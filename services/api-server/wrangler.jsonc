@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloude-code-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "vars": {
+    "ENVIRONMENT": "production",
+    "SPRITES_API_URL": "https://api.sprites.dev"
+    // todo: fix this.
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSION_AGENT",
+        "class_name": "SessionAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SessionAgent"]
+    }
+  ]
+  // Secrets (set via wrangler secret put):
+  // - ANTHROPIC_API_KEY
+  // - SPRITES_API_KEY
+  // - GITHUB_TOKEN
+}
