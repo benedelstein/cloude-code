@@ -7,10 +7,17 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "run:ci": "pnpm lint && pnpm lint && pnpm typecheck",
+    "test:create-session": "npx tsx scripts/test-create-session.ts"
   },
   "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@types/ws": "^8.18.1",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
     "turbo": "^2.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "ws": "^8.19.0"
   }
 }

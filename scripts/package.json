@@ -1,0 +1,11 @@
+{
+  "name": "@repo/scripts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
+    "@fly/sprites": "^0.0.1"
+  }
+}

@@ -3,6 +3,7 @@
   "name": "cloude-code-api",
   "main": "src/index.ts",
   "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev"
@@ -12,14 +13,14 @@
     "bindings": [
       {
         "name": "SESSION_AGENT",
-        "class_name": "SessionAgent"
+        "class_name": "SessionAgentDO"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["SessionAgent"]
+      "new_sqlite_classes": ["SessionAgentDO"]
     }
   ]
   // Secrets (set via wrangler secret put):

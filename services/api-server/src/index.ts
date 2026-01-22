@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sessionsRoutes } from "./routes/sessions.routes";
+import { testRoutes } from "./routes/test.routes";
 import type { Env } from "./types";
 
-export { SessionAgent } from "./durable-objects/session-agent";
+export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -17,6 +18,7 @@ app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-app.route("/api/sessions", sessionsRoutes);
+app.route("/sessions", sessionsRoutes);
+app.route("/test", testRoutes);
 
 export default app;

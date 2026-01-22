@@ -21,6 +21,7 @@ sessionsRoutes.post("/", async (c) => {
   }
 
   const sessionId = crypto.randomUUID();
+  console.log("creating session agent", sessionId);
   const stub = getSessionAgent(sessionId, c);
 
   // Initialize the session in the DO
@@ -43,7 +44,7 @@ sessionsRoutes.post("/", async (c) => {
 
   const host = c.req.header("host") ?? "localhost";
   const protocol = host.includes("localhost") ? "ws" : "wss";
-  const wsUrl = `${protocol}://${host}/api/sessions/${sessionId}/ws`;
+  const wsUrl = `${protocol}://${host}/sessions/${sessionId}/ws`;
 
   return c.json({ sessionId, wsUrl }, 201);
 });
