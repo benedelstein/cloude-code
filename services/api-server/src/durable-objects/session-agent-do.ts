@@ -26,11 +26,10 @@ interface InitRequest {
 
 export class SessionAgentDO extends DurableObject<Env> {
   private sql: SqlStorage;
-  // Track connected WebSocket clients (multiple clients can connect to one session)
+  /** Track connected WebSocket clients (multiple clients can connect to one session) */
   private connectedClients: Map<WebSocket, { clientId: string }> = new Map();
   private spritesCoordinator: SpritesCoordinator | null = null;
   private currentMessageId: string | null = null;
-
   /**
    * Claude Code session running on the sprite (Workers-compatible)
    */
