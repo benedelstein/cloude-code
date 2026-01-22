@@ -103,6 +103,19 @@ export const ErrorEvent = z.object({
 });
 export type ErrorEvent = z.infer<typeof ErrorEvent>;
 
+// Agent SDK message events (forwarded from vm-agent)
+export const ClaudeSdkEvent = z.object({
+  type: z.literal("claude.sdk"),
+  message: z.unknown(), // SDKMessage from @anthropic-ai/claude-agent-sdk
+});
+export type ClaudeSdkEvent = z.infer<typeof ClaudeSdkEvent>;
+
+export const ClaudeReadyEvent = z.object({
+  type: z.literal("claude.ready"),
+  agentSessionId: z.string(),
+});
+export type ClaudeReadyEvent = z.infer<typeof ClaudeReadyEvent>;
+
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
   MessageStartEvent,
@@ -113,5 +126,7 @@ export const ServerMessage = z.discriminatedUnion("type", [
   SpriteStatusEvent,
   SyncResponseEvent,
   ErrorEvent,
+  ClaudeSdkEvent,
+  ClaudeReadyEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

@@ -2,12 +2,18 @@ import { DurableObject } from "cloudflare:workers";
 import { SpritesCoordinator, WorkersSprite, SpriteWebsocketSession } from "@/lib/sprites";
 import {
   type Session,
-  type Message,
   type SessionSettings,
   type ClientMessage,
   type ServerMessage,
+  type AgentOutput,
+  decodeAgentOutput,
+  encodeAgentInput,
 } from "@repo/shared";
 import type { Env } from "../types";
+
+// TODO: Replace with bundled vm-agent script
+const VM_AGENT_SCRIPT = `console.error("vm-agent not bundled yet");`;
+const WORKSPACE_DIR = "/home/sprite/workspace";
 
 interface SessionState {
   sessionId: string;
@@ -29,11 +35,10 @@ export class SessionAgentDO extends DurableObject<Env> {
   /** Track connected WebSocket clients (multiple clients can connect to one session) */
   private connectedClients: Map<WebSocket, { clientId: string }> = new Map();
   private spritesCoordinator: SpritesCoordinator | null = null;
-  private currentMessageId: string | null = null;
-  /**
-   * Claude Code session running on the sprite (Workers-compatible)
-   */
-  private claudeSession: SpriteWebsocketSession | null = null;
+  /** Buffer for partial NDJSON lines from agent stdout */
+  private agentOutputBuffer: string = "";
+  /** vm-agent session running on the sprite */
+  private agentSession: SpriteWebsocketSession | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -216,26 +221,27 @@ export class SessionAgentDO extends DurableObject<Env> {
       const sprite = new WorkersSprite(spriteResponse.name, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
       // Clone the repo on the sprite using HTTP exec
+      // TODO: git pull if repo already exists on the sprite.
       console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
-      const mkdirResult = await sprite.execHttp("mkdir -p /workspace", {});
+      const mkdirResult = await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
       console.log(`Mkdir result: exitCode=${mkdirResult.exitCode}, stdout=${mkdirResult.stdout}, stderr=${mkdirResult.stderr}`);
 
       const cloneResult = await sprite.execHttp(
-        `git clone https://github.com/${repoId}.git /workspace`,
+        `git clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
         {}
       );
       console.log(`Clone result: exitCode=${cloneResult.exitCode}, stdout=${cloneResult.stdout}, stderr=${cloneResult.stderr}`);
 
       // Verify clone succeeded by checking if workspace has files
-      const verifyResult = await sprite.execHttp("ls -la /workspace", {});
+      const verifyResult = await sprite.execHttp(`ls -la ${WORKSPACE_DIR}`, {});
       console.log(`Workspace contents: ${verifyResult.stdout}`);
 
       if (!verifyResult.stdout || verifyResult.stdout.trim().split("\n").length < 3) {
         throw new Error(`Clone failed - workspace is empty. Clone output: ${cloneResult.stdout || cloneResult.stderr}`);
       }
 
-      // Start Claude Code in a tmux session
-      await this.startClaudeSession(spriteResponse.name);
+      // Start vm-agent on the sprite
+      await this.startAgentSession(spriteResponse.name);
 
       // Update status to ready
       this.sql.exec(
@@ -259,61 +265,91 @@ export class SessionAgentDO extends DurableObject<Env> {
     }
   }
 
-  private async startClaudeSession(spriteName: string): Promise<void> {
-    // Use Workers-compatible sprite for WebSocket session
+  private async startAgentSession(spriteName: string): Promise<void> {
     const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
-    // Start Claude Code in a tmux session (tty required for interactive CLI)
-    this.claudeSession = sprite.createSession("claude", [], {
-      cwd: "/workspace",
-      tty: true,
+    // Write the vm-agent script to the sprite
+    // TODO: if this is installed inside the workspace dir, won't it get committed to git?
+    await sprite.writeFile(`${WORKSPACE_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
+
+    // Start vm-agent via exec WebSocket (Sprite has Bun installed)
+    this.agentSession = sprite.createSession("bun", ["run", `${WORKSPACE_DIR}/.cloude/agent.js`], {
+      cwd: WORKSPACE_DIR,
       env: {
         ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
       },
     });
-    // Wire stdout to broadcast
-    this.claudeSession.onStdout((data: string) => {
-      this.broadcast({
-        type: "claude.output",
-        data,
-      } as unknown as ServerMessage);
+
+    // Handle stdout - parse NDJSON lines
+    this.agentSession.onStdout((data: string) => {
+      this.handleAgentStdout(data);
     });
 
-    // Wire stderr to broadcast
-    this.claudeSession.onStderr((data: string) => {
-      console.error(`Claude session stderr: ${data}`);
-      this.broadcast({
-        type: "claude.output",
-        data,
-        isStderr: true,
-      } as unknown as ServerMessage);
+    // Handle stderr - log for debugging
+    this.agentSession.onStderr((data: string) => {
+      console.error(`vm-agent stderr: ${data}`);
     });
 
     // Handle session exit
-    this.claudeSession.onExit((code: number) => {
-      console.log(`Claude session exited with code ${code}`);
-      this.claudeSession = null;
-      this.broadcast({
-        type: "claude.exit",
-        exitCode: code,
-      } as unknown as ServerMessage);
+    this.agentSession.onExit((code: number) => {
+      console.log(`vm-agent exited with code ${code}`);
+      this.agentSession = null;
     });
 
     // Start the WebSocket connection
-    await this.claudeSession.start();
+    await this.agentSession.start();
+    console.log(`vm-agent started on sprite ${spriteName}`);
+  }
 
-    // Get and store the session ID for reattachment
-    const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    console.log(`${sessions.length} sessions on sprite: ${JSON.stringify(sessions)}`);
-    const claudeSession = sessions.find((s) => s.command.includes("claude"));
-    if (claudeSession) {
-      this.sql.exec(
-        "UPDATE session SET claude_session_id = ? WHERE sprite_name = ?",
-        String(claudeSession.id),
-        spriteName
-      );
-    } else {
-      console.error("No Claude session found");
+  private handleAgentStdout(data: string): void {
+    // Buffer partial lines and process complete NDJSON lines
+    this.agentOutputBuffer += data;
+    const lines = this.agentOutputBuffer.split("\n");
+
+    // Keep the last incomplete line in the buffer
+    this.agentOutputBuffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const output = decodeAgentOutput(line);
+        this.handleAgentOutput(output);
+      } catch (e) {
+        console.error("Failed to decode agent output:", line, e);
+      }
+    }
+  }
+
+  private handleAgentOutput(output: AgentOutput): void {
+    switch (output.type) {
+      case "ready":
+        // Store the Agent SDK session ID for resumption
+        this.sql.exec(
+          "UPDATE session SET claude_session_id = ? WHERE id = (SELECT id FROM session LIMIT 1)",
+          output.sessionId
+        );
+        this.broadcast({
+          type: "claude.ready",
+          agentSessionId: output.sessionId,
+        });
+        break;
+
+      case "sdk":
+        // Forward SDK messages to connected clients
+        this.broadcast({
+          type: "claude.sdk",
+          message: output.message,
+        });
+        break;
+
+      case "error":
+        this.broadcast({
+          type: "error",
+          code: "AGENT_ERROR",
+          message: output.error,
+        });
+        break;
     }
   }
 
@@ -466,17 +502,17 @@ export class SessionAgentDO extends DurableObject<Env> {
       return;
     }
 
-    // Ensure we have a Claude session (reattach if needed after hibernation)
-    if (!this.claudeSession && session.spriteName) {
-      await this.reattachClaudeSession(session.spriteName);
+    // Ensure we have an agent session (reattach if needed after DO hibernation)
+    if (!this.agentSession && session.spriteName) {
+      await this.reattachAgentSession(session.spriteName);
     }
 
-    if (!this.claudeSession) {
+    if (!this.agentSession) {
       ws.send(
         JSON.stringify({
           type: "error",
-          code: "NO_CLAUDE_SESSION",
-          message: "Claude session not available",
+          code: "NO_AGENT_SESSION",
+          message: "Agent session not available",
         } satisfies ServerMessage)
       );
       return;
@@ -492,64 +528,44 @@ export class SessionAgentDO extends DurableObject<Env> {
       content
     );
 
-    // Pipe the message to Claude's stdin using Workers-compatible write
-    this.claudeSession.write(content + "\n");
+    // Send chat message to vm-agent via stdin
+    this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
-  private async reattachClaudeSession(spriteName: string): Promise<void> {
-    // Get stored session ID
-    const rows = this.sql.exec(
-      "SELECT claude_session_id FROM session WHERE sprite_name = ?",
-      spriteName
-    ).toArray();
+  private async reattachAgentSession(spriteName: string): Promise<void> {
+    // After DO hibernation, the agentSession WebSocket is gone but the vm-agent
+    // process may still be running on the Sprite (Sprites maintain state when dormant).
+    // We need to reconnect to it or start a new one.
 
-    if (rows.length === 0 || !rows[0]) return;
-
-    const storedSessionId = (rows[0] as Record<string, unknown>).claude_session_id as string | null;
-    if (!storedSessionId) return;
-
-    // Use Workers-compatible sprite
     const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
-    // Check if session still exists (stored id is string, API returns number)
+    // Check if vm-agent session still exists on the Sprite
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    const existingSession = sessions.find((s) => String(s.id) === storedSessionId);
+    const existingSession = sessions.find((s) => s.command.includes("agent.js"));
 
     if (existingSession) {
-      // Reattach to existing session using Workers-compatible method
-      this.claudeSession = sprite.attachSession(storedSessionId, { tty: true });
+      // Reattach to existing vm-agent session
+      this.agentSession = sprite.attachSession(String(existingSession.id), {});
 
-      // Rewire stdout/stderr
-      this.claudeSession.onStdout((data: string) => {
-        this.broadcast({
-          type: "claude.output",
-          data,
-        } as unknown as ServerMessage);
+      this.agentSession.onStdout((data: string) => {
+        this.handleAgentStdout(data);
       });
 
-      this.claudeSession.onStderr((data: string) => {
-        this.broadcast({
-          type: "claude.output",
-          data,
-          isStderr: true,
-        } as unknown as ServerMessage);
+      this.agentSession.onStderr((data: string) => {
+        console.error(`vm-agent stderr: ${data}`);
       });
 
-      this.claudeSession.onExit((code: number) => {
-        console.log(`Claude session exited with code ${code}`);
-        this.claudeSession = null;
-        this.broadcast({
-          type: "claude.exit",
-          exitCode: code,
-        } as unknown as ServerMessage);
+      this.agentSession.onExit((code: number) => {
+        console.log(`vm-agent exited with code ${code}`);
+        this.agentSession = null;
       });
 
-      await this.claudeSession.start();
-      console.log(`Reattached to Claude session ${storedSessionId}`);
+      await this.agentSession.start();
+      console.log(`Reattached to vm-agent session ${existingSession.id}`);
     } else {
       // Session no longer exists, start a new one
-      console.log("Previous Claude session not found, starting new one");
-      await this.startClaudeSession(spriteName);
+      console.log("Previous vm-agent session not found, starting new one");
+      await this.startAgentSession(spriteName);
     }
   }
 
@@ -562,10 +578,9 @@ export class SessionAgentDO extends DurableObject<Env> {
   }
 
   private handleOperationCancel(): void {
-    // Close the Claude session if active
-    if (this.claudeSession) {
-      this.claudeSession.close();
-      this.claudeSession = null;
+    // Send cancel to vm-agent
+    if (this.agentSession) {
+      this.agentSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
     }
   }
 

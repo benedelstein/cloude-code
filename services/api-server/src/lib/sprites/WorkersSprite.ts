@@ -118,4 +118,38 @@ export class WorkersSprite {
         sessionId,
       });
     }
+
+    async writeFile(
+      path: string,
+      content: string,
+      options: { mode?: string; mkdir?: boolean } = {}
+    ): Promise<void> {
+      const url = new URL(`${this.baseUrl}/v1/sprites/${this.name}/fs/write`);
+      url.searchParams.set("path", path);
+
+      if (options.mkdir !== false) {
+        url.searchParams.set("mkdir", "true");
+      }
+      if (options.mode) {
+        url.searchParams.set("mode", options.mode);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: content,
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new SpritesError(
+          `Failed to write file ${path}: ${response.status}`,
+          response.status,
+          text
+        );
+      }
+    }
   }
