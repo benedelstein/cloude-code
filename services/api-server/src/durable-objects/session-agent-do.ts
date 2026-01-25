@@ -10,10 +10,9 @@ import {
   encodeAgentInput,
 } from "@repo/shared";
 import type { Env } from "../types";
-
-// TODO: Replace with bundled vm-agent script
-const VM_AGENT_SCRIPT = `console.error("vm-agent not bundled yet");`;
+import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 const WORKSPACE_DIR = "/home/sprite/workspace";
+const HOME_DIR = "/home/sprite";
 
 interface SessionState {
   sessionId: string;
@@ -268,13 +267,13 @@ export class SessionAgentDO extends DurableObject<Env> {
   private async startAgentSession(spriteName: string): Promise<void> {
     const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
-    // Write the vm-agent script to the sprite
-    // TODO: if this is installed inside the workspace dir, won't it get committed to git?
-    await sprite.writeFile(`${WORKSPACE_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
+    // Write the vm-agent script to the sprite filesystem.
+    await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
 
     // Start vm-agent via exec WebSocket (Sprite has Bun installed)
-    this.agentSession = sprite.createSession("bun", ["run", `${WORKSPACE_DIR}/.cloude/agent.js`], {
+    this.agentSession = sprite.createSession("bun", ["run", `${HOME_DIR}/.cloude/agent.js`], {
       cwd: WORKSPACE_DIR,
+      tty: true,
       env: {
         ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
       },
@@ -314,9 +313,10 @@ export class SessionAgentDO extends DurableObject<Env> {
 
       try {
         const output = decodeAgentOutput(line);
+        console.log("agent output type:", output.type);
         this.handleAgentOutput(output);
-      } catch (e) {
-        console.error("Failed to decode agent output:", line, e);
+      } catch {
+        // Ignore lines that don't match AgentOutput schema (e.g., TTY echo of input)
       }
     }
   }

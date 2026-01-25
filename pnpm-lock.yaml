@@ -79,6 +79,9 @@ importers:
       '@repo/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@repo/vm-agent':
+        specifier: workspace:*
+        version: link:../../packages/vm-agent
       hono:
         specifier: ^4.6.0
         version: 4.11.4

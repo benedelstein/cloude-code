@@ -32,12 +32,13 @@ export type AgentInput = z.infer<typeof AgentInput>;
 // Wrapper for SDK messages (we use z.unknown() since SDK types aren't Zod)
 export const AgentSdkOutput = z.object({
   type: z.literal("sdk"),
-  message: z.unknown(), // SDKMessage from @anthropic-ai/claude-agent-sdk
+  message: z.unknown(), // Raw SDKMessage from @anthropic-ai/claude-agent-sdk
 });
 
 export const AgentReadyOutput = z.object({
   type: z.literal("ready"),
   sessionId: z.string(),
+  claudeExecutablePath: z.string(),
 });
 
 export const AgentErrorOutput = z.object({

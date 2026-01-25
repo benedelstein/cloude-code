@@ -2,11 +2,11 @@
   "name": "@repo/vm-agent",
   "version": "0.0.1",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/vm-agent.bundle.js",
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun run src/test-agent.ts",
-    "build": "bun build src/index.ts --outfile=dist/index.js --target=bun --minify",
+    "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

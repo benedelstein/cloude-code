@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "turbo run dev --filter=@repo/api-server",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",

@@ -14,6 +14,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@fly/sprites": "^0.0.1",
     "@repo/shared": "workspace:*",
+    "@repo/vm-agent": "workspace:*",
     "hono": "^4.6.0",
     "zod": "^3.24.0"
   },
