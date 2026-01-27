@@ -28,7 +28,7 @@ export const CreateSpriteRequest = z.object({
     })
     .optional(),
   image: z.string().optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
 });
 export type CreateSpriteRequest = z.infer<typeof CreateSpriteRequest>;
 

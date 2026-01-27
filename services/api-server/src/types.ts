@@ -1,6 +1,8 @@
+import type { SessionAgentDO } from "./durable-objects/session-agent-do";
+
 export interface Env {
   // Durable Objects
-  SESSION_AGENT: DurableObjectNamespace;
+  SESSION_AGENT: DurableObjectNamespace<SessionAgentDO>;
 
   // Environment variables
   ENVIRONMENT: string;

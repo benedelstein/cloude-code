@@ -26,6 +26,21 @@ async function createSession(repoId: string): Promise<SessionResponse> {
   return res.json() as Promise<SessionResponse>;
 }
 
+async function getSession(sessionId: string): Promise<SessionResponse> {
+  const res = await fetch(`${API_URL}/sessions/${sessionId}`);
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to get session: ${res.status} ${error}`);
+  }
+
+  return res.json() as Promise<SessionResponse>;
+}
+
+function isUUID(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 function connectWebSocket(wsUrl: string): WebSocket {
   console.log(`\nConnecting to WebSocket: ${wsUrl}`);
   const ws = new WebSocket(wsUrl);
@@ -85,14 +100,24 @@ function setupRepl(ws: WebSocket) {
 }
 
 async function main() {
-  const repoId = process.argv[2] ?? "anthropics/claude-code";
-
-  console.log(`Creating session for repo: ${repoId}`);
+  const arg = process.argv[2];
   console.log(`API URL: ${API_URL}\n`);
 
-  const session = await createSession(repoId);
+  let session: SessionResponse;
 
-  console.log("Session created:");
+  if (arg && isUUID(arg)) {
+    // Resume existing session
+    console.log(`Resuming session: ${arg}`);
+    session = await getSession(arg);
+    console.log("Session info:");
+  } else {
+    // Create new session
+    const repoId = arg ?? "anthropics/claude-code";
+    console.log(`Creating session for repo: ${repoId}`);
+    session = await createSession(repoId);
+    console.log("Session created:");
+  }
+
   console.log(JSON.stringify(session, null, 2));
 
   const ws = connectWebSocket(session.wsUrl);

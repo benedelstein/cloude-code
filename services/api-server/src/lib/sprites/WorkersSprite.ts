@@ -48,8 +48,6 @@ export class WorkersSprite {
         },
       });
   
-      console.log(`Exec response status: ${response.status}`);
-  
       if (!response.ok) {
         const text = await response.text();
         console.error(`Exec failed: ${text}`);
@@ -62,7 +60,6 @@ export class WorkersSprite {
   
       // Response can be NDJSON or plain text depending on the command
       const text = await response.text();
-      console.log(`Exec response body (${text.length} chars): ${text.substring(0, 500)}`);
   
       let stdout = "";
       let stderr = "";
@@ -90,7 +87,6 @@ export class WorkersSprite {
         stdout = text;
       }
   
-      console.log(`Exec result: exitCode=${exitCode}, stdout=${stdout.length} chars, stderr=${stderr.length} chars`);
       return { stdout, stderr, exitCode };
     }
   

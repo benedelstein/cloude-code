@@ -1,4 +1,4 @@
-import { SessionOptions } from "./types";
+import { SessionOptions, SpriteServerMessage, SpriteServerMessageSchema } from "./types";
 
 interface WorkersSessionOptions extends SessionOptions {
     sessionId?: string;
@@ -20,6 +20,7 @@ export class SpriteWebsocketSession {
     private stderrHandlers: Set<(data: string) => void> = new Set();
     private exitHandlers: Set<(code: number) => void> = new Set();
     private errorHandlers: Set<(error: Error) => void> = new Set();
+    private serverMessageHandlers: Set<(msg: SpriteServerMessage) => void> = new Set();
   
     constructor(
       spriteName: string,
@@ -133,12 +134,8 @@ export class SpriteWebsocketSession {
           this.stdoutHandlers.forEach((h) => h(text));
         } else if (typeof data === "string") {
           try {
-            const msg = JSON.parse(data);
-            // Control messages (session_info, exit, etc.)
-            if (msg.type === "exit" && msg.exit_code !== undefined) {
-              this.exitHandlers.forEach((h) => h(msg.exit_code));
-            }
-            // Could also handle resize confirmations, etc.
+            const msg: unknown = JSON.parse(data);
+            this.dispatchServerMessage(msg);
           } catch {
             // Non-JSON string - treat as stdout
             this.stdoutHandlers.forEach((h) => h(data));
@@ -166,40 +163,65 @@ export class SpriteWebsocketSession {
             }
           }
         } else if (typeof data === "string") {
-          // JSON fallback for non-TTY
+          // JSON server messages in non-TTY mode
           try {
-            const msg = JSON.parse(data);
-            if (msg.stdout) this.stdoutHandlers.forEach((h) => h(msg.stdout));
-            if (msg.stderr) this.stderrHandlers.forEach((h) => h(msg.stderr));
-            if (msg.exit_code !== undefined)
-              this.exitHandlers.forEach((h) => h(msg.exit_code));
+            const msg: unknown = JSON.parse(data);
+            this.dispatchServerMessage(msg);
           } catch {
-            this.stdoutHandlers.forEach((h) => h(String(data)));
+            // Non-JSON string - unexpected in non-TTY mode
           }
         }
       }
     }
   
+    private dispatchServerMessage(msg: unknown): void {
+      const result = SpriteServerMessageSchema.safeParse(msg);
+      if (!result.success) {
+        console.warn("[SpriteWebsocketSession] Unknown server message:", msg, result.error.format());
+        return;
+      }
+
+      const parsed = result.data;
+      this.serverMessageHandlers.forEach((h) => h(parsed));
+
+      // Also dispatch to legacy exitHandlers for backwards compatibility
+      if (parsed.type === "exit") {
+        this.exitHandlers.forEach((h) => h(parsed.exit_code));
+      }
+    }
+
     write(data: string): void {
       if (!this.ws) throw new Error("WebSocket not connected");
   
+      // Send raw text - the Sprites server routes stdin based on the connection
+      const encoder = new TextEncoder();
+      const payload = encoder.encode(data);
+      this.ws.send(payload);
+    }
+
+    closeStdin(): void {
+      if (!this.ws) throw new Error("WebSocket not connected");
+
       if (this.options.tty) {
-        // TTY mode: send raw binary data (same as native SDK)
+        // TTY mode: send Ctrl+D (EOT character)
         const encoder = new TextEncoder();
-        const payload = encoder.encode(data);
-        this.ws.send(payload);
+        this.ws.send(encoder.encode("\x04"));
       } else {
-        // Non-TTY mode: binary protocol with stream ID 0 = stdin
-        const encoder = new TextEncoder();
-        const payload = encoder.encode(data);
-        const buffer = new ArrayBuffer(1 + payload.length);
+        // Non-TTY mode: send stdin_eof (stream ID 4)
+        const buffer = new ArrayBuffer(1);
         const view = new DataView(buffer);
-        view.setUint8(0, 0); // stdin stream ID
-        new Uint8Array(buffer, 1).set(payload);
+        view.setUint8(0, 4); // stdin_eof stream ID
         this.ws.send(buffer);
       }
     }
-  
+
+    resize(cols: number, rows: number): void {
+      if (!this.ws) throw new Error("WebSocket not connected");
+      if (!this.options.tty) throw new Error("Resize only supported in TTY mode");
+
+      this.ws.send(JSON.stringify({ type: "resi", cols, rows }));
+    }
+
     onStdout(handler: (data: string) => void): () => void {
       this.stdoutHandlers.add(handler);
       return () => this.stdoutHandlers.delete(handler);
@@ -218,6 +240,11 @@ export class SpriteWebsocketSession {
     onError(handler: (error: Error) => void): () => void {
       this.errorHandlers.add(handler);
       return () => this.errorHandlers.delete(handler);
+    }
+
+    onServerMessage(handler: (msg: SpriteServerMessage) => void): () => void {
+      this.serverMessageHandlers.add(handler);
+      return () => this.serverMessageHandlers.delete(handler);
     }
   
     close(): void {

@@ -2,3 +2,13 @@ packages:
   - "packages/*"
   - "services/*"
   - "scripts/"
+
+# shared package version catalog
+# package.jsons should use "<package>": "catalog:"
+catalog:
+  "agents": "^0.3.6"
+  "tsx": "^4.7.0"
+  "typescript": "^5.7.0"
+  "zod": "^4.3.6"
+  "dotenv": "^17.2.3"
+  "@anthropic-ai/sdk": "^0.71.0"

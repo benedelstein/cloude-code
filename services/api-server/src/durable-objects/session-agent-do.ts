@@ -1,27 +1,37 @@
-import { DurableObject } from "cloudflare:workers";
-import { SpritesCoordinator, WorkersSprite, SpriteWebsocketSession } from "@/lib/sprites";
+import { SpritesCoordinator, WorkersSprite, SpriteWebsocketSession, SpriteServerMessage } from "@/lib/sprites";
 import {
-  type Session,
+  type SessionInfo,
   type SessionSettings,
   type ClientMessage,
   type ServerMessage,
   type AgentOutput,
   decodeAgentOutput,
   encodeAgentInput,
+  Session,
 } from "@repo/shared";
 import type { Env } from "../types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
+import { Agent, type Connection } from "agents";
+import { MessageRepository } from "./repositories/message-repository";
+
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
-interface SessionState {
+// Session metadata stored in Agent state (survives hibernation)
+type AgentState = {
   sessionId: string;
   userId: string;
   repoId: string;
   spriteName: string | null;
+  githubBranchName: string | null;
+  /** Session ID given by the Claude Agent SDK */
+  claudeSessionId: string | null;
+  /** ID of the agent process session running on the sprite */
+  agentProcessId: number | null;
   status: Session["status"];
   settings: SessionSettings;
-}
+  createdAt: string;
+};
 
 interface InitRequest {
   sessionId: string;
@@ -29,11 +39,9 @@ interface InitRequest {
   settings?: Partial<SessionSettings>;
 }
 
-export class SessionAgentDO extends DurableObject<Env> {
-  private sql: SqlStorage;
-  /** Track connected WebSocket clients (multiple clients can connect to one session) */
-  private connectedClients: Map<WebSocket, { clientId: string }> = new Map();
+export class SessionAgentDO extends Agent<Env, AgentState> {
   private spritesCoordinator: SpritesCoordinator | null = null;
+  private messageRepository: MessageRepository | null = null;
   /** Buffer for partial NDJSON lines from agent stdout */
   private agentOutputBuffer: string = "";
   /** vm-agent session running on the sprite */
@@ -41,128 +49,129 @@ export class SessionAgentDO extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.sql = ctx.storage.sql;
     this.initializeSchema();
     this.initializeClients();
   }
 
   private initializeSchema(): void {
-    // todo: strong type db? 
-    this.sql.exec(`
-      CREATE TABLE IF NOT EXISTS session (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        repo_id TEXT NOT NULL,
-        sprite_name TEXT,
-        claude_session_id TEXT,
-        status TEXT NOT NULL DEFAULT 'creating',
-        settings_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
+    this.sql`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
-        tool_calls_json TEXT,
-        stream_position INTEGER,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (session_id) REFERENCES session(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS tool_calls (
-        id TEXT PRIMARY KEY,
-        message_id TEXT NOT NULL,
-        tool_name TEXT NOT NULL,
-        input_json TEXT NOT NULL,
-        output TEXT,
-        status TEXT NOT NULL DEFAULT 'pending',
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (message_id) REFERENCES messages(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS sprite_checkpoints (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        git_commit_sha TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (session_id) REFERENCES session(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS stream_state (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        message_id TEXT NOT NULL,
-        total_chunks INTEGER NOT NULL DEFAULT 0,
-        last_sent_chunk INTEGER NOT NULL DEFAULT 0,
-        pending_chunks_json TEXT NOT NULL DEFAULT '[]',
-        FOREIGN KEY (session_id) REFERENCES session(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
-      CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
-    `);
-  }
-
-  private getSession(): SessionState | null {
-    const rows = this.sql.exec("SELECT * FROM session LIMIT 1").toArray();
-    if (rows.length === 0) return null;
-
-    const row = rows[0] as Record<string, unknown>;
-    return {
-      sessionId: row.id as string,
-      userId: row.user_id as string,
-      repoId: row.repo_id as string,
-      spriteName: row.sprite_name as string | null,
-      status: row.status as Session["status"],
-      settings: JSON.parse(row.settings_json as string) as SessionSettings,
-    };
-  }
-
-  private updateSessionStatus(status: Session["status"]): void {
-    this.sql.exec(
-      "UPDATE session SET status = ?, updated_at = datetime('now')",
-      status
-    );
+        raw_data TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `;
+    this.sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
   }
 
   private initializeClients(): void {
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
+    this.messageRepository = new MessageRepository(this.sql.bind(this));
   }
+
+  // Ensure clients are initialized (may be null after hibernation)
+  private ensureClients(): void {
+    if (!this.spritesCoordinator) {
+      this.initializeClients();
+    }
+  }
+
+  private updateStatus(status: Session["status"]): void {
+    this.setState({ ...this.state, status });
+  }
+
+  // ============================================
+  // HTTP Handlers
+  // ============================================
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-    console.debug(`fetching ${path}`);
 
-    // Handle WebSocket upgrade
-    if (request.headers.get("Upgrade") === "websocket") {
-      console.debug("upgrading to websocket");
-      return this.handleWebSocketUpgrade();
+    // Root path = session operations (the DO *is* the session)
+    if (path === "/" || path === "") {
+      switch (request.method) {
+        case "POST":
+          return this.handleInit(request);
+        case "GET":
+          return this.handleGetSession();
+        case "DELETE":
+          return this.handleDeleteSession();
+        default:
+          return new Response("Method not allowed", { status: 405 });
+      }
     }
 
-    // REST endpoints for DO internal communication
-    switch (path) {
-      case "/init":
-        return this.handleInit(request);
-      case "/session":
-        if (request.method === "DELETE") {
-          return this.handleDeleteSession();
-        }
-        return this.handleGetSession();
-      case "/messages":
-        return this.handleGetMessages();
-      default:
-        return new Response("Not found", { status: 404 });
+    // Sub-resources
+    if (path === "/messages" && request.method === "GET") {
+      return this.handleGetMessages();
+    }
+
+    // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
+    return super.fetch(request);
+  }
+
+  // Called by Agent SDK when a new WebSocket connection is established
+  onConnect(connection: Connection): void {
+    // Send initial connection state
+    connection.send(JSON.stringify({
+      type: "connected",
+      sessionId: this.state?.sessionId ?? "",
+      status: this.state?.status ?? "unknown",
+    } satisfies ServerMessage));
+
+    // Send message history
+    if (this.state?.sessionId && this.messageRepository) {
+      this.ensureClients();
+      const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
+      connection.send(JSON.stringify({
+        type: "sync.response",
+        messages,
+      }));
     }
   }
 
+  // Agent SDK WebSocket handlers
+  async onMessage(connection: Connection, message: string | ArrayBuffer): Promise<void> {
+    this.ensureClients();
+
+    try {
+      const messageStr = typeof message === "string" ? message : new TextDecoder().decode(message);
+      const data = JSON.parse(messageStr) as ClientMessage;
+      await this.handleClientMessage(connection, data);
+    } catch (error) {
+      console.error("Failed to handle message:", error);
+      connection.send(JSON.stringify({
+        type: "error",
+        code: "INVALID_MESSAGE",
+        message: "Failed to parse message",
+      } satisfies ServerMessage));
+    }
+  }
+
+  onClose(connection: Connection, code: number, reason: string, wasClean: boolean): void {
+    // Cleanup if needed
+    console.log(`WebSocket closed: code=${code}, reason=${reason}, wasClean=${wasClean}`);
+  }
+
+  onError(connectionOrError: Connection | unknown, error?: unknown): void {
+    console.error("WebSocket error:", error ?? connectionOrError);
+  }
+
   private async handleInit(request: Request): Promise<Response> {
+    // Prevent re-initialization
+    if (this.state?.sessionId) {
+      return new Response(JSON.stringify({ error: "Session already initialized" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const data = (await request.json()) as InitRequest;
 
     const settings: SessionSettings = {
@@ -170,16 +179,19 @@ export class SessionAgentDO extends DurableObject<Env> {
       maxTokens: data.settings?.maxTokens ?? 8192,
     };
 
-    // Create session record (only one per DO instance)
-    this.sql.exec(
-      `INSERT INTO session (id, user_id, repo_id, status, settings_json)
-       VALUES (?, ?, ?, ?, ?)`,
-      data.sessionId,
-      "anonymous", // TODO: dont couple session to 1 user.
-      data.repoId,
-      "provisioning",
-      JSON.stringify(settings)
-    );
+    // Initialize agent state
+    this.setState({
+      sessionId: data.sessionId,
+      userId: "anonymous", // todo
+      repoId: data.repoId,
+      spriteName: null,
+      githubBranchName: null,
+      claudeSessionId: null,
+      agentProcessId: null,
+      status: "provisioning",
+      settings,
+      createdAt: new Date().toISOString(),
+    });
 
     // Provision sprite asynchronously
     this.ctx.waitUntil(this.provisionSprite(data.sessionId, data.repoId));
@@ -189,12 +201,10 @@ export class SessionAgentDO extends DurableObject<Env> {
     });
   }
 
-  private async provisionSprite(
-    sessionId: string,
-    repoId: string
-  ): Promise<void> {
+  private async provisionSprite(sessionId: string, repoId: string): Promise<void> {
     try {
-      // Create the sprite VM using the original SDK (for sprite lifecycle management)
+      this.ensureClients();
+
       const spriteResponse = await this.spritesCoordinator!.createSprite({
         name: `session-${sessionId}`,
         env: {
@@ -203,60 +213,55 @@ export class SessionAgentDO extends DurableObject<Env> {
         },
       });
 
-      // Update session with sprite name
-      this.sql.exec(
-        "UPDATE session SET sprite_name = ?, status = ?, updated_at = datetime('now') WHERE id = ?",
-        spriteResponse.name,
-        "cloning",
-        sessionId
-      );
+      this.setState({
+        ...this.state,
+        spriteName: spriteResponse.name,
+        status: "cloning",
+      });
 
-      this.broadcast({
+      this.broadcastMessage({
         type: "sprite.status",
         status: "cloning" as Session["status"],
       } as unknown as ServerMessage);
 
-      // Use Workers-compatible sprite for exec/session operations
-      const sprite = new WorkersSprite(spriteResponse.name, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
-
-      // Clone the repo on the sprite using HTTP exec
-      // TODO: git pull if repo already exists on the sprite.
-      console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
-      const mkdirResult = await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
-      console.log(`Mkdir result: exitCode=${mkdirResult.exitCode}, stdout=${mkdirResult.stdout}, stderr=${mkdirResult.stderr}`);
-
-      const cloneResult = await sprite.execHttp(
-        `git clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
-        {}
+      const sprite = new WorkersSprite(
+        spriteResponse.name,
+        this.env.SPRITES_API_KEY,
+        this.env.SPRITES_API_URL
       );
-      console.log(`Clone result: exitCode=${cloneResult.exitCode}, stdout=${cloneResult.stdout}, stderr=${cloneResult.stderr}`);
 
-      // Verify clone succeeded by checking if workspace has files
-      const verifyResult = await sprite.execHttp(`ls -la ${WORKSPACE_DIR}`, {});
-      console.log(`Workspace contents: ${verifyResult.stdout}`);
-
-      if (!verifyResult.stdout || verifyResult.stdout.trim().split("\n").length < 3) {
-        throw new Error(`Clone failed - workspace is empty. Clone output: ${cloneResult.stdout || cloneResult.stderr}`);
+      // Clone the repo
+      // check if the repo is already cloned
+      const isCloned = await sprite.execHttp(`test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`, {});
+      if (isCloned.stdout.includes("exists")) {
+        console.log(`Repo ${repoId} already cloned on sprite ${spriteResponse.name}`);
+        // make sure we're up to date?
+      } else {
+        console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
+        await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
+        const cloneResult = await sprite.execHttp(
+          `git clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
+          {}
+        );
+        console.log(`Clone result: exitCode=${cloneResult.exitCode}`);
+        // we need to switch to a new branch too.
+        // Verify clone
+        const verifyResult = await sprite.execHttp(`ls -la ${WORKSPACE_DIR}`, {});
+        if (!verifyResult.stdout || verifyResult.stdout.trim().split("\n").length < 3) {
+          throw new Error(`Clone failed - workspace empty: ${cloneResult.stderr}`);
+        }
       }
 
-      // Start vm-agent on the sprite
-      await this.startAgentSession(spriteResponse.name);
 
-      // Update status to ready
-      this.sql.exec(
-        "UPDATE session SET status = ?, updated_at = datetime('now') WHERE id = ?",
-        "ready",
-        sessionId
-      );
+      // Start vm-agent
+      await this.startAgentOnVM(spriteResponse.name);
 
-      this.broadcast({
-        type: "sprite.status",
-        status: "ready",
-      });
+      this.updateStatus("ready");
+      this.broadcastMessage({ type: "sprite.status", status: "ready" });
     } catch (error) {
       console.error("Failed to provision sprite:", error);
-      this.updateSessionStatus("error");
-      this.broadcast({
+      this.updateStatus("error");
+      this.broadcastMessage({
         type: "sprite.status",
         status: "error",
         message: error instanceof Error ? error.message : "Unknown error",
@@ -264,48 +269,47 @@ export class SessionAgentDO extends DurableObject<Env> {
     }
   }
 
-  private async startAgentSession(spriteName: string): Promise<void> {
-    const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+  private async startAgentOnVM(spriteName: string): Promise<void> {
+    const sprite = new WorkersSprite(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL
+    );
 
-    // Write the vm-agent script to the sprite filesystem.
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
 
-    // Start vm-agent via exec WebSocket (Sprite has Bun installed)
     this.agentSession = sprite.createSession("bun", ["run", `${HOME_DIR}/.cloude/agent.js`], {
       cwd: WORKSPACE_DIR,
-      tty: true,
+      tty: false,
       env: {
         ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
       },
     });
 
-    // Handle stdout - parse NDJSON lines
     this.agentSession.onStdout((data: string) => {
       this.handleAgentStdout(data);
     });
 
-    // Handle stderr - log for debugging
     this.agentSession.onStderr((data: string) => {
       console.error(`vm-agent stderr: ${data}`);
     });
 
-    // Handle session exit
     this.agentSession.onExit((code: number) => {
       console.log(`vm-agent exited with code ${code}`);
       this.agentSession = null;
     });
 
-    // Start the WebSocket connection
+    this.agentSession.onServerMessage((msg: SpriteServerMessage) => {
+      this.handleAgentServerMessage(msg);
+    });
+
     await this.agentSession.start();
     console.log(`vm-agent started on sprite ${spriteName}`);
   }
 
   private handleAgentStdout(data: string): void {
-    // Buffer partial lines and process complete NDJSON lines
     this.agentOutputBuffer += data;
     const lines = this.agentOutputBuffer.split("\n");
-
-    // Keep the last incomplete line in the buffer
     this.agentOutputBuffer = lines.pop() ?? "";
 
     for (const line of lines) {
@@ -313,10 +317,10 @@ export class SessionAgentDO extends DurableObject<Env> {
 
       try {
         const output = decodeAgentOutput(line);
-        console.log("agent output type:", output.type);
         this.handleAgentOutput(output);
       } catch {
-        // Ignore lines that don't match AgentOutput schema (e.g., TTY echo of input)
+        // Ignore lines that don't match AgentOutput schema (e.g., TTY echo)
+        console.debug(`Skipping invalid agent output: ${line}`);
       }
     }
   }
@@ -324,27 +328,24 @@ export class SessionAgentDO extends DurableObject<Env> {
   private handleAgentOutput(output: AgentOutput): void {
     switch (output.type) {
       case "ready":
-        // Store the Agent SDK session ID for resumption
-        this.sql.exec(
-          "UPDATE session SET claude_session_id = ? WHERE id = (SELECT id FROM session LIMIT 1)",
-          output.sessionId
-        );
-        this.broadcast({
-          type: "claude.ready",
-          agentSessionId: output.sessionId,
+        this.setState({ ...this.state, claudeSessionId: output.sessionId });
+        this.broadcastMessage({
+          type: "agent.ready",
+          sessionId: output.sessionId,
         });
         break;
 
       case "sdk":
-        // Forward SDK messages to connected clients
-        this.broadcast({
-          type: "claude.sdk",
+        this.broadcastMessage({
+          type: "agent.event",
           message: output.message,
         });
+        // Save agent events to message repository
+        this.saveAgentEvent(output.message);
         break;
 
       case "error":
-        this.broadcast({
+        this.broadcastMessage({
           type: "error",
           code: "AGENT_ERROR",
           message: output.error,
@@ -353,132 +354,104 @@ export class SessionAgentDO extends DurableObject<Env> {
     }
   }
 
+  private handleAgentServerMessage(msg: SpriteServerMessage): void {
+    switch (msg.type) {
+      case "session_info":
+        console.log(`vm-agent session info: ${JSON.stringify(msg.session_id)}`);
+        this.setState({ ...this.state, agentProcessId: msg.session_id });
+        break;
+      default:
+        break;
+    }
+  }
+
+  private saveAgentEvent(message: unknown): void {
+    if (!this.state?.sessionId || !this.messageRepository) return;
+
+    // Extract content from SDK message if it's a text event
+    const msg = message as { type?: string; content?: string };
+    this.messageRepository.create({
+      sessionId: this.state.sessionId,
+      role: "assistant", // is this always assistant?
+      content: msg.content ?? "",
+      // content: msg.content,
+      rawData: message,
+    });
+    // if (msg.type === "text" && msg.content) {
+    // }
+  }
+
   private handleGetSession(): Response {
-    const session = this.getSession();
-    if (!session) {
+    if (!this.state?.sessionId) {
       return new Response("Session not found", { status: 404 });
     }
 
-    return new Response(JSON.stringify(session), {
+    // should we re-provision the sprite here?
+
+    return new Response(JSON.stringify({
+      sessionId: this.state.sessionId,
+      status: this.state.status,
+      repoId: this.state.repoId,
+    } satisfies SessionInfo), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
   private handleGetMessages(): Response {
-    const rows = this.sql
-      .exec("SELECT * FROM messages ORDER BY created_at ASC")
-      .toArray();
+    this.ensureClients();
 
-    const messages = rows.map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        id: r.id,
-        sessionId: r.session_id,
-        role: r.role,
-        content: r.content,
-        toolCalls: r.tool_calls_json ? JSON.parse(r.tool_calls_json as string) : undefined,
-        createdAt: r.created_at,
-      };
-    });
+    if (!this.state?.sessionId) {
+      return new Response(JSON.stringify([]), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
+    const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
     return new Response(JSON.stringify(messages), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
   private async handleDeleteSession(): Promise<Response> {
-    const session = this.getSession();
+    this.ensureClients();
 
-    // Clean up sprite if exists
-    if (session?.spriteName && this.spritesCoordinator) {
+    // Clean up sprite
+    if (this.state?.spriteName && this.spritesCoordinator) {
       try {
-        await this.spritesCoordinator.deleteSprite(session.spriteName);
+        await this.spritesCoordinator.deleteSprite(this.state.spriteName);
       } catch (error) {
         console.error("Failed to delete sprite:", error);
       }
     }
 
-    // Delete all data
-    this.sql.exec("DELETE FROM stream_state");
-    this.sql.exec("DELETE FROM tool_calls");
-    this.sql.exec("DELETE FROM sprite_checkpoints");
-    this.sql.exec("DELETE FROM messages");
-    this.sql.exec("DELETE FROM session");
+    // Clear messages
+    if (this.state?.sessionId) {
+      const sessionId = this.state.sessionId;
+      this.sql`DELETE FROM messages WHERE session_id = ${sessionId}`;
+    }
+
+    // Reset state
+    this.setState(undefined as unknown as AgentState);
 
     return new Response(JSON.stringify({ deleted: true }), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  // WebSocket Hibernation API
-  private handleWebSocketUpgrade(): Response {
-    const pair = new WebSocketPair();
-    const [client, server] = [pair[0], pair[1]];
+  // ============================================
+  // Client Message Handlers
+  // ============================================
 
-    const clientId = crypto.randomUUID();
-    this.ctx.acceptWebSocket(server);
-    this.connectedClients.set(server, { clientId });
-
-    // Send initial connection message
-    const session = this.getSession();
-
-    server.send(
-      JSON.stringify({
-        type: "connected",
-        sessionId: session?.sessionId ?? "",
-        status: session?.status ?? "unknown",
-      } satisfies ServerMessage)
-    );
-
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  // Called when WebSocket receives a message (hibernation-aware)
-  async webSocketMessage(ws: WebSocket, message: string): Promise<void> {
-    // Reinitialize clients after hibernation wake
-    if (!this.spritesCoordinator) {
-      this.initializeClients();
-    }
-
-    try {
-      const data = JSON.parse(message) as ClientMessage;
-      await this.handleClientMessage(ws, data);
-    } catch (error) {
-      console.error("Failed to handle message:", error);
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          code: "INVALID_MESSAGE",
-          message: "Failed to parse message",
-        } satisfies ServerMessage)
-      );
-    }
-  }
-
-  // Called when WebSocket closes (hibernation-aware)
-  async webSocketClose(ws: WebSocket): Promise<void> {
-    this.connectedClients.delete(ws);
-  }
-
-  // Called when WebSocket errors (hibernation-aware)
-  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error("WebSocket error:", error);
-    this.connectedClients.delete(ws);
-  }
-
-  private async handleClientMessage(
-    ws: WebSocket,
-    message: ClientMessage
-  ): Promise<void> {
+  private async handleClientMessage(connection: Connection, message: ClientMessage): Promise<void> {
     switch (message.type) {
       case "chat.message":
-        await this.handleChatMessage(ws, message.content);
+        await this.handleChatMessage(connection, message.content);
         break;
       case "stream.ack":
-        this.handleStreamAck(message.messageId, message.chunkIndex);
+        // TODO: implement
         break;
       case "sync.request":
-        await this.handleSyncRequest(ws, message);
+        this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
         this.handleOperationCancel();
@@ -486,65 +459,55 @@ export class SessionAgentDO extends DurableObject<Env> {
     }
   }
 
-  private async handleChatMessage(
-    ws: WebSocket,
-    content: string
-  ): Promise<void> {
-    const session = this.getSession();
-    if (!session || session.status !== "ready") {
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          code: "SESSION_NOT_READY",
-          message: `Session is ${session?.status ?? "not found"}`,
-        } satisfies ServerMessage)
-      );
+  private async handleChatMessage(connection: Connection, content: string): Promise<void> {
+    if (!this.state || this.state.status !== "ready") {
+      connection.send(JSON.stringify({
+        type: "error",
+        code: "SESSION_NOT_READY",
+        message: `Session is ${this.state?.status ?? "not found"}`,
+      } satisfies ServerMessage));
       return;
     }
 
-    // Ensure we have an agent session (reattach if needed after DO hibernation)
-    if (!this.agentSession && session.spriteName) {
-      await this.reattachAgentSession(session.spriteName);
+    // Reattach agent session if needed (after hibernation)
+    if (!this.agentSession && this.state.spriteName) {
+      await this.reattachAgentSession(this.state.spriteName);
     }
 
     if (!this.agentSession) {
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          code: "NO_AGENT_SESSION",
-          message: "Agent session not available",
-        } satisfies ServerMessage)
-      );
+      connection.send(JSON.stringify({
+        type: "error",
+        code: "NO_AGENT_SESSION",
+        message: "Agent session not available",
+      } satisfies ServerMessage));
       return;
     }
 
     // Store user message
-    const userMessageId = crypto.randomUUID();
-    this.sql.exec(
-      "INSERT INTO messages (id, session_id, role, content) VALUES (?, ?, ?, ?)",
-      userMessageId,
-      session.sessionId,
-      "user",
-      content
-    );
+    this.ensureClients();
+    this.messageRepository!.create({
+      sessionId: this.state.sessionId,
+      role: "user",
+      content,
+    });
 
-    // Send chat message to vm-agent via stdin
+    // Send to vm-agent
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
   private async reattachAgentSession(spriteName: string): Promise<void> {
-    // After DO hibernation, the agentSession WebSocket is gone but the vm-agent
-    // process may still be running on the Sprite (Sprites maintain state when dormant).
-    // We need to reconnect to it or start a new one.
+    this.ensureClients();
 
-    const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+    const sprite = new WorkersSprite(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL
+    );
 
-    // Check if vm-agent session still exists on the Sprite
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    const existingSession = sessions.find((s) => s.command.includes("agent.js"));
+    const existingSession = sessions.find((s) => s.id === this.state?.agentProcessId);
 
     if (existingSession) {
-      // Reattach to existing vm-agent session
       this.agentSession = sprite.attachSession(String(existingSession.id), {});
 
       this.agentSession.onStdout((data: string) => {
@@ -563,36 +526,36 @@ export class SessionAgentDO extends DurableObject<Env> {
       await this.agentSession.start();
       console.log(`Reattached to vm-agent session ${existingSession.id}`);
     } else {
-      // Session no longer exists, start a new one
       console.log("Previous vm-agent session not found, starting new one");
-      await this.startAgentSession(spriteName);
+      await this.startAgentOnVM(spriteName);
     }
   }
 
-  private handleStreamAck(messageId: string, chunkIndex: number): void {
-    // TODO: implement
-  }
+  private handleSyncRequest(connection: Connection): void {
+    this.ensureClients();
 
-  private handleSyncRequest(ws: WebSocket, message: ClientMessage): void {
-    // todo: implement
+    if (!this.state?.sessionId) {
+      connection.send(JSON.stringify({
+        type: "sync.response",
+        messages: [],
+      }));
+      return;
+    }
+
+    const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
+    connection.send(JSON.stringify({
+      type: "sync.response",
+      messages,
+    }));
   }
 
   private handleOperationCancel(): void {
-    // Send cancel to vm-agent
     if (this.agentSession) {
       this.agentSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
     }
   }
 
-  private broadcast(message: ServerMessage): void {
-    const data = JSON.stringify(message);
-    for (const ws of this.ctx.getWebSockets()) {
-      try {
-        ws.send(data);
-      } catch(error) {
-        // WebSocket might be closed
-        console.error("Failed to broadcast message to WebSocket:", error);
-      }
-    }
+  private broadcastMessage(message: ServerMessage): void {
+    this.broadcast(JSON.stringify(message));
   }
 }

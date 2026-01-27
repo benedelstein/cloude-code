@@ -3,6 +3,7 @@ import { z } from "zod";
 export const SessionStatus = z.enum([
   "creating",
   "provisioning",
+  "cloning",
   "ready",
   "hibernating",
   "error",
@@ -26,6 +27,20 @@ export const Session = z.object({
   updatedAt: z.string().datetime(),
 });
 export type Session = z.infer<typeof Session>;
+
+/** Minimal session info returned by API */
+export const SessionInfo = z.object({
+  sessionId: z.string(),
+  status: SessionStatus,
+  repoId: z.string(),
+});
+export type SessionInfo = z.infer<typeof SessionInfo>;
+
+/** Session info with wsUrl for reconnection */
+export const SessionInfoWithWsUrl = SessionInfo.extend({
+  wsUrl: z.string(),
+});
+export type SessionInfoWithWsUrl = z.infer<typeof SessionInfoWithWsUrl>;
 
 export const CreateSessionRequest = z.object({
   repoId: z.string().min(1),
@@ -54,7 +69,7 @@ export const ToolCall = z.object({
   id: z.string().uuid(),
   messageId: z.string().uuid(),
   toolName: z.string(),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
   output: z.string().nullable(),
   status: z.enum(["pending", "running", "completed", "failed"]),
   createdAt: z.string().datetime(),
