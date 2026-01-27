@@ -1,10 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to ai agents when working with code in this repository.
 
 ## Project Overview
 
-cloude-code is a cloud-hosted agent platform. It runs agents inside isolated VMs (Fly.io Sprites) that are connected to an API server via WebSockets. Users connect to the API server, which provisions a durable object which provisions a Sprite VM, clones their GitHub repo, and runs a vm-agent that wraps the Claude Agent SDK.
+cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) that are connected to an API server via WebSockets. Users connect to the API serve and create a session to make changes in a repository. The session gets its own Durable Object, which provisions a Sprite VM, clones the repository, and runs an agent process on the vm and communicates with the API server. 
+
+The Durable Object is the source of truth and coordinator for the session. It stores all messages in its sqlite db, handles websocket comms and forwards responses to and from the agent process on the vm (via stdin/stdout).
 
 ## Build & Development Commands
 
@@ -61,10 +63,10 @@ pnpm build         # tsc
 
 ### Request Flow
 
-1. Client creates session via `POST /sessions` with `repoId`
+1. Client creates session via `POST /sessions` with `repoId` (or connects to an existing session via `GET /sessions/{sessionId}`)
 2. API returns `sessionId` and `wsUrl`, spawns provisioning in background
 3. `SessionAgentDO` provisions a Sprite VM, clones the repo, starts vm-agent
-4. Client connects via WebSocket, receives `connected` and `sync.response` events
+4. Client connects to WebSocket url, receives `connected` and `sync.response` events with initial message history
 5. Client sends `chat.message`, DO forwards to vm-agent stdin
 6. vm-agent runs Claude Agent SDK, streams `sdk` output back through stdout
 7. DO broadcasts `claude.sdk` events to all connected WebSocket clients
