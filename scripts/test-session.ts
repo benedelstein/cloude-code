@@ -105,7 +105,11 @@ async function main() {
 
   let session: SessionResponse;
 
-  if (arg && isUUID(arg)) {
+  if (arg) {
+    if (!isUUID(arg)) {
+      console.error(`Invalid session id: ${arg}`);
+      process.exit(1);
+    }
     // Resume existing session
     console.log(`Resuming session: ${arg}`);
     session = await getSession(arg);

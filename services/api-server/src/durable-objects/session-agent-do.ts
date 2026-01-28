@@ -13,15 +13,16 @@ import type { Env } from "../types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
+import { generateBranchSlug } from "../lib/branch-slug";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
 // Session metadata stored in Agent state (survives hibernation)
 type AgentState = {
-  sessionId: string;
-  userId: string;
-  repoId: string;
+  sessionId: string | null;
+  userId: string | null;
+  repoId: string | null;
   spriteName: string | null;
   githubBranchName: string | null;
   /** Session ID given by the Claude Agent SDK */
@@ -30,7 +31,7 @@ type AgentState = {
   agentProcessId: number | null;
   status: Session["status"];
   settings: SessionSettings;
-  createdAt: string;
+  createdAt: Date;
 };
 
 interface InitRequest {
@@ -46,6 +47,21 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private agentOutputBuffer: string = "";
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
+  /** Mutex for reattachment to prevent race conditions */
+  private reattachPromise: Promise<void> | null = null;
+
+  initialState: AgentState = {
+    sessionId: "",
+    userId: "",
+    repoId: "",
+    spriteName: null,
+    githubBranchName: null,
+    claudeSessionId: null,
+    agentProcessId: null,
+    status: "creating",
+    settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
+    createdAt: new Date(),
+  };
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -134,6 +150,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         messages,
       }));
     }
+
+    // Proactively trigger reattachment when client connects (non-blocking)
+    if (this.state.status === "ready" && !this.agentSession && this.state.spriteName) {
+      this.ctx.waitUntil(this.reattachAgentSession(this.state.spriteName));
+    }
   }
 
   // Agent SDK WebSocket handlers
@@ -165,7 +186,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async handleInit(request: Request): Promise<Response> {
     // Prevent re-initialization
-    if (this.state?.sessionId) {
+    if (this.state.sessionId) {
       return new Response(JSON.stringify({ error: "Session already initialized" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -181,6 +202,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Initialize agent state
     this.setState({
+      ...this.state,
       sessionId: data.sessionId,
       userId: "anonymous", // todo
       repoId: data.repoId,
@@ -190,7 +212,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       agentProcessId: null,
       status: "provisioning",
       settings,
-      createdAt: new Date().toISOString(),
     });
 
     // Provision sprite asynchronously
@@ -202,6 +223,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async provisionSprite(sessionId: string, repoId: string): Promise<void> {
+    console.debug(`Provisioning sprite for session ${sessionId} and repo ${repoId}`);
     try {
       this.ensureClients();
 
@@ -212,17 +234,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
         },
       });
-
-      this.setState({
-        ...this.state,
-        spriteName: spriteResponse.name,
-        status: "cloning",
-      });
-
-      this.broadcastMessage({
-        type: "sprite.status",
-        status: "cloning" as Session["status"],
-      } as unknown as ServerMessage);
 
       const sprite = new WorkersSprite(
         spriteResponse.name,
@@ -235,8 +246,18 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       const isCloned = await sprite.execHttp(`test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`, {});
       if (isCloned.stdout.includes("exists")) {
         console.log(`Repo ${repoId} already cloned on sprite ${spriteResponse.name}`);
-        // make sure we're up to date?
       } else {
+        this.setState({
+          ...this.state,
+          spriteName: spriteResponse.name,
+          status: "cloning",
+        });
+  
+        this.broadcastMessage({
+          type: "sprite.status",
+          status: "cloning",
+          message: `Cloning repo ${repoId} on sprite ${spriteResponse.name}`,
+        });
         console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
         const cloneResult = await sprite.execHttp(
@@ -244,13 +265,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           {}
         );
         console.log(`Clone result: exitCode=${cloneResult.exitCode}`);
-        // we need to switch to a new branch too.
         // Verify clone
         const verifyResult = await sprite.execHttp(`ls -la ${WORKSPACE_DIR}`, {});
         if (!verifyResult.stdout || verifyResult.stdout.trim().split("\n").length < 3) {
           throw new Error(`Clone failed - workspace empty: ${cloneResult.stderr}`);
         }
       }
+
+      // Set up git config for commits
+      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
+      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Agent"`, {});
 
 
       // Start vm-agent
@@ -277,8 +301,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
-
-    this.agentSession = sprite.createSession("bun", ["run", `${HOME_DIR}/.cloude/agent.js`], {
+    const claudeSessionId = this.state.claudeSessionId;
+    const commands = ["run", `${HOME_DIR}/.cloude/agent.js`];
+    if (claudeSessionId) {
+      commands.push(`--sessionId=${claudeSessionId}`);
+    }
+    this.agentSession = sprite.createSession("bun", commands, {
       cwd: WORKSPACE_DIR,
       tty: false,
       env: {
@@ -366,7 +394,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private saveAgentEvent(message: unknown): void {
-    if (!this.state?.sessionId || !this.messageRepository) return;
+    if (!this.state.sessionId || !this.messageRepository) return;
 
     // Extract content from SDK message if it's a text event
     const msg = message as { type?: string; content?: string };
@@ -382,11 +410,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleGetSession(): Response {
-    if (!this.state?.sessionId) {
+    if (!this.state.sessionId || !this.state.repoId) {
       return new Response("Session not found", { status: 404 });
     }
-
-    // should we re-provision the sprite here?
 
     return new Response(JSON.stringify({
       sessionId: this.state.sessionId,
@@ -400,7 +426,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private handleGetMessages(): Response {
     this.ensureClients();
 
-    if (!this.state?.sessionId) {
+    if (!this.state.sessionId) {
       return new Response(JSON.stringify([]), {
         headers: { "Content-Type": "application/json" },
       });
@@ -416,7 +442,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.ensureClients();
 
     // Clean up sprite
-    if (this.state?.spriteName && this.spritesCoordinator) {
+    if (this.state.spriteName && this.spritesCoordinator) {
       try {
         await this.spritesCoordinator.deleteSprite(this.state.spriteName);
       } catch (error) {
@@ -425,13 +451,18 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     // Clear messages
-    if (this.state?.sessionId) {
+    if (this.state.sessionId) {
       const sessionId = this.state.sessionId;
       this.sql`DELETE FROM messages WHERE session_id = ${sessionId}`;
     }
 
     // Reset state
-    this.setState(undefined as unknown as AgentState);
+    this.setState({
+      ...this.state,
+      status: "deleted",
+    });
+
+    // maybe delete the sprite.
 
     return new Response(JSON.stringify({ deleted: true }), {
       headers: { "Content-Type": "application/json" },
@@ -460,11 +491,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleChatMessage(connection: Connection, content: string): Promise<void> {
-    if (!this.state || this.state.status !== "ready") {
+    // Reject messages during transitional states
+    const transitionStates = ["provisioning", "cloning", "syncing", "attaching"];
+    if (transitionStates.includes(this.state.status)) {
+      connection.send(JSON.stringify({
+        type: "error",
+        code: "SESSION_TRANSITIONING",
+        message: `Session is ${this.state.status}, please wait`,
+      } satisfies ServerMessage));
+      return;
+    }
+
+    if (this.state.status !== "ready") {
       connection.send(JSON.stringify({
         type: "error",
         code: "SESSION_NOT_READY",
-        message: `Session is ${this.state?.status ?? "not found"}`,
+        message: `Session is ${this.state.status}`,
       } satisfies ServerMessage));
       return;
     }
@@ -483,8 +525,31 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return;
     }
 
+    // Create feature branch on first message
+    if (!this.state.githubBranchName && this.state.spriteName) {
+      try {
+        const branchSlug = await generateBranchSlug(content, this.env.ANTHROPIC_API_KEY);
+        console.log(`Generated branch slug: ${branchSlug}`);
+        await this.createFeatureBranch(this.state.spriteName, branchSlug);
+        this.setState({ ...this.state, githubBranchName: branchSlug });
+        console.log(`Created feature branch: ${branchSlug}`);
+      } catch (error) {
+        console.error("Failed to create feature branch:", error);
+        connection.send(JSON.stringify({
+          type: "error",
+          code: "FAILED_TO_CREATE_BRANCH",
+          message: "Failed to create feature branch",
+        } satisfies ServerMessage));
+        return;
+      }
+    }
+
     // Store user message
     this.ensureClients();
+    if (!this.state.sessionId) {
+      console.error("No session id");
+      return;
+    }
     this.messageRepository!.create({
       sessionId: this.state.sessionId,
       role: "user",
@@ -495,14 +560,66 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
+  private async createFeatureBranch(spriteName: string, branchName: string): Promise<void> {
+    const sprite = new WorkersSprite(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL
+    );
+
+    const result = await sprite.execHttp(`cd ${WORKSPACE_DIR} && git checkout -b ${branchName}`, {});
+    if (result.exitCode !== 0) {
+      throw new Error(`Failed to create branch ${branchName}: ${result.stderr}`);
+    }
+  }
+
+  private async syncRepository(sprite: WorkersSprite): Promise<void> {
+    const branchName = this.state?.githubBranchName;
+
+    // Stash any local changes
+    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash --include-untracked`, {});
+    // Fetch latest refs
+    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git fetch origin`, {});
+    // Pull if remote branch exists
+    if (branchName) {
+      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git pull origin ${branchName} --rebase || true`, {});
+    }
+    // Restore stashed changes
+    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash pop || true`, {});
+    // what if there are conflicts? what if the remote branch doesnt exist?
+  }
+
   private async reattachAgentSession(spriteName: string): Promise<void> {
+    // Mutex pattern: if already reattaching, wait for that to complete
+    if (this.reattachPromise) {
+      return this.reattachPromise;
+    }
+
+    this.reattachPromise = this._doReattach(spriteName);
+    try {
+      await this.reattachPromise;
+    } finally {
+      this.reattachPromise = null;
+    }
+  }
+
+  private async _doReattach(spriteName: string): Promise<void> {
     this.ensureClients();
+
+    // Set status to attaching
+    this.updateStatus("attaching");
+    this.broadcastMessage({ type: "sprite.status", status: "attaching" });
 
     const sprite = new WorkersSprite(
       spriteName,
       this.env.SPRITES_API_KEY,
       this.env.SPRITES_API_URL
     );
+
+    // Sync repository before reattaching
+    this.updateStatus("syncing");
+    this.broadcastMessage({ type: "sprite.status", status: "syncing" });
+    await this.syncRepository(sprite);
 
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
     const existingSession = sessions.find((s) => s.id === this.state?.agentProcessId);
@@ -529,6 +646,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       console.log("Previous vm-agent session not found, starting new one");
       await this.startAgentOnVM(spriteName);
     }
+
+    // Set status back to ready
+    this.updateStatus("ready");
+    this.broadcastMessage({ type: "sprite.status", status: "ready" });
   }
 
   private handleSyncRequest(connection: Connection): void {

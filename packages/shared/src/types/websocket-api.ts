@@ -84,7 +84,7 @@ export type ToolResultEvent = z.infer<typeof ToolResultEvent>;
 
 export const SpriteStatusEvent = z.object({
   type: z.literal("sprite.status"),
-  status: z.enum(["provisioning", "ready", "waking", "hibernating", "error"]),
+  status: z.enum(["provisioning", "cloning", "syncing", "attaching", "ready", "waking", "hibernating", "error"]),
   message: z.string().optional(),
 });
 export type SpriteStatusEvent = z.infer<typeof SpriteStatusEvent>;

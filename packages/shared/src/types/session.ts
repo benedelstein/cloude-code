@@ -4,9 +4,12 @@ export const SessionStatus = z.enum([
   "creating",
   "provisioning",
   "cloning",
+  "syncing",
+  "attaching", // attaching to the existing agent process on the vm
   "ready",
   "hibernating",
   "error",
+  "deleted", 
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 

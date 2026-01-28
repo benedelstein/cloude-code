@@ -1,3 +1,3 @@
 export * from "./session";
-export * from "./protocol";
+export * from "./websocket-api";
 export * from "./vm-agent";
