@@ -1,4 +1,8 @@
-import { z } from "zod";
+import { z } from "zod/v4";
+import type { UIMessage, UIMessagePart } from "ai";
+
+// Re-export AI SDK types for convenience
+export type { UIMessage, UIMessagePart };
 
 // Client → Server messages
 export const ChatMessageEvent = z.object({
@@ -44,44 +48,6 @@ export const ConnectedEvent = z.object({
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
-export const MessageStartEvent = z.object({
-  type: z.literal("message.start"),
-  messageId: z.string().uuid(),
-});
-export type MessageStartEvent = z.infer<typeof MessageStartEvent>;
-
-export const StreamChunkEvent = z.object({
-  type: z.literal("stream.chunk"),
-  messageId: z.string().uuid(),
-  chunkIndex: z.number(),
-  content: z.string(),
-});
-export type StreamChunkEvent = z.infer<typeof StreamChunkEvent>;
-
-export const MessageCompleteEvent = z.object({
-  type: z.literal("message.complete"),
-  messageId: z.string().uuid(),
-  totalChunks: z.number(),
-});
-export type MessageCompleteEvent = z.infer<typeof MessageCompleteEvent>;
-
-export const ToolUseEvent = z.object({
-  type: z.literal("tool.use"),
-  toolCallId: z.string().uuid(),
-  messageId: z.string().uuid(),
-  toolName: z.string(),
-  input: z.record(z.string(), z.unknown()),
-});
-export type ToolUseEvent = z.infer<typeof ToolUseEvent>;
-
-export const ToolResultEvent = z.object({
-  type: z.literal("tool.result"),
-  toolCallId: z.string().uuid(),
-  output: z.string(),
-  isError: z.boolean().optional(),
-});
-export type ToolResultEvent = z.infer<typeof ToolResultEvent>;
-
 export const SpriteStatusEvent = z.object({
   type: z.literal("sprite.status"),
   status: z.enum(["provisioning", "cloning", "syncing", "attaching", "ready", "waking", "hibernating", "error"]),
@@ -89,9 +55,17 @@ export const SpriteStatusEvent = z.object({
 });
 export type SpriteStatusEvent = z.infer<typeof SpriteStatusEvent>;
 
+// Zod schema for UIMessage (runtime validation)
+export const UIMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  parts: z.array(z.unknown()), // UIMessagePart[]
+  metadata: z.unknown().optional(),
+});
+
 export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
-  messages: z.array(z.unknown()),
+  messages: z.array(UIMessageSchema),
   pendingChunks: z.array(z.unknown()).optional(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
@@ -103,30 +77,39 @@ export const ErrorEvent = z.object({
 });
 export type ErrorEvent = z.infer<typeof ErrorEvent>;
 
-// Agent SDK message events (forwarded from vm-agent)
-export const AgentEvent = z.object({
-  type: z.literal("agent.event"),
-  message: z.unknown(), // SDKMessage from @anthropic-ai/claude-agent-sdk
+// AI SDK UIMessageStream chunk (for real-time streaming)
+export const AgentChunkEvent = z.object({
+  type: z.literal("agent.chunk"),
+  chunk: z.unknown(), // UIMessageStreamPart from AI SDK
 });
-export type AgentEvent = z.infer<typeof AgentEvent>;
+export type AgentChunkEvent = z.infer<typeof AgentChunkEvent>;
+
+// Agent message finished (accumulated UIMessage saved)
+export const AgentFinishEvent = z.object({
+  type: z.literal("agent.finish"),
+  message: UIMessageSchema,
+});
+export type AgentFinishEvent = z.infer<typeof AgentFinishEvent>;
 
 export const AgentReadyEvent = z.object({
   type: z.literal("agent.ready"),
-  sessionId: z.string(),
 });
 export type AgentReadyEvent = z.infer<typeof AgentReadyEvent>;
 
+export const UserMessageEvent = z.object({
+  type: z.literal("user.message"),
+  message: UIMessageSchema,
+});
+export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
+
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
-  MessageStartEvent,
-  StreamChunkEvent,
-  MessageCompleteEvent,
-  ToolUseEvent,
-  ToolResultEvent,
   SpriteStatusEvent,
   SyncResponseEvent,
   ErrorEvent,
-  AgentEvent,
+  AgentChunkEvent,
+  AgentFinishEvent,
   AgentReadyEvent,
+  UserMessageEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

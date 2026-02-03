@@ -1,4 +1,8 @@
 import { z } from "zod";
+import type { UIMessage, UIMessageChunk } from "ai";
+
+// Re-export AI SDK types
+export type { UIMessage, UIMessageChunk };
 
 // ============================================
 // VM Agent Input (api-server → vm-agent stdin)
@@ -29,27 +33,41 @@ export type AgentInput = z.infer<typeof AgentInput>;
 // VM Agent Output (vm-agent stdout → api-server)
 // ============================================
 
-// Wrapper for SDK messages (we use z.unknown() since SDK types aren't Zod)
-export const AgentSdkOutput = z.object({
-  type: z.literal("sdk"),
-  message: z.unknown(), // Raw SDKMessage from @anthropic-ai/claude-agent-sdk
-});
-
+// Agent is ready to receive messages
 export const AgentReadyOutput = z.object({
   type: z.literal("ready"),
-  sessionId: z.string(),
-  claudeExecutablePath: z.string(),
+  // sessionId: z.string(),
 });
 
+// Fatal agent error
 export const AgentErrorOutput = z.object({
   type: z.literal("error"),
   error: z.string(),
 });
 
+// AI SDK stream chunk wrapper
+export const AgentStreamOutput = z.object({
+  type: z.literal("stream"),
+  chunk: z.unknown(), // UIMessageChunk from AI SDK
+});
+
+export const AgentDebugOutput = z.object({
+  type: z.literal("debug"),
+  message: z.string(),
+});
+
+// Claude session ID (for resuming sessions)
+export const AgentSessionIdOutput = z.object({
+  type: z.literal("sessionId"),
+  sessionId: z.string(),
+});
+
 export const AgentOutput = z.discriminatedUnion("type", [
-  AgentSdkOutput,
   AgentReadyOutput,
+  AgentDebugOutput,
   AgentErrorOutput,
+  AgentStreamOutput,
+  AgentSessionIdOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 

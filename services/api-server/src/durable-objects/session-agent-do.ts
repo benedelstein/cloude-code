@@ -9,11 +9,13 @@ import {
   encodeAgentInput,
   Session,
 } from "@repo/shared";
-import type { Env } from "../types";
+import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
-import { generateBranchSlug } from "../lib/branch-slug";
+import { generateBranchSlug } from "@/lib/branch-slug";
+import { MessageAccumulator } from "@/lib/message-accumulator";
+import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -47,8 +49,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private agentOutputBuffer: string = "";
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
+  /** mitmproxy session for HTTP debugging */
+  private mitmSession: SpriteWebsocketSession | null = null;
   /** Mutex for reattachment to prevent race conditions */
   private reattachPromise: Promise<void> | null = null;
+  /** Accumulator for building UIMessage from stream chunks */
+  private messageAccumulator: MessageAccumulator = new MessageAccumulator();
 
   initialState: AgentState = {
     sessionId: "",
@@ -74,9 +80,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        raw_data TEXT,
+        message TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `;
@@ -134,6 +138,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   // Called by Agent SDK when a new WebSocket connection is established
   onConnect(connection: Connection): void {
+    console.debug(`client connected: ${connection.id}`);
     // Send initial connection state
     connection.send(JSON.stringify({
       type: "connected",
@@ -144,16 +149,18 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Send message history
     if (this.state?.sessionId && this.messageRepository) {
       this.ensureClients();
-      const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
+      const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
       connection.send(JSON.stringify({
         type: "sync.response",
-        messages,
-      }));
+        messages: storedMessages.map((m) => m.message),
+      } satisfies ServerMessage));
     }
 
     // Proactively trigger reattachment when client connects (non-blocking)
     if (this.state.status === "ready" && !this.agentSession && this.state.spriteName) {
       this.ctx.waitUntil(this.reattachAgentSession(this.state.spriteName));
+    } else {
+      console.debug(`reattachAgentSession not triggered: status=${this.state.status}, spriteName=${this.state.spriteName}`);
     }
   }
 
@@ -224,14 +231,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async provisionSprite(sessionId: string, repoId: string): Promise<void> {
     console.debug(`Provisioning sprite for session ${sessionId} and repo ${repoId}`);
+    this.getConnections()
     try {
       this.ensureClients();
 
       const spriteResponse = await this.spritesCoordinator!.createSprite({
-        name: `session-${sessionId}`,
+        name: `${sessionId}`,
         env: {
           GITHUB_TOKEN: this.env.GITHUB_TOKEN,
-          ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
         },
       });
 
@@ -276,8 +283,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Agent"`, {});
 
+      // Install mitmproxy for HTTP header debugging
+      await sprite.execHttp(`pip install mitmproxy`, {});
 
-      // Start vm-agent
+      // Start mitmproxy as a session, then vm-agent
+      await this.startMitmproxyOnVM(spriteResponse.name);
       await this.startAgentOnVM(spriteResponse.name);
 
       this.updateStatus("ready");
@@ -293,6 +303,34 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
+  private async startMitmproxyOnVM(spriteName: string): Promise<void> {
+    console.debug(`Starting mitmproxy on sprite ${spriteName}`);
+    const sprite = new WorkersSprite(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL
+    );
+
+    // Kill any existing mitmproxy to free port 8080
+    await sprite.execHttp(`pkill -f mitmdump || true`, {});
+    await new Promise(r => setTimeout(r, 200));
+
+    const PYENV_SHIMS = "/.sprite/languages/python/pyenv/shims";
+    this.mitmSession = sprite.createSession(
+      `${PYENV_SHIMS}/mitmdump`,
+      ["-p", "8080", "--set", "stream_large_bodies=1", "-w", `${HOME_DIR}/.cloude/traffic.mitm`],
+      {}
+    );
+
+    // Only log errors, traffic is written to file
+    this.mitmSession.onStderr((data) => console.log("[mitmdump err]", data));
+
+    await this.mitmSession.start();
+    // Give it a moment to bind to port
+    await new Promise(r => setTimeout(r, 500));
+    console.log(`mitmproxy started on sprite ${spriteName}`);
+  }
+
   private async startAgentOnVM(spriteName: string): Promise<void> {
     const sprite = new WorkersSprite(
       spriteName,
@@ -302,17 +340,35 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
     const claudeSessionId = this.state.claudeSessionId;
-    const commands = ["run", `${HOME_DIR}/.cloude/agent.js`];
-    if (claudeSessionId) {
-      commands.push(`--sessionId=${claudeSessionId}`);
-    }
-    this.agentSession = sprite.createSession("bun", commands, {
+    const commands = [
+      "bun",
+      "run",
+      `${HOME_DIR}/.cloude/agent.js`,
+      ...(claudeSessionId ? [`--sessionId=${claudeSessionId}`] : []),
+    ];
+    this.agentSession = sprite.createSession("env", commands, {
       cwd: WORKSPACE_DIR,
       tty: false,
       env: {
         ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
-      },
+        // Proxy disabled for now - uncomment to debug HTTP traffic
+        // HTTP_PROXY: "http://127.0.0.1:8080",
+        // HTTPS_PROXY: "http://127.0.0.1:8080",
+        // http_proxy: "http://127.0.0.1:8080",
+        // https_proxy: "http://127.0.0.1:8080",
+        // ALL_PROXY: "http://127.0.0.1:8080",
+        // NODE_TLS_REJECT_UNAUTHORIZED: "0",
+        // NODE_EXTRA_CA_CERTS: `${HOME_DIR}/.mitmproxy/mitmproxy-ca-cert.pem`,
+      }
     });
+
+    this.setupAgentSessionHandlers();
+    await this.agentSession.start();
+    console.log(`vm-agent started on sprite ${spriteName}`);
+  }
+
+  private setupAgentSessionHandlers(): void {
+    if (!this.agentSession) return;
 
     this.agentSession.onStdout((data: string) => {
       this.handleAgentStdout(data);
@@ -330,12 +386,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.agentSession.onServerMessage((msg: SpriteServerMessage) => {
       this.handleAgentServerMessage(msg);
     });
-
-    await this.agentSession.start();
-    console.log(`vm-agent started on sprite ${spriteName}`);
   }
 
   private handleAgentStdout(data: string): void {
+    console.log(`[vm-agent stdout] ${data}`);
     this.agentOutputBuffer += data;
     const lines = this.agentOutputBuffer.split("\n");
     this.agentOutputBuffer = lines.pop() ?? "";
@@ -355,58 +409,69 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private handleAgentOutput(output: AgentOutput): void {
     switch (output.type) {
-      case "ready":
-        this.setState({ ...this.state, claudeSessionId: output.sessionId });
+      case "ready": {
         this.broadcastMessage({
           type: "agent.ready",
-          sessionId: output.sessionId,
         });
         break;
-
-      case "sdk":
-        this.broadcastMessage({
-          type: "agent.event",
-          message: output.message,
-        });
-        // Save agent events to message repository
-        this.saveAgentEvent(output.message);
-        break;
-
-      case "error":
+      }
+      case "error": {
+        console.error(`vm-agent error: ${output.error}`);
         this.broadcastMessage({
           type: "error",
           code: "AGENT_ERROR",
           message: output.error,
         });
         break;
+      }
+      case "debug": {
+        console.debug(`[vm-agent debug] ${output.message}`);
+        break;
+      }
+      case "stream": {
+        this.broadcastMessage({
+          type: "agent.chunk",
+          chunk: output.chunk,
+        });
+
+        // Accumulate chunks into UIMessage
+        const isFinished = this.messageAccumulator.process(output.chunk);
+        if (isFinished) {
+          // Save the accumulated message to DB
+          const message = this.messageAccumulator.getMessage();
+          if (message && this.state.sessionId && this.messageRepository) {
+            const stored = this.messageRepository.create(this.state.sessionId, message);
+
+            // Broadcast finish event with the complete message
+            this.broadcastMessage({
+              type: "agent.finish",
+              message: stored.message,
+            });
+          }
+
+          // Reset accumulator for next message
+          this.messageAccumulator.reset();
+        }
+        break;
+      }
+      case "sessionId": {
+        // Store Claude's session ID for resuming later
+        console.log(`Storing Claude session ID: ${output.sessionId}`);
+        this.setState({ ...this.state, claudeSessionId: output.sessionId });
+        break;
+      }
     }
   }
 
   private handleAgentServerMessage(msg: SpriteServerMessage): void {
     switch (msg.type) {
       case "session_info":
-        console.log(`vm-agent session info: ${JSON.stringify(msg.session_id)}`);
+        console.log(`vm-agent session id: ${JSON.stringify(msg.session_id)}`);
         this.setState({ ...this.state, agentProcessId: msg.session_id });
         break;
       default:
         break;
     }
-  }
-
-  private saveAgentEvent(message: unknown): void {
-    if (!this.state.sessionId || !this.messageRepository) return;
-
-    // Extract content from SDK message if it's a text event
-    const msg = message as { type?: string; content?: string };
-    this.messageRepository.create({
-      sessionId: this.state.sessionId,
-      role: "assistant", // is this always assistant?
-      content: msg.content ?? "",
-      // content: msg.content,
-      rawData: message,
-    });
-    // if (msg.type === "text" && msg.content) {
-    // }
   }
 
   private handleGetSession(): Response {
@@ -432,8 +497,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       });
     }
 
-    const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
-    return new Response(JSON.stringify(messages), {
+    const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
+    return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -491,24 +556,33 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleChatMessage(connection: Connection, content: string): Promise<void> {
-    // Reject messages during transitional states
-    const transitionStates = ["provisioning", "cloning", "syncing", "attaching"];
-    if (transitionStates.includes(this.state.status)) {
-      connection.send(JSON.stringify({
-        type: "error",
-        code: "SESSION_TRANSITIONING",
-        message: `Session is ${this.state.status}, please wait`,
-      } satisfies ServerMessage));
-      return;
-    }
-
-    if (this.state.status !== "ready") {
-      connection.send(JSON.stringify({
-        type: "error",
-        code: "SESSION_NOT_READY",
-        message: `Session is ${this.state.status}`,
-      } satisfies ServerMessage));
-      return;
+    switch (this.state.status) {
+      case "provisioning":
+      case "cloning":
+      case "syncing":
+      case "attaching":
+        connection.send(JSON.stringify({
+          type: "error",
+          code: "SESSION_TRANSITIONING",
+          message: `Session is ${this.state.status}, please wait`,
+        } satisfies ServerMessage));
+        return;
+      case "creating":
+      case "hibernating":
+      case "error":
+      case "deleted":
+        connection.send(JSON.stringify({
+          type: "error",
+          code: "SESSION_NOT_READY",
+          message: `Session is ${this.state.status}`,
+        } satisfies ServerMessage));
+        return;
+      case "ready":
+        break;
+      default: {
+        const _exhaustive: never = this.state.status;
+        throw new Error(`Unhandled status: ${_exhaustive}`);
+      }
     }
 
     // Reattach agent session if needed (after hibernation)
@@ -544,19 +618,26 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
     }
 
-    // Store user message
+    // Store user message with parts format
     this.ensureClients();
     if (!this.state.sessionId) {
       console.error("No session id");
       return;
     }
-    this.messageRepository!.create({
-      sessionId: this.state.sessionId,
+    // We also need to broadcast this to all clients who are not this connected client.
+    const userMessage: UIMessage = {
+      id: crypto.randomUUID(),
       role: "user",
-      content,
-    });
+      parts: [{ type: "text", text: content }],
+    };
+    const stored = this.messageRepository!.create(this.state.sessionId, userMessage);
+    this.broadcastMessage({
+      type: "user.message",
+      message: stored.message,
+    }, [connection.id]);
 
     // Send to vm-agent
+    console.log(`Sending to vm-agent: ${content}`);
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
@@ -583,6 +664,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Pull if remote branch exists
     if (branchName) {
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git pull origin ${branchName} --rebase || true`, {});
+    } else {
+      // what to do if the branch doesn't exist?
     }
     // Restore stashed changes
     await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash pop || true`, {});
@@ -606,9 +689,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async _doReattach(spriteName: string): Promise<void> {
     this.ensureClients();
 
-    // Set status to attaching
-    this.updateStatus("attaching");
-    this.broadcastMessage({ type: "sprite.status", status: "attaching" });
 
     const sprite = new WorkersSprite(
       spriteName,
@@ -616,30 +696,26 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.env.SPRITES_API_URL
     );
 
+    // Restart mitmproxy if not running (it doesn't survive hibernation)
+    if (!this.mitmSession) {
+      await this.startMitmproxyOnVM(spriteName);
+    }
+
     // Sync repository before reattaching
     this.updateStatus("syncing");
     this.broadcastMessage({ type: "sprite.status", status: "syncing" });
     await this.syncRepository(sprite);
-
+    
+    // Set status to attaching
+    this.updateStatus("attaching");
+    this.broadcastMessage({ type: "sprite.status", status: "attaching" });
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
     const existingSession = sessions.find((s) => s.id === this.state?.agentProcessId);
 
     if (existingSession) {
       this.agentSession = sprite.attachSession(String(existingSession.id), {});
 
-      this.agentSession.onStdout((data: string) => {
-        this.handleAgentStdout(data);
-      });
-
-      this.agentSession.onStderr((data: string) => {
-        console.error(`vm-agent stderr: ${data}`);
-      });
-
-      this.agentSession.onExit((code: number) => {
-        console.log(`vm-agent exited with code ${code}`);
-        this.agentSession = null;
-      });
-
+      this.setupAgentSessionHandlers();
       await this.agentSession.start();
       console.log(`Reattached to vm-agent session ${existingSession.id}`);
     } else {
@@ -652,6 +728,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.broadcastMessage({ type: "sprite.status", status: "ready" });
   }
 
+  /**
+   * Handles a client request to sync message history.
+   * @param connection The connection to the client.
+   */
   private handleSyncRequest(connection: Connection): void {
     this.ensureClients();
 
@@ -663,10 +743,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return;
     }
 
-    const messages = this.messageRepository!.getAllBySession(this.state.sessionId);
+    const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
     connection.send(JSON.stringify({
       type: "sync.response",
-      messages,
+      messages: storedMessages.map((m) => m.message),
     }));
   }
 
@@ -676,7 +756,31 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  private broadcastMessage(message: ServerMessage): void {
-    this.broadcast(JSON.stringify(message));
+  private broadcastMessage(message: ServerMessage, without?: string[]): void {
+    this.broadcast(JSON.stringify(message), without);
+  }
+
+  /**
+   * Retrieves captured HTTP traffic from mitmproxy.
+   * Note: mitmdump writes binary format; for human-readable output,
+   * use `mitmproxy` or `mitmweb` interactively.
+   */
+  async getTrafficLogs(): Promise<string> {
+    if (!this.state.spriteName) {
+      return "No sprite available";
+    }
+
+    this.ensureClients();
+    const sprite = new WorkersSprite(
+      this.state.spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL
+    );
+
+    const result = await sprite.execHttp(
+      `cat ${HOME_DIR}/.cloude/traffic.mitm 2>/dev/null || echo "No traffic captured"`,
+      {}
+    );
+    return result.stdout ?? "";
   }
 }

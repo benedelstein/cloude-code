@@ -16,7 +16,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "ai": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:"

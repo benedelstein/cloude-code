@@ -1,4 +1,5 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
+import { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { createInterface } from "readline";
 import { execSync } from "child_process";
 import { parseArgs } from "util";
@@ -67,8 +68,6 @@ async function startAgent(): Promise<void> {
   const claudeExecutablePath = execSync("which claude", { encoding: "utf-8" }).trim();
 
   try {
-    // Cast to any to bypass strict SDK types - runtime accepts the simpler message format
-    // per the official docs: https://platform.claude.com/docs/en/agent-sdk/streaming-vs-single-mode
     currentQuery = query({
       prompt: generateMessages() as any,
       options: {
@@ -77,6 +76,7 @@ async function startAgent(): Promise<void> {
         resume: args.sessionId,
         permissionMode: "acceptEdits",
         pathToClaudeCodeExecutable: claudeExecutablePath,
+        includePartialMessages: true,
         sandbox: {
           enabled: true,
           autoAllowBashIfSandboxed: true,
@@ -90,7 +90,7 @@ async function startAgent(): Promise<void> {
 
     for await (const message of currentQuery) {
       if (message.type === "system" && message.subtype === "init") {
-        emit({ type: "ready", sessionId: message.session_id, claudeExecutablePath: claudeExecutablePath });
+        emit({ type: "ready", sessionId: message.session_id });
       }
       emit({ type: "sdk", message });
     }

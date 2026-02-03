@@ -192,11 +192,21 @@ export class SpriteWebsocketSession {
 
     write(data: string): void {
       if (!this.ws) throw new Error("WebSocket not connected");
-  
-      // Send raw text - the Sprites server routes stdin based on the connection
+
       const encoder = new TextEncoder();
-      const payload = encoder.encode(data);
-      this.ws.send(payload);
+      const textBytes = encoder.encode(data);
+
+      if (this.options.tty) {
+        // TTY mode: send raw text
+        this.ws.send(textBytes);
+      } else {
+        // Non-TTY mode: prefix with stream ID 0 (stdin)
+        const buffer = new ArrayBuffer(1 + textBytes.length);
+        const view = new Uint8Array(buffer);
+        view[0] = 0; // stdin stream ID
+        view.set(textBytes, 1);
+        this.ws.send(buffer);
+      }
     }
 
     closeStdin(): void {

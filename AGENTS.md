@@ -13,13 +13,8 @@ The Durable Object is the source of truth and coordinator for the session. It st
 ```bash
 # Install dependencies
 pnpm install
-
-# Run all packages in dev mode (uses Turbo)
-pnpm dev
-
 # Run just the API server (Cloudflare Workers)
 pnpm dev:api
-
 # Build all packages
 pnpm build
 
@@ -89,7 +84,9 @@ Required secrets for `api-server` (set via `wrangler secret put`):
 
 - **pnpm workspaces** with Turbo for monorepo orchestration
 - **Cloudflare Workers** with Durable Objects (SQLite for message persistence)
-- **Hono** for HTTP routing
-- **Zod** for runtime type validation (uses pnpm catalog for version consistency)
+- **Hono** for server middleware
+- **Zod** for runtime type validation
 - **Bun** runtime for vm-agent
-- **Sprites** for isolated VM execution
+- **Sprites** for isolated VM execution. Sprites are 
+
+NOTE: if adding new dependencies in multiple packages in the repo, prefer to use the pnpm catalog in `pnpm-workspace.yaml` for shared versioning.

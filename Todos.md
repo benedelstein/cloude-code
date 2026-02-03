@@ -1,6 +1,7 @@
 - [ ] Make sure websocket types are consistent between vm<->server<->client.
 - [x] Use cloudflare agents sdk for message storage and streaming and websockets.
-- [ ] Figure out repo pulling and cloning synchronization.
+- [x] Figure out repo pulling and cloning synchronization.
+- [ ] 
 - [ ] 1 client implementation (web or cli)
 - [ ] Add github auth and connecting to a user's github repos.
 - [ ] Proxy git and github actions for security. VM should only have write access specific to the repo and branch.

@@ -4,15 +4,20 @@
   "type": "module",
   "main": "dist/vm-agent.bundle.js",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "test": "bun run src/test-agent.ts",
-    "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
+    "dev": "bun run src/index-aisdk.ts",
+    "dev:legacy": "bun run src/index.ts",
+    "test": "bun run src/test-agent-aisdk.ts",
+    "test:legacy": "bun run src/test-agent.ts",
+    "build": "bun build src/index-aisdk.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
+    "build:legacy": "bun build src/index.ts --outfile=dist/vm-agent-legacy.bundle.js --target=bun --minify",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",
-    "@repo/shared": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "ai": "catalog:",
+    "ai-sdk-provider-claude-code": "^3.3.3"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",
