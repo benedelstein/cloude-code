@@ -1,0 +1,168 @@
+"use client";
+
+import { useState, useCallback, useRef } from "react";
+import { useAgent } from "agents/react";
+import { readUIMessageStream } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
+import type { ServerMessage, SessionStatus } from "@repo/shared";
+
+export interface UseCloudflareAgentOptions {
+  sessionId: string;
+  host?: string;
+  onError?: (error: Error) => void;
+}
+
+export interface UseCloudflareAgentReturn {
+  messages: UIMessage[];
+  streamingMessage: UIMessage | null;
+  sessionStatus: SessionStatus;
+  errorMessage: string | null;
+  isReady: boolean;
+  isStreaming: boolean;
+  sendMessage: (content: string) => void;
+  stop: () => void;
+}
+
+export function useCloudflareAgent({
+  sessionId,
+  host,
+  onError,
+}: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
+  const isConsumingRef = useRef(false);
+
+  // Consume the stream with readUIMessageStream
+  const consumeStream = useCallback(async (stream: ReadableStream<UIMessageChunk>) => {
+    if (isConsumingRef.current) return;
+    isConsumingRef.current = true;
+
+    try {
+      const messageStream = readUIMessageStream({ stream });
+
+      for await (const message of messageStream) {
+        setStreamingMessage(message);
+      }
+    } catch (err) {
+      console.error("Error consuming stream:", err);
+    } finally {
+      isConsumingRef.current = false;
+    }
+  }, []);
+
+  const handleServerMessage = useCallback((msg: ServerMessage) => {
+    switch (msg.type) {
+      case "connected":
+        break;
+
+      case "sync.response":
+        setMessages(msg.messages as UIMessage[]);
+        break;
+
+      case "session.status":
+        setSessionStatus(msg.status);
+        if (msg.status === "error" && msg.message) {
+          setErrorMessage(msg.message);
+        }
+        break;
+
+      case "agent.chunk":
+        if (streamControllerRef.current) {
+          streamControllerRef.current.enqueue(msg.chunk as UIMessageChunk);
+        }
+        break;
+
+      case "agent.finish":
+        if (streamControllerRef.current) {
+          streamControllerRef.current.close();
+          streamControllerRef.current = null;
+        }
+        setMessages((prev) => [...prev, msg.message as UIMessage]);
+        setStreamingMessage(null);
+        break;
+
+      case "agent.ready":
+        break;
+
+      case "user.message":
+        setMessages((prev) => [...prev, msg.message as UIMessage]);
+        break;
+
+      case "error":
+        setErrorMessage(msg.message);
+        onError?.(new Error(msg.message));
+        break;
+    }
+  }, [onError]);
+
+  // Use Cloudflare's useAgent hook
+  const agent = useAgent({
+    agent: "session",
+    name: sessionId,
+    host,
+    onMessage: (event) => {
+      try {
+        const msg = JSON.parse(event.data) as ServerMessage;
+        handleServerMessage(msg);
+      } catch (err) {
+        console.error("Error parsing message:", err);
+      }
+    },
+    onOpen: () => {
+      // Connection established - useAgent handles this
+    },
+    onClose: () => {
+      // useAgent will auto-reconnect
+    },
+    onStateUpdate(state, source) {
+      console.log("state update", state, source);
+    },
+    onError: () => {
+      setSessionStatus("error");
+      setErrorMessage("Connection error");
+      onError?.(new Error("Connection error"));
+    },
+  });
+
+  const sendMessage = useCallback((content: string) => {
+    // Create optimistic user message
+    const userMessage: UIMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      parts: [{ type: "text", text: content }],
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Create a new stream for this response
+    const stream = new ReadableStream<UIMessageChunk>({
+      start: (controller) => {
+        streamControllerRef.current = controller;
+      },
+    });
+
+    // Start consuming the stream
+    consumeStream(stream);
+
+    // Send via useAgent's connection
+    agent.send(JSON.stringify({ type: "chat.message", content }));
+  }, [agent, consumeStream]);
+
+  const stop = useCallback(() => {
+    agent.send(JSON.stringify({ type: "operation.cancel" }));
+  }, [agent]);
+
+  return {
+    messages,
+    streamingMessage,
+    sessionStatus,
+    errorMessage,
+    isReady: sessionStatus === "ready",
+    isStreaming: streamingMessage !== null,
+    sendMessage,
+    stop,
+  };
+}

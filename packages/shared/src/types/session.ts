@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 export const SessionStatus = z.enum([
-  "creating",
   "provisioning",
   "cloning",
   "syncing",
-  "attaching", // attaching to the existing agent process on the vm
+  "attaching",
   "ready",
+  "waking",
   "hibernating",
   "error",
-  "deleted", 
+  "terminated",
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
@@ -20,30 +20,25 @@ export const SessionSettings = z.object({
 export type SessionSettings = z.infer<typeof SessionSettings>;
 
 export const Session = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   userId: z.string(),
   repoId: z.string(),
   spriteName: z.string().nullable(),
+  githubBranchName: z.string().nullable(),
   status: SessionStatus,
   settings: SessionSettings,
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 });
 export type Session = z.infer<typeof Session>;
 
 /** Minimal session info returned by API */
-export const SessionInfo = z.object({
-  sessionId: z.string(),
+export const SessionInfoResponse = z.object({
+  sessionId: z.uuid(),
   status: SessionStatus,
   repoId: z.string(),
 });
-export type SessionInfo = z.infer<typeof SessionInfo>;
-
-/** Session info with wsUrl for reconnection */
-export const SessionInfoWithWsUrl = SessionInfo.extend({
-  wsUrl: z.string(),
-});
-export type SessionInfoWithWsUrl = z.infer<typeof SessionInfoWithWsUrl>;
+export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
 export const CreateSessionRequest = z.object({
   repoId: z.string().min(1),
@@ -53,37 +48,36 @@ export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 
 export const CreateSessionResponse = z.object({
   sessionId: z.string().uuid(),
-  wsUrl: z.string().url(),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
 
 export const Message = z.object({
-  id: z.string().uuid(),
-  sessionId: z.string().uuid(),
+  id: z.uuid(),
+  sessionId: z.uuid(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
   toolCalls: z.array(z.unknown()).optional(),
   streamPosition: z.number().optional(),
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 export type Message = z.infer<typeof Message>;
 
 export const ToolCall = z.object({
-  id: z.string().uuid(),
-  messageId: z.string().uuid(),
+  id: z.uuid(),
+  messageId: z.uuid(),
   toolName: z.string(),
   input: z.record(z.string(), z.unknown()),
   output: z.string().nullable(),
   status: z.enum(["pending", "running", "completed", "failed"]),
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 export type ToolCall = z.infer<typeof ToolCall>;
 
 export const SpriteCheckpoint = z.object({
   id: z.string(),
-  sessionId: z.string().uuid(),
+  sessionId: z.uuid(),
   version: z.number(),
   gitCommitSha: z.string().nullable(),
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 export type SpriteCheckpoint = z.infer<typeof SpriteCheckpoint>;

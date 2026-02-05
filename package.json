@@ -6,11 +6,13 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "dev:api": "turbo run dev --filter=@repo/api-server",
+    "dev:web": "turbo run dev --filter=@repo/web",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
     "run:ci": "pnpm lint && pnpm lint && pnpm typecheck",
-    "test:create-session": "npx tsx scripts/test-create-session.ts"
+    "test:create-session": "npx tsx scripts/test-create-session.ts",
+    "test:session": "npx tsx scripts/test-session.ts"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",

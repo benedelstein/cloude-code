@@ -8,7 +8,6 @@ const API_URL = process.env.API_URL ?? "http://localhost:8787";
 
 interface SessionResponse {
   sessionId: string;
-  wsUrl: string;
 }
 
 async function createSession(repoId: string): Promise<SessionResponse> {
@@ -35,6 +34,12 @@ async function getSession(sessionId: string): Promise<SessionResponse> {
   }
 
   return res.json() as Promise<SessionResponse>;
+}
+
+function getWsUrl(sessionId: string): string {
+  const url = new URL(API_URL);
+  const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${url.host}/agents/session/${sessionId}`;
 }
 
 function isUUID(str: string): boolean {
@@ -101,15 +106,12 @@ function setupRepl(ws: WebSocket) {
 
 async function main() {
   const arg = process.argv[2];
+
   console.log(`API URL: ${API_URL}\n`);
 
   let session: SessionResponse;
 
-  if (arg) {
-    if (!isUUID(arg)) {
-      console.error(`Invalid session id: ${arg}`);
-      process.exit(1);
-    }
+  if (arg && isUUID(arg)) {
     // Resume existing session
     console.log(`Resuming session: ${arg}`);
     session = await getSession(arg);
@@ -124,7 +126,8 @@ async function main() {
 
   console.log(JSON.stringify(session, null, 2));
 
-  const ws = connectWebSocket(session.wsUrl);
+  const wsUrl = getWsUrl(session.sessionId);
+  const ws = connectWebSocket(wsUrl);
 
   ws.on("open", () => {
     setupRepl(ws);

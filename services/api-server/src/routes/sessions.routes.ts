@@ -1,7 +1,7 @@
 import { Context, Hono } from "hono";
-import { CreateSessionRequest, type SessionInfo } from "@repo/shared";
+import { CreateSessionRequest, type SessionInfoResponse } from "@repo/shared";
 import type { Env } from "../types";
-import { getAgentByName, routeAgentRequest } from "agents";
+import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "../durable-objects/session-agent-do";
 
 export const sessionsRoutes = new Hono<{ Bindings: Env }>();
@@ -43,11 +43,7 @@ sessionsRoutes.post("/", async (c) => {
     return c.json({ error: "Failed to create session", details: error }, 500);
   }
 
-  const host = c.req.header("host") ?? "localhost";
-  const protocol = host.includes("localhost") ? "ws" : "wss";
-  const wsUrl = `${protocol}://${host}/sessions/${sessionId}/ws`;
-
-  return c.json({ sessionId, wsUrl }, 201);
+  return c.json({ sessionId }, 201);
 });
 
 // Get session info
@@ -60,27 +56,8 @@ sessionsRoutes.get("/:sessionId", async (c) => {
     return c.json({ error: "Session not found" }, 404);
   }
 
-  const session = (await response.json()) as SessionInfo;
-
-  // Add wsUrl for client reconnection
-  const host = c.req.header("host") ?? "localhost";
-  const protocol = host.includes("localhost") ? "ws" : "wss";
-  const wsUrl = `${protocol}://${host}/sessions/${sessionId}/ws`;
-
-  return c.json({ ...session, wsUrl });
-});
-
-// WebSocket upgrade
-sessionsRoutes.get("/:sessionId/ws", async (c) => {
-  const sessionId = c.req.param("sessionId");
-  const upgradeHeader = c.req.header("Upgrade");
-
-  if (upgradeHeader !== "websocket") {
-    return c.json({ error: "Expected WebSocket upgrade" }, 426);
-  }
-  const stub = await getSessionAgent(sessionId, c);
-  // Forward the WebSocket upgrade to the DO
-  return stub.fetch(c.req.raw);
+  const session = (await response.json()) as SessionInfoResponse;
+  return c.json(session);
 });
 
 // Get messages for a session

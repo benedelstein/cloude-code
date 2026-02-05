@@ -12,4 +12,5 @@ export interface Env {
   SPRITES_API_KEY: string;
   SPRITES_API_URL: string;
   GITHUB_TOKEN: string;
+  PORT: string;
 }

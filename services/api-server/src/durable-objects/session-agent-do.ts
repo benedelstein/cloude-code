@@ -1,6 +1,5 @@
 import { SpritesCoordinator, WorkersSprite, SpriteWebsocketSession, SpriteServerMessage } from "@/lib/sprites";
 import {
-  type SessionInfo,
   type SessionSettings,
   type ClientMessage,
   type ServerMessage,
@@ -8,6 +7,8 @@ import {
   decodeAgentOutput,
   encodeAgentInput,
   Session,
+  SessionInfoResponse,
+  SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
@@ -31,7 +32,7 @@ type AgentState = {
   claudeSessionId: string | null;
   /** ID of the agent process session running on the sprite */
   agentProcessId: number | null;
-  status: Session["status"];
+  status: SessionStatus;
   settings: SessionSettings;
   createdAt: Date;
 };
@@ -64,7 +65,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     githubBranchName: null,
     claudeSessionId: null,
     agentProcessId: null,
-    status: "creating",
+    status: "provisioning",
     settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
     createdAt: new Date(),
   };
@@ -101,7 +102,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  private updateStatus(status: Session["status"]): void {
+  private updateStatus(status: SessionStatus): void {
     this.setState({ ...this.state, status });
   }
 
@@ -111,6 +112,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    console.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
     // Root path = session operations (the DO *is* the session)
@@ -261,7 +263,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
   
         this.broadcastMessage({
-          type: "sprite.status",
+          type: "session.status",
           status: "cloning",
           message: `Cloning repo ${repoId} on sprite ${spriteResponse.name}`,
         });
@@ -291,12 +293,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await this.startAgentOnVM(spriteResponse.name);
 
       this.updateStatus("ready");
-      this.broadcastMessage({ type: "sprite.status", status: "ready" });
+      this.broadcastMessage({ type: "session.status", status: "ready" });
     } catch (error) {
       console.error("Failed to provision sprite:", error);
       this.updateStatus("error");
       this.broadcastMessage({
-        type: "sprite.status",
+        type: "session.status",
         status: "error",
         message: error instanceof Error ? error.message : "Unknown error",
       });
@@ -483,7 +485,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       sessionId: this.state.sessionId,
       status: this.state.status,
       repoId: this.state.repoId,
-    } satisfies SessionInfo), {
+    } satisfies SessionInfoResponse), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -524,7 +526,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Reset state
     this.setState({
       ...this.state,
-      status: "deleted",
+      status: "terminated",
     });
 
     // maybe delete the sprite.
@@ -567,10 +569,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           message: `Session is ${this.state.status}, please wait`,
         } satisfies ServerMessage));
         return;
-      case "creating":
+      case "waking":
+        connection.send(JSON.stringify({
+          type: "error",
+          code: "SESSION_TRANSITIONING",
+          message: `Session is ${this.state.status}, please wait`,
+        } satisfies ServerMessage));
+        return;
       case "hibernating":
       case "error":
-      case "deleted":
+      case "terminated":
         connection.send(JSON.stringify({
           type: "error",
           code: "SESSION_NOT_READY",
@@ -703,29 +711,34 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Sync repository before reattaching
     this.updateStatus("syncing");
-    this.broadcastMessage({ type: "sprite.status", status: "syncing" });
+    this.broadcastMessage({ type: "session.status", status: "syncing" });
     await this.syncRepository(sprite);
     
     // Set status to attaching
     this.updateStatus("attaching");
-    this.broadcastMessage({ type: "sprite.status", status: "attaching" });
+    this.broadcastMessage({ type: "session.status", status: "attaching" });
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
     const existingSession = sessions.find((s) => s.id === this.state?.agentProcessId);
 
-    if (existingSession) {
-      this.agentSession = sprite.attachSession(String(existingSession.id), {});
+    // Check if other clients are connected (current client is already counted)
+    const connectionCount = [...this.getConnections()].length;
+    const otherClientsConnected = connectionCount > 1;
 
+    if (existingSession && otherClientsConnected) {
+      // Multiplayer: attach to existing session to not disrupt others
+      console.log(`${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`);
+      this.agentSession = sprite.attachSession(String(existingSession.id), {});
       this.setupAgentSessionHandlers();
       await this.agentSession.start();
-      console.log(`Reattached to vm-agent session ${existingSession.id}`);
     } else {
-      console.log("Previous vm-agent session not found, starting new one");
+      // Solo: start fresh with latest script (old session orphaned)
+      console.log(`No other clients connected, starting fresh vm-agent`);
       await this.startAgentOnVM(spriteName);
     }
 
     // Set status back to ready
     this.updateStatus("ready");
-    this.broadcastMessage({ type: "sprite.status", status: "ready" });
+    this.broadcastMessage({ type: "session.status", status: "ready" });
   }
 
   /**

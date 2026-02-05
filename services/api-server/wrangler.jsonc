@@ -14,7 +14,9 @@
   "vars": {
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev"
-    // todo: fix this.
+  },
+  "dev": {
+    "port": 8787
   },
   "durable_objects": {
     "bindings": [

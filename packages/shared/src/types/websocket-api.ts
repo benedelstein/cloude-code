@@ -1,10 +1,13 @@
 import { z } from "zod/v4";
 import type { UIMessage, UIMessagePart } from "ai";
+import { SessionStatus } from "./session";
 
 // Re-export AI SDK types for convenience
 export type { UIMessage, UIMessagePart };
 
+// ------------------------------------------------------------
 // Client → Server messages
+// ------------------------------------------------------------
 export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().min(1),
@@ -39,21 +42,24 @@ export const ClientMessage = z.discriminatedUnion("type", [
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
+// ------------------------------------------------------------
 // Server → Client messages
+// ------------------------------------------------------------
 export const ConnectedEvent = z.object({
   type: z.literal("connected"),
-  sessionId: z.string().uuid(),
+  sessionId: z.uuid(),
   status: z.string(),
   lastMessageId: z.string().uuid().optional(),
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
-export const SpriteStatusEvent = z.object({
-  type: z.literal("sprite.status"),
-  status: z.enum(["provisioning", "cloning", "syncing", "attaching", "ready", "waking", "hibernating", "error"]),
+
+export const SessionStatusEvent = z.object({
+  type: z.literal("session.status"),
+  status: SessionStatus,
   message: z.string().optional(),
 });
-export type SpriteStatusEvent = z.infer<typeof SpriteStatusEvent>;
+export type SessionStatusEvent = z.infer<typeof SessionStatusEvent>;
 
 // Zod schema for UIMessage (runtime validation)
 export const UIMessageSchema = z.object({
@@ -104,7 +110,7 @@ export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
 
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
-  SpriteStatusEvent,
+  SessionStatusEvent,
   SyncResponseEvent,
   ErrorEvent,
   AgentChunkEvent,
