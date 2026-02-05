@@ -48,7 +48,7 @@ export type ClientMessage = z.infer<typeof ClientMessage>;
 export const ConnectedEvent = z.object({
   type: z.literal("connected"),
   sessionId: z.uuid(),
-  status: z.string(),
+  status: SessionStatus,
   lastMessageId: z.string().uuid().optional(),
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;

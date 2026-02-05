@@ -6,6 +6,8 @@ import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
 import type { ServerMessage, SessionStatus } from "@repo/shared";
 
+const DEFAULT_API_HOST = process.env.NEXT_PUBLIC_API_HOST ?? "localhost:8787";
+
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   host?: string;
@@ -57,6 +59,8 @@ export function useCloudflareAgent({
   const handleServerMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case "connected":
+        console.log("Connected to agent", msg);
+        setSessionStatus(msg.status);
         break;
 
       case "sync.response":
@@ -103,7 +107,7 @@ export function useCloudflareAgent({
   const agent = useAgent({
     agent: "session",
     name: sessionId,
-    host,
+    host: host ?? DEFAULT_API_HOST,
     onMessage: (event) => {
       try {
         const msg = JSON.parse(event.data) as ServerMessage;
@@ -121,9 +125,10 @@ export function useCloudflareAgent({
     onStateUpdate(state, source) {
       console.log("state update", state, source);
     },
-    onError: () => {
+    onError: (message) => {
       setSessionStatus("error");
       setErrorMessage("Connection error");
+      console.error("Connection error", message);
       onError?.(new Error("Connection error"));
     },
   });

@@ -22,6 +22,7 @@ app.get("/health", (c) => {
 
 // Agent WebSocket route (for useAgent hook)
 app.all("/agents/session/:sessionId", async (c) => {
+  console.log("Agent WebSocket route", c.req.url);
   const sessionId = c.req.param("sessionId");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
   return stub.fetch(c.req.raw);

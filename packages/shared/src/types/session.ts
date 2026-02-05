@@ -1,15 +1,24 @@
 import { z } from "zod";
 
 export const SessionStatus = z.enum([
+  /** Provisioning the session */
   "provisioning",
+  /** Cloning the repository */
   "cloning",
+  /** Syncing the repository via git */
   "syncing",
+  /** Attaching to the agent process running on the vm */
   "attaching",
-  "ready",
+  /** Waking up the vm */
   "waking",
+  /** Hibernating the vm */
   "hibernating",
+  /** Error occurred */
   "error",
+  /** Session is terminated. No more messages can be sent or received. */
   "terminated",
+  /** Ready to send and receive messages */
+  "ready",
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
