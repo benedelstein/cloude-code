@@ -6,7 +6,10 @@ interface ToolCallPartProps {
   part: {
     type: string;
     toolCallId?: string;
+    toolName?: string;
+    args?: unknown;
     input?: unknown;
+    result?: unknown;
     output?: unknown;
     state?: string;
   };
@@ -15,10 +18,14 @@ interface ToolCallPartProps {
 export function ToolCallPart({ part }: ToolCallPartProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Extract tool info from the part
-  // The type is like "tool-readFile" and the part has input/output
-  const toolName = part.type.replace("tool-", "");
-  const hasOutput = part.output !== undefined;
+  // Debug: log the part structure
+  console.log("ToolCallPart received:", part);
+
+  // Extract tool name - try toolName property first, then fall back to parsing type
+  const toolName = part.toolName ?? part.type.replace(/^tool-/, "");
+  const input = part.args ?? part.input;
+  const output = part.result ?? part.output;
+  const hasOutput = output !== undefined;
   const state = part.state;
 
   return (
@@ -51,13 +58,13 @@ export function ToolCallPart({ part }: ToolCallPartProps) {
       {isExpanded && (
         <div className="p-3 border-t border-border space-y-3">
           {/* Input */}
-          {part.input !== undefined && (
+          {input !== undefined && (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">
                 Input
               </h4>
               <pre className="text-xs bg-background/50 p-2 rounded overflow-x-auto">
-                {JSON.stringify(part.input, null, 2)}
+                {JSON.stringify(input, null, 2)}
               </pre>
             </div>
           )}
@@ -69,7 +76,7 @@ export function ToolCallPart({ part }: ToolCallPartProps) {
                 Output
               </h4>
               <pre className="text-xs bg-background/50 p-2 rounded overflow-x-auto max-h-48">
-                {formatOutput(part.output)}
+                {formatOutput(output)}
               </pre>
             </div>
           )}

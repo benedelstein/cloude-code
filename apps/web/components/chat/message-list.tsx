@@ -7,9 +7,10 @@ import { MessageItem } from "./message-item";
 interface MessageListProps {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
+  isResponding?: boolean;
 }
 
-export function MessageList({ messages, streamingMessage }: MessageListProps) {
+export function MessageList({ messages, streamingMessage, isResponding }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -64,8 +65,20 @@ export function MessageList({ messages, streamingMessage }: MessageListProps) {
             isStreaming={streamingMessage?.id === message.id}
           />
         ))}
+        {isResponding && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+      Working
+      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse" />
+      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse [animation-delay:0.2s]" />
+      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse [animation-delay:0.4s]" />
     </div>
   );
 }

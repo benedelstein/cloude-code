@@ -10,4 +10,4 @@
 - [ ] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
 
 Sprites are long-lived VMs. I'm kind of using them like disposable VMs - just creating 1 session and checking out a repo on a new branch.
-How can I make use of their persistence?
+How can I make use of their persistence?ww

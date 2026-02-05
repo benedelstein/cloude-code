@@ -17,6 +17,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     errorMessage,
     isReady,
     isStreaming,
+    isResponding,
     sendMessage,
     stop,
   } = useSession();
@@ -58,6 +59,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         <MessageList
           messages={messages}
           streamingMessage={streamingMessage}
+          isResponding={isResponding}
         />
       </div>
 

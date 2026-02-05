@@ -21,6 +21,7 @@ export interface UseCloudflareAgentReturn {
   errorMessage: string | null;
   isReady: boolean;
   isStreaming: boolean;
+  isResponding: boolean;
   sendMessage: (content: string) => void;
   stop: () => void;
 }
@@ -34,6 +35,7 @@ export function useCloudflareAgent({
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isResponding, setIsResponding] = useState(false);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -75,12 +77,14 @@ export function useCloudflareAgent({
         break;
 
       case "agent.chunk":
+        // setIsResponding(false);
         if (streamControllerRef.current) {
           streamControllerRef.current.enqueue(msg.chunk as UIMessageChunk);
         }
         break;
 
       case "agent.finish":
+        setIsResponding(false);
         if (streamControllerRef.current) {
           streamControllerRef.current.close();
           streamControllerRef.current = null;
@@ -141,6 +145,7 @@ export function useCloudflareAgent({
       parts: [{ type: "text", text: content }],
     };
     setMessages((prev) => [...prev, userMessage]);
+    setIsResponding(true);
 
     // Create a new stream for this response
     const stream = new ReadableStream<UIMessageChunk>({
@@ -167,6 +172,7 @@ export function useCloudflareAgent({
     errorMessage,
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
+    isResponding,
     sendMessage,
     stop,
   };
