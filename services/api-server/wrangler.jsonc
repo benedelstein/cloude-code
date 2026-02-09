@@ -31,9 +31,18 @@
       "tag": "v1",
       "new_sqlite_classes": ["SessionAgentDO"]
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cloude-code-db",
+      "database_id": "TBD"
+    }
   ]
   // Secrets (set via wrangler secret put):
   // - ANTHROPIC_API_KEY
   // - SPRITES_API_KEY
-  // - GITHUB_TOKEN
+  // - GITHUB_APP_ID
+  // - GITHUB_APP_PRIVATE_KEY
+  // - GITHUB_WEBHOOK_SECRET
 }

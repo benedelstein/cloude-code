@@ -3,6 +3,7 @@ import { CreateSessionRequest, type SessionInfoResponse } from "@repo/shared";
 import type { Env } from "../types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "../durable-objects/session-agent-do";
+import { GitHubAppService, GitHubAppError } from "@/lib/github";
 
 export const sessionsRoutes = new Hono<{ Bindings: Env }>();
 
@@ -21,6 +22,18 @@ sessionsRoutes.post("/", async (c) => {
     return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
   }
 
+  // Resolve GitHub App installation token for this repo
+  const github = new GitHubAppService(c.env);
+  let githubToken: string;
+  try {
+    githubToken = await github.getTokenForRepo(parsed.data.repoId);
+  } catch (error) {
+    if (error instanceof GitHubAppError) {
+      return c.json({ error: error.message, code: error.code }, 422);
+    }
+    throw error;
+  }
+
   const sessionId = crypto.randomUUID();
   console.log("creating session agent", sessionId);
   const stub = await getSessionAgent(sessionId, c);
@@ -34,6 +47,7 @@ sessionsRoutes.post("/", async (c) => {
         sessionId,
         repoId: parsed.data.repoId,
         settings: parsed.data.settings,
+        githubToken,
       }),
     })
   );

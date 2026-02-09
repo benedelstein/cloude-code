@@ -15,3 +15,4 @@ catalog:
   "dotenv": "^17.2.3"
   "@anthropic-ai/sdk": "^0.71.0"
   "ai": "^6.0.59"
+  "octokit": "^4.1.2"

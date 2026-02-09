@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { getAgentByName } from "agents";
 import { sessionsRoutes } from "./routes/sessions.routes";
 import { testRoutes } from "./routes/test.routes";
+import { webhooksRoutes } from "./routes/webhooks.routes";
 import type { Env } from "./types";
 import type { SessionAgentDO } from "./durable-objects/session-agent-do";
 
@@ -30,5 +31,6 @@ app.all("/agents/session/:sessionId", async (c) => {
 
 app.route("/sessions", sessionsRoutes);
 app.route("/test", testRoutes);
+app.route("/webhooks", webhooksRoutes);
 
 export default app;

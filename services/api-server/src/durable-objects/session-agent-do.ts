@@ -11,6 +11,7 @@ import {
   SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
+import { GitHubAppService } from "@/lib/github";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
@@ -32,6 +33,8 @@ type AgentState = {
   claudeSessionId: string | null;
   /** ID of the agent process session running on the sprite */
   agentProcessId: number | null;
+  /** GitHub App installation access token for git operations */
+  githubToken: string | null;
   status: SessionStatus;
   settings: SessionSettings;
   createdAt: Date;
@@ -41,6 +44,7 @@ interface InitRequest {
   sessionId: string;
   repoId: string;
   settings?: Partial<SessionSettings>;
+  githubToken: string;
 }
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
@@ -65,6 +69,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     githubBranchName: null,
     claudeSessionId: null,
     agentProcessId: null,
+    githubToken: null,
     status: "provisioning",
     settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
     createdAt: new Date(),
@@ -219,6 +224,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       githubBranchName: null,
       claudeSessionId: null,
       agentProcessId: null,
+      githubToken: data.githubToken,
       status: "provisioning",
       settings,
     });
@@ -239,9 +245,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       const spriteResponse = await this.spritesCoordinator!.createSprite({
         name: `${sessionId}`,
-        env: {
-          GITHUB_TOKEN: this.env.GITHUB_TOKEN,
-        },
+        env: {},
       });
 
       const sprite = new WorkersSprite(
@@ -269,8 +273,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
         console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
+        const cloneUrl = this.state.githubToken
+          ? `https://x-access-token:${this.state.githubToken}@github.com/${repoId}.git`
+          : `https://github.com/${repoId}.git`;
         const cloneResult = await sprite.execHttp(
-          `git clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
+          `git clone ${cloneUrl} ${WORKSPACE_DIR}`,
           {}
         );
         console.log(`Clone result: exitCode=${cloneResult.exitCode}`);
@@ -284,6 +291,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Set up git config for commits
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Agent"`, {});
+
+      // Set up credential helper so fetch/push use the installation token
+      if (this.state.githubToken) {
+        await sprite.execHttp(
+          `cd ${WORKSPACE_DIR} && git config credential.helper '!f() { echo "username=x-access-token"; echo "password=${this.state.githubToken}"; }; f'`,
+          {}
+        );
+      }
 
       // Install mitmproxy for HTTP header debugging
       await sprite.execHttp(`pip install mitmproxy`, {});
@@ -680,6 +695,31 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // what if there are conflicts? what if the remote branch doesnt exist?
   }
 
+  /**
+   * Refresh the GitHub installation token if it's close to expiry.
+   * Updates both the state and the credential helper on the VM.
+   */
+  private async refreshGitHubToken(): Promise<void> {
+    if (!this.state.repoId) return;
+
+    const github = new GitHubAppService(this.env);
+    const token = await github.getTokenForRepo(this.state.repoId);
+    this.setState({ ...this.state, githubToken: token });
+
+    // Update credential helper on the VM
+    if (this.state.spriteName) {
+      const sprite = new WorkersSprite(
+        this.state.spriteName,
+        this.env.SPRITES_API_KEY,
+        this.env.SPRITES_API_URL
+      );
+      await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git config credential.helper '!f() { echo "username=x-access-token"; echo "password=${token}"; }; f'`,
+        {}
+      );
+    }
+  }
+
   private async reattachAgentSession(spriteName: string): Promise<void> {
     // Mutex pattern: if already reattaching, wait for that to complete
     if (this.reattachPromise) {
@@ -709,6 +749,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await this.startMitmproxyOnVM(spriteName);
     }
 
+    // Refresh GitHub token before sync (may have expired during hibernation)
+    try {
+      await this.refreshGitHubToken();
+    } catch (error) {
+      console.error("Failed to refresh GitHub token:", error);
+    }
+
     // Sync repository before reattaching
     this.updateStatus("syncing");
     this.broadcastMessage({ type: "session.status", status: "syncing" });
@@ -718,7 +765,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.updateStatus("attaching");
     this.broadcastMessage({ type: "session.status", status: "attaching" });
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    const existingSession = sessions.find((s) => s.id === this.state?.agentProcessId);
+    const existingSession = sessions.find((s) => s.id === String(this.state?.agentProcessId));
 
     // Check if other clients are connected (current client is already counted)
     const connectionCount = [...this.getConnections()].length;
