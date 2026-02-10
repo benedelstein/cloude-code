@@ -28,6 +28,9 @@ pnpm lint
 pnpm clean
 ```
 
+NOTE: After making changes, make sure to build and lint and typecheck the repo.
+NOTE: If you are tasked with committing to git, prefer concise messages. 
+
 ### Package-specific commands
 
 ```bash
@@ -56,16 +59,6 @@ pnpm build         # tsc
 
 - **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. The `SessionAgentDO` Durable Object manages the full session lifecycle.
 
-### Request Flow
-
-1. Client creates session via `POST /sessions` with `repoId` (or connects to an existing session via `GET /sessions/{sessionId}`)
-2. API returns `sessionId` and `wsUrl`, spawns provisioning in background
-3. `SessionAgentDO` provisions a Sprite VM, clones the repo, starts vm-agent
-4. Client connects to WebSocket url, receives `connected` and `sync.response` events with initial message history
-5. Client sends `chat.message`, DO forwards to vm-agent stdin
-6. vm-agent runs Claude Agent SDK, streams `sdk` output back through stdout
-7. DO broadcasts `claude.sdk` events to all connected WebSocket clients
-
 ### Key Files
 
 - `services/api-server/src/durable-objects/session-agent-do.ts` - Core session management, Sprite lifecycle, WebSocket handling
@@ -78,6 +71,7 @@ pnpm build         # tsc
 Required secrets for `api-server` (set via `wrangler secret put`):
 - `ANTHROPIC_API_KEY`
 - `SPRITES_API_KEY`
+- ... others
 
 ## Tech Stack
 

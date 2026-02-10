@@ -10,7 +10,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
-    "run:ci": "pnpm lint && pnpm lint && pnpm typecheck",
+    "run:ci": "pnpm lint && pnpm typecheck",
     "test:create-session": "npx tsx scripts/test-create-session.ts",
     "test:session": "npx tsx scripts/test-session.ts"
   },
