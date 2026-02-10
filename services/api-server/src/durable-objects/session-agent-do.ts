@@ -33,8 +33,6 @@ type AgentState = {
   claudeSessionId: string | null;
   /** ID of the agent process session running on the sprite */
   agentProcessId: number | null;
-  /** GitHub App installation access token for git operations */
-  githubToken: string | null;
   status: SessionStatus;
   settings: SessionSettings;
   createdAt: Date;
@@ -44,7 +42,6 @@ interface InitRequest {
   sessionId: string;
   repoId: string;
   settings?: Partial<SessionSettings>;
-  githubToken: string;
 }
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
@@ -60,6 +57,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private reattachPromise: Promise<void> | null = null;
   /** Accumulator for building UIMessage from stream chunks */
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
+  /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
+  private githubToken: string | null = null;
+  /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
+  private gitProxySecret: string | null = null;
 
   initialState: AgentState = {
     sessionId: "",
@@ -69,7 +70,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     githubBranchName: null,
     claudeSessionId: null,
     agentProcessId: null,
-    githubToken: null,
     status: "provisioning",
     settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
     createdAt: new Date(),
@@ -91,6 +91,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       )
     `;
     this.sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
+    this.sql`
+      CREATE TABLE IF NOT EXISTS secrets (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `;
+    // Load secrets from SQLite into memory
+    const rows = [...this.sql`SELECT key, value FROM secrets WHERE key IN ('github_token', 'git_proxy_secret')`];
+    for (const row of rows) {
+      const { key, value } = row as { key: string; value: string };
+      if (key === "github_token") this.githubToken = value;
+      if (key === "git_proxy_secret") this.gitProxySecret = value;
+    }
   }
 
   private initializeClients(): void {
@@ -132,6 +145,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         default:
           return new Response("Method not allowed", { status: 405 });
       }
+    }
+
+    // Git proxy: forward git operations to GitHub with auth
+    if (path.startsWith("/git-proxy/")) {
+      return this.handleGitProxy(request, path);
     }
 
     // Sub-resources
@@ -214,6 +232,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       maxTokens: data.settings?.maxTokens ?? 8192,
     };
 
+    // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)
+    this.gitProxySecret = crypto.randomUUID();
+    this.sql`INSERT OR REPLACE INTO secrets (key, value) VALUES ('git_proxy_secret', ${this.gitProxySecret})`;
+
     // Initialize agent state
     this.setState({
       ...this.state,
@@ -224,7 +246,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       githubBranchName: null,
       claudeSessionId: null,
       agentProcessId: null,
-      githubToken: data.githubToken,
       status: "provisioning",
       settings,
     });
@@ -254,6 +275,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.env.SPRITES_API_URL
       );
 
+      // Build proxy clone URL — token never enters the sprite
+      const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
+      const cloneUrl = `${proxyBaseUrl}/github.com/${repoId}.git`;
+
       // Clone the repo
       // check if the repo is already cloned
       const isCloned = await sprite.execHttp(`test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`, {});
@@ -265,7 +290,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           spriteName: spriteResponse.name,
           status: "cloning",
         });
-  
+
         this.broadcastMessage({
           type: "session.status",
           status: "cloning",
@@ -273,11 +298,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
         console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
-        const cloneUrl = this.state.githubToken
-          ? `https://x-access-token:${this.state.githubToken}@github.com/${repoId}.git`
-          : `https://github.com/${repoId}.git`;
+
+        // Fetch a token for the initial clone (ensureValidToken won't work until first proxy request)
+        await this.ensureValidToken();
+
         const cloneResult = await sprite.execHttp(
-          `git clone ${cloneUrl} ${WORKSPACE_DIR}`,
+          `git -c http.extraHeader="Authorization: Bearer ${this.gitProxySecret}" clone ${cloneUrl} ${WORKSPACE_DIR}`,
           {}
         );
         console.log(`Clone result: exitCode=${cloneResult.exitCode}`);
@@ -292,13 +318,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Agent"`, {});
 
-      // Set up credential helper so fetch/push use the installation token
-      if (this.state.githubToken) {
-        await sprite.execHttp(
-          `cd ${WORKSPACE_DIR} && git config credential.helper '!f() { echo "username=x-access-token"; echo "password=${this.state.githubToken}"; }; f'`,
-          {}
-        );
-      }
+      // Configure git to send the proxy auth header on all requests to the proxy
+      await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git config http.extraHeader "Authorization: Bearer ${this.gitProxySecret}"`,
+        {}
+      );
 
       // Install mitmproxy for HTTP header debugging
       await sprite.execHttp(`pip install mitmproxy`, {});
@@ -489,6 +513,94 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       default:
         break;
     }
+  }
+
+  // ============================================
+  // Git Proxy
+  // ============================================
+
+  private async handleGitProxy(request: Request, path: string): Promise<Response> {
+    // Authenticate: check Bearer token matches session secret
+    const authHeader = request.headers.get("Authorization");
+    if (!this.gitProxySecret || authHeader !== `Bearer ${this.gitProxySecret}`) {
+      return new Response("unauthorized", { status: 401 });
+    }
+
+    // Strip the /git-proxy/<sessionId>/ prefix to get github.com/owner/repo.git/...
+    const match = path.match(/^\/git-proxy\/[^/]+\/github\.com\/(.+)/);
+    if (!match?.[1]) return new Response("invalid path", { status: 400 });
+    const githubPath = match[1];
+
+    // Enforce: only the configured repo
+    if (this.state.repoId && !githubPath.startsWith(this.state.repoId)) {
+      return new Response("repo not allowed", { status: 403 });
+    }
+
+    // Enforce: push only to session branch
+    if (githubPath.endsWith("/git-receive-pack") && request.method === "POST") {
+      const body = await request.arrayBuffer();
+      const pushCheck = this.validatePush(new Uint8Array(body));
+      if (!pushCheck.allowed) {
+        return new Response(`push rejected: ${pushCheck.reason}`, { status: 403 });
+      }
+      return this.forwardToGitHub(githubPath, request, body);
+    }
+
+    // Read operations (clone, fetch, pull) — always forward
+    return this.forwardToGitHub(githubPath, request, request.body);
+  }
+
+  private async forwardToGitHub(
+    githubPath: string,
+    originalRequest: Request,
+    body: ArrayBuffer | ReadableStream<Uint8Array> | null,
+  ): Promise<Response> {
+    await this.ensureValidToken();
+
+    const url = new URL(originalRequest.url);
+    const targetUrl = `https://github.com/${githubPath}${url.search}`;
+
+    const headers: Record<string, string> = {
+      "Authorization": `token ${this.githubToken}`,
+      "User-Agent": "cloude-code-git-proxy",
+    };
+
+    const contentType = originalRequest.headers.get("Content-Type");
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
+
+    return fetch(targetUrl, {
+      method: originalRequest.method,
+      headers,
+      body,
+    });
+  }
+
+  private validatePush(body: Uint8Array): { allowed: boolean; reason?: string } {
+    const allowedBranch = this.state.githubBranchName;
+    if (!allowedBranch) return { allowed: true };
+
+    // Git pkt-line format: "oldsha newsha refs/heads/branch\0capabilities..."
+    const preamble = new TextDecoder().decode(body.slice(0, 2048));
+    const refPattern = /[0-9a-f]{40} [0-9a-f]{40} refs\/heads\/(\S+)/g;
+    let match;
+    while ((match = refPattern.exec(preamble)) !== null) {
+      if (match[1] !== allowedBranch) {
+        return { allowed: false, reason: `only '${allowedBranch}' allowed, got '${match[1]}'` };
+      }
+    }
+    return { allowed: true };
+  }
+
+  private async ensureValidToken(): Promise<void> {
+    if (!this.state.repoId) return;
+
+    // GitHubAppService handles caching with a 5-minute buffer before expiry
+    const github = new GitHubAppService(this.env);
+    const token = await github.getTokenForRepo(this.state.repoId);
+    this.githubToken = token;
+    this.sql`INSERT OR REPLACE INTO secrets (key, value) VALUES ('github_token', ${token})`;
   }
 
   private handleGetSession(): Response {
@@ -695,30 +807,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // what if there are conflicts? what if the remote branch doesnt exist?
   }
 
-  /**
-   * Refresh the GitHub installation token if it's close to expiry.
-   * Updates both the state and the credential helper on the VM.
-   */
-  private async refreshGitHubToken(): Promise<void> {
-    if (!this.state.repoId) return;
-
-    const github = new GitHubAppService(this.env);
-    const token = await github.getTokenForRepo(this.state.repoId);
-    this.setState({ ...this.state, githubToken: token });
-
-    // Update credential helper on the VM
-    if (this.state.spriteName) {
-      const sprite = new WorkersSprite(
-        this.state.spriteName,
-        this.env.SPRITES_API_KEY,
-        this.env.SPRITES_API_URL
-      );
-      await sprite.execHttp(
-        `cd ${WORKSPACE_DIR} && git config credential.helper '!f() { echo "username=x-access-token"; echo "password=${token}"; }; f'`,
-        {}
-      );
-    }
-  }
 
   private async reattachAgentSession(spriteName: string): Promise<void> {
     // Mutex pattern: if already reattaching, wait for that to complete
@@ -751,7 +839,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Refresh GitHub token before sync (may have expired during hibernation)
     try {
-      await this.refreshGitHubToken();
+      await this.ensureValidToken();
     } catch (error) {
       console.error("Failed to refresh GitHub token:", error);
     }

@@ -9,6 +9,7 @@ export interface Env {
 
   // Environment variables
   ENVIRONMENT: string;
+  WORKER_URL: string;
 
   // Secrets
   ANTHROPIC_API_KEY: string;

@@ -22,11 +22,12 @@ sessionsRoutes.post("/", async (c) => {
     return c.json({ error: "Invalid request", details: parsed.error.issues }, 400);
   }
 
-  // Resolve GitHub App installation token for this repo
+  // Verify the GitHub App installation exists for this repo before creating the session
   const github = new GitHubAppService(c.env);
-  let githubToken: string;
   try {
-    githubToken = await github.getTokenForRepo(parsed.data.repoId);
+    await github.findInstallationForRepo(
+      ...parsed.data.repoId.split("/") as [string, string],
+    );
   } catch (error) {
     if (error instanceof GitHubAppError) {
       return c.json({ error: error.message, code: error.code }, 422);
@@ -38,7 +39,7 @@ sessionsRoutes.post("/", async (c) => {
   console.log("creating session agent", sessionId);
   const stub = await getSessionAgent(sessionId, c);
 
-  // Initialize the session in the DO
+  // Initialize the session in the DO (token fetched internally by the DO)
   const initResponse = await stub.fetch(
     new Request("http://do/", {
       method: "POST",
@@ -47,7 +48,6 @@ sessionsRoutes.post("/", async (c) => {
         sessionId,
         repoId: parsed.data.repoId,
         settings: parsed.data.settings,
-        githubToken,
       }),
     })
   );

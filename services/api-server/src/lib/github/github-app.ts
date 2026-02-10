@@ -40,7 +40,7 @@ export class GitHubAppService {
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);
-    return this.getInstallationToken(installation.id);
+    return this.getInstallationToken(installation.id, repo);
   }
 
   /**
@@ -103,7 +103,10 @@ export class GitHubAppService {
   /**
    * Get an installation access token, using D1 cache with 5-minute buffer.
    */
-  async getInstallationToken(installationId: number): Promise<string> {
+  async getInstallationToken(
+    installationId: number,
+    repoName?: string,
+  ): Promise<string> {
     // Check cache
     const cached = await this.db
       .prepare(
@@ -118,10 +121,15 @@ export class GitHubAppService {
       return cached.token;
     }
 
-    // Generate new token via octokit
+    // Generate new token via octokit, scoped to single repo with minimum permissions
     const octokit = await this.app.getInstallationOctokit(installationId);
     const { data } = await octokit.rest.apps.createInstallationAccessToken({
       installation_id: installationId,
+      ...(repoName && { repositories: [repoName] }),
+      permissions: {
+        contents: "write",
+        metadata: "read",
+      },
     });
 
     // Cache it

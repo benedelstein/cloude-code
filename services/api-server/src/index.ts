@@ -29,6 +29,18 @@ app.all("/agents/session/:sessionId", async (c) => {
   return stub.fetch(c.req.raw);
 });
 
+// Git proxy: forward to the session's DO for authenticated git operations
+app.all("/git-proxy/:sessionId/*", async (c) => {
+  const sessionId = c.req.param("sessionId");
+  const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
+  const url = new URL(c.req.url);
+  return stub.fetch(new Request(`http://do${url.pathname}${url.search}`, {
+    method: c.req.method,
+    headers: c.req.raw.headers,
+    body: c.req.raw.body,
+  }));
+});
+
 app.route("/sessions", sessionsRoutes);
 app.route("/test", testRoutes);
 app.route("/webhooks", webhooksRoutes);
