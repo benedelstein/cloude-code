@@ -531,8 +531,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     if (!match?.[1]) return new Response("invalid path", { status: 400 });
     const githubPath = match[1];
 
-    // Enforce: only the configured repo
-    if (this.state.repoId && !githubPath.startsWith(this.state.repoId)) {
+    // Enforce: only the configured repo (match with .git suffix to prevent prefix collisions like acme/app matching acme/app-evil)
+    if (this.state.repoId && !githubPath.startsWith(`${this.state.repoId}.git`)) {
       return new Response("repo not allowed", { status: 403 });
     }
 

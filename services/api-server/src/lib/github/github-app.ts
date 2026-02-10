@@ -40,7 +40,28 @@ export class GitHubAppService {
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);
-    return this.getInstallationToken(installation.id, repo);
+    const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
+    return this.getInstallationToken(installation.id, { repoName: repo, repoId: numericRepoId });
+  }
+
+  /**
+   * Resolve a repo's numeric GitHub ID. Checks D1 first, falls back to the API.
+   */
+  private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {
+    const row = await this.db
+      .prepare(
+        `SELECT repo_id FROM github_installation_repos
+         WHERE installation_id = ? AND repo_name = ?`,
+      )
+      .bind(installationId, `${owner}/${repo}`)
+      .first<{ repo_id: number }>();
+
+    if (row) return row.repo_id;
+
+    // Fallback: query GitHub API
+    const octokit = await this.app.getInstallationOctokit(installationId);
+    const { data } = await octokit.rest.repos.get({ owner, repo });
+    return data.id;
   }
 
   /**
@@ -85,7 +106,7 @@ export class GitHubAppService {
     try {
       const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
         owner,
-        repo,
+        repo
       });
 
       return {
@@ -105,16 +126,17 @@ export class GitHubAppService {
    */
   async getInstallationToken(
     installationId: number,
-    repoName?: string,
+    repo?: { repoName: string; repoId: number },
   ): Promise<string> {
-    // Check cache
+    // Check cache (keyed by installation + numeric repo ID to avoid cross-repo token leaks)
+    const cacheRepoId = repo?.repoId ?? 0;
     const cached = await this.db
       .prepare(
         `SELECT token, expires_at FROM installation_token_cache
-         WHERE installation_id = ?
+         WHERE installation_id = ? AND repo_id = ?
          AND datetime(expires_at) > datetime('now', '+5 minutes')`,
       )
-      .bind(installationId)
+      .bind(installationId, cacheRepoId)
       .first<{ token: string; expires_at: string }>();
 
     if (cached) {
@@ -125,7 +147,7 @@ export class GitHubAppService {
     const octokit = await this.app.getInstallationOctokit(installationId);
     const { data } = await octokit.rest.apps.createInstallationAccessToken({
       installation_id: installationId,
-      ...(repoName && { repositories: [repoName] }),
+      ...(repo && { repositories: [repo.repoName] }),
       permissions: {
         contents: "write",
         metadata: "read",
@@ -135,10 +157,10 @@ export class GitHubAppService {
     // Cache it
     await this.db
       .prepare(
-        `INSERT OR REPLACE INTO installation_token_cache (installation_id, token, expires_at)
-         VALUES (?, ?, ?)`,
+        `INSERT OR REPLACE INTO installation_token_cache (installation_id, repo_id, token, expires_at)
+         VALUES (?, ?, ?, ?)`,
       )
-      .bind(installationId, data.token, data.expires_at)
+      .bind(installationId, cacheRepoId, data.token, data.expires_at)
       .run();
 
     return data.token;

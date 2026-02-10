@@ -29,9 +29,11 @@ CREATE INDEX idx_installation_repos_name ON github_installation_repos(repo_name)
 
 -- Cache for installation access tokens (1hr lifetime)
 CREATE TABLE installation_token_cache (
-  installation_id INTEGER PRIMARY KEY,
+  installation_id INTEGER NOT NULL,
+  repo_id INTEGER NOT NULL,            -- GitHub numeric repo ID, or 0 for unscoped tokens
   token TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (installation_id, repo_id),
   FOREIGN KEY (installation_id) REFERENCES github_installations(id) ON DELETE CASCADE
 );

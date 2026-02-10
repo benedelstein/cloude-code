@@ -78,7 +78,6 @@ pnpm build         # tsc
 Required secrets for `api-server` (set via `wrangler secret put`):
 - `ANTHROPIC_API_KEY`
 - `SPRITES_API_KEY`
-- `GITHUB_TOKEN`
 
 ## Tech Stack
 
