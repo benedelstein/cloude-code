@@ -15,6 +15,8 @@ import { GitHubAppService } from "@/lib/github";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
+import { SecretRepository } from "./repositories/secret-repository";
+import { SchemaManager } from "./repositories/schema-manager";
 import { generateBranchSlug } from "@/lib/branch-slug";
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import type { UIMessage } from "ai";
@@ -22,7 +24,9 @@ import type { UIMessage } from "ai";
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
-// Session metadata stored in Agent state (survives hibernation)
+/** Session metadata stored in Agent state (survives hibernation)
+* IMPORTANT: THIS STATE IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+*/
 type AgentState = {
   sessionId: string | null;
   userId: string | null;
@@ -47,8 +51,7 @@ interface InitRequest {
 export class SessionAgentDO extends Agent<Env, AgentState> {
   private spritesCoordinator: SpritesCoordinator | null = null;
   private messageRepository: MessageRepository | null = null;
-  /** Buffer for partial NDJSON lines from agent stdout */
-  private agentOutputBuffer: string = "";
+  private secretRepository: SecretRepository | null = null;
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
   /** mitmproxy session for HTTP debugging */
@@ -82,35 +85,27 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private initializeSchema(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `;
-    this.sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
-    this.sql`
-      CREATE TABLE IF NOT EXISTS secrets (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    `;
+    const sql = this.sql.bind(this);
+    this.messageRepository = new MessageRepository(sql);
+    this.secretRepository = new SecretRepository(sql);
+
+    new SchemaManager([this.messageRepository, this.secretRepository]).migrate();
+
     // Load secrets from SQLite into memory
-    const rows = [...this.sql`SELECT key, value FROM secrets WHERE key IN ('github_token', 'git_proxy_secret')`];
-    for (const row of rows) {
-      const { key, value } = row as { key: string; value: string };
-      if (key === "github_token") this.githubToken = value;
-      if (key === "git_proxy_secret") this.gitProxySecret = value;
-    }
+    this.githubToken = this.secretRepository.get("github_token");
+    this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
   }
 
   private initializeClients(): void {
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
-    this.messageRepository = new MessageRepository(this.sql.bind(this));
+    if (!this.messageRepository) {
+      this.messageRepository = new MessageRepository(this.sql.bind(this));
+    }
+    if (!this.secretRepository) {
+      this.secretRepository = new SecretRepository(this.sql.bind(this));
+    }
   }
 
   // Ensure clients are initialized (may be null after hibernation)
@@ -234,7 +229,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)
     this.gitProxySecret = crypto.randomUUID();
-    this.sql`INSERT OR REPLACE INTO secrets (key, value) VALUES ('git_proxy_secret', ${this.gitProxySecret})`;
+    this.secretRepository!.set("git_proxy_secret", this.gitProxySecret);
 
     // Initialize agent state
     this.setState({
@@ -431,11 +426,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private handleAgentStdout(data: string): void {
     console.log(`[vm-agent stdout] ${data}`);
-    this.agentOutputBuffer += data;
-    const lines = this.agentOutputBuffer.split("\n");
-    this.agentOutputBuffer = lines.pop() ?? "";
 
-    for (const line of lines) {
+    for (const line of data.split("\n")) {
       if (!line.trim()) continue;
 
       try {
@@ -600,7 +592,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const github = new GitHubAppService(this.env);
     const token = await github.getTokenForRepo(this.state.repoId);
     this.githubToken = token;
-    this.sql`INSERT OR REPLACE INTO secrets (key, value) VALUES ('github_token', ${token})`;
+    this.secretRepository!.set("github_token", token);
   }
 
   private handleGetSession(): Response {
@@ -906,29 +898,5 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private broadcastMessage(message: ServerMessage, without?: string[]): void {
     this.broadcast(JSON.stringify(message), without);
-  }
-
-  /**
-   * Retrieves captured HTTP traffic from mitmproxy.
-   * Note: mitmdump writes binary format; for human-readable output,
-   * use `mitmproxy` or `mitmweb` interactively.
-   */
-  async getTrafficLogs(): Promise<string> {
-    if (!this.state.spriteName) {
-      return "No sprite available";
-    }
-
-    this.ensureClients();
-    const sprite = new WorkersSprite(
-      this.state.spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL
-    );
-
-    const result = await sprite.execHttp(
-      `cat ${HOME_DIR}/.cloude/traffic.mitm 2>/dev/null || echo "No traffic captured"`,
-      {}
-    );
-    return result.stdout ?? "";
   }
 }

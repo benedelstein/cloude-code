@@ -13,10 +13,10 @@ webhooksRoutes.post("/github", async (c) => {
     return c.json({ error: "Missing required GitHub webhook headers" }, 400);
   }
 
-  const github = new GitHubAppService(c.env);
+  const githubService = new GitHubAppService(c.env);
 
   try {
-    await github.handleWebhook({
+    await githubService.handleWebhook({
       id,
       name,
       signature,

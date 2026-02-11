@@ -8,7 +8,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wrangler",
-    "test-sprite": "tsx scripts/test-sprite.ts"
+    "test-sprite": "tsx scripts/test-sprite.ts",
+    "db:migrate": "wrangler d1 migrations apply cloude-code-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260129.0",
+    "@octokit/webhooks": "13.9.1",
     "dotenv": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",

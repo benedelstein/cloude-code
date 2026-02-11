@@ -67,7 +67,7 @@ importers:
         version: link:../../packages/shared
       agents:
         specifier: 'catalog:'
-        version: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.1.0)(zod@4.3.6)
+        version: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6)
       ai:
         specifier: 'catalog:'
         version: 6.0.59(zod@4.3.6)
@@ -198,6 +198,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260129.0
         version: 4.20260129.0
+      '@octokit/webhooks':
+        specifier: 13.9.1
+        version: 13.9.1
       dotenv:
         specifier: 'catalog:'
         version: 17.2.3
@@ -2582,7 +2585,7 @@ snapshots:
 
   '@cloudflare/ai-chat@0.0.4(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6)':
     dependencies:
-      agents: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.1.0)(zod@4.3.6)
+      agents: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6)
       ai: 6.0.59(zod@4.3.6)
       react: 19.1.0
       zod: 4.3.6
@@ -2596,7 +2599,7 @@ snapshots:
 
   '@cloudflare/codemode@0.0.5(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(typescript@5.9.3)(zod@4.3.6)':
     dependencies:
-      agents: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.1.0)(zod@4.3.6)
+      agents: 0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.2.3)(zod@4.3.6)
       ai: 6.0.59(zod@4.3.6)
       zod: 4.3.6
       zod-to-ts: 2.0.0(typescript@5.9.3)(zod@4.3.6)
@@ -3346,28 +3349,6 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
-  agents@0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.1.0)(zod@4.3.6):
-    dependencies:
-      '@cfworker/json-schema': 4.1.1
-      '@cloudflare/ai-chat': 0.0.4(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6)
-      '@cloudflare/codemode': 0.0.5(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(typescript@5.9.3)(zod@4.3.6)
-      '@modelcontextprotocol/sdk': 1.25.2(@cfworker/json-schema@4.1.1)(hono@4.11.4)(zod@4.3.6)
-      ai: 6.0.59(zod@4.3.6)
-      cron-schedule: 6.0.0
-      json-schema: 0.4.0
-      json-schema-to-typescript: 15.0.4
-      mimetext: 3.0.27
-      nanoid: 5.1.6
-      partyserver: 0.1.0(@cloudflare/workers-types@4.20260129.0)
-      partysocket: 1.1.10
-      react: 19.1.0
-      yargs: 18.0.0
-      zod: 4.3.6
-    transitivePeerDependencies:
-      - '@cloudflare/workers-types'
-      - hono
-      - supports-color
-
   agents@0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(hono@4.11.4)(react@19.2.3)(zod@4.3.6):
     dependencies:
       '@cfworker/json-schema': 4.1.1
@@ -3383,6 +3364,28 @@ snapshots:
       partyserver: 0.1.0(@cloudflare/workers-types@4.20260129.0)
       partysocket: 1.1.10
       react: 19.2.3
+      yargs: 18.0.0
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@cloudflare/workers-types'
+      - hono
+      - supports-color
+
+  agents@0.3.6(@cloudflare/ai-chat@0.0.4)(@cloudflare/codemode@0.0.5)(@cloudflare/workers-types@4.20260129.0)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6):
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      '@cloudflare/ai-chat': 0.0.4(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(react@19.1.0)(zod@4.3.6)
+      '@cloudflare/codemode': 0.0.5(agents@0.3.6)(ai@6.0.59(zod@4.3.6))(typescript@5.9.3)(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.25.2(@cfworker/json-schema@4.1.1)(hono@4.11.4)(zod@4.3.6)
+      ai: 6.0.59(zod@4.3.6)
+      cron-schedule: 6.0.0
+      json-schema: 0.4.0
+      json-schema-to-typescript: 15.0.4
+      mimetext: 3.0.27
+      nanoid: 5.1.6
+      partyserver: 0.1.0(@cloudflare/workers-types@4.20260129.0)
+      partysocket: 1.1.10
+      react: 19.1.0
       yargs: 18.0.0
       zod: 4.3.6
     transitivePeerDependencies:

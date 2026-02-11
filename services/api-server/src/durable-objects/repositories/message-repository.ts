@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { SqlFn, Repository } from "./types";
 
 /**
  * Stored message wraps UIMessage with session metadata.
@@ -16,14 +17,20 @@ interface MessageRow {
   created_at: string;
 }
 
-// Tagged template SQL function type from Agent SDK
-type SqlFn = <T = Record<string, string | number | boolean | null>>(
-  strings: TemplateStringsArray,
-  ...values: (string | number | boolean | null)[]
-) => T[];
-
-export class MessageRepository {
+export class MessageRepository implements Repository {
   constructor(private sql: SqlFn) {}
+
+  migrate(): void {
+    this.sql`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `;
+    this.sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
+  }
 
   /**
    * Store a UIMessage.
