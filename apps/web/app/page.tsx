@@ -6,7 +6,7 @@ import { createSession, listRepos, type Repo } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Home() {
-  const { user, loading: authLoading, isAuthenticated, login, logout } = useAuth();
+  const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [installUrl, setInstallUrl] = useState<string | null>(null);
   const [reposLoading, setReposLoading] = useState(false);
@@ -46,6 +46,10 @@ export default function Home() {
     );
   }
 
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
@@ -56,104 +60,94 @@ export default function Home() {
           </p>
         </div>
 
-        {!isAuthenticated ? (
-          <button
-            onClick={login}
-            className="w-full cursor-pointer py-3 px-4 rounded-lg bg-accent text-accent-foreground font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-          >
-            <GitHubIcon />
-            Sign in with GitHub
-          </button>
-        ) : (
-          <div className="space-y-6">
-            {/* User header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {user?.avatarUrl && (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.login}
-                    className="w-8 h-8 rounded-full"
-                  />
-                )}
-                <span className="font-medium">{user?.login}</span>
-              </div>
-              <button
-                onClick={logout}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Sign out
-              </button>
+        <div className="space-y-6">
+          {/* User header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {user?.avatarUrl && (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.login}
+                  className="w-8 h-8 rounded-full"
+                />
+              )}
+              <span className="font-medium">{user?.login}</span>
             </div>
+            <button
+              onClick={logout}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
 
-            {/* Error */}
-            {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
-                {error}
+          {/* Error */}
+          {error && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Repo list */}
+          <div>
+            <h2 className="text-sm font-medium mb-3 text-muted-foreground">
+              Select a repository
+            </h2>
+            {reposLoading ? (
+              <div className="flex justify-center py-8">
+                <LoadingSpinner />
               </div>
-            )}
-
-            {/* Repo list */}
-            <div>
-              <h2 className="text-sm font-medium mb-3 text-muted-foreground">
-                Select a repository
-              </h2>
-              {reposLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner />
-                </div>
-              ) : repos.length === 0 ? (
-                <div className="text-center py-8 space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    No repositories found. Install the GitHub App to get started.
-                  </p>
-                  {installUrl && (
-                    <a
-                      href={installUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-medium hover:opacity-90 transition-opacity text-sm"
+            ) : repos.length === 0 ? (
+              <div className="text-center py-8 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  No repositories found. Install the GitHub App to get started.
+                </p>
+                {installUrl && (
+                  <a
+                    href={installUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-medium hover:opacity-90 transition-opacity text-sm"
+                  >
+                    <GitHubIcon />
+                    Install GitHub App
+                  </a>
+                )}
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {repos.map((repo) => (
+                  <li key={repo.id}>
+                    <button
+                      onClick={() => handleSelectRepo(repo)}
+                      disabled={creatingSessionFor !== null}
+                      className="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <GitHubIcon />
-                      Install GitHub App
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {repos.map((repo) => (
-                    <li key={repo.id}>
-                      <button
-                        onClick={() => handleSelectRepo(repo)}
-                        disabled={creatingSessionFor !== null}
-                        className="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-medium">{repo.fullName}</span>
-                            {repo.private && (
-                              <span className="ml-2 text-xs px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                                private
-                              </span>
-                            )}
-                          </div>
-                          {creatingSessionFor === repo.fullName && (
-                            <LoadingSpinner />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-medium">{repo.fullName}</span>
+                          {repo.private && (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+                              private
+                            </span>
                           )}
                         </div>
-                        {repo.description && (
-                          <p className="text-sm text-muted-foreground mt-1 truncate">
-                            {repo.description}
-                          </p>
+                        {creatingSessionFor === repo.fullName && (
+                          <LoadingSpinner />
                         )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                      </div>
+                      {repo.description && (
+                        <p className="text-sm text-muted-foreground mt-1 truncate">
+                          {repo.description}
+                        </p>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

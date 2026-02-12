@@ -28,7 +28,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       <header className="shrink-0 border-b border-border px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="font-semibold">cloude-code</h1>
+            <h1 className="font-semibold">☁️ Cloude Code</h1>
             <p className="text-xs text-muted-foreground">
               Session: {sessionId.slice(0, 8)}...
             </p>
