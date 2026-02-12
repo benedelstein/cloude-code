@@ -83,3 +83,10 @@ Required secrets for `api-server` (set via `wrangler secret put`):
 - **Sprites** for isolated VM execution. Sprites are 
 
 NOTE: if adding new dependencies in multiple packages in the repo, prefer to use the pnpm catalog in `pnpm-workspace.yaml` for shared versioning.
+
+## Best Practices
+
+- Always build and lint and typecheck after completing a task to test it.
+- Prefer unabbreviated variable names rather than shortened ones. For example, prefer `let installation = ...` instead of `let inst = ...`. Variable names should not be too long (>30 chars) though.
+- Do not use emojis in your git messages or comments unless absolutely relevant and necessary.
+- Write instructive and clarifying comments where needed, but do not be too verbose. 

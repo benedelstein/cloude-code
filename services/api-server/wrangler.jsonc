@@ -15,7 +15,8 @@
   "vars": {
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev",
-    "WORKER_URL": "https://cloude-code-api.benwatkins.workers.dev"
+    "WORKER_URL": "https://cloude-code-api.bedelstein12.workers.dev",
+    "GITHUB_APP_NAME": "cloude-code"
   },
   "dev": {
     "port": 8787
@@ -47,4 +48,7 @@
   // - GITHUB_APP_ID
   // - GITHUB_APP_PRIVATE_KEY
   // - GITHUB_WEBHOOK_SECRET
+  // - GITHUB_APP_CLIENT_ID
+  // - GITHUB_APP_CLIENT_SECRET
+  // - TOKEN_ENCRYPTION_KEY
 }

@@ -286,6 +286,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           status: "cloning",
         });
 
+        // NOTE: even though the git command is not controlled by the agent, we still use the proxy url
+        // to prevent the token from being visible to the vm (and to the agent)
         this.broadcastMessage({
           type: "session.status",
           status: "cloning",
@@ -311,7 +313,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Set up git config for commits
       await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
-      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Agent"`, {});
+      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Code"`, {});
 
       // Configure git to send the proxy auth header on all requests to the proxy
       await sprite.execHttp(

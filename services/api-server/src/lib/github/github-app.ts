@@ -1,4 +1,4 @@
-import { App } from "octokit";
+import { App, Octokit } from "octokit";
 import type {
   EmitterWebhookEvent,
   EmitterWebhookEventName,
@@ -7,6 +7,28 @@ import type { Env } from "@/types";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
+
+export interface OAuthUser {
+  id: number;
+  login: string;
+  name: string | null;
+  avatarUrl: string;
+}
+
+export interface OAuthTokenResult {
+  accessToken: string;
+  refreshToken: string | undefined;
+  refreshTokenExpiresAt: string | undefined;
+  expiresAt: string | undefined;
+  user: OAuthUser;
+}
+
+export interface RefreshedToken {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  refreshTokenExpiresAt: string;
+}
 
 export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
@@ -26,14 +48,78 @@ export class GitHubAppError extends Error {
 export class GitHubAppService {
   private app: App;
   private db: D1Database;
+  private clientId: string;
+  private appName: string;
 
   constructor(env: Env) {
     this.app = new App({
       appId: env.GITHUB_APP_ID,
       privateKey: atob(env.GITHUB_APP_PRIVATE_KEY),
       webhooks: { secret: env.GITHUB_WEBHOOK_SECRET },
+      oauth: {
+        clientId: env.GITHUB_APP_CLIENT_ID,
+        clientSecret: env.GITHUB_APP_CLIENT_SECRET,
+      },
     });
     this.db = env.DB;
+    this.clientId = env.GITHUB_APP_CLIENT_ID;
+    this.appName = env.GITHUB_APP_NAME;
+  }
+
+  /**
+   * Returns the GitHub OAuth authorization URL.
+   * For users who already have the app installed, this goes straight to OAuth.
+   * New users will need to install the app separately (or be directed to /installations/new).
+   */
+  getAuthUrl(state: string): string {
+    return `https://github.com/login/oauth/authorize?client_id=${this.clientId}&state=${state}`;
+  }
+
+  /**
+   * Returns the GitHub App installation URL (for users who need to install the app).
+   */
+  getInstallUrl(): string {
+    return `https://github.com/apps/${this.appName}/installations/new`;
+  }
+
+  /**
+   * Exchange an OAuth authorization code for user tokens + profile info.
+   */
+  async exchangeOAuthCode(code: string): Promise<OAuthTokenResult> {
+    const { authentication } = await this.app.oauth.createToken({ code });
+
+    // Fetch user profile with the new token
+    const userOctokit = new Octokit({ auth: authentication.token });
+    const { data: ghUser } = await userOctokit.rest.users.getAuthenticated();
+
+    return {
+      accessToken: authentication.token,
+      refreshToken: authentication.refreshToken,
+      refreshTokenExpiresAt: authentication.refreshTokenExpiresAt,
+      expiresAt: authentication.expiresAt,
+      user: {
+        id: ghUser.id,
+        login: ghUser.login,
+        name: ghUser.name,
+        avatarUrl: ghUser.avatar_url,
+      },
+    };
+  }
+
+  /**
+   * Refresh an expired user access token using a refresh token.
+   */
+  async refreshUserToken(refreshToken: string): Promise<RefreshedToken> {
+    const { authentication } = await this.app.oauth.refreshToken({
+      refreshToken,
+    });
+
+    return {
+      accessToken: authentication.token,
+      refreshToken: authentication.refreshToken,
+      expiresAt: authentication.expiresAt,
+      refreshTokenExpiresAt: authentication.refreshTokenExpiresAt,
+    };
   }
 
   /**
@@ -187,6 +273,7 @@ export class GitHubAppService {
     payload: string;
   }): Promise<void> {
     this.registerWebhookHandlers();
+    console.log(`github webhook received: ${params.id} - ${params.name}`);
 
     await this.app.webhooks.verifyAndReceive({
       id: params.id,
@@ -280,6 +367,7 @@ export class GitHubAppService {
   private async handleInstallationDeleted(
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
+    console.log(`github installation deleted: ${payload.installation.id}`);
     // CASCADE will clean up repos and token cache
     await this.db
       .prepare(`DELETE FROM github_installations WHERE id = ?`)
@@ -290,6 +378,7 @@ export class GitHubAppService {
   private async handleInstallationSuspended(
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
+    console.log(`github installation suspended: ${payload.installation.id}`);
     await this.db
       .prepare(
         `UPDATE github_installations SET suspended_at = datetime('now'), updated_at = datetime('now')
@@ -302,6 +391,7 @@ export class GitHubAppService {
   private async handleInstallationUnsuspended(
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
+    console.log(`github installation unsuspended: ${payload.installation.id}`);
     await this.db
       .prepare(
         `UPDATE github_installations SET suspended_at = NULL, updated_at = datetime('now')

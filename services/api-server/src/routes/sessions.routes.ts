@@ -1,16 +1,20 @@
-import { Context, Hono } from "hono";
+import { Hono } from "hono";
 import { CreateSessionRequest, type SessionInfoResponse } from "@repo/shared";
 import type { Env } from "../types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "../durable-objects/session-agent-do";
 import { GitHubAppService, GitHubAppError } from "@/lib/github";
+import type { AuthUser } from "@/middleware/auth.middleware";
 
-export const sessionsRoutes = new Hono<{ Bindings: Env }>();
+export const sessionsRoutes = new Hono<{
+  Bindings: Env;
+  Variables: { user: AuthUser };
+}>();
 
-const getSessionAgent = async (id: string, c: Context<{ Bindings: Env }>) => {
+const getSessionAgent = async (id: string, env: Env) => {
   // Use getAgentByName to properly route requests (including WebSockets)
   // This adds the headers that PartyServer/Agents SDK expects
-  return await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, id);
+  return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
 };
 
 // Create a new session
@@ -35,9 +39,10 @@ sessionsRoutes.post("/", async (c) => {
     throw error;
   }
 
+  const user = c.get("user");
   const sessionId = crypto.randomUUID();
-  console.log("creating session agent", sessionId);
-  const stub = await getSessionAgent(sessionId, c);
+  console.log("creating session agent", sessionId, "user", user.githubLogin);
+  const stub = await getSessionAgent(sessionId, c.env);
 
   // Initialize the session in the DO (token fetched internally by the DO)
   const initResponse = await stub.fetch(
@@ -47,6 +52,7 @@ sessionsRoutes.post("/", async (c) => {
       body: JSON.stringify({
         sessionId,
         repoId: parsed.data.repoId,
+        userId: user.id,
         settings: parsed.data.settings,
       }),
     })
@@ -63,7 +69,7 @@ sessionsRoutes.post("/", async (c) => {
 // Get session info
 sessionsRoutes.get("/:sessionId", async (c) => {
   const sessionId = c.req.param("sessionId");
-  const stub = await getSessionAgent(sessionId, c);
+  const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(new Request("http://do/"));
   if (!response.ok) {
@@ -77,7 +83,7 @@ sessionsRoutes.get("/:sessionId", async (c) => {
 // Get messages for a session
 sessionsRoutes.get("/:sessionId/messages", async (c) => {
   const sessionId = c.req.param("sessionId");
-  const stub = await getSessionAgent(sessionId, c);
+  const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(new Request("http://do/messages"));
   if (!response.ok) {
@@ -90,7 +96,7 @@ sessionsRoutes.get("/:sessionId/messages", async (c) => {
 // Delete a session
 sessionsRoutes.delete("/:sessionId", async (c) => {
   const sessionId = c.req.param("sessionId");
-  const stub = await getSessionAgent(sessionId, c);
+  const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(
     new Request("http://do/", { method: "DELETE" })

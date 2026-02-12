@@ -4,6 +4,9 @@ import { getAgentByName } from "agents";
 import { sessionsRoutes } from "./routes/sessions.routes";
 import { testRoutes } from "./routes/test.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
+import { authRoutes } from "./routes/auth.routes";
+import { reposRoutes } from "./routes/repos.routes";
+import { authMiddleware } from "./middleware/auth.middleware";
 import type { Env } from "./types";
 import type { SessionAgentDO } from "./durable-objects/session-agent-do";
 
@@ -11,7 +14,13 @@ export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use("*", cors());
+app.use(
+  "*",
+  cors({
+    origin: (origin) => origin, // reflect request origin
+    credentials: true,
+  }),
+);
 
 app.get("/", (c) => {
   return c.json({ name: "cloude-code-api", version: "0.0.1" });
@@ -41,7 +50,13 @@ app.all("/git-proxy/:sessionId/*", async (c) => {
   }));
 });
 
+app.route("/auth", authRoutes);
+app.route("/repos", reposRoutes);
+
+// Protected routes
+app.use("/sessions/*", authMiddleware);
 app.route("/sessions", sessionsRoutes);
+
 app.route("/test", testRoutes);
 app.route("/webhooks", webhooksRoutes);
 

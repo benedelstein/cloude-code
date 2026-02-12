@@ -28,7 +28,7 @@ import { z } from "zod";
 
 export const SessionInfoMessageSchema = z.object({
     type: z.literal("session_info"),
-    session_id: z.number(),
+    session_id: z.coerce.number(),
     command: z.string(),
     created: z.number(),
     cols: z.number().optional(),
