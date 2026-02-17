@@ -16,7 +16,7 @@ import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
 import { SchemaManager } from "./repositories/schema-manager";
-import { generateBranchSlug } from "@/lib/branch-slug";
+
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
 import type { UIMessage } from "ai";
@@ -32,13 +32,14 @@ type AgentState = {
   userId: string | null;
   repoId: string | null;
   spriteName: string | null;
-  githubBranchName: string | null;
   /** Session ID given by the Claude Agent SDK */
   claudeSessionId: string | null;
   /** ID of the agent process session running on the sprite */
   agentProcessId: number | null;
   status: SessionStatus;
   settings: SessionSettings;
+  /** Branch name locked after first push (for "Create PR" flow) */
+  pushedBranch: string | null;
   createdAt: Date;
 };
 
@@ -70,11 +71,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     userId: "",
     repoId: "",
     spriteName: null,
-    githubBranchName: null,
     claudeSessionId: null,
     agentProcessId: null,
     status: "provisioning",
     settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
+    pushedBranch: null,
     createdAt: new Date(),
   };
 
@@ -144,11 +145,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
-      const { response, githubToken } = await handleGitProxy(request, path, this.gitProxyContext());
-      if (githubToken) {
-        this.githubToken = githubToken;
+      const result = await handleGitProxy(request, path, this.gitProxyContext());
+      if (result.githubToken) {
+        this.githubToken = result.githubToken;
       }
-      return response;
+      // Capture pushed branch name and notify clients
+      if (result.pushedBranch && result.response.ok) {
+        this.setState({ ...this.state, pushedBranch: result.pushedBranch });
+        this.broadcastMessage({
+          type: "branch.pushed",
+          branch: result.pushedBranch,
+          repoId: this.state.repoId ?? "",
+        });
+      }
+      return result.response;
     }
 
     // Sub-resources
@@ -242,7 +252,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       userId: "anonymous", // todo
       repoId: data.repoId,
       spriteName: null,
-      githubBranchName: null,
       claudeSessionId: null,
       agentProcessId: null,
       status: "provisioning",
@@ -389,6 +398,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       tty: false,
       env: {
         ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
+        SESSION_ID: this.state.sessionId ?? "",
         // Proxy disabled for now - uncomment to debug HTTP traffic
         // HTTP_PROXY: "http://127.0.0.1:8080",
         // HTTPS_PROXY: "http://127.0.0.1:8080",
@@ -513,8 +523,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return {
       gitProxySecret: this.gitProxySecret,
       repoId: this.state.repoId,
-      githubBranchName: this.state.githubBranchName,
+      sessionId: this.state.sessionId,
       githubToken: this.githubToken,
+      pushedBranch: this.state.pushedBranch,
       env: this.env,
       secretRepository: this.secretRepository!,
     };
@@ -658,25 +669,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return;
     }
 
-    // Create feature branch on first message
-    if (!this.state.githubBranchName && this.state.spriteName) {
-      try {
-        const branchSlug = await generateBranchSlug(content, this.env.ANTHROPIC_API_KEY);
-        console.log(`Generated branch slug: ${branchSlug}`);
-        await this.createFeatureBranch(this.state.spriteName, branchSlug);
-        this.setState({ ...this.state, githubBranchName: branchSlug });
-        console.log(`Created feature branch: ${branchSlug}`);
-      } catch (error) {
-        console.error("Failed to create feature branch:", error);
-        connection.send(JSON.stringify({
-          type: "error",
-          code: "FAILED_TO_CREATE_BRANCH",
-          message: "Failed to create feature branch",
-        } satisfies ServerMessage));
-        return;
-      }
-    }
-
     // Store user message with parts format
     this.ensureClients();
     if (!this.state.sessionId) {
@@ -700,35 +692,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
-  private async createFeatureBranch(spriteName: string, branchName: string): Promise<void> {
-    const sprite = new WorkersSprite(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL
-    );
-
-    const result = await sprite.execHttp(`cd ${WORKSPACE_DIR} && git checkout -b ${branchName}`, {});
-    if (result.exitCode !== 0) {
-      throw new Error(`Failed to create branch ${branchName}: ${result.stderr}`);
-    }
-  }
-
   private async syncRepository(sprite: WorkersSprite): Promise<void> {
-    const branchName = this.state?.githubBranchName;
-
     // Stash any local changes
     await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash --include-untracked`, {});
-    // Fetch latest refs
-    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git fetch origin`, {});
-    // Pull if remote branch exists
-    if (branchName) {
-      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git pull origin ${branchName} --rebase || true`, {});
-    } else {
-      // what to do if the branch doesn't exist?
-    }
+    // Fetch and pull latest from main
+    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git checkout main`, {});
+    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git pull origin main --rebase || true`, {});
     // Restore stashed changes
     await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash pop || true`, {});
-    // what if there are conflicts? what if the remote branch doesnt exist?
   }
 
 

@@ -13,12 +13,16 @@ import {
   encodeAgentOutput,
 } from "@repo/shared";
 import { execSync } from "child_process";
+import { buildSystemPromptAppend } from "./system-prompt";
 
 const { values: args } = parseArgs({
   options: {
     sessionId: { type: "string", short: "s" },
   },
 });
+
+const sessionId = process.env.SESSION_ID ?? "";
+const sessionSuffix = sessionId.slice(0, 4);
 
 const rl = createInterface({ input: process.stdin });
 
@@ -131,6 +135,11 @@ async function runAgent(): Promise<void> {
       permissionMode: "acceptEdits",
       includePartialMessages: false,
       persistSession: true,
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+        append: buildSystemPromptAppend(sessionSuffix),
+      },
       env: {
         ...process.env,
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,

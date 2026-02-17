@@ -13,6 +13,7 @@ const main = async () => {
         },
     });
     const response = await sessions.json() as { sessions: {id: number }[] };
+    console.log(response)
     for (const session of response.sessions) {
         const killResponse = await fetch(`https://api.sprites.dev/v1/sprites/${SPRITE_NAME}/exec/${session.id}/kill`, {
             method: "POST",

@@ -8,7 +8,7 @@ import { SpritesCoordinator, WorkersSprite } from "../src/lib/sprites";
 
 const SPRITES_API_KEY = process.env.SPRITES_API_KEY!;
 const SPRITES_API_URL = process.env.SPRITES_API_URL || "https://api.sprites.dev";
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
+// const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 const REPO_ID = process.env.REPO_ID || "anthropics/claude-code";
 
 if (!SPRITES_API_KEY) {
