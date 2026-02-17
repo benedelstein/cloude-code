@@ -23,6 +23,14 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+      "quotes": [
+        "error",
+        "double",
+        {
+          avoidEscape: true,
+          allowTemplateLiterals: true,
+        },
+      ],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-expressions": [
         "error",
