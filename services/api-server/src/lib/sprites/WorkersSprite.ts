@@ -58,36 +58,41 @@ export class WorkersSprite {
         );
       }
   
-      // Response can be NDJSON or plain text depending on the command
-      const text = await response.text();
-  
+      // Sprites exec returns a binary stream with control byte prefixes:
+      //   \x01 = stdout data follows (until newline)
+      //   \x02 = stderr data follows (until newline)
+      //   \x03 = exit, next byte is the exit code as a raw byte value
+      const buffer = new Uint8Array(await response.arrayBuffer());
+
       let stdout = "";
       let stderr = "";
-      let exitCode = 0;
-  
-      // Try to parse as NDJSON first
-      const lines = text.trim().split("\n");
-      let parsedAsJson = false;
-  
-      for (const line of lines) {
-        if (!line) continue;
-        try {
-          const msg = JSON.parse(line);
-          parsedAsJson = true;
-          if (msg.stdout) stdout += msg.stdout;
-          if (msg.stderr) stderr += msg.stderr;
-          if (msg.exit_code !== undefined) exitCode = msg.exit_code;
-        } catch {
-          // Not JSON - will handle as plain text below
+      let exitCode = -1;
+      const decoder = new TextDecoder();
+
+      let i = 0;
+      while (i < buffer.length) {
+        const marker = buffer[i];
+        if (marker === 0x03) {
+          // Exit code: single byte following the marker
+          exitCode = i + 1 < buffer.length ? (buffer[i + 1] ?? 0) : 0;
+          break;
         }
+
+        // Find the end of this chunk (next newline or end of buffer)
+        let end = buffer.indexOf(0x0a, i + 1);
+        if (end === -1) end = buffer.length;
+        const chunk = decoder.decode(buffer.subarray(i + 1, end));
+
+        if (marker === 0x01) {
+          stdout += chunk + "\n";
+        } else if (marker === 0x02) {
+          stderr += chunk + "\n";
+        }
+
+        i = end + 1;
       }
-  
-      // If no JSON was parsed, treat entire response as stdout
-      if (!parsedAsJson) {
-        stdout = text;
-      }
-  
-      return { stdout, stderr, exitCode };
+
+      return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
     }
   
     createSession(

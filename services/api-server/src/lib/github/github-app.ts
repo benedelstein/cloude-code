@@ -406,6 +406,7 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_added;
+    console.log(`github installation repositories added: ${installationId} - ${repos.length} repos`);
 
     if (repos.length > 0) {
       const batch = repos.map((repo) =>

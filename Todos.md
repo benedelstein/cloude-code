@@ -4,6 +4,7 @@
 - [x] 1 client implementation (web or cli)
 - [x] Add github auth and connecting to a user's github repos.
 - [x] store conversations in d1 and let user click on old convo list to resume
+- [ ] customize system prompt for agent specifying its container environment and how to commit changes
 - [ ] Proxy git and github actions for security. VM should only have write access specific to the repo and branch.
 - [ ] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.

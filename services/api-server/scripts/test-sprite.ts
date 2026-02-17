@@ -1,7 +1,8 @@
 #!/usr/bin/env npx tsx
 
 
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { Sprite, SpritesClient } from "@fly/sprites";
 import { SpritesCoordinator, WorkersSprite } from "../src/lib/sprites";
 

@@ -259,6 +259,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     try {
       this.ensureClients();
 
+      if (!this.gitProxySecret) {
+        // this should never happen, but just in case
+        throw new Error("gitProxySecret is not set — cannot provision sprite without it");
+      }
+
       const spriteResponse = await this.spritesCoordinator!.createSprite({
         name: `${sessionId}`,
         env: {},
@@ -303,17 +308,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           `git -c http.extraHeader="Authorization: Bearer ${this.gitProxySecret}" clone ${cloneUrl} ${WORKSPACE_DIR}`,
           {}
         );
-        console.log(`Clone result: exitCode=${cloneResult.exitCode}`);
-        // Verify clone
-        const verifyResult = await sprite.execHttp(`ls -la ${WORKSPACE_DIR}`, {});
-        if (!verifyResult.stdout || verifyResult.stdout.trim().split("\n").length < 3) {
-          throw new Error(`Clone failed - workspace empty: ${cloneResult.stderr}`);
+        console.log(`Clone result: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`);
+        if (cloneResult.exitCode !== 0) {
+          throw new Error(`Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`);
         }
       }
 
       // Set up git config for commits
-      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev"`, {});
-      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.name "Cloude Code"`, {});
+      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev" && git config user.name "Cloude Code"`, {});
 
       // Configure git to send the proxy auth header on all requests to the proxy
       await sprite.execHttp(
@@ -321,11 +323,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {}
       );
 
-      // Install mitmproxy for HTTP header debugging
-      await sprite.execHttp(`pip install mitmproxy`, {});
-
       // Start mitmproxy as a session, then vm-agent
-      await this.startMitmproxyOnVM(spriteResponse.name);
+      await this.startMitmproxyOnVM(sprite);
       await this.startAgentOnVM(spriteResponse.name);
 
       this.updateStatus("ready");
@@ -341,13 +340,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  private async startMitmproxyOnVM(spriteName: string): Promise<void> {
-    console.debug(`Starting mitmproxy on sprite ${spriteName}`);
-    const sprite = new WorkersSprite(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL
-    );
+  private async startMitmproxyOnVM(sprite: WorkersSprite): Promise<void> {
+    console.debug(`Starting mitmproxy on sprite ${sprite.name}`);
+    // Install mitmproxy for HTTP header debugging
+    await sprite.execHttp(`pip install mitmproxy`, {});
 
     // Kill any existing mitmproxy to free port 8080
     await sprite.execHttp(`pkill -f mitmdump || true`, {});
@@ -366,7 +362,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     await this.mitmSession.start();
     // Give it a moment to bind to port
     await new Promise(r => setTimeout(r, 500));
-    console.log(`mitmproxy started on sprite ${spriteName}`);
+    console.log(`mitmproxy started on sprite ${sprite.name}`);
   }
 
   private async startAgentOnVM(spriteName: string): Promise<void> {
@@ -515,8 +511,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async handleGitProxy(request: Request, path: string): Promise<Response> {
     // Authenticate: check Bearer token matches session secret
+    console.log(`[git-proxy] request: ${request.method} ${request.url}`);
+
     const authHeader = request.headers.get("Authorization");
     if (!this.gitProxySecret || authHeader !== `Bearer ${this.gitProxySecret}`) {
+      console.log(`[git-proxy] 401: secret=${this.gitProxySecret ? "set" : "null"}, authHeader=${authHeader ? "present" : "missing"}`);
       return new Response("unauthorized", { status: 401 });
     }
 
@@ -549,13 +548,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     originalRequest: Request,
     body: ArrayBuffer | ReadableStream<Uint8Array> | null,
   ): Promise<Response> {
+    console.log(`[git-proxy] forwarding to GitHub: ${githubPath}`);
     await this.ensureValidToken();
+    console.log(`[git-proxy] token: ${this.githubToken ? this.githubToken : "null"}`);
 
     const url = new URL(originalRequest.url);
-    const targetUrl = `https://github.com/${githubPath}${url.search}`;
+    const targetUrl = `https://x-access-token:${this.githubToken}@github.com/${githubPath}${url.search}`;
 
     const headers: Record<string, string> = {
-      "Authorization": `token ${this.githubToken}`,
       "User-Agent": "cloude-code-git-proxy",
     };
 
@@ -828,7 +828,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Restart mitmproxy if not running (it doesn't survive hibernation)
     if (!this.mitmSession) {
-      await this.startMitmproxyOnVM(spriteName);
+      await this.startMitmproxyOnVM(sprite);
     }
 
     // Refresh GitHub token before sync (may have expired during hibernation)

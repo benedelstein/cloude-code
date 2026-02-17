@@ -54,7 +54,7 @@ export default function Home() {
     <main className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">cloude-code</h1>
+          <h1 className="text-3xl font-bold mb-2">☁️ Cloude Code</h1>
           <p className="text-muted-foreground">
             Cloud-hosted agent service for code repositories
           </p>

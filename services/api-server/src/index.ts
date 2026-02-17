@@ -43,11 +43,13 @@ app.all("/git-proxy/:sessionId/*", async (c) => {
   const sessionId = c.req.param("sessionId");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
   const url = new URL(c.req.url);
-  return stub.fetch(new Request(`http://do${url.pathname}${url.search}`, {
+  const doRequest = new Request(`http://do${url.pathname}${url.search}`, {
     method: c.req.method,
     headers: c.req.raw.headers,
     body: c.req.raw.body,
-  }));
+  });
+  const response = await stub.fetch(doRequest);
+  return response;
 });
 
 app.route("/auth", authRoutes);
