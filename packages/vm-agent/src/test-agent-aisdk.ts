@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { encodeAgentInput } from "@repo/shared";
-import { TextStreamPart } from "ai";
+
 
 console.log("🤖 vm-agent (AI SDK) test harness");
 
@@ -27,12 +27,13 @@ agentOutput.on("line", (line) => {
       case "tool-call":
         console.log(`\n🔧 Tool call: ${output.toolName}(${JSON.stringify(output.args)})`);
         break;
-      case "tool-result":
+      case "tool-result": {
         const result = typeof output.result === "string"
           ? output.result.slice(0, 200) + (output.result.length > 200 ? "..." : "")
           : JSON.stringify(output.result).slice(0, 200);
         console.log(`\n📋 Tool result: ${result}`);
         break;
+      }
       case "finish":
         console.log(`\n✔ Finished (${output.finishReason})`);
         if (output.usage) {

@@ -28,19 +28,6 @@ export const SessionSettings = z.object({
 });
 export type SessionSettings = z.infer<typeof SessionSettings>;
 
-export const Session = z.object({
-  id: z.uuid(),
-  userId: z.string(),
-  repoId: z.string(),
-  spriteName: z.string().nullable(),
-  githubBranchName: z.string().nullable(),
-  status: SessionStatus,
-  settings: SessionSettings,
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
-export type Session = z.infer<typeof Session>;
-
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),

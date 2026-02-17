@@ -6,12 +6,11 @@ import {
   type AgentOutput,
   decodeAgentOutput,
   encodeAgentInput,
-  Session,
+  // Session,
   SessionInfoResponse,
   SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
-import { GitHubAppService } from "@/lib/github";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
@@ -19,6 +18,7 @@ import { SecretRepository } from "./repositories/secret-repository";
 import { SchemaManager } from "./repositories/schema-manager";
 import { generateBranchSlug } from "@/lib/branch-slug";
 import { MessageAccumulator } from "@/lib/message-accumulator";
+import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
 import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -144,7 +144,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
-      return this.handleGitProxy(request, path);
+      const { response, githubToken } = await handleGitProxy(request, path, this.gitProxyContext());
+      if (githubToken) {
+        this.githubToken = githubToken;
+      }
+      return response;
     }
 
     // Sub-resources
@@ -302,7 +306,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
         // Fetch a token for the initial clone (ensureValidToken won't work until first proxy request)
-        await this.ensureValidToken();
+        await this.refreshGitHubToken();
 
         const cloneResult = await sprite.execHttp(
           `git -c http.extraHeader="Authorization: Bearer ${this.gitProxySecret}" clone ${cloneUrl} ${WORKSPACE_DIR}`,
@@ -505,96 +509,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  // ============================================
-  // Git Proxy
-  // ============================================
-
-  private async handleGitProxy(request: Request, path: string): Promise<Response> {
-    // Authenticate: check Bearer token matches session secret
-    console.log(`[git-proxy] request: ${request.method} ${request.url}`);
-
-    const authHeader = request.headers.get("Authorization");
-    if (!this.gitProxySecret || authHeader !== `Bearer ${this.gitProxySecret}`) {
-      console.log(`[git-proxy] 401: secret=${this.gitProxySecret ? "set" : "null"}, authHeader=${authHeader ? "present" : "missing"}`);
-      return new Response("unauthorized", { status: 401 });
-    }
-
-    // Strip the /git-proxy/<sessionId>/ prefix to get github.com/owner/repo.git/...
-    const match = path.match(/^\/git-proxy\/[^/]+\/github\.com\/(.+)/);
-    if (!match?.[1]) return new Response("invalid path", { status: 400 });
-    const githubPath = match[1];
-
-    // Enforce: only the configured repo (match with .git suffix to prevent prefix collisions like acme/app matching acme/app-evil)
-    if (this.state.repoId && !githubPath.startsWith(`${this.state.repoId}.git`)) {
-      return new Response("repo not allowed", { status: 403 });
-    }
-
-    // Enforce: push only to session branch
-    if (githubPath.endsWith("/git-receive-pack") && request.method === "POST") {
-      const body = await request.arrayBuffer();
-      const pushCheck = this.validatePush(new Uint8Array(body));
-      if (!pushCheck.allowed) {
-        return new Response(`push rejected: ${pushCheck.reason}`, { status: 403 });
-      }
-      return this.forwardToGitHub(githubPath, request, body);
-    }
-
-    // Read operations (clone, fetch, pull) — always forward
-    return this.forwardToGitHub(githubPath, request, request.body);
-  }
-
-  private async forwardToGitHub(
-    githubPath: string,
-    originalRequest: Request,
-    body: ArrayBuffer | ReadableStream<Uint8Array> | null,
-  ): Promise<Response> {
-    console.log(`[git-proxy] forwarding to GitHub: ${githubPath}`);
-    await this.ensureValidToken();
-    console.log(`[git-proxy] token: ${this.githubToken ? this.githubToken : "null"}`);
-
-    const url = new URL(originalRequest.url);
-    const targetUrl = `https://x-access-token:${this.githubToken}@github.com/${githubPath}${url.search}`;
-
-    const headers: Record<string, string> = {
-      "User-Agent": "cloude-code-git-proxy",
+  private gitProxyContext(): GitProxyContext {
+    return {
+      gitProxySecret: this.gitProxySecret,
+      repoId: this.state.repoId,
+      githubBranchName: this.state.githubBranchName,
+      githubToken: this.githubToken,
+      env: this.env,
+      secretRepository: this.secretRepository!,
     };
-
-    const contentType = originalRequest.headers.get("Content-Type");
-    if (contentType) {
-      headers["Content-Type"] = contentType;
-    }
-
-    return fetch(targetUrl, {
-      method: originalRequest.method,
-      headers,
-      body,
-    });
   }
 
-  private validatePush(body: Uint8Array): { allowed: boolean; reason?: string } {
-    const allowedBranch = this.state.githubBranchName;
-    if (!allowedBranch) return { allowed: true };
-
-    // Git pkt-line format: "oldsha newsha refs/heads/branch\0capabilities..."
-    const preamble = new TextDecoder().decode(body.slice(0, 2048));
-    const refPattern = /[0-9a-f]{40} [0-9a-f]{40} refs\/heads\/(\S+)/g;
-    let match;
-    while ((match = refPattern.exec(preamble)) !== null) {
-      if (match[1] !== allowedBranch) {
-        return { allowed: false, reason: `only '${allowedBranch}' allowed, got '${match[1]}'` };
-      }
+  private async refreshGitHubToken(): Promise<void> {
+    const token = await ensureValidToken(this.gitProxyContext());
+    if (token) {
+      this.githubToken = token;
     }
-    return { allowed: true };
-  }
-
-  private async ensureValidToken(): Promise<void> {
-    if (!this.state.repoId) return;
-
-    // GitHubAppService handles caching with a 5-minute buffer before expiry
-    const github = new GitHubAppService(this.env);
-    const token = await github.getTokenForRepo(this.state.repoId);
-    this.githubToken = token;
-    this.secretRepository!.set("github_token", token);
   }
 
   private handleGetSession(): Response {
@@ -833,7 +763,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Refresh GitHub token before sync (may have expired during hibernation)
     try {
-      await this.ensureValidToken();
+      await this.refreshGitHubToken();
     } catch (error) {
       console.error("Failed to refresh GitHub token:", error);
     }

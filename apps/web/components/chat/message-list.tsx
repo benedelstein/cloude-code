@@ -58,7 +58,7 @@ export function MessageList({ messages, streamingMessage, isResponding }: Messag
       className="h-full overflow-y-auto p-4"
     >
       <div className="max-w-4xl mx-auto space-y-4">
-        {allMessages.map((message, index) => (
+        {allMessages.map((message) => (
           <MessageItem
             key={message.id}
             message={message}

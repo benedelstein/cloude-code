@@ -206,7 +206,7 @@ export class GitHubAppService {
         id: data.id,
         repository_selection: data.repository_selection ?? "all",
       };
-    } catch (error) {
+    } catch (_error) {
       throw new GitHubAppError(
         "INSTALLATION_NOT_FOUND",
         `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,

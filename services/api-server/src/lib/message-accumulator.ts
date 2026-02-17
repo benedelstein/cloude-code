@@ -95,14 +95,15 @@ export class MessageAccumulator {
         });
         break;
 
-      case "tool-input-delta":
+      case "tool-input-delta": {
         const toolCall = this.toolCalls.get(part.toolCallId);
         if (toolCall) {
           toolCall.inputText += part.inputTextDelta;
         }
         break;
+      }
 
-      case "tool-input-available":
+      case "tool-input-available": {
         const availableTool = this.toolCalls.get(part.toolCallId);
         if (availableTool) {
           availableTool.input = part.input;
@@ -118,8 +119,9 @@ export class MessageAccumulator {
           });
         }
         break;
+      }
 
-      case "tool-output-available":
+      case "tool-output-available": {
         const outputTool = this.toolCalls.get(part.toolCallId);
         if (outputTool) {
           outputTool.output = part.output;
@@ -137,8 +139,9 @@ export class MessageAccumulator {
           this.toolCalls.delete(part.toolCallId);
         }
         break;
+      }
 
-      case "tool-output-error":
+      case "tool-output-error": {
         const errorTool = this.toolCalls.get(part.toolCallId);
         if (errorTool) {
           this.parts.push({
@@ -154,6 +157,7 @@ export class MessageAccumulator {
           this.toolCalls.delete(part.toolCallId);
         }
         break;
+      }
 
       case "source-url":
         this.parts.push({
