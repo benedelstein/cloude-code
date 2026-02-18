@@ -64,11 +64,11 @@ export async function listRepos(): Promise<{ repos: Repo[]; installUrl: string }
   return apiFetch("/repos");
 }
 
-export async function createSession(repoId: string): Promise<SessionResponse> {
+export async function createSession(repoId: number, repoFullName: string): Promise<SessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ repoId }),
+    body: JSON.stringify({ repoId, repoFullName }),
   });
 }
 

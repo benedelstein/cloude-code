@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { CreateSessionRequest, type SessionInfoResponse } from "@repo/shared";
+import { CreateSessionRequest, type SessionInfoResponse, type ListSessionsResponse } from "@repo/shared";
 import type { Env } from "../types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "../durable-objects/session-agent-do";
 import { GitHubAppService, GitHubAppError } from "@/lib/github";
+import { SessionHistoryService } from "@/lib/session-history";
 import type { AuthUser } from "@/middleware/auth.middleware";
 
 export const sessionsRoutes = new Hono<{
@@ -16,6 +17,23 @@ const getSessionAgent = async (id: string, env: Env) => {
   // This adds the headers that PartyServer/Agents SDK expects
   return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
 };
+
+// List sessions for the current user
+sessionsRoutes.get("/", async (c) => {
+  const user = c.get("user");
+  const repoId = c.req.query("repoId") ? Number(c.req.query("repoId")) : undefined;
+  const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
+  const cursor = c.req.query("cursor");
+
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const result = await sessionHistory.listByUser(user.id, {
+    repoId,
+    limit,
+    cursor: cursor ?? undefined,
+  });
+
+  return c.json(result satisfies ListSessionsResponse);
+});
 
 // Create a new session
 sessionsRoutes.post("/", async (c) => {
@@ -30,7 +48,7 @@ sessionsRoutes.post("/", async (c) => {
   const github = new GitHubAppService(c.env);
   try {
     await github.findInstallationForRepo(
-      ...parsed.data.repoId.split("/") as [string, string],
+      ...parsed.data.repoFullName.split("/") as [string, string],
     );
   } catch (error) {
     if (error instanceof GitHubAppError) {
@@ -51,8 +69,7 @@ sessionsRoutes.post("/", async (c) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId,
-        repoId: parsed.data.repoId,
-        userId: user.id,
+        repoFullName: parsed.data.repoFullName,
         settings: parsed.data.settings,
       }),
     })
@@ -62,6 +79,15 @@ sessionsRoutes.post("/", async (c) => {
     const error = await initResponse.text();
     return c.json({ error: "Failed to create session", details: error }, 500);
   }
+
+  // Record session in D1 for history listing
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  await sessionHistory.create({
+    id: sessionId,
+    userId: user.id,
+    repoId: parsed.data.repoId,
+    repoFullName: parsed.data.repoFullName,
+  });
 
   return c.json({ sessionId }, 201);
 });
@@ -99,7 +125,7 @@ sessionsRoutes.post("/:sessionId/pr", async (c) => {
   const user = c.get("user");
   const stub = await getSessionAgent(sessionId, c.env);
 
-  // Get session info (repoId, pushedBranch) from the DO
+  // Get session info (repoFullName, pushedBranch) from the DO
   const sessionResponse = await stub.fetch(new Request("http://do/"));
   if (!sessionResponse.ok) {
     return c.json({ error: "Session not found" }, 404);
@@ -114,9 +140,9 @@ sessionsRoutes.post("/:sessionId/pr", async (c) => {
     return c.json({ error: "Pull request already exists", url: session.pullRequestUrl }, 409);
   }
 
-  const [owner, repo] = session.repoId.split("/");
+  const [owner, repo] = session.repoFullName.split("/");
   if (!owner || !repo) {
-    return c.json({ error: "Invalid repoId" }, 400);
+    return c.json({ error: "Invalid repoFullName" }, 400);
   }
 
   // Generate PR title from branch name (e.g. "cloude/fix-readme-a1b2" -> "fix readme")
@@ -184,14 +210,14 @@ sessionsRoutes.get("/:sessionId/pr", async (c) => {
     return c.json({ error: "No pull request exists" }, 404);
   }
 
-  const [owner, repo] = session.repoId.split("/");
+  const [owner, repo] = session.repoFullName.split("/");
   if (!owner || !repo) {
-    return c.json({ error: "Invalid repoId" }, 400);
+    return c.json({ error: "Invalid repoFullName" }, 400);
   }
 
   // Use installation token for reads (no user token needed)
   const github = new GitHubAppService(c.env);
-  const installationToken = await github.getTokenForRepo(session.repoId);
+  const installationToken = await github.getTokenForRepo(session.repoFullName);
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/pulls/${session.pullRequestNumber}`,
@@ -240,6 +266,10 @@ sessionsRoutes.delete("/:sessionId", async (c) => {
   if (!response.ok) {
     return c.json({ error: "Failed to delete session" }, 500);
   }
+
+  // Archive in D1 (keep the record for history visibility)
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  await sessionHistory.archive(sessionId);
 
   return c.json({ deleted: true });
 });

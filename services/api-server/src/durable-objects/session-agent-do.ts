@@ -20,6 +20,8 @@ import { SchemaManager } from "./repositories/schema-manager";
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
 import { GitHubAppService } from "@/lib/github/github-app";
+import { SessionHistoryService } from "@/lib/session-history";
+import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -31,7 +33,7 @@ const HOME_DIR = "/home/sprite";
 type AgentState = {
   sessionId: string | null;
   userId: string | null;
-  repoId: string | null;
+  repoFullName: string | null;
   spriteName: string | null;
   /** Session ID given by the Claude Agent SDK */
   claudeSessionId: string | null;
@@ -52,7 +54,7 @@ type AgentState = {
 
 interface InitRequest {
   sessionId: string;
-  repoId: string;
+  repoFullName: string;
   settings?: Partial<SessionSettings>;
 }
 
@@ -76,7 +78,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   initialState: AgentState = {
     sessionId: "",
     userId: "",
-    repoId: "",
+    repoFullName: "",
     spriteName: null,
     claudeSessionId: null,
     agentProcessId: null,
@@ -165,7 +167,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.broadcastMessage({
           type: "branch.pushed",
           branch: result.pushedBranch,
-          repoId: this.state.repoId ?? "",
+          repoFullName: this.state.repoFullName ?? "",
         });
       }
       return result.response;
@@ -269,8 +271,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.setState({
       ...this.state,
       sessionId: data.sessionId,
-      userId: "anonymous", // todo
-      repoId: data.repoId,
+      repoFullName: data.repoFullName,
       spriteName: null,
       claudeSessionId: null,
       agentProcessId: null,
@@ -279,15 +280,15 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
 
     // Provision sprite asynchronously
-    this.ctx.waitUntil(this.provisionSprite(data.sessionId, data.repoId));
+    this.ctx.waitUntil(this.provisionSprite(data.sessionId, data.repoFullName));
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  private async provisionSprite(sessionId: string, repoId: string): Promise<void> {
-    console.debug(`Provisioning sprite for session ${sessionId} and repo ${repoId}`);
+  private async provisionSprite(sessionId: string, repoFullName: string): Promise<void> {
+    console.debug(`Provisioning sprite for session ${sessionId} and repo ${repoFullName}`);
     this.getConnections()
     try {
       this.ensureClients();
@@ -310,13 +311,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Build proxy clone URL — token never enters the sprite
       const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
-      const cloneUrl = `${proxyBaseUrl}/github.com/${repoId}.git`;
+      const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
 
       // Clone the repo
       // check if the repo is already cloned
       const isCloned = await sprite.execHttp(`test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`, {});
       if (isCloned.stdout.includes("exists")) {
-        console.log(`Repo ${repoId} already cloned on sprite ${spriteResponse.name}`);
+        console.log(`Repo ${repoFullName} already cloned on sprite ${spriteResponse.name}`);
       } else {
         this.setState({
           ...this.state,
@@ -329,21 +330,21 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.broadcastMessage({
           type: "session.status",
           status: "cloning",
-          message: `Cloning repo ${repoId} on sprite ${spriteResponse.name}`,
+          message: `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
         });
-        console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
+        console.log(`Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`);
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
         // Fetch a read-only token scoped to contents:read for the initial clone
         const github = new GitHubAppService(this.env);
-        const cloneToken = await github.getReadOnlyTokenForRepo(repoId);
+        const cloneToken = await github.getReadOnlyTokenForRepo(repoFullName);
         const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
         // Also refresh the write token for the proxy (used after clone)
         await this.refreshGitHubToken();
         const cloneStart = Date.now();
         const cloneResult = await sprite.execHttp(
-          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
+          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone https://github.com/${repoFullName}.git ${WORKSPACE_DIR}`,
           {}
         );
         console.log(`Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`);
@@ -555,7 +556,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private gitProxyContext(): GitProxyContext {
     return {
       gitProxySecret: this.gitProxySecret,
-      repoId: this.state.repoId,
+      repoFullName: this.state.repoFullName,
       sessionId: this.state.sessionId,
       githubToken: this.githubToken,
       pushedBranch: this.state.pushedBranch,
@@ -572,14 +573,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleGetSession(): Response {
-    if (!this.state.sessionId || !this.state.repoId) {
+    if (!this.state.sessionId || !this.state.repoFullName) {
       return new Response("Session not found", { status: 404 });
     }
 
     return new Response(JSON.stringify({
       sessionId: this.state.sessionId,
       status: this.state.status,
-      repoId: this.state.repoId,
+      repoFullName: this.state.repoFullName,
       pushedBranch: this.state.pushedBranch ?? undefined,
       pullRequestUrl: this.state.pullRequestUrl ?? undefined,
       pullRequestNumber: this.state.pullRequestNumber ?? undefined,
@@ -754,6 +755,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       message: stored.message,
     }, [connection.id]);
 
+    // Sync to D1: update last_message_at and generate title from first message
+    this.ctx.waitUntil(this.syncMessageToHistory(content));
+
     // Send to vm-agent
     console.log(`Sending to vm-agent: ${content}`);
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
@@ -863,6 +867,28 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private handleOperationCancel(): void {
     if (this.agentSession) {
       this.agentSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
+    }
+  }
+
+  /** Sync a user message to D1: update last_message_at, and set title from first message. */
+  private async syncMessageToHistory(content: string): Promise<void> {
+    const sessionId = this.state.sessionId;
+    if (!sessionId) return;
+
+    try {
+      const sessionHistory = new SessionHistoryService(this.env.DB);
+      await sessionHistory.updateLastMessageAt(sessionId);
+
+      // Check if this is the first user message — if so, generate a title via LLM
+      const userMessages = this.messageRepository!.getAllBySession(sessionId)
+        .filter((m) => m.message.role === "user");
+
+      if (userMessages.length === 1) {
+        const title = await generateSessionTitle(this.env.ANTHROPIC_API_KEY, content);
+        await sessionHistory.updateTitle(sessionId, title);
+      }
+    } catch (error) {
+      console.error("Failed to sync message to D1 history:", error);
     }
   }
 
