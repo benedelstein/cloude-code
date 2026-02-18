@@ -73,6 +73,25 @@ export const ToolCall = z.object({
 });
 export type ToolCall = z.infer<typeof ToolCall>;
 
+/** Summary of a session for the session list */
+export const SessionSummary = z.object({
+  id: z.string().uuid(),
+  repoId: z.string(),
+  title: z.string().nullable(),
+  status: SessionStatus,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  lastMessageAt: z.string().nullable(),
+});
+export type SessionSummary = z.infer<typeof SessionSummary>;
+
+/** Paginated response for GET /sessions */
+export const ListSessionsResponse = z.object({
+  sessions: z.array(SessionSummary),
+  cursor: z.string().nullable(),
+});
+export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
+
 export const SpriteCheckpoint = z.object({
   id: z.string(),
   sessionId: z.uuid(),

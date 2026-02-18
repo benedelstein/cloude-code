@@ -20,6 +20,8 @@ import { SchemaManager } from "./repositories/schema-manager";
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
 import { GitHubAppService } from "@/lib/github/github-app";
+import { SessionHistoryService } from "@/lib/session-history";
+import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -53,6 +55,7 @@ type AgentState = {
 interface InitRequest {
   sessionId: string;
   repoId: string;
+  userId: string;
   settings?: Partial<SessionSettings>;
 }
 
@@ -128,6 +131,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private updateStatus(status: SessionStatus): void {
     this.setState({ ...this.state, status });
+    // Sync status to D1 for session history (fire-and-forget)
+    if (this.state.sessionId) {
+      const sessionHistory = new SessionHistoryService(this.env.DB);
+      this.ctx.waitUntil(
+        sessionHistory.updateStatus(this.state.sessionId, status)
+          .catch((error) => console.error("Failed to sync status to D1:", error)),
+      );
+    }
   }
 
   // ============================================
@@ -269,7 +280,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.setState({
       ...this.state,
       sessionId: data.sessionId,
-      userId: "anonymous", // todo
+      userId: data.userId,
       repoId: data.repoId,
       spriteName: null,
       claudeSessionId: null,
@@ -754,6 +765,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       message: stored.message,
     }, [connection.id]);
 
+    // Sync to D1: update last_message_at and generate title from first message
+    this.ctx.waitUntil(this.syncMessageToHistory(content));
+
     // Send to vm-agent
     console.log(`Sending to vm-agent: ${content}`);
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
@@ -863,6 +877,28 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private handleOperationCancel(): void {
     if (this.agentSession) {
       this.agentSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
+    }
+  }
+
+  /** Sync a user message to D1: update last_message_at, and set title from first message. */
+  private async syncMessageToHistory(content: string): Promise<void> {
+    const sessionId = this.state.sessionId;
+    if (!sessionId) return;
+
+    try {
+      const sessionHistory = new SessionHistoryService(this.env.DB);
+      await sessionHistory.updateLastMessageAt(sessionId);
+
+      // Check if this is the first user message — if so, generate a title via LLM
+      const userMessages = this.messageRepository!.getAllBySession(sessionId)
+        .filter((m) => m.message.role === "user");
+
+      if (userMessages.length === 1) {
+        const title = await generateSessionTitle(this.env.ANTHROPIC_API_KEY, content);
+        await sessionHistory.updateTitle(sessionId, title);
+      }
+    } catch (error) {
+      console.error("Failed to sync message to D1 history:", error);
     }
   }
 

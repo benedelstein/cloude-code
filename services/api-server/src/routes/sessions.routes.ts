@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { CreateSessionRequest, type SessionInfoResponse } from "@repo/shared";
+import { CreateSessionRequest, type SessionInfoResponse, type ListSessionsResponse } from "@repo/shared";
 import type { Env } from "../types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "../durable-objects/session-agent-do";
 import { GitHubAppService, GitHubAppError } from "@/lib/github";
+import { SessionHistoryService } from "@/lib/session-history";
 import type { AuthUser } from "@/middleware/auth.middleware";
 
 export const sessionsRoutes = new Hono<{
@@ -16,6 +17,23 @@ const getSessionAgent = async (id: string, env: Env) => {
   // This adds the headers that PartyServer/Agents SDK expects
   return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
 };
+
+// List sessions for the current user
+sessionsRoutes.get("/", async (c) => {
+  const user = c.get("user");
+  const repoId = c.req.query("repoId");
+  const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
+  const cursor = c.req.query("cursor");
+
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const result = await sessionHistory.listByUser(user.id, {
+    repoId,
+    limit,
+    cursor: cursor ?? undefined,
+  });
+
+  return c.json(result satisfies ListSessionsResponse);
+});
 
 // Create a new session
 sessionsRoutes.post("/", async (c) => {
@@ -62,6 +80,15 @@ sessionsRoutes.post("/", async (c) => {
     const error = await initResponse.text();
     return c.json({ error: "Failed to create session", details: error }, 500);
   }
+
+  // Record session in D1 for history listing
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  await sessionHistory.create({
+    id: sessionId,
+    userId: user.id,
+    repoId: parsed.data.repoId,
+    status: "provisioning",
+  });
 
   return c.json({ sessionId }, 201);
 });
@@ -240,6 +267,10 @@ sessionsRoutes.delete("/:sessionId", async (c) => {
   if (!response.ok) {
     return c.json({ error: "Failed to delete session" }, 500);
   }
+
+  // Mark as terminated in D1 (keep the record for history visibility)
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  await sessionHistory.updateStatus(sessionId, "terminated");
 
   return c.json({ deleted: true });
 });
