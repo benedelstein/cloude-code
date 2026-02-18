@@ -78,7 +78,7 @@ export const SessionSummary = z.object({
   id: z.string().uuid(),
   repoId: z.string(),
   title: z.string().nullable(),
-  status: SessionStatus,
+  archived: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastMessageAt: z.string().nullable(),

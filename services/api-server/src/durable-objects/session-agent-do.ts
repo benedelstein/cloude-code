@@ -55,7 +55,6 @@ type AgentState = {
 interface InitRequest {
   sessionId: string;
   repoId: string;
-  userId: string;
   settings?: Partial<SessionSettings>;
 }
 
@@ -131,14 +130,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private updateStatus(status: SessionStatus): void {
     this.setState({ ...this.state, status });
-    // Sync status to D1 for session history (fire-and-forget)
-    if (this.state.sessionId) {
-      const sessionHistory = new SessionHistoryService(this.env.DB);
-      this.ctx.waitUntil(
-        sessionHistory.updateStatus(this.state.sessionId, status)
-          .catch((error) => console.error("Failed to sync status to D1:", error)),
-      );
-    }
   }
 
   // ============================================
@@ -280,7 +271,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.setState({
       ...this.state,
       sessionId: data.sessionId,
-      userId: data.userId,
       repoId: data.repoId,
       spriteName: null,
       claudeSessionId: null,

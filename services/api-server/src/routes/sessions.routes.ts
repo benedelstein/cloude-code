@@ -70,7 +70,6 @@ sessionsRoutes.post("/", async (c) => {
       body: JSON.stringify({
         sessionId,
         repoId: parsed.data.repoId,
-        userId: user.id,
         settings: parsed.data.settings,
       }),
     })
@@ -87,7 +86,6 @@ sessionsRoutes.post("/", async (c) => {
     id: sessionId,
     userId: user.id,
     repoId: parsed.data.repoId,
-    status: "provisioning",
   });
 
   return c.json({ sessionId }, 201);
@@ -268,9 +266,9 @@ sessionsRoutes.delete("/:sessionId", async (c) => {
     return c.json({ error: "Failed to delete session" }, 500);
   }
 
-  // Mark as terminated in D1 (keep the record for history visibility)
+  // Archive in D1 (keep the record for history visibility)
   const sessionHistory = new SessionHistoryService(c.env.DB);
-  await sessionHistory.updateStatus(sessionId, "terminated");
+  await sessionHistory.archive(sessionId);
 
   return c.json({ deleted: true });
 });

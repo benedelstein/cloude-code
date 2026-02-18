@@ -1,10 +1,9 @@
-import type { SessionStatus, SessionSummary } from "@repo/shared";
+import type { SessionSummary } from "@repo/shared";
 
 interface CreateSessionParams {
   id: string;
   userId: string;
   repoId: string;
-  status: SessionStatus;
 }
 
 interface SessionRow {
@@ -12,7 +11,7 @@ interface SessionRow {
   user_id: string;
   repo_id: string;
   title: string | null;
-  status: string;
+  archived: number;
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
@@ -23,7 +22,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
     id: row.id,
     repoId: row.repo_id,
     title: row.title,
-    status: row.status as SessionStatus,
+    archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastMessageAt: row.last_message_at,
@@ -36,9 +35,9 @@ export class SessionHistoryService {
   async create(params: CreateSessionParams): Promise<void> {
     await this.database
       .prepare(
-        `INSERT INTO sessions (id, user_id, repo_id, status) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, user_id, repo_id) VALUES (?, ?, ?)`,
       )
-      .bind(params.id, params.userId, params.repoId, params.status)
+      .bind(params.id, params.userId, params.repoId)
       .run();
   }
 
@@ -51,12 +50,12 @@ export class SessionHistoryService {
       .run();
   }
 
-  async updateStatus(sessionId: string, status: SessionStatus): Promise<void> {
+  async archive(sessionId: string): Promise<void> {
     await this.database
       .prepare(
-        `UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE sessions SET archived = 1, updated_at = datetime('now') WHERE id = ?`,
       )
-      .bind(status, sessionId)
+      .bind(sessionId)
       .run();
   }
 
