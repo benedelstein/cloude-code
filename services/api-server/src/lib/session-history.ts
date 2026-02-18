@@ -4,12 +4,14 @@ interface CreateSessionParams {
   id: string;
   userId: string;
   repoId: string;
+  repoName: string;
 }
 
 interface SessionRow {
   id: string;
   user_id: string;
   repo_id: string;
+  repo_name: string;
   title: string | null;
   archived: number;
   created_at: string;
@@ -21,6 +23,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
   return {
     id: row.id,
     repoId: row.repo_id,
+    repoName: row.repo_name,
     title: row.title,
     archived: row.archived === 1,
     createdAt: row.created_at,
@@ -35,9 +38,9 @@ export class SessionHistoryService {
   async create(params: CreateSessionParams): Promise<void> {
     await this.database
       .prepare(
-        `INSERT INTO sessions (id, user_id, repo_id) VALUES (?, ?, ?)`,
+        `INSERT INTO sessions (id, user_id, repo_id, repo_name) VALUES (?, ?, ?, ?)`,
       )
-      .bind(params.id, params.userId, params.repoId)
+      .bind(params.id, params.userId, params.repoId, params.repoName)
       .run();
   }
 

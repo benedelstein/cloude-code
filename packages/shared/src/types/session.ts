@@ -77,6 +77,7 @@ export type ToolCall = z.infer<typeof ToolCall>;
 export const SessionSummary = z.object({
   id: z.string().uuid(),
   repoId: z.string(),
+  repoName: z.string(),
   title: z.string().nullable(),
   archived: z.boolean(),
   createdAt: z.string(),

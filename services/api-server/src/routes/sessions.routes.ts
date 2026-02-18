@@ -81,11 +81,14 @@ sessionsRoutes.post("/", async (c) => {
   }
 
   // Record session in D1 for history listing
+  const repoId = parsed.data.repoId;
+  const repoName = repoId.split("/")[1] ?? repoId;
   const sessionHistory = new SessionHistoryService(c.env.DB);
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
-    repoId: parsed.data.repoId,
+    repoId,
+    repoName,
   });
 
   return c.json({ sessionId }, 201);

@@ -3,6 +3,7 @@ CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   repo_id TEXT NOT NULL,
+  repo_name TEXT NOT NULL,
   title TEXT,
   archived INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
