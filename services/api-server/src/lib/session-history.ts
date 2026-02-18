@@ -3,14 +3,12 @@ import type { SessionSummary } from "@repo/shared";
 interface CreateSessionParams {
   id: string;
   userId: string;
-  repoId: string;
   repoName: string;
 }
 
 interface SessionRow {
   id: string;
   user_id: string;
-  repo_id: string;
   repo_name: string;
   title: string | null;
   archived: number;
@@ -22,7 +20,6 @@ interface SessionRow {
 function rowToSummary(row: SessionRow): SessionSummary {
   return {
     id: row.id,
-    repoId: row.repo_id,
     repoName: row.repo_name,
     title: row.title,
     archived: row.archived === 1,
@@ -38,9 +35,9 @@ export class SessionHistoryService {
   async create(params: CreateSessionParams): Promise<void> {
     await this.database
       .prepare(
-        `INSERT INTO sessions (id, user_id, repo_id, repo_name) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, user_id, repo_name) VALUES (?, ?, ?)`,
       )
-      .bind(params.id, params.userId, params.repoId, params.repoName)
+      .bind(params.id, params.userId, params.repoName)
       .run();
   }
 
@@ -73,19 +70,19 @@ export class SessionHistoryService {
 
   async listByUser(
     userId: string,
-    options: { repoId?: string; limit?: number; cursor?: string } = {},
+    options: { repoName?: string; limit?: number; cursor?: string } = {},
   ): Promise<{ sessions: SessionSummary[]; cursor: string | null }> {
     const limit = Math.min(options.limit ?? 20, 50);
 
     let query: string;
     const bindings: (string | number)[] = [userId];
 
-    if (options.repoId && options.cursor) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.repoId, options.cursor, limit + 1);
-    } else if (options.repoId) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_id = ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.repoId, limit + 1);
+    if (options.repoName && options.cursor) {
+      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_name = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
+      bindings.push(options.repoName, options.cursor, limit + 1);
+    } else if (options.repoName) {
+      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_name = ? ORDER BY updated_at DESC LIMIT ?`;
+      bindings.push(options.repoName, limit + 1);
     } else if (options.cursor) {
       query = `SELECT * FROM sessions WHERE user_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(options.cursor, limit + 1);

@@ -32,7 +32,7 @@ export type SessionSettings = z.infer<typeof SessionSettings>;
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   status: SessionStatus,
-  repoId: z.string(),
+  repoName: z.string(),
   pushedBranch: z.string().optional(),
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
@@ -41,7 +41,7 @@ export const SessionInfoResponse = z.object({
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
 export const CreateSessionRequest = z.object({
-  repoId: z.string().min(1),
+  repoName: z.string().min(1),
   settings: SessionSettings.partial().optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
@@ -76,7 +76,6 @@ export type ToolCall = z.infer<typeof ToolCall>;
 /** Summary of a session for the session list */
 export const SessionSummary = z.object({
   id: z.string().uuid(),
-  repoId: z.string(),
   repoName: z.string(),
   title: z.string().nullable(),
   archived: z.boolean(),
