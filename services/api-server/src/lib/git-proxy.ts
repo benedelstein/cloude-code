@@ -31,7 +31,7 @@ export async function handleGitProxy(
   // Authenticate: check Bearer token matches session secret
   const authHeader = request.headers.get("Authorization");
   if (!context.gitProxySecret || authHeader !== `Bearer ${context.gitProxySecret}`) {
-    console.error(`[git-proxy] authorization header missing or invalid`);
+    console.error(`[git-proxy] auth failed: secret=${context.gitProxySecret ? "set" : "null"}, header=${authHeader ? "present" : "missing"}, match=${authHeader === `Bearer ${context.gitProxySecret}`}`);
     return { response: new Response("unauthorized", { status: 401 }), githubToken: null, pushedBranch: null };
   }
 
@@ -78,13 +78,16 @@ async function forwardToGitHub(
 ): Promise<GitProxyResult> {
   console.log(`[git-proxy] forwarding to GitHub: ${githubPath}`);
   const githubToken = await ensureValidToken(context);
-  console.log(`[git-proxy] token: ${githubToken ? githubToken : "null"}`);
 
   const url = new URL(originalRequest.url);
-  const targetUrl = `https://x-access-token:${githubToken}@github.com/${githubPath}${url.search}`;
+  const targetUrl = `https://github.com/${githubPath}${url.search}`;
 
+  // Use Authorization header instead of URL credentials — Workers' fetch() strips
+  // credentials from URLs (user:pass@host), which causes 401 on private repos.
+  const basicAuth = btoa(`x-access-token:${githubToken}`);
   const headers: Record<string, string> = {
     "User-Agent": "cloude-code-git-proxy",
+    "Authorization": `Basic ${basicAuth}`,
   };
 
   const contentType = originalRequest.headers.get("Content-Type");
@@ -98,6 +101,7 @@ async function forwardToGitHub(
     body,
   });
 
+  console.log(`[git-proxy] GitHub response: ${response.status} for ${originalRequest.method} ${githubPath}`);
   return { response, githubToken, pushedBranch: null };
 }
 

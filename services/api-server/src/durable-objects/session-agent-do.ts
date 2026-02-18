@@ -19,6 +19,7 @@ import { SchemaManager } from "./repositories/schema-manager";
 
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
+import { GitHubAppService } from "@/lib/github/github-app";
 import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -40,6 +41,12 @@ type AgentState = {
   settings: SessionSettings;
   /** Branch name locked after first push (for "Create PR" flow) */
   pushedBranch: string | null;
+  /** GitHub PR URL after creation */
+  pullRequestUrl: string | null;
+  /** GitHub PR number for API lookups */
+  pullRequestNumber: number | null;
+  /** PR state: open, merged, or closed */
+  pullRequestState: "open" | "merged" | "closed" | null;
   createdAt: Date;
 };
 
@@ -76,6 +83,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     status: "provisioning",
     settings: { model: "claude-opus-4-20250514", maxTokens: 8192 },
     pushedBranch: null,
+    pullRequestUrl: null,
+    pullRequestNumber: null,
+    pullRequestState: null,
     createdAt: new Date(),
   };
 
@@ -159,6 +169,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
       }
       return result.response;
+    }
+
+    // Pull request state
+    if (path === "/pr") {
+      if (request.method === "POST") {
+        return this.handleSetPullRequest(request);
+      }
+      if (request.method === "PATCH") {
+        return this.handleUpdatePullRequest(request);
+      }
     }
 
     // Sub-resources
@@ -314,17 +334,28 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         console.log(`Cloning repo ${repoId} on sprite ${spriteResponse.name}`);
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
-        // Fetch a token for the initial clone (ensureValidToken won't work until first proxy request)
-        await this.refreshGitHubToken();
+        // Fetch a read-only token scoped to contents:read for the initial clone
+        const github = new GitHubAppService(this.env);
+        const cloneToken = await github.getReadOnlyTokenForRepo(repoId);
+        const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
+        // Also refresh the write token for the proxy (used after clone)
+        await this.refreshGitHubToken();
+        const cloneStart = Date.now();
         const cloneResult = await sprite.execHttp(
-          `git -c http.extraHeader="Authorization: Bearer ${this.gitProxySecret}" clone ${cloneUrl} ${WORKSPACE_DIR}`,
+          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone https://github.com/${repoId}.git ${WORKSPACE_DIR}`,
           {}
         );
-        console.log(`Clone result: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`);
+        console.log(`Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`);
         if (cloneResult.exitCode !== 0) {
           throw new Error(`Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`);
         }
+
+        // Point remote at the proxy for subsequent push/fetch
+        await sprite.execHttp(
+          `cd ${WORKSPACE_DIR} && git remote set-url origin ${cloneUrl}`,
+          {}
+        );
       }
 
       // Set up git config for commits
@@ -336,8 +367,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {}
       );
 
+      // this.updateStatus("attaching");
+      // this.broadcastMessage({ type: "session.status", status: "attaching" });
       // Start mitmproxy as a session, then vm-agent
-      await this.startMitmproxyOnVM(sprite);
+      // await this.startMitmproxyOnVM(sprite);
       await this.startAgentOnVM(spriteResponse.name);
 
       this.updateStatus("ready");
@@ -547,6 +580,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       sessionId: this.state.sessionId,
       status: this.state.status,
       repoId: this.state.repoId,
+      pushedBranch: this.state.pushedBranch ?? undefined,
+      pullRequestUrl: this.state.pullRequestUrl ?? undefined,
+      pullRequestNumber: this.state.pullRequestNumber ?? undefined,
+      pullRequestState: this.state.pullRequestState ?? undefined,
     } satisfies SessionInfoResponse), {
       headers: { "Content-Type": "application/json" },
     });
@@ -563,6 +600,36 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
     return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  private async handleSetPullRequest(request: Request): Promise<Response> {
+    const data = await request.json() as {
+      url: string;
+      number: number;
+      state: "open" | "merged" | "closed";
+    };
+    this.setState({
+      ...this.state,
+      pullRequestUrl: data.url,
+      pullRequestNumber: data.number,
+      pullRequestState: data.state,
+    });
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  private async handleUpdatePullRequest(request: Request): Promise<Response> {
+    const data = await request.json() as {
+      state: "open" | "merged" | "closed";
+    };
+    this.setState({
+      ...this.state,
+      pullRequestState: data.state,
+    });
+    return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
   }

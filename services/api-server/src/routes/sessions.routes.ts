@@ -93,6 +93,141 @@ sessionsRoutes.get("/:sessionId/messages", async (c) => {
   return c.json(await response.json());
 });
 
+// Create a pull request for a session's pushed branch
+sessionsRoutes.post("/:sessionId/pr", async (c) => {
+  const sessionId = c.req.param("sessionId");
+  const user = c.get("user");
+  const stub = await getSessionAgent(sessionId, c.env);
+
+  // Get session info (repoId, pushedBranch) from the DO
+  const sessionResponse = await stub.fetch(new Request("http://do/"));
+  if (!sessionResponse.ok) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+  const session = (await sessionResponse.json()) as SessionInfoResponse;
+
+  if (!session.pushedBranch) {
+    return c.json({ error: "No branch has been pushed yet" }, 400);
+  }
+
+  if (session.pullRequestUrl) {
+    return c.json({ error: "Pull request already exists", url: session.pullRequestUrl }, 409);
+  }
+
+  const [owner, repo] = session.repoId.split("/");
+  if (!owner || !repo) {
+    return c.json({ error: "Invalid repoId" }, 400);
+  }
+
+  // Generate PR title from branch name (e.g. "cloude/fix-readme-a1b2" -> "fix readme")
+  const branchName = session.pushedBranch;
+  const titleSlug = branchName
+    .replace(/^cloude\//, "")
+    .replace(/-[a-z0-9]{4}$/, "")
+    .replace(/-/g, " ");
+  const title = titleSlug.charAt(0).toUpperCase() + titleSlug.slice(1);
+
+  // Create PR using user's GitHub OAuth token
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${user.githubAccessToken}`,
+      "Accept": "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "User-Agent": "cloude-code",
+    },
+    body: JSON.stringify({
+      title,
+      head: branchName,
+      base: "main",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`GitHub PR creation failed: ${response.status} ${errorBody}`);
+    return c.json({ error: "Failed to create pull request", details: errorBody }, response.status as 400);
+  }
+
+  const prData = await response.json() as { html_url: string; number: number; state: string };
+
+  // Store PR info in the DO
+  await stub.fetch(new Request("http://do/pr", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: prData.html_url,
+      number: prData.number,
+      state: "open",
+    }),
+  }));
+
+  return c.json({
+    url: prData.html_url,
+    number: prData.number,
+    state: "open",
+  }, 201);
+});
+
+// Check pull request status
+sessionsRoutes.get("/:sessionId/pr", async (c) => {
+  const sessionId = c.req.param("sessionId");
+  const stub = await getSessionAgent(sessionId, c.env);
+
+  const sessionResponse = await stub.fetch(new Request("http://do/"));
+  if (!sessionResponse.ok) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+  const session = (await sessionResponse.json()) as SessionInfoResponse;
+
+  if (!session.pullRequestNumber || !session.pullRequestUrl) {
+    return c.json({ error: "No pull request exists" }, 404);
+  }
+
+  const [owner, repo] = session.repoId.split("/");
+  if (!owner || !repo) {
+    return c.json({ error: "Invalid repoId" }, 400);
+  }
+
+  // Use installation token for reads (no user token needed)
+  const github = new GitHubAppService(c.env);
+  const installationToken = await github.getTokenForRepo(session.repoId);
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${session.pullRequestNumber}`,
+    {
+      headers: {
+        "Authorization": `Bearer ${installationToken}`,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "cloude-code",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    return c.json({ error: "Failed to fetch PR status" }, 500);
+  }
+
+  const prData = await response.json() as { state: string; merged: boolean };
+  const state = prData.merged ? "merged" : prData.state as "open" | "closed";
+
+  // Update DO state if changed
+  if (state !== session.pullRequestState) {
+    await stub.fetch(new Request("http://do/pr", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state }),
+    }));
+  }
+
+  return c.json({
+    url: session.pullRequestUrl,
+    number: session.pullRequestNumber,
+    state,
+    merged: prData.merged,
+  });
+});
+
 // Delete a session
 sessionsRoutes.delete("/:sessionId", async (c) => {
   const sessionId = c.req.param("sessionId");

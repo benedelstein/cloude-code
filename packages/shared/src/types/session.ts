@@ -33,6 +33,10 @@ export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   status: SessionStatus,
   repoId: z.string(),
+  pushedBranch: z.string().optional(),
+  pullRequestUrl: z.string().optional(),
+  pullRequestNumber: z.number().optional(),
+  pullRequestState: z.enum(["open", "merged", "closed"]).optional(),
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 

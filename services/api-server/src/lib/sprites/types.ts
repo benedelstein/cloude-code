@@ -49,10 +49,18 @@ export const PortNotificationMessageSchema = z.object({
     pid: z.number(),
 });
 
+export const DebugMessageSchema = z.object({
+    type: z.literal("debug"),
+    msg: z.string(),
+    pid: z.number().optional(),
+    t_ms: z.number().optional(),
+});
+
 export const SpriteServerMessageSchema = z.discriminatedUnion("type", [
     SessionInfoMessageSchema,
     ExitMessageSchema,
     PortNotificationMessageSchema,
+    DebugMessageSchema,
 ]);
 
 export type SessionInfoMessage = z.infer<typeof SessionInfoMessageSchema>;

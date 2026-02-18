@@ -138,6 +138,25 @@ export class GitHubAppService {
   }
 
   /**
+   * Get a read-only token for a repo, scoped to contents:read only.
+   * Used for initial clone where write access is not needed.
+   */
+  async getReadOnlyTokenForRepo(repoId: string): Promise<string> {
+    const [owner, repo] = repoId.split("/");
+    if (!owner || !repo) {
+      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoId: ${repoId}`);
+    }
+
+    const installation = await this.findInstallationForRepo(owner, repo);
+    const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
+    return this.getInstallationToken(
+      installation.id,
+      { repoName: repo, repoId: numericRepoId },
+      { contents: "read", metadata: "read" },
+    );
+  }
+
+  /**
    * Resolve a repo's numeric GitHub ID. Checks D1 first, falls back to the API.
    */
   private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {
@@ -220,31 +239,31 @@ export class GitHubAppService {
   async getInstallationToken(
     installationId: number,
     repo?: { repoName: string; repoId: number },
+    permissions: { contents: "read" | "write"; metadata: "read" } = { contents: "write", metadata: "read" },
   ): Promise<string> {
-    // Check cache (keyed by installation + numeric repo ID to avoid cross-repo token leaks)
+    // Cache key includes installation, repo, and permission scope to avoid cross-token leaks
     const cacheRepoId = repo?.repoId ?? 0;
+    const permissionSuffix = permissions.contents === "read" ? ":ro" : "";
+    const cacheKey = `${cacheRepoId}${permissionSuffix}`;
     const cached = await this.db
       .prepare(
         `SELECT token, expires_at FROM installation_token_cache
          WHERE installation_id = ? AND repo_id = ?
          AND datetime(expires_at) > datetime('now', '+5 minutes')`,
       )
-      .bind(installationId, cacheRepoId)
+      .bind(installationId, cacheKey)
       .first<{ token: string; expires_at: string }>();
 
     if (cached) {
       return cached.token;
     }
 
-    // Generate new token via octokit, scoped to single repo with minimum permissions
+    // Generate new token via octokit, scoped to single repo with requested permissions
     const octokit = await this.app.getInstallationOctokit(installationId);
     const { data } = await octokit.rest.apps.createInstallationAccessToken({
       installation_id: installationId,
       ...(repo && { repositories: [repo.repoName] }),
-      permissions: {
-        contents: "write",
-        metadata: "read",
-      },
+      permissions,
     });
 
     // Cache it
@@ -253,7 +272,7 @@ export class GitHubAppService {
         `INSERT OR REPLACE INTO installation_token_cache (installation_id, repo_id, token, expires_at)
          VALUES (?, ?, ?, ?)`,
       )
-      .bind(installationId, cacheRepoId, data.token, data.expires_at)
+      .bind(installationId, cacheKey, data.token, data.expires_at)
       .run();
 
     return data.token;

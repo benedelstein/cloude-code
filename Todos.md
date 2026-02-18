@@ -6,7 +6,9 @@
 - [x] store conversations in d1 and let user click on old convo list to resume
 - [x] customize system prompt for agent specifying its container environment and how to commit changes
 - [x] Proxy git and github actions for security. VM should only have write access specific to the repo and branch.
-- [x] Mobile client
+- [ ] Pre-warm sprite instances for a repo and cache them for reuse later so we don't have to do a fresh clone.
+- [ ] Store past session history and open resumed sessions
+- [ ] Mobile client
 - [ ] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.
 - [ ] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.

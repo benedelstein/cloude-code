@@ -4,6 +4,7 @@ import { useSession } from "@/components/providers/session-provider";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
+import { BranchBar } from "./branch-bar";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -18,6 +19,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     isReady,
     isStreaming,
     isResponding,
+    pushedBranch,
+    pullRequestUrl,
+    pullRequestState,
     sendMessage,
     stop,
   } = useSession();
@@ -62,6 +66,14 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isResponding={isResponding}
         />
       </div>
+
+      {/* Branch Bar */}
+      <BranchBar
+        sessionId={sessionId}
+        pushedBranch={pushedBranch}
+        pullRequestUrl={pullRequestUrl}
+        pullRequestState={pullRequestState}
+      />
 
       {/* Input */}
       <div className="shrink-0 border-t border-border">

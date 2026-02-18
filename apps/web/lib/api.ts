@@ -75,3 +75,24 @@ export async function createSession(repoId: string): Promise<SessionResponse> {
 export async function getSession(sessionId: string): Promise<SessionResponse> {
   return apiFetch(`/sessions/${sessionId}`);
 }
+
+export interface PullRequestResponse {
+  url: string;
+  number: number;
+  state: string;
+}
+
+export interface PullRequestStatusResponse {
+  url: string;
+  number: number;
+  state: string;
+  merged: boolean;
+}
+
+export async function createPullRequest(sessionId: string): Promise<PullRequestResponse> {
+  return apiFetch(`/sessions/${sessionId}/pr`, { method: "POST" });
+}
+
+export async function getPullRequestStatus(sessionId: string): Promise<PullRequestStatusResponse> {
+  return apiFetch(`/sessions/${sessionId}/pr`);
+}

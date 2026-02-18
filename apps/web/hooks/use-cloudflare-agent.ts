@@ -14,6 +14,8 @@ export interface UseCloudflareAgentOptions {
   onError?: (error: Error) => void;
 }
 
+export type PullRequestState = "open" | "merged" | "closed";
+
 export interface UseCloudflareAgentReturn {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
@@ -22,6 +24,9 @@ export interface UseCloudflareAgentReturn {
   isReady: boolean;
   isStreaming: boolean;
   isResponding: boolean;
+  pushedBranch: string | null;
+  pullRequestUrl: string | null;
+  pullRequestState: PullRequestState | null;
   sendMessage: (content: string) => void;
   stop: () => void;
 }
@@ -36,6 +41,9 @@ export function useCloudflareAgent({
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isResponding, setIsResponding] = useState(false);
+  const [pushedBranch, setPushedBranch] = useState<string | null>(null);
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
+  const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -126,8 +134,17 @@ export function useCloudflareAgent({
     onClose: () => {
       // useAgent will auto-reconnect
     },
-    onStateUpdate(state, source) {
+    onStateUpdate(state: Record<string, unknown>, source) {
       console.log("state update", state, source);
+      if (state.pushedBranch !== undefined) {
+        setPushedBranch((state.pushedBranch as string) ?? null);
+      }
+      if (state.pullRequestUrl !== undefined) {
+        setPullRequestUrl((state.pullRequestUrl as string) ?? null);
+      }
+      if (state.pullRequestState !== undefined) {
+        setPullRequestState((state.pullRequestState as PullRequestState) ?? null);
+      }
     },
     onError: (message) => {
       setSessionStatus("error");
@@ -173,6 +190,9 @@ export function useCloudflareAgent({
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
     isResponding,
+    pushedBranch,
+    pullRequestUrl,
+    pullRequestState,
     sendMessage,
     stop,
   };
