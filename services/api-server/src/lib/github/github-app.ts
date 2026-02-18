@@ -126,10 +126,10 @@ export class GitHubAppService {
    * Resolve a repo (owner/name) to an installation access token.
    * Checks D1 for installation, verifies repo access, and returns a cached or fresh token.
    */
-  async getTokenForRepo(repoId: string): Promise<string> {
-    const [owner, repo] = repoId.split("/");
+  async getTokenForRepo(repoFullName: string): Promise<string> {
+    const [owner, repo] = repoFullName.split("/");
     if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoId: ${repoId}`);
+      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);
@@ -141,10 +141,10 @@ export class GitHubAppService {
    * Get a read-only token for a repo, scoped to contents:read only.
    * Used for initial clone where write access is not needed.
    */
-  async getReadOnlyTokenForRepo(repoId: string): Promise<string> {
-    const [owner, repo] = repoId.split("/");
+  async getReadOnlyTokenForRepo(repoFullName: string): Promise<string> {
+    const [owner, repo] = repoFullName.split("/");
     if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoId: ${repoId}`);
+      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);

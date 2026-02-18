@@ -111,7 +111,7 @@ export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
 export const BranchPushedEvent = z.object({
   type: z.literal("branch.pushed"),
   branch: z.string(),
-  repoName: z.string(),
+  repoFullName: z.string(),
 });
 export type BranchPushedEvent = z.infer<typeof BranchPushedEvent>;
 

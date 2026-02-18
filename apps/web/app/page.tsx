@@ -30,7 +30,7 @@ export default function Home() {
     setCreatingSessionFor(repo.fullName);
     setError(null);
     try {
-      const session = await createSession(repo.fullName);
+      const session = await createSession(repo.id, repo.fullName);
       router.push(`/session/${session.sessionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create session");

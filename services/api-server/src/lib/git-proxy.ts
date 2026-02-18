@@ -4,7 +4,7 @@ import type { SecretRepository } from "@/durable-objects/repositories/secret-rep
 
 export interface GitProxyContext {
   gitProxySecret: string | null;
-  repoName: string | null;
+  repoFullName: string | null;
   sessionId: string | null;
   githubToken: string | null;
   /** Branch name locked after first push (enforces single-branch pushes) */
@@ -43,7 +43,7 @@ export async function handleGitProxy(
   const githubPath = match[1];
 
   // Enforce: only the configured repo (match with .git suffix to prevent prefix collisions)
-  if (context.repoName && !githubPath.startsWith(`${context.repoName}.git`)) {
+  if (context.repoFullName && !githubPath.startsWith(`${context.repoFullName}.git`)) {
     return { response: new Response("repo not allowed", { status: 403 }), githubToken: null, pushedBranch: null };
   }
 
@@ -139,11 +139,11 @@ function validatePush(
  * Returns the (possibly refreshed) token and persists it to the secret repository.
  */
 export async function ensureValidToken(context: GitProxyContext): Promise<string | null> {
-  if (!context.repoName) return context.githubToken;
+  if (!context.repoFullName) return context.githubToken;
 
   // GitHubAppService handles caching with a 5-minute buffer before expiry
   const github = new GitHubAppService(context.env);
-  const token = await github.getTokenForRepo(context.repoName);
+  const token = await github.getTokenForRepo(context.repoFullName);
   context.secretRepository.set("github_token", token);
   return token;
 }

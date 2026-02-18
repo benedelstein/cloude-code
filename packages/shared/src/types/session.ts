@@ -32,7 +32,7 @@ export type SessionSettings = z.infer<typeof SessionSettings>;
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   status: SessionStatus,
-  repoName: z.string(),
+  repoFullName: z.string(),
   pushedBranch: z.string().optional(),
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
@@ -41,7 +41,10 @@ export const SessionInfoResponse = z.object({
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
 export const CreateSessionRequest = z.object({
-  repoName: z.string().min(1),
+  /** Numeric GitHub repo ID (stable across renames) */
+  repoId: z.number(),
+  /** "owner/repo" full name */
+  repoFullName: z.string().min(1),
   settings: SessionSettings.partial().optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
@@ -76,7 +79,8 @@ export type ToolCall = z.infer<typeof ToolCall>;
 /** Summary of a session for the session list */
 export const SessionSummary = z.object({
   id: z.string().uuid(),
-  repoName: z.string(),
+  repoId: z.number(),
+  repoFullName: z.string(),
   title: z.string().nullable(),
   archived: z.boolean(),
   createdAt: z.string(),

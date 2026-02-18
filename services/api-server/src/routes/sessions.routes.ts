@@ -21,13 +21,13 @@ const getSessionAgent = async (id: string, env: Env) => {
 // List sessions for the current user
 sessionsRoutes.get("/", async (c) => {
   const user = c.get("user");
-  const repoName = c.req.query("repoName");
+  const repoId = c.req.query("repoId") ? Number(c.req.query("repoId")) : undefined;
   const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
   const cursor = c.req.query("cursor");
 
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const result = await sessionHistory.listByUser(user.id, {
-    repoName,
+    repoId,
     limit,
     cursor: cursor ?? undefined,
   });
@@ -48,7 +48,7 @@ sessionsRoutes.post("/", async (c) => {
   const github = new GitHubAppService(c.env);
   try {
     await github.findInstallationForRepo(
-      ...parsed.data.repoName.split("/") as [string, string],
+      ...parsed.data.repoFullName.split("/") as [string, string],
     );
   } catch (error) {
     if (error instanceof GitHubAppError) {
@@ -69,7 +69,7 @@ sessionsRoutes.post("/", async (c) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId,
-        repoName: parsed.data.repoName,
+        repoFullName: parsed.data.repoFullName,
         settings: parsed.data.settings,
       }),
     })
@@ -85,7 +85,8 @@ sessionsRoutes.post("/", async (c) => {
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
-    repoName: parsed.data.repoName,
+    repoId: parsed.data.repoId,
+    repoFullName: parsed.data.repoFullName,
   });
 
   return c.json({ sessionId }, 201);
@@ -124,7 +125,7 @@ sessionsRoutes.post("/:sessionId/pr", async (c) => {
   const user = c.get("user");
   const stub = await getSessionAgent(sessionId, c.env);
 
-  // Get session info (repoName, pushedBranch) from the DO
+  // Get session info (repoFullName, pushedBranch) from the DO
   const sessionResponse = await stub.fetch(new Request("http://do/"));
   if (!sessionResponse.ok) {
     return c.json({ error: "Session not found" }, 404);
@@ -139,9 +140,9 @@ sessionsRoutes.post("/:sessionId/pr", async (c) => {
     return c.json({ error: "Pull request already exists", url: session.pullRequestUrl }, 409);
   }
 
-  const [owner, repo] = session.repoName.split("/");
+  const [owner, repo] = session.repoFullName.split("/");
   if (!owner || !repo) {
-    return c.json({ error: "Invalid repoName" }, 400);
+    return c.json({ error: "Invalid repoFullName" }, 400);
   }
 
   // Generate PR title from branch name (e.g. "cloude/fix-readme-a1b2" -> "fix readme")
@@ -209,14 +210,14 @@ sessionsRoutes.get("/:sessionId/pr", async (c) => {
     return c.json({ error: "No pull request exists" }, 404);
   }
 
-  const [owner, repo] = session.repoName.split("/");
+  const [owner, repo] = session.repoFullName.split("/");
   if (!owner || !repo) {
-    return c.json({ error: "Invalid repoName" }, 400);
+    return c.json({ error: "Invalid repoFullName" }, 400);
   }
 
   // Use installation token for reads (no user token needed)
   const github = new GitHubAppService(c.env);
-  const installationToken = await github.getTokenForRepo(session.repoName);
+  const installationToken = await github.getTokenForRepo(session.repoFullName);
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/pulls/${session.pullRequestNumber}`,
