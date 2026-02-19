@@ -53,7 +53,8 @@ pnpm build         # tsc
 
 ### Packages
 
-- **@repo/shared** (`packages/shared/`) - Shared types and Zod schemas for the WebSocket protocol, session state, and vm-agent I/O. All client/server messages are validated through discriminated unions.
+- **@repo/shared** (`packages/shared/`) - Shared types and Zod schemas for data transfer, session state, and vm-agent I/O. All client/server messages are validated through discriminated unions.
+Note: If a type should be used by multiple packages, always put it in shared instead of duplicating the interface in those packages.
 
 - **@repo/vm-agent** (`packages/vm-agent/`) - Runs inside the Sprite VM. Wraps the Claude Agent SDK in streaming input mode, communicates via stdin/stdout NDJSON with the Durable Object. Uses Bun runtime.
 
@@ -61,10 +62,10 @@ pnpm build         # tsc
 
 ### Key Files
 
-- `services/api-server/src/durable-objects/session-agent-do.ts` - Core session management, Sprite lifecycle, WebSocket handling
+- `services/api-server/src/durable-objects/session-agent-do.ts` - Core session management, VM lifecycle, WebSocket handling
 - `packages/vm-agent/src/index.ts` - Claude Agent SDK wrapper with streaming input mode
-- `packages/shared/src/types/protocol.ts` - WebSocket message schemas
-- `packages/shared/src/types/vm-agent.ts` - NDJSON protocol between DO and vm-agent
+- `packages/shared/src/types/websocket-api.ts` - WebSocket message schemas
+- `packages/shared/src/types/vm-agent.ts` - Script to run the agent on the VM. Handles comms via stdin/stdout NDJSON.
 
 ### Environment & Secrets
 
@@ -76,17 +77,21 @@ Required secrets for `api-server` (set via `wrangler secret put`):
 ## Tech Stack
 
 - **pnpm workspaces** with Turbo for monorepo orchestration
-- **Cloudflare Workers** with Durable Objects (SQLite for message persistence)
-- **Hono** for server middleware
+- **Cloudflare** Workers, Agents SDK, Durable Objects (SQLite for message persistence)
+- **AI SDK** for abstracting over LLM data types. Generic interface for llm interaction and data types. https://ai-sdk.dev/docs/introduction
+- **Hono** for server middleware - https://hono.dev/docs/
 - **Zod** for runtime type validation
 - **Bun** runtime for vm-agent
-- **Sprites** for isolated VM execution. Sprites are 
+- **Sprites** for isolated VM execution. Sprites are quick-booting persistent vms by fly.io - https://docs.sprites.dev/
+- **Github API** for repo management and authentication. User auths with github and the cloude-code github app is installed on each org they choose (they can also scope to specific repos). github-app.ts handles this authentication and data management. 
+    NOTE: Github has repository ids and names (eg owner/repo). Prefer using the numeric ids over names, as they are stable.
+    NOTE: Github apps api docs are here: https://docs.github.com/en/apps. Prefer looking up docs to your own memory if you are not certain.
 
 NOTE: if adding new dependencies in multiple packages in the repo, prefer to use the pnpm catalog in `pnpm-workspace.yaml` for shared versioning.
 
 ## Best Practices
 
-- Always build and lint and typecheck after completing a task to test it.
+- Always build, lint, and typecheck after completing a task to test it.
 - Prefer unabbreviated variable names rather than shortened ones. For example, prefer `let installation = ...` instead of `let inst = ...`. Variable names should not be too long (>30 chars) though.
 - Do not use emojis in your git messages or comments unless absolutely relevant and necessary.
 - Write instructive and clarifying comments where needed, but do not be too verbose. 

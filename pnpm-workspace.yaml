@@ -16,3 +16,4 @@ catalog:
   "@anthropic-ai/sdk": "^0.71.0"
   "ai": "^6.0.59"
   "octokit": "^4.1.2"
+  "@hono/zod-openapi": "^1.2.2"

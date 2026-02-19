@@ -28,32 +28,6 @@ export const SessionSettings = z.object({
 });
 export type SessionSettings = z.infer<typeof SessionSettings>;
 
-/** Minimal session info returned by API */
-export const SessionInfoResponse = z.object({
-  sessionId: z.uuid(),
-  status: SessionStatus,
-  repoFullName: z.string(),
-  pushedBranch: z.string().optional(),
-  pullRequestUrl: z.string().optional(),
-  pullRequestNumber: z.number().optional(),
-  pullRequestState: z.enum(["open", "merged", "closed"]).optional(),
-});
-export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
-
-export const CreateSessionRequest = z.object({
-  /** Numeric GitHub repo ID (stable across renames) */
-  repoId: z.number(),
-  /** "owner/repo" full name */
-  repoFullName: z.string().min(1),
-  settings: SessionSettings.partial().optional(),
-});
-export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
-
-export const CreateSessionResponse = z.object({
-  sessionId: z.string().uuid(),
-});
-export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
-
 export const Message = z.object({
   id: z.uuid(),
   sessionId: z.uuid(),
@@ -88,13 +62,6 @@ export const SessionSummary = z.object({
   lastMessageAt: z.string().nullable(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
-
-/** Paginated response for GET /sessions */
-export const ListSessionsResponse = z.object({
-  sessions: z.array(SessionSummary),
-  cursor: z.string().nullable(),
-});
-export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
 
 export const SpriteCheckpoint = z.object({
   id: z.string(),

@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getAgentByName } from "agents";
-import { sessionsRoutes } from "./routes/sessions.routes";
+import { sessionsRoutes } from "./routes/sessions/sessions.routes";
 import { testRoutes } from "./routes/test.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
-import { authRoutes } from "./routes/auth.routes";
-import { reposRoutes } from "./routes/repos.routes";
+import { authRoutes } from "./routes/auth/auth.routes";
+import { reposRoutes } from "./routes/repos/repos.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
 import type { Env } from "./types";
 import type { SessionAgentDO } from "./durable-objects/session-agent-do";

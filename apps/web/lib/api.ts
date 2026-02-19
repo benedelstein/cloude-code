@@ -1,30 +1,22 @@
+import type {
+  UserInfo,
+  Repo,
+  ListReposResponse,
+  CreateSessionResponse,
+  SessionInfoResponse,
+  PullRequestResponse,
+  PullRequestStatusResponse,
+} from "@repo/shared";
+
+// Re-export types that other modules import from this file
+export type { UserInfo, Repo, PullRequestResponse, PullRequestStatusResponse };
+
 // WebSocket URL still uses direct API URL (not proxied)
 export const WS_API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 
 // All REST calls go through the Next.js API proxy (same-origin, cookie-based auth)
 const API_BASE = "/api";
-
-export interface SessionResponse {
-  sessionId: string;
-}
-
-export interface UserInfo {
-  id: string;
-  login: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-export interface Repo {
-  id: number;
-  name: string;
-  fullName: string;
-  owner: string;
-  private: boolean;
-  description: string | null;
-  defaultBranch: string;
-}
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -60,11 +52,11 @@ export async function getCurrentUser(): Promise<UserInfo> {
   return apiFetch("/auth/me");
 }
 
-export async function listRepos(): Promise<{ repos: Repo[]; installUrl: string }> {
+export async function listRepos(): Promise<ListReposResponse> {
   return apiFetch("/repos");
 }
 
-export async function createSession(repoId: number, repoFullName: string): Promise<SessionResponse> {
+export async function createSession(repoId: number, repoFullName: string): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -72,21 +64,8 @@ export async function createSession(repoId: number, repoFullName: string): Promi
   });
 }
 
-export async function getSession(sessionId: string): Promise<SessionResponse> {
+export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
   return apiFetch(`/sessions/${sessionId}`);
-}
-
-export interface PullRequestResponse {
-  url: string;
-  number: number;
-  state: string;
-}
-
-export interface PullRequestStatusResponse {
-  url: string;
-  number: number;
-  state: string;
-  merged: boolean;
 }
 
 export async function createPullRequest(sessionId: string): Promise<PullRequestResponse> {

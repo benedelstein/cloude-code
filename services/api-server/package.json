@@ -20,6 +20,7 @@
     "@repo/vm-agent": "workspace:*",
     "agents": "catalog:",
     "ai": "catalog:",
+    "@hono/zod-openapi": "catalog:",
     "hono": "^4.6.0",
     "octokit": "catalog:",
     "zod": "catalog:"

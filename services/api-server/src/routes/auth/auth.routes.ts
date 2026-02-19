@@ -1,13 +1,22 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { GitHubAppService } from "@/lib/github";
 import { encrypt } from "@/lib/crypto";
-import { authMiddleware } from "@/middleware/auth.middleware";
+import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
+import {
+  getGithubRoute,
+  postTokenRoute,
+  getMeRoute,
+  postLogoutRoute,
+} from "./routes";
 
-export const authRoutes = new Hono<{ Bindings: Env }>();
+export const authRoutes = new OpenAPIHono<{
+  Bindings: Env;
+  Variables: { user: AuthUser };
+}>();
 
 // GET /auth/github — returns the install + authorize URL
-authRoutes.get("/github", async (c) => {
+authRoutes.openapi(getGithubRoute, async (c) => {
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
 
@@ -20,15 +29,15 @@ authRoutes.get("/github", async (c) => {
   const github = new GitHubAppService(c.env);
   const url = github.getAuthUrl(state);
 
-  return c.json({ url, state });
+  return c.json({ url, state }, 200);
 });
 
 // POST /auth/token — exchange code for session token
-authRoutes.post("/token", async (c) => {
-  const { code, state } = await c.req.json<{ code: string; state: string }>();
+authRoutes.openapi(postTokenRoute, async (c) => {
+  const { code, state } = c.req.valid("json");
 
   if (!code || !state) {
-    return c.json({ error: "Missing code or state" }, 400);
+    return c.json({ error: "Missing code or state" }, 400) as any;
   }
 
   // Validate and consume state
@@ -39,7 +48,7 @@ authRoutes.post("/token", async (c) => {
     .first();
 
   if (!stateRow) {
-    return c.json({ error: "Invalid or expired state" }, 400);
+    return c.json({ error: "Invalid or expired state" }, 400) as any;
   }
 
   // Exchange code for tokens
@@ -48,7 +57,7 @@ authRoutes.post("/token", async (c) => {
   try {
     result = await github.exchangeOAuthCode(code);
   } catch {
-    return c.json({ error: "Failed to exchange OAuth code" }, 400);
+    return c.json({ error: "Failed to exchange OAuth code" }, 400) as any;
   }
 
   // Encrypt tokens before storing
@@ -93,7 +102,7 @@ authRoutes.post("/token", async (c) => {
     }>();
 
   if (!user) {
-    return c.json({ error: "Failed to create user" }, 500);
+    return c.json({ error: "Failed to create user" }, 500) as any;
   }
 
   // Create auth session with access token (30 days)
@@ -129,30 +138,38 @@ authRoutes.post("/token", async (c) => {
       .run();
   }
 
-  return c.json({
-    token: sessionToken,
-    user: {
-      id: user.id,
-      login: user.github_login,
-      name: user.github_name,
-      avatarUrl: user.github_avatar_url,
+  return c.json(
+    {
+      token: sessionToken,
+      user: {
+        id: user.id,
+        login: user.github_login,
+        name: user.github_name,
+        avatarUrl: user.github_avatar_url,
+      },
     },
-  });
+    200,
+  );
 });
 
 // GET /auth/me — returns current user info
-authRoutes.get("/me", authMiddleware, async (c) => {
+authRoutes.use("/me", authMiddleware);
+authRoutes.openapi(getMeRoute, async (c) => {
   const user = c.get("user");
-  return c.json({
-    id: user.id,
-    login: user.githubLogin,
-    name: user.githubName,
-    avatarUrl: user.githubAvatarUrl,
-  });
+  return c.json(
+    {
+      id: user.id,
+      login: user.githubLogin,
+      name: user.githubName,
+      avatarUrl: user.githubAvatarUrl,
+    },
+    200,
+  );
 });
 
 // POST /auth/logout — deletes auth session
-authRoutes.post("/logout", authMiddleware, async (c) => {
+authRoutes.use("/logout", authMiddleware);
+authRoutes.openapi(postLogoutRoute, async (c) => {
   const authHeader = c.req.header("Authorization")!;
   const token = authHeader.slice(7);
 
@@ -160,5 +177,5 @@ authRoutes.post("/logout", authMiddleware, async (c) => {
     .bind(token)
     .run();
 
-  return c.json({ ok: true });
+  return c.json({ ok: true as const }, 200);
 });

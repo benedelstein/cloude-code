@@ -157,6 +157,27 @@ export class GitHubAppService {
   }
 
   /**
+   * Resolve a repo's full name (owner/repo) from its numeric GitHub ID.
+   * Checks D1 first, falls back to the GitHub API.
+   */
+  async getRepoNameById(repoId: number): Promise<string> {
+    const row = await this.db
+      .prepare(
+        `SELECT repo_name FROM github_installation_repos WHERE repo_id = ?`,
+      )
+      .bind(repoId)
+      .first<{ repo_name: string }>();
+
+    if (row) return row.repo_name;
+
+    // Fallback: query GitHub API using an app-level request
+    const { data } = await this.app.octokit.request("GET /repositories/{id}", {
+      id: repoId,
+    });
+    return data.full_name;
+  }
+
+  /**
    * Resolve a repo's numeric GitHub ID. Checks D1 first, falls back to the API.
    */
   private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {

@@ -1,10 +1,12 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { GitHubAppService } from "@/lib/github";
+import { listReposRoute } from "./routes";
+import type { Repo } from "@repo/shared";
 
-export const reposRoutes = new Hono<{
+export const reposRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
@@ -12,22 +14,14 @@ export const reposRoutes = new Hono<{
 reposRoutes.use("*", authMiddleware);
 
 // GET /repos — list repos where the GitHub App is installed, visible to the authenticated user
-reposRoutes.get("/", async (c) => {
+reposRoutes.openapi(listReposRoute, async (c) => {
   const user = c.get("user");
   const octokit = new Octokit({ auth: user.githubAccessToken });
 
   const { data } =
     await octokit.rest.apps.listInstallationsForAuthenticatedUser();
 
-  const repos: Array<{
-    id: number;
-    name: string;
-    fullName: string;
-    owner: string;
-    private: boolean;
-    description: string | null;
-    defaultBranch: string;
-  }> = [];
+  const repos: Repo[] = [];
 
   for (const installation of data.installations) {
     const { data: repoData } =
@@ -49,5 +43,5 @@ reposRoutes.get("/", async (c) => {
   }
 
   const github = new GitHubAppService(c.env);
-  return c.json({ repos, installUrl: github.getInstallUrl() });
+  return c.json({ repos, installUrl: github.getInstallUrl() }, 200);
 });
