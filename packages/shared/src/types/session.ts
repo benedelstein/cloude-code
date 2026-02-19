@@ -52,7 +52,7 @@ export type ToolCall = z.infer<typeof ToolCall>;
 
 /** Summary of a session for the session list */
 export const SessionSummary = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   repoId: z.number(),
   repoFullName: z.string(),
   title: z.string().nullable(),

@@ -44,7 +44,12 @@ export async function handleGitProxy(
 
   // Enforce: only the configured repo (match with .git suffix to prevent prefix collisions)
   if (context.repoFullName && !githubPath.startsWith(`${context.repoFullName}.git`)) {
-    return { response: new Response("repo not allowed", { status: 403 }), githubToken: null, pushedBranch: null };
+    console.error(`[git-proxy] repo not allowed: ${githubPath} !== ${context.repoFullName}.git`);
+    return { 
+      response: new Response("repo not allowed", { status: 403 }),
+      githubToken: null,
+      pushedBranch: null,
+    };
   }
 
   // Enforce: push only to session branch
@@ -52,6 +57,7 @@ export async function handleGitProxy(
     const body = await request.arrayBuffer();
     const pushCheck = validatePush(new Uint8Array(body), context.sessionId, context.pushedBranch);
     if (!pushCheck.allowed) {
+      console.error(`[git-proxy] push rejected: ${pushCheck.reason}`);
       return {
         response: new Response(`push rejected: ${pushCheck.reason}`, { status: 403 }),
         githubToken: null,
@@ -114,7 +120,7 @@ function validatePush(
 
   // Git pkt-line format: "oldsha newsha refs/heads/branch\0capabilities..."
   const preamble = new TextDecoder().decode(body.slice(0, 2048));
-  const refPattern = /[0-9a-f]{40} [0-9a-f]{40} refs\/heads\/(\S+)/g;
+  const refPattern = /[0-9a-f]{40} [0-9a-f]{40} refs\/heads\/([^\s\0]+)/g;
   let match;
   let detectedBranch: string | undefined;
   while ((match = refPattern.exec(preamble)) !== null) {

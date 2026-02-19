@@ -47,7 +47,7 @@ export const getSessionRoute = createRoute({
   method: "get",
   path: "/{sessionId}",
   request: {
-    params: z.object({ sessionId: z.string().uuid() }),
+    params: z.object({ sessionId: z.uuid() }),
   },
   responses: {
     200: {
@@ -61,7 +61,7 @@ export const getSessionMessagesRoute = createRoute({
   method: "get",
   path: "/{sessionId}/messages",
   request: {
-    params: z.object({ sessionId: z.string().uuid() }),
+    params: z.object({ sessionId: z.uuid() }),
   },
   responses: {
     200: {
@@ -74,7 +74,7 @@ export const createPullRequestRoute = createRoute({
   method: "post",
   path: "/{sessionId}/pr",
   request: {
-    params: z.object({ sessionId: z.string().uuid() }),
+    params: z.object({ sessionId: z.uuid() }),
   },
   responses: {
     201: {
@@ -88,7 +88,7 @@ export const getPullRequestRoute = createRoute({
   method: "get",
   path: "/{sessionId}/pr",
   request: {
-    params: z.object({ sessionId: z.string().uuid() }),
+    params: z.object({ sessionId: z.uuid() }),
   },
   responses: {
     200: {
@@ -102,7 +102,7 @@ export const deleteSessionRoute = createRoute({
   method: "delete",
   path: "/{sessionId}",
   request: {
-    params: z.object({ sessionId: z.string().uuid() }),
+    params: z.object({ sessionId: z.uuid() }),
   },
   responses: {
     200: {

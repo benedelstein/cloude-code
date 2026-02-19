@@ -11,20 +11,20 @@ export type { UIMessage, UIMessagePart };
 export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().min(1),
-  messageId: z.string().uuid().optional(),
+  messageId: z.uuid().optional(),
 });
 export type ChatMessageEvent = z.infer<typeof ChatMessageEvent>;
 
 export const StreamAckEvent = z.object({
   type: z.literal("stream.ack"),
-  messageId: z.string().uuid(),
+  messageId: z.uuid(),
   chunkIndex: z.number(),
 });
 export type StreamAckEvent = z.infer<typeof StreamAckEvent>;
 
 export const SyncRequestEvent = z.object({
   type: z.literal("sync.request"),
-  lastMessageId: z.string().uuid().optional(),
+  lastMessageId: z.uuid().optional(),
   lastChunkIndex: z.number().optional(),
 });
 export type SyncRequestEvent = z.infer<typeof SyncRequestEvent>;
@@ -49,7 +49,7 @@ export const ConnectedEvent = z.object({
   type: z.literal("connected"),
   sessionId: z.uuid(),
   status: SessionStatus,
-  lastMessageId: z.string().uuid().optional(),
+  lastMessageId: z.uuid().optional(),
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
