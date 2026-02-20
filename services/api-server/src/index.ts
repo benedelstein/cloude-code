@@ -23,7 +23,7 @@ app.use(
 );
 
 app.get("/", (c) => {
-  return c.json({ name: "cloude-code-api", version: "0.0.1" });
+  return c.json({ name: "cloude-code-api", version: "0.0.1", status: "running" });
 });
 
 app.get("/health", (c) => {
