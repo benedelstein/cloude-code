@@ -1,4 +1,9 @@
-import { SpritesCoordinator, WorkersSprite, SpriteWebsocketSession, SpriteServerMessage } from "@/lib/sprites";
+import {
+  SpritesCoordinator,
+  WorkersSprite,
+  SpriteWebsocketSession,
+  SpriteServerMessage,
+} from "@/lib/sprites";
 import {
   type SessionSettings,
   type ClientMessage,
@@ -18,7 +23,11 @@ import { SecretRepository } from "./repositories/secret-repository";
 import { SchemaManager } from "./repositories/schema-manager";
 
 import { MessageAccumulator } from "@/lib/message-accumulator";
-import { handleGitProxy, ensureValidToken, type GitProxyContext } from "@/lib/git-proxy";
+import {
+  handleGitProxy,
+  ensureValidToken,
+  type GitProxyContext,
+} from "@/lib/git-proxy";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
@@ -28,8 +37,8 @@ const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
 /** Session metadata stored in Agent state (survives hibernation)
-* IMPORTANT: THIS STATE IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
-*/
+ * IMPORTANT: THIS STATE IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+ */
 type AgentState = {
   sessionId: string | null;
   userId: string | null;
@@ -102,7 +111,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.messageRepository = new MessageRepository(sql);
     this.secretRepository = new SecretRepository(sql);
 
-    new SchemaManager([this.messageRepository, this.secretRepository]).migrate();
+    new SchemaManager([
+      this.messageRepository,
+      this.secretRepository,
+    ]).migrate();
 
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
@@ -157,7 +169,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
-      const result = await handleGitProxy(request, path, this.gitProxyContext());
+      const result = await handleGitProxy(
+        request,
+        path,
+        this.gitProxyContext(),
+      );
       if (result.githubToken) {
         this.githubToken = result.githubToken;
       }
@@ -196,51 +212,78 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   onConnect(connection: Connection): void {
     console.debug(`client connected: ${connection.id}`);
     // Send initial connection state
-    connection.send(JSON.stringify({
-      type: "connected",
-      sessionId: this.state?.sessionId ?? "",
-      status: this.state?.status ?? "unknown",
-    } satisfies ServerMessage));
+    connection.send(
+      JSON.stringify({
+        type: "connected",
+        sessionId: this.state?.sessionId ?? "",
+        status: this.state?.status ?? "unknown",
+      } satisfies ServerMessage),
+    );
 
     // Send message history
     if (this.state?.sessionId && this.messageRepository) {
       this.ensureClients();
-      const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
-      connection.send(JSON.stringify({
-        type: "sync.response",
-        messages: storedMessages.map((m) => m.message),
-      } satisfies ServerMessage));
+      const storedMessages = this.messageRepository!.getAllBySession(
+        this.state.sessionId,
+      );
+      connection.send(
+        JSON.stringify({
+          type: "sync.response",
+          messages: storedMessages.map((m) => m.message),
+        } satisfies ServerMessage),
+      );
     }
 
     // Proactively trigger reattachment when client connects (non-blocking)
-    if (this.state.status === "ready" && !this.agentSession && this.state.spriteName) {
+    if (
+      this.state.status === "ready" &&
+      !this.agentSession &&
+      this.state.spriteName
+    ) {
       this.ctx.waitUntil(this.reattachAgentSession(this.state.spriteName));
     } else {
-      console.debug(`reattachAgentSession not triggered: status=${this.state.status}, spriteName=${this.state.spriteName}`);
+      console.debug(
+        `reattachAgentSession not triggered: status=${this.state.status}, spriteName=${this.state.spriteName}`,
+      );
     }
   }
 
   // Agent SDK WebSocket handlers
-  async onMessage(connection: Connection, message: string | ArrayBuffer): Promise<void> {
+  async onMessage(
+    connection: Connection,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
     this.ensureClients();
 
     try {
-      const messageStr = typeof message === "string" ? message : new TextDecoder().decode(message);
+      const messageStr =
+        typeof message === "string"
+          ? message
+          : new TextDecoder().decode(message);
       const data = JSON.parse(messageStr) as ClientMessage;
       await this.handleClientMessage(connection, data);
     } catch (error) {
       console.error("Failed to handle message:", error);
-      connection.send(JSON.stringify({
-        type: "error",
-        code: "INVALID_MESSAGE",
-        message: "Failed to parse message",
-      } satisfies ServerMessage));
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "INVALID_MESSAGE",
+          message: "Failed to parse message",
+        } satisfies ServerMessage),
+      );
     }
   }
 
-  onClose(connection: Connection, code: number, reason: string, wasClean: boolean): void {
+  onClose(
+    connection: Connection,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): void {
     // Cleanup if needed
-    console.log(`WebSocket closed: code=${code}, reason=${reason}, wasClean=${wasClean}`);
+    console.log(
+      `WebSocket closed: code=${code}, reason=${reason}, wasClean=${wasClean}`,
+    );
   }
 
   onError(connectionOrError: Connection | unknown, error?: unknown): void {
@@ -250,10 +293,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async handleInit(request: Request): Promise<Response> {
     // Prevent re-initialization
     if (this.state.sessionId) {
-      return new Response(JSON.stringify({ error: "Session already initialized" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Session already initialized" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const data = (await request.json()) as InitRequest;
@@ -287,15 +333,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
   }
 
-  private async provisionSprite(sessionId: string, repoFullName: string): Promise<void> {
-    console.debug(`Provisioning sprite for session ${sessionId} and repo ${repoFullName}`);
-    this.getConnections()
+  private async provisionSprite(
+    sessionId: string,
+    repoFullName: string,
+  ): Promise<void> {
+    console.debug(
+      `Provisioning sprite for session ${sessionId} and repo ${repoFullName}`,
+    );
+    this.getConnections();
     try {
       this.ensureClients();
 
       if (!this.gitProxySecret) {
         // this should never happen, but just in case
-        throw new Error("gitProxySecret is not set — cannot provision sprite without it");
+        throw new Error(
+          "gitProxySecret is not set — cannot provision sprite without it",
+        );
       }
 
       const spriteResponse = await this.spritesCoordinator!.createSprite({
@@ -306,7 +359,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       const sprite = new WorkersSprite(
         spriteResponse.name,
         this.env.SPRITES_API_KEY,
-        this.env.SPRITES_API_URL
+        this.env.SPRITES_API_URL,
       );
 
       // Build proxy clone URL — token never enters the sprite
@@ -315,9 +368,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Clone the repo
       // check if the repo is already cloned
-      const isCloned = await sprite.execHttp(`test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`, {});
+      const isCloned = await sprite.execHttp(
+        `test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`,
+        {},
+      );
       if (isCloned.stdout.includes("exists")) {
-        console.log(`Repo ${repoFullName} already cloned on sprite ${spriteResponse.name}`);
+        console.log(
+          `Repo ${repoFullName} already cloned on sprite ${spriteResponse.name}`,
+        );
       } else {
         this.setState({
           ...this.state,
@@ -332,7 +390,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           status: "cloning",
           message: `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
         });
-        console.log(`Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`);
+        console.log(
+          `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
+        );
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
         // Fetch a read-only token scoped to contents:read for the initial clone
@@ -345,27 +405,34 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         const cloneStart = Date.now();
         const cloneResult = await sprite.execHttp(
           `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone https://github.com/${repoFullName}.git ${WORKSPACE_DIR}`,
-          {}
+          {},
         );
-        console.log(`Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`);
+        console.log(
+          `Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`,
+        );
         if (cloneResult.exitCode !== 0) {
-          throw new Error(`Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`);
+          throw new Error(
+            `Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`,
+          );
         }
 
         // Point remote at the proxy for subsequent push/fetch
         await sprite.execHttp(
           `cd ${WORKSPACE_DIR} && git remote set-url origin ${cloneUrl}`,
-          {}
+          {},
         );
       }
 
       // Set up git config for commits
-      await sprite.execHttp(`cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev" && git config user.name "Cloude Code"`, {});
+      await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev" && git config user.name "Cloude Code"`,
+        {},
+      );
 
       // Configure git to send the proxy auth header on all requests to the proxy
       await sprite.execHttp(
         `cd ${WORKSPACE_DIR} && git config http.extraHeader "Authorization: Bearer ${this.gitProxySecret}"`,
-        {}
+        {},
       );
 
       // this.updateStatus("attaching");
@@ -394,13 +461,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Kill any existing mitmproxy to free port 8080
     await sprite.execHttp(`pkill -f mitmdump || true`, {});
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
 
     const PYENV_SHIMS = "/.sprite/languages/python/pyenv/shims";
     this.mitmSession = sprite.createSession(
       `${PYENV_SHIMS}/mitmdump`,
-      ["-p", "8080", "--set", "stream_large_bodies=1", "-w", `${HOME_DIR}/.cloude/traffic.mitm`],
-      {}
+      [
+        "-p",
+        "8080",
+        "--set",
+        "stream_large_bodies=1",
+        "-w",
+        `${HOME_DIR}/.cloude/traffic.mitm`,
+      ],
+      {},
     );
 
     // Only log errors, traffic is written to file
@@ -408,7 +482,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     await this.mitmSession.start();
     // Give it a moment to bind to port
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 500));
     console.log(`mitmproxy started on sprite ${sprite.name}`);
   }
 
@@ -416,7 +490,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const sprite = new WorkersSprite(
       spriteName,
       this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL
+      this.env.SPRITES_API_URL,
     );
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
@@ -441,7 +515,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         // ALL_PROXY: "http://127.0.0.1:8080",
         // NODE_TLS_REJECT_UNAUTHORIZED: "0",
         // NODE_EXTRA_CA_CERTS: `${HOME_DIR}/.mitmproxy/mitmproxy-ca-cert.pem`,
-      }
+      },
     });
 
     this.setupAgentSessionHandlers();
@@ -519,7 +593,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           // Save the accumulated message to DB
           const message = this.messageAccumulator.getMessage();
           if (message && this.state.sessionId && this.messageRepository) {
-            const stored = this.messageRepository.create(this.state.sessionId, message);
+            const stored = this.messageRepository.create(
+              this.state.sessionId,
+              message,
+            );
 
             // Broadcast finish event with the complete message
             this.broadcastMessage({
@@ -577,17 +654,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return new Response("Session not found", { status: 404 });
     }
 
-    return new Response(JSON.stringify({
-      sessionId: this.state.sessionId,
-      status: this.state.status,
-      repoFullName: this.state.repoFullName,
-      pushedBranch: this.state.pushedBranch ?? undefined,
-      pullRequestUrl: this.state.pullRequestUrl ?? undefined,
-      pullRequestNumber: this.state.pullRequestNumber ?? undefined,
-      pullRequestState: this.state.pullRequestState ?? undefined,
-    } satisfies SessionInfoResponse), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        sessionId: this.state.sessionId,
+        status: this.state.status,
+        repoFullName: this.state.repoFullName,
+        pushedBranch: this.state.pushedBranch ?? undefined,
+        pullRequestUrl: this.state.pullRequestUrl ?? undefined,
+        pullRequestNumber: this.state.pullRequestNumber ?? undefined,
+        pullRequestState: this.state.pullRequestState ?? undefined,
+      } satisfies SessionInfoResponse),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   private handleGetMessages(): Response {
@@ -599,14 +679,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       });
     }
 
-    const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
+    const storedMessages = this.messageRepository!.getAllBySession(
+      this.state.sessionId,
+    );
     return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
   private async handleSetPullRequest(request: Request): Promise<Response> {
-    const data = await request.json() as {
+    const data = (await request.json()) as {
       url: string;
       number: number;
       state: "open" | "merged" | "closed";
@@ -623,7 +705,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleUpdatePullRequest(request: Request): Promise<Response> {
-    const data = await request.json() as {
+    const data = (await request.json()) as {
       state: "open" | "merged" | "closed";
     };
     this.setState({
@@ -670,7 +752,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   // Client Message Handlers
   // ============================================
 
-  private async handleClientMessage(connection: Connection, message: ClientMessage): Promise<void> {
+  private async handleClientMessage(
+    connection: Connection,
+    message: ClientMessage,
+  ): Promise<void> {
     switch (message.type) {
       case "chat.message":
         await this.handleChatMessage(connection, message.content);
@@ -687,33 +772,42 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  private async handleChatMessage(connection: Connection, content: string): Promise<void> {
+  private async handleChatMessage(
+    connection: Connection,
+    content: string,
+  ): Promise<void> {
     switch (this.state.status) {
       case "provisioning":
       case "cloning":
       case "syncing":
       case "attaching":
-        connection.send(JSON.stringify({
-          type: "error",
-          code: "SESSION_TRANSITIONING",
-          message: `Session is ${this.state.status}, please wait`,
-        } satisfies ServerMessage));
+        connection.send(
+          JSON.stringify({
+            type: "error",
+            code: "SESSION_TRANSITIONING",
+            message: `Session is ${this.state.status}, please wait`,
+          } satisfies ServerMessage),
+        );
         return;
       case "waking":
-        connection.send(JSON.stringify({
-          type: "error",
-          code: "SESSION_TRANSITIONING",
-          message: `Session is ${this.state.status}, please wait`,
-        } satisfies ServerMessage));
+        connection.send(
+          JSON.stringify({
+            type: "error",
+            code: "SESSION_TRANSITIONING",
+            message: `Session is ${this.state.status}, please wait`,
+          } satisfies ServerMessage),
+        );
         return;
       case "hibernating":
       case "error":
       case "terminated":
-        connection.send(JSON.stringify({
-          type: "error",
-          code: "SESSION_NOT_READY",
-          message: `Session is ${this.state.status}`,
-        } satisfies ServerMessage));
+        connection.send(
+          JSON.stringify({
+            type: "error",
+            code: "SESSION_NOT_READY",
+            message: `Session is ${this.state.status}`,
+          } satisfies ServerMessage),
+        );
         return;
       case "ready":
         break;
@@ -729,11 +823,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     if (!this.agentSession) {
-      connection.send(JSON.stringify({
-        type: "error",
-        code: "NO_AGENT_SESSION",
-        message: "Agent session not available",
-      } satisfies ServerMessage));
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "NO_AGENT_SESSION",
+          message: "Agent session not available",
+        } satisfies ServerMessage),
+      );
       return;
     }
 
@@ -749,11 +845,17 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       role: "user",
       parts: [{ type: "text", text: content }],
     };
-    const stored = this.messageRepository!.create(this.state.sessionId, userMessage);
-    this.broadcastMessage({
-      type: "user.message",
-      message: stored.message,
-    }, [connection.id]);
+    const stored = this.messageRepository!.create(
+      this.state.sessionId,
+      userMessage,
+    );
+    this.broadcastMessage(
+      {
+        type: "user.message",
+        message: stored.message,
+      },
+      [connection.id],
+    );
 
     // Sync to D1: update last_message_at and generate title from first message
     this.ctx.waitUntil(this.syncMessageToHistory(content));
@@ -765,14 +867,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async syncRepository(sprite: WorkersSprite): Promise<void> {
     // Stash any local changes
-    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash --include-untracked`, {});
+    await sprite.execHttp(
+      `cd ${WORKSPACE_DIR} && git stash --include-untracked`,
+      {},
+    );
     // Fetch and pull latest from main
     await sprite.execHttp(`cd ${WORKSPACE_DIR} && git checkout main`, {});
-    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git pull origin main --rebase || true`, {});
+    await sprite.execHttp(
+      `cd ${WORKSPACE_DIR} && git pull origin main --rebase || true`,
+      {},
+    );
     // Restore stashed changes
     await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash pop || true`, {});
   }
-
 
   private async reattachAgentSession(spriteName: string): Promise<void> {
     // Mutex pattern: if already reattaching, wait for that to complete
@@ -791,11 +898,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async _doReattach(spriteName: string): Promise<void> {
     this.ensureClients();
 
-
     const sprite = new WorkersSprite(
       spriteName,
       this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL
+      this.env.SPRITES_API_URL,
     );
 
     // Restart mitmproxy if not running (it doesn't survive hibernation)
@@ -814,12 +920,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.updateStatus("syncing");
     this.broadcastMessage({ type: "session.status", status: "syncing" });
     await this.syncRepository(sprite);
-    
+
     // Set status to attaching
     this.updateStatus("attaching");
     this.broadcastMessage({ type: "session.status", status: "attaching" });
     const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    const existingSession = sessions.find((s) => s.id === String(this.state?.agentProcessId));
+    const existingSession = sessions.find(
+      (s) => s.id === String(this.state?.agentProcessId),
+    );
 
     // Check if other clients are connected (current client is already counted)
     const connectionCount = [...this.getConnections()].length;
@@ -827,7 +935,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     if (existingSession && otherClientsConnected) {
       // Multiplayer: attach to existing session to not disrupt others
-      console.log(`${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`);
+      console.log(
+        `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
+      );
       this.agentSession = sprite.attachSession(String(existingSession.id), {});
       this.setupAgentSessionHandlers();
       await this.agentSession.start();
@@ -850,18 +960,24 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.ensureClients();
 
     if (!this.state?.sessionId) {
-      connection.send(JSON.stringify({
-        type: "sync.response",
-        messages: [],
-      }));
+      connection.send(
+        JSON.stringify({
+          type: "sync.response",
+          messages: [],
+        }),
+      );
       return;
     }
 
-    const storedMessages = this.messageRepository!.getAllBySession(this.state.sessionId);
-    connection.send(JSON.stringify({
-      type: "sync.response",
-      messages: storedMessages.map((m) => m.message),
-    }));
+    const storedMessages = this.messageRepository!.getAllBySession(
+      this.state.sessionId,
+    );
+    connection.send(
+      JSON.stringify({
+        type: "sync.response",
+        messages: storedMessages.map((m) => m.message),
+      }),
+    );
   }
 
   private handleOperationCancel(): void {
@@ -880,11 +996,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await sessionHistory.updateLastMessageAt(sessionId);
 
       // Check if this is the first user message — if so, generate a title via LLM
-      const userMessages = this.messageRepository!.getAllBySession(sessionId)
-        .filter((m) => m.message.role === "user");
+      // TODO: STORE MESSAGES IN MEMORY?
+      const userMessages = this.messageRepository!.getAllBySession(
+        sessionId,
+      ).filter((m) => m.message.role === "user");
 
       if (userMessages.length === 1) {
-        const title = await generateSessionTitle(this.env.ANTHROPIC_API_KEY, content);
+        const title = await generateSessionTitle(
+          this.env.ANTHROPIC_API_KEY,
+          content,
+        );
         await sessionHistory.updateTitle(sessionId, title);
       }
     } catch (error) {

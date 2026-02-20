@@ -1,36 +1,35 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
 /**
  * Generate a short, descriptive session title from the user's first message
  * using a lightweight LLM call. Falls back to truncation if the call fails.
  */
 export async function generateSessionTitle(
-  apiKey: string,
+  anthropicApiKey: string,
   userMessage: string,
 ): Promise<string> {
   try {
-    const client = new Anthropic({ apiKey });
+    const anthropic = createAnthropic({ apiKey: anthropicApiKey });
 
-    // TODO: REPLACE WITH AI-SDK WRAPPER.
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 30,
+    const result = await generateText({
+      model: anthropic("claude-haiku-4-5-20251001"),
+      maxOutputTokens: 30,
+      system:
+        "Generate a short title (max 6 words) summarizing what the user wants to do. " +
+        "Respond with only the title, no quotes or punctuation. " +
+        "Examples: 'Add dark mode toggle', 'Fix login redirect bug', 'Refactor auth middleware'.",
       messages: [
         {
           role: "user",
           content: userMessage,
         },
       ],
-      system:
-        "Generate a short title (max 6 words) summarizing what the user wants to do. " +
-        "Respond with only the title, no quotes or punctuation. " +
-        "Examples: 'Add dark mode toggle', 'Fix login redirect bug', 'Refactor auth middleware'.",
     });
 
-    const text =
-      response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
+    const text = result.text.trim();
 
-    if (text && text.length > 0) {
+    if (text.length > 0) {
       return text;
     }
   } catch (error) {

@@ -15,5 +15,6 @@ catalog:
   "dotenv": "^17.2.3"
   "@anthropic-ai/sdk": "^0.71.0"
   "ai": "^6.0.59"
+  "@ai-sdk/anthropic": "^3.0.45"
   "octokit": "^4.1.2"
   "@hono/zod-openapi": "^1.2.2"

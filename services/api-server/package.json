@@ -14,7 +14,7 @@
     "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "catalog:",
+    "@ai-sdk/anthropic": "catalog:",
     "@fly/sprites": "^0.0.1",
     "@repo/shared": "workspace:*",
     "@repo/vm-agent": "workspace:*",
