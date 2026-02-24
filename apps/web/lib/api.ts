@@ -3,13 +3,16 @@ import type {
   Repo,
   ListReposResponse,
   CreateSessionResponse,
+  DeleteSessionResponse,
   SessionInfoResponse,
+  ListSessionsResponse,
+  SessionSummary,
   PullRequestResponse,
   PullRequestStatusResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
-export type { UserInfo, Repo, PullRequestResponse, PullRequestStatusResponse };
+export type { UserInfo, Repo, SessionSummary, PullRequestResponse, PullRequestStatusResponse };
 
 // WebSocket URL still uses direct API URL (not proxied)
 export const WS_API_URL =
@@ -64,6 +67,11 @@ export async function createSession(repoId: number, repoFullName: string): Promi
   });
 }
 
+export async function listSessions(repoId?: number): Promise<ListSessionsResponse> {
+  const params = repoId ? `?repoId=${repoId}` : "";
+  return apiFetch(`/sessions${params}`);
+}
+
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
   return apiFetch(`/sessions/${sessionId}`);
 }
@@ -74,4 +82,8 @@ export async function createPullRequest(sessionId: string): Promise<PullRequestR
 
 export async function getPullRequestStatus(sessionId: string): Promise<PullRequestStatusResponse> {
   return apiFetch(`/sessions/${sessionId}/pr`);
+}
+
+export async function deleteSession(sessionId: string): Promise<DeleteSessionResponse> {
+  return apiFetch(`/sessions/${sessionId}`, { method: "DELETE" });
 }

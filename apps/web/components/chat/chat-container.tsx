@@ -27,16 +27,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   } = useSession();
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="shrink-0 border-b border-border px-4 py-3">
+      <header className="shrink-0 h-12 border-b border-border px-4 flex items-center">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="font-semibold">☁️ Cloude Code</h1>
-            <p className="text-xs text-muted-foreground">
-              Session: {sessionId.slice(0, 8)}...
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Session: {sessionId.slice(0, 8)}...
+          </p>
           <div className="flex items-center gap-2">
             <span
               className={`h-2 w-2 rounded-full ${

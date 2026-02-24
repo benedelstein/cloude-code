@@ -22,6 +22,7 @@ import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
 import { SchemaManager } from "./repositories/schema-manager";
 
+import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import {
   handleGitProxy,
@@ -361,6 +362,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.env.SPRITES_API_KEY,
         this.env.SPRITES_API_URL,
       );
+
+      // Lock down outbound network access to known-good domains
+      const workerHostname = new URL(this.env.WORKER_URL).hostname;
+      const networkPolicy = buildNetworkPolicy([
+        { domain: workerHostname, action: "allow" },
+      ]);
+      await sprite.setNetworkPolicy(networkPolicy);
 
       // Build proxy clone URL — token never enters the sprite
       const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;

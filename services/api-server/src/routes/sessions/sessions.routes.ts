@@ -302,9 +302,9 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
     return c.json({ error: "Failed to delete session" }, 500) as any;
   }
 
-  // Archive in D1 (keep the record for history visibility)
+  // Hard-delete from D1 so terminated sessions vanish entirely
   const sessionHistory = new SessionHistoryService(c.env.DB);
-  await sessionHistory.archive(sessionId);
+  await sessionHistory.delete(sessionId);
 
   return c.json({ deleted: true as const }, 200);
 });

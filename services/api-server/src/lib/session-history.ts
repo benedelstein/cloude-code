@@ -62,6 +62,13 @@ export class SessionHistoryService {
       .run();
   }
 
+  async delete(sessionId: string): Promise<void> {
+    await this.database
+      .prepare(`DELETE FROM sessions WHERE id = ?`)
+      .bind(sessionId)
+      .run();
+  }
+
   async updateLastMessageAt(sessionId: string): Promise<void> {
     await this.database
       .prepare(

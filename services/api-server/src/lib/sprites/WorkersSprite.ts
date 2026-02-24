@@ -1,6 +1,11 @@
 import { SpriteWebsocketSession } from "./SpriteWebsocketSession";
 import { ExecResult, SessionOptions, SpritesError } from "./types";
 
+export interface NetworkPolicyRule {
+  domain: string;
+  action: "allow" | "deny";
+}
+
 export class WorkersSprite {
     private baseUrl: string;
     private apiKey: string;
@@ -118,6 +123,26 @@ export class WorkersSprite {
         ...options,
         sessionId,
       });
+    }
+
+    async setNetworkPolicy(rules: NetworkPolicyRule[]): Promise<void> {
+      const url = `${this.baseUrl}/v1/sprites/${this.name}/policy/network`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rules }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new SpritesError(
+          `Failed to set network policy: ${response.status}`,
+          response.status,
+          text,
+        );
+      }
     }
 
     async writeFile(
