@@ -1014,6 +1014,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           this.env.ANTHROPIC_API_KEY,
           content,
         );
+        console.log(`Generated session title: ${title} for session ${sessionId}`);
         await sessionHistory.updateTitle(sessionId, title);
       }
     } catch (error) {

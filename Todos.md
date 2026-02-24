@@ -9,7 +9,7 @@
 - [ ] Pre-warm sprite instances for a repo and cache them for reuse later so we don't have to do a fresh clone.
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
-- [ ] Store past session history and open resumed sessions
+- [x] Store past session history and open resumed sessions
 - [ ] Mobile client
 - [ ] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.

@@ -44,7 +44,7 @@ export function SessionSidebar() {
 
   const handleTerminateSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
-    if (!window.confirm("Terminate this session? This will destroy the VM and delete the session permanently.")) {
+    if (!window.confirm("Delete this session? This will delete all associated data permanently.")) {
       return;
     }
     setTerminatingSessionId(sessionId);
