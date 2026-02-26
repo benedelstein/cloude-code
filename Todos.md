@@ -6,14 +6,16 @@
 - [x] store conversations in d1 and let user click on old convo list to resume
 - [x] customize system prompt for agent specifying its container environment and how to commit changes
 - [x] Proxy git and github actions for security. VM should only have write access specific to the repo and branch.
+- [ ] After creating PR, have the agent auto-review the pr using a subagent and then write comments. 
 - [ ] Pre-warm sprite instances for a repo and cache them for reuse later so we don't have to do a fresh clone.
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
 - [x] Store past session history and open resumed sessions
 - [ ] Mobile client
-- [ ] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
+- [ ] Bug: sometimes sessions get stuck as syncing on restore and can't be recovered.
+- [x] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.
 - [ ] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
 
 Sprites are long-lived VMs. I'm kind of using them like disposable VMs - just creating 1 session and checking out a repo on a new branch.
-How can I make use of their persistence? keep a pool of sprites warm? 
+How can I make use of their persistence? keep a pool of sprites warm?

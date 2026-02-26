@@ -22,6 +22,33 @@ export const SessionStatus = z.enum([
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
+export type PullRequestState = "open" | "merged" | "closed";
+
+/** State managed by the SessionAgentDO, synced to clients via Cloudflare Agents */
+export type AgentState = {
+  sessionId: string | null;
+  userId: string | null;
+  repoFullName: string | null;
+  spriteName: string | null;
+  /** Session ID given by the Claude Agent SDK */
+  claudeSessionId: string | null;
+  /** ID of the agent process session running on the sprite */
+  agentProcessId: number | null;
+  status: SessionStatus;
+  settings: SessionSettings;
+  /** Branch name locked after first push (for "Create PR" flow) */
+  pushedBranch: string | null;
+  /** GitHub PR URL after creation */
+  pullRequestUrl: string | null;
+  /** GitHub PR number for API lookups */
+  pullRequestNumber: number | null;
+  /** PR state: open, merged, or closed */
+  pullRequestState: PullRequestState | null;
+  /** Message to send automatically once provisioning completes */
+  pendingMessage: string | null;
+  createdAt: Date;
+};
+
 export const SessionSettings = z.object({
   model: z.string().default("claude-opus-4-20250514"),
   maxTokens: z.number().default(8192),

@@ -8,22 +8,23 @@ interface MessageListProps {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
   isResponding?: boolean;
+  pendingMessage?: string | null;
 }
 
-export function MessageList({ messages, streamingMessage, isResponding }: MessageListProps) {
+export function MessageList({ messages, streamingMessage, isResponding, pendingMessage }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage]);
+  }, [messages, streamingMessage, pendingMessage]);
 
   const allMessages = streamingMessage
     ? [...messages, streamingMessage]
     : messages;
 
-  if (allMessages.length === 0) {
+  if (allMessages.length === 0 && !pendingMessage) {
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -65,6 +66,15 @@ export function MessageList({ messages, streamingMessage, isResponding }: Messag
             isStreaming={streamingMessage?.id === message.id}
           />
         ))}
+        {pendingMessage && (
+          <MessageItem
+            message={{
+              id: "pending-message",
+              role: "user",
+              parts: [{ type: "text", text: pendingMessage }],
+            }}
+          />
+        )}
         {isResponding && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>

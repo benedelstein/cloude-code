@@ -19,11 +19,14 @@ export const CreateSessionRequest = z.object({
   /** "owner/repo" full name */
   repoFullName: z.string().min(1),
   settings: SessionSettings.partial().optional(),
+  /** Optional first message to send immediately after session creation */
+  initialMessage: z.string().min(1).optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 
 export const CreateSessionResponse = z.object({
   sessionId: z.uuid(),
+  title: z.string().nullable(),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
 

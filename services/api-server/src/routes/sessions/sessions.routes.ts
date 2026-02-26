@@ -5,6 +5,7 @@ import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { GitHubAppService, GitHubAppError } from "@/lib/github";
 import { SessionHistoryService } from "@/lib/session-history";
+import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   listSessionsRoute,
@@ -71,6 +72,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         sessionId,
         repoFullName: parsed.repoFullName,
         settings: parsed.settings,
+        initialMessage: parsed.initialMessage,
       }),
     }),
   );
@@ -92,7 +94,18 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     repoFullName: parsed.repoFullName,
   });
 
-  return c.json({ sessionId }, 201);
+  // If an initial message was provided, generate a title immediately
+  let title: string | null = null;
+  if (parsed.initialMessage) {
+    try {
+      title = await generateSessionTitle(c.env.ANTHROPIC_API_KEY, parsed.initialMessage);
+      await sessionHistory.updateTitle(sessionId, title);
+    } catch (error) {
+      console.error("Failed to generate title at creation:", error);
+    }
+  }
+
+  return c.json({ sessionId, title }, 201);
 });
 
 // Get session info

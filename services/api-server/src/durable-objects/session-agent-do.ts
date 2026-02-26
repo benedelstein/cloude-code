@@ -5,6 +5,7 @@ import {
   SpriteServerMessage,
 } from "@/lib/sprites";
 import {
+  type AgentState,
   type SessionSettings,
   type ClientMessage,
   type ServerMessage,
@@ -37,35 +38,13 @@ import type { UIMessage } from "ai";
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
-/** Session metadata stored in Agent state (survives hibernation)
- * IMPORTANT: THIS STATE IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
- */
-type AgentState = {
-  sessionId: string | null;
-  userId: string | null;
-  repoFullName: string | null;
-  spriteName: string | null;
-  /** Session ID given by the Claude Agent SDK */
-  claudeSessionId: string | null;
-  /** ID of the agent process session running on the sprite */
-  agentProcessId: number | null;
-  status: SessionStatus;
-  settings: SessionSettings;
-  /** Branch name locked after first push (for "Create PR" flow) */
-  pushedBranch: string | null;
-  /** GitHub PR URL after creation */
-  pullRequestUrl: string | null;
-  /** GitHub PR number for API lookups */
-  pullRequestNumber: number | null;
-  /** PR state: open, merged, or closed */
-  pullRequestState: "open" | "merged" | "closed" | null;
-  createdAt: Date;
-};
+/** IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE. */
 
 interface InitRequest {
   sessionId: string;
   repoFullName: string;
   settings?: Partial<SessionSettings>;
+  initialMessage?: string;
 }
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
@@ -98,6 +77,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestUrl: null,
     pullRequestNumber: null,
     pullRequestState: null,
+    pendingMessage: null,
     createdAt: new Date(),
   };
 
@@ -324,6 +304,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       agentProcessId: null,
       status: "provisioning",
       settings,
+      pendingMessage: data.initialMessage ?? null,
     });
 
     // Provision sprite asynchronously
@@ -451,6 +432,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       this.updateStatus("ready");
       this.broadcastMessage({ type: "session.status", status: "ready" });
+
+      // If there's a pending initial message, send it to the agent now
+      if (this.state.pendingMessage) {
+        await this.sendPendingMessage();
+      }
     } catch (error) {
       console.error("Failed to provision sprite:", error);
       this.updateStatus("error");
@@ -460,6 +446,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
+  }
+
+  /** Send the pending initial message to the agent (message is already stored during init). */
+  private async sendPendingMessage(): Promise<void> {
+    const content = this.state.pendingMessage;
+    if (!content || !this.agentSession || !this.state.sessionId) return;
+
+    // Clear pending message from state
+    this.setState({ ...this.state, pendingMessage: null });
+
+    // Send to vm-agent
+    console.log(`Sending pending message to vm-agent: ${content}`);
+    this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
   private async startMitmproxyOnVM(sprite: WorkersSprite): Promise<void> {

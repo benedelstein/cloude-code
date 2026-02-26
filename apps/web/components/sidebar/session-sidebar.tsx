@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { listSessions, listRepos, createSession, deleteSession, type SessionSummary, type Repo } from "@/lib/api";
+import { deleteSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useSessionList } from "@/components/providers/session-list-provider";
 import { formatRelativeTime } from "./utils";
 
 export function SessionSidebar() {
@@ -11,35 +12,12 @@ export function SessionSidebar() {
   const router = useRouter();
   const params = useParams();
   const activeSessionId = params?.sessionId as string | undefined;
+  const { sessions, loading: sessionsLoading, removeSession } = useSessionList();
 
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [showRepoPicker, setShowRepoPicker] = useState(false);
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [reposLoading, setReposLoading] = useState(false);
-  const [creatingSessionFor, setCreatingSessionFor] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    listSessions()
-      .then((data) => setSessions(data.sessions))
-      .catch((err) => console.error("Failed to load sessions:", err))
-      .finally(() => setSessionsLoading(false));
-  }, []);
-
   const handleNewSession = () => {
-    if (showRepoPicker) {
-      setShowRepoPicker(false);
-      return;
-    }
-    setShowRepoPicker(true);
-    setReposLoading(true);
-    setError(null);
-    listRepos()
-      .then((data) => setRepos(data.repos))
-      .catch((err) => setError(err.message))
-      .finally(() => setReposLoading(false));
+    router.push("/");
   };
 
   const handleTerminateSession = async (e: React.MouseEvent, sessionId: string) => {
@@ -50,7 +28,7 @@ export function SessionSidebar() {
     setTerminatingSessionId(sessionId);
     try {
       await deleteSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      removeSession(sessionId);
       if (sessionId === activeSessionId) {
         router.push("/");
       }
@@ -61,40 +39,12 @@ export function SessionSidebar() {
     }
   };
 
-  const handleSelectRepo = async (repo: Repo) => {
-    setCreatingSessionFor(repo.fullName);
-    setError(null);
-    try {
-      const session = await createSession(repo.id, repo.fullName);
-      setShowRepoPicker(false);
-      // Add the new session to the top of the list
-      setSessions((prev) => [
-        {
-          id: session.sessionId,
-          repoId: repo.id,
-          repoFullName: repo.fullName,
-          title: null,
-          archived: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          lastMessageAt: null,
-        },
-        ...prev,
-      ]);
-      router.push(`/session/${session.sessionId}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create session");
-    } finally {
-      setCreatingSessionFor(null);
-    }
-  };
-
   return (
     <aside className="w-[280px] shrink-0 h-screen flex flex-col border-r border-border bg-background">
       {/* Header */}
       <div className="shrink-0 h-12 px-4 flex items-center border-b border-border">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-sm">cloude-code</span>
+        <div className="w-full flex items-center justify-between">
+          <div className="font-semibold text-sm">☁️</div>
           <div className="flex items-center gap-2">
             {user?.avatarUrl && (
               <img
@@ -122,38 +72,6 @@ export function SessionSidebar() {
           + New session
         </button>
       </div>
-
-      {/* Repo picker dropdown */}
-      {showRepoPicker && (
-        <div className="shrink-0 px-3 pb-2 border-b border-border">
-          {error && (
-            <div className="p-2 mb-2 rounded text-xs bg-red-500/10 border border-red-500/20 text-red-500">
-              {error}
-            </div>
-          )}
-          {reposLoading ? (
-            <div className="flex justify-center py-4">
-              <LoadingSpinner />
-            </div>
-          ) : (
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {repos.map((repo) => (
-                <button
-                  key={repo.id}
-                  onClick={() => handleSelectRepo(repo)}
-                  disabled={creatingSessionFor !== null}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-accent/10 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate">{repo.fullName}</span>
-                    {creatingSessionFor === repo.fullName && <LoadingSpinner />}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto">

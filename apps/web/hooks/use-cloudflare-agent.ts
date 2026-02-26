@@ -4,7 +4,12 @@ import { useState, useCallback, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
-import type { ServerMessage, SessionStatus } from "@repo/shared";
+import type {
+  AgentState,
+  PullRequestState,
+  ServerMessage,
+  SessionStatus,
+} from "@repo/shared";
 
 const DEFAULT_API_HOST = process.env.NEXT_PUBLIC_API_HOST ?? "localhost:8787";
 
@@ -14,8 +19,6 @@ export interface UseCloudflareAgentOptions {
   onError?: (error: Error) => void;
 }
 
-export type PullRequestState = "open" | "merged" | "closed";
-
 export interface UseCloudflareAgentReturn {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
@@ -24,6 +27,8 @@ export interface UseCloudflareAgentReturn {
   isReady: boolean;
   isStreaming: boolean;
   isResponding: boolean;
+  pendingMessage: string | null;
+  repoFullName: string | null;
   pushedBranch: string | null;
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
@@ -37,10 +42,12 @@ export function useCloudflareAgent({
   onError,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
   const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isResponding, setIsResponding] = useState(false);
+  const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
@@ -73,9 +80,11 @@ export function useCloudflareAgent({
         setSessionStatus(msg.status);
         break;
 
-      case "sync.response":
-        setMessages(msg.messages as UIMessage[]);
+      case "sync.response": {
+        const synced = msg.messages as UIMessage[];
+        setMessages(synced);
         break;
+      }
 
       case "session.status":
         setSessionStatus(msg.status);
@@ -116,7 +125,7 @@ export function useCloudflareAgent({
   }, [onError]);
 
   // Use Cloudflare's useAgent hook
-  const agent = useAgent({
+  const agent = useAgent<AgentState>({
     agent: "session",
     name: sessionId,
     host: host ?? DEFAULT_API_HOST,
@@ -134,16 +143,22 @@ export function useCloudflareAgent({
     onClose: () => {
       // useAgent will auto-reconnect
     },
-    onStateUpdate(state: Record<string, unknown>, source) {
+    onStateUpdate(state: AgentState, source) {
       console.log("state update", state, source);
       if (state.pushedBranch !== undefined) {
-        setPushedBranch((state.pushedBranch as string) ?? null);
+        setPushedBranch(state.pushedBranch);
+      }
+      if (state.repoFullName !== undefined) {
+        setRepoFullName(state.repoFullName);
       }
       if (state.pullRequestUrl !== undefined) {
-        setPullRequestUrl((state.pullRequestUrl as string) ?? null);
+        setPullRequestUrl(state.pullRequestUrl);
       }
       if (state.pullRequestState !== undefined) {
-        setPullRequestState((state.pullRequestState as PullRequestState) ?? null);
+        setPullRequestState(state.pullRequestState);
+      }
+      if (state.pendingMessage !== undefined) {
+        setPendingMessage(state.pendingMessage);
       }
     },
     onError: (message) => {
@@ -183,6 +198,7 @@ export function useCloudflareAgent({
   }, [agent]);
 
   return {
+    repoFullName,
     messages,
     streamingMessage,
     sessionStatus,
@@ -190,6 +206,7 @@ export function useCloudflareAgent({
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
     isResponding,
+    pendingMessage,
     pushedBranch,
     pullRequestUrl,
     pullRequestState,

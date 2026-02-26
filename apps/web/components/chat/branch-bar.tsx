@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createPullRequest, getPullRequestStatus } from "@/lib/api";
-import type { PullRequestState } from "@/hooks/use-cloudflare-agent";
+import type { PullRequestState } from "@repo/shared";
 
 const POLL_INTERVAL_MS = 30_000;
 
