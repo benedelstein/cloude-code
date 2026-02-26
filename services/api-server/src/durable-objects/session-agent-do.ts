@@ -351,7 +351,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       ]);
       await sprite.setNetworkPolicy(networkPolicy);
 
-      // Build proxy clone URL — token never enters the sprite
+      // Build git proxy  URL — token never enters the sprite
       const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
       const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
 
@@ -435,6 +435,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // If there's a pending initial message, send it to the agent now
       if (this.state.pendingMessage) {
+        console.log(`Sending pending message to vm-agent: ${this.state.pendingMessage}`);
         await this.sendPendingMessage();
       }
     } catch (error) {
@@ -448,50 +449,69 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  /** Send the pending initial message to the agent (message is already stored during init). */
+  /** Send the pending initial message to the agent and store/broadcast it as a user message. */
   private async sendPendingMessage(): Promise<void> {
     const content = this.state.pendingMessage;
     if (!content || !this.agentSession || !this.state.sessionId) return;
 
-    // Clear pending message from state
+    // Store user message and broadcast to all clients
+    this.ensureClients();
+    const userMessage: UIMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      parts: [{ type: "text", text: content }],
+    };
+    const stored = this.messageRepository!.create(
+      this.state.sessionId,
+      userMessage,
+    );
+    this.broadcastMessage({
+      type: "user.message",
+      message: stored.message,
+    });
+
+    // Clear pending message from state (after broadcast so client has the real message)
     this.setState({ ...this.state, pendingMessage: null });
+
+    // Sync to D1 history and generate title
+    this.ctx.waitUntil(this.syncMessageToHistory(content));
 
     // Send to vm-agent
     console.log(`Sending pending message to vm-agent: ${content}`);
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
-  private async startMitmproxyOnVM(sprite: WorkersSprite): Promise<void> {
-    console.debug(`Starting mitmproxy on sprite ${sprite.name}`);
-    // Install mitmproxy for HTTP header debugging
-    await sprite.execHttp(`pip install mitmproxy`, {});
+  // private async startMitmproxyOnVM(sprite: WorkersSprite): Promise<void> {
+  //   console.debug(`Starting mitmproxy on sprite ${sprite.name}`);
+  //   // Install mitmproxy for HTTP header debugging
+  //   await sprite.execHttp(`pip install mitmproxy`, {});
 
-    // Kill any existing mitmproxy to free port 8080
-    await sprite.execHttp(`pkill -f mitmdump || true`, {});
-    await new Promise((r) => setTimeout(r, 200));
+  //   // Kill any existing mitmproxy to free port 8080
+  //   await sprite.execHttp(`pkill -f mitmdump || true`, {});
+  //   await new Promise((r) => setTimeout(r, 200));
 
-    const PYENV_SHIMS = "/.sprite/languages/python/pyenv/shims";
-    this.mitmSession = sprite.createSession(
-      `${PYENV_SHIMS}/mitmdump`,
-      [
-        "-p",
-        "8080",
-        "--set",
-        "stream_large_bodies=1",
-        "-w",
-        `${HOME_DIR}/.cloude/traffic.mitm`,
-      ],
-      {},
-    );
+  //   const PYENV_SHIMS = "/.sprite/languages/python/pyenv/shims";
+  //   this.mitmSession = sprite.createSession(
+  //     `${PYENV_SHIMS}/mitmdump`,
+  //     [
+  //       "-p",
+  //       "8080",
+  //       "--set",
+  //       "stream_large_bodies=1",
+  //       "-w",
+  //       `${HOME_DIR}/.cloude/traffic.mitm`,
+  //     ],
+  //     {},
+  //   );
 
-    // Only log errors, traffic is written to file
-    this.mitmSession.onStderr((data) => console.log("[mitmdump err]", data));
+  //   // Only log errors, traffic is written to file
+  //   this.mitmSession.onStderr((data) => console.log("[mitmdump err]", data));
 
-    await this.mitmSession.start();
-    // Give it a moment to bind to port
-    await new Promise((r) => setTimeout(r, 500));
-    console.log(`mitmproxy started on sprite ${sprite.name}`);
-  }
+  //   await this.mitmSession.start();
+  //   // Give it a moment to bind to port
+  //   await new Promise((r) => setTimeout(r, 500));
+  //   console.log(`mitmproxy started on sprite ${sprite.name}`);
+  // }
 
   private async startAgentOnVM(spriteName: string): Promise<void> {
     const sprite = new WorkersSprite(
@@ -912,9 +932,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     // Restart mitmproxy if not running (it doesn't survive hibernation)
-    if (!this.mitmSession) {
-      await this.startMitmproxyOnVM(sprite);
-    }
+    // if (!this.mitmSession) {
+    //   await this.startMitmproxyOnVM(sprite);
+    // }
 
     // Refresh GitHub token before sync (may have expired during hibernation)
     try {

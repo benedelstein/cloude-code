@@ -94,8 +94,18 @@ export function useCloudflareAgent({
         break;
 
       case "agent.chunk":
-        // setIsResponding(false);
-        if (streamControllerRef.current) {
+        setIsResponding(true);
+        if (!streamControllerRef.current) {
+          // First chunk for a server-initiated response (e.g. pending message) —
+          // create a stream so the UI can render it
+          const stream = new ReadableStream<UIMessageChunk>({
+            start: (controller) => {
+              streamControllerRef.current = controller;
+              controller.enqueue(msg.chunk as UIMessageChunk);
+            },
+          });
+          consumeStream(stream);
+        } else {
           streamControllerRef.current.enqueue(msg.chunk as UIMessageChunk);
         }
         break;
@@ -114,6 +124,7 @@ export function useCloudflareAgent({
         break;
 
       case "user.message":
+        setIsResponding(true);
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         break;
 

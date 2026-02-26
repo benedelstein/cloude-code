@@ -6,6 +6,7 @@ import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
+import Link from "next/link";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -41,9 +42,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               {sessionTitle ?? repoFullName ?? ""}
             </p>
             {sessionTitle && repoFullName && (
-              <p className="text-xs text-muted-foreground truncate">
+              <Link href={`https://github.com/${repoFullName}`} target="_blank" className="text-xs text-muted-foreground truncate hover:underline">
                 {repoFullName}
-              </p>
+              </Link>
             )}
           </div>
           <div className="flex items-center gap-2">

@@ -12,10 +12,13 @@
         When a session is complete, we can mark the sprite as available for reuse.
 - [x] Store past session history and open resumed sessions
 - [ ] Mobile client
+- [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses? 
 - [ ] Bug: sometimes sessions get stuck as syncing on restore and can't be recovered.
 - [x] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.
 - [ ] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
+- [ ] Allow the vm to render results as screenshots with a browser in order to visually see its results. Extra tool?
+        Can we install chromium on the sprite?
 
 Sprites are long-lived VMs. I'm kind of using them like disposable VMs - just creating 1 session and checking out a repo on a new branch.
 How can I make use of their persistence? keep a pool of sprites warm?

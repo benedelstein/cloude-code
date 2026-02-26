@@ -17,6 +17,8 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
   allow("platform.claude.com"),
   allow("code.claude.com"),
   allow("claude.ai"),
+  allow("openai.com"),
+  allow("ai-sdk.dev"),
 
   // --- Version Control ---
   allow("github.com"),

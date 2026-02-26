@@ -4,6 +4,8 @@ import type { UIMessage } from "ai";
 import { isTextUIPart, isReasoningUIPart, isToolUIPart } from "ai";
 import { TextPart } from "@/components/parts/text-part";
 import { ToolCallPart } from "@/components/parts/tool-call-part";
+import { TodoWritePart } from "@/components/parts/todo-write-part";
+import { ExitPlanModePart } from "@/components/parts/exit-plan-mode-part";
 import { ReasoningPart } from "@/components/parts/reasoning-part";
 
 interface MessageItemProps {
@@ -84,6 +86,13 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
 
                 // Handle tool calls - they start with "tool-" prefix
                 if (isToolUIPart(part) || part.type.startsWith("tool-")) {
+                  const toolName = (part as { toolName?: string }).toolName ?? part.type.replace(/^tool-/, "");
+                  if (toolName === "TodoWrite") {
+                    return <TodoWritePart key={key} part={part} />;
+                  }
+                  if (toolName === "ExitPlanMode") {
+                    return <ExitPlanModePart key={key} part={part} />;
+                  }
                   return (
                     <ToolCallPart
                       key={key}

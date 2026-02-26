@@ -6,6 +6,7 @@ import { deleteSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { formatRelativeTime } from "./utils";
+import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 export function SessionSidebar() {
   const { user, logout } = useAuth();
@@ -20,7 +21,7 @@ export function SessionSidebar() {
     router.push("/");
   };
 
-  const handleTerminateSession = async (e: React.MouseEvent, sessionId: string) => {
+  const handleTerminateSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
     e.stopPropagation();
     if (!window.confirm("Delete this session? This will delete all associated data permanently.")) {
       return;
@@ -77,7 +78,7 @@ export function SessionSidebar() {
       <div className="flex-1 overflow-y-auto">
         {sessionsLoading ? (
           <div className="flex justify-center py-8">
-            <LoadingSpinner />
+            <LoadingSpinner className="h-4 w-4" />
           </div>
         ) : sessions.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -92,7 +93,7 @@ export function SessionSidebar() {
 
               return (
                 <li key={session.id} className="group/row">
-                  <button
+                  <div
                     onClick={() => router.push(`/session/${session.id}`)}
                     className={`w-full text-left px-4 py-2.5 transition-all duration-150 cursor-pointer ${
                       isActive
@@ -105,7 +106,7 @@ export function SessionSidebar() {
                         {displayTitle}
                       </span>
                       {terminatingSessionId === session.id ? (
-                        <span className="shrink-0"><LoadingSpinner /></span>
+                        <span className="shrink-0"><LoadingSpinner className="h-4 w-4" /></span>
                       ) : (
                         <>
                           <span className="text-xs text-muted-foreground shrink-0 group-hover/row:hidden">
@@ -127,7 +128,7 @@ export function SessionSidebar() {
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
                       {session.repoFullName}
                     </p>
-                  </button>
+                  </div>
                 </li>
               );
             })}
@@ -138,27 +139,3 @@ export function SessionSidebar() {
   );
 }
 
-function LoadingSpinner() {
-  return (
-    <svg
-      className="animate-spin h-4 w-4"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  );
-}
