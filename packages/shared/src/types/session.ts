@@ -46,6 +46,8 @@ export type AgentState = {
   pullRequestState: PullRequestState | null;
   /** Message to send automatically once provisioning completes */
   pendingMessage: string | null;
+  /** Public URL for the VS Code editor (set when editor is open) */
+  editorUrl: string | null;
   createdAt: Date;
 };
 

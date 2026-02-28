@@ -63,6 +63,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private githubToken: string | null = null;
   /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
   private gitProxySecret: string | null = null;
+  /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
+  private editorToken: string | null = null;
 
   initialState: AgentState = {
     sessionId: "",
@@ -78,6 +80,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestNumber: null,
     pullRequestState: null,
     pendingMessage: null,
+    editorUrl: null,
     createdAt: new Date(),
   };
 
@@ -100,6 +103,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
+    this.editorToken = this.secretRepository.get("editor_token");
   }
 
   private initializeClients(): void {
@@ -690,6 +694,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         pullRequestUrl: this.state.pullRequestUrl ?? undefined,
         pullRequestNumber: this.state.pullRequestNumber ?? undefined,
         pullRequestState: this.state.pullRequestState ?? undefined,
+        editorUrl: this.state.editorUrl ?? undefined,
       } satisfies SessionInfoResponse),
       {
         headers: { "Content-Type": "application/json" },
@@ -747,6 +752,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async handleDeleteSession(): Promise<Response> {
     this.ensureClients();
 
+    // Close editor if open
+    if (this.state.editorUrl) {
+      await this.handleEditorClose();
+    }
+
     // Clean up sprite
     if (this.state.spriteName && this.spritesCoordinator) {
       try {
@@ -795,6 +805,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         break;
       case "operation.cancel":
         this.handleOperationCancel();
+        break;
+      case "editor.open":
+        this.ctx.waitUntil(this.handleEditorOpen());
+        break;
+      case "editor.close":
+        this.ctx.waitUntil(this.handleEditorClose());
         break;
     }
   }
@@ -977,6 +993,152 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Set status back to ready
     this.updateStatus("ready");
     this.broadcastMessage({ type: "session.status", status: "ready" });
+  }
+
+  // ============================================
+  // Editor (VS Code) Lifecycle
+  // ============================================
+
+  private async handleEditorOpen(): Promise<void> {
+    if (!this.state.spriteName) {
+      this.broadcastMessage({
+        type: "editor.error",
+        message: "No sprite provisioned",
+      });
+      return;
+    }
+
+    // If editor is already open, just re-broadcast the URL
+    if (this.state.editorUrl && this.editorToken) {
+      this.broadcastMessage({
+        type: "editor.ready",
+        url: this.state.editorUrl,
+        token: this.editorToken,
+      });
+      return;
+    }
+
+    this.ensureClients();
+    const sprite = new WorkersSprite(
+      this.state.spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    try {
+      // Install openvscode-server if not already present
+      const checkResult = await sprite.execHttp(
+        `test -f ${HOME_DIR}/.openvscode/bin/openvscode-server && echo 'installed' || echo 'missing'`,
+        {},
+      );
+      if (checkResult.stdout.includes("missing")) {
+        console.log("Installing openvscode-server on sprite");
+        const installResult = await sprite.execHttp(
+          [
+            `wget -q https://github.com/nicedoc/openvscode-server/releases/download/v1.101.2/openvscode-server-v1.101.2-linux-x64.tar.gz -O /tmp/ovs.tar.gz`,
+            `mkdir -p ${HOME_DIR}/.openvscode`,
+            `tar -xzf /tmp/ovs.tar.gz -C ${HOME_DIR}/.openvscode --strip-components=1`,
+            `rm /tmp/ovs.tar.gz`,
+          ].join(" && "),
+          {},
+        );
+        if (installResult.exitCode !== 0) {
+          throw new Error(
+            `openvscode-server install failed (exit ${installResult.exitCode}): ${installResult.stderr}`,
+          );
+        }
+        console.log("openvscode-server installed successfully");
+      }
+
+      // Generate a connection token for auth
+      const token = crypto.randomUUID();
+      this.editorToken = token;
+      this.secretRepository!.set("editor_token", token);
+
+      // Start openvscode-server on port 8080
+      // Kill any existing process on 8080 first
+      await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
+
+      // Start as a detached session so it survives
+      const editorSession = sprite.createSession(
+        `${HOME_DIR}/.openvscode/bin/openvscode-server`,
+        [
+          "--host", "0.0.0.0",
+          "--port", "8080",
+          "--connection-token", token,
+          "--default-folder", WORKSPACE_DIR,
+        ],
+        {},
+      );
+      editorSession.onStderr((data: string) => {
+        console.log(`[openvscode-server stderr] ${data}`);
+      });
+      editorSession.onExit((code: number) => {
+        console.log(`openvscode-server exited with code ${code}`);
+      });
+      await editorSession.start();
+
+      // Wait briefly for the server to start listening
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Make the Sprite URL public so the browser can reach it directly
+      await sprite.setUrlAuth("public");
+
+      // Get the Sprite's public URL
+      const spriteInfo = await sprite.getSpriteInfo();
+      if (!spriteInfo.url) {
+        throw new Error("Sprite does not have a public URL");
+      }
+
+      const editorUrl = spriteInfo.url;
+      this.setState({ ...this.state, editorUrl });
+
+      console.log(`Editor ready at ${editorUrl}`);
+      this.broadcastMessage({
+        type: "editor.ready",
+        url: editorUrl,
+        token,
+      });
+    } catch (error) {
+      console.error("Failed to open editor:", error);
+      this.broadcastMessage({
+        type: "editor.error",
+        message: error instanceof Error ? error.message : "Failed to open editor",
+      });
+    }
+  }
+
+  private async handleEditorClose(): Promise<void> {
+    if (!this.state.spriteName) return;
+
+    this.ensureClients();
+    const sprite = new WorkersSprite(
+      this.state.spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    try {
+      // Kill openvscode-server
+      await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
+
+      // Revoke public URL access
+      await sprite.setUrlAuth("default");
+
+      // Clear editor state
+      this.editorToken = null;
+      this.secretRepository!.set("editor_token", "");
+      this.setState({ ...this.state, editorUrl: null });
+
+      this.broadcastMessage({ type: "editor.closed" });
+      console.log("Editor closed");
+    } catch (error) {
+      console.error("Failed to close editor:", error);
+      this.broadcastMessage({
+        type: "editor.error",
+        message: error instanceof Error ? error.message : "Failed to close editor",
+      });
+    }
   }
 
   /**

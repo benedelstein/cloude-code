@@ -1,6 +1,6 @@
 import type { SqlFn, Repository } from "./types";
 
-export type SecretKey = "github_token" | "git_proxy_secret";
+export type SecretKey = "github_token" | "git_proxy_secret" | "editor_token";
 
 interface SecretRow {
   key: SecretKey;

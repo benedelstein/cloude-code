@@ -34,11 +34,23 @@ export const OperationCancelEvent = z.object({
 });
 export type OperationCancelEvent = z.infer<typeof OperationCancelEvent>;
 
+export const EditorOpenEvent = z.object({
+  type: z.literal("editor.open"),
+});
+export type EditorOpenEvent = z.infer<typeof EditorOpenEvent>;
+
+export const EditorCloseEvent = z.object({
+  type: z.literal("editor.close"),
+});
+export type EditorCloseEvent = z.infer<typeof EditorCloseEvent>;
+
 export const ClientMessage = z.discriminatedUnion("type", [
   ChatMessageEvent,
   StreamAckEvent,
   SyncRequestEvent,
   OperationCancelEvent,
+  EditorOpenEvent,
+  EditorCloseEvent,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -115,6 +127,24 @@ export const BranchPushedEvent = z.object({
 });
 export type BranchPushedEvent = z.infer<typeof BranchPushedEvent>;
 
+export const EditorReadyEvent = z.object({
+  type: z.literal("editor.ready"),
+  url: z.string(),
+  token: z.string(),
+});
+export type EditorReadyEvent = z.infer<typeof EditorReadyEvent>;
+
+export const EditorClosedEvent = z.object({
+  type: z.literal("editor.closed"),
+});
+export type EditorClosedEvent = z.infer<typeof EditorClosedEvent>;
+
+export const EditorErrorEvent = z.object({
+  type: z.literal("editor.error"),
+  message: z.string(),
+});
+export type EditorErrorEvent = z.infer<typeof EditorErrorEvent>;
+
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
   SessionStatusEvent,
@@ -125,5 +155,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentReadyEvent,
   UserMessageEvent,
   BranchPushedEvent,
+  EditorReadyEvent,
+  EditorClosedEvent,
+  EditorErrorEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

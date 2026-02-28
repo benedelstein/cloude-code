@@ -10,6 +10,7 @@ export const SessionInfoResponse = z.object({
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
   pullRequestState: z.enum(["open", "merged", "closed"]).optional(),
+  editorUrl: z.string().optional(),
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
