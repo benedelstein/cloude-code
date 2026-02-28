@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { deleteSession } from "@/lib/api";
+import { deleteSession, archiveSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { formatRelativeTime } from "./utils";
@@ -16,9 +16,26 @@ export function SessionSidebar() {
   const { sessions, loading: sessionsLoading, removeSession } = useSessionList();
 
   const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
+  const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null);
 
   const handleNewSession = () => {
     router.push("/");
+  };
+
+  const handleArchiveSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
+    e.stopPropagation();
+    setArchivingSessionId(sessionId);
+    try {
+      await archiveSession(sessionId);
+      removeSession(sessionId);
+      if (sessionId === activeSessionId) {
+        router.push("/");
+      }
+    } catch (err) {
+      console.error("Failed to archive session:", err);
+    } finally {
+      setArchivingSessionId(null);
+    }
   };
 
   const handleTerminateSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
@@ -105,23 +122,36 @@ export function SessionSidebar() {
                       <span className="text-sm font-medium truncate">
                         {displayTitle}
                       </span>
-                      {terminatingSessionId === session.id ? (
+                      {terminatingSessionId === session.id || archivingSessionId === session.id ? (
                         <span className="shrink-0"><LoadingSpinner className="h-4 w-4" /></span>
                       ) : (
                         <>
                           <span className="text-xs text-muted-foreground shrink-0 group-hover/row:hidden">
                             {formatRelativeTime(timestamp)}
                           </span>
-                          <button
-                            onClick={(e) => handleTerminateSession(e, session.id)}
-                            className="hidden group-hover/row:flex shrink-0 items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                            title="Terminate session"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
+                          <div className="hidden group-hover/row:flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => handleArchiveSession(e, session.id)}
+                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-accent/20 transition-colors cursor-pointer"
+                              title="Archive session"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="5" rx="1" />
+                                <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+                                <path d="M10 12h4" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => handleTerminateSession(e, session.id)}
+                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title="Delete session"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          </div>
                         </>
                       )}
                     </div>

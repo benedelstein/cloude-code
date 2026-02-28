@@ -58,3 +58,8 @@ export const DeleteSessionResponse = z.object({
   deleted: z.literal(true),
 });
 export type DeleteSessionResponse = z.infer<typeof DeleteSessionResponse>;
+
+export const ArchiveSessionResponse = z.object({
+  archived: z.literal(true),
+});
+export type ArchiveSessionResponse = z.infer<typeof ArchiveSessionResponse>;
