@@ -13,7 +13,7 @@
 - [x] Store past session history and open resumed sessions
 - [ ] Mobile client
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses? 
-- [ ] Bug: sometimes sessions get stuck as syncing on restore and can't be recovered.
+- [x] Bug: sometimes sessions get stuck as syncing on restore and can't be recovered.
 - [x] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.
 - [ ] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
