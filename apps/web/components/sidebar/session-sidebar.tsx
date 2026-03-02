@@ -25,12 +25,12 @@ export function SessionSidebar() {
   const handleArchiveSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
     e.stopPropagation();
     setArchivingSessionId(sessionId);
+    if (sessionId === activeSessionId) {
+      router.push("/");
+    }
     try {
       await archiveSession(sessionId);
       removeSession(sessionId);
-      if (sessionId === activeSessionId) {
-        router.push("/");
-      }
     } catch (err) {
       console.error("Failed to archive session:", err);
     } finally {
@@ -44,12 +44,12 @@ export function SessionSidebar() {
       return;
     }
     setTerminatingSessionId(sessionId);
+    if (sessionId === activeSessionId) {
+      router.push("/");
+    }
     try {
       await deleteSession(sessionId);
       removeSession(sessionId);
-      if (sessionId === activeSessionId) {
-        router.push("/");
-      }
     } catch (err) {
       console.error("Failed to terminate session:", err);
     } finally {
@@ -132,7 +132,7 @@ export function SessionSidebar() {
                           <div className="hidden group-hover/row:flex items-center gap-0.5">
                             <button
                               onClick={(e) => handleArchiveSession(e, session.id)}
-                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-accent/20 transition-colors cursor-pointer"
+                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
                               title="Archive session"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
