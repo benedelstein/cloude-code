@@ -18,14 +18,12 @@ export function useSession(): UseCloudflareAgentReturn {
 
 interface SessionProviderProps {
   sessionId: string;
-  host?: string;
   children: ReactNode;
 }
 
-export function SessionProvider({ sessionId, host, children }: SessionProviderProps) {
+export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const session = useCloudflareAgent({
     sessionId,
-    host,
     onError: (error) => {
       console.error("Session error:", error);
     },

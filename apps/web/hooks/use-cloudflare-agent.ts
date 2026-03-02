@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
+import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
   PullRequestState,
@@ -11,11 +12,19 @@ import type {
   SessionStatus,
 } from "@repo/shared";
 
-const DEFAULT_API_HOST = process.env.NEXT_PUBLIC_API_HOST ?? "localhost:8787";
+function resolveDefaultApiHost(): string {
+  const configuredApiUrl = normalizeHost(process.env.NEXT_PUBLIC_API_URL ?? "");
+  if (configuredApiUrl) {
+    return configuredApiUrl;
+  }
+
+  return "localhost:8787";
+}
+
+const DEFAULT_API_HOST = resolveDefaultApiHost();
 
 export interface UseCloudflareAgentOptions {
   sessionId: string;
-  host?: string;
   onError?: (error: Error) => void;
 }
 
@@ -39,9 +48,9 @@ export interface UseCloudflareAgentReturn {
 
 export function useCloudflareAgent({
   sessionId,
-  host,
   onError,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
+  const resolvedHost = DEFAULT_API_HOST;
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
@@ -141,7 +150,7 @@ export function useCloudflareAgent({
   const agent = useAgent<AgentState>({
     agent: "session",
     name: sessionId,
-    host: host ?? DEFAULT_API_HOST,
+    host: resolvedHost,
     onMessage: (event) => {
       try {
         const msg = JSON.parse(event.data) as ServerMessage;
@@ -180,8 +189,8 @@ export function useCloudflareAgent({
     onError: (message) => {
       setSessionStatus("error");
       setErrorMessage("Connection error");
-      console.error("Connection error", message);
-      onError?.(new Error("Connection error"));
+      console.error("Connection error", { host: resolvedHost, sessionId, message });
+      onError?.(new Error(`Connection error (${resolvedHost})`));
     },
   });
 
