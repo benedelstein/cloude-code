@@ -7,7 +7,7 @@ export interface NetworkPolicyRule {
 }
 
 export interface SpriteUrlSettings {
-  auth: "public" | "default";
+  auth: "public" | "sprite";
 }
 
 export interface SpriteInfoResponse {

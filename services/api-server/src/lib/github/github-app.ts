@@ -49,7 +49,7 @@ export class GitHubAppService {
   private app: App;
   private db: D1Database;
   private clientId: string;
-  private appName: string;
+  private appSlug: string;
 
   constructor(env: Env) {
     this.app = new App({
@@ -63,7 +63,7 @@ export class GitHubAppService {
     });
     this.db = env.DB;
     this.clientId = env.GITHUB_APP_CLIENT_ID;
-    this.appName = env.GITHUB_APP_NAME;
+    this.appSlug = env.GITHUB_APP_SLUG;
   }
 
   /**
@@ -79,7 +79,7 @@ export class GitHubAppService {
    * Returns the GitHub App installation URL (for users who need to install the app).
    */
   getInstallUrl(): string {
-    return `https://github.com/apps/${this.appName}/installations/new`;
+    return `https://github.com/apps/${this.appSlug}/installations/new`;
   }
 
   /**

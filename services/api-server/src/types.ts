@@ -20,7 +20,7 @@ export interface Env {
   GITHUB_WEBHOOK_SECRET: string;
   GITHUB_APP_CLIENT_ID: string;
   GITHUB_APP_CLIENT_SECRET: string;
-  GITHUB_APP_NAME: string;
+  GITHUB_APP_SLUG: string;
   TOKEN_ENCRYPTION_KEY: string;
   ALLOWED_GITHUB_LOGINS: string;
   PORT: string;

@@ -11,16 +11,9 @@
   --accent-foreground: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --muted: #262626;
-    --muted-foreground: #a3a3a3;
-    --border: #404040;
-    --accent: #8b5cf6;
-    --accent-foreground: #ffffff;
-  }
+
+html {
+  color-scheme: light;
 }
 
 html,

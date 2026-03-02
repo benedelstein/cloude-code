@@ -11,6 +11,7 @@ export default function Home() {
   const { addSession } = useSessionList();
 
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [installUrl, setInstallUrl] = useState<string | null>(null);
   const [reposLoading, setReposLoading] = useState(true);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
   const [message, setMessage] = useState("");
@@ -21,6 +22,7 @@ export default function Home() {
     listRepos()
       .then((data) => {
         setRepos(data.repos);
+        setInstallUrl(data.installUrl);
         const lastRepoId = localStorage.getItem("lastRepoId");
         const lastRepo = lastRepoId
           ? data.repos.find((r) => r.id === Number(lastRepoId))
@@ -77,6 +79,7 @@ export default function Home() {
   return (
     <div className="h-full flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-2xl">
+        <div className="text-[5rem] text-center">☁️</div>
         <h1 className="text-2xl font-semibold mb-1 text-center">
           What do you want to build?
         </h1>
@@ -104,26 +107,38 @@ export default function Home() {
 
             <div className="flex items-center justify-between px-3 pb-3">
               {/* Repo selector */}
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
                 {reposLoading ? (
                   <span className="text-xs text-muted-foreground px-1">Loading repos...</span>
                 ) : (
-                  <select
-                    value={selectedRepo?.id ?? ""}
-                    onChange={(e) => {
-                      const repo = repos.find((r) => r.id === Number(e.target.value));
-                      setSelectedRepo(repo ?? null);
-                    }}
-                    disabled={submitting}
-                    className="text-xs bg-transparent border border-border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-accent/50 cursor-pointer disabled:opacity-50"
-                  >
-                    <option value="">Select a repo</option>
-                    {repos.map((repo) => (
-                      <option key={repo.id} value={repo.id}>
-                        {repo.fullName}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={selectedRepo?.id ?? ""}
+                      onChange={(e) => {
+                        const repo = repos.find((r) => r.id === Number(e.target.value));
+                        setSelectedRepo(repo ?? null);
+                      }}
+                      disabled={submitting}
+                      className="text-xs bg-transparent border border-border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-accent/50 cursor-pointer disabled:opacity-50"
+                    >
+                      <option value="">Select a repo</option>
+                      {repos.map((repo) => (
+                        <option key={repo.id} value={repo.id}>
+                          {repo.fullName}
+                        </option>
+                      ))}
+                    </select>
+                    {installUrl && (
+                      <a
+                        href={installUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Configure repos
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
 

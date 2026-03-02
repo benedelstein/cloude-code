@@ -1134,7 +1134,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
 
       // Revoke public URL access
-      await sprite.setUrlAuth("default");
+      await sprite.setUrlAuth("sprite");
 
       // Clear editor state
       this.editorToken = null;

@@ -16,7 +16,7 @@
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev",
     "WORKER_URL": "https://cloude-code-api.bedelstein12.workers.dev",
-    "GITHUB_APP_NAME": "cloude-code"
+    "GITHUB_APP_SLUG": "cloude-code"
   },
   "dev": {
     "port": 8787
