@@ -66,6 +66,19 @@ export function useCloudflareAgent({
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
 
+  const resetPendingResponse = useCallback(() => {
+    setIsResponding(false);
+    setStreamingMessage(null);
+    if (streamControllerRef.current) {
+      try {
+        streamControllerRef.current.close();
+      } catch {
+        // no-op: stream may already be closed
+      }
+      streamControllerRef.current = null;
+    }
+  }, []);
+
   // Consume the stream with readUIMessageStream
   const consumeStream = useCallback(async (stream: ReadableStream<UIMessageChunk>) => {
     if (isConsumingRef.current) return;
@@ -140,11 +153,12 @@ export function useCloudflareAgent({
         break;
 
       case "error":
+        resetPendingResponse();
         setErrorMessage(msg.message);
         onError?.(new Error(msg.message));
         break;
     }
-  }, [onError]);
+  }, [onError, resetPendingResponse]);
 
   // Use Cloudflare's useAgent hook
   const agent = useAgent<AgentState>({
@@ -164,6 +178,7 @@ export function useCloudflareAgent({
     },
     onClose: () => {
       // useAgent will auto-reconnect
+      resetPendingResponse();
     },
     onStateUpdate(state: AgentState, source) {
       console.log("state update", state, source);
@@ -187,6 +202,7 @@ export function useCloudflareAgent({
       }
     },
     onError: (message) => {
+      resetPendingResponse();
       setSessionStatus("error");
       setErrorMessage("Connection error");
       console.error("Connection error", { host: resolvedHost, sessionId, message });

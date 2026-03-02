@@ -7,6 +7,7 @@ import {
 import {
   type AgentState,
   type SessionSettings,
+  ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
   type AgentOutput,
@@ -127,6 +128,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
+  private getConnectedAgentSession(): SpriteWebsocketSession | null {
+    const currentAgentSession = this.agentSession;
+    if (!currentAgentSession || !currentAgentSession.isConnected) {
+      return null;
+    }
+    return currentAgentSession;
+  }
+
   private updateStatus(status: SessionStatus): void {
     this.setState({ ...this.state, status });
   }
@@ -232,7 +241,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Proactively trigger reattachment when client connects (non-blocking)
     if (
       this.state.status === "ready" &&
-      !this.agentSession &&
+      !this.getConnectedAgentSession() &&
       this.state.spriteName
     ) {
       this.ctx.waitUntil(this.reattachAgentSession(this.state.spriteName));
@@ -250,20 +259,56 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   ): Promise<void> {
     this.ensureClients();
 
+    const messageStr =
+      typeof message === "string"
+        ? message
+        : new TextDecoder().decode(message);
+
+    let messageData: unknown;
     try {
-      const messageStr =
-        typeof message === "string"
-          ? message
-          : new TextDecoder().decode(message);
-      const data = JSON.parse(messageStr) as ClientMessage;
-      await this.handleClientMessage(connection, data);
+      messageData = JSON.parse(messageStr);
     } catch (error) {
-      console.error("Failed to handle message:", error);
+      console.error("Ignored non-JSON websocket message", {
+        connectionId: connection.id,
+        error,
+        preview: messageStr.slice(0, 200),
+      });
+      return;
+    }
+
+    const parsedMessage = ClientMessageSchema.safeParse(messageData);
+    if (!parsedMessage.success) {
+      console.error("Invalid websocket message payload", {
+        connectionId: connection.id,
+        preview: messageStr.slice(0, 200),
+        issues: parsedMessage.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
       connection.send(
         JSON.stringify({
           type: "error",
           code: "INVALID_MESSAGE",
-          message: "Failed to parse message",
+          message: "unknown request",
+        } satisfies ServerMessage),
+      );
+      return;
+    }
+
+    try {
+      await this.handleClientMessage(connection, parsedMessage.data);
+    } catch (error) {
+      console.error("Failed to handle websocket message", {
+        connectionId: connection.id,
+        error,
+        type: parsedMessage.data.type,
+      });
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "MESSAGE_HANDLER_ERROR",
+          message: "request failed",
         } satisfies ServerMessage),
       );
     }
@@ -880,11 +925,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     // Reattach agent session if needed (after hibernation)
-    if (!this.agentSession && this.state.spriteName) {
+    if (!this.getConnectedAgentSession() && this.state.spriteName) {
       await this.reattachAgentSession(this.state.spriteName);
     }
 
-    if (!this.agentSession) {
+    const currentAgentSession = this.getConnectedAgentSession();
+    if (!currentAgentSession || !currentAgentSession.isConnected) {
       connection.send(
         JSON.stringify({
           type: "error",
@@ -923,8 +969,45 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.ctx.waitUntil(this.syncMessageToHistory(content));
 
     // Send to vm-agent
+    const encoded = encodeAgentInput({ type: "chat", content }) + "\n";
     console.log(`Sending to vm-agent: ${content}`);
-    this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
+    try {
+      currentAgentSession.write(encoded);
+      return;
+    } catch (error) {
+      console.error("Failed to write to vm-agent, attempting reattach:", error);
+      this.agentSession = null;
+    }
+
+    if (this.state.spriteName) {
+      await this.reattachAgentSession(this.state.spriteName);
+    }
+
+    const reattachedAgentSession = this.getConnectedAgentSession();
+    if (!reattachedAgentSession) {
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "NO_AGENT_SESSION",
+          message: "Agent session not available",
+        } satisfies ServerMessage),
+      );
+      return;
+    }
+
+    try {
+      reattachedAgentSession.write(encoded);
+    } catch (error) {
+      console.error("Failed to write to vm-agent after reattach:", error);
+      this.agentSession = null;
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "NO_AGENT_SESSION",
+          message: "Agent session unavailable, please try again",
+        } satisfies ServerMessage),
+      );
+    }
   }
 
   private async syncRepository(sprite: WorkersSprite): Promise<void> {
