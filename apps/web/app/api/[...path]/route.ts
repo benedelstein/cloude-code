@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 async function handler(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  if (!API_URL) {
+    return new NextResponse("API URL not set", { status: 500 });
+  }
   const { path } = await params;
   const apiPath = path.join("/");
   const url = new URL(req.url);

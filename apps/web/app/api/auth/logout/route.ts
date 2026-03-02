@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function POST(req: NextRequest) {
+  if (!API_URL) {
+    return new NextResponse("API URL not set", { status: 500 });
+  }
   const token = req.cookies.get("session_token")?.value;
 
   if (token) {
