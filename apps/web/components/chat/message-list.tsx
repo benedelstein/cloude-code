@@ -84,11 +84,11 @@ export function MessageList({ messages, streamingMessage, isResponding, pendingM
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-2xl bg-white border border-zinc-200 text-zinc-700 shadow-sm">
       Working
-      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse" />
-      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse [animation-delay:0.2s]" />
-      <span className="w-2.5 h-2.5 bg-zinc-500 rounded-full animate-pulse [animation-delay:0.4s]" />
+      <span className="w-2.5 h-2.5 bg-zinc-400 rounded-full animate-pulse" />
+      <span className="w-2.5 h-2.5 bg-zinc-400 rounded-full animate-pulse [animation-delay:0.2s]" />
+      <span className="w-2.5 h-2.5 bg-zinc-400 rounded-full animate-pulse [animation-delay:0.4s]" />
     </div>
   );
 }

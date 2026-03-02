@@ -1,3 +1,5 @@
+import { dedent } from "@repo/shared";
+
 /**
  * System prompt appended to the Claude Code preset for the vm-agent.
  * Provides context about the environment and workflow instructions.
@@ -5,7 +7,7 @@
  * @param sessionSuffix - First 4 characters of the session ID, used for branch naming.
  */
 export function buildSystemPromptAppend(sessionSuffix: string): string {
-  return `
+  return dedent`
 # Environment
 
 You are running as a cloud-hosted coding agent inside an isolated VM. A user is
@@ -37,5 +39,5 @@ When your task is done:
 4. NEVER push to \`main\`. Only push to your \`cloude/\` branch.
 
 After pushing the branch, the user may create a pull request to merge the branch into the main branch.
-`.trim();
+`;
 }
