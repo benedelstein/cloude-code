@@ -39,3 +39,4 @@ coverage/
 # Misc
 *.bak
 *.tmp
+.vercel
