@@ -189,6 +189,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return this.handleGetMessages();
     }
 
+    // Editor (VS Code) lifecycle
+    if (path === "/editor/open" && request.method === "POST") {
+      return this.handleEditorOpen();
+    }
+    if (path === "/editor/close" && request.method === "POST") {
+      return this.handleEditorClose();
+    }
+
     // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
     return super.fetch(request);
   }
@@ -806,12 +814,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       case "operation.cancel":
         this.handleOperationCancel();
         break;
-      case "editor.open":
-        this.ctx.waitUntil(this.handleEditorOpen());
-        break;
-      case "editor.close":
-        this.ctx.waitUntil(this.handleEditorClose());
-        break;
     }
   }
 
@@ -999,23 +1001,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   // Editor (VS Code) Lifecycle
   // ============================================
 
-  private async handleEditorOpen(): Promise<void> {
+  private async handleEditorOpen(): Promise<Response> {
     if (!this.state.spriteName) {
-      this.broadcastMessage({
-        type: "editor.error",
-        message: "No sprite provisioned",
-      });
-      return;
+      return Response.json({ error: "No sprite provisioned" }, { status: 400 });
     }
 
-    // If editor is already open, just re-broadcast the URL
+    // If editor is already open, return the existing URL
     if (this.state.editorUrl && this.editorToken) {
-      this.broadcastMessage({
-        type: "editor.ready",
-        url: this.state.editorUrl,
-        token: this.editorToken,
-      });
-      return;
+      return Response.json({ url: this.state.editorUrl, token: this.editorToken });
     }
 
     this.ensureClients();
@@ -1094,22 +1087,25 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.setState({ ...this.state, editorUrl });
 
       console.log(`Editor ready at ${editorUrl}`);
+      // Broadcast to all WS clients so other tabs/windows can open the editor too
       this.broadcastMessage({
         type: "editor.ready",
         url: editorUrl,
         token,
       });
+
+      return Response.json({ url: editorUrl, token });
     } catch (error) {
       console.error("Failed to open editor:", error);
-      this.broadcastMessage({
-        type: "editor.error",
-        message: error instanceof Error ? error.message : "Failed to open editor",
-      });
+      const message = error instanceof Error ? error.message : "Failed to open editor";
+      return Response.json({ error: message }, { status: 500 });
     }
   }
 
-  private async handleEditorClose(): Promise<void> {
-    if (!this.state.spriteName) return;
+  private async handleEditorClose(): Promise<Response> {
+    if (!this.state.spriteName) {
+      return Response.json({ error: "No sprite provisioned" }, { status: 400 });
+    }
 
     this.ensureClients();
     const sprite = new WorkersSprite(
@@ -1130,14 +1126,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.secretRepository!.set("editor_token", "");
       this.setState({ ...this.state, editorUrl: null });
 
-      this.broadcastMessage({ type: "editor.closed" });
       console.log("Editor closed");
+      return Response.json({ closed: true });
     } catch (error) {
       console.error("Failed to close editor:", error);
-      this.broadcastMessage({
-        type: "editor.error",
-        message: error instanceof Error ? error.message : "Failed to close editor",
-      });
+      const message = error instanceof Error ? error.message : "Failed to close editor";
+      return Response.json({ error: message }, { status: 500 });
     }
   }
 

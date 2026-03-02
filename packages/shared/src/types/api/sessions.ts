@@ -59,3 +59,14 @@ export const DeleteSessionResponse = z.object({
   deleted: z.literal(true),
 });
 export type DeleteSessionResponse = z.infer<typeof DeleteSessionResponse>;
+
+export const EditorOpenResponse = z.object({
+  url: z.string(),
+  token: z.string(),
+});
+export type EditorOpenResponse = z.infer<typeof EditorOpenResponse>;
+
+export const EditorCloseResponse = z.object({
+  closed: z.literal(true),
+});
+export type EditorCloseResponse = z.infer<typeof EditorCloseResponse>;

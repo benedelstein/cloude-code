@@ -7,6 +7,8 @@ import {
   PullRequestResponse,
   PullRequestStatusResponse,
   DeleteSessionResponse,
+  EditorOpenResponse,
+  EditorCloseResponse,
 } from "@repo/shared";
 
 export const listSessionsRoute = createRoute({
@@ -108,6 +110,34 @@ export const deleteSessionRoute = createRoute({
     200: {
       content: { "application/json": { schema: DeleteSessionResponse } },
       description: "Session deleted",
+    },
+  },
+});
+
+export const openEditorRoute = createRoute({
+  method: "post",
+  path: "/{sessionId}/editor/open",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: EditorOpenResponse } },
+      description: "Editor URL and connection token",
+    },
+  },
+});
+
+export const closeEditorRoute = createRoute({
+  method: "post",
+  path: "/{sessionId}/editor/close",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: EditorCloseResponse } },
+      description: "Editor closed",
     },
   },
 });
