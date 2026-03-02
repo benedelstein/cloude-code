@@ -6,6 +6,7 @@ import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
+import { EditorButton } from "./editor-button";
 import Link from "next/link";
 
 interface ChatContainerProps {
@@ -26,6 +27,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
+    editorUrl,
     sendMessage,
     stop,
   } = useSession();
@@ -47,17 +49,20 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               </Link>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                sessionStatus === "ready"
-                  ? "bg-green-500"
-                  : "bg-yellow-500"
-              }`}
-            />
-            <span className="text-xs text-muted-foreground capitalize">
-              {sessionStatus}
-            </span>
+          <div className="flex items-center gap-3">
+            <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} />
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  sessionStatus === "ready"
+                    ? "bg-green-500"
+                    : "bg-yellow-500"
+                }`}
+              />
+              <span className="text-xs text-muted-foreground capitalize">
+                {sessionStatus}
+              </span>
+            </div>
           </div>
         </div>
       </header>

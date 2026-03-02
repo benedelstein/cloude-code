@@ -1036,6 +1036,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     try {
+      // Ensure network policy allows GitHub release downloads (may not be set on older Sprites)
+      const workerHostname = new URL(this.env.WORKER_URL).hostname;
+      await sprite.setNetworkPolicy(
+        buildNetworkPolicy([{ domain: workerHostname, action: "allow" }]),
+      );
+
       // Install openvscode-server if not already present
       const checkResult = await sprite.execHttp(
         `test -f ${HOME_DIR}/.openvscode/bin/openvscode-server && echo 'installed' || echo 'missing'`,
@@ -1045,7 +1051,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         console.log("Installing openvscode-server on sprite");
         const installResult = await sprite.execHttp(
           [
-            `wget -q https://github.com/nicedoc/openvscode-server/releases/download/v1.101.2/openvscode-server-v1.101.2-linux-x64.tar.gz -O /tmp/ovs.tar.gz`,
+            `curl -fsSL https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.109.5/openvscode-server-v1.109.5-linux-x64.tar.gz -o /tmp/ovs.tar.gz`,
             `mkdir -p ${HOME_DIR}/.openvscode`,
             `tar -xzf /tmp/ovs.tar.gz -C ${HOME_DIR}/.openvscode --strip-components=1`,
             `rm /tmp/ovs.tar.gz`,
