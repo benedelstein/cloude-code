@@ -18,7 +18,7 @@ export function TextPart({ text, isUser = false }: TextPartProps) {
 
   // For assistant messages, render markdown
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
+    <div className="prose prose-sm max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -29,7 +29,7 @@ export function TextPart({ text, isUser = false }: TextPartProps) {
             if (isInline) {
               return (
                 <code
-                  className="bg-background/50 px-1.5 py-0.5 rounded text-sm font-mono"
+                  className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
                   {...props}
                 >
                   {children}

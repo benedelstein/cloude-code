@@ -119,7 +119,7 @@ export function SessionSidebar() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">
+                      <span className="text-sm font-semibold truncate">
                         {displayTitle}
                       </span>
                       {terminatingSessionId === session.id || archivingSessionId === session.id ? (
