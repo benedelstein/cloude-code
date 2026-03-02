@@ -19,7 +19,7 @@
     "GITHUB_APP_SLUG": "cloude-code",
     "GITHUB_APP_ID": "2799576",
     "ALLOWED_GITHUB_LOGINS": "benedelstein,evancarter",
-    "GITHUB_APP_CLIENT_ID": "Iv1.1234567890",
+    "GITHUB_APP_CLIENT_ID": "Iv23lirr1sj5RthzlsAs",
   },
   "dev": {
     "port": 8787
