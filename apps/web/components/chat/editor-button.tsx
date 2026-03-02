@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { openEditor } from "@/lib/api";
 
 interface EditorButtonProps {
@@ -12,34 +12,31 @@ interface EditorButtonProps {
 export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editorLink, setEditorLink] = useState<string | null>(null);
 
-  async function handleClick() {
-    // If editor is already open, just navigate to it
-    if (editorUrl) {
-      window.open(editorUrl, "_blank");
-      return;
+  // When editorUrl is set (e.g. from state on page load), eagerly fetch the token
+  useEffect(() => {
+    if (editorUrl && !editorLink) {
+      openEditor(sessionId)
+        .then((result) => setEditorLink(`${result.url}?tkn=${result.token}`))
+        .catch(() => {/* will fetch on click instead */});
     }
+  }, [editorUrl, editorLink, sessionId]);
 
-    // Open the window immediately in the click handler to avoid popup blockers.
-    // We'll update the URL once the API responds.
-    const editorWindow = window.open("about:blank", "_blank");
+  async function handleClick(event: React.MouseEvent) {
+    // If we already have the link, let the <a> handle it natively
+    if (editorLink) return;
 
+    event.preventDefault();
     setLoading(true);
     setError(null);
     try {
       const result = await openEditor(sessionId);
       const fullUrl = `${result.url}?tkn=${result.token}`;
-      if (editorWindow && !editorWindow.closed) {
-        editorWindow.location.href = fullUrl;
-      } else {
-        // Window was closed or blocked despite our efforts — fall back
-        window.open(fullUrl, "_blank");
-      }
+      setEditorLink(fullUrl);
+      // Navigate now — opens in new tab via the link's target="_blank"
+      window.open(fullUrl, "_blank");
     } catch (err) {
-      // Close the blank tab on error
-      if (editorWindow && !editorWindow.closed) {
-        editorWindow.close();
-      }
       const message = err instanceof Error ? err.message : "Failed to open editor";
       setError(message);
       console.error("Failed to open editor:", err);
@@ -49,23 +46,23 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
   }
 
   return (
-    <div className="relative">
-      <button
-        onClick={handleClick}
-        disabled={disabled || loading}
-        title={error ?? (editorUrl ? "Open editor" : "Launch VS Code editor")}
-        className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors ${
-          error
-            ? "border-red-500/30 text-red-500 hover:bg-red-500/10"
-            : editorUrl
-              ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
-              : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-        } disabled:opacity-50 disabled:cursor-not-allowed`}
-      >
-        <CodeIcon />
-        {loading ? "Opening..." : editorUrl ? "Editor" : "Editor"}
-      </button>
-    </div>
+    <a
+      href={editorLink ?? "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={handleClick}
+      title={error ?? "Open hosted VS Code to make manual edits"}
+      className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-colors ${
+        error
+          ? "border-red-500/30 text-red-500 hover:bg-red-500/10"
+          : editorLink
+            ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
+            : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+      } ${disabled || loading ? "opacity-50 pointer-events-none" : ""}`}
+    >
+      <CodeIcon />
+      {loading ? "Opening..." : "Editor"}
+    </a>
   );
 }
 

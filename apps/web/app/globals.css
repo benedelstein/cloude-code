@@ -42,6 +42,11 @@ body {
     sans-serif;
 }
 
+button,
+a {
+  cursor: pointer;
+}
+
 /* Prose styling for markdown */
 .prose {
   --tw-prose-body: var(--foreground);

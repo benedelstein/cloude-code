@@ -1071,31 +1071,23 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.editorToken = token;
       this.secretRepository!.set("editor_token", token);
 
-      // Start openvscode-server on port 8080
-      // Kill any existing process on 8080 first
-      await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
-
-      // Start as a detached session so it survives
-      const editorSession = sprite.createSession(
-        `${HOME_DIR}/.openvscode/bin/openvscode-server`,
-        [
-          "--host", "0.0.0.0",
-          "--port", "8080",
-          "--connection-token", token,
-          "--default-folder", WORKSPACE_DIR,
-        ],
+      // Write the token to a file and start openvscode-server with --connection-token-file
+      const tokenFile = `${HOME_DIR}/.openvscode/.connection-token`;
+      // Kill any existing openvscode-server processes
+      await sprite.execHttp(
+        `pkill -f openvscode-server 2>/dev/null || true; fuser -k 8080/tcp 2>/dev/null || true; sleep 1`,
         {},
       );
-      editorSession.onStderr((data: string) => {
-        console.log(`[openvscode-server stderr] ${data}`);
-      });
-      editorSession.onExit((code: number) => {
-        console.log(`openvscode-server exited with code ${code}`);
-      });
-      await editorSession.start();
+      await sprite.execHttp(`echo -n '${token}' > ${tokenFile}`, {});
 
-      // Wait briefly for the server to start listening
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Start as a background process via nohup so it persists
+      await sprite.execHttp(
+        `nohup ${HOME_DIR}/.openvscode/bin/openvscode-server --host 0.0.0.0 --port 8080 --connection-token-file ${tokenFile} --default-folder ${WORKSPACE_DIR} > /tmp/openvscode.log 2>&1 &`,
+        {},
+      );
+
+      // Wait for the server to start listening
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // Make the Sprite URL public so the browser can reach it directly
       await sprite.setUrlAuth("public");

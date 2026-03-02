@@ -22,5 +22,6 @@ export interface Env {
   GITHUB_APP_CLIENT_SECRET: string;
   GITHUB_APP_NAME: string;
   TOKEN_ENCRYPTION_KEY: string;
+  ALLOWED_GITHUB_LOGINS: string;
   PORT: string;
 }
