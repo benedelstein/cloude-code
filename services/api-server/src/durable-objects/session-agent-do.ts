@@ -363,9 +363,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       ]);
       await sprite.setNetworkPolicy(networkPolicy);
 
-      // Build git proxy  URL — token never enters the sprite
+      // Build git URLs: direct GitHub for fast reads, proxy for validated pushes
       const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
       const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
+      const githubRemoteUrl = `https://github.com/${repoFullName}.git`;
 
       // Clone the repo
       // check if the repo is already cloned
@@ -384,8 +385,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           status: "cloning",
         });
 
-        // NOTE: even though the git command is not controlled by the agent, we still use the proxy url
-        // to prevent the token from being visible to the vm (and to the agent)
         this.broadcastMessage({
           type: "session.status",
           status: "cloning",
@@ -405,7 +404,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         await this.refreshGitHubToken();
         const cloneStart = Date.now();
         const cloneResult = await sprite.execHttp(
-          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone https://github.com/${repoFullName}.git ${WORKSPACE_DIR}`,
+          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone ${githubRemoteUrl} ${WORKSPACE_DIR}`,
           {},
         );
         console.log(
@@ -417,12 +416,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           );
         }
 
-        // Point remote at the proxy for subsequent push/fetch
-        await sprite.execHttp(
-          `cd ${WORKSPACE_DIR} && git remote set-url origin ${cloneUrl}`,
-          {},
-        );
       }
+
+      // Use direct GitHub for fetch/pull and proxy URL for push-only operations.
+      await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git remote set-url origin ${githubRemoteUrl} && git remote set-url --push origin ${cloneUrl}`,
+        {},
+      );
 
       // Set up git config for commits
       await sprite.execHttp(
@@ -430,9 +430,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {},
       );
 
-      // Configure git to send the proxy auth header on all requests to the proxy
+      // Configure git to send the proxy auth header only for proxy URL requests.
       await sprite.execHttp(
-        `cd ${WORKSPACE_DIR} && git config http.extraHeader "Authorization: Bearer ${this.gitProxySecret}"`,
+        `cd ${WORKSPACE_DIR} && git config --unset-all http.extraHeader || true`,
+        {},
+      );
+      await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true && git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${this.gitProxySecret}"`,
         {},
       );
 
@@ -942,59 +946,72 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async _doReattach(spriteName: string): Promise<void> {
     this.ensureClients();
-
-    const sprite = new WorkersSprite(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    // Restart mitmproxy if not running (it doesn't survive hibernation)
-    // if (!this.mitmSession) {
-    //   await this.startMitmproxyOnVM(sprite);
-    // }
-
-    // Refresh GitHub token before sync (may have expired during hibernation)
     try {
-      await this.refreshGitHubToken();
-    } catch (error) {
-      console.error("Failed to refresh GitHub token:", error);
-    }
-
-    // Sync repository before reattaching
-    this.updateStatus("syncing");
-    this.broadcastMessage({ type: "session.status", status: "syncing" });
-    await this.syncRepository(sprite);
-
-    // Set status to attaching
-    this.updateStatus("attaching");
-    this.broadcastMessage({ type: "session.status", status: "attaching" });
-    const sessions = await this.spritesCoordinator!.listSessions(spriteName);
-    const existingSession = sessions.find(
-      (s) => s.id === String(this.state?.agentProcessId),
-    );
-
-    // Check if other clients are connected (current client is already counted)
-    const connectionCount = [...this.getConnections()].length;
-    const otherClientsConnected = connectionCount > 1;
-
-    if (existingSession && otherClientsConnected) {
-      // Multiplayer: attach to existing session to not disrupt others
-      console.log(
-        `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
+      const sprite = new WorkersSprite(
+        spriteName,
+        this.env.SPRITES_API_KEY,
+        this.env.SPRITES_API_URL,
       );
-      this.agentSession = sprite.attachSession(String(existingSession.id), {});
-      this.setupAgentSessionHandlers();
-      await this.agentSession.start();
-    } else {
-      // Solo: start fresh with latest script (old session orphaned)
-      console.log(`No other clients connected, starting fresh vm-agent`);
-      await this.startAgentOnVM(spriteName);
-    }
 
-    // Set status back to ready
-    this.updateStatus("ready");
-    this.broadcastMessage({ type: "session.status", status: "ready" });
+      // Restart mitmproxy if not running (it doesn't survive hibernation)
+      // if (!this.mitmSession) {
+      //   await this.startMitmproxyOnVM(sprite);
+      // }
+
+      // Refresh GitHub token before sync (may have expired during hibernation)
+      try {
+        await this.refreshGitHubToken();
+      } catch (error) {
+        console.error("Failed to refresh GitHub token:", error);
+      }
+
+      // Sync repository before reattaching
+      this.updateStatus("syncing");
+      this.broadcastMessage({ type: "session.status", status: "syncing" });
+      await this.syncRepository(sprite);
+
+      // Set status to attaching
+      this.updateStatus("attaching");
+      this.broadcastMessage({ type: "session.status", status: "attaching" });
+      const sessions = await this.spritesCoordinator!.listSessions(spriteName);
+      const existingSession = sessions.find(
+        (s) => s.id === String(this.state?.agentProcessId),
+      );
+
+      // Check if other clients are connected (current client is already counted)
+      const connectionCount = [...this.getConnections()].length;
+      const otherClientsConnected = connectionCount > 1;
+
+      if (existingSession && otherClientsConnected) {
+        // Multiplayer: attach to existing session to not disrupt others
+        console.log(
+          `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
+        );
+        this.agentSession = sprite.attachSession(
+          String(existingSession.id),
+          {},
+        );
+        this.setupAgentSessionHandlers();
+        await this.agentSession.start();
+      } else {
+        // Solo: start fresh with latest script (old session orphaned)
+        console.log(`No other clients connected, starting fresh vm-agent`);
+        await this.startAgentOnVM(spriteName);
+      }
+
+      // Set status back to ready
+      this.updateStatus("ready");
+      this.broadcastMessage({ type: "session.status", status: "ready" });
+    } catch (error) {
+      console.error("Failed to reattach agent session:", error);
+      this.updateStatus("ready");
+      this.broadcastMessage({ type: "session.status", status: "ready" });
+      this.broadcastMessage({
+        type: "error",
+        code: "reattach_failed",
+        message: `Failed to reattach: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }
 
   // ============================================

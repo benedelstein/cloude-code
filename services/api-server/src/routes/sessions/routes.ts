@@ -7,6 +7,7 @@ import {
   PullRequestResponse,
   PullRequestStatusResponse,
   DeleteSessionResponse,
+  ArchiveSessionResponse,
   EditorOpenResponse,
   EditorCloseResponse,
 } from "@repo/shared";
@@ -96,6 +97,20 @@ export const getPullRequestRoute = createRoute({
     200: {
       content: { "application/json": { schema: PullRequestStatusResponse } },
       description: "Pull request status",
+    },
+  },
+});
+
+export const archiveSessionRoute = createRoute({
+  method: "post",
+  path: "/{sessionId}/archive",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: ArchiveSessionResponse } },
+      description: "Session archived",
     },
   },
 });

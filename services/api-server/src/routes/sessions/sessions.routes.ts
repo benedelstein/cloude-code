@@ -14,6 +14,7 @@ import {
   getSessionMessagesRoute,
   createPullRequestRoute,
   getPullRequestRoute,
+  archiveSessionRoute,
   deleteSessionRoute,
   openEditorRoute,
   closeEditorRoute,
@@ -302,6 +303,14 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
     },
     200,
   );
+});
+
+// Archive a session (hide from list but preserve data)
+sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
+  const { sessionId } = c.req.valid("param");
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  await sessionHistory.archive(sessionId);
+  return c.json({ archived: true as const }, 200);
 });
 
 // Delete a session

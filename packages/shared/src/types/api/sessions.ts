@@ -60,6 +60,11 @@ export const DeleteSessionResponse = z.object({
 });
 export type DeleteSessionResponse = z.infer<typeof DeleteSessionResponse>;
 
+export const ArchiveSessionResponse = z.object({
+  archived: z.literal(true),
+});
+export type ArchiveSessionResponse = z.infer<typeof ArchiveSessionResponse>;
+
 export const EditorOpenResponse = z.object({
   url: z.string(),
   token: z.string(),

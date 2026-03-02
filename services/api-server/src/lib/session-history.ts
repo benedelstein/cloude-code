@@ -88,16 +88,16 @@ export class SessionHistoryService {
     const bindings: (string | number)[] = [userId];
 
     if (options.repoId && options.cursor) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
+      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(options.repoId, options.cursor, limit + 1);
     } else if (options.repoId) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND repo_id = ? ORDER BY updated_at DESC LIMIT ?`;
+      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(options.repoId, limit + 1);
     } else if (options.cursor) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
+      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(options.cursor, limit + 1);
     } else {
-      query = `SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?`;
+      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(limit + 1);
     }
 

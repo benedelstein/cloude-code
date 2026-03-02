@@ -4,6 +4,7 @@ import type {
   ListReposResponse,
   CreateSessionResponse,
   DeleteSessionResponse,
+  ArchiveSessionResponse,
   SessionInfoResponse,
   ListSessionsResponse,
   SessionSummary,
@@ -90,4 +91,8 @@ export async function getPullRequestStatus(sessionId: string): Promise<PullReque
 
 export async function deleteSession(sessionId: string): Promise<DeleteSessionResponse> {
   return apiFetch(`/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export async function archiveSession(sessionId: string): Promise<ArchiveSessionResponse> {
+  return apiFetch(`/sessions/${sessionId}/archive`, { method: "POST" });
 }
