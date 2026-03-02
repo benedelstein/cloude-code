@@ -32,6 +32,7 @@ export interface UseCloudflareAgentReturn {
   pushedBranch: string | null;
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
+  editorUrl: string | null;
   sendMessage: (content: string) => void;
   stop: () => void;
 }
@@ -51,6 +52,7 @@ export function useCloudflareAgent({
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
+  const [editorUrl, setEditorUrl] = useState<string | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -171,6 +173,9 @@ export function useCloudflareAgent({
       if (state.pendingMessage !== undefined) {
         setPendingMessage(state.pendingMessage);
       }
+      if (state.editorUrl !== undefined) {
+        setEditorUrl(state.editorUrl);
+      }
     },
     onError: (message) => {
       setSessionStatus("error");
@@ -221,6 +226,7 @@ export function useCloudflareAgent({
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
+    editorUrl,
     sendMessage,
     stop,
   };

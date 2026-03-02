@@ -28,6 +28,7 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
   allow("raw.githubusercontent.com"),
   allow("pkg-npm.githubusercontent.com"),
   allow("objects.githubusercontent.com"),
+  allow("release-assets.githubusercontent.com"),
   allow("codeload.github.com"),
   allow("avatars.githubusercontent.com"),
   allow("camo.githubusercontent.com"),

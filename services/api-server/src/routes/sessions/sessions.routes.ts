@@ -16,6 +16,8 @@ import {
   getPullRequestRoute,
   archiveSessionRoute,
   deleteSessionRoute,
+  openEditorRoute,
+  closeEditorRoute,
 } from "./routes";
 
 export const sessionsRoutes = new OpenAPIHono<{
@@ -329,4 +331,38 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   await sessionHistory.delete(sessionId);
 
   return c.json({ deleted: true as const }, 200);
+});
+
+// Open VS Code editor on the Sprite VM
+sessionsRoutes.openapi(openEditorRoute, async (c) => {
+  const { sessionId } = c.req.valid("param");
+  const stub = await getSessionAgent(sessionId, c.env);
+
+  const response = await stub.fetch(
+    new Request("http://do/editor/open", { method: "POST" }),
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    return c.json({ error: "Failed to open editor", details: error }, response.status as 500) as any;
+  }
+
+  return c.json(await response.json() as any, 200);
+});
+
+// Close VS Code editor on the Sprite VM
+sessionsRoutes.openapi(closeEditorRoute, async (c) => {
+  const { sessionId } = c.req.valid("param");
+  const stub = await getSessionAgent(sessionId, c.env);
+
+  const response = await stub.fetch(
+    new Request("http://do/editor/close", { method: "POST" }),
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    return c.json({ error: "Failed to close editor", details: error }, response.status as 500) as any;
+  }
+
+  return c.json(await response.json() as any, 200);
 });

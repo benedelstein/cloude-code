@@ -6,11 +6,22 @@ export interface NetworkPolicyRule {
   action: "allow" | "deny";
 }
 
+export interface SpriteUrlSettings {
+  auth: "public" | "default";
+}
+
+export interface SpriteInfoResponse {
+  name: string;
+  url?: string;
+  url_settings?: { auth: string };
+  status?: string;
+}
+
 export class WorkersSprite {
     private baseUrl: string;
     private apiKey: string;
     public readonly name: string;
-  
+
     constructor(name: string, apiKey: string, baseUrl: string) {
       this.name = name;
       this.apiKey = apiKey;
@@ -175,6 +186,53 @@ export class WorkersSprite {
           `Failed to write file ${path}: ${response.status}`,
           response.status,
           text
+        );
+      }
+    }
+
+    /**
+     * Get sprite info from the REST API, including the public URL.
+     */
+    async getSpriteInfo(): Promise<SpriteInfoResponse> {
+      const url = `${this.baseUrl}/v1/sprites/${this.name}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new SpritesError(
+          `Failed to get sprite info: ${response.status}`,
+          response.status,
+          text,
+        );
+      }
+      return (await response.json()) as SpriteInfoResponse;
+    }
+
+    /**
+     * Update the sprite's URL auth settings.
+     * "public" makes the URL accessible without authentication.
+     * "default" requires the Sprites API token (the default).
+     */
+    async setUrlAuth(auth: SpriteUrlSettings["auth"]): Promise<void> {
+      const url = `${this.baseUrl}/v1/sprites/${this.name}`;
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url_settings: { auth } }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new SpritesError(
+          `Failed to update URL settings: ${response.status}`,
+          response.status,
+          text,
         );
       }
     }

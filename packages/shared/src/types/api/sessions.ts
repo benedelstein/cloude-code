@@ -10,6 +10,7 @@ export const SessionInfoResponse = z.object({
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
   pullRequestState: z.enum(["open", "merged", "closed"]).optional(),
+  editorUrl: z.string().optional(),
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
@@ -63,3 +64,14 @@ export const ArchiveSessionResponse = z.object({
   archived: z.literal(true),
 });
 export type ArchiveSessionResponse = z.infer<typeof ArchiveSessionResponse>;
+
+export const EditorOpenResponse = z.object({
+  url: z.string(),
+  token: z.string(),
+});
+export type EditorOpenResponse = z.infer<typeof EditorOpenResponse>;
+
+export const EditorCloseResponse = z.object({
+  closed: z.literal(true),
+});
+export type EditorCloseResponse = z.infer<typeof EditorCloseResponse>;
