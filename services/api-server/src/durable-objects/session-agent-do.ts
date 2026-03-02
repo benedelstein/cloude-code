@@ -44,6 +44,7 @@ interface InitRequest {
   sessionId: string;
   repoFullName: string;
   settings?: Partial<SessionSettings>;
+  branch?: string;
   initialMessage?: string;
 }
 
@@ -81,6 +82,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestState: null,
     pendingMessage: null,
     editorUrl: null,
+    baseBranch: null,
     createdAt: new Date(),
   };
 
@@ -320,7 +322,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
 
     // Provision sprite asynchronously
-    this.ctx.waitUntil(this.provisionSprite(data.sessionId, data.repoFullName));
+    this.ctx.waitUntil(this.provisionSprite(data.sessionId, data.repoFullName, data.branch));
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -330,6 +332,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async provisionSprite(
     sessionId: string,
     repoFullName: string,
+    branch?: string,
   ): Promise<void> {
     console.debug(
       `Provisioning sprite for session ${sessionId} and repo ${repoFullName}`,
@@ -403,8 +406,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         // Also refresh the write token for the proxy (used after clone)
         await this.refreshGitHubToken();
         const cloneStart = Date.now();
+        const branchFlag = branch ? `--branch ${branch} ` : "";
         const cloneResult = await sprite.execHttp(
-          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone ${githubRemoteUrl} ${WORKSPACE_DIR}`,
+          `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
           {},
         );
         console.log(
@@ -417,6 +421,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         }
 
       }
+
+      // Detect the base branch (whatever branch the clone checked out)
+      const branchResult = await sprite.execHttp(
+        `cd ${WORKSPACE_DIR} && git rev-parse --abbrev-ref HEAD`,
+        {},
+      );
+      const baseBranch = branchResult.stdout.trim() || "main";
+      this.setState({ ...this.state, baseBranch });
 
       // Use direct GitHub for fetch/pull and proxy URL for push-only operations.
       await sprite.execHttp(
@@ -702,6 +714,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         sessionId: this.state.sessionId,
         status: this.state.status,
         repoFullName: this.state.repoFullName,
+        baseBranch: this.state.baseBranch ?? undefined,
         pushedBranch: this.state.pushedBranch ?? undefined,
         pullRequestUrl: this.state.pullRequestUrl ?? undefined,
         pullRequestNumber: this.state.pullRequestNumber ?? undefined,

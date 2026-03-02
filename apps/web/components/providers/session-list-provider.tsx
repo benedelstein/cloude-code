@@ -16,6 +16,7 @@ interface SessionListContextValue {
   loading: boolean;
   addSession: (session: SessionSummary) => void;
   removeSession: (sessionId: string) => void;
+  updateTitle: (sessionId: string, title: string | null) => void;
   refresh: () => void;
 }
 
@@ -63,9 +64,24 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   }, []);
 
+  const updateTitle = useCallback((sessionId: string, title: string | null) => {
+    setSessions((prev) => prev.map((session) =>
+      session.id === sessionId
+        ? { ...session, title }
+        : session
+    ));
+  }, []);
+
   return (
     <SessionListContext.Provider
-      value={{ sessions, loading, addSession, removeSession, refresh: fetchSessions }}
+      value={{
+        sessions,
+        loading,
+        addSession,
+        removeSession,
+        updateTitle,
+        refresh: fetchSessions,
+      }}
     >
       {children}
     </SessionListContext.Provider>

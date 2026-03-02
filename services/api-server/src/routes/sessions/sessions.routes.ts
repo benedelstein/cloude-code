@@ -11,6 +11,7 @@ import {
   listSessionsRoute,
   createSessionRoute,
   getSessionRoute,
+  updateSessionTitleRoute,
   getSessionMessagesRoute,
   createPullRequestRoute,
   getPullRequestRoute,
@@ -75,6 +76,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         sessionId,
         repoFullName: parsed.repoFullName,
         settings: parsed.settings,
+        branch: parsed.branch,
         initialMessage: parsed.initialMessage,
       }),
     }),
@@ -123,6 +125,21 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
 
   const session = (await response.json()) as SessionInfoResponse;
   return c.json(session, 200);
+});
+
+// Update session title
+sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
+  const { sessionId } = c.req.valid("param");
+  const { title } = c.req.valid("json");
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+
+  const session = await sessionHistory.getById(sessionId);
+  if (!session) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
+
+  await sessionHistory.updateTitle(sessionId, title);
+  return c.json({ title }, 200);
 });
 
 // Get messages for a session
@@ -175,6 +192,8 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
     .replace(/-/g, " ");
   const title = titleSlug.charAt(0).toUpperCase() + titleSlug.slice(1);
 
+  const baseBranch = session.baseBranch ?? "main";
+
   // Create PR using user's GitHub OAuth token
   const prResponse = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/pulls`,
@@ -189,7 +208,7 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
       body: JSON.stringify({
         title,
         head: branchName,
-        base: "main",
+        base: baseBranch,
       }),
     },
   );

@@ -48,6 +48,8 @@ export type AgentState = {
   pendingMessage: string | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
+  /** Branch the session was based off — used as the PR target */
+  baseBranch: string | null;
   createdAt: Date;
 };
 

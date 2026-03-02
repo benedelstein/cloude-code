@@ -2,6 +2,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   CreateSessionRequest,
   CreateSessionResponse,
+  UpdateSessionTitleRequest,
+  UpdateSessionTitleResponse,
   SessionInfoResponse,
   ListSessionsResponse,
   PullRequestResponse,
@@ -56,6 +58,23 @@ export const getSessionRoute = createRoute({
     200: {
       content: { "application/json": { schema: SessionInfoResponse } },
       description: "Session info",
+    },
+  },
+});
+
+export const updateSessionTitleRoute = createRoute({
+  method: "patch",
+  path: "/{sessionId}/title",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+    body: {
+      content: { "application/json": { schema: UpdateSessionTitleRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: UpdateSessionTitleResponse } },
+      description: "Session title updated",
     },
   },
 });

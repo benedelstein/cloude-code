@@ -8,6 +8,7 @@ import type {
   SessionInfoResponse,
   ListSessionsResponse,
   SessionSummary,
+  UpdateSessionTitleResponse,
   PullRequestResponse,
   PullRequestStatusResponse,
   EditorOpenResponse,
@@ -81,6 +82,17 @@ export async function listSessions(repoId?: number): Promise<ListSessionsRespons
 
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
   return apiFetch(`/sessions/${sessionId}`);
+}
+
+export async function updateSessionTitle(
+  sessionId: string,
+  title: string,
+): Promise<UpdateSessionTitleResponse> {
+  return apiFetch(`/sessions/${sessionId}/title`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
 }
 
 export async function createPullRequest(sessionId: string): Promise<PullRequestResponse> {

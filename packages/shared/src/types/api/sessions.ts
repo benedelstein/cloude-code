@@ -6,6 +6,7 @@ export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   status: SessionStatus,
   repoFullName: z.string(),
+  baseBranch: z.string().optional(),
   pushedBranch: z.string().optional(),
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
@@ -20,6 +21,8 @@ export const CreateSessionRequest = z.object({
   /** "owner/repo" full name */
   repoFullName: z.string().min(1),
   settings: SessionSettings.partial().optional(),
+  /** Optional branch to base the session on (defaults to repo's default branch) */
+  branch: z.string().min(1).optional(),
   /** Optional first message to send immediately after session creation */
   initialMessage: z.string().min(1).optional(),
 });
@@ -30,6 +33,16 @@ export const CreateSessionResponse = z.object({
   title: z.string().nullable(),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
+
+export const UpdateSessionTitleRequest = z.object({
+  title: z.string().trim().min(1).max(60),
+});
+export type UpdateSessionTitleRequest = z.infer<typeof UpdateSessionTitleRequest>;
+
+export const UpdateSessionTitleResponse = z.object({
+  title: z.string(),
+});
+export type UpdateSessionTitleResponse = z.infer<typeof UpdateSessionTitleResponse>;
 
 /** Paginated response for GET /sessions */
 export const ListSessionsResponse = z.object({
