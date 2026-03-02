@@ -299,6 +299,24 @@ export class GitHubAppService {
     return data.token;
   }
 
+  /**
+   * Check if a user has access to a repository using their OAuth token.
+   * Returns true if the user can see the repo, false otherwise.
+   */
+  async verifyUserRepoAccess(
+    userAccessToken: string,
+    owner: string,
+    repo: string,
+  ): Promise<boolean> {
+    try {
+      const octokit = new Octokit({ auth: userAccessToken });
+      await octokit.rest.repos.get({ owner, repo });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ============================================
   // Webhook handling
   // ============================================

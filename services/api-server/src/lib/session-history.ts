@@ -122,4 +122,14 @@ export class SessionHistoryService {
 
     return row ? rowToSummary(row) : null;
   }
+
+  /** Returns true if the session exists and belongs to the given user. */
+  async isOwnedBy(sessionId: string, userId: string): Promise<boolean> {
+    const row = await this.database
+      .prepare(`SELECT 1 FROM sessions WHERE id = ? AND user_id = ?`)
+      .bind(sessionId, userId)
+      .first();
+
+    return row !== null;
+  }
 }

@@ -30,6 +30,20 @@ const getSessionAgent = async (id: string, env: Env) => {
   return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
 };
 
+/** Return a 403 Response if the user does not own the session, or null if OK. */
+async function requireOwnership(
+  sessionId: string,
+  userId: string,
+  env: Env,
+): Promise<Response | null> {
+  const sessionHistory = new SessionHistoryService(env.DB);
+  const owned = await sessionHistory.isOwnedBy(sessionId, userId);
+  if (!owned) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
 // List sessions for the current user
 sessionsRoutes.openapi(listSessionsRoute, async (c) => {
   const user = c.get("user");
@@ -49,6 +63,8 @@ sessionsRoutes.openapi(listSessionsRoute, async (c) => {
 sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const parsed = c.req.valid("json");
 
+  const user = c.get("user");
+
   // Verify the GitHub App installation exists for this repo before creating the session
   const github = new GitHubAppService(c.env);
   try {
@@ -62,7 +78,20 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     throw error;
   }
 
-  const user = c.get("user");
+  // Verify the user has access to this repo via their GitHub token
+  const [owner, repo] = parsed.repoFullName.split("/") as [string, string];
+  const hasAccess = await github.verifyUserRepoAccess(
+    user.githubAccessToken,
+    owner,
+    repo,
+  );
+  if (!hasAccess) {
+    return c.json(
+      { error: "You do not have access to this repository" },
+      403,
+    ) as any;
+  }
+
   const sessionId = crypto.randomUUID();
   console.log("creating session agent", sessionId, "user", user.githubLogin);
   const stub = await getSessionAgent(sessionId, c.env);
@@ -116,6 +145,10 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
 // Get session info
 sessionsRoutes.openapi(getSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(new Request("http://do/"));
@@ -130,6 +163,10 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
 // Update session title
 sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const { title } = c.req.valid("json");
   const sessionHistory = new SessionHistoryService(c.env.DB);
 
@@ -145,6 +182,10 @@ sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
 // Get messages for a session
 sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(new Request("http://do/messages"));
@@ -159,6 +200,9 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
 sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   // Get session info (repoFullName, pushedBranch) from the DO
@@ -256,6 +300,10 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
 // Check pull request status
 sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const sessionResponse = await stub.fetch(new Request("http://do/"));
@@ -327,6 +375,10 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
 // Archive a session (hide from list but preserve data)
 sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const sessionHistory = new SessionHistoryService(c.env.DB);
   await sessionHistory.archive(sessionId);
   return c.json({ archived: true as const }, 200);
@@ -335,6 +387,10 @@ sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
 // Delete a session
 sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(
@@ -355,6 +411,10 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
 // Open VS Code editor on the Sprite VM
 sessionsRoutes.openapi(openEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(
@@ -372,6 +432,10 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
 // Close VS Code editor on the Sprite VM
 sessionsRoutes.openapi(closeEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const denied = await requireOwnership(sessionId, user.id, c.env);
+  if (denied) return denied as any;
+
   const stub = await getSessionAgent(sessionId, c.env);
 
   const response = await stub.fetch(
