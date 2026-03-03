@@ -202,6 +202,12 @@ export class MessageAccumulator {
       case "finish-step":
         break;
 
+      case "abort":
+        this.finalizePendingParts();
+        this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
+        this.finished = true;
+        return true;
+
       case "error":
         this.finalizePendingParts();
         this.finished = true;

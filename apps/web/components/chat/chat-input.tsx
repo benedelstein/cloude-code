@@ -74,7 +74,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={onStop}
-              className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
               title="Stop generation"
             >
               <StopIcon />
@@ -117,7 +117,7 @@ function SendIcon() {
 function StopIcon() {
   return (
     <svg
-      className="w-5 h-5"
+      className="h-5 w-5 block"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

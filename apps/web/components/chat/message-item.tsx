@@ -16,6 +16,7 @@ interface MessageItemProps {
 
 export function MessageItem({ message, isStreaming = false }: MessageItemProps) {
   const isUser = message.role === "user";
+  const isAborted = !isUser && (message.metadata as Record<string, unknown>)?.aborted === true;
 
   return (
     <div
@@ -113,6 +114,13 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
                 <span className="inline-block w-2 h-4 bg-current animate-pulse ml-1" />
               )}
             </div>
+
+            {/* Interrupted label for aborted messages */}
+            {isAborted && (
+              <p className="mt-1.5 text-xs text-muted-foreground italic">
+                Interrupted
+              </p>
+            )}
           </div>
 
           {/* User avatar on right */}

@@ -7,6 +7,7 @@ import {
 import {
   type AgentState,
   type SessionSettings,
+  type Logger,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
@@ -31,7 +32,7 @@ import {
   ensureValidToken,
   type GitProxyContext,
 } from "@/lib/git-proxy";
-import { logger } from "@/lib/logger";
+import { logger as defaultLogger } from "@/lib/logger";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
@@ -39,6 +40,7 @@ import type { UIMessage } from "ai";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
+const loggerName = "session-agent-do.ts";
 
 /** IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE. */
 
@@ -51,6 +53,7 @@ interface InitRequest {
 }
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
+  private readonly logger: Logger;
   private spritesCoordinator: SpritesCoordinator | null = null;
   private messageRepository: MessageRepository | null = null;
   private secretRepository: SecretRepository | null = null;
@@ -88,8 +91,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     createdAt: new Date(),
   };
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Env, logger: Logger = defaultLogger) {
     super(ctx, env);
+    this.logger = logger;
     this.initializeSchema();
     this.initializeClients();
   }
@@ -147,7 +151,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    console.debug(`[HTTP request] ${request.method} ${url.pathname}`);
+    this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`, {
+      loggerName,
+    });
     const path = url.pathname;
 
     // Root path = session operations (the DO *is* the session)
@@ -215,7 +221,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   // Called by Agent SDK when a new WebSocket connection is established
   onConnect(connection: Connection): void {
-    console.debug(`client connected: ${connection.id}`);
+    this.logger.debug(`client connected: ${connection.id}`, { loggerName });
     // Send initial connection state
     connection.send(
       JSON.stringify({
@@ -247,8 +253,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     ) {
       this.ctx.waitUntil(this.reattachAgentSession(this.state.spriteName));
     } else {
-      console.debug(
+      this.logger.debug(
         `reattachAgentSession not triggered: status=${this.state.status}, spriteName=${this.state.spriteName}`,
+        { loggerName },
       );
     }
   }
@@ -269,23 +276,29 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     try {
       messageData = JSON.parse(messageStr);
     } catch (error) {
-      console.error("Ignored non-JSON websocket message", {
-        connectionId: connection.id,
+      this.logger.error("Ignored non-JSON websocket message", {
+        loggerName,
         error,
-        preview: messageStr.slice(0, 200),
+        fields: {
+          connectionId: connection.id,
+          preview: messageStr.slice(0, 200),
+        },
       });
       return;
     }
 
     const parsedMessage = ClientMessageSchema.safeParse(messageData);
     if (!parsedMessage.success) {
-      console.error("Invalid websocket message payload", {
-        connectionId: connection.id,
-        preview: messageStr.slice(0, 200),
-        issues: parsedMessage.error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-        })),
+      this.logger.error("Invalid websocket message payload", {
+        loggerName,
+        fields: {
+          connectionId: connection.id,
+          preview: messageStr.slice(0, 200),
+          issues: parsedMessage.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
       });
       connection.send(
         JSON.stringify({
@@ -300,10 +313,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     try {
       await this.handleClientMessage(connection, parsedMessage.data);
     } catch (error) {
-      console.error("Failed to handle websocket message", {
-        connectionId: connection.id,
+      this.logger.error("Failed to handle websocket message", {
+        loggerName,
         error,
-        type: parsedMessage.data.type,
+        fields: {
+          connectionId: connection.id,
+          type: parsedMessage.data.type,
+        },
       });
       connection.send(
         JSON.stringify({
@@ -322,13 +338,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     wasClean: boolean,
   ): void {
     // Cleanup if needed
-    console.log(
-      `WebSocket closed: code=${code}, reason=${reason}, wasClean=${wasClean}`,
-    );
+    this.logger.info("WebSocket closed", {
+      loggerName,
+      fields: {
+        connectionId: connection.id,
+        code,
+        reason,
+        wasClean,
+      },
+    });
   }
 
   onError(connectionOrError: Connection | unknown, error?: unknown): void {
-    console.error("WebSocket error:", error ?? connectionOrError);
+    this.logger.error("WebSocket error", {
+      loggerName,
+      error: error ?? connectionOrError,
+    });
   }
 
   private async handleInit(request: Request): Promise<Response> {
@@ -380,8 +405,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     repoFullName: string,
     branch?: string,
   ): Promise<void> {
-    console.debug(
+    this.logger.debug(
       `Provisioning sprite for session ${sessionId} and repo ${repoFullName}`,
+      { loggerName },
     );
     this.getConnections();
     try {
@@ -424,8 +450,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {},
       );
       if (isCloned.stdout.includes("exists")) {
-        console.log(
+        this.logger.info(
           `Repo ${repoFullName} already cloned on sprite ${spriteResponse.name}`,
+          { loggerName },
         );
       } else {
         this.setState({
@@ -439,13 +466,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           status: "cloning",
           message: `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
         });
-        console.log(
+        this.logger.info(
           `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
+          { loggerName },
         );
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
         // Fetch a read-only token scoped to contents:read for the initial clone
-        const github = new GitHubAppService(this.env, logger);
+        const github = new GitHubAppService(this.env, this.logger);
         const cloneToken = await github.getReadOnlyTokenForRepo(repoFullName);
         const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
@@ -457,8 +485,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
           {},
         );
-        console.log(
+        this.logger.info(
           `Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`,
+          { loggerName },
         );
         if (cloneResult.exitCode !== 0) {
           throw new Error(
@@ -509,11 +538,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // If there's a pending initial message, send it to the agent now
       if (this.state.pendingMessage) {
-        console.log(`Sending pending message to vm-agent: ${this.state.pendingMessage}`);
+        this.logger.info(`Sending pending message to vm-agent: ${this.state.pendingMessage}`, {
+          loggerName,
+        });
         await this.sendPendingMessage();
       }
     } catch (error) {
-      console.error("Failed to provision sprite:", error);
+      this.logger.error("Failed to provision sprite", { loggerName, error });
       this.updateStatus("error");
       this.broadcastMessage({
         type: "session.status",
@@ -551,7 +582,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.ctx.waitUntil(this.syncMessageToHistory(content));
 
     // Send to vm-agent
-    console.log(`Sending pending message to vm-agent: ${content}`);
+    this.logger.info(`Sending pending message to vm-agent: ${content}`, { loggerName });
     this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
   }
 
@@ -621,7 +652,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     this.setupAgentSessionHandlers();
     await this.agentSession.start();
-    console.log(`vm-agent started on sprite ${spriteName}`);
+    this.logger.info(`vm-agent started on sprite ${spriteName}`, { loggerName });
   }
 
   private setupAgentSessionHandlers(): void {
@@ -632,11 +663,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
 
     this.agentSession.onStderr((data: string) => {
-      console.error(`vm-agent stderr: ${data}`);
+      this.logger.error(`vm-agent stderr: ${data}`, { loggerName });
     });
 
     this.agentSession.onExit((code: number) => {
-      console.log(`vm-agent exited with code ${code}`);
+      this.logger.info(`vm-agent exited with code ${code}`, { loggerName });
       this.agentSession = null;
     });
 
@@ -646,7 +677,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleAgentStdout(data: string): void {
-    console.log(`[vm-agent stdout] ${data}`);
+    this.logger.info(`[vm-agent stdout] ${data}`, { loggerName });
 
     for (const line of data.split("\n")) {
       if (!line.trim()) continue;
@@ -656,7 +687,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.handleAgentOutput(output);
       } catch {
         // Ignore lines that don't match AgentOutput schema (e.g., TTY echo)
-        console.debug(`Skipping invalid agent output: ${line}`);
+        this.logger.debug(`Skipping invalid agent output: ${line}`, {
+          loggerName,
+        });
       }
     }
   }
@@ -670,7 +703,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         break;
       }
       case "error": {
-        console.error(`vm-agent error: ${output.error}`);
+        this.logger.error(`vm-agent error: ${output.error}`, { loggerName });
         this.broadcastMessage({
           type: "error",
           code: "AGENT_ERROR",
@@ -679,7 +712,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         break;
       }
       case "debug": {
-        console.debug(`[vm-agent debug] ${output.message}`);
+        this.logger.debug(`[vm-agent debug] ${output.message}`, { loggerName });
         break;
       }
       case "stream": {
@@ -713,7 +746,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
       case "sessionId": {
         // Store Claude's session ID for resuming later
-        console.log(`Storing Claude session ID: ${output.sessionId}`);
+        this.logger.info(`Storing Claude session ID: ${output.sessionId}`, {
+          loggerName,
+        });
         this.setState({ ...this.state, claudeSessionId: output.sessionId });
         break;
       }
@@ -723,7 +758,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private handleAgentServerMessage(msg: SpriteServerMessage): void {
     switch (msg.type) {
       case "session_info":
-        console.log(`vm-agent session id: ${JSON.stringify(msg.session_id)}`);
+        this.logger.info(`vm-agent session id: ${JSON.stringify(msg.session_id)}`, {
+          loggerName,
+        });
         this.setState({ ...this.state, agentProcessId: msg.session_id });
         break;
       default:
@@ -833,7 +870,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       try {
         await this.spritesCoordinator.deleteSprite(this.state.spriteName);
       } catch (error) {
-        console.error("Failed to delete sprite:", error);
+        this.logger.error("Failed to delete sprite", { loggerName, error });
       }
     }
 
@@ -945,7 +982,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Store user message with parts format
     this.ensureClients();
     if (!this.state.sessionId) {
-      console.error("No session id");
+      this.logger.error("No session id", { loggerName });
       return;
     }
     // We also need to broadcast this to all clients who are not this connected client.
@@ -971,12 +1008,15 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Send to vm-agent
     const encoded = encodeAgentInput({ type: "chat", content }) + "\n";
-    console.log(`Sending to vm-agent: ${content}`);
+    this.logger.info(`Sending to vm-agent: ${content}`, { loggerName });
     try {
       currentAgentSession.write(encoded);
       return;
     } catch (error) {
-      console.error("Failed to write to vm-agent, attempting reattach:", error);
+      this.logger.error("Failed to write to vm-agent, attempting reattach", {
+        loggerName,
+        error,
+      });
       this.agentSession = null;
     }
 
@@ -999,7 +1039,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     try {
       reattachedAgentSession.write(encoded);
     } catch (error) {
-      console.error("Failed to write to vm-agent after reattach:", error);
+      this.logger.error("Failed to write to vm-agent after reattach", {
+        loggerName,
+        error,
+      });
       this.agentSession = null;
       connection.send(
         JSON.stringify({
@@ -1059,7 +1102,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       try {
         await this.refreshGitHubToken();
       } catch (error) {
-        console.error("Failed to refresh GitHub token:", error);
+        this.logger.error("Failed to refresh GitHub token", {
+          loggerName,
+          error,
+        });
       }
 
       // Sync repository before reattaching
@@ -1081,8 +1127,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       if (existingSession && otherClientsConnected) {
         // Multiplayer: attach to existing session to not disrupt others
-        console.log(
+        this.logger.info(
           `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
+          { loggerName },
         );
         this.agentSession = sprite.attachSession(
           String(existingSession.id),
@@ -1092,7 +1139,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         await this.agentSession.start();
       } else {
         // Solo: start fresh with latest script (old session orphaned)
-        console.log(`No other clients connected, starting fresh vm-agent`);
+        this.logger.info("No other clients connected, starting fresh vm-agent", {
+          loggerName,
+        });
         await this.startAgentOnVM(spriteName);
       }
 
@@ -1100,7 +1149,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.updateStatus("ready");
       this.broadcastMessage({ type: "session.status", status: "ready" });
     } catch (error) {
-      console.error("Failed to reattach agent session:", error);
+      this.logger.error("Failed to reattach agent session", { loggerName, error });
       this.updateStatus("ready");
       this.broadcastMessage({ type: "session.status", status: "ready" });
       this.broadcastMessage({
@@ -1145,7 +1194,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {},
       );
       if (checkResult.stdout.includes("missing")) {
-        console.log("Installing openvscode-server on sprite");
+        this.logger.info("Installing openvscode-server on sprite", {
+          loggerName,
+        });
         const installResult = await sprite.execHttp(
           [
             `curl -fsSL https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.109.5/openvscode-server-v1.109.5-linux-x64.tar.gz -o /tmp/ovs.tar.gz`,
@@ -1160,7 +1211,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
             `openvscode-server install failed (exit ${installResult.exitCode}): ${installResult.stderr}`,
           );
         }
-        console.log("openvscode-server installed successfully");
+        this.logger.info("openvscode-server installed successfully", {
+          loggerName,
+        });
       }
 
       // Generate a connection token for auth
@@ -1198,7 +1251,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       const editorUrl = spriteInfo.url;
       this.setState({ ...this.state, editorUrl });
 
-      console.log(`Editor ready at ${editorUrl}`);
+      this.logger.info(`Editor ready at ${editorUrl}`, { loggerName });
       // Broadcast to all WS clients so other tabs/windows can open the editor too
       this.broadcastMessage({
         type: "editor.ready",
@@ -1208,7 +1261,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       return Response.json({ url: editorUrl, token });
     } catch (error) {
-      console.error("Failed to open editor:", error);
+      this.logger.error("Failed to open editor", { loggerName, error });
       const message = error instanceof Error ? error.message : "Failed to open editor";
       return Response.json({ error: message }, { status: 500 });
     }
@@ -1238,10 +1291,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.secretRepository!.set("editor_token", "");
       this.setState({ ...this.state, editorUrl: null });
 
-      console.log("Editor closed");
+      this.logger.info("Editor closed", { loggerName });
       return Response.json({ closed: true });
     } catch (error) {
-      console.error("Failed to close editor:", error);
+      this.logger.error("Failed to close editor", { loggerName, error });
       const message = error instanceof Error ? error.message : "Failed to close editor";
       return Response.json({ error: message }, { status: 500 });
     }
@@ -1301,11 +1354,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           this.env.ANTHROPIC_API_KEY,
           content,
         );
-        console.log(`Generated session title: ${title} for session ${sessionId}`);
+        this.logger.info(`Generated session title: ${title} for session ${sessionId}`, {
+          loggerName,
+        });
         await sessionHistory.updateTitle(sessionId, title);
       }
     } catch (error) {
-      console.error("Failed to sync message to D1 history:", error);
+      this.logger.error("Failed to sync message to D1 history", {
+        loggerName,
+        error,
+      });
     }
   }
 

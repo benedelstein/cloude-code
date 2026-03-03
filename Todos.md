@@ -11,11 +11,14 @@
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
 - [x] Store past session history and open resumed sessions
+
 - [ ] Mobile client
+- [ ] keep session agent message history in memory for faster syncing with clients
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses?
 - [x] Bug: sometimes sessions get stuck as syncing on restore and can't be recovered.
 - [x] Network access permissions. See https://docs.sprites.dev/api/v001-rc30/policy/
 - [ ] Image uploads.
+- [ ] Slash commands (plugins), file mentions
 - [x] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
 - [ ] Allow the vm to render results as screenshots with a browser in order to visually see its results. Extra tool?
         Can we install chromium on the sprite?
