@@ -23,6 +23,8 @@ export type TokenRequest = z.infer<typeof TokenRequest>;
 export const TokenResponse = z.object({
   token: z.string(),
   user: UserInfo,
+  hasInstallations: z.boolean(),
+  installUrl: z.string(),
 });
 export type TokenResponse = z.infer<typeof TokenResponse>;
 

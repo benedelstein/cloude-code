@@ -47,6 +47,11 @@ export function useAuth() {
         setUser(event.data.user);
         setLoading(false);
         window.removeEventListener("message", handleMessage);
+
+        // Redirect to GitHub App install page if no installations yet
+        if (event.data.hasInstallations === false && event.data.installUrl) {
+          window.location.href = event.data.installUrl;
+        }
       }
     };
     window.addEventListener("message", handleMessage);

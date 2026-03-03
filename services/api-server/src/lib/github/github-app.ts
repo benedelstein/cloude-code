@@ -3,10 +3,13 @@ import type {
   EmitterWebhookEvent,
   EmitterWebhookEventName,
 } from "@octokit/webhooks";
+import type { Logger } from "@repo/shared";
 import type { Env } from "@/types";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
+
+const loggerName = "github-app.ts";
 
 export interface OAuthUser {
   id: number;
@@ -50,8 +53,9 @@ export class GitHubAppService {
   private db: D1Database;
   private clientId: string;
   private appSlug: string;
+  private logger: Logger;
 
-  constructor(env: Env) {
+  constructor(env: Env, logger: Logger) {
     this.app = new App({
       appId: env.GITHUB_APP_ID,
       privateKey: atob(env.GITHUB_APP_PRIVATE_KEY),
@@ -64,6 +68,7 @@ export class GitHubAppService {
     this.db = env.DB;
     this.clientId = env.GITHUB_APP_CLIENT_ID;
     this.appSlug = env.GITHUB_APP_SLUG;
+    this.logger = logger;
   }
 
   /**
@@ -313,7 +318,9 @@ export class GitHubAppService {
     payload: string;
   }): Promise<void> {
     this.registerWebhookHandlers();
-    console.log(`github webhook received: ${params.id} - ${params.name}`);
+    this.logger.info(`github webhook received: ${params.id} - ${params.name}`, {
+      loggerName,
+    });
 
     await this.app.webhooks.verifyAndReceive({
       id: params.id,
@@ -361,11 +368,17 @@ export class GitHubAppService {
     const installation = payload.installation;
     const account = installation.account;
     if (!account || !("login" in account)) {
-      console.error(`github installation created: ${installation.id} - ${installation.target_type} - no account`);
+      this.logger.error(
+        `github installation created: ${installation.id} - ${installation.target_type} - no account`,
+        { loggerName },
+      );
       return;
     }
 
-    console.log(`github installation created: ${installation.id}\ntarget_type:${installation.target_type}`);
+    this.logger.info(
+      `github installation created: ${installation.id}\ntarget_type:${installation.target_type}`,
+      { loggerName },
+    );
     await this.db
       .prepare(
         `INSERT OR REPLACE INTO github_installations
@@ -388,7 +401,10 @@ export class GitHubAppService {
 
     // Insert selected repos if any
     if (payload.repositories && payload.repositories.length > 0) {
-      console.log(`installation ${installation.id} has ${payload.repositories.length} repositories`);
+      this.logger.info(
+        `installation ${installation.id} has ${payload.repositories.length} repositories`,
+        { loggerName },
+      );
       const batch = payload.repositories.map((repo) =>
         this.db
           .prepare(
@@ -400,14 +416,18 @@ export class GitHubAppService {
       );
       await this.db.batch(batch);
     } else {
-      console.log(`installation ${installation.id} has no repositories specified`);
+      this.logger.info(`installation ${installation.id} has no repositories specified`, {
+        loggerName,
+      });
     }
   }
 
   private async handleInstallationDeleted(
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
-    console.log(`github installation deleted: ${payload.installation.id}`);
+    this.logger.info(`github installation deleted: ${payload.installation.id}`, {
+      loggerName,
+    });
     // CASCADE will clean up repos and token cache
     await this.db
       .prepare(`DELETE FROM github_installations WHERE id = ?`)
@@ -418,7 +438,9 @@ export class GitHubAppService {
   private async handleInstallationSuspended(
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
-    console.log(`github installation suspended: ${payload.installation.id}`);
+    this.logger.info(`github installation suspended: ${payload.installation.id}`, {
+      loggerName,
+    });
     await this.db
       .prepare(
         `UPDATE github_installations SET suspended_at = datetime('now'), updated_at = datetime('now')
@@ -431,7 +453,9 @@ export class GitHubAppService {
   private async handleInstallationUnsuspended(
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
-    console.log(`github installation unsuspended: ${payload.installation.id}`);
+    this.logger.info(`github installation unsuspended: ${payload.installation.id}`, {
+      loggerName,
+    });
     await this.db
       .prepare(
         `UPDATE github_installations SET suspended_at = NULL, updated_at = datetime('now')
@@ -446,7 +470,12 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_added;
-    console.log(`github installation repositories added: ${installationId} - ${repos.length} repos`);
+    this.logger.info(
+      `github installation repositories added: ${installationId} - ${repos.length} repos`,
+      {
+        loggerName,
+      },
+    );
 
     if (repos.length > 0) {
       const batch = repos.map((repo) =>

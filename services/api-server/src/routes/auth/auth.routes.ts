@@ -1,6 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { GitHubAppService } from "@/lib/github";
+import { logger } from "@/lib/logger";
 import { encrypt } from "@/lib/crypto";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import {
@@ -26,7 +28,7 @@ authRoutes.openapi(getGithubRoute, async (c) => {
     .bind(state, expiresAt)
     .run();
 
-  const github = new GitHubAppService(c.env);
+  const github = new GitHubAppService(c.env, logger);
   const url = github.getAuthUrl(state);
 
   return c.json({ url, state }, 200);
@@ -52,7 +54,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   }
 
   // Exchange code for tokens
-  const github = new GitHubAppService(c.env);
+  const github = new GitHubAppService(c.env, logger);
   let result;
   try {
     result = await github.exchangeOAuthCode(code);
@@ -152,6 +154,21 @@ authRoutes.openapi(postTokenRoute, async (c) => {
       .run();
   }
 
+  // Check if user has any GitHub App installations
+  const userOctokit = new Octokit({ auth: result.accessToken });
+  let hasInstallations = false;
+  try {
+    const { data } =
+      await userOctokit.request("GET /user/installations", {
+        per_page: 1,
+      });
+    hasInstallations = data.total_count > 0;
+  } catch {
+    // If the check fails, assume no installations to prompt setup
+  }
+
+  const installUrl = github.getInstallUrl();
+
   return c.json(
     {
       token: sessionToken,
@@ -161,6 +178,8 @@ authRoutes.openapi(postTokenRoute, async (c) => {
         name: user.github_name,
         avatarUrl: user.github_avatar_url,
       },
+      hasInstallations,
+      installUrl,
     },
     200,
   );

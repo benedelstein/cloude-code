@@ -31,6 +31,7 @@ import {
   ensureValidToken,
   type GitProxyContext,
 } from "@/lib/git-proxy";
+import { logger } from "@/lib/logger";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
@@ -444,7 +445,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
         // Fetch a read-only token scoped to contents:read for the initial clone
-        const github = new GitHubAppService(this.env);
+        const github = new GitHubAppService(this.env, logger);
         const cloneToken = await github.getReadOnlyTokenForRepo(repoFullName);
         const basicAuth = btoa(`x-access-token:${cloneToken}`);
 

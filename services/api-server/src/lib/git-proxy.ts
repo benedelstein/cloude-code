@@ -1,4 +1,5 @@
 import { GitHubAppService } from "@/lib/github";
+import { logger } from "@/lib/logger";
 import type { Env } from "@/types";
 import type { SecretRepository } from "@/durable-objects/repositories/secret-repository";
 
@@ -148,7 +149,7 @@ export async function ensureValidToken(context: GitProxyContext): Promise<string
   if (!context.repoFullName) return context.githubToken;
 
   // GitHubAppService handles caching with a 5-minute buffer before expiry
-  const github = new GitHubAppService(context.env);
+  const github = new GitHubAppService(context.env, logger);
   const token = await github.getTokenForRepo(context.repoFullName);
   context.secretRepository.set("github_token", token);
   return token;

@@ -28,10 +28,10 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const { token, user } = await response.json();
+  const { token, user, hasInstallations, installUrl } = await response.json();
 
   const isProduction = process.env.NODE_ENV === "production";
-  const result = new NextResponse(popupHtml(true, user), {
+  const result = new NextResponse(popupHtml(true, user, hasInstallations, installUrl), {
     headers: { "Content-Type": "text/html" },
   });
   result.cookies.set("session_token", token, {
@@ -45,9 +45,14 @@ export async function GET(request: NextRequest) {
   return result;
 }
 
-function popupHtml(success: boolean, user?: Record<string, unknown>): string {
+function popupHtml(
+  success: boolean,
+  user?: Record<string, unknown>,
+  hasInstallations?: boolean,
+  installUrl?: string,
+): string {
   const message = success
-    ? JSON.stringify({ type: "auth:success", user })
+    ? JSON.stringify({ type: "auth:success", user, hasInstallations, installUrl })
     : JSON.stringify({ type: "auth:error" });
 
   // Escape characters that could break out of a <script> context.

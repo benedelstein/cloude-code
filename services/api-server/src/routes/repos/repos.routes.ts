@@ -3,6 +3,7 @@ import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { GitHubAppService } from "@/lib/github";
+import { logger } from "@/lib/logger";
 import { listReposRoute } from "./routes";
 import type { Repo } from "@repo/shared";
 
@@ -42,6 +43,6 @@ reposRoutes.openapi(listReposRoute, async (c) => {
     }
   }
 
-  const github = new GitHubAppService(c.env);
+  const github = new GitHubAppService(c.env, logger);
   return c.json({ repos, installUrl: github.getInstallUrl() }, 200);
 });

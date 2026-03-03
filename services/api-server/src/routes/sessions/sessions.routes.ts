@@ -4,6 +4,7 @@ import type { Env } from "@/types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { GitHubAppService, GitHubAppError } from "@/lib/github";
+import { logger } from "@/lib/logger";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { AuthUser } from "@/middleware/auth.middleware";
@@ -50,7 +51,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const parsed = c.req.valid("json");
 
   // Verify the GitHub App installation exists for this repo before creating the session
-  const github = new GitHubAppService(c.env);
+  const github = new GitHubAppService(c.env, logger);
   try {
     await github.findInstallationForRepo(
       ...parsed.repoFullName.split("/") as [string, string],
@@ -274,7 +275,7 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   }
 
   // Use installation token for reads (no user token needed)
-  const github = new GitHubAppService(c.env);
+  const github = new GitHubAppService(c.env, logger);
   const installationToken = await github.getTokenForRepo(
     session.repoFullName,
   );

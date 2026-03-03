@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { Env } from "@/types";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github";
+import { logger } from "@/lib/logger";
 
 export interface AuthUser {
   id: string;
@@ -70,7 +71,7 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     }
 
     try {
-      const github = new GitHubAppService(c.env);
+      const github = new GitHubAppService(c.env, logger);
       const decryptedRefresh = await decrypt(
         refreshRow.encrypted_token,
         c.env.TOKEN_ENCRYPTION_KEY,
