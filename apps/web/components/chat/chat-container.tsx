@@ -21,6 +21,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     streamingMessage,
     sessionStatus,
     errorMessage,
+    isHistoryLoading,
     isReady,
     isStreaming,
     isResponding,
@@ -206,6 +207,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         <MessageList
           messages={messages}
           streamingMessage={streamingMessage}
+          isHistoryLoading={isHistoryLoading}
           isResponding={isResponding}
           pendingMessage={pendingMessage}
         />

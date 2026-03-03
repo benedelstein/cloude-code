@@ -6,6 +6,7 @@ import { TextPart } from "@/components/parts/text-part";
 import { ToolCallPart } from "@/components/parts/tool-call-part";
 import { TodoWritePart } from "@/components/parts/todo-write-part";
 import { ExitPlanModePart } from "@/components/parts/exit-plan-mode-part";
+import { BashPart } from "@/components/parts/bash-part";
 import { ReasoningPart } from "@/components/parts/reasoning-part";
 
 interface MessageItemProps {
@@ -92,6 +93,9 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
                   }
                   if (toolName === "ExitPlanMode") {
                     return <ExitPlanModePart key={key} part={part} />;
+                  }
+                  if (toolName.toLowerCase() === "bash") {
+                    return <BashPart key={key} part={part} />;
                   }
                   return (
                     <ToolCallPart

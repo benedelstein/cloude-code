@@ -3,15 +3,23 @@
 import { useEffect, useRef } from "react";
 import type { UIMessage } from "ai";
 import { MessageItem } from "./message-item";
+import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 interface MessageListProps {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
+  isHistoryLoading?: boolean;
   isResponding?: boolean;
   pendingMessage?: string | null;
 }
 
-export function MessageList({ messages, streamingMessage, isResponding, pendingMessage }: MessageListProps) {
+export function MessageList({
+  messages,
+  streamingMessage,
+  isHistoryLoading = false,
+  isResponding,
+  pendingMessage,
+}: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -23,6 +31,17 @@ export function MessageList({ messages, streamingMessage, isResponding, pendingM
   const allMessages = streamingMessage
     ? [...messages, streamingMessage]
     : messages;
+
+  if (isHistoryLoading) {
+    return (
+      <div className="h-full flex items-center justify-center p-4">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <LoadingSpinner className="h-4 w-4" />
+          Loading messages...
+        </div>
+      </div>
+    );
+  }
 
   if (allMessages.length === 0 && !pendingMessage) {
     return (

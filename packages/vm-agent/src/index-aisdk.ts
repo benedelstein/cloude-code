@@ -181,6 +181,7 @@ rl.on("line", async (rawLine) => {
       break;
 
     case "cancel":
+      emit({ type: "debug", message: "cancel received; aborting current operation" });
       currentAbortController?.abort();
       break;
 

@@ -33,6 +33,7 @@ export interface UseCloudflareAgentReturn {
   streamingMessage: UIMessage | null;
   sessionStatus: SessionStatus;
   errorMessage: string | null;
+  isHistoryLoading: boolean;
   isReady: boolean;
   isStreaming: boolean;
   isResponding: boolean;
@@ -56,6 +57,7 @@ export function useCloudflareAgent({
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isResponding, setIsResponding] = useState(false);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
@@ -107,6 +109,7 @@ export function useCloudflareAgent({
       case "sync.response": {
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
+        setIsHistoryLoading(false);
         break;
       }
 
@@ -155,6 +158,7 @@ export function useCloudflareAgent({
       case "error":
         resetPendingResponse();
         setErrorMessage(msg.message);
+        setIsHistoryLoading(false);
         onError?.(new Error(msg.message));
         break;
     }
@@ -205,6 +209,7 @@ export function useCloudflareAgent({
       resetPendingResponse();
       setSessionStatus("error");
       setErrorMessage("Connection error");
+      setIsHistoryLoading(false);
       console.error("Connection error", { host: resolvedHost, sessionId, message });
       onError?.(new Error(`Connection error (${resolvedHost})`));
     },
@@ -244,6 +249,7 @@ export function useCloudflareAgent({
     streamingMessage,
     sessionStatus,
     errorMessage,
+    isHistoryLoading,
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
     isResponding,
