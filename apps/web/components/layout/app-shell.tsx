@@ -18,12 +18,15 @@ export function AppShell({ children }: AppShellProps) {
       <AppHeaderProvider>
         <SessionSidebar />
         <SidebarInset>
-          <div className="shrink-0 h-12 mt-2 px-4 flex items-center gap-3">
-            <SidebarTrigger title="Open/close sidebar" className="shrink-0" />
-            <div className="flex-1 min-w-0 flex justify-center">
-              <div className="w-full max-w-4xl">
-                <AppHeaderSlot />
-              </div>
+          <div className="shrink-0 h-12 mt-2 relative">
+            <SidebarTrigger title="Open/close sidebar" className="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 z-10" />
+            <div className="max-w-4xl px-4 h-full flex items-center"
+              style={{
+                marginLeft: "max(3rem, calc((100% - 56rem) / 2))",
+                marginRight: "max(0rem, calc((100% - 56rem) / 2))",
+              }}
+            >
+              <AppHeaderSlot />
             </div>
           </div>
           <div className="flex-1 min-h-0">{children}</div>

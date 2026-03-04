@@ -2,7 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { isTextUIPart, isReasoningUIPart, isToolUIPart } from "ai";
-import { Monitor, User } from "lucide-react";
+import { User } from "lucide-react";
 import { TextPart } from "@/components/parts/text-part";
 import { ToolCallPart } from "@/components/parts/tool-call-part";
 import { TodoWritePart } from "@/components/parts/todo-write-part";
@@ -27,20 +27,13 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
         className={`max-w-[85%] ${isUser ? "order-1" : "order-1"}`}
       >
         <div className="flex items-start gap-3">
-          {/* Avatar */}
-          {!isUser && (
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-subtle flex items-center justify-center">
-              <Monitor className="w-4 h-4 text-accent" />
-            </div>
-          )}
-
           {/* Message Content */}
           <div className="flex-1 min-w-0">
             <div
-              className={`rounded-lg px-4 py-3 ${
+              className={`rounded-lg ${
                 isUser
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-background-secondary"
+                  ? "px-4 py-3 bg-accent text-accent-foreground"
+                  : ""
               }`}
             >
               {message.parts?.map((part, index) => {
@@ -66,12 +59,7 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
                 }
 
                 if (part.type === "step-start") {
-                  return (
-                    <div
-                      key={key}
-                      className="my-2 border-t border-border/50"
-                    />
-                  );
+                  return null;
                 }
 
                 // Handle tool calls - they start with "tool-" prefix

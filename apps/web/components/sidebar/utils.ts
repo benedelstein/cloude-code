@@ -1,15 +1,26 @@
 export function formatRelativeTime(dateString: string): string {
-  const now = Date.now();
-  const date = new Date(dateString).getTime();
-  const seconds = Math.floor((now - date) / 1000);
+  const now = new Date();
+  const date = new Date(dateString);
 
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
+  const timeStr = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDateDay = new Date(date);
+  startOfDateDay.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round(
+    (startOfToday.getTime() - startOfDateDay.getTime()) / (24 * 60 * 60 * 1000)
+  );
+
+  if (diffDays === 0) return timeStr;
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString("en-US", {
+    month: "numeric",
+    day: "numeric",
+  });
 }

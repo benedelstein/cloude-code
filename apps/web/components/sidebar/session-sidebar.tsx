@@ -142,12 +142,12 @@ export function SessionSidebar() {
                           <span className="truncate text-sm">{displayTitle}</span>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-foreground-muted truncate">
-                              {session.repoFullName}
+                              {session.repoFullName.split("/")[1] || session.repoFullName}
                             </span>
                             {isLoading ? (
                               <LoadingSpinner className="h-3 w-3 shrink-0" />
                             ) : (
-                              <span className="text-[10px] text-foreground-muted shrink-0">
+                              <span className="text-xs font-mono text-foreground-muted shrink-0">
                                 · {formatRelativeTime(timestamp)}
                               </span>
                             )}

@@ -124,7 +124,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center px-4">
+    <div className="h-full flex flex-col items-center justify-center px-4 pb-16">
       <div className="w-full max-w-2xl">
         <div className="text-6xl mb-4 text-center">☁️</div>
         <h1 className="text-2xl font-semibold mb-1 text-center">
