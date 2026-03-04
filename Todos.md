@@ -11,7 +11,7 @@
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
 - [x] Store past session history and open resumed sessions
-
+- [ ] Proactive push notifications to the user when something is ready.
 - [ ] Mobile client
 - [ ] keep session agent message history in memory for faster syncing with clients
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses?

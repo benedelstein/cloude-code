@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pencil, Check, X } from "lucide-react";
+import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import { updateSessionTitle as updateSessionTitleRequest } from "@/lib/api";
+import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
 import { EditorButton } from "./editor-button";
-import Link from "next/link";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -100,9 +101,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <header className="shrink-0 h-12 border-b border-border px-4 flex items-center w-full">
-        <div className="max-w-4xl mx-auto flex items-center justify-between w-full gap-4">
+      <AppHeaderPortal>
+        <div className="flex items-center justify-between w-full gap-4">
           <div className="flex flex-col gap-0 min-w-0">
             <div className="flex items-center gap-1 min-w-0">
               {isEditingTitle ? (
@@ -173,21 +173,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} />
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  sessionStatus === "ready"
-                    ? "bg-success"
-                    : "bg-warning"
-                }`}
-              />
-              <span className="text-xs text-foreground-muted capitalize hidden sm:inline">
-                {sessionStatus}
-              </span>
-            </div>
           </div>
         </div>
-      </header>
+      </AppHeaderPortal>
 
       {/* Status Banner */}
       <StatusBanner
@@ -215,7 +203,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       />
 
       {/* Input */}
-      <div className="shrink-0 border-t border-border">
+      <div className="shrink-0">
         <div className="max-w-4xl mx-auto">
           <ChatInput
             onSend={sendMessage}

@@ -4,7 +4,7 @@ import type { Env } from "@/types";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { GitHubAppService } from "@/lib/github";
 import { logger } from "@/lib/logger";
-import { listReposRoute } from "./routes";
+import { listReposRoute, listBranchesRoute } from "./routes";
 import type { Repo } from "@repo/shared";
 
 export const reposRoutes = new OpenAPIHono<{
@@ -45,4 +45,34 @@ reposRoutes.openapi(listReposRoute, async (c) => {
 
   const github = new GitHubAppService(c.env, logger);
   return c.json({ repos, installUrl: github.getInstallUrl() }, 200);
+});
+
+// GET /repos/:repoId/branches — list branches for a repo
+reposRoutes.openapi(listBranchesRoute, async (c) => {
+  const user = c.get("user");
+  const { repoId } = c.req.valid("param");
+  const octokit = new Octokit({ auth: user.githubAccessToken });
+
+  // Resolve repo owner/name from numeric ID
+  const { data: repo } = await octokit.request("GET /repositories/{repository_id}", {
+    repository_id: repoId,
+  });
+
+  const branches: { name: string; default: boolean }[] = [];
+  const iterator = octokit.paginate.iterator(octokit.rest.repos.listBranches, {
+    owner: repo.owner.login,
+    repo: repo.name,
+    per_page: 100,
+  });
+
+  for await (const response of iterator) {
+    for (const branch of response.data) {
+      branches.push({
+        name: branch.name,
+        default: branch.name === repo.default_branch,
+      });
+    }
+  }
+
+  return c.json({ branches }, 200);
 });

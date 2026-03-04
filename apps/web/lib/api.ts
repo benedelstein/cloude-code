@@ -2,6 +2,7 @@ import type {
   UserInfo,
   Repo,
   ListReposResponse,
+  ListBranchesResponse,
   CreateSessionResponse,
   DeleteSessionResponse,
   ArchiveSessionResponse,
@@ -63,15 +64,20 @@ export async function listRepos(): Promise<ListReposResponse> {
   return apiFetch("/repos");
 }
 
+export async function listBranches(repoId: number): Promise<ListBranchesResponse> {
+  return apiFetch(`/repos/${repoId}/branches`);
+}
+
 export async function createSession(
   repoId: number,
   repoFullName: string,
   initialMessage?: string,
+  branch?: string,
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ repoId, repoFullName, initialMessage }),
+    body: JSON.stringify({ repoId, repoFullName, initialMessage, branch }),
   });
 }
 

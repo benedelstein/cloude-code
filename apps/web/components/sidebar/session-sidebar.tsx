@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Plus, Archive, Trash2, LogOut, ChevronsUpDown } from "lucide-react";
+import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal } from "lucide-react";
 import { deleteSession, archiveSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
@@ -91,19 +91,18 @@ export function SessionSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border">
+    <>
+    <Sidebar collapsible="offcanvas" variant="floating">
+      <SidebarHeader className="h-12 justify-center border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              size="lg"
               onClick={() => navigate("/")}
               className="cursor-pointer"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-foreground font-bold text-sm">
-                c
+              <div className="flex h-8 w-8 text-2xl">
+                ☁️
               </div>
-              <span className="font-semibold text-sm">cloude</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -140,26 +139,26 @@ export function SessionSidebar() {
                         className="cursor-pointer h-auto py-2"
                       >
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm">{displayTitle}</span>
+                          <span className="truncate text-sm">{displayTitle}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-foreground-muted truncate">
+                              {session.repoFullName}
+                            </span>
                             {isLoading ? (
                               <LoadingSpinner className="h-3 w-3 shrink-0" />
                             ) : (
                               <span className="text-[10px] text-foreground-muted shrink-0">
-                                {formatRelativeTime(timestamp)}
+                                · {formatRelativeTime(timestamp)}
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-foreground-muted truncate">
-                            {session.repoFullName}
-                          </span>
                         </div>
                       </SidebarMenuButton>
                       {!isLoading && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <SidebarMenuAction showOnHover>
-                              <ChevronsUpDown className="h-3 w-3" />
+                            <SidebarMenuAction showOnHover className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]">
+                              <MoreHorizontal className="h-3 w-3" />
                             </SidebarMenuAction>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent side="right" align="start">
@@ -194,15 +193,15 @@ export function SessionSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton className="cursor-pointer">
+                <SidebarMenuButton size="lg" className="cursor-pointer">
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt={user.login}
-                      className="h-5 w-5 rounded-full"
+                      className="h-8 w-8 shrink-0 rounded-full"
                     />
                   ) : (
-                    <div className="h-5 w-5 rounded-full bg-sidebar-accent" />
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
                   )}
                   <span className="truncate text-sm">{user?.login ?? "User"}</span>
                   <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-muted" />
@@ -221,33 +220,34 @@ export function SessionSidebar() {
         </SidebarMenu>
       </SidebarFooter>
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog
-        open={deleteDialogSessionId !== null}
-        onOpenChange={(open) => { if (!open) setDeleteDialogSessionId(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete session?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this session and all associated data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deleteDialogSessionId) {
-                  void handleDeleteSession(deleteDialogSessionId);
-                }
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Sidebar>
+
+    <AlertDialog
+      open={deleteDialogSessionId !== null}
+      onOpenChange={(open) => { if (!open) setDeleteDialogSessionId(null); }}
+    >
+      <AlertDialogContent container={document.body}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete session?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete this session and all associated data. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => {
+              if (deleteDialogSessionId) {
+                void handleDeleteSession(deleteDialogSessionId);
+              }
+            }}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

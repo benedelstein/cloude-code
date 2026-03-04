@@ -5,46 +5,46 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  /* Custom app tokens */
+  /* Base palette */
   --background: #ffffff;
   --background-secondary: #f8fafc;
   --foreground: #0f172a;
   --foreground-muted: #64748b;
   --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --accent: #7CB9E8;
+  --border-strong: #84a9d4;
+  --accent: #6ba7d5;
   --accent-hover: #5BA0D9;
   --accent-subtle: #EBF4FB;
   --accent-foreground: #ffffff;
   --danger: #ef4444;
   --warning: #f59e0b;
   --success: #22c55e;
-
-  /* Standard shadcn tokens */
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --primary: #0f172a;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --input: #e2e8f0;
-  --ring: #7CB9E8;
+
+  /* shadcn aliases */
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+  --primary: var(--foreground);
+  --primary-foreground: var(--accent-foreground);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: var(--foreground-muted);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--accent-foreground);
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--accent);
 
   /* Sidebar */
-  --sidebar: #f8fafc;
+  --sidebar: var(--background);
   --sidebar-foreground: #334155;
-  --sidebar-primary: #0f172a;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #7CB9E8;
+  --sidebar-primary: var(--foreground);
+  --sidebar-primary-foreground: var(--accent-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--accent);
 
   /* Radii */
   --radius-sm: 6px;

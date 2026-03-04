@@ -16,3 +16,14 @@ export const ListReposResponse = z.object({
   installUrl: z.string(),
 });
 export type ListReposResponse = z.infer<typeof ListReposResponse>;
+
+export const Branch = z.object({
+  name: z.string(),
+  default: z.boolean(),
+});
+export type Branch = z.infer<typeof Branch>;
+
+export const ListBranchesResponse = z.object({
+  branches: z.array(Branch),
+});
+export type ListBranchesResponse = z.infer<typeof ListBranchesResponse>;

@@ -17,8 +17,12 @@ export const authRoutes = new OpenAPIHono<{
   Variables: { user: AuthUser };
 }>();
 
-// GET /auth/github — returns the install + authorize URL
+/**
+ * GET auth/github — returns the install + authorize URL
+ * @returns The install + authorize URL and the nonce token
+ */
 authRoutes.openapi(getGithubRoute, async (c) => {
+  // create a nonce token for CSRF protection
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
 
@@ -34,7 +38,13 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   return c.json({ url, state }, 200);
 });
 
-// POST /auth/token — exchange code for session token
+/**
+ * POST /auth/token — exchange code for session token
+ * the code is returned by github 
+ * @param code - The OAuth code to exchange
+ * @param state - The state/nonce token to validate
+ * @returns The session token and user info
+ */
 authRoutes.openapi(postTokenRoute, async (c) => {
   const { code, state } = c.req.valid("json");
 
@@ -50,7 +60,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     .first();
 
   if (!stateRow) {
-    return c.json({ error: "Invalid or expired state" }, 400) as any;
+    return c.json({ error: "Invalid or expired state" }, 400);
   }
 
   // Exchange code for tokens
@@ -59,7 +69,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   try {
     result = await github.exchangeOAuthCode(code);
   } catch {
-    return c.json({ error: "Failed to exchange OAuth code" }, 400) as any;
+    return c.json({ error: "Failed to exchange OAuth code" }, 400);
   }
 
   // Check allowlist
@@ -73,7 +83,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     allowedLogins.length === 0 ||
     !allowedLogins.includes(result.user.login.toLowerCase())
   ) {
-    return c.json({ error: "User not allowed" }, 403) as any;
+    return c.json({ error: "User not allowed" }, 403);
   }
 
   // Encrypt tokens before storing
@@ -86,6 +96,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     : null;
 
   // Upsert user (no tokens on the user row)
+  // Only used for new users; existing users keep their original id
   const userId = crypto.randomUUID();
   await c.env.DB.prepare(
     `INSERT INTO users (id, github_id, github_login, github_name, github_avatar_url)
@@ -118,7 +129,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     }>();
 
   if (!user) {
-    return c.json({ error: "Failed to create user" }, 500) as any;
+    return c.json({ error: "Failed to create user" }, 500);
   }
 
   // Create auth session with access token (30 days)
@@ -165,6 +176,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     hasInstallations = data.total_count > 0;
   } catch {
     // If the check fails, assume no installations to prompt setup
+    console.error("Failed to check for GitHub app installations");
   }
 
   const installUrl = github.getInstallUrl();
