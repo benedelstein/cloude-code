@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { listRepos, createSession, type Repo } from "@/lib/api";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 export default function Home() {
   const router = useRouter();
@@ -79,22 +87,21 @@ export default function Home() {
   return (
     <div className="h-full flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-2xl">
-        <div className="text-[5rem] text-center">☁️</div>
         <h1 className="text-2xl font-semibold mb-1 text-center">
           What do you want to build?
         </h1>
-        <p className="text-sm text-muted-foreground mb-8 text-center">
+        <p className="text-sm text-foreground-muted mb-8 text-center">
           Pick a repo and describe the task.
         </p>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg text-sm bg-red-500/10 border border-red-500/20 text-red-500">
+          <div className="mb-4 p-3 rounded-md text-sm bg-danger/10 border border-danger/20 text-danger">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="border border-border rounded-xl bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 transition-shadow">
+          <div className="border border-border rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -102,38 +109,41 @@ export default function Home() {
               placeholder="Describe what you want to do..."
               rows={4}
               disabled={submitting}
-              className="w-full px-4 pt-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground/50 disabled:opacity-50"
+              className="w-full px-4 pt-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50"
             />
 
             <div className="flex items-center justify-between px-3 pb-3">
               {/* Repo selector */}
               <div className="flex items-center gap-2">
                 {reposLoading ? (
-                  <span className="text-xs text-muted-foreground px-1">Loading repos...</span>
+                  <span className="text-xs text-foreground-muted px-1">Loading repos...</span>
                 ) : (
                   <>
-                    <select
-                      value={selectedRepo?.id ?? ""}
-                      onChange={(e) => {
-                        const repo = repos.find((r) => r.id === Number(e.target.value));
+                    <Select
+                      value={selectedRepo ? String(selectedRepo.id) : ""}
+                      onValueChange={(value) => {
+                        const repo = repos.find((r) => r.id === Number(value));
                         setSelectedRepo(repo ?? null);
                       }}
                       disabled={submitting}
-                      className="text-xs bg-transparent border border-border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-accent/50 cursor-pointer disabled:opacity-50"
                     >
-                      <option value="">Select a repo</option>
-                      {repos.map((repo) => (
-                        <option key={repo.id} value={repo.id}>
-                          {repo.fullName}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-auto max-w-[200px] sm:max-w-[280px]">
+                        <SelectValue placeholder="Select a repo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {repos.map((repo) => (
+                          <SelectItem key={repo.id} value={String(repo.id)}>
+                            {repo.fullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {installUrl && (
                       <a
                         href={installUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-xs text-foreground-muted hover:text-foreground transition-colors hidden sm:inline"
                       >
                         Configure repos
                       </a>
@@ -146,7 +156,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={!selectedRepo || !message.trim() || submitting}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-foreground text-background hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
               >
                 {submitting ? (
                   <>
@@ -156,17 +166,14 @@ export default function Home() {
                 ) : (
                   <>
                     Start
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
-                    </svg>
+                    <ArrowRight className="h-3 w-3" />
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground/60 mt-2 text-center">
+          <p className="text-xs text-foreground-muted/60 mt-2 text-center">
             Press Enter to submit, Shift+Enter for new line
           </p>
         </form>

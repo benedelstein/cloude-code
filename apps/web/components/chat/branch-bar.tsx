@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { GitPullRequest, ExternalLink } from "lucide-react";
 import { createPullRequest, getPullRequestStatus } from "@/lib/api";
 import type { PullRequestState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
@@ -56,20 +57,20 @@ export function BranchBar({
   if (!pushedBranch) return null;
 
   return (
-    <div className="shrink-0 border-t border-border bg-muted/30">
+    <div className="shrink-0 border-t border-border bg-background-secondary/50">
       <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-          <GitPullRequestIcon />
+        <div className="flex items-center gap-2 text-sm text-foreground-muted min-w-0">
+          <GitPullRequest className="h-4 w-4 shrink-0" />
           <span className="truncate">
             <span className="text-foreground font-medium">main</span>
-            {" ← "}
+            {" \u2190 "}
             <span className="text-foreground font-medium">{pushedBranch}</span>
           </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           {error && (
-            <span className="text-xs text-red-500">{error}</span>
+            <span className="text-xs text-danger">{error}</span>
           )}
 
           {pullRequestState === "merged" && (
@@ -79,7 +80,7 @@ export function BranchBar({
           )}
 
           {pullRequestState === "closed" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-500">
+            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-0.5 text-xs font-medium text-danger">
               Closed
             </span>
           )}
@@ -89,16 +90,16 @@ export function BranchBar({
               href={pullRequestUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent-subtle px-3 py-1 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
             >
               View PR
-              <ExternalLinkIcon />
+              <ExternalLink className="h-3 w-3" />
             </a>
           ) : (
             <button
               onClick={handleCreatePR}
               disabled={isCreating}
-              className="inline-flex items-center cursor-pointer gap-1.5 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="inline-flex items-center cursor-pointer gap-1.5 rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {isCreating ? (
                 <>
@@ -115,39 +116,3 @@ export function BranchBar({
     </div>
   );
 }
-
-function GitPullRequestIcon() {
-  return (
-    <svg
-      className="h-4 w-4 shrink-0"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <circle cx="18" cy="18" r="3" />
-      <circle cx="6" cy="6" r="3" />
-      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-      <line x1="6" y1="9" x2="6" y2="21" />
-    </svg>
-  );
-}
-
-function ExternalLinkIcon() {
-  return (
-    <svg
-      className="h-3 w-3"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  );
-}
-

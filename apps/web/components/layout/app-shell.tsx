@@ -1,6 +1,11 @@
 "use client";
 
 import { SessionSidebar } from "@/components/sidebar/session-sidebar";
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -8,9 +13,14 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="flex h-screen">
+    <SidebarProvider>
       <SessionSidebar />
-      <main className="flex-1 min-w-0">{children}</main>
-    </div>
+      <SidebarInset>
+        <div className="shrink-0 h-12 border-b border-border px-3 flex items-center">
+          <SidebarTrigger />
+        </div>
+        <div className="flex-1 min-h-0">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

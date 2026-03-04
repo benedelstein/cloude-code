@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { isTextUIPart, isReasoningUIPart, isToolUIPart } from "ai";
+import { Monitor, User } from "lucide-react";
 import { TextPart } from "@/components/parts/text-part";
 import { ToolCallPart } from "@/components/parts/tool-call-part";
 import { TodoWritePart } from "@/components/parts/todo-write-part";
@@ -28,21 +29,8 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
         <div className="flex items-start gap-3">
           {/* Avatar */}
           {!isUser && (
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
-              <svg
-                className="w-4 h-4 text-accent"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-subtle flex items-center justify-center">
+              <Monitor className="w-4 h-4 text-accent" />
             </div>
           )}
 
@@ -52,7 +40,7 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
               className={`rounded-lg px-4 py-3 ${
                 isUser
                   ? "bg-accent text-accent-foreground"
-                  : "bg-muted"
+                  : "bg-background-secondary"
               }`}
             >
               {message.parts?.map((part, index) => {
@@ -117,7 +105,7 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
 
             {/* Interrupted label for aborted messages */}
             {isAborted && (
-              <p className="mt-1.5 text-xs text-muted-foreground italic">
+              <p className="mt-1.5 text-xs text-foreground-muted italic">
                 Interrupted
               </p>
             )}
@@ -126,20 +114,7 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
           {/* User avatar on right */}
           {isUser && (
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-              <svg
-                className="w-4 h-4 text-accent-foreground"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
+              <User className="w-4 h-4 text-accent-foreground" />
             </div>
           )}
         </div>

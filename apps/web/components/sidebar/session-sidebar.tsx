@@ -2,31 +2,67 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { Plus, Archive, Trash2, LogOut, ChevronsUpDown } from "lucide-react";
 import { deleteSession, archiveSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { formatRelativeTime } from "./utils";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupAction,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function SessionSidebar() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const { setOpenMobile } = useSidebar();
   const activeSessionId = params?.sessionId as string | undefined;
   const { sessions, loading: sessionsLoading, removeSession } = useSessionList();
 
   const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
   const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null);
+  const [deleteDialogSessionId, setDeleteDialogSessionId] = useState<string | null>(null);
 
-  const handleNewSession = () => {
-    router.push("/");
+  const navigate = (path: string) => {
+    router.push(path);
+    setOpenMobile(false);
   };
 
-  const handleArchiveSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
-    e.stopPropagation();
+  const handleArchiveSession = async (sessionId: string) => {
     setArchivingSessionId(sessionId);
     if (sessionId === activeSessionId) {
-      router.push("/");
+      navigate("/");
     }
     try {
       await archiveSession(sessionId);
@@ -38,134 +74,180 @@ export function SessionSidebar() {
     }
   };
 
-  const handleTerminateSession = async (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
-    e.stopPropagation();
-    if (!window.confirm("Delete this session? This will delete all associated data permanently.")) {
-      return;
-    }
+  const handleDeleteSession = async (sessionId: string) => {
     setTerminatingSessionId(sessionId);
+    setDeleteDialogSessionId(null);
     if (sessionId === activeSessionId) {
-      router.push("/");
+      navigate("/");
     }
     try {
       await deleteSession(sessionId);
       removeSession(sessionId);
     } catch (err) {
-      console.error("Failed to terminate session:", err);
+      console.error("Failed to delete session:", err);
     } finally {
       setTerminatingSessionId(null);
     }
   };
 
   return (
-    <aside className="w-[280px] shrink-0 h-screen flex flex-col border-r border-border bg-background">
-      {/* Header */}
-      <div className="shrink-0 h-12 px-4 flex items-center border-b border-border">
-        <div className="w-full flex items-center justify-between">
-          <div className="font-semibold text-sm">☁️</div>
-          <div className="flex items-center gap-2">
-            {user?.avatarUrl && (
-              <img
-                src={user.avatarUrl}
-                alt={user.login}
-                className="w-6 h-6 rounded-full"
-              />
-            )}
-            <button
-              onClick={logout}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+    <Sidebar>
+      <SidebarHeader className="border-b border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              onClick={() => navigate("/")}
+              className="cursor-pointer"
             >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-foreground font-bold text-sm">
+                c
+              </div>
+              <span className="font-semibold text-sm">cloude</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
 
-      {/* New session button */}
-      <div className="shrink-0 px-3 py-2">
-        <button
-          onClick={handleNewSession}
-          className="w-full px-3 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent/10 transition-colors cursor-pointer"
-        >
-          + New session
-        </button>
-      </div>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Sessions</SidebarGroupLabel>
+          <SidebarGroupAction title="New session" onClick={() => navigate("/")}>
+            <Plus />
+          </SidebarGroupAction>
+          <SidebarGroupContent>
+            {sessionsLoading ? (
+              <div className="flex justify-center py-6">
+                <LoadingSpinner className="h-4 w-4 text-foreground-muted" />
+              </div>
+            ) : sessions.length === 0 ? (
+              <p className="px-2 py-6 text-center text-xs text-foreground-muted">
+                No sessions yet
+              </p>
+            ) : (
+              <SidebarMenu>
+                {sessions.map((session) => {
+                  const isActive = session.id === activeSessionId;
+                  const displayTitle = session.title || session.repoFullName.split("/")[1] || session.id.slice(0, 8);
+                  const timestamp = session.lastMessageAt || session.updatedAt;
+                  const isLoading = terminatingSessionId === session.id || archivingSessionId === session.id;
 
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto">
-        {sessionsLoading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner className="h-4 w-4" />
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No sessions yet
-          </div>
-        ) : (
-          <ul className="py-1">
-            {sessions.map((session) => {
-              const isActive = session.id === activeSessionId;
-              const displayTitle = session.title || session.repoFullName.split("/")[1] || session.id.slice(0, 8);
-              const timestamp = session.lastMessageAt || session.updatedAt;
-
-              return (
-                <li key={session.id} className="group/row">
-                  <div
-                    onClick={() => router.push(`/session/${session.id}`)}
-                    className={`w-full text-left px-4 py-2.5 transition-all duration-150 cursor-pointer ${
-                      isActive
-                        ? "bg-accent/15 border-r-2 border-accent"
-                        : "hover:bg-accent/10 hover:pl-5"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold truncate">
-                        {displayTitle}
-                      </span>
-                      {terminatingSessionId === session.id || archivingSessionId === session.id ? (
-                        <span className="shrink-0"><LoadingSpinner className="h-4 w-4" /></span>
-                      ) : (
-                        <>
-                          <span className="text-xs text-muted-foreground shrink-0 group-hover/row:hidden">
-                            {formatRelativeTime(timestamp)}
-                          </span>
-                          <div className="hidden group-hover/row:flex items-center gap-0.5">
-                            <button
-                              onClick={(e) => handleArchiveSession(e, session.id)}
-                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
-                              title="Archive session"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="2" y="3" width="20" height="5" rx="1" />
-                                <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-                                <path d="M10 12h4" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={(e) => handleTerminateSession(e, session.id)}
-                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                              title="Delete session"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
+                  return (
+                    <SidebarMenuItem key={session.id}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => navigate(`/session/${session.id}`)}
+                        className="cursor-pointer h-auto py-2"
+                      >
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm">{displayTitle}</span>
+                            {isLoading ? (
+                              <LoadingSpinner className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <span className="text-[10px] text-foreground-muted shrink-0">
+                                {formatRelativeTime(timestamp)}
+                              </span>
+                            )}
                           </div>
-                        </>
+                          <span className="text-xs text-foreground-muted truncate">
+                            {session.repoFullName}
+                          </span>
+                        </div>
+                      </SidebarMenuButton>
+                      {!isLoading && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <SidebarMenuAction showOnHover>
+                              <ChevronsUpDown className="h-3 w-3" />
+                            </SidebarMenuAction>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent side="right" align="start">
+                            <DropdownMenuItem
+                              onClick={() => handleArchiveSession(session.id)}
+                            >
+                              <Archive className="h-4 w-4" />
+                              Archive
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteDialogSessionId(session.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {session.repoFullName}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </aside>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            )}
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton className="cursor-pointer">
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.login}
+                      className="h-5 w-5 rounded-full"
+                    />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full bg-sidebar-accent" />
+                  )}
+                  <span className="truncate text-sm">{user?.login ?? "User"}</span>
+                  <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-muted" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-48">
+                <DropdownMenuLabel>{user?.login}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog
+        open={deleteDialogSessionId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteDialogSessionId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this session and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteDialogSessionId) {
+                  void handleDeleteSession(deleteDialogSessionId);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Sidebar>
   );
 }
-

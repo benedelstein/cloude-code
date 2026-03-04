@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { Send, Square } from "lucide-react";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -66,7 +67,7 @@ export function ChatInput({
           }
           disabled={disabled || isStreaming}
           rows={1}
-          className="w-full resize-none overflow-hidden rounded-xl border border-border bg-background px-4 py-3 pr-24 focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none overflow-hidden rounded-lg border border-border bg-background px-4 py-3 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
         />
 
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2">
@@ -74,61 +75,23 @@ export function ChatInput({
             <button
               type="button"
               onClick={onStop}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-danger text-white hover:bg-danger/90 transition-colors"
               title="Stop generation"
             >
-              <StopIcon />
+              <Square className="h-4 w-4" />
             </button>
           ) : (
             <button
               type="submit"
               disabled={disabled || !input.trim()}
-              className="p-2 rounded-lg bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Send message"
             >
-              <SendIcon />
+              <Send className="h-4 w-4" />
             </button>
           )}
         </div>
       </div>
     </form>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg
-      className="w-5 h-5"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-      />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg
-      className="h-5 w-5 block"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6 6h12v12H6z"
-      />
-    </svg>
   );
 }
