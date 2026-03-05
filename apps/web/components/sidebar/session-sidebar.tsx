@@ -93,7 +93,7 @@ export function SessionSidebar() {
   return (
     <>
     <Sidebar collapsible="offcanvas" variant="floating">
-      <SidebarHeader className="h-12 justify-center border-b border-sidebar-border">
+      <SidebarHeader className="h-14 justify-center border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton

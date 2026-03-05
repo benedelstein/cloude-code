@@ -53,8 +53,8 @@ export function ChatInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4">
-      <div className="relative">
+    <form onSubmit={handleSubmit}>
+      <div className="px-4 pt-3">
         <textarea
           ref={textareaRef}
           value={input}
@@ -63,34 +63,33 @@ export function ChatInput({
           placeholder={
             disabled
               ? "Waiting for agent to be ready..."
-              : "Send a message... (Enter to send, Shift+Enter for new line)"
+              : "Send a message..."
           }
           disabled={disabled || isStreaming}
           rows={1}
-          className="w-full resize-none overflow-hidden rounded-lg border border-border bg-background px-4 py-3 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
+          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
-
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2">
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={onStop}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-danger text-white hover:bg-danger/90 transition-colors"
-              title="Stop generation"
-            >
-              <Square className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={disabled || !input.trim()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Send message"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+      </div>
+      <div className="flex items-center justify-end px-3 pb-2">
+        {isStreaming ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/90 transition-colors"
+            title="Stop generation"
+          >
+            <Square className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={disabled || !input.trim()}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Send message"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     </form>
   );

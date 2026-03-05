@@ -203,14 +203,19 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       />
 
       {/* Input */}
-      <div className="shrink-0">
-        <div className="max-w-4xl mx-auto">
-          <ChatInput
-            onSend={sendMessage}
-            onStop={stop}
-            disabled={!isReady}
-            isStreaming={isStreaming}
-          />
+      <div className="shrink-0 sticky bottom-0 z-10 pb-6 pt-2">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="rounded-lg border border-border shadow-sm bg-background">
+            <ChatInput
+              onSend={sendMessage}
+              onStop={stop}
+              disabled={!isReady}
+              isStreaming={isStreaming}
+            />
+          </div>
+          <p className="text-xs text-foreground-muted text-center mt-2">
+            Shift+Enter for new line
+          </p>
         </div>
       </div>
     </div>

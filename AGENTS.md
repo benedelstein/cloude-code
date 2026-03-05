@@ -28,7 +28,11 @@ pnpm lint
 pnpm clean
 ```
 
-NOTE: After making changes, make sure to build and lint and typecheck the repo.
+### Validating your work.
+
+NOTE: After making changes, always make sure to build, lint, and typecheck the repo.
+NOTE: You have access to the /screenshot skill to test visual changes on the web app. If you make visual changes, check your work by using /screenshot with a localhost url.
+        If you need to know which session url to use, you could look one up from the local d1 db or ask the user.
 NOTE: If you are tasked with committing to git, prefer concise messages. 
 
 ### Package-specific commands
