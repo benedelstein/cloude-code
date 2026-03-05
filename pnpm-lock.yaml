@@ -202,6 +202,9 @@ importers:
       ai-sdk-provider-claude-code:
         specifier: ^3.3.3
         version: 3.3.3(zod@4.3.6)
+      ai-sdk-provider-codex-cli:
+        specifier: ^1.0.0
+        version: 1.1.0(zod@4.3.6)
     devDependencies:
       '@types/bun':
         specifier: ^1.2.0
@@ -1231,6 +1234,47 @@ packages:
     resolution: {integrity: sha512-Nss2b4Jyn4wB3EAqAPJypGuCJFalz/ZujKBQQ5934To7Xw9xjf4hkr/EAByxQY7hp7MKd790bWGz7XYSTsHmaw==}
     engines: {node: '>= 18'}
 
+  '@openai/codex@0.105.0':
+    resolution: {integrity: sha512-enoNmQs3aOgUhsKYC6kfuKEG0AogS4q01pqcySPwf9zl2r8OcKuMUoLw1v5n4Y7sd3B6qGS7UtTABqbcT5FaMA==}
+    engines: {node: '>=16'}
+    hasBin: true
+
+  '@openai/codex@0.105.0-darwin-arm64':
+    resolution: {integrity: sha512-9TD7pDIg8o7itmOhyEPcC2HeVnVIOxxrrbwTvnTibMj2rHPLnY8E0JaK8QOBRNiIUlqI4WKspTMUZQg5Fegndw==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@openai/codex@0.105.0-darwin-x64':
+    resolution: {integrity: sha512-00xRV2X7RwKFRY8LB99/WmVSWqhHnMV6BB4gc5x4MMuDPDslaNrGTYWdp6KBukok1ayrg0JfwazUeAawNWU5Zw==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@openai/codex@0.105.0-linux-arm64':
+    resolution: {integrity: sha512-UFGyZhRB0Gtr31wFf0WDd//W3XGbZZ7mxYwf528i6rhlwabb3FIJKWrgv4DVXKQZCGiBujqAk0pr32PziElouA==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@openai/codex@0.105.0-linux-x64':
+    resolution: {integrity: sha512-cZgNzNjspqHmXNf/CraqqQrfotw5cXO7wvkSSYs2NZjZR7Ud10u5hFeumUW1sEvb5/F9tEKsjO+WCj+bVxdrYQ==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [linux]
+
+  '@openai/codex@0.105.0-win32-arm64':
+    resolution: {integrity: sha512-OGvHTn/XAyY8889n0ZEcvUgiaPeT/rLFEFUEOzWgt5yhKiODV+zEzfruYmcvZUpzgFJ1kRQlDgKPMbW7u2r01Q==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@openai/codex@0.105.0-win32-x64':
+    resolution: {integrity: sha512-8V26RjFeg06i4mrrhQTKLY6lcRXsm0s1cxT3lamApLccvBBAhhAOE0je6jHb5nkrncvf9x/lee+WmY0louvvGQ==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [win32]
+
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
@@ -1925,6 +1969,12 @@ packages:
     peerDependencies:
       zod: ^4.0.0
 
+  ai-sdk-provider-codex-cli@1.1.0:
+    resolution: {integrity: sha512-l1ap+RAwCpdwEaLmB2cpQ4br+h2ut2IR0IvI88QvUMAAk5c3h2dSnx+vYZhwsOt1th3CS7FUQmvCTcnxqYshWg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.0.0 || ^4.0.0
+
   ai@6.0.59:
     resolution: {integrity: sha512-9SfCvcr4kVk4t8ZzIuyHpuL1hFYKsYMQfBSbBq3dipXPa+MphARvI8wHEjNaRqYl3JOsJbWxEBIMqHL0L92mUA==}
     engines: {node: '>=18'}
@@ -2518,6 +2568,9 @@ packages:
 
   json-stable-stringify-without-jsonify@1.0.1:
     resolution: {integrity: sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==}
+
+  jsonc-parser@3.3.1:
+    resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
@@ -4188,6 +4241,34 @@ snapshots:
       '@octokit/request-error': 6.1.8
       '@octokit/webhooks-methods': 5.1.1
 
+  '@openai/codex@0.105.0':
+    optionalDependencies:
+      '@openai/codex-darwin-arm64': '@openai/codex@0.105.0-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.105.0-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.105.0-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.105.0-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.105.0-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.105.0-win32-x64'
+    optional: true
+
+  '@openai/codex@0.105.0-darwin-arm64':
+    optional: true
+
+  '@openai/codex@0.105.0-darwin-x64':
+    optional: true
+
+  '@openai/codex@0.105.0-linux-arm64':
+    optional: true
+
+  '@openai/codex@0.105.0-linux-x64':
+    optional: true
+
+  '@openai/codex@0.105.0-win32-arm64':
+    optional: true
+
+  '@openai/codex@0.105.0-win32-x64':
+    optional: true
+
   '@opentelemetry/api@1.9.0': {}
 
   '@poppinss/colors@4.1.6':
@@ -4914,6 +4995,15 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk': 0.2.19(zod@4.3.6)
       zod: 4.3.6
 
+  ai-sdk-provider-codex-cli@1.1.0(zod@4.3.6):
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.15(zod@4.3.6)
+      jsonc-parser: 3.3.1
+      zod: 4.3.6
+    optionalDependencies:
+      '@openai/codex': 0.105.0
+
   ai@6.0.59(zod@4.3.6):
     dependencies:
       '@ai-sdk/gateway': 3.0.27(zod@4.3.6)
@@ -5550,6 +5640,8 @@ snapshots:
   json-schema@0.4.0: {}
 
   json-stable-stringify-without-jsonify@1.0.1: {}
+
+  jsonc-parser@3.3.1: {}
 
   keyv@4.5.4:
     dependencies:

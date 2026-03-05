@@ -24,4 +24,9 @@ export interface Env {
   TOKEN_ENCRYPTION_KEY: string;
   ALLOWED_GITHUB_LOGINS: string;
   PORT: string;
+
+  // Codex CLI provider (optional)
+  OPENAI_API_KEY?: string;
+  /** JSON string of codex OAuth tokens (contents of ~/.codex/auth.json) */
+  CODEX_AUTH_JSON?: string;
 }
