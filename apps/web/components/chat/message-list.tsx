@@ -12,6 +12,7 @@ interface MessageListProps {
   isHistoryLoading?: boolean;
   isResponding?: boolean;
   pendingMessage?: string | null;
+  userAvatarUrl?: string | null;
 }
 
 export function MessageList({
@@ -20,6 +21,7 @@ export function MessageList({
   isHistoryLoading = false,
   isResponding,
   pendingMessage,
+  userAvatarUrl,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -71,6 +73,7 @@ export function MessageList({
             key={message.id}
             message={message}
             isStreaming={streamingMessage?.id === message.id}
+            userAvatarUrl={userAvatarUrl}
           />
         ))}
         {pendingMessage && (
@@ -80,6 +83,7 @@ export function MessageList({
               role: "user",
               parts: [{ type: "text", text: pendingMessage }],
             }}
+            userAvatarUrl={userAvatarUrl}
           />
         )}
         {isResponding && <TypingIndicator />}

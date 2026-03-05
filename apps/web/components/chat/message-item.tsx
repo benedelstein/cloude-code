@@ -13,9 +13,10 @@ import { ReasoningPart } from "@/components/parts/reasoning-part";
 interface MessageItemProps {
   message: UIMessage;
   isStreaming?: boolean;
+  userAvatarUrl?: string | null;
 }
 
-export function MessageItem({ message, isStreaming = false }: MessageItemProps) {
+export function MessageItem({ message, isStreaming = false, userAvatarUrl }: MessageItemProps) {
   const isUser = message.role === "user";
   const isAborted = !isUser && (message.metadata as Record<string, unknown>)?.aborted === true;
 
@@ -101,9 +102,17 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
 
           {/* User avatar on right */}
           {isUser && (
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-              <User className="w-4 h-4 text-accent-foreground" />
-            </div>
+            userAvatarUrl ? (
+              <img
+                src={userAvatarUrl}
+                alt="You"
+                className="flex-shrink-0 w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                <User className="w-4 h-4 text-accent-foreground" />
+              </div>
+            )
           )}
         </div>
       </div>

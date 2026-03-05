@@ -5,6 +5,7 @@ import { Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
+import { useAuth } from "@/hooks/use-auth";
 import { updateSessionTitle as updateSessionTitleRequest } from "@/lib/api";
 import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
@@ -37,6 +38,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     stop,
   } = useSession();
 
+  const { user } = useAuth();
   const { updateTitle } = useSessionList();
   const sessionTitle = useSessionTitle(sessionId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -191,6 +193,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isHistoryLoading={isHistoryLoading}
           isResponding={isResponding}
           pendingMessage={pendingMessage}
+          userAvatarUrl={user?.avatarUrl}
         />
       </div>
 
