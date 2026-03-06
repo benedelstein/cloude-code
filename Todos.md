@@ -10,6 +10,7 @@
 - [ ] Pre-warm sprite instances for a repo and cache them for reuse later so we don't have to do a fresh clone.
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
+        Maybe,...run multiple sessions on one cpu for different repos. would need to handle resource sharing.
 - [x] Store past session history and open resumed sessions
 - [ ] Proactive push notifications to the user when something is ready.
 - [ ] Mobile client

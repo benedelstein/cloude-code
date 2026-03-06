@@ -65,7 +65,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-y-auto py-4"
+      className="h-full overflow-y-auto pt-20 pb-64"
     >
       <div className="max-w-4xl mx-auto px-7 space-y-4">
         {allMessages.map((message) => (
@@ -95,7 +95,7 @@ export function MessageList({
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-lg bg-background-secondary border border-border text-foreground-muted shadow-sm">
+    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-lg bg-background border border-border text-foreground-muted shadow-shadow shadow-md">
       Working
       <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse" />
       <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse [animation-delay:0.2s]" />

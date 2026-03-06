@@ -22,37 +22,44 @@ const statusMessages: Record<SessionStatus, string> = {
 };
 
 const statusColors: Record<SessionStatus, string> = {
-  provisioning: "bg-accent-subtle text-accent border-accent/20",
-  cloning: "bg-accent-subtle text-accent border-accent/20",
-  syncing: "bg-accent-subtle text-accent border-accent/20",
-  attaching: "bg-accent-subtle text-accent border-accent/20",
-  waking: "bg-warning/10 text-warning border-warning/20",
-  hibernating: "bg-warning/10 text-warning border-warning/20",
+  provisioning: "border-accent/30 bg-accent-subtle text-accent",
+  cloning: "border-accent/30 bg-accent-subtle text-accent",
+  syncing: "border-accent/30 bg-accent-subtle text-accent",
+  attaching: "border-accent/30 bg-accent-subtle text-accent",
+  waking: "border-warning/30 bg-warning/10 text-warning",
+  hibernating: "border-warning/30 bg-warning/10 text-warning",
   ready: "",
-  error: "bg-danger/10 text-danger border-danger/20",
-  terminated: "bg-danger/10 text-danger border-danger/20",
+  error: "border-danger/30 bg-danger/10 text-danger",
+  terminated: "border-danger/30 bg-danger/10 text-danger",
 };
 
+const isVisible = (status: SessionStatus) => status !== "ready";
+
 export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps) {
-  // Don't show banner when ready
-  if (sessionStatus === "ready") {
-    return null;
-  }
+  const visible = isVisible(sessionStatus);
 
   const message = sessionStatus === "error" && errorMessage
     ? errorMessage
     : statusMessages[sessionStatus];
 
   return (
-    <div className={`shrink-0 border-b ${statusColors[sessionStatus]}`}>
-      <div className="max-w-4xl mx-auto px-4 py-2 flex items-center gap-3">
-        {sessionStatus !== "error" && (
-          <LoadingSpinner className="h-4 w-4" />
-        )}
-        {sessionStatus === "error" && (
-          <AlertTriangle className="h-4 w-4" />
-        )}
-        <span className="text-sm font-medium">{message}</span>
+    <div
+      className="grid transition-all duration-300 ease-in-out"
+      style={{
+        gridTemplateRows: visible ? "1fr" : "0fr",
+        opacity: visible ? 1 : 0,
+      }}
+    >
+      <div className="overflow-hidden">
+        <div className={`mx-3 mt-3 rounded-md border px-3 py-2 flex items-center gap-2.5 ${visible ? statusColors[sessionStatus] : ""}`}>
+          {sessionStatus !== "error" && sessionStatus !== "terminated" && (
+            <LoadingSpinner className="h-3.5 w-3.5" />
+          )}
+          {(sessionStatus === "error" || sessionStatus === "terminated") && (
+            <AlertTriangle className="h-3.5 w-3.5" />
+          )}
+          <span className="text-xs font-medium">{message}</span>
+        </div>
       </div>
     </div>
   );

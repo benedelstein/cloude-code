@@ -92,6 +92,20 @@ export const getSessionMessagesRoute = createRoute({
   },
 });
 
+const ErrorResponse = z.object({ error: z.string() });
+const ErrorWithDetailsResponse = z.object({
+  error: z.string(),
+  details: z.string(),
+});
+const ErrorWithOptionalDetailsResponse = z.object({
+  error: z.string(),
+  details: z.string().optional(),
+});
+const ErrorWithUrlResponse = z.object({
+  error: z.string(),
+  url: z.string(),
+});
+
 export const createPullRequestRoute = createRoute({
   method: "post",
   path: "/{sessionId}/pr",
@@ -102,6 +116,18 @@ export const createPullRequestRoute = createRoute({
     201: {
       content: { "application/json": { schema: PullRequestResponse } },
       description: "Created pull request",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorWithOptionalDetailsResponse } },
+      description: "Bad request or failed to create PR",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
+    },
+    409: {
+      content: { "application/json": { schema: ErrorWithUrlResponse } },
+      description: "Pull request already exists",
     },
   },
 });
@@ -116,6 +142,18 @@ export const getPullRequestRoute = createRoute({
     200: {
       content: { "application/json": { schema: PullRequestStatusResponse } },
       description: "Pull request status",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Invalid repo",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session or PR not found",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to fetch PR status",
     },
   },
 });
@@ -145,6 +183,10 @@ export const deleteSessionRoute = createRoute({
       content: { "application/json": { schema: DeleteSessionResponse } },
       description: "Session deleted",
     },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to delete session",
+    },
   },
 });
 
@@ -159,6 +201,10 @@ export const openEditorRoute = createRoute({
       content: { "application/json": { schema: EditorOpenResponse } },
       description: "Editor URL and connection token",
     },
+    500: {
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
+      description: "Failed to open editor",
+    },
   },
 });
 
@@ -172,6 +218,10 @@ export const closeEditorRoute = createRoute({
     200: {
       content: { "application/json": { schema: EditorCloseResponse } },
       description: "Editor closed",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
+      description: "Failed to close editor",
     },
   },
 });

@@ -16,7 +16,7 @@ interface MessageItemProps {
   userAvatarUrl?: string | null;
 }
 
-export function MessageItem({ message, isStreaming = false, userAvatarUrl }: MessageItemProps) {
+export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
   const isUser = message.role === "user";
   const isAborted = !isUser && (message.metadata as Record<string, unknown>)?.aborted === true;
 
@@ -31,9 +31,9 @@ export function MessageItem({ message, isStreaming = false, userAvatarUrl }: Mes
           {/* Message Content */}
           <div className="flex-1 min-w-0">
             <div
-              className={`rounded-lg ${
+              className={`rounded-md ${
                 isUser
-                  ? "px-4 py-3 bg-accent text-accent-foreground"
+                  ? "px-3 py-2 bg-accent-subtle text-accent-foreground"
                   : ""
               }`}
             >
@@ -86,10 +86,6 @@ export function MessageItem({ message, isStreaming = false, userAvatarUrl }: Mes
                 return null;
               })}
 
-              {/* Streaming cursor */}
-              {isStreaming && !isUser && (
-                <span className="inline-block w-2 h-4 bg-current animate-pulse ml-1" />
-              )}
             </div>
 
             {/* Interrupted label for aborted messages */}

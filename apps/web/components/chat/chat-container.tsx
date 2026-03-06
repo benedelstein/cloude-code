@@ -179,14 +179,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         </div>
       </AppHeaderPortal>
 
-      {/* Status Banner */}
-      <StatusBanner
-        sessionStatus={sessionStatus}
-        errorMessage={errorMessage}
-      />
-
       {/* Messages */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <MessageList
           messages={messages}
           streamingMessage={streamingMessage}
@@ -197,28 +191,29 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         />
       </div>
 
-      {/* Branch Bar */}
-      <BranchBar
-        sessionId={sessionId}
-        pushedBranch={pushedBranch}
-        pullRequestUrl={pullRequestUrl}
-        pullRequestState={pullRequestState}
-      />
-
-      {/* Input */}
-      <div className="shrink-0 sticky bottom-0 z-10 pb-6 pt-2">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="rounded-lg border border-border shadow-sm bg-background">
-            <ChatInput
-              onSend={sendMessage}
-              onStop={stop}
-              disabled={!isReady}
-              isStreaming={isStreaming}
+      {/* Branch Bar + Input - floating at bottom */}
+      <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
+        <div className="pt-8">
+          <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background) 32px)" }}>
+            <BranchBar
+              sessionId={sessionId}
+              pushedBranch={pushedBranch}
+              pullRequestUrl={pullRequestUrl}
+              pullRequestState={pullRequestState}
             />
+            <div className="rounded-lg border border-border bg-background shadow-shadow shadow-xl">
+              <StatusBanner
+                sessionStatus={sessionStatus}
+                errorMessage={errorMessage}
+              />
+              <ChatInput
+                onSend={sendMessage}
+                onStop={stop}
+                disabled={!isReady}
+                isStreaming={isStreaming}
+              />
+            </div>
           </div>
-          <p className="text-xs text-foreground-muted text-center mt-2">
-            Shift+Enter for new line
-          </p>
         </div>
       </div>
     </div>

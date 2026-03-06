@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Send, Square } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -72,23 +73,31 @@ export function ChatInput({
       </div>
       <div className="flex items-center justify-end px-3 pb-2">
         {isStreaming ? (
-          <button
-            type="button"
-            onClick={onStop}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/90 transition-colors"
-            title="Stop generation"
-          >
-            <Square className="h-3.5 w-3.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onStop}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/90 transition-colors"
+              >
+                <Square className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Stop generation</TooltipContent>
+          </Tooltip>
         ) : (
-          <button
-            type="submit"
-            disabled={disabled || !input.trim()}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Send message"
-          >
-            <Send className="h-3.5 w-3.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="submit"
+                disabled={disabled || !input.trim()}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Enter to send. Shift+Enter for new line.</TooltipContent>
+          </Tooltip>
         )}
       </div>
     </form>

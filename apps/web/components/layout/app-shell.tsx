@@ -7,6 +7,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppHeaderProvider, AppHeaderSlot } from "@/components/layout/app-header-context";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -14,28 +15,35 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <SidebarProvider>
+    <SidebarProvider className="min-h-0! h-svh">
       <AppHeaderProvider>
         <SessionSidebar />
-        <SidebarInset>
+        <SidebarInset className="overflow-hidden">
           {/* Toggle button - aligned with sidebar header */}
           <div className="sticky top-0 z-20 h-0">
             <div className="absolute left-4 top-2 h-14 flex items-center">
-              <SidebarTrigger title="Open/close sidebar" className="bg-background shadow border border-border" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SidebarTrigger className="bg-background shadow-shadow shadow-lg border border-border" />
+                </TooltipTrigger>
+                <TooltipContent side="right">Toggle sidebar</TooltipContent>
+              </Tooltip>
             </div>
           </div>
 
-          {/* Sticky header */}
-          <div className="shrink-0 sticky top-0 z-10 pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
-            <div
-              className="max-w-4xl px-4 h-full flex items-center"
-              style={{
-                marginLeft: "max(3rem, calc((100% - 56rem) / 2))",
-                marginRight: "max(0rem, calc((100% - 56rem) / 2))",
-              }}
-            >
-              <div className="header-card flex-1 flex items-center rounded-lg border border-border shadow-sm bg-background px-3 py-2 has-[>:empty]:hidden">
-                <AppHeaderSlot />
+          {/* Floating header - overlays content */}
+          <div className="sticky top-0 z-10 h-0">
+            <div className="pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
+              <div
+                className="max-w-4xl px-4 h-full flex items-center"
+                style={{
+                  marginLeft: "max(3rem, calc((100% - 56rem) / 2))",
+                  marginRight: "max(0rem, calc((100% - 56rem) / 2))",
+                }}
+              >
+                <div className="header-card flex-1 flex items-center rounded-lg border border-border shadow-shadow shadow-xl bg-background px-3 py-2 has-[>:empty]:hidden">
+                  <AppHeaderSlot />
+                </div>
               </div>
             </div>
           </div>

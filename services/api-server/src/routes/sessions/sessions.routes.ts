@@ -3,9 +3,17 @@ import type { SessionInfoResponse } from "@repo/shared";
 import type { Env } from "@/types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { GitHubAppService, GitHubAppError } from "@/lib/github";
+import {
+  GitHubAppService,
+  GitHubAppError,
+} from "@/lib/github";
 import { logger } from "@/lib/logger";
 import { SessionHistoryService } from "@/lib/session-history";
+import {
+  createPullRequestForSession,
+  getPullRequestStatusForSession,
+  SessionPullRequestServiceError,
+} from "@/lib/session-pull-request-service";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
@@ -150,179 +158,76 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
 
   const response = await stub.fetch(new Request("http://do/messages"));
   if (!response.ok) {
-    return c.json({ error: "Failed to get messages" }, 500) as any;
+    return c.json({ error: "Failed to get messages" }, 500);
   }
 
-  return c.json(await response.json() as any, 200);
+  return c.json(await response.json(), 200);
 });
 
 // Create a pull request for a session's pushed branch
 sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const user = c.get("user");
   const stub = await getSessionAgent(sessionId, c.env);
-
-  // Get session info (repoFullName, pushedBranch) from the DO
-  const sessionResponse = await stub.fetch(new Request("http://do/"));
-  if (!sessionResponse.ok) {
-    return c.json({ error: "Session not found" }, 404) as any;
+  const github = new GitHubAppService(c.env, logger);
+  try {
+    const pullRequest = await createPullRequestForSession({
+      sessionStub: stub,
+      github,
+      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
+    });
+    return c.json(pullRequest, 201);
+  } catch (error) {
+    if (error instanceof SessionPullRequestServiceError) {
+      if (error.status === 409 && error.responseBody.url) {
+        return c.json(
+          { error: error.responseBody.error, url: error.responseBody.url },
+          409,
+        );
+      }
+      if (error.status === 404) {
+        return c.json({ error: error.responseBody.error }, 404);
+      }
+      if (error.status === 400) {
+        return c.json(
+          {
+            error: error.responseBody.error,
+            details: error.responseBody.details,
+          },
+          400,
+        );
+      }
+      return c.json(
+        { error: "Failed to create pull request" },
+        400,
+      );
+    }
+    throw error;
   }
-  const session = (await sessionResponse.json()) as SessionInfoResponse;
-
-  if (!session.pushedBranch) {
-    return c.json({ error: "No branch has been pushed yet" }, 400) as any;
-  }
-
-  if (session.pullRequestUrl) {
-    return c.json(
-      { error: "Pull request already exists", url: session.pullRequestUrl },
-      409,
-    ) as any;
-  }
-
-  const [owner, repo] = session.repoFullName.split("/");
-  if (!owner || !repo) {
-    return c.json({ error: "Invalid repoFullName" }, 400) as any;
-  }
-
-  // Generate PR title from branch name (e.g. "cloude/fix-readme-a1b2" -> "fix readme")
-  const branchName = session.pushedBranch;
-  const titleSlug = branchName
-    .replace(/^cloude\//, "")
-    .replace(/-[a-z0-9]{4}$/, "")
-    .replace(/-/g, " ");
-  const title = titleSlug.charAt(0).toUpperCase() + titleSlug.slice(1);
-
-  const baseBranch = session.baseBranch ?? "main";
-
-  // Create PR using user's GitHub OAuth token
-  const prResponse = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${user.githubAccessToken}`,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-        "User-Agent": "cloude-code",
-      },
-      body: JSON.stringify({
-        title,
-        head: branchName,
-        base: baseBranch,
-      }),
-    },
-  );
-
-  if (!prResponse.ok) {
-    const errorBody = await prResponse.text();
-    console.error(
-      `GitHub PR creation failed: ${prResponse.status} ${errorBody}`,
-    );
-    return c.json(
-      { error: "Failed to create pull request", details: errorBody },
-      prResponse.status as 400,
-    ) as any;
-  }
-
-  const prData = (await prResponse.json()) as {
-    html_url: string;
-    number: number;
-    state: string;
-  };
-
-  // Store PR info in the DO
-  await stub.fetch(
-    new Request("http://do/pr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: prData.html_url,
-        number: prData.number,
-        state: "open",
-      }),
-    }),
-  );
-
-  return c.json(
-    {
-      url: prData.html_url,
-      number: prData.number,
-      state: "open",
-    },
-    201,
-  );
 });
 
 // Check pull request status
 sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const stub = await getSessionAgent(sessionId, c.env);
-
-  const sessionResponse = await stub.fetch(new Request("http://do/"));
-  if (!sessionResponse.ok) {
-    return c.json({ error: "Session not found" }, 404) as any;
-  }
-  const session = (await sessionResponse.json()) as SessionInfoResponse;
-
-  if (!session.pullRequestNumber || !session.pullRequestUrl) {
-    return c.json({ error: "No pull request exists" }, 404) as any;
-  }
-
-  const [owner, repo] = session.repoFullName.split("/");
-  if (!owner || !repo) {
-    return c.json({ error: "Invalid repoFullName" }, 400) as any;
-  }
-
-  // Use installation token for reads (no user token needed)
   const github = new GitHubAppService(c.env, logger);
-  const installationToken = await github.getTokenForRepo(
-    session.repoFullName,
-  );
-
-  const prResponse = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${session.pullRequestNumber}`,
-    {
-      headers: {
-        Authorization: `Bearer ${installationToken}`,
-        Accept: "application/vnd.github+json",
-        "User-Agent": "cloude-code",
-      },
-    },
-  );
-
-  if (!prResponse.ok) {
-    return c.json({ error: "Failed to fetch PR status" }, 500) as any;
+  try {
+    const pullRequestStatus = await getPullRequestStatusForSession({
+      sessionStub: stub,
+      github,
+    });
+    return c.json(pullRequestStatus, 200);
+  } catch (error) {
+    if (error instanceof SessionPullRequestServiceError) {
+      if (error.status === 404) {
+        return c.json({ error: error.responseBody.error }, 404);
+      }
+      if (error.status === 400) {
+        return c.json({ error: error.responseBody.error }, 400);
+      }
+      return c.json({ error: error.responseBody.error }, 500);
+    }
+    throw error;
   }
-
-  const prData = (await prResponse.json()) as {
-    state: string;
-    merged: boolean;
-  };
-  const state = prData.merged
-    ? "merged"
-    : (prData.state as "open" | "closed");
-
-  // Update DO state if changed
-  if (state !== session.pullRequestState) {
-    await stub.fetch(
-      new Request("http://do/pr", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
-      }),
-    );
-  }
-
-  return c.json(
-    {
-      url: session.pullRequestUrl,
-      number: session.pullRequestNumber,
-      state,
-      merged: prData.merged,
-    },
-    200,
-  );
 });
 
 // Archive a session (hide from list but preserve data)
@@ -343,7 +248,7 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   );
 
   if (!response.ok) {
-    return c.json({ error: "Failed to delete session" }, 500) as any;
+    return c.json({ error: "Failed to delete session" }, 500);
   }
 
   // Hard-delete from D1 so terminated sessions vanish entirely
@@ -364,10 +269,11 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
 
   if (!response.ok) {
     const error = await response.text();
-    return c.json({ error: "Failed to open editor", details: error }, response.status as 500) as any;
+    return c.json({ error: "Failed to open editor", details: error }, response.status as 500);
   }
 
-  return c.json(await response.json() as any, 200);
+  const body = (await response.json()) as { url: string; token: string };
+  return c.json(body, 200);
 });
 
 // Close VS Code editor on the Sprite VM
@@ -381,8 +287,9 @@ sessionsRoutes.openapi(closeEditorRoute, async (c) => {
 
   if (!response.ok) {
     const error = await response.text();
-    return c.json({ error: "Failed to close editor", details: error }, response.status as 500) as any;
+    return c.json({ error: "Failed to close editor", details: error }, response.status as 500);
   }
 
-  return c.json(await response.json() as any, 200);
+  const body = (await response.json()) as { closed: true };
+  return c.json(body, 200);
 });

@@ -13,7 +13,7 @@ interface TextPartProps {
 export function TextPart({ text, isUser = false }: TextPartProps) {
   // For user messages, just render plain text
   if (isUser) {
-    return <p className="whitespace-pre-wrap">{text}</p>;
+    return <p className="whitespace-pre-wrap text-foreground font-regular text-sm">{text}</p>;
   }
 
   // For assistant messages, render markdown

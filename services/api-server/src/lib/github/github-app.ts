@@ -33,6 +33,36 @@ export interface RefreshedToken {
   refreshTokenExpiresAt: string;
 }
 
+export interface GitHubCompareData {
+  aheadBy: number;
+  totalCommits: number;
+  files: Array<{
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+  }>;
+  commits: Array<{
+    sha: string;
+    message: string;
+    authorName: string | null;
+  }>;
+}
+
+export interface CreatePullRequestInput {
+  title: string;
+  body: string;
+  head: string;
+  base: string;
+}
+
+export interface PullRequestData {
+  number: number;
+  url: string;
+  state: "open" | "closed";
+  merged: boolean;
+}
+
 export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
   | "REPO_NOT_ACCESSIBLE"
@@ -162,6 +192,85 @@ export class GitHubAppService {
   }
 
   /**
+   * Compare two branches using the GitHub App installation token.
+   */
+  async compareBranches(
+    repoFullName: string,
+    baseBranch: string,
+    headBranch: string,
+  ): Promise<GitHubCompareData> {
+    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
+    const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${baseBranch}...${headBranch}`,
+    });
+
+    return {
+      aheadBy: data.ahead_by,
+      totalCommits: data.total_commits,
+      files: (data.files ?? []).map((file) => ({
+        filename: file.filename,
+        status: file.status ?? "modified",
+        additions: file.additions ?? 0,
+        deletions: file.deletions ?? 0,
+      })),
+      commits: (data.commits ?? []).map((commit) => ({
+        sha: commit.sha,
+        message: commit.commit.message ?? "",
+        authorName: commit.commit.author?.name ?? null,
+      })),
+    };
+  }
+
+  /**
+   * Create a pull request using the GitHub App installation token.
+   */
+  async createPullRequest(
+    repoFullName: string,
+    input: CreatePullRequestInput,
+  ): Promise<PullRequestData> {
+    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
+    const { data } = await octokit.rest.pulls.create({
+      owner,
+      repo,
+      title: input.title,
+      body: input.body,
+      head: input.head,
+      base: input.base,
+    });
+
+    return {
+      number: data.number,
+      url: data.html_url,
+      state: data.state as "open" | "closed",
+      merged: false,
+    };
+  }
+
+  /**
+   * Get pull request status using the GitHub App installation token.
+   */
+  async getPullRequest(
+    repoFullName: string,
+    pullRequestNumber: number,
+  ): Promise<PullRequestData> {
+    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
+    const { data } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: pullRequestNumber,
+    });
+
+    return {
+      number: data.number,
+      url: data.html_url,
+      state: data.state as "open" | "closed",
+      merged: data.merged,
+    };
+  }
+
+  /**
    * Resolve a repo's full name (owner/repo) from its numeric GitHub ID.
    * Checks D1 first, falls back to the GitHub API.
    */
@@ -200,6 +309,26 @@ export class GitHubAppService {
     const octokit = await this.app.getInstallationOctokit(installationId);
     const { data } = await octokit.rest.repos.get({ owner, repo });
     return data.id;
+  }
+
+  private async getRepoOctokit(repoFullName: string): Promise<{
+    owner: string;
+    repo: string;
+    octokit: Octokit;
+  }> {
+    const [owner, repo] = repoFullName.split("/");
+    if (!owner || !repo) {
+      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
+    }
+
+    const installation = await this.findInstallationForRepo(owner, repo);
+    const octokit = await this.app.getInstallationOctokit(installation.id);
+
+    return {
+      owner,
+      repo,
+      octokit,
+    };
   }
 
   /**

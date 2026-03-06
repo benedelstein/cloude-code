@@ -126,7 +126,7 @@ export default function Home() {
   return (
     <div className="h-full flex flex-col items-center justify-center px-4 pb-16">
       <div className="w-full max-w-2xl">
-        <div className="text-6xl mb-4 text-center">☁️</div>
+        <div className="text-8xl mb-4 text-center">☁️</div>
         <h1 className="text-2xl font-semibold mb-1 text-center">
           What do you want to build?
         </h1>
@@ -141,7 +141,7 @@ export default function Home() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow">
+          <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
