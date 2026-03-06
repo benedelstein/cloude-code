@@ -34,6 +34,7 @@ import {
   type GitProxyContext,
 } from "@/lib/git-proxy";
 import { logger as defaultLogger } from "@/lib/logger";
+import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
@@ -47,6 +48,7 @@ const loggerName = "session-agent-do.ts";
 
 interface InitRequest {
   sessionId: string;
+  userId: string;
   repoFullName: string;
   settings?: Partial<SessionSettings>;
   branch?: string;
@@ -385,6 +387,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.setState({
       ...this.state,
       sessionId: data.sessionId,
+      userId: data.userId,
       repoFullName: data.repoFullName,
       spriteName: null,
       claudeSessionId: null,
@@ -646,8 +649,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     };
 
     if (isCodex) {
-      // Pass codex OAuth tokens or API key
-      if (this.env.CODEX_AUTH_JSON) {
+      // Try per-user OpenAI OAuth tokens first, then fall back to server-wide env vars
+      const codexAuthJson = await this.buildCodexAuthJson();
+      if (codexAuthJson) {
+        baseEnv.CODEX_AUTH_JSON = codexAuthJson;
+      } else if (this.env.CODEX_AUTH_JSON) {
         baseEnv.CODEX_AUTH_JSON = this.env.CODEX_AUTH_JSON;
       }
       if (this.env.OPENAI_API_KEY) {
@@ -670,6 +676,52 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.setupAgentSessionHandlers();
     await this.agentSession.start();
     this.logger.info(`vm-agent (${provider}) started on sprite ${spriteName}`, { loggerName });
+  }
+
+  /**
+   * Build Codex auth.json content from per-user OpenAI OAuth tokens stored in D1.
+   * Returns null if no per-user tokens are found.
+   */
+  private async buildCodexAuthJson(): Promise<string | null> {
+    const userId = this.state.userId;
+    if (!userId) return null;
+
+    const row = await this.env.DB.prepare(
+      `SELECT encrypted_access_token, encrypted_refresh_token, encrypted_id_token, token_expires_at
+       FROM openai_tokens WHERE user_id = ?`,
+    )
+      .bind(userId)
+      .first<{
+        encrypted_access_token: string;
+        encrypted_refresh_token: string | null;
+        encrypted_id_token: string | null;
+        token_expires_at: string | null;
+      }>();
+
+    if (!row) return null;
+
+    const accessToken = await decrypt(
+      row.encrypted_access_token,
+      this.env.TOKEN_ENCRYPTION_KEY,
+    );
+    const refreshToken = row.encrypted_refresh_token
+      ? await decrypt(row.encrypted_refresh_token, this.env.TOKEN_ENCRYPTION_KEY)
+      : undefined;
+    const idToken = row.encrypted_id_token
+      ? await decrypt(row.encrypted_id_token, this.env.TOKEN_ENCRYPTION_KEY)
+      : undefined;
+
+    const authJson: Record<string, unknown> = {
+      auth_mode: "chatgpt",
+      tokens: {
+        access_token: accessToken,
+        ...(refreshToken && { refresh_token: refreshToken }),
+        ...(idToken && { id_token: idToken }),
+        ...(row.token_expires_at && { expires_at: row.token_expires_at }),
+      },
+    };
+
+    return JSON.stringify(authJson);
   }
 
   private setupAgentSessionHandlers(): void {

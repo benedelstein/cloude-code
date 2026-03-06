@@ -1,0 +1,279 @@
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute } from "@hono/zod-openapi";
+import type { Env } from "@/types";
+import { encrypt } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
+import {
+  authMiddleware,
+  type AuthUser,
+} from "@/middleware/auth.middleware";
+import {
+  OpenAIAuthUrlResponse,
+  OpenAITokenRequest,
+  OpenAITokenResponse,
+  OpenAIStatusResponse,
+  OpenAIDisconnectResponse,
+} from "@repo/shared";
+
+const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+const OPENAI_AUTH_URL = "https://auth.openai.com/oauth/authorize";
+const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
+const OPENAI_SCOPES = "openid profile email offline_access";
+
+// --- PKCE helpers (Web Crypto) ---
+
+function generateCodeVerifier(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+}
+
+async function computeCodeChallenge(verifier: string): Promise<string> {
+  const encoded = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/** Decode JWT payload without signature verification (for expiry tracking only). */
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Invalid JWT");
+  const payload = parts[1]!
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  return JSON.parse(atob(payload));
+}
+
+// --- Route definitions ---
+
+const getOpenAIAuthRoute = createRoute({
+  method: "get",
+  path: "/openai",
+  responses: {
+    200: {
+      content: { "application/json": { schema: OpenAIAuthUrlResponse } },
+      description: "OpenAI OAuth authorization URL with PKCE",
+    },
+  },
+});
+
+const postOpenAITokenRoute = createRoute({
+  method: "post",
+  path: "/openai/token",
+  request: {
+    body: {
+      content: { "application/json": { schema: OpenAITokenRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: OpenAITokenResponse } },
+      description: "Token exchange success",
+    },
+  },
+});
+
+const getOpenAIStatusRoute = createRoute({
+  method: "get",
+  path: "/openai/status",
+  responses: {
+    200: {
+      content: { "application/json": { schema: OpenAIStatusResponse } },
+      description: "OpenAI connection status",
+    },
+  },
+});
+
+const postOpenAIDisconnectRoute = createRoute({
+  method: "post",
+  path: "/openai/disconnect",
+  responses: {
+    200: {
+      content: { "application/json": { schema: OpenAIDisconnectResponse } },
+      description: "Disconnect success",
+    },
+  },
+});
+
+// --- Router ---
+
+export const openaiAuthRoutes = new OpenAPIHono<{
+  Bindings: Env;
+  Variables: { user: AuthUser };
+}>();
+
+/**
+ * GET /auth/openai — Generate OpenAI OAuth URL with PKCE
+ * The redirect_uri query param tells us where to send the user back.
+ */
+openaiAuthRoutes.openapi(getOpenAIAuthRoute, async (c) => {
+  const state = crypto.randomUUID();
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await computeCodeChallenge(codeVerifier);
+
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await c.env.DB.prepare(
+    `INSERT INTO oauth_states (state, expires_at, code_verifier) VALUES (?, ?, ?)`,
+  )
+    .bind(state, expiresAt, codeVerifier)
+    .run();
+
+  // Derive the redirect URI from the request origin (web app proxies to this endpoint)
+  const requestUrl = new URL(c.req.url);
+  const redirectUri =
+    c.req.query("redirect_uri") ??
+    `${requestUrl.origin}/auth/openai/callback`;
+
+  const params = new URLSearchParams({
+    client_id: OPENAI_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: redirectUri,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    state,
+    scope: OPENAI_SCOPES,
+  });
+
+  const url = `${OPENAI_AUTH_URL}?${params.toString()}`;
+
+  return c.json({ url, state }, 200);
+});
+
+/**
+ * POST /auth/openai/token — Exchange authorization code for tokens
+ * Requires authentication (user must be logged in via GitHub first).
+ */
+openaiAuthRoutes.use("/openai/token", authMiddleware);
+openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
+  const { code, state } = c.req.valid("json");
+  const user = c.get("user");
+
+  if (!code || !state) {
+    return c.json({ error: "Missing code or state" }, 400) as any;
+  }
+
+  // Validate and consume state, retrieve code_verifier
+  const stateRow = await c.env.DB.prepare(
+    `DELETE FROM oauth_states WHERE state = ? AND datetime(expires_at) > datetime('now') RETURNING state, code_verifier`,
+  )
+    .bind(state)
+    .first<{ state: string; code_verifier: string }>();
+
+  if (!stateRow?.code_verifier) {
+    return c.json({ error: "Invalid or expired state" }, 400) as any;
+  }
+
+  // Derive redirect_uri (must match what was sent in the authorize request)
+  const redirectUri =
+    c.req.query("redirect_uri") ??
+    `${new URL(c.req.url).origin}/auth/openai/callback`;
+
+  // Exchange code for tokens at OpenAI
+  let tokenData: {
+    access_token: string;
+    refresh_token?: string;
+    id_token?: string;
+  };
+
+  try {
+    const response = await fetch(OPENAI_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        client_id: OPENAI_CLIENT_ID,
+        code_verifier: stateRow.code_verifier,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(`OpenAI token exchange failed: ${errorText}`);
+      return c.json({ error: "Failed to exchange code" }, 400) as any;
+    }
+
+    tokenData = await response.json();
+  } catch (error) {
+    logger.error("OpenAI token exchange error", { error });
+    return c.json({ error: "Failed to exchange code" }, 400) as any;
+  }
+
+  // Encrypt tokens before storing
+  const encryptedAccess = await encrypt(
+    tokenData.access_token,
+    c.env.TOKEN_ENCRYPTION_KEY,
+  );
+  const encryptedRefresh = tokenData.refresh_token
+    ? await encrypt(tokenData.refresh_token, c.env.TOKEN_ENCRYPTION_KEY)
+    : null;
+  const encryptedIdToken = tokenData.id_token
+    ? await encrypt(tokenData.id_token, c.env.TOKEN_ENCRYPTION_KEY)
+    : null;
+
+  // Extract expiry from access token JWT
+  let tokenExpiresAt: string | null = null;
+  try {
+    const payload = decodeJwtPayload(tokenData.access_token);
+    if (typeof payload.exp === "number") {
+      tokenExpiresAt = new Date(payload.exp * 1000).toISOString();
+    }
+  } catch {
+    // Non-critical — we just won't track expiry
+  }
+
+  // Upsert into openai_tokens
+  await c.env.DB.prepare(
+    `INSERT INTO openai_tokens (user_id, encrypted_access_token, encrypted_refresh_token, encrypted_id_token, token_expires_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET
+       encrypted_access_token = excluded.encrypted_access_token,
+       encrypted_refresh_token = excluded.encrypted_refresh_token,
+       encrypted_id_token = excluded.encrypted_id_token,
+       token_expires_at = excluded.token_expires_at,
+       updated_at = datetime('now')`,
+  )
+    .bind(user.id, encryptedAccess, encryptedRefresh, encryptedIdToken, tokenExpiresAt)
+    .run();
+
+  return c.json({ ok: true as const }, 200);
+});
+
+/**
+ * GET /auth/openai/status — Check if user has connected OpenAI
+ */
+openaiAuthRoutes.use("/openai/status", authMiddleware);
+openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
+  const user = c.get("user");
+
+  const row = await c.env.DB.prepare(
+    `SELECT user_id FROM openai_tokens WHERE user_id = ?`,
+  )
+    .bind(user.id)
+    .first();
+
+  return c.json({ connected: !!row }, 200);
+});
+
+/**
+ * POST /auth/openai/disconnect — Remove OpenAI tokens
+ */
+openaiAuthRoutes.use("/openai/disconnect", authMiddleware);
+openaiAuthRoutes.openapi(postOpenAIDisconnectRoute, async (c) => {
+  const user = c.get("user");
+
+  await c.env.DB.prepare(`DELETE FROM openai_tokens WHERE user_id = ?`)
+    .bind(user.id)
+    .run();
+
+  return c.json({ ok: true as const }, 200);
+});
