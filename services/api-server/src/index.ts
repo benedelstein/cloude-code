@@ -5,6 +5,7 @@ import { sessionsRoutes } from "./routes/sessions/sessions.routes";
 import { testRoutes } from "./routes/test.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { authRoutes } from "./routes/auth/auth.routes";
+import { openaiAuthRoutes } from "./routes/auth/openai.routes";
 import { reposRoutes } from "./routes/repos/repos.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
 import type { Env } from "./types";
@@ -53,6 +54,7 @@ app.all("/git-proxy/:sessionId/*", async (c) => {
 });
 
 app.route("/auth", authRoutes);
+app.route("/auth", openaiAuthRoutes);
 app.route("/repos", reposRoutes);
 
 // Protected routes

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
+import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, Unplug, X } from "lucide-react";
 import { listRepos, listBranches, createSession, type Repo } from "@/lib/api";
+import { useOpenAIAuth } from "@/hooks/use-openai-auth";
 import type { Branch } from "@repo/shared";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
@@ -38,6 +39,7 @@ export default function Home() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const openai = useOpenAIAuth();
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -290,9 +292,38 @@ export default function Home() {
             </div>
           </div>
 
-          <p className="text-xs text-foreground-muted/60 mt-2 text-center">
-            Press Enter to submit, Shift+Enter for new line
-          </p>
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-2">
+              {!openai.loading && (
+                openai.connected ? (
+                  <div className="flex items-center gap-1.5 text-xs text-foreground-muted">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+                    ChatGPT connected
+                    <button
+                      type="button"
+                      onClick={openai.disconnect}
+                      className="ml-1 text-foreground-muted/60 hover:text-foreground-muted transition-colors cursor-pointer"
+                      title="Disconnect ChatGPT"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={openai.connect}
+                    className="flex items-center gap-1.5 text-xs text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    <Unplug className="h-3 w-3" />
+                    Connect ChatGPT
+                  </button>
+                )
+              )}
+            </div>
+            <p className="text-xs text-foreground-muted/60">
+              Press Enter to submit, Shift+Enter for new line
+            </p>
+          </div>
         </form>
       </div>
     </div>

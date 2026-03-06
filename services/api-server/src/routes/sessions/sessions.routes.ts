@@ -75,6 +75,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId,
+        userId: user.id,
         repoFullName: parsed.repoFullName,
         settings: parsed.settings,
         branch: parsed.branch,

@@ -32,3 +32,31 @@ export const LogoutResponse = z.object({
   ok: z.literal(true),
 });
 export type LogoutResponse = z.infer<typeof LogoutResponse>;
+
+// OpenAI OAuth types
+export const OpenAIAuthUrlResponse = z.object({
+  url: z.string(),
+  state: z.string(),
+});
+export type OpenAIAuthUrlResponse = z.infer<typeof OpenAIAuthUrlResponse>;
+
+export const OpenAITokenRequest = z.object({
+  code: z.string(),
+  state: z.string(),
+});
+export type OpenAITokenRequest = z.infer<typeof OpenAITokenRequest>;
+
+export const OpenAITokenResponse = z.object({
+  ok: z.literal(true),
+});
+export type OpenAITokenResponse = z.infer<typeof OpenAITokenResponse>;
+
+export const OpenAIStatusResponse = z.object({
+  connected: z.boolean(),
+});
+export type OpenAIStatusResponse = z.infer<typeof OpenAIStatusResponse>;
+
+export const OpenAIDisconnectResponse = z.object({
+  ok: z.literal(true),
+});
+export type OpenAIDisconnectResponse = z.infer<typeof OpenAIDisconnectResponse>;
