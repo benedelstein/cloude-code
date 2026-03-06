@@ -53,7 +53,12 @@ export type AgentState = {
   createdAt: Date;
 };
 
+/** Supported agent providers */
+export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
+export type AgentProvider = z.infer<typeof AgentProvider>;
+
 export const SessionSettings = z.object({
+  provider: AgentProvider.default("claude-code"),
   model: z.string().default("claude-opus-4-20250514"),
   maxTokens: z.number().default(8192),
 });

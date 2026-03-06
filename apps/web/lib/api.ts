@@ -14,6 +14,9 @@ import type {
   PullRequestStatusResponse,
   EditorOpenResponse,
   EditorCloseResponse,
+  OpenAIAuthUrlResponse,
+  OpenAIStatusResponse,
+  OpenAIDisconnectResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -123,4 +126,17 @@ export async function openEditor(sessionId: string): Promise<EditorOpenResponse>
 
 export async function closeEditor(sessionId: string): Promise<EditorCloseResponse> {
   return apiFetch(`/sessions/${sessionId}/editor/close`, { method: "POST" });
+}
+
+// OpenAI OAuth
+export async function getOpenAIAuthUrl(): Promise<OpenAIAuthUrlResponse> {
+  return apiFetch("/auth/openai");
+}
+
+export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {
+  return apiFetch("/auth/openai/status");
+}
+
+export async function disconnectOpenAI(): Promise<OpenAIDisconnectResponse> {
+  return apiFetch("/auth/openai/disconnect", { method: "POST" });
 }
