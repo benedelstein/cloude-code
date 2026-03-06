@@ -67,7 +67,7 @@ export function MessageList({
       ref={containerRef}
       className="h-full overflow-y-auto pt-20 pb-64"
     >
-      <div className="max-w-4xl mx-auto px-7 space-y-4">
+      <div className="max-w-4xl mx-auto px-8 space-y-4">
         {allMessages.map((message) => (
           <MessageItem
             key={message.id}
