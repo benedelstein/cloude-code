@@ -81,6 +81,8 @@ export type ClaudeTokenResponse = z.infer<typeof ClaudeTokenResponse>;
 
 export const ClaudeStatusResponse = z.object({
   connected: z.boolean(),
+  subscriptionType: z.string().nullable(),
+  rateLimitTier: z.string().nullable(),
 });
 export type ClaudeStatusResponse = z.infer<typeof ClaudeStatusResponse>;
 

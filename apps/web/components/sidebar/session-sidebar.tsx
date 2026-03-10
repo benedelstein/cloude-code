@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal } from "lucide-react";
@@ -41,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function SessionSidebar() {
   const { user, logout } = useAuth();
@@ -111,9 +113,14 @@ export function SessionSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Sessions</SidebarGroupLabel>
-          <SidebarGroupAction title="New session" onClick={() => navigate("/")}>
-            <Plus />
-          </SidebarGroupAction>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarGroupAction aria-label="New session" onClick={() => navigate("/")}>
+                <Plus />
+              </SidebarGroupAction>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">New session</TooltipContent>
+          </Tooltip>
           <SidebarGroupContent>
             {sessionsLoading ? (
               <div className="flex justify-center py-6">
@@ -208,7 +215,11 @@ export function SessionSidebar() {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start" className="w-48">
-                <DropdownMenuLabel>{user?.login}</DropdownMenuLabel>
+                {/* add a github logo next to user login */}
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <Image src="/github_logo.svg" alt="GitHub logo" width={16} height={16} />
+                  <span className="text-sm">{user?.login}</span>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="h-4 w-4" />

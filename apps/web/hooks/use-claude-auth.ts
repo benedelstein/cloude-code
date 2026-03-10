@@ -10,6 +10,8 @@ import {
 
 export function useClaudeAuth() {
   const [connected, setConnected] = useState(false);
+  const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
+  const [rateLimitTier, setRateLimitTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [pendingState, setPendingState] = useState<string | null>(null);
@@ -17,12 +19,22 @@ export function useClaudeAuth() {
   const [submittingCode, setSubmittingCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getClaudeStatus()
-      .then((res) => setConnected(res.connected))
-      .catch(() => setConnected(false))
-      .finally(() => setLoading(false));
+  const refreshStatus = useCallback(async () => {
+    const status = await getClaudeStatus();
+    setConnected(status.connected);
+    setSubscriptionType(status.subscriptionType);
+    setRateLimitTier(status.rateLimitTier);
   }, []);
+
+  useEffect(() => {
+    refreshStatus()
+      .catch(() => {
+        setConnected(false);
+        setSubscriptionType(null);
+        setRateLimitTier(null);
+      })
+      .finally(() => setLoading(false));
+  }, [refreshStatus]);
 
   const connect = useCallback(async () => {
     setError(null);
@@ -47,7 +59,7 @@ export function useClaudeAuth() {
     setError(null);
     try {
       await exchangeClaudeCode(code.trim(), pendingState);
-      setConnected(true);
+      await refreshStatus();
       setAwaitingCode(false);
       setPendingState(null);
       setCode("");
@@ -59,7 +71,7 @@ export function useClaudeAuth() {
     } finally {
       setSubmittingCode(false);
     }
-  }, [code, pendingState]);
+  }, [code, pendingState, refreshStatus]);
 
   const cancelCodeEntry = useCallback(() => {
     setAwaitingCode(false);
@@ -71,6 +83,8 @@ export function useClaudeAuth() {
   const disconnect = useCallback(async () => {
     await disconnectClaude();
     setConnected(false);
+    setSubscriptionType(null);
+    setRateLimitTier(null);
     setAwaitingCode(false);
     setPendingState(null);
     setCode("");
@@ -79,6 +93,8 @@ export function useClaudeAuth() {
 
   return {
     connected,
+    subscriptionType,
+    rateLimitTier,
     loading,
     awaitingCode,
     code,

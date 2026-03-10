@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, Unplug } from "lucide-react";
+import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
 import { listRepos, listBranches, createSession, type Repo } from "@/lib/api";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
+import { ClaudeSigninPanel } from "./claude-signin-panel";
 import type { Branch } from "@repo/shared";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
@@ -23,9 +24,18 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
+function formatClaudeMetadata(value: string): string {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function Home() {
   const router = useRouter();
   const { addSession } = useSessionList();
+  const isDevelopment = process.env.NODE_ENV === "development";
 
   const [repos, setRepos] = useState<Repo[]>([]);
   const [installUrl, setInstallUrl] = useState<string | null>(null);
@@ -39,7 +49,15 @@ export default function Home() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
+  const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const claude = useClaudeAuth();
+  const subscriptionLabel = claude.subscriptionType
+    ? `${formatClaudeMetadata(claude.subscriptionType)} subscription`
+    : "Claude subscription";
+  const tierLabel = claude.rateLimitTier
+    ? ` (${formatClaudeMetadata(claude.rateLimitTier)})`
+    : "";
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -83,9 +101,29 @@ export default function Home() {
       .finally(() => setReposLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (claude.loading) return;
+
+    if (!claude.connected) {
+      setShowClaudeSigninPanel(true);
+      setIsClaudeSigninPanelExiting(false);
+      return;
+    }
+
+    if (!showClaudeSigninPanel) return;
+
+    setIsClaudeSigninPanelExiting(true);
+    const timeout = window.setTimeout(() => {
+      setShowClaudeSigninPanel(false);
+      setIsClaudeSigninPanelExiting(false);
+    }, 220);
+
+    return () => window.clearTimeout(timeout);
+  }, [claude.connected, claude.loading, showClaudeSigninPanel]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRepo || !message.trim()) return;
+    if (!claude.connected || !selectedRepo || !message.trim()) return;
 
     setSubmitting(true);
     setError(null);
@@ -148,221 +186,227 @@ export default function Home() {
           </div>
         )}
 
-        {claude.loading ? (
-          <div className="border border-border-strong rounded-lg bg-background p-6 text-center">
-            <p className="text-sm text-foreground-muted">Checking Claude authentication…</p>
-          </div>
-        ) : !claude.connected ? (
-          <div className="border border-border-strong rounded-lg bg-background p-6 text-center">
-            <p className="text-sm text-foreground-muted mb-4">
-              Connect Claude before creating sessions.
-            </p>
-            <button
-              type="button"
-              onClick={claude.connect}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors cursor-pointer"
-            >
-              <Unplug className="h-3 w-3" />
-              Connect Claude (opens new tab)
-            </button>
-            {claude.error && !claude.awaitingCode && (
-              <p className="mt-3 text-xs text-danger">{claude.error}</p>
-            )}
-            {claude.awaitingCode && (
-              <div className="mt-5 max-w-md mx-auto text-left">
-                <label className="block text-xs text-foreground-muted mb-2">
-                  Paste the code from Claude auth:
-                </label>
-                <input
-                  value={claude.code}
-                  onChange={(e) => claude.setCode(e.target.value)}
-                  placeholder="Paste code..."
-                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
-                  disabled={claude.submittingCode}
-                />
-                {claude.error && (
-                  <p className="mt-2 text-xs text-danger">{claude.error}</p>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={claude.submitCode}
-                    disabled={!claude.code.trim() || claude.submittingCode}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-50"
-                  >
-                    {claude.submittingCode ? "Submitting..." : "Submit code"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={claude.cancelCodeEntry}
-                    disabled={claude.submittingCode}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
         <form onSubmit={handleSubmit}>
-          <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Describe what you want to do..."
-              rows={4}
-              disabled={submitting}
-              className="w-full px-4 pt-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50"
-            />
+            <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
+              {showClaudeSigninPanel && (
+                <ClaudeSigninPanel
+                  claude={claude}
+                  isExiting={isClaudeSigninPanelExiting}
+                />
+              )}
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Describe what you want to do..."
+                rows={claude.connected ? 4 : 2}
+                disabled={submitting}
+                className={`w-full px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
+                  claude.connected ? "pt-4" : "pt-2"
+                }`}
+              />
 
-            <div className="flex items-center justify-between px-3 pb-3">
-              {/* Repo selector */}
-              <div className="flex items-center gap-2">
-                {reposLoading ? (
-                  <span className="text-xs text-foreground-muted px-1">Loading repos...</span>
-                ) : (
-                  <Popover open={repoPickerOpen} onOpenChange={setRepoPickerOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
-                      >
-                        <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-                        <span className="truncate">
-                          {selectedRepo ? selectedRepo.fullName : "Select a repo"}
-                        </span>
-                        <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search repos..." />
-                        <CommandList>
-                          <CommandEmpty>No repos found.</CommandEmpty>
-                          <CommandGroup>
-                            {repos.map((repo) => (
-                              <CommandItem
-                                key={repo.id}
-                                value={repo.fullName}
-                                onSelect={() => {
-                                  setSelectedRepo(repo);
-                                  setRepoPickerOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "h-3.5 w-3.5 shrink-0",
-                                    selectedRepo?.id === repo.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <span className="truncate">{repo.fullName}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                        {installUrl && (
-                          <div className="border-t border-border p-1">
-                            <a
-                              href={installUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
-                            >
-                              <Settings className="h-3.5 w-3.5" />
-                              Configure repos
-                            </a>
-                          </div>
-                        )}
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                )}
-
-                {/* Branch selector */}
-                {selectedRepo && (
-                  branchesLoading ? (
-                    <span className="text-xs text-foreground-muted px-1">...</span>
-                  ) : branches.length > 0 ? (
-                    <Popover open={branchPickerOpen} onOpenChange={setBranchPickerOpen}>
+              <div className="flex items-center justify-between px-3 pb-3">
+                {/* Repo selector */}
+                <div className="flex items-center gap-2">
+                  {reposLoading ? (
+                    <span className="text-xs text-foreground-muted px-1">
+                      Loading repos...
+                    </span>
+                  ) : (
+                    <Popover
+                      open={repoPickerOpen}
+                      onOpenChange={setRepoPickerOpen}
+                    >
                       <PopoverTrigger asChild>
                         <button
                           type="button"
                           disabled={submitting}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
                         >
-                          <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{selectedBranch ?? "Select branch"}</span>
+                          <svg
+                            className="h-3.5 w-3.5 shrink-0"
+                            viewBox="0 0 16 16"
+                            fill="currentColor"
+                          >
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                          </svg>
+                          <span className="truncate">
+                            {selectedRepo
+                              ? selectedRepo.fullName
+                              : "Select a repo"}
+                          </span>
                           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[240px] p-0" align="start">
+                      <PopoverContent className="w-[280px] p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search branches..." />
+                          <CommandInput placeholder="Search repos..." />
                           <CommandList>
-                            <CommandEmpty>No branches found.</CommandEmpty>
+                            <CommandEmpty>No repos found.</CommandEmpty>
                             <CommandGroup>
-                              {branches.map((branch) => (
+                              {repos.map((repo) => (
                                 <CommandItem
-                                  key={branch.name}
-                                  value={branch.name}
+                                  key={repo.id}
+                                  value={repo.fullName}
                                   onSelect={() => {
-                                    setSelectedBranch(branch.name);
-                                    setBranchPickerOpen(false);
+                                    setSelectedRepo(repo);
+                                    setRepoPickerOpen(false);
                                   }}
                                 >
                                   <Check
                                     className={cn(
                                       "h-3.5 w-3.5 shrink-0",
-                                      selectedBranch === branch.name ? "opacity-100" : "opacity-0"
+                                      selectedRepo?.id === repo.id
+                                        ? "opacity-100"
+                                        : "opacity-0",
                                     )}
                                   />
-                                  <span className="truncate">{branch.name}</span>
-                                  {branch.default && (
-                                    <span className="ml-auto text-[10px] text-foreground-muted">default</span>
-                                  )}
+                                  <span className="truncate">
+                                    {repo.fullName}
+                                  </span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
                           </CommandList>
+                          {installUrl && (
+                            <div className="border-t border-border p-1">
+                              <a
+                                href={installUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
+                              >
+                                <Settings className="h-3.5 w-3.5" />
+                                Configure repos
+                              </a>
+                            </div>
+                          )}
                         </Command>
                       </PopoverContent>
                     </Popover>
-                  ) : null
+                  )}
+
+                  {/* Branch selector */}
+                  {selectedRepo &&
+                    (branchesLoading ? (
+                      <span className="text-xs text-foreground-muted px-1">
+                        ...
+                      </span>
+                    ) : branches.length > 0 ? (
+                      <Popover
+                        open={branchPickerOpen}
+                        onOpenChange={setBranchPickerOpen}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
+                          >
+                            <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">
+                              {selectedBranch ?? "Select branch"}
+                            </span>
+                            <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[240px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search branches..." />
+                            <CommandList>
+                              <CommandEmpty>No branches found.</CommandEmpty>
+                              <CommandGroup>
+                                {branches.map((branch) => (
+                                  <CommandItem
+                                    key={branch.name}
+                                    value={branch.name}
+                                    onSelect={() => {
+                                      setSelectedBranch(branch.name);
+                                      setBranchPickerOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "h-3.5 w-3.5 shrink-0",
+                                        selectedBranch === branch.name
+                                          ? "opacity-100"
+                                          : "opacity-0",
+                                      )}
+                                    />
+                                    <span className="truncate">
+                                      {branch.name}
+                                    </span>
+                                    {branch.default && (
+                                      <span className="ml-auto text-[10px] text-foreground-muted">
+                                        default
+                                      </span>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    ) : null)}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {claude.connected && (
+                    <div className="text-right leading-tight">
+                      <p className="text-[11px] font-medium text-foreground">
+                        Claude Opus 4.6
+                      </p>
+                      <p className="text-[10px] text-foreground-muted">
+                        via {subscriptionLabel}{tierLabel}
+                      </p>
+                    </div>
+                  )}
+                  {/* Submit button */}
+                  <button
+                    type="submit"
+                    disabled={
+                      !claude.connected ||
+                      !selectedRepo ||
+                      !message.trim() ||
+                      submitting
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {submitting ? (
+                      <>
+                        <LoadingSpinner className="h-3 w-3" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        Start
+                        <ArrowRight className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-3">
+              <div>
+                {isDevelopment && claude.connected && (
+                  <button
+                    type="button"
+                    onClick={claude.disconnect}
+                    className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    Debug: Disconnect Claude
+                  </button>
                 )}
               </div>
-
-              {/* Submit button */}
-              <button
-                type="submit"
-                disabled={!selectedRepo || !message.trim() || submitting}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {submitting ? (
-                  <>
-                    <LoadingSpinner className="h-3 w-3" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    Start
-                    <ArrowRight className="h-3 w-3" />
-                  </>
-                )}
-              </button>
+              <p className="text-xs text-foreground-muted/60">
+                Press Enter to submit, Shift+Enter for new line
+              </p>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between mt-3">
-            <div />
-            <p className="text-xs text-foreground-muted/60">
-              Press Enter to submit, Shift+Enter for new line
-            </p>
-          </div>
         </form>
-        )}
       </div>
     </div>
   );

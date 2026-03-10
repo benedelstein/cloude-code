@@ -1,15 +1,41 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Code } from "lucide-react";
-import { openEditor } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { Archive, Code, MoreHorizontal, Trash2 } from "lucide-react";
+import { archiveSession, deleteSession, openEditor } from "@/lib/api";
+import { useSessionList } from "@/components/providers/session-list-provider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EditorButtonProps {
   sessionId: string;
   editorUrl: string | null;
   disabled: boolean;
 }
+
+interface SessionActionsButtonProps {
+  sessionId: string;
+}
+
+const buttonBaseClassName =
+  "h-7 flex items-center gap-1.5 px-2 py-1 text-xs rounded-sm border transition-colors";
 
 export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -55,7 +81,7 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleClick}
-          className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-colors ${
+          className={`${buttonBaseClassName} ${
             error
               ? "border-danger/30 text-danger hover:bg-danger/10"
               : editorLink
@@ -71,5 +97,94 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
         {error ?? "Open hosted VS Code to make manual edits"}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
+  const router = useRouter();
+  const { removeSession } = useSessionList();
+
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const isBusy = isArchiving || isDeleting;
+
+  async function handleArchiveSession(): Promise<void> {
+    setIsArchiving(true);
+    router.push("/");
+    try {
+      await archiveSession(sessionId);
+      removeSession(sessionId);
+    } catch (error) {
+      console.error("Failed to archive session:", error);
+    } finally {
+      setIsArchiving(false);
+    }
+  }
+
+  async function handleDeleteSession(): Promise<void> {
+    setIsDeleting(true);
+    setDeleteDialogOpen(false);
+    router.push("/");
+    try {
+      await deleteSession(sessionId);
+      removeSession(sessionId);
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={isBusy}
+            className={`${buttonBaseClassName} w-6 justify-center gap-0 px-0 border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
+            aria-label="Session actions"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end">
+          <DropdownMenuItem onClick={() => void handleArchiveSession()}>
+            <Archive className="h-4 w-4" />
+            Archive
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent container={document.body}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this session and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void handleDeleteSession()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

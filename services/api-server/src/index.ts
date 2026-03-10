@@ -6,7 +6,7 @@ import { testRoutes } from "./routes/test.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { authRoutes } from "./routes/auth/auth.routes";
 import { openaiAuthRoutes } from "./routes/auth/openai.routes";
-import { claudeAuthRoutes } from "./routes/auth/claude.routes";
+import { claudeAuthRoutes } from "./routes/auth/claude/claude.routes";
 import { reposRoutes } from "./routes/repos/repos.routes";
 import { authMiddleware } from "./middleware/auth.middleware";
 import type { Env } from "./types";

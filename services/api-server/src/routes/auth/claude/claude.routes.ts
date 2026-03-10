@@ -1,5 +1,4 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { createRoute } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { encrypt } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
@@ -8,12 +7,11 @@ import {
   type AuthUser,
 } from "@/middleware/auth.middleware";
 import {
-  ClaudeAuthUrlResponse,
-  ClaudeTokenRequest,
-  ClaudeTokenResponse,
-  ClaudeStatusResponse,
-  ClaudeDisconnectResponse,
-} from "@repo/shared";
+  getClaudeAuthRoute,
+  postClaudeTokenRoute,
+  getClaudeStatusRoute,
+  postClaudeDisconnectRoute,
+} from "./schemas";
 
 const DEFAULT_CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const DEFAULT_CLAUDE_AUTH_URL = "https://claude.ai/oauth/authorize";
@@ -130,56 +128,6 @@ function parseClaudeTokenResponse(payload: unknown): ClaudeCredentials {
   };
 }
 
-const getClaudeAuthRoute = createRoute({
-  method: "get",
-  path: "/claude",
-  responses: {
-    200: {
-      content: { "application/json": { schema: ClaudeAuthUrlResponse } },
-      description: "Claude OAuth authorization URL with PKCE",
-    },
-  },
-});
-
-const postClaudeTokenRoute = createRoute({
-  method: "post",
-  path: "/claude/token",
-  description: "Exchange Claude OAuth code for tokens",
-  request: {
-    body: {
-      content: { "application/json": { schema: ClaudeTokenRequest } },
-    },
-  },
-  responses: {
-    200: {
-      content: { "application/json": { schema: ClaudeTokenResponse } },
-      description: "Token exchange success",
-    },
-  },
-});
-
-const getClaudeStatusRoute = createRoute({
-  method: "get",
-  path: "/claude/status",
-  responses: {
-    200: {
-      content: { "application/json": { schema: ClaudeStatusResponse } },
-      description: "Claude connection status",
-    },
-  },
-});
-
-const postClaudeDisconnectRoute = createRoute({
-  method: "post",
-  path: "/claude/disconnect",
-  responses: {
-    200: {
-      content: { "application/json": { schema: ClaudeDisconnectResponse } },
-      description: "Disconnect success",
-    },
-  },
-});
-
 export const claudeAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
@@ -221,7 +169,7 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const user = c.get("user");
 
   if (!code || !state) {
-    return c.json({ error: "Missing code or state" }, 400) as any;
+    return c.json({ error: "Missing code or state" }, 400);
   }
 
   // Some manual flows return "code#state". Support that format while
@@ -230,10 +178,10 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const authorizationCode = rawCodePart?.trim() ?? "";
   const pastedState = rawStatePart?.trim();
   if (!authorizationCode) {
-    return c.json({ error: "Missing authorization code" }, 400) as any;
+    return c.json({ error: "Missing authorization code" }, 400);
   }
   if (pastedState && pastedState !== state) {
-    return c.json({ error: "State mismatch in pasted code" }, 400) as any;
+    return c.json({ error: "State mismatch in pasted code" }, 400);
   }
 
   const stateRow = await c.env.DB.prepare(
@@ -243,7 +191,7 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
     .first<{ state: string; code_verifier: string }>();
 
   if (!stateRow?.code_verifier) {
-    return c.json({ error: "Invalid or expired state" }, 400) as any;
+    return c.json({ error: "Invalid or expired state" }, 400);
   }
 
   const clientId = c.env.CLAUDE_OAUTH_CLIENT_ID ?? DEFAULT_CLAUDE_CLIENT_ID;
@@ -268,14 +216,14 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error(`Claude token exchange failed: ${errorText}`);
-      return c.json({ error: "Failed to exchange code" }, 400) as any;
+      return c.json({ error: "Failed to exchange code" }, 400);
     }
 
     const tokenPayload = await response.json();
     credentials = parseClaudeTokenResponse(tokenPayload);
   } catch (error) {
     logger.error("Claude token exchange error", { error });
-    return c.json({ error: "Failed to exchange code" }, 400) as any;
+    return c.json({ error: "Failed to exchange code" }, 400);
   }
 
   const encryptedAccess = await encrypt(
@@ -324,11 +272,33 @@ claudeAuthRoutes.use("/claude/status", authMiddleware);
 claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   const user = c.get("user");
   const row = await c.env.DB.prepare(
-    `SELECT user_id FROM claude_tokens WHERE user_id = ?`,
+    `SELECT subscription_type, rate_limit_tier FROM claude_tokens WHERE user_id = ?`,
   )
     .bind(user.id)
-    .first();
-  return c.json({ connected: !!row }, 200);
+    .first<{
+      subscription_type: string | null;
+      rate_limit_tier: string | null;
+    }>();
+
+  if (!row) {
+    return c.json(
+      {
+        connected: false,
+        subscriptionType: null,
+        rateLimitTier: null,
+      },
+      200,
+    );
+  }
+
+  return c.json(
+    {
+      connected: true,
+      subscriptionType: row.subscription_type ?? null,
+      rateLimitTier: row.rate_limit_tier ?? null,
+    },
+    200,
+  );
 });
 
 claudeAuthRoutes.use("/claude/disconnect", authMiddleware);
