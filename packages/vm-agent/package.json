@@ -8,7 +8,9 @@
     "dev:legacy": "bun run src/index.ts",
     "test": "bun run src/test-agent-aisdk.ts",
     "test:legacy": "bun run src/test-agent.ts",
-    "build": "bun build src/index-aisdk.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
+    "build": "bun build src/index-aisdk.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify && bun build src/index-codex.ts --outfile=dist/vm-agent-codex.bundle.js --target=bun --minify",
+    "build:claude": "bun build src/index-aisdk.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
+    "build:codex": "bun build src/index-codex.ts --outfile=dist/vm-agent-codex.bundle.js --target=bun --minify",
     "build:legacy": "bun build src/index.ts --outfile=dist/vm-agent-legacy.bundle.js --target=bun --minify",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
@@ -18,7 +20,8 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",
     "@repo/shared": "workspace:*",
     "ai": "catalog:",
-    "ai-sdk-provider-claude-code": "^3.3.3"
+    "ai-sdk-provider-claude-code": "^3.3.3",
+    "ai-sdk-provider-codex-cli": "^1.0.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

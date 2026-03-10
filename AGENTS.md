@@ -64,12 +64,13 @@ Note: If a type should be used by multiple packages, always put it in shared ins
 
 - **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. The `SessionAgentDO` Durable Object manages the full session lifecycle.
 
+- **@repo/web** (`apps/web/`) - Next.js web client
+
 ### Key Files
 
 - `services/api-server/src/durable-objects/session-agent-do.ts` - Core session management, VM lifecycle, WebSocket handling
 - `packages/vm-agent/src/index.ts` - Claude Agent SDK wrapper with streaming input mode
 - `packages/shared/src/types/websocket-api.ts` - WebSocket message schemas
-- `packages/shared/src/types/vm-agent.ts` - Script to run the agent on the VM. Handles comms via stdin/stdout NDJSON.
 
 ### Environment & Secrets
 

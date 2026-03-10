@@ -14,6 +14,14 @@ import type {
   PullRequestStatusResponse,
   EditorOpenResponse,
   EditorCloseResponse,
+  OpenAIAuthUrlResponse,
+  OpenAIStatusResponse,
+  OpenAIDisconnectResponse,
+  ClaudeAuthUrlResponse,
+  ClaudeTokenResponse,
+  ClaudeStatusResponse,
+  ClaudeDisconnectResponse,
+  SessionSettingsInput,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -73,11 +81,12 @@ export async function createSession(
   repoFullName: string,
   initialMessage?: string,
   branch?: string,
+  settings?: SessionSettingsInput,
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ repoId, repoFullName, initialMessage, branch }),
+    body: JSON.stringify({ repoId, repoFullName, initialMessage, branch, settings }),
   });
 }
 
@@ -123,4 +132,41 @@ export async function openEditor(sessionId: string): Promise<EditorOpenResponse>
 
 export async function closeEditor(sessionId: string): Promise<EditorCloseResponse> {
   return apiFetch(`/sessions/${sessionId}/editor/close`, { method: "POST" });
+}
+
+// OpenAI OAuth
+export async function getOpenAIAuthUrl(): Promise<OpenAIAuthUrlResponse> {
+  return apiFetch("/auth/openai");
+}
+
+export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {
+  return apiFetch("/auth/openai/status");
+}
+
+export async function disconnectOpenAI(): Promise<OpenAIDisconnectResponse> {
+  return apiFetch("/auth/openai/disconnect", { method: "POST" });
+}
+
+// Claude OAuth
+export async function getClaudeAuthUrl(): Promise<ClaudeAuthUrlResponse> {
+  return apiFetch("/auth/claude");
+}
+
+export async function exchangeClaudeCode(
+  code: string,
+  state: string,
+): Promise<ClaudeTokenResponse> {
+  return apiFetch("/auth/claude/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, state }),
+  });
+}
+
+export async function getClaudeStatus(): Promise<ClaudeStatusResponse> {
+  return apiFetch("/auth/claude/status");
+}
+
+export async function disconnectClaude(): Promise<ClaudeDisconnectResponse> {
+  return apiFetch("/auth/claude/disconnect", { method: "POST" });
 }

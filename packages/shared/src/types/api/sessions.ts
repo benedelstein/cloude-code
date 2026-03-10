@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionStatus, SessionSettings, SessionSummary } from "../session";
+import { SessionStatus, SessionSettingsInput, SessionSummary } from "../session";
 
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({
@@ -20,7 +20,7 @@ export const CreateSessionRequest = z.object({
   repoId: z.number(),
   /** "owner/repo" full name */
   repoFullName: z.string().min(1),
-  settings: SessionSettings.partial().optional(),
+  settings: SessionSettingsInput.optional(),
   /** Optional branch to base the session on (defaults to repo's default branch) */
   branch: z.string().min(1).optional(),
   /** Optional first message to send immediately after session creation */

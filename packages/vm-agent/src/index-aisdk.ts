@@ -13,6 +13,9 @@ import {
   encodeAgentOutput,
 } from "@repo/shared";
 import { execSync } from "child_process";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import { buildSystemPromptAppend } from "./system-prompt";
 
 const { values: args } = parseArgs({
@@ -30,12 +33,52 @@ function emit(output: AgentOutput): void {
   process.stdout.write(encodeAgentOutput(output) + "\n");
 }
 
-// Debug: check env vars on startup
-const apiKey = process.env.ANTHROPIC_API_KEY;
-emit({
-  type: "debug",
-  message: `ANTHROPIC_API_KEY: ${apiKey ? `set (${apiKey.slice(0, 10)}...)` : "NOT SET"}`,
-});
+type ClaudeCredentials = {
+  claudeAiOauth: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+    scopes: string[];
+    subscriptionType?: string;
+    rateLimitTier?: string;
+  };
+};
+
+function setupClaudeCredentials(): void {
+  const credentialsJson = process.env.CLAUDE_CREDENTIALS_JSON;
+  if (!credentialsJson) {
+    throw new Error(
+      "Missing CLAUDE_CREDENTIALS_JSON. Claude OAuth credentials are required.",
+    );
+  }
+
+  let parsed: ClaudeCredentials;
+  try {
+    parsed = JSON.parse(credentialsJson) as ClaudeCredentials;
+  } catch (error) {
+    throw new Error("CLAUDE_CREDENTIALS_JSON is not valid JSON.", {
+      cause: error,
+    });
+  }
+
+  const oauth = parsed.claudeAiOauth;
+  if (
+    !oauth ||
+    typeof oauth.accessToken !== "string" ||
+    typeof oauth.refreshToken !== "string" ||
+    typeof oauth.expiresAt !== "number" ||
+    !Array.isArray(oauth.scopes)
+  ) {
+    throw new Error("CLAUDE_CREDENTIALS_JSON missing required claudeAiOauth fields.");
+  }
+
+  const claudeDir = join(homedir(), ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, ".credentials.json"), credentialsJson, {
+    mode: 0o600,
+  });
+  emit({ type: "debug", message: "Wrote ~/.claude/.credentials.json from CLAUDE_CREDENTIALS_JSON env" });
+}
 
 // Pending messages waiting to be processed
 const pendingMessages: string[] = [];
@@ -109,6 +152,14 @@ async function runAgent(): Promise<void> {
   if (isRunning) return;
   isRunning = true;
 
+  try {
+    setupClaudeCredentials();
+  } catch (error) {
+    emit({ type: "error", error: String(error) });
+    isRunning = false;
+    return;
+  }
+
   let claudeExecutablePath: string;
   try {
     claudeExecutablePath = execSync("which claude", { encoding: "utf-8" }).trim();
@@ -142,7 +193,6 @@ async function runAgent(): Promise<void> {
       },
       env: {
         ...process.env,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
       },
       stderr: (data) => {
         emit({ type: "debug", message: `claude-cli stderr: ${data}` });

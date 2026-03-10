@@ -13,6 +13,8 @@
         Maybe,...run multiple sessions on one cpu for different repos. would need to handle resource sharing.
 - [x] Store past session history and open resumed sessions
 - [ ] Proactive push notifications to the user when something is ready.
+        Track session state (responding, pending input, done) so user can passively monitor multiple sessions.
+- [ ] Visualize sessions by repo — make it more useful for high-level orchestration.
 - [ ] Mobile client
 - [ ] keep session agent message history in memory for faster syncing with clients
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses?
@@ -22,7 +24,7 @@
 - [ ] Slash commands (plugins), file mentions
 - [x] Use https://docs.sprites.dev/api/v001-rc30/proxy/ to set up a proxy to vs code running in the VM for direct user edits.
 - [ ] Allow the vm to render results as screenshots with a browser in order to visually see its results. Extra tool?
-        Can we install chromium on the sprite?
+        Can we install chromium on the sprite? eh can't the user prompt this with a skill?
 
 Sprites are long-lived VMs. I'm kind of using them like disposable VMs - just creating 1 session and checking out a repo on a new branch.
 How can I make use of their persistence? keep a pool of sprites warm?
