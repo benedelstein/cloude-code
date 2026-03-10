@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { useAuth } from "@/hooks/use-auth";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
@@ -42,7 +41,7 @@ export default function LoginPage() {
           onClick={login}
           className="w-full cursor-pointer py-3 px-4 rounded-lg border border-border bg-background text-foreground font-medium shadow-shadow shadow-md hover:bg-background-secondary transition-colors flex items-center justify-center gap-2"
         >
-          <Image src="/github_logo.svg" alt="GitHub" width={20} height={20} />
+          <img src="/github_logo.svg" alt="GitHub" width={20} height={20} />
           Sign in with GitHub
         </button>
       </div>
