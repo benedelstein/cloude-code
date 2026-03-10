@@ -29,18 +29,18 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-background-secondary">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-background shadow-shadow shadow-xl p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2 text-accent">Cloude Code</h1>
-          <p className="text-foreground-muted">
+          <p className="text-sm text-foreground-muted">
             Connect your Github to start building
           </p>
         </div>
 
         <button
           onClick={login}
-          className="w-full cursor-pointer py-3 px-4 rounded-md bg-accent text-accent-foreground font-medium hover:bg-accent-hover transition-colors flex items-center justify-center gap-2"
+          className="w-full cursor-pointer py-3 px-4 rounded-lg border border-border bg-background text-foreground font-medium shadow-shadow shadow-md hover:bg-background-secondary transition-colors flex items-center justify-center gap-2"
         >
           <Image src="/github_logo.svg" alt="GitHub" width={20} height={20} />
           Sign in with GitHub
