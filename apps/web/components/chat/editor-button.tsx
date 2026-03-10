@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Code, MoreHorizontal, Trash2 } from "lucide-react";
+import { Archive, Code, Trash2 } from "lucide-react";
 import { archiveSession, deleteSession, openEditor } from "@/lib/api";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -144,10 +144,14 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
           <button
             type="button"
             disabled={isBusy}
-            className={`${buttonBaseClassName} w-6 justify-center gap-0 px-0 border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
+            className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm border border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
             aria-label="Session actions"
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <span className="flex items-center justify-center gap-[2px]" aria-hidden="true">
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+            </span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end">

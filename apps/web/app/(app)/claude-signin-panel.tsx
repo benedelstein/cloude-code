@@ -48,15 +48,17 @@ export function ClaudeSigninPanel({
               Copy the code from Claude and paste it here to finish.
             </li>
           </ol>
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={claude.connect}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm bg-[#d97757] text-white hover:bg-[#d97757]/90 transition-colors cursor-pointer"
-            >
-              Sign in with Claude
-            </button>
-          </div>
+          {!claude.awaitingCode && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={claude.connect}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm bg-[#d97757] text-white hover:bg-[#d97757]/90 transition-colors cursor-pointer"
+              >
+                Sign in with Claude
+              </button>
+            </div>
+          )}
           {claude.error && !claude.awaitingCode && (
             <p className="mt-3 text-xs text-danger">{claude.error}</p>
           )}

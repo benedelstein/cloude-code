@@ -21,6 +21,7 @@ export function useClaudeAuth() {
 
   const refreshStatus = useCallback(async () => {
     const status = await getClaudeStatus();
+    console.log("Claude status:", status);
     setConnected(status.connected);
     setSubscriptionType(status.subscriptionType);
     setRateLimitTier(status.rateLimitTier);

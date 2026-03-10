@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "cloude-code",
-  description: "Cloud-hosted agent service",
+  title: "☁️ Cloude Code",
+  description: "Develop in the cloud.",
 };
 
 export default function RootLayout({

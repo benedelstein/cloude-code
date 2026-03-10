@@ -68,63 +68,31 @@ function parseClaudeTokenResponse(payload: unknown): ClaudeCredentials {
     throw new Error("Invalid Claude token payload");
   }
   const raw = payload as Record<string, unknown>;
-  const nested = raw.claudeAiOauth as Record<string, unknown> | undefined;
-
-  const accessToken = (
-    nested?.accessToken ??
-    raw.access_token ??
-    raw.accessToken
-  );
-  const refreshToken = (
-    nested?.refreshToken ??
-    raw.refresh_token ??
-    raw.refreshToken
-  );
-  const expiresAtRaw = (
-    nested?.expiresAt ??
-    raw.expiresAt ??
-    raw.expires_at_ms
-  );
+  const accessToken = raw.access_token;
+  const refreshToken = raw.refresh_token;
   const expiresIn = raw.expires_in;
-
-  let expiresAt: number | null = null;
-  if (typeof expiresAtRaw === "number" && Number.isFinite(expiresAtRaw)) {
-    expiresAt = expiresAtRaw;
-  } else if (typeof expiresAtRaw === "string" && Number.isFinite(Number(expiresAtRaw))) {
-    expiresAt = Number(expiresAtRaw);
-  } else if (typeof expiresIn === "number" && Number.isFinite(expiresIn)) {
-    expiresAt = Date.now() + expiresIn * 1000;
-  }
-
-  const scopes = parseScopes(
-    nested?.scopes ??
-      raw.scope ??
-      raw.scopes,
-  );
-  const subscriptionType =
-    (nested?.subscriptionType ?? raw.subscription_type ?? raw.subscriptionType) as
-      | string
-      | undefined;
-  const rateLimitTier =
-    (nested?.rateLimitTier ?? raw.rate_limit_tier ?? raw.rateLimitTier) as
-      | string
-      | undefined;
+  const subscriptionType = raw.subscription_type;
+  const rateLimitTier = raw.rate_limit_tier;
 
   if (
     typeof accessToken !== "string" ||
     typeof refreshToken !== "string" ||
-    !expiresAt
+    typeof expiresIn !== "number" ||
+    !Number.isFinite(expiresIn)
   ) {
     throw new Error("Claude token response missing required fields");
   }
+
+  const expiresAt = Date.now() + expiresIn * 1000;
+  const scopes = parseScopes(raw.scope);
 
   return {
     accessToken,
     refreshToken,
     expiresAt,
     scopes: scopes.length > 0 ? scopes : DEFAULT_CLAUDE_SCOPES,
-    subscriptionType: subscriptionType ?? null,
-    rateLimitTier: rateLimitTier ?? null,
+    subscriptionType: typeof subscriptionType === "string" ? subscriptionType : null,
+    rateLimitTier: typeof rateLimitTier === "string" ? rateLimitTier : null,
   };
 }
 
