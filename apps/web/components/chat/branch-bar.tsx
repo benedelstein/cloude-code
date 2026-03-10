@@ -36,14 +36,18 @@ export function BranchBar({
   useEffect(() => {
     if (!pullRequestUrl || pullRequestState !== "open") return;
 
-    const interval = setInterval(async () => {
+    const pollStatus = async () => {
       try {
         await getPullRequestStatus(sessionId);
         // State update comes via onStateUpdate from the DO
       } catch {
         // Silently ignore polling errors
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    // Check immediately on mount/reconnect, then poll on interval
+    void pollStatus();
+    const interval = setInterval(pollStatus, POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [sessionId, pullRequestUrl, pullRequestState]);
