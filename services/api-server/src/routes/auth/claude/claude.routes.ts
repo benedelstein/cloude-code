@@ -12,6 +12,7 @@ import {
   getClaudeStatusRoute,
   postClaudeDisconnectRoute,
 } from "./schemas";
+import { generateCodeVerifier, computeCodeChallenge } from "@/lib/pkce";
 
 const DEFAULT_CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const DEFAULT_CLAUDE_AUTH_URL = "https://claude.ai/oauth/authorize";
@@ -24,25 +25,6 @@ const DEFAULT_CLAUDE_SCOPES = [
   "user:profile",
   "user:sessions:claude_code",
 ];
-
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(64);
-  crypto.getRandomValues(array);
-  return base64UrlEncode(array);
-}
-
-async function computeCodeChallenge(verifier: string): Promise<string> {
-  const encoded = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return base64UrlEncode(new Uint8Array(digest));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
 
 type ClaudeCredentials = {
   accessToken: string;
@@ -118,7 +100,7 @@ claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
   const redirectUri = c.env.CLAUDE_OAUTH_REDIRECT_URI ?? DEFAULT_CLAUDE_REDIRECT_URI;
 
   const params = new URLSearchParams({
-    code: "true",
+    code: "true", // required, regular redirect uri doesn't work 
     client_id: clientId,
     response_type: "code",
     redirect_uri: redirectUri,

@@ -85,7 +85,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     claudeSessionId: null,
     agentProcessId: null,
     status: "provisioning",
-    settings: { provider: "codex-cli", model: "gpt-5.3-codex", maxTokens: 8192 },
+    settings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
     pushedBranch: null,
     pullRequestUrl: null,
     pullRequestNumber: null,
@@ -375,22 +375,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const data = (await request.json()) as InitRequest;
 
-    const provider = data.settings?.provider ?? "codex-cli";
-    const defaultModel =
-      provider === "codex-cli" ? "gpt-5.3-codex" : "claude-opus-4-20250514";
-    const model = data.settings?.model ?? defaultModel;
+    const provider = data.settings?.provider ?? "claude-code";
     const maxTokens = data.settings?.maxTokens ?? 8192;
 
+    // Let the discriminated union's per-provider defaults handle the model
+    // when the caller doesn't supply one or supplies an invalid one.
     let settings: SessionSettingsType;
-    const parsed = SessionSettings.safeParse({ provider, model, maxTokens });
+    const parsed = SessionSettings.safeParse({
+      provider,
+      model: data.settings?.model,
+      maxTokens,
+    });
     if (parsed.success) {
       settings = parsed.data;
     } else {
-      settings = SessionSettings.parse({
-        provider,
-        model: defaultModel,
-        maxTokens,
-      });
+      // Invalid model — fall back to the provider's default by omitting model
+      settings = SessionSettings.parse({ provider, maxTokens });
     }
 
     // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)

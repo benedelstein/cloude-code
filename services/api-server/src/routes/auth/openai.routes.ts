@@ -14,32 +14,12 @@ import {
   OpenAIStatusResponse,
   OpenAIDisconnectResponse,
 } from "@repo/shared";
+import { generateCodeVerifier, computeCodeChallenge } from "@/lib/pkce";
 
 const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_AUTH_URL = "https://auth.openai.com/oauth/authorize";
 const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const OPENAI_SCOPES = "openid profile email offline_access";
-
-// --- PKCE helpers (Web Crypto) ---
-
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(64);
-  crypto.getRandomValues(array);
-  return base64UrlEncode(array);
-}
-
-async function computeCodeChallenge(verifier: string): Promise<string> {
-  const encoded = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return base64UrlEncode(new Uint8Array(digest));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
 
 /** Decode JWT payload without signature verification (for expiry tracking only). */
 function decodeJwtPayload(token: string): Record<string, unknown> {
