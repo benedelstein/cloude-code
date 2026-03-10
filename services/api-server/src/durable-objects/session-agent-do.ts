@@ -6,7 +6,9 @@ import {
 } from "@/lib/sprites";
 import {
   type AgentState,
-  type SessionSettings,
+  type SessionSettings as SessionSettingsType,
+  type SessionSettingsInput,
+  SessionSettings,
   type Logger,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
@@ -50,7 +52,7 @@ interface InitRequest {
   sessionId: string;
   userId: string;
   repoFullName: string;
-  settings?: Partial<SessionSettings>;
+  settings?: SessionSettingsInput;
   branch?: string;
   initialMessage?: string;
 }
@@ -83,7 +85,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     claudeSessionId: null,
     agentProcessId: null,
     status: "provisioning",
-    settings: { provider: "claude-code", model: "claude-opus-4-20250514", maxTokens: 8192 },
+    settings: { provider: "codex-cli", model: "gpt-5.3-codex", maxTokens: 8192 },
     pushedBranch: null,
     pullRequestUrl: null,
     pullRequestNumber: null,
@@ -373,11 +375,23 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const data = (await request.json()) as InitRequest;
 
-    const settings: SessionSettings = {
-      provider: data.settings?.provider ?? "claude-code",
-      model: data.settings?.model ?? "claude-opus-4-20250514",
-      maxTokens: data.settings?.maxTokens ?? 8192,
-    };
+    const provider = data.settings?.provider ?? "codex-cli";
+    const defaultModel =
+      provider === "codex-cli" ? "gpt-5.3-codex" : "claude-opus-4-20250514";
+    const model = data.settings?.model ?? defaultModel;
+    const maxTokens = data.settings?.maxTokens ?? 8192;
+
+    let settings: SessionSettingsType;
+    const parsed = SessionSettings.safeParse({ provider, model, maxTokens });
+    if (parsed.success) {
+      settings = parsed.data;
+    } else {
+      settings = SessionSettings.parse({
+        provider,
+        model: defaultModel,
+        maxTokens,
+      });
+    }
 
     // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)
     this.gitProxySecret = crypto.randomUUID();
@@ -633,7 +647,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const provider = this.state.settings.provider;
     const isCodex = provider === "codex-cli";
 
-    const agentScript = isCodex ? VM_AGENT_CODEX_SCRIPT : VM_AGENT_SCRIPT;
+    let agentScript: string;
+    switch (provider) {
+      case "codex-cli":
+        agentScript = VM_AGENT_CODEX_SCRIPT;
+        break;
+      case "claude-code":
+        agentScript = VM_AGENT_SCRIPT;
+        break;
+    }
+    console.log(`Using agent script: ${provider}`);
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, agentScript);
 
     const claudeSessionId = this.state.claudeSessionId;
@@ -659,12 +682,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       if (this.env.OPENAI_API_KEY) {
         baseEnv.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
       }
-      // Allow model override via settings
-      if (this.state.settings.model && this.state.settings.model !== "claude-opus-4-20250514") {
-        baseEnv.CODEX_MODEL = this.state.settings.model;
-      }
+      baseEnv.CODEX_MODEL = this.state.settings.model;
     } else {
-      baseEnv.ANTHROPIC_API_KEY = this.env.ANTHROPIC_API_KEY;
+      const claudeCredentialsJson = await this.buildClaudeCredentialsJson();
+      if (!claudeCredentialsJson) {
+        throw new Error("Claude authentication required. Connect Claude before creating a session.");
+      }
+      baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentialsJson;
     }
 
     this.agentSession = sprite.createSession("env", commands, {
@@ -724,6 +748,64 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return JSON.stringify(authJson);
   }
 
+  /**
+   * Build Claude Code Linux credentials content from per-user OAuth tokens.
+   * Returns null if no per-user tokens are found.
+   */
+  private async buildClaudeCredentialsJson(): Promise<string | null> {
+    const userId = this.state.userId;
+    if (!userId) return null;
+
+    const row = await this.env.DB.prepare(
+      `SELECT encrypted_access_token, encrypted_refresh_token, expires_at_ms, scopes_json, subscription_type, rate_limit_tier
+       FROM claude_tokens WHERE user_id = ?`,
+    )
+      .bind(userId)
+      .first<{
+        encrypted_access_token: string;
+        encrypted_refresh_token: string;
+        expires_at_ms: number | string;
+        scopes_json: string;
+        subscription_type: string | null;
+        rate_limit_tier: string | null;
+      }>();
+
+    if (!row) return null;
+
+    const accessToken = await decrypt(
+      row.encrypted_access_token,
+      this.env.TOKEN_ENCRYPTION_KEY,
+    );
+    const refreshToken = await decrypt(
+      row.encrypted_refresh_token,
+      this.env.TOKEN_ENCRYPTION_KEY,
+    );
+
+    let scopes: string[] = [];
+    try {
+      const parsed = JSON.parse(row.scopes_json);
+      if (Array.isArray(parsed)) {
+        scopes = parsed.filter((scope): scope is string => typeof scope === "string");
+      }
+    } catch {
+      scopes = [];
+    }
+
+    const expiresAt = Number(row.expires_at_ms);
+    const credentials = {
+      claudeAiOauth: {
+        accessToken,
+        refreshToken,
+        expiresAt: Number.isFinite(expiresAt) ? expiresAt : Date.now() + 60 * 60 * 1000,
+        scopes,
+        subscriptionType: row.subscription_type ?? "unknown",
+        rateLimitTier: row.rate_limit_tier ?? "default",
+      },
+    };
+
+    return JSON.stringify(credentials);
+  }
+
   private setupAgentSessionHandlers(): void {
     if (!this.agentSession) return;
 
@@ -746,7 +828,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleAgentStdout(data: string): void {
-    this.logger.info(`[vm-agent stdout] ${data}`, { loggerName });
+    this.logger.info(`[vm-agent stdout] ${data.slice(0, 150)}`, { loggerName });
 
     for (const line of data.split("\n")) {
       if (!line.trim()) continue;

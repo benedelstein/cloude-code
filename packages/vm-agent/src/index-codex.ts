@@ -9,6 +9,7 @@
 import { createCodexAppServer } from "ai-sdk-provider-codex-cli";
 import { streamText } from "ai";
 import { createInterface } from "readline";
+import { parseArgs } from "util";
 import {
   type AgentInput,
   type AgentOutput,
@@ -18,7 +19,14 @@ import {
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "./system-prompt";
+
+const { values: args } = parseArgs({
+  options: {
+    sessionId: { type: "string", short: "s" },
+  },
+});
 
 const sessionId = process.env.SESSION_ID ?? "";
 const sessionSuffix = sessionId.slice(0, 4);
@@ -119,12 +127,26 @@ async function runAgent(): Promise<void> {
 
   const systemPromptAppend = buildSystemPromptAppend(sessionSuffix);
 
+  // Resolve the system-installed codex binary path to avoid the bundled
+  // require resolution, which may find a cached @openai/codex missing the
+  // platform-specific native dependency (e.g. @openai/codex-linux-x64).
+  let codexPath: string | undefined;
+  try {
+    codexPath = execSync("which codex", { encoding: "utf-8" }).trim();
+    emit({ type: "debug", message: `Resolved codex path: ${codexPath}` });
+  } catch {
+    emit({ type: "debug", message: "Could not resolve codex path via 'which'; using default resolution" });
+  }
+
   codexProvider = createCodexAppServer({
     defaultSettings: {
-      minCodexVersion: "0.105.0",
-      autoApprove: false,
+      minCodexVersion: "0.104.0",
+      autoApprove: true,
+      sandboxPolicy: "workspace-write",
       personality: "pragmatic",
       baseInstructions: systemPromptAppend,
+      codexPath,
+      resume: args.sessionId,
     },
   });
 
@@ -183,8 +205,9 @@ process.on("beforeExit", async () => {
   if (codexProvider) {
     try {
       await codexProvider.close();
-    } catch {
+    } catch (error) {
       // Ignore cleanup errors
+      emit({ type: "debug", message: "Error closing codex provider: " + String(error) });
     }
   }
 });

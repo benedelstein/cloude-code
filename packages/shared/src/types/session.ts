@@ -56,13 +56,46 @@ export type AgentState = {
 /** Supported agent providers */
 export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
 export type AgentProvider = z.infer<typeof AgentProvider>;
+export const CodexModel = z.enum([
+  "gpt-5.3-codex",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex-max",
+  "gpt-5.2",
+]);
+export type CodexModel = z.infer<typeof CodexModel>;
 
-export const SessionSettings = z.object({
-  provider: AgentProvider.default("claude-code"),
-  model: z.string().default("claude-opus-4-20250514"),
+export const ClaudeModel = z.enum([
+  "opus",
+  "sonnet",
+  "haiku",
+]);
+export type ClaudeModel = z.infer<typeof ClaudeModel>;
+
+const SessionSettingsCodex = z.object({
+  provider: z.literal("codex-cli"),
+  model: CodexModel.default("gpt-5.3-codex"),
   maxTokens: z.number().default(8192),
 });
+
+const SessionSettingsClaude = z.object({
+  provider: z.literal("claude-code"),
+  model: ClaudeModel.default("opus"),
+  maxTokens: z.number().default(8192),
+});
+
+export const SessionSettings = z.discriminatedUnion("provider", [
+  SessionSettingsCodex,
+  SessionSettingsClaude,
+]);
 export type SessionSettings = z.infer<typeof SessionSettings>;
+
+/** Partial settings for create/init requests; validated and merged in the DO */
+export const SessionSettingsInput = z.object({
+  provider: AgentProvider.optional(),
+  model: z.string().optional(),
+  maxTokens: z.number().optional(),
+});
+export type SessionSettingsInput = z.infer<typeof SessionSettingsInput>;
 
 export const Message = z.object({
   id: z.uuid(),

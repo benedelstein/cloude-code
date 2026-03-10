@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, Unplug, X } from "lucide-react";
+import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, Unplug } from "lucide-react";
 import { listRepos, listBranches, createSession, type Repo } from "@/lib/api";
-import { useOpenAIAuth } from "@/hooks/use-openai-auth";
+import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import type { Branch } from "@repo/shared";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
@@ -39,7 +39,7 @@ export default function Home() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
-  const openai = useOpenAIAuth();
+  const claude = useClaudeAuth();
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -94,7 +94,13 @@ export default function Home() {
       const branchToUse = selectedBranch && selectedBranch !== selectedRepo.defaultBranch
         ? selectedBranch
         : undefined;
-      const session = await createSession(selectedRepo.id, selectedRepo.fullName, message.trim(), branchToUse);
+      const session = await createSession(
+        selectedRepo.id,
+        selectedRepo.fullName,
+        message.trim(),
+        branchToUse,
+        { provider: "claude-code", model: "opus" },
+      );
 
       addSession({
         id: session.sessionId,
@@ -142,6 +148,63 @@ export default function Home() {
           </div>
         )}
 
+        {claude.loading ? (
+          <div className="border border-border-strong rounded-lg bg-background p-6 text-center">
+            <p className="text-sm text-foreground-muted">Checking Claude authentication…</p>
+          </div>
+        ) : !claude.connected ? (
+          <div className="border border-border-strong rounded-lg bg-background p-6 text-center">
+            <p className="text-sm text-foreground-muted mb-4">
+              Connect Claude before creating sessions.
+            </p>
+            <button
+              type="button"
+              onClick={claude.connect}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors cursor-pointer"
+            >
+              <Unplug className="h-3 w-3" />
+              Connect Claude (opens new tab)
+            </button>
+            {claude.error && !claude.awaitingCode && (
+              <p className="mt-3 text-xs text-danger">{claude.error}</p>
+            )}
+            {claude.awaitingCode && (
+              <div className="mt-5 max-w-md mx-auto text-left">
+                <label className="block text-xs text-foreground-muted mb-2">
+                  Paste the code from Claude auth:
+                </label>
+                <input
+                  value={claude.code}
+                  onChange={(e) => claude.setCode(e.target.value)}
+                  placeholder="Paste code..."
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
+                  disabled={claude.submittingCode}
+                />
+                {claude.error && (
+                  <p className="mt-2 text-xs text-danger">{claude.error}</p>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={claude.submitCode}
+                    disabled={!claude.code.trim() || claude.submittingCode}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {claude.submittingCode ? "Submitting..." : "Submit code"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={claude.cancelCodeEntry}
+                    disabled={claude.submittingCode}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
         <form onSubmit={handleSubmit}>
           <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
             <textarea
@@ -293,38 +356,13 @@ export default function Home() {
           </div>
 
           <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-2">
-              {!openai.loading && (
-                openai.connected ? (
-                  <div className="flex items-center gap-1.5 text-xs text-foreground-muted">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-                    ChatGPT connected
-                    <button
-                      type="button"
-                      onClick={openai.disconnect}
-                      className="ml-1 text-foreground-muted/60 hover:text-foreground-muted transition-colors cursor-pointer"
-                      title="Disconnect ChatGPT"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={openai.connect}
-                    className="flex items-center gap-1.5 text-xs text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    <Unplug className="h-3 w-3" />
-                    Connect ChatGPT
-                  </button>
-                )
-              )}
-            </div>
+            <div />
             <p className="text-xs text-foreground-muted/60">
               Press Enter to submit, Shift+Enter for new line
             </p>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

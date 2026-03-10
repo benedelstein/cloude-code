@@ -60,3 +60,31 @@ export const OpenAIDisconnectResponse = z.object({
   ok: z.literal(true),
 });
 export type OpenAIDisconnectResponse = z.infer<typeof OpenAIDisconnectResponse>;
+
+// Claude OAuth types
+export const ClaudeAuthUrlResponse = z.object({
+  url: z.string(),
+  state: z.string(),
+});
+export type ClaudeAuthUrlResponse = z.infer<typeof ClaudeAuthUrlResponse>;
+
+export const ClaudeTokenRequest = z.object({
+  code: z.string(),
+  state: z.string(),
+});
+export type ClaudeTokenRequest = z.infer<typeof ClaudeTokenRequest>;
+
+export const ClaudeTokenResponse = z.object({
+  ok: z.literal(true),
+});
+export type ClaudeTokenResponse = z.infer<typeof ClaudeTokenResponse>;
+
+export const ClaudeStatusResponse = z.object({
+  connected: z.boolean(),
+});
+export type ClaudeStatusResponse = z.infer<typeof ClaudeStatusResponse>;
+
+export const ClaudeDisconnectResponse = z.object({
+  ok: z.literal(true),
+});
+export type ClaudeDisconnectResponse = z.infer<typeof ClaudeDisconnectResponse>;

@@ -23,7 +23,7 @@ const OPENAI_SCOPES = "openid profile email offline_access";
 // --- PKCE helpers (Web Crypto) ---
 
 function generateCodeVerifier(): string {
-  const array = new Uint8Array(32);
+  const array = new Uint8Array(64);
   crypto.getRandomValues(array);
   return base64UrlEncode(array);
 }
@@ -126,23 +126,29 @@ openaiAuthRoutes.openapi(getOpenAIAuthRoute, async (c) => {
     .bind(state, expiresAt, codeVerifier)
     .run();
 
-  // Derive the redirect URI from the request origin (web app proxies to this endpoint)
-  const requestUrl = new URL(c.req.url);
+  // redirect_uri must be a localhost URL — OpenAI's OAuth client only allows
+  // localhost redirects for the Codex CLI public client.
   const redirectUri =
     c.req.query("redirect_uri") ??
-    `${requestUrl.origin}/auth/openai/callback`;
+    "http://localhost:1455/auth/callback";
 
-  const params = new URLSearchParams({
-    client_id: OPENAI_CLIENT_ID,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    state,
-    scope: OPENAI_SCOPES,
-  });
+  // Build the query string manually — URLSearchParams encodes spaces as "+"
+  // but OpenAI's auth server expects "%20" encoding for the scope parameter.
+  const queryParts = [
+    `client_id=${encodeURIComponent(OPENAI_CLIENT_ID)}`,
+    `response_type=code`,
+    `redirect_uri=${encodeURIComponent(redirectUri)}`,
+    `code_challenge=${encodeURIComponent(codeChallenge)}`,
+    `code_challenge_method=S256`,
+    `state=${encodeURIComponent(state)}`,
+    `scope=${encodeURIComponent(OPENAI_SCOPES)}`,
+    `id_token_add_organizations=true`,
+    `codex_cli_simplified_flow=true`,
+    `originator=codex_cli_rs`,
+  ];
 
-  const url = `${OPENAI_AUTH_URL}?${params.toString()}`;
+  const url = `${OPENAI_AUTH_URL}?${queryParts.join("&")}`;
+  console.log(`OpenAI OAuth URL: ${url}`);
 
   return c.json({ url, state }, 200);
 });
@@ -171,10 +177,10 @@ openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
     return c.json({ error: "Invalid or expired state" }, 400) as any;
   }
 
-  // Derive redirect_uri (must match what was sent in the authorize request)
+  // Must match the redirect_uri used in the authorize request
   const redirectUri =
     c.req.query("redirect_uri") ??
-    `${new URL(c.req.url).origin}/auth/openai/callback`;
+    "http://localhost:1455/auth/callback";
 
   // Exchange code for tokens at OpenAI
   let tokenData: {
