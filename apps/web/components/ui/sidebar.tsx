@@ -25,7 +25,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-const SIDEBAR_STORAGE_KEY = "sidebar_state"
+const SIDEBAR_COOKIE_NAME = "sidebar_state"
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -77,15 +78,7 @@ const SidebarProvider = React.forwardRef<
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
-    // Initialize with defaultOpen to match SSR, then sync from localStorage after hydration.
     const [_open, _setOpen] = React.useState(defaultOpen)
-
-    React.useEffect(() => {
-      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-      if (stored !== null) {
-        _setOpen(stored === "true")
-      }
-    }, [])
     const open = openProp ?? _open
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
@@ -96,9 +89,7 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState)
         }
 
-        if (typeof window !== "undefined") {
-          localStorage.setItem(SIDEBAR_STORAGE_KEY, String(openState))
-        }
+        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
       [setOpenProp, open]
     )

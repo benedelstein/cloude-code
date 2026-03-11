@@ -11,11 +11,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface AppShellProps {
   children: React.ReactNode;
+  defaultSidebarOpen?: boolean;
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, defaultSidebarOpen }: AppShellProps) {
   return (
-    <SidebarProvider className="min-h-0! h-svh">
+    <SidebarProvider defaultOpen={defaultSidebarOpen} className="min-h-0! h-svh">
       <AppHeaderProvider>
         <SessionSidebar />
         <SidebarInset className="overflow-hidden">
