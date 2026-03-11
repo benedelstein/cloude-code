@@ -4,6 +4,7 @@ import type {
   EmitterWebhookEventName,
 } from "@octokit/webhooks";
 import type { Logger } from "@repo/shared";
+import { decrypt, encrypt } from "@/lib/crypto";
 import type { Env } from "@/types";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
@@ -84,6 +85,7 @@ export class GitHubAppService {
   private clientId: string;
   private appSlug: string;
   private logger: Logger;
+  private tokenEncryptionKey: string;
 
   constructor(env: Env, logger: Logger) {
     this.app = new App({
@@ -99,6 +101,7 @@ export class GitHubAppService {
     this.clientId = env.GITHUB_APP_CLIENT_ID;
     this.appSlug = env.GITHUB_APP_SLUG;
     this.logger = logger;
+    this.tokenEncryptionKey = env.TOKEN_ENCRYPTION_KEY;
   }
 
   /**
@@ -410,7 +413,12 @@ export class GitHubAppService {
       .first<{ token: string; expires_at: string }>();
 
     if (cached) {
-      return cached.token;
+      try {
+        return await decrypt(cached.token, this.tokenEncryptionKey);
+      } catch {
+        // Legacy rows may still contain plaintext values from before encryption.
+        return cached.token;
+      }
     }
 
     // Generate new token via octokit, scoped to single repo with requested permissions
@@ -422,12 +430,13 @@ export class GitHubAppService {
     });
 
     // Cache it
+    const encryptedToken = await encrypt(data.token, this.tokenEncryptionKey);
     await this.db
       .prepare(
         `INSERT OR REPLACE INTO installation_token_cache (installation_id, repo_id, token, expires_at)
          VALUES (?, ?, ?, ?)`,
       )
-      .bind(installationId, cacheKey, data.token, data.expires_at)
+      .bind(installationId, cacheKey, encryptedToken, data.expires_at)
       .run();
 
     return data.token;
