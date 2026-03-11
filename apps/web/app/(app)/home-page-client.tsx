@@ -219,7 +219,7 @@ export function HomePageClient() {
     return () => window.clearTimeout(timeout);
   }, [claude.connected, claude.loading, showClaudeSigninPanel]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const trimmedMessage = message.trim();
     if (!claude.connected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
