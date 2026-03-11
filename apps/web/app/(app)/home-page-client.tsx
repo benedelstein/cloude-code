@@ -7,7 +7,8 @@ import { listRepos, listBranches, createSession, uploadAttachments, deleteAttach
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ClaudeSigninPanel } from "./claude-signin-panel";
-import type { Branch } from "@repo/shared";
+import type { Branch, ListReposResponse, ListBranchesResponse } from "@repo/shared";
+import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import {
@@ -90,43 +91,110 @@ export function HomePageClient() {
     ? ` (${formatClaudeMetadata(claude.rateLimitTier)})`
     : "";
 
+  // Fetch branches when selected repo changes
   useEffect(() => {
     if (!selectedRepo) {
       setBranches([]);
       setSelectedBranch(null);
       return;
     }
-    setBranchesLoading(true);
-    setBranches([]);
-    setSelectedBranch(selectedRepo.defaultBranch);
-    listBranches(selectedRepo.id)
+
+    let stale = false;
+    const repoId = selectedRepo.id;
+    const cacheKey = branchCacheKey(repoId);
+
+    // Phase 1: Restore from cache
+    const cached = readCache<ListBranchesResponse>(cacheKey);
+    if (cached) {
+      setBranches(cached.data.branches);
+      const defaultBranch = cached.data.branches.find((b) => b.default);
+      setSelectedBranch(defaultBranch?.name ?? cached.data.branches[0]?.name ?? null);
+      setBranchesLoading(false);
+    } else {
+      setBranchesLoading(true);
+      setBranches([]);
+      setSelectedBranch(selectedRepo.defaultBranch);
+    }
+
+    // Phase 2: Revalidate
+    listBranches(repoId)
       .then((data) => {
+        if (stale) return;
+        writeCache(cacheKey, data);
         setBranches(data.branches);
-        const defaultBranch = data.branches.find((b) => b.default);
-        setSelectedBranch(defaultBranch?.name ?? data.branches[0]?.name ?? null);
+
+        setSelectedBranch((currentBranch) => {
+          if (currentBranch) {
+            const stillExists = data.branches.find((b) => b.name === currentBranch);
+            if (stillExists) return currentBranch;
+          }
+          const defaultBranch = data.branches.find((b) => b.default);
+          return defaultBranch?.name ?? data.branches[0]?.name ?? null;
+        });
       })
       .catch(() => {
-        setSelectedBranch(selectedRepo.defaultBranch);
+        if (stale) return;
+        if (!cached) {
+          setSelectedBranch(selectedRepo.defaultBranch);
+        }
       })
-      .finally(() => setBranchesLoading(false));
+      .finally(() => {
+        if (!stale) setBranchesLoading(false);
+      });
+
+    return () => {
+      stale = true;
+    };
   }, [selectedRepo]);
 
   useEffect(() => {
-    listRepos()
+    // Phase 1: Restore from cache (synchronous, instant render)
+    // DEBUG: skip cache to test loading state — remove before committing
+    const cached = null as ReturnType<typeof readCache<ListReposResponse>>;
+    if (cached) {
+      setRepos(cached.data.repos);
+      setInstallUrl(cached.data.installUrl);
+      setReposLoading(false);
+
+      const lastRepoId = localStorage.getItem("lastRepoId");
+      const lastRepo = lastRepoId
+        ? cached.data.repos.find((r) => r.id === Number(lastRepoId))
+        : undefined;
+      if (lastRepo) {
+        setSelectedRepo(lastRepo);
+      } else if (cached.data.repos.length === 1) {
+        setSelectedRepo(cached.data.repos[0]);
+      }
+    }
+
+    // Phase 2: Revalidate in the background (always runs)
+    // DEBUG: artificial delay to test loading state — remove before committing
+    new Promise((r) => setTimeout(r, 3000)).then(() => listRepos())
       .then((data) => {
+        writeCache(CACHE_KEY_REPOS, data);
         setRepos(data.repos);
         setInstallUrl(data.installUrl);
-        const lastRepoId = localStorage.getItem("lastRepoId");
-        const lastRepo = lastRepoId
-          ? data.repos.find((repo) => repo.id === Number(lastRepoId))
-          : undefined;
-        if (lastRepo) {
-          setSelectedRepo(lastRepo);
-        } else if (data.repos.length === 1) {
-          setSelectedRepo(data.repos[0]);
+
+        // Reconcile selection: keep current choice if it still exists in fresh data
+        setSelectedRepo((currentSelected) => {
+          if (currentSelected) {
+            const stillExists = data.repos.find((r) => r.id === currentSelected.id);
+            return stillExists ?? null;
+          }
+          const lastRepoId = localStorage.getItem("lastRepoId");
+          const lastRepo = lastRepoId
+            ? data.repos.find((r) => r.id === Number(lastRepoId))
+            : undefined;
+          if (lastRepo) return lastRepo;
+          if (data.repos.length === 1) return data.repos[0];
+          return null;
+        });
+      })
+      .catch((err) => {
+        if (!cached) {
+          setError(err.message);
         }
       })
-      .catch((err) => setError(err.message))
       .finally(() => setReposLoading(false));
   }, []);
 
@@ -343,23 +411,18 @@ export function HomePageClient() {
                     <TooltipContent>Add images</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {reposLoading ? (
-                  <span className="text-xs text-foreground-muted px-1">
-                    Loading repos...
-                  </span>
-                ) : (
-                  <Popover
+                <Popover
                     open={repoPickerOpen}
                     onOpenChange={setRepoPickerOpen}
                   >
                     <TooltipProvider delayDuration={300}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <PopoverTrigger asChild>
+                          <PopoverTrigger asChild disabled={reposLoading || submitting}>
                             <button
                               type="button"
-                              disabled={submitting}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
+                              disabled={reposLoading || submitting}
+                              className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer w-[200px] sm:w-[240px]"
                             >
                               <svg
                                 className="h-3.5 w-3.5 shrink-0"
@@ -369,11 +432,13 @@ export function HomePageClient() {
                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
                               </svg>
                               <span className="truncate">
-                                {selectedRepo
-                                  ? selectedRepo.fullName
-                                  : "Select a repo"}
+                                {reposLoading && !selectedRepo
+                                  ? "Loading repos..."
+                                  : selectedRepo
+                                    ? selectedRepo.fullName
+                                    : "Select a repo"}
                               </span>
-                              <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                              <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
                             </button>
                           </PopoverTrigger>
                         </TooltipTrigger>
@@ -426,14 +491,8 @@ export function HomePageClient() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                )}
 
-                {selectedRepo &&
-                  (branchesLoading ? (
-                    <span className="text-xs text-foreground-muted px-1">
-                      ...
-                    </span>
-                  ) : branches.length > 0 ? (
+                {selectedRepo && (branches.length > 0 || branchesLoading) && (
                     <Popover
                       open={branchPickerOpen}
                       onOpenChange={setBranchPickerOpen}
@@ -441,15 +500,15 @@ export function HomePageClient() {
                       <TooltipProvider delayDuration={300}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <PopoverTrigger asChild>
+                            <PopoverTrigger asChild disabled={branchesLoading || submitting}>
                               <button
                                 type="button"
-                                disabled={submitting}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
+                                disabled={branchesLoading || submitting}
+                                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer max-w-[180px]"
                               >
                                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                                 <span className="truncate">
-                                  {selectedBranch ?? "Select branch"}
+                                  {branchesLoading ? "..." : selectedBranch ?? "Select branch"}
                                 </span>
                                 <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
                               </button>
@@ -496,7 +555,7 @@ export function HomePageClient() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                  ) : null)}
+                )}
               </div>
 
               <div className="flex items-center gap-3">

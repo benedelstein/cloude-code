@@ -237,7 +237,7 @@ export function SessionSidebar() {
       open={deleteDialogSessionId !== null}
       onOpenChange={(open) => { if (!open) setDeleteDialogSessionId(null); }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent container={typeof document !== "undefined" ? document.body : undefined}>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete session?</AlertDialogTitle>
           <AlertDialogDescription>
