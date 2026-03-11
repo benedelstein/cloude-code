@@ -171,7 +171,7 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
       </DropdownMenu>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent container={document.body}>
+        <AlertDialogContent container={typeof document !== "undefined" ? document.body : undefined}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete session?</AlertDialogTitle>
             <AlertDialogDescription>
