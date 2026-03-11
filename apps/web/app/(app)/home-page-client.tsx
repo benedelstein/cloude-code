@@ -149,7 +149,8 @@ export function HomePageClient() {
 
   useEffect(() => {
     // Phase 1: Restore from cache (synchronous, instant render)
-    const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
+    // DEBUG: skip cache to test loading state — remove before committing
+    const cached = null as ReturnType<typeof readCache<ListReposResponse>>;
     if (cached) {
       setRepos(cached.data.repos);
       setInstallUrl(cached.data.installUrl);
@@ -167,7 +168,8 @@ export function HomePageClient() {
     }
 
     // Phase 2: Revalidate in the background (always runs)
-    listRepos()
+    // DEBUG: artificial delay to test loading state — remove before committing
+    new Promise((r) => setTimeout(r, 3000)).then(() => listRepos())
       .then((data) => {
         writeCache(CACHE_KEY_REPOS, data);
         setRepos(data.repos);
@@ -409,23 +411,18 @@ export function HomePageClient() {
                     <TooltipContent>Add images</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {reposLoading ? (
-                  <span className="text-xs text-foreground-muted px-1">
-                    Loading repos...
-                  </span>
-                ) : (
-                  <Popover
+                <Popover
                     open={repoPickerOpen}
                     onOpenChange={setRepoPickerOpen}
                   >
                     <TooltipProvider delayDuration={300}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <PopoverTrigger asChild>
+                          <PopoverTrigger asChild disabled={reposLoading || submitting}>
                             <button
                               type="button"
-                              disabled={submitting}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
+                              disabled={reposLoading || submitting}
+                              className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer w-[200px] sm:w-[240px]"
                             >
                               <svg
                                 className="h-3.5 w-3.5 shrink-0"
@@ -435,11 +432,13 @@ export function HomePageClient() {
                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
                               </svg>
                               <span className="truncate">
-                                {selectedRepo
-                                  ? selectedRepo.fullName
-                                  : "Select a repo"}
+                                {reposLoading && !selectedRepo
+                                  ? "Loading repos..."
+                                  : selectedRepo
+                                    ? selectedRepo.fullName
+                                    : "Select a repo"}
                               </span>
-                              <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                              <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
                             </button>
                           </PopoverTrigger>
                         </TooltipTrigger>
@@ -492,14 +491,8 @@ export function HomePageClient() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                )}
 
-                {selectedRepo &&
-                  (branchesLoading ? (
-                    <span className="text-xs text-foreground-muted px-1">
-                      ...
-                    </span>
-                  ) : branches.length > 0 ? (
+                {selectedRepo && (branches.length > 0 || branchesLoading) && (
                     <Popover
                       open={branchPickerOpen}
                       onOpenChange={setBranchPickerOpen}
@@ -507,15 +500,15 @@ export function HomePageClient() {
                       <TooltipProvider delayDuration={300}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <PopoverTrigger asChild>
+                            <PopoverTrigger asChild disabled={branchesLoading || submitting}>
                               <button
                                 type="button"
-                                disabled={submitting}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
+                                disabled={branchesLoading || submitting}
+                                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer max-w-[180px]"
                               >
                                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                                 <span className="truncate">
-                                  {selectedBranch ?? "Select branch"}
+                                  {branchesLoading ? "..." : selectedBranch ?? "Select branch"}
                                 </span>
                                 <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
                               </button>
@@ -562,7 +555,7 @@ export function HomePageClient() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                  ) : null)}
+                )}
               </div>
 
               <div className="flex items-center gap-3">
