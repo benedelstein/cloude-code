@@ -16,6 +16,7 @@ export const authRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const loggerName = "auth.routes.ts";
 
 /**
  * GET auth/github — returns the install + authorize URL
@@ -25,6 +26,15 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   // create a nonce token for CSRF protection
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+
+  logger.info("Starting GitHub OAuth flow", {
+    loggerName,
+    fields: {
+      expiresAt,
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    },
+  });
 
   await c.env.DB.prepare(
     `INSERT INTO oauth_states (state, expires_at) VALUES (?, ?)`,
@@ -48,7 +58,25 @@ authRoutes.openapi(getGithubRoute, async (c) => {
 authRoutes.openapi(postTokenRoute, async (c) => {
   const { code, state } = c.req.valid("json");
 
+  logger.info("Received GitHub OAuth callback", {
+    loggerName,
+    fields: {
+      hasCode: Boolean(code),
+      requestId: c.req.header("cf-ray") ?? null,
+      statePrefix: state?.slice(0, 8) ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    },
+  });
+
   if (!code || !state) {
+    logger.error("GitHub OAuth callback missing code or state", {
+      loggerName,
+      fields: {
+        hasCode: Boolean(code),
+        hasState: Boolean(state),
+        requestId: c.req.header("cf-ray") ?? null,
+      },
+    });
     return c.json({ error: "Missing code or state" }, 400) as any;
   }
 
@@ -60,6 +88,13 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     .first();
 
   if (!stateRow) {
+    logger.error("GitHub OAuth callback rejected: invalid or expired state", {
+      loggerName,
+      fields: {
+        requestId: c.req.header("cf-ray") ?? null,
+        statePrefix: state.slice(0, 8),
+      },
+    });
     return c.json({ error: "Invalid or expired state" }, 400);
   }
 
@@ -68,7 +103,15 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   let result;
   try {
     result = await github.exchangeOAuthCode(code);
-  } catch {
+  } catch (error) {
+    logger.error("GitHub OAuth code exchange failed", {
+      loggerName,
+      error,
+      fields: {
+        requestId: c.req.header("cf-ray") ?? null,
+        statePrefix: state.slice(0, 8),
+      },
+    });
     return c.json({ error: "Failed to exchange OAuth code" }, 400);
   }
 
@@ -83,6 +126,13 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     allowedLogins.length === 0 ||
     !allowedLogins.includes(result.user.login.toLowerCase())
   ) {
+    logger.error("GitHub OAuth callback rejected: user not allowlisted", {
+      loggerName,
+      fields: {
+        githubLogin: result.user.login,
+        requestId: c.req.header("cf-ray") ?? null,
+      },
+    });
     return c.json({ error: "User not allowed" }, 403);
   }
 
@@ -180,6 +230,15 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   }
 
   const installUrl = github.getInstallUrl();
+
+  logger.info("GitHub OAuth login succeeded", {
+    loggerName,
+    fields: {
+      githubLogin: user.github_login,
+      hasInstallations,
+      requestId: c.req.header("cf-ray") ?? null,
+    },
+  });
 
   return c.json(
     {

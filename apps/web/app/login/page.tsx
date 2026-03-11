@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 export default function LoginPage() {
-  const { loading, isAuthenticated, login } = useAuth();
+  const { loading, isAuthenticated, login, authError } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -45,6 +45,12 @@ export default function LoginPage() {
           <Image src="/github_logo.svg" alt="GitHub" width={20} height={20} />
           Sign in with GitHub
         </button>
+
+        {authError ? (
+          <p className="mt-4 text-sm text-red-600">
+            {authError}
+          </p>
+        ) : null}
       </div>
     </main>
   );

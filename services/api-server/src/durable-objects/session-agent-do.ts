@@ -74,6 +74,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private reattachPromise: Promise<void> | null = null;
   /** Accumulator for building UIMessage from stream chunks */
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
+  /** Buffers partial vm-agent stdout until a full NDJSON line arrives. */
+  private agentStdoutBuffer = "";
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
   private githubToken: string | null = null;
   /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
@@ -855,6 +857,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     this.agentSession.onExit((code: number) => {
       this.logger.info(`vm-agent exited with code ${code}`, { loggerName });
+      this.agentStdoutBuffer = "";
       this.agentSession = null;
     });
 
@@ -864,7 +867,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleAgentStdout(data: string): void {
-    for (const line of data.split("\n")) {
+    this.agentStdoutBuffer += data;
+    const lines = this.agentStdoutBuffer.split("\n");
+    this.agentStdoutBuffer = lines.pop() ?? "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
       if (!line.trim()) continue;
 
       try {

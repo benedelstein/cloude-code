@@ -6,6 +6,7 @@ import { getCurrentUser, type UserInfo, ApiError } from "@/lib/api";
 export function useAuth() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentUser()
@@ -22,10 +23,13 @@ export function useAuth() {
   }, []);
 
   const login = useCallback(async () => {
+    setAuthError(null);
+
     // Fetch the OAuth URL from the API (proxied through catch-all)
     const res = await fetch("/api/auth/github");
     if (!res.ok) {
       console.error("Failed to get auth URL");
+      setAuthError("Failed to start GitHub sign-in.");
       return;
     }
     const { url } = await res.json();
@@ -40,10 +44,16 @@ export function useAuth() {
       `width=${width},height=${height},left=${left},top=${top}`,
     );
 
+    if (!popup) {
+      setAuthError("GitHub sign-in popup was blocked.");
+      return;
+    }
+
     // Listen for the popup to signal auth completion
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === "auth:success") {
+        setAuthError(null);
         setUser(event.data.user);
         setLoading(false);
         window.removeEventListener("message", handleMessage);
@@ -52,6 +62,14 @@ export function useAuth() {
         if (event.data.hasInstallations === false && event.data.installUrl) {
           window.location.href = event.data.installUrl;
         }
+      } else if (event.data?.type === "auth:error") {
+        setAuthError(
+          typeof event.data.error === "string" && event.data.error.length > 0
+            ? event.data.error
+            : "GitHub sign-in failed.",
+        );
+        setLoading(false);
+        window.removeEventListener("message", handleMessage);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -78,6 +96,7 @@ export function useAuth() {
   return {
     user,
     loading,
+    authError,
     isAuthenticated: !!user,
     login,
     logout,
