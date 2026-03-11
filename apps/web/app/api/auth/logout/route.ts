@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clearSessionCookie, getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -6,7 +7,7 @@ export async function POST(req: NextRequest) {
   if (!API_URL) {
     return new NextResponse("API URL not set", { status: 500 });
   }
-  const token = req.cookies.get("session_token")?.value;
+  const token = await getSessionTokenFromRequest(req);
 
   if (token) {
     // Best-effort logout on the API side
@@ -17,13 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("session_token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+  clearSessionCookie(response);
 
   return response;
 }

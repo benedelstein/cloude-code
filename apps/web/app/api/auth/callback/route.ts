@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookie } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // TODO: USE API.TS 
   const response = await fetch(`${API_URL}/auth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -33,20 +35,13 @@ export async function GET(request: NextRequest) {
 
   const { token, user, hasInstallations, installUrl } = await response.json();
 
-  const isProduction = process.env.NODE_ENV === "production";
   const result = new NextResponse(
     popupHtml(true, undefined, user, hasInstallations, installUrl),
     {
       headers: { "Content-Type": "text/html" },
     },
   );
-  result.cookies.set("session_token", token, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    path: "/",
-  });
+  await setSessionCookie(result, token);
 
   return result;
 }

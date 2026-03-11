@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Read session token from cookie (user must be logged in via GitHub first)
-  const sessionToken = request.cookies.get("session_token")?.value;
+  const sessionToken = await getSessionTokenFromRequest(request);
   if (!sessionToken) {
     return new NextResponse(popupHtml(false, "Not logged in"), {
       headers: { "Content-Type": "text/html" },

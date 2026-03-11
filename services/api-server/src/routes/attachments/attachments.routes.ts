@@ -94,7 +94,7 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   } catch (error) {
     for (const record of created) {
       await c.env.ATTACHMENTS_BUCKET.delete(record.objectKey);
-      await c.env.DB.prepare(`DELETE FROM attachments WHERE id = ?`).bind(record.id).run();
+      await attachmentService.deleteById(record.id);
     }
     const message = error instanceof Error ? error.message : "Failed to store attachments";
     return c.json({ error: message }, 500);
@@ -156,8 +156,6 @@ attachmentsRoutes.openapi(deleteAttachmentRoute, async (c) => {
   try {
     await c.env.ATTACHMENTS_BUCKET.delete(record.objectKey);
     await attachmentService.deleteForUploader(attachmentId, user.id);
-    // Defensive cleanup if an old trigger still exists in a migrated local DB.
-    await attachmentService.clearGcTaskByObjectKey(record.objectKey);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete attachment";
     return c.json({ error: message }, 500);

@@ -1,19 +1,14 @@
-"use client";
-
-import { use } from "react";
-import { SessionProvider } from "@/components/providers/session-provider";
-import { ChatContainer } from "@/components/chat/chat-container";
+import { verifySession } from "@/lib/auth";
+import { SessionPageClient } from "./session-page-client";
 
 interface SessionPageProps {
   params: Promise<{ sessionId: string }>;
 }
 
-export default function SessionPage({ params }: SessionPageProps) {
-  const { sessionId } = use(params);
+export default async function SessionPage({ params }: SessionPageProps) {
+  await verifySession();
 
-  return (
-    <SessionProvider sessionId={sessionId}>
-      <ChatContainer sessionId={sessionId} />
-    </SessionProvider>
-  );
+  const { sessionId } = await params;
+
+  return <SessionPageClient sessionId={sessionId} />;
 }
