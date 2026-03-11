@@ -117,8 +117,9 @@ export function HomePageClient() {
     }
 
     // Phase 2: Revalidate
-    listBranches(repoId)
-      .then((data) => {
+    (async () => {
+      try {
+        const data = await listBranches(repoId);
         if (stale) return;
         writeCache(cacheKey, data);
         setBranches(data.branches);
@@ -131,16 +132,15 @@ export function HomePageClient() {
           const defaultBranch = data.branches.find((b) => b.default);
           return defaultBranch?.name ?? data.branches[0]?.name ?? null;
         });
-      })
-      .catch(() => {
+      } catch {
         if (stale) return;
         if (!cached) {
           setSelectedBranch(selectedRepo.defaultBranch);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!stale) setBranchesLoading(false);
-      });
+      }
+    })();
 
     return () => {
       stale = true;
@@ -168,9 +168,9 @@ export function HomePageClient() {
     }
 
     // Phase 2: Revalidate in the background (always runs)
-    // DEBUG: artificial delay to test loading state — remove before committing
-    new Promise((r) => setTimeout(r, 3000)).then(() => listRepos())
-      .then((data) => {
+    (async () => {
+      try {
+        const data = await listRepos();
         writeCache(CACHE_KEY_REPOS, data);
         setRepos(data.repos);
         setInstallUrl(data.installUrl);
@@ -189,13 +189,14 @@ export function HomePageClient() {
           if (data.repos.length === 1) return data.repos[0];
           return null;
         });
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cached) {
-          setError(err.message);
+          setError((err as Error).message);
         }
-      })
-      .finally(() => setReposLoading(false));
+      } finally {
+        setReposLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -218,7 +219,7 @@ export function HomePageClient() {
     return () => window.clearTimeout(timeout);
   }, [claude.connected, claude.loading, showClaudeSigninPanel]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmedMessage = message.trim();
     if (!claude.connected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;

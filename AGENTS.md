@@ -100,5 +100,6 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 - Prefer unabbreviated variable names rather than shortened ones. For example, prefer `let installation = ...` instead of `let inst = ...`. Variable names should not be too long (>30 chars) though.
 - Do not use emojis in your git messages or comments unless absolutely relevant and necessary.
 - Write instructive and clarifying comments where needed, but do not be too verbose. 
+- Always prefer to use async/await over callbacks and .then()/.catch()
 
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.
