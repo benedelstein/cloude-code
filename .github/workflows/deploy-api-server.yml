@@ -9,6 +9,7 @@ on:
       - "packages/shared/**"
       - "packages/vm-agent/**"
       - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-api-server.yml"
 
 jobs:
   deploy:
