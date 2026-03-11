@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/layout/app-shell";
 import { SessionListProvider } from "@/components/providers/session-list-provider";
-import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
@@ -18,11 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [loading, isAuthenticated, router]);
 
   if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
+    return <div className="h-screen" />;
   }
 
   if (!isAuthenticated) {

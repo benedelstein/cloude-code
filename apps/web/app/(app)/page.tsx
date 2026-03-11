@@ -250,61 +250,69 @@ export default function Home() {
           }}
         >
             <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
-              {showClaudeSigninPanel && (
+              {showClaudeSigninPanel && !claude.loading && (
                 <ClaudeSigninPanel
                   claude={claude}
                   isExiting={isClaudeSigninPanelExiting}
                 />
               )}
-              {attachments.length > 0 && (
-                <div className="px-4 pt-4">
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {attachments.map((attachment) => (
-                      <div
-                        key={attachment.id}
-                        className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-md border ${
-                          attachment.status === "error" ? "border-danger" : "border-border"
-                        }`}
-                      >
-                        <img
-                          src={attachment.previewUrl}
-                          alt={attachment.file.name}
-                          className={`h-full w-full object-cover ${
-                            attachment.status === "uploading" ? "opacity-60" : ""
+              <div
+                className="grid transition-all duration-300 ease-in-out"
+                style={{
+                  gridTemplateRows: attachments.length > 0 ? "1fr" : "0fr",
+                  opacity: attachments.length > 0 ? 1 : 0,
+                }}
+              >
+                <div className="overflow-hidden">
+                  <div className="px-4 pt-4">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {attachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-md border ${
+                            attachment.status === "error" ? "border-danger" : "border-border"
                           }`}
-                        />
-                        {attachment.status === "uploading" && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                            <LoadingSpinner className="h-4 w-4 text-white" />
-                          </div>
-                        )}
-                        {attachment.status === "error" && (
-                          <div className="absolute left-1 top-1 rounded bg-danger/90 px-1 text-[10px] text-white">
-                            Failed
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeAttachment(attachment.id)}
-                          className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-foreground-muted hover:text-foreground"
-                          aria-label={`Remove ${attachment.file.name}`}
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+                          <img
+                            src={attachment.previewUrl}
+                            alt={attachment.file.name}
+                            className={`h-full w-full object-cover ${
+                              attachment.status === "uploading" ? "opacity-60" : ""
+                            }`}
+                          />
+                          {attachment.status === "uploading" && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                              <LoadingSpinner className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          {attachment.status === "error" && (
+                            <div className="absolute left-1 top-1 rounded bg-danger/90 px-1 text-[10px] text-white">
+                              Failed
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(attachment.id)}
+                            className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-foreground-muted hover:text-foreground"
+                            aria-label={`Remove ${attachment.file.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={isDragging ? "Drop images to attach..." : "Describe what you want to do..."}
-                rows={claude.connected ? 4 : 2}
+                rows={claude.connected || claude.loading ? 4 : 2}
                 disabled={submitting}
                 className={`w-full px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
-                  claude.connected ? "pt-4" : "pt-2"
+                  claude.connected || claude.loading ? "pt-4" : "pt-2"
                 }`}
               />
 
