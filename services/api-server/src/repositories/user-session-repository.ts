@@ -27,7 +27,11 @@ interface RefreshTokenRow {
 }
 
 export class UserSessionRepository {
-  constructor(private readonly database: D1Database) {}
+  private readonly database: D1Database;
+
+  constructor(database: D1Database) {
+    this.database = database;
+  }
 
   async getActiveAuthSessionByToken(
     token: string,
@@ -70,6 +74,38 @@ export class UserSessionRepository {
     return row?.encrypted_token ?? null;
   }
 
+  async createAuthSession(
+    sessionToken: string,
+    userId: string,
+    githubAccessToken: string,
+    tokenExpiresAt: string | null,
+    expiresAt: string,
+  ): Promise<void> {
+    await this.database.prepare(
+      `INSERT INTO auth_sessions (token, user_id, github_access_token, token_expires_at, expires_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(sessionToken, userId, githubAccessToken, tokenExpiresAt, expiresAt)
+      .run();
+  }
+
+  async upsertRefreshToken(
+    userId: string,
+    encryptedToken: string,
+    expiresAt: string | null,
+  ): Promise<void> {
+    await this.database.prepare(
+      `INSERT INTO user_refresh_tokens (user_id, encrypted_token, expires_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET
+         encrypted_token = excluded.encrypted_token,
+         expires_at = excluded.expires_at,
+         updated_at = datetime('now')`,
+    )
+      .bind(userId, encryptedToken, expiresAt)
+      .run();
+  }
+
   async updateSessionAccessToken(
     sessionToken: string,
     githubAccessToken: string,
@@ -93,6 +129,12 @@ export class UserSessionRepository {
        updated_at = datetime('now') WHERE user_id = ?`,
     )
       .bind(encryptedToken, expiresAt, userId)
+      .run();
+  }
+
+  async deleteByToken(sessionToken: string): Promise<void> {
+    await this.database.prepare(`DELETE FROM auth_sessions WHERE token = ?`)
+      .bind(sessionToken)
       .run();
   }
 }

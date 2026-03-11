@@ -5,6 +5,9 @@ import { GitHubAppService } from "@/lib/github";
 import { logger } from "@/lib/logger";
 import { encrypt } from "@/lib/crypto";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
+import { OauthStateRepository } from "@/repositories/oauth-state-repository";
+import { UserRepository } from "@/repositories/user-repository";
+import { UserSessionRepository } from "@/repositories/user-session-repository";
 import {
   getGithubRoute,
   postTokenRoute,
@@ -26,6 +29,7 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   // create a nonce token for CSRF protection
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
 
   logger.info("Starting GitHub OAuth flow", {
     loggerName,
@@ -36,11 +40,7 @@ authRoutes.openapi(getGithubRoute, async (c) => {
     },
   });
 
-  await c.env.DB.prepare(
-    `INSERT INTO oauth_states (state, expires_at) VALUES (?, ?)`,
-  )
-    .bind(state, expiresAt)
-    .run();
+  await oauthStateRepository.create(state, expiresAt);
 
   const github = new GitHubAppService(c.env, logger);
   const url = github.getAuthUrl(state);
@@ -57,6 +57,9 @@ authRoutes.openapi(getGithubRoute, async (c) => {
  */
 authRoutes.openapi(postTokenRoute, async (c) => {
   const { code, state } = c.req.valid("json");
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
+  const userRepository = new UserRepository(c.env.DB);
+  const userSessionRepository = new UserSessionRepository(c.env.DB);
 
   logger.info("Received GitHub OAuth callback", {
     loggerName,
@@ -81,13 +84,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   }
 
   // Validate and consume state
-  const stateRow = await c.env.DB.prepare(
-    `DELETE FROM oauth_states WHERE state = ? AND datetime(expires_at) > datetime('now') RETURNING state`,
-  )
-    .bind(state)
-    .first();
-
-  if (!stateRow) {
+  if (!(await oauthStateRepository.consumeValid(state))) {
     logger.error("GitHub OAuth callback rejected: invalid or expired state", {
       loggerName,
       fields: {
@@ -148,35 +145,16 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   // Upsert user (no tokens on the user row)
   // Only used for new users; existing users keep their original id
   const userId = crypto.randomUUID();
-  await c.env.DB.prepare(
-    `INSERT INTO users (id, github_id, github_login, github_name, github_avatar_url)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT (github_id) DO UPDATE SET
-       github_login = excluded.github_login,
-       github_name = excluded.github_name,
-       github_avatar_url = excluded.github_avatar_url,
-       updated_at = datetime('now')`,
-  )
-    .bind(
-      userId,
-      result.user.id,
-      result.user.login,
-      result.user.name,
-      result.user.avatarUrl,
-    )
-    .run();
+  await userRepository.upsertGitHubUser({
+    id: userId,
+    githubId: result.user.id,
+    githubLogin: result.user.login,
+    githubName: result.user.name,
+    githubAvatarUrl: result.user.avatarUrl,
+  });
 
   // Get the actual user ID (may be existing)
-  const user = await c.env.DB.prepare(
-    `SELECT id, github_login, github_name, github_avatar_url FROM users WHERE github_id = ?`,
-  )
-    .bind(result.user.id)
-    .first<{
-      id: string;
-      github_login: string;
-      github_name: string | null;
-      github_avatar_url: string | null;
-    }>();
+  const user = await userRepository.getByGitHubId(result.user.id);
 
   if (!user) {
     return c.json({ error: "Failed to create user" }, 500);
@@ -188,31 +166,21 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     Date.now() + 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  await c.env.DB.prepare(
-    `INSERT INTO auth_sessions (token, user_id, github_access_token, token_expires_at, expires_at)
-     VALUES (?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      sessionToken,
-      user.id,
-      encryptedAccess,
-      result.expiresAt ?? null,
-      sessionExpires,
-    )
-    .run();
+  await userSessionRepository.createAuthSession(
+    sessionToken,
+    user.id,
+    encryptedAccess,
+    result.expiresAt ?? null,
+    sessionExpires,
+  );
 
   // Upsert refresh token (one per user)
   if (encryptedRefresh) {
-    await c.env.DB.prepare(
-      `INSERT INTO user_refresh_tokens (user_id, encrypted_token, expires_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT (user_id) DO UPDATE SET
-         encrypted_token = excluded.encrypted_token,
-         expires_at = excluded.expires_at,
-         updated_at = datetime('now')`,
-    )
-      .bind(user.id, encryptedRefresh, result.refreshTokenExpiresAt ?? null)
-      .run();
+    await userSessionRepository.upsertRefreshToken(
+      user.id,
+      encryptedRefresh,
+      result.refreshTokenExpiresAt ?? null,
+    );
   }
 
   // Check if user has any GitHub App installations
@@ -234,7 +202,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   logger.info("GitHub OAuth login succeeded", {
     loggerName,
     fields: {
-      githubLogin: user.github_login,
+      githubLogin: user.githubLogin,
       hasInstallations,
       requestId: c.req.header("cf-ray") ?? null,
     },
@@ -245,9 +213,9 @@ authRoutes.openapi(postTokenRoute, async (c) => {
       token: sessionToken,
       user: {
         id: user.id,
-        login: user.github_login,
-        name: user.github_name,
-        avatarUrl: user.github_avatar_url,
+        login: user.githubLogin,
+        name: user.githubName,
+        avatarUrl: user.githubAvatarUrl,
       },
       hasInstallations,
       installUrl,
@@ -276,10 +244,9 @@ authRoutes.use("/logout", authMiddleware);
 authRoutes.openapi(postLogoutRoute, async (c) => {
   const authHeader = c.req.header("Authorization")!;
   const token = authHeader.slice(7);
+  const userSessionRepository = new UserSessionRepository(c.env.DB);
 
-  await c.env.DB.prepare(`DELETE FROM auth_sessions WHERE token = ?`)
-    .bind(token)
-    .run();
+  await userSessionRepository.deleteByToken(token);
 
   return c.json({ ok: true as const }, 200);
 });
