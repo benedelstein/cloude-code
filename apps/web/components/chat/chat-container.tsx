@@ -16,7 +16,7 @@ import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
-import { EditorButton, SessionActionsButton } from "./editor-button";
+import { BrowserButton, EditorButton, SessionActionsButton } from "./editor-button";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -178,6 +178,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
+            <BrowserButton />
             <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} />
             <SessionActionsButton sessionId={sessionId} />
           </div>
