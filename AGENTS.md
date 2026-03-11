@@ -87,7 +87,8 @@ Required secrets for `api-server` (set via `wrangler secret put`):
 - **Hono** for server middleware - https://hono.dev/docs/
 - **Zod** for runtime type validation
 - **Bun** runtime for vm-agent
-- **Sprites** for isolated VM execution. Sprites are quick-booting persistent vms by fly.io - https://docs.sprites.dev/
+- **Sprites** for isolated VM execution. Sprites are quick-booting persistent vms by fly.io - https://docs.sprites.dev/ https://sprites.dev/api
+    Note: Always look up the sprites api docs instead of relying on your internal knowledge if you are not certain.
 - **Github API** for repo management and authentication. User auths with github and the cloude-code github app is installed on each org they choose (they can also scope to specific repos). github-app.ts handles this authentication and data management. 
     NOTE: Github has repository ids and names (eg owner/repo). Prefer using the numeric ids over names, as they are stable.
     NOTE: Github apps api docs are here: https://docs.github.com/en/apps. Prefer looking up docs to your own memory if you are not certain.
