@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GitPullRequest, ExternalLink, Copy, Check } from "lucide-react";
+import { GitPullRequest, GitMerge, GitPullRequestClosed, GitBranch, ExternalLink, Copy, Check } from "lucide-react";
 import { createPullRequest, getPullRequestStatus } from "@/lib/api";
 import type { PullRequestState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -72,7 +73,7 @@ export function BranchBar({
     <div className="shrink-0 rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
       <div className="px-4 py-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-foreground-muted min-w-0">
-          <GitPullRequest className="h-4 w-4 shrink-0" />
+          <PrStatusIcon pullRequestUrl={pullRequestUrl} pullRequestState={pullRequestState} />
           <span className="text-foreground font-medium">main</span>
           {" \u2190 "}
           <button
@@ -93,18 +94,6 @@ export function BranchBar({
         <div className="flex items-center gap-2 shrink-0">
           {error && (
             <span className="text-xs text-danger">{error}</span>
-          )}
-
-          {pullRequestState === "merged" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2.5 py-0.5 text-xs font-medium text-purple-500">
-              Merged
-            </span>
-          )}
-
-          {pullRequestState === "closed" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-0.5 text-xs font-medium text-danger">
-              Closed
-            </span>
           )}
 
           {pullRequestUrl ? (
@@ -136,5 +125,58 @@ export function BranchBar({
         </div>
       </div>
     </div>
+  );
+}
+
+function PrStatusIcon({
+  pullRequestUrl,
+  pullRequestState,
+}: {
+  pullRequestUrl: string | null;
+  pullRequestState: PullRequestState | null;
+}) {
+  if (pullRequestState === "merged") {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center justify-center shrink-0 rounded bg-purple-500/15 p-1">
+            <GitMerge className="h-3.5 w-3.5 text-purple-500" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Merged</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (pullRequestState === "closed") {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center justify-center shrink-0 rounded bg-danger/15 p-1">
+            <GitPullRequestClosed className="h-3.5 w-3.5 text-danger" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Closed</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (pullRequestUrl) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center justify-center shrink-0 rounded bg-green-500/15 p-1">
+            <GitPullRequest className="h-3.5 w-3.5 text-green-500" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Open</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center justify-center shrink-0 rounded bg-foreground/10 p-1">
+      <GitBranch className="h-3.5 w-3.5 text-foreground-muted" />
+    </span>
   );
 }

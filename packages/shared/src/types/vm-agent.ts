@@ -8,9 +8,28 @@ export type { UIMessage, UIMessageChunk };
 // VM Agent Input (api-server → vm-agent stdin)
 // ============================================
 
+export const AgentInputAttachment = z.object({
+  filename: z.string().min(1),
+  mediaType: z.string().min(1),
+  dataUrl: z.string().min(1),
+});
+export type AgentInputAttachment = z.infer<typeof AgentInputAttachment>;
+
+export const AgentInputMessage = z.object({
+  content: z.string().trim().min(1).optional(),
+  attachments: z.array(AgentInputAttachment).max(20).optional(),
+}).refine(
+  (value) => Boolean(value.content) || (value.attachments?.length ?? 0) > 0,
+  {
+    message: "Agent chat input must include content or attachments",
+    path: ["content"],
+  },
+);
+export type AgentInputMessage = z.infer<typeof AgentInputMessage>;
+
 export const AgentChatInput = z.object({
   type: z.literal("chat"),
-  content: z.string(),
+  message: AgentInputMessage,
 });
 
 export const AgentCancelInput = z.object({

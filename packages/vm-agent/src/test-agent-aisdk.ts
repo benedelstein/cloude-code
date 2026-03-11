@@ -64,7 +64,7 @@ userInput.on("line", (line) => {
     return;
   }
 
-  const message = encodeAgentInput({ type: "chat", content: line });
+  const message = encodeAgentInput({ type: "chat", message: { content: line } });
   console.log(`\n📥 Sending: ${line}`);
   agent.stdin!.write(message + "\n");
 });

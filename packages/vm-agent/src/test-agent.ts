@@ -27,7 +27,7 @@ console.log("🤖 vm-agent test harness");
 console.log("Type a message to send to the agent. Ctrl+C to exit.\n");
 
 userInput.on("line", (line) => {
-  const message = encodeAgentInput({ type: "chat", content: line });
+  const message = encodeAgentInput({ type: "chat", message: { content: line } });
   console.log(`\n📥 Sending: ${message}`);
   agent.stdin!.write(message + "\n");
 });

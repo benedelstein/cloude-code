@@ -15,6 +15,7 @@ import {
   SessionPullRequestServiceError,
 } from "@/lib/session-pull-request-service";
 import { generateSessionTitle } from "@/lib/generate-session-title";
+import { AttachmentService } from "@/lib/attachments/attachment-service";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   listSessionsRoute,
@@ -28,7 +29,7 @@ import {
   deleteSessionRoute,
   openEditorRoute,
   closeEditorRoute,
-} from "./routes";
+} from "./schema";
 
 export const sessionsRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -37,6 +38,19 @@ export const sessionsRoutes = new OpenAPIHono<{
 
 const getSessionAgent = async (id: string, env: Env) => {
   return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
+};
+
+const getAuthorizedSessionAgent = async (
+  sessionId: string,
+  userId: string,
+  env: Env,
+): Promise<Awaited<ReturnType<typeof getSessionAgent>> | null> => {
+  const sessionHistory = new SessionHistoryService(env.DB);
+  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, userId);
+  if (!isOwnedByUser) {
+    return null;
+  }
+  return getSessionAgent(sessionId, env);
 };
 
 // List sessions for the current user
@@ -74,40 +88,71 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const user = c.get("user");
   const sessionId = crypto.randomUUID();
   console.log("creating session agent", sessionId, "user", user.githubLogin);
-  const stub = await getSessionAgent(sessionId, c.env);
-
-  // Initialize the session in the DO (token fetched internally by the DO)
-  const initResponse = await stub.fetch(
-    new Request("http://do/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        userId: user.id,
-        repoFullName: parsed.repoFullName,
-        settings: parsed.settings,
-        branch: parsed.branch,
-        initialMessage: parsed.initialMessage,
-      }),
-    }),
-  );
-
-  if (!initResponse.ok) {
-    const error = await initResponse.text();
-    return c.json(
-      { error: "Failed to create session", details: error },
-      500,
-    ) as any;
-  }
-
-  // Record session in D1 for history listing
   const sessionHistory = new SessionHistoryService(c.env.DB);
+  const attachmentService = new AttachmentService(c.env.DB);
+  const attachmentIds = [...new Set(parsed.attachmentIds ?? [])];
+
+  // Record session in D1 for history listing. Attachments reference sessions via FK.
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
     repoId: parsed.repoId,
     repoFullName: parsed.repoFullName,
   });
+  let attachmentsBound = false;
+
+  try {
+    if (attachmentIds.length > 0) {
+      const bound = await attachmentService.bindUnboundOwnedToSession(
+        attachmentIds,
+        user.id,
+        sessionId,
+      );
+      if (!bound) {
+        await sessionHistory.delete(sessionId);
+        return c.json(
+          {
+            error: "Failed to bind one or more attachments. Ensure they exist, are unbound, and are owned by you.",
+          },
+          400,
+        ) as any;
+      }
+      attachmentsBound = true;
+    }
+
+    const stub = await getSessionAgent(sessionId, c.env);
+    // Initialize the session in the DO (token fetched internally by the DO)
+    const initResponse = await stub.fetch(
+      new Request("http://do/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          userId: user.id,
+          repoFullName: parsed.repoFullName,
+        settings: parsed.settings,
+        branch: parsed.branch,
+        initialMessage: parsed.initialMessage,
+        initialAttachmentIds: attachmentIds,
+      }),
+    }),
+  );
+
+    if (!initResponse.ok) {
+      const error = await initResponse.text();
+      throw new Error(error || "Failed to initialize session");
+    }
+  } catch (error) {
+    if (attachmentsBound && attachmentIds.length > 0) {
+      await attachmentService.unbindFromSession(attachmentIds, user.id, sessionId);
+    }
+    await sessionHistory.delete(sessionId);
+    const details = error instanceof Error ? error.message : "Unknown error";
+    return c.json(
+      { error: "Failed to create session", details },
+      500,
+    ) as any;
+  }
 
   // If an initial message was provided, generate a title immediately
   let title: string | null = null;
@@ -126,7 +171,11 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
 // Get session info
 sessionsRoutes.openapi(getSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
 
   const response = await stub.fetch(new Request("http://do/"));
   if (!response.ok) {
@@ -139,12 +188,13 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
 
 // Update session title
 sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
+  const user = c.get("user");
   const { sessionId } = c.req.valid("param");
   const { title } = c.req.valid("json");
   const sessionHistory = new SessionHistoryService(c.env.DB);
 
-  const session = await sessionHistory.getById(sessionId);
-  if (!session) {
+  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
+  if (!isOwnedByUser) {
     return c.json({ error: "Session not found" }, 404) as any;
   }
 
@@ -155,7 +205,11 @@ sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
 // Get messages for a session
 sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
 
   const response = await stub.fetch(new Request("http://do/messages"));
   if (!response.ok) {
@@ -168,7 +222,11 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
 // Create a pull request for a session's pushed branch
 sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
   const github = new GitHubAppService(c.env, logger);
   try {
     const pullRequest = await createPullRequestForSession({
@@ -209,7 +267,11 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
 // Check pull request status
 sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
   const github = new GitHubAppService(c.env, logger);
   try {
     const pullRequestStatus = await getPullRequestStatusForSession({
@@ -233,8 +295,13 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
 
 // Archive a session (hide from list but preserve data)
 sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
+  const user = c.get("user");
   const { sessionId } = c.req.valid("param");
   const sessionHistory = new SessionHistoryService(c.env.DB);
+  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
+  if (!isOwnedByUser) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
   await sessionHistory.archive(sessionId);
   return c.json({ archived: true as const }, 200);
 });
@@ -242,7 +309,11 @@ sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
 // Delete a session
 sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
 
   const response = await stub.fetch(
     new Request("http://do/", { method: "DELETE" }),
@@ -252,9 +323,10 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
     return c.json({ error: "Failed to delete session" }, 500);
   }
 
-  // Hard-delete from D1 so terminated sessions vanish entirely
+  // Hard-delete from D1 so terminated sessions vanish entirely.
+  // Enqueue attachment object keys for async R2 cleanup as part of this bulk session deletion path.
   const sessionHistory = new SessionHistoryService(c.env.DB);
-  await sessionHistory.delete(sessionId);
+  await sessionHistory.deleteAndQueueAttachmentGc(sessionId);
 
   return c.json({ deleted: true as const }, 200);
 });
@@ -262,7 +334,11 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
 // Open VS Code editor on the Sprite VM
 sessionsRoutes.openapi(openEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
 
   const response = await stub.fetch(
     new Request("http://do/editor/open", { method: "POST" }),
@@ -280,7 +356,11 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
 // Close VS Code editor on the Sprite VM
 sessionsRoutes.openapi(closeEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
-  const stub = await getSessionAgent(sessionId, c.env);
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
 
   const response = await stub.fetch(
     new Request("http://do/editor/close", { method: "POST" }),

@@ -16,6 +16,40 @@ interface MessageItemProps {
   userAvatarUrl?: string | null;
 }
 
+function isImageFilePart(
+  part: unknown,
+): part is { type: "file"; url: string; mediaType?: string; filename?: string } {
+  if (!part || typeof part !== "object") {
+    return false;
+  }
+  const candidate = part as {
+    type?: unknown;
+    url?: unknown;
+    mediaType?: unknown;
+  };
+  return candidate.type === "file"
+    && typeof candidate.url === "string"
+    && (typeof candidate.mediaType === "string"
+      ? candidate.mediaType.startsWith("image/")
+      : true);
+}
+
+function resolveAttachmentUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  if (url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+  if (url.startsWith("/api/")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    return `/api${url}`;
+  }
+  return `/api/${url}`;
+}
+
 export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
   const isUser = message.role === "user";
   const isAborted = !isUser && (message.metadata as Record<string, unknown>)?.aborted === true;
@@ -57,6 +91,22 @@ export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
                       text={part.text}
                     />
                   );
+                }
+
+                if (isImageFilePart(part)) {
+                  return (
+                    <div key={key} className="mb-2">
+                      <img
+                        src={resolveAttachmentUrl(part.url)}
+                        alt={part.filename ?? "Uploaded image"}
+                        className="max-h-96 max-w-full rounded-md border border-border"
+                      />
+                    </div>
+                  );
+                }
+
+                if (!part || typeof part !== "object" || !("type" in part)) {
+                  return null;
                 }
 
                 if (part.type === "step-start") {

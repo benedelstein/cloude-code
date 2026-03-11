@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
-import { listRepos, listBranches, createSession, type Repo } from "@/lib/api";
+import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, ImagePlus, X } from "lucide-react";
+import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/api";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
+import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ClaudeSigninPanel } from "./claude-signin-panel";
 import type { Branch } from "@repo/shared";
 import { useSessionList } from "@/components/providers/session-list-provider";
@@ -23,6 +24,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function formatClaudeMetadata(value: string): string {
   return value
@@ -51,7 +58,30 @@ export default function Home() {
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const claude = useClaudeAuth();
+  const {
+    attachments,
+    error: attachmentError,
+    setError: setAttachmentError,
+    addFiles,
+    removeAttachment,
+    clearAttachments,
+    uploadedDescriptors,
+    isUploading: isUploadingAttachments,
+    hasPendingOrFailedUploads,
+  } = useImageAttachments({
+    uploadFile: async (file) => {
+      const response = await uploadAttachments([file]);
+      const descriptor = response.attachments[0];
+      if (!descriptor) {
+        throw new Error("Upload succeeded but no attachment descriptor was returned");
+      }
+      return descriptor;
+    },
+    deleteAttachment,
+  });
   const subscriptionLabel = claude.subscriptionType
     ? `${formatClaudeMetadata(claude.subscriptionType)} subscription`
     : "Claude subscription";
@@ -123,10 +153,16 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claude.connected || !selectedRepo || !message.trim()) return;
+    const trimmedMessage = message.trim();
+    if (!claude.connected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
+    if (hasPendingOrFailedUploads) {
+      setAttachmentError("Please wait for all attachments to finish uploading (or remove failed ones).");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
+    setAttachmentError(null);
     try {
       localStorage.setItem("lastRepoId", String(selectedRepo.id));
       const branchToUse = selectedBranch && selectedBranch !== selectedRepo.defaultBranch
@@ -135,9 +171,10 @@ export default function Home() {
       const session = await createSession(
         selectedRepo.id,
         selectedRepo.fullName,
-        message.trim(),
+        trimmedMessage || undefined,
         branchToUse,
         { provider: "claude-code", model: "opus" },
+        uploadedDescriptors.map((attachment) => attachment.attachmentId),
       );
 
       addSession({
@@ -151,6 +188,7 @@ export default function Home() {
         lastMessageAt: new Date().toISOString(),
       });
 
+      clearAttachments();
       router.push(`/session/${session.sessionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create session");
@@ -169,6 +207,8 @@ export default function Home() {
     }
   };
 
+  const displayedError = error ?? attachmentError;
+
   return (
     <div className="h-full flex flex-col items-center justify-center px-4 pb-16">
       <div className="w-full max-w-2xl">
@@ -180,13 +220,35 @@ export default function Home() {
           Pick a repo and describe the task.
         </p>
 
-        {error && (
+        {displayedError && (
           <div className="mb-4 p-3 rounded-md text-sm bg-danger/10 border border-danger/20 text-danger">
-            {error}
+            {displayedError}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!submitting) {
+              setIsDragging(true);
+            }
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setIsDragging(false);
+            }
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            if (submitting) {
+              return;
+            }
+            addFiles(Array.from(event.dataTransfer.files));
+          }}
+        >
             <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
               {showClaudeSigninPanel && (
                 <ClaudeSigninPanel
@@ -194,11 +256,51 @@ export default function Home() {
                   isExiting={isClaudeSigninPanelExiting}
                 />
               )}
+              {attachments.length > 0 && (
+                <div className="px-4 pt-4">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {attachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-md border ${
+                          attachment.status === "error" ? "border-danger" : "border-border"
+                        }`}
+                      >
+                        <img
+                          src={attachment.previewUrl}
+                          alt={attachment.file.name}
+                          className={`h-full w-full object-cover ${
+                            attachment.status === "uploading" ? "opacity-60" : ""
+                          }`}
+                        />
+                        {attachment.status === "uploading" && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <LoadingSpinner className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                        {attachment.status === "error" && (
+                          <div className="absolute left-1 top-1 rounded bg-danger/90 px-1 text-[10px] text-white">
+                            Failed
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(attachment.id)}
+                          className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-foreground-muted hover:text-foreground"
+                          aria-label={`Remove ${attachment.file.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Describe what you want to do..."
+                placeholder={isDragging ? "Drop images to attach..." : "Describe what you want to do..."}
                 rows={claude.connected ? 4 : 2}
                 disabled={submitting}
                 className={`w-full px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
@@ -209,6 +311,32 @@ export default function Home() {
               <div className="flex items-center justify-between px-3 pb-3">
                 {/* Repo selector */}
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      addFiles(Array.from(event.currentTarget.files ?? []));
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={submitting}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ImagePlus className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Add images</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   {reposLoading ? (
                     <span className="text-xs text-foreground-muted px-1">
                       Loading repos...
@@ -218,27 +346,34 @@ export default function Home() {
                       open={repoPickerOpen}
                       onOpenChange={setRepoPickerOpen}
                     >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          disabled={submitting}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
-                        >
-                          <svg
-                            className="h-3.5 w-3.5 shrink-0"
-                            viewBox="0 0 16 16"
-                            fill="currentColor"
-                          >
-                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                          </svg>
-                          <span className="truncate">
-                            {selectedRepo
-                              ? selectedRepo.fullName
-                              : "Select a repo"}
-                          </span>
-                          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </button>
-                      </PopoverTrigger>
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[200px] sm:max-w-[280px]"
+                              >
+                                <svg
+                                  className="h-3.5 w-3.5 shrink-0"
+                                  viewBox="0 0 16 16"
+                                  fill="currentColor"
+                                >
+                                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                                </svg>
+                                <span className="truncate">
+                                  {selectedRepo
+                                    ? selectedRepo.fullName
+                                    : "Select a repo"}
+                                </span>
+                                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                              </button>
+                            </PopoverTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>Select repository</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <PopoverContent className="w-[280px] p-0" align="start">
                         <Command>
                           <CommandInput placeholder="Search repos..." />
@@ -298,19 +433,26 @@ export default function Home() {
                         open={branchPickerOpen}
                         onOpenChange={setBranchPickerOpen}
                       >
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={submitting}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
-                          >
-                            <GitBranch className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">
-                              {selectedBranch ?? "Select branch"}
-                            </span>
-                            <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
-                          </button>
-                        </PopoverTrigger>
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  disabled={submitting}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer max-w-[180px]"
+                                >
+                                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">
+                                    {selectedBranch ?? "Select branch"}
+                                  </span>
+                                  <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                                </button>
+                              </PopoverTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>Select base branch</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <PopoverContent className="w-[240px] p-0" align="start">
                           <Command>
                             <CommandInput placeholder="Search branches..." />
@@ -369,15 +511,16 @@ export default function Home() {
                     disabled={
                       !claude.connected ||
                       !selectedRepo ||
-                      !message.trim() ||
+                      hasPendingOrFailedUploads ||
+                      (!message.trim() && attachments.length === 0) ||
                       submitting
                     }
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    {submitting ? (
+                    {submitting || isUploadingAttachments ? (
                       <>
                         <LoadingSpinner className="h-3 w-3" />
-                        Creating...
+                        {submitting ? "Creating..." : "Uploading..."}
                       </>
                     ) : (
                       <>

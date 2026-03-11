@@ -6,6 +6,7 @@ export interface Env {
 
   // D1 Database
   DB: D1Database;
+  ATTACHMENTS_BUCKET: R2Bucket;
 
   // Environment variables
   ENVIRONMENT: string;

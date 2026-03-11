@@ -18,11 +18,14 @@
     "WORKER_URL": "https://cloude-code-api.bedelstein12.workers.dev",
     "GITHUB_APP_SLUG": "cloude-code",
     "GITHUB_APP_ID": "2799576",
-    "ALLOWED_GITHUB_LOGINS": "benedelstein,evancarter",
+    "ALLOWED_GITHUB_LOGINS": "benedelstein,evancarter,sidkasbekar",
     "GITHUB_APP_CLIENT_ID": "Iv23lirr1sj5RthzlsAs",
   },
   "dev": {
     "port": 8787
+  },
+  "triggers": {
+    "crons": ["*/30 * * * *"]
   },
   "durable_objects": {
     "bindings": [
@@ -43,6 +46,12 @@
       "binding": "DB",
       "database_name": "cloude-code-db",
       "database_id": "83f9e684-6771-446f-bff6-7e2eb4e6d5e3"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS_BUCKET",
+      "bucket_name": "cloude-code-attachments"
     }
   ]
   // Secrets (set via wrangler secret put):

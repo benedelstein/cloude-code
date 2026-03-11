@@ -22,6 +22,7 @@ import type {
   ClaudeStatusResponse,
   ClaudeDisconnectResponse,
   SessionSettingsInput,
+  UploadAttachmentResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -49,6 +50,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       text || `Request failed: ${res.status}`,
       res.status,
     );
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
   }
 
   return res.json();
@@ -82,11 +87,19 @@ export async function createSession(
   initialMessage?: string,
   branch?: string,
   settings?: SessionSettingsInput,
+  attachmentIds?: string[],
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ repoId, repoFullName, initialMessage, branch, settings }),
+    body: JSON.stringify({
+      repoId,
+      repoFullName,
+      initialMessage,
+      branch,
+      settings,
+      attachmentIds,
+    }),
   });
 }
 
@@ -132,6 +145,27 @@ export async function openEditor(sessionId: string): Promise<EditorOpenResponse>
 
 export async function closeEditor(sessionId: string): Promise<EditorCloseResponse> {
   return apiFetch(`/sessions/${sessionId}/editor/close`, { method: "POST" });
+}
+
+export async function uploadAttachments(
+  files: File[],
+  sessionId?: string,
+): Promise<UploadAttachmentResponse> {
+  const formData = new FormData();
+  if (sessionId) {
+    formData.append("sessionId", sessionId);
+  }
+  for (const file of files) {
+    formData.append("files", file, file.name);
+  }
+  return apiFetch("/attachments", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function deleteAttachment(attachmentId: string): Promise<void> {
+  await apiFetch<void>(`/attachments/${attachmentId}`, { method: "DELETE" });
 }
 
 // OpenAI OAuth

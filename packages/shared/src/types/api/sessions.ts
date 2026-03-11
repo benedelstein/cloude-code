@@ -25,6 +25,8 @@ export const CreateSessionRequest = z.object({
   branch: z.string().min(1).optional(),
   /** Optional first message to send immediately after session creation */
   initialMessage: z.string().min(1).optional(),
+  /** Optional uploaded attachment IDs to bind to this session on create */
+  attachmentIds: z.array(z.uuid()).max(20).optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 

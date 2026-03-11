@@ -8,6 +8,7 @@ import { createInterface } from "readline";
 import { parseArgs } from "util";
 import {
   type AgentInput,
+  type AgentInputMessage,
   type AgentOutput,
   decodeAgentInput,
   encodeAgentOutput,
@@ -80,21 +81,41 @@ function setupClaudeCredentials(): void {
   emit({ type: "debug", message: "Wrote ~/.claude/.credentials.json from CLAUDE_CREDENTIALS_JSON env" });
 }
 
-// Pending messages waiting to be processed
-const pendingMessages: string[] = [];
-let messageResolver: ((content: string) => void) | null = null;
+function clearConflictingAnthropicAuthEnvVars(): void {
+  const conflictingKeys = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
+  const removedKeys: string[] = [];
 
-function queueMessage(content: string): void {
-  if (messageResolver) {
-    const resolve = messageResolver;
-    messageResolver = null;
-    resolve(content);
-  } else {
-    pendingMessages.push(content);
+  for (const key of conflictingKeys) {
+    if (process.env[key]) {
+      delete process.env[key];
+      removedKeys.push(key);
+    }
+  }
+
+  if (removedKeys.length > 0) {
+    emit({
+      type: "debug",
+      message: `Removed conflicting auth env vars: ${removedKeys.join(", ")}`,
+    });
   }
 }
 
-function waitForMessage(): Promise<string> {
+// Pending messages waiting to be processed
+const pendingMessages: AgentInputMessage[] = [];
+// eslint-disable-next-line no-unused-vars
+let messageResolver: ((message: AgentInputMessage) => void) | null = null;
+
+function queueMessage(message: AgentInputMessage): void {
+  if (messageResolver) {
+    const resolve = messageResolver;
+    messageResolver = null;
+    resolve(message);
+  } else {
+    pendingMessages.push(message);
+  }
+}
+
+function waitForMessage(): Promise<AgentInputMessage> {
   return new Promise((resolve) => {
     const pending = pendingMessages.shift();
     if (pending !== undefined) {
@@ -111,13 +132,27 @@ let currentAbortController: AbortController | null = null;
 // Track session ID from Claude - updated after first message
 let claudeSessionId: string | undefined;
 
-async function processMessage(model: LanguageModel, content: string): Promise<void> {
+async function processMessage(model: LanguageModel, message: AgentInputMessage): Promise<void> {
   currentAbortController = new AbortController();
+  const userContentParts: Array<
+    | { type: "text"; text: string }
+    | { type: "image"; image: string; mediaType: string }
+  > = [];
+  if (message.content) {
+    userContentParts.push({ type: "text", text: message.content });
+  }
+  for (const attachment of message.attachments ?? []) {
+    userContentParts.push({
+      type: "image",
+      image: attachment.dataUrl,
+      mediaType: attachment.mediaType,
+    });
+  }
 
   try {
     const result = streamText({
       model,
-      prompt: content,
+      messages: [{ role: "user", content: userContentParts }],
       abortSignal: currentAbortController.signal,
       ...(claudeSessionId && {
         experimental_providerMetadata: { claudeCode: { resume: claudeSessionId } },
@@ -154,6 +189,7 @@ async function runAgent(): Promise<void> {
 
   try {
     setupClaudeCredentials();
+    clearConflictingAnthropicAuthEnvVars();
   } catch (error) {
     emit({ type: "error", error: String(error) });
     isRunning = false;
@@ -185,14 +221,12 @@ async function runAgent(): Promise<void> {
       resume: args.sessionId, // FIXME: THIS CAUSES ISSUES WITH THE API
       permissionMode: "acceptEdits",
       includePartialMessages: false,
+      streamingInput: "always",
       persistSession: true,
       systemPrompt: {
         type: "preset",
         preset: "claude_code",
         append: buildSystemPromptAppend(sessionSuffix),
-      },
-      env: {
-        ...process.env,
       },
       stderr: (data) => {
         emit({ type: "debug", message: `claude-cli stderr: ${data}` });
@@ -203,9 +237,12 @@ async function runAgent(): Promise<void> {
   const model = claudeCodeProvider("opus", { settingSources: ["local", "project", "user"] });
 
   while (true) {
-    const content = await waitForMessage();
-    emit({ type: "debug", message: `processing message: ${content}` });
-    await processMessage(model, content);
+    const message = await waitForMessage();
+    emit({
+      type: "debug",
+      message: `processing message: contentLength=${message.content?.length ?? 0}, attachments=${message.attachments?.length ?? 0}`,
+    });
+    await processMessage(model, message);
   }
 }
 
@@ -227,7 +264,7 @@ rl.on("line", async (rawLine) => {
       if (!isRunning) {
         runAgent();
       }
-      queueMessage(input.content);
+      queueMessage(input.message);
       break;
 
     case "cancel":

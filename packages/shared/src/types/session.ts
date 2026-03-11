@@ -46,6 +46,8 @@ export type AgentState = {
   pullRequestState: PullRequestState | null;
   /** Message to send automatically once provisioning completes */
   pendingMessage: string | null;
+  /** Attachment IDs to send with the pending initial message */
+  pendingAttachmentIds: string[];
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
   /** Branch the session was based off — used as the PR target */

@@ -69,6 +69,26 @@ export class SessionHistoryService {
       .run();
   }
 
+  async deleteAndQueueAttachmentGc(sessionId: string): Promise<void> {
+    await this.database.batch([
+      this.database
+        .prepare(
+          `INSERT INTO attachment_gc_queue (object_key, retry_count, created_at, updated_at)
+           SELECT object_key, 0, datetime('now'), datetime('now')
+           FROM attachments
+           WHERE session_id = ?
+           ON CONFLICT(object_key) DO UPDATE SET
+             retry_count = 0,
+             last_error = NULL,
+             updated_at = datetime('now')`,
+        )
+        .bind(sessionId),
+      this.database
+        .prepare(`DELETE FROM sessions WHERE id = ?`)
+        .bind(sessionId),
+    ]);
+  }
+
   async updateLastMessageAt(sessionId: string): Promise<void> {
     await this.database
       .prepare(
@@ -121,5 +141,13 @@ export class SessionHistoryService {
       .first<SessionRow>();
 
     return row ? rowToSummary(row) : null;
+  }
+
+  async isOwnedByUser(sessionId: string, userId: string): Promise<boolean> {
+    const row = await this.database
+      .prepare(`SELECT 1 as owned FROM sessions WHERE id = ? AND user_id = ?`)
+      .bind(sessionId, userId)
+      .first<{ owned: number }>();
+    return Boolean(row?.owned);
   }
 }

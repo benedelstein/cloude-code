@@ -6,7 +6,11 @@ import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import { useAuth } from "@/hooks/use-auth";
-import { updateSessionTitle as updateSessionTitleRequest } from "@/lib/api";
+import {
+  updateSessionTitle as updateSessionTitleRequest,
+  uploadAttachments,
+  deleteAttachment,
+} from "@/lib/api";
 import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
@@ -209,6 +213,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               />
               <ChatInput
                 onSend={sendMessage}
+                onUploadAttachments={(files) => uploadAttachments(files, sessionId).then((response) => response.attachments)}
+                onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
                 onStop={stop}
                 disabled={!isReady}
                 isStreaming={isStreaming}

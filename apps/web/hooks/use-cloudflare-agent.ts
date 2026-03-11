@@ -7,7 +7,9 @@ import type { UIMessage, UIMessageChunk } from "ai";
 import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
+  MessageAttachmentRef,
   PullRequestState,
+  AttachmentDescriptor,
   ServerMessage,
   SessionStatus,
 } from "@repo/shared";
@@ -43,7 +45,11 @@ export interface UseCloudflareAgentReturn {
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
   editorUrl: string | null;
-  sendMessage: (content: string) => void;
+  sendMessage: (message: {
+    content?: string;
+    attachments?: MessageAttachmentRef[];
+    optimisticAttachments?: AttachmentDescriptor[];
+  }) => void;
   stop: () => void;
 }
 
@@ -215,12 +221,35 @@ export function useCloudflareAgent({
     },
   });
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((message: {
+    content?: string;
+    attachments?: MessageAttachmentRef[];
+    optimisticAttachments?: AttachmentDescriptor[];
+  }) => {
+    const content = message.content?.trim();
+    const attachmentReferences = message.attachments ?? [];
+    if (!content && attachmentReferences.length === 0) {
+      return;
+    }
+
     // Create optimistic user message
+    const parts: UIMessage["parts"] = [];
+    if (content) {
+      parts.push({ type: "text", text: content });
+    }
+    const optimisticAttachments = message.optimisticAttachments ?? [];
+    for (const attachment of optimisticAttachments) {
+      parts.push({
+        type: "file",
+        mediaType: attachment.mediaType,
+        filename: attachment.filename,
+        url: attachment.contentUrl,
+      } as UIMessage["parts"][number]);
+    }
     const userMessage: UIMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      parts: [{ type: "text", text: content }],
+      parts,
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsResponding(true);
@@ -236,7 +265,11 @@ export function useCloudflareAgent({
     consumeStream(stream);
 
     // Send via useAgent's connection
-    agent.send(JSON.stringify({ type: "chat.message", content }));
+    agent.send(JSON.stringify({
+      type: "chat.message",
+      content,
+      attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
+    }));
   }, [agent, consumeStream]);
 
   const stop = useCallback(() => {

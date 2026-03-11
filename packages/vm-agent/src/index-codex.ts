@@ -12,6 +12,7 @@ import { createInterface } from "readline";
 import { parseArgs } from "util";
 import {
   type AgentInput,
+  type AgentInputMessage,
   type AgentOutput,
   decodeAgentInput,
   encodeAgentOutput,
@@ -64,20 +65,20 @@ function setupCodexAuth(): void {
 // Message queue (same pattern as index-aisdk.ts)
 // ============================================
 
-const pendingMessages: string[] = [];
-let messageResolver: ((content: string) => void) | null = null;
+const pendingMessages: AgentInputMessage[] = [];
+let messageResolver: ((message: AgentInputMessage) => void) | null = null;
 
-function queueMessage(content: string): void {
+function queueMessage(message: AgentInputMessage): void {
   if (messageResolver) {
     const resolve = messageResolver;
     messageResolver = null;
-    resolve(content);
+    resolve(message);
   } else {
-    pendingMessages.push(content);
+    pendingMessages.push(message);
   }
 }
 
-function waitForMessage(): Promise<string> {
+function waitForMessage(): Promise<AgentInputMessage> {
   return new Promise((resolve) => {
     const pending = pendingMessages.shift();
     if (pending !== undefined) {
@@ -92,16 +93,30 @@ let isRunning = false;
 let currentAbortController: AbortController | null = null;
 let codexProvider: ReturnType<typeof createCodexAppServer> | null = null;
 
-async function processMessage(content: string): Promise<void> {
+async function processMessage(message: AgentInputMessage): Promise<void> {
   if (!codexProvider) return;
 
   currentAbortController = new AbortController();
   const modelId = process.env.CODEX_MODEL ?? "gpt-5.3-codex";
+  const userContentParts: Array<
+    | { type: "text"; text: string }
+    | { type: "image"; image: string; mediaType: string }
+  > = [];
+  if (message.content) {
+    userContentParts.push({ type: "text", text: message.content });
+  }
+  for (const attachment of message.attachments ?? []) {
+    userContentParts.push({
+      type: "image",
+      image: attachment.dataUrl,
+      mediaType: attachment.mediaType,
+    });
+  }
 
   try {
     const result = streamText({
       model: codexProvider(modelId),
-      prompt: content,
+      messages: [{ role: "user", content: userContentParts }],
       abortSignal: currentAbortController.signal,
     });
 
@@ -157,9 +172,12 @@ async function runAgent(): Promise<void> {
   });
 
   while (true) {
-    const content = await waitForMessage();
-    emit({ type: "debug", message: `processing message: ${content}` });
-    await processMessage(content);
+    const message = await waitForMessage();
+    emit({
+      type: "debug",
+      message: `processing message: contentLength=${message.content?.length ?? 0}, attachments=${message.attachments?.length ?? 0}`,
+    });
+    await processMessage(message);
   }
 }
 
@@ -184,7 +202,7 @@ rl.on("line", async (rawLine) => {
       if (!isRunning) {
         runAgent();
       }
-      queueMessage(input.content);
+      queueMessage(input.message);
       break;
 
     case "cancel":

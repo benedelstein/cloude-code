@@ -6,6 +6,7 @@ import {
 } from "@/lib/sprites";
 import {
   type AgentState,
+  type AgentInputAttachment,
   type SessionSettings as SessionSettingsType,
   type SessionSettingsInput,
   SessionSettings,
@@ -19,6 +20,7 @@ import {
   // Session,
   SessionInfoResponse,
   SessionStatus,
+  type MessageAttachmentRef,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
@@ -27,6 +29,7 @@ import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
 import { SchemaManager } from "./repositories/schema-manager";
+import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/attachment-service";
 
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { MessageAccumulator } from "@/lib/message-accumulator";
@@ -55,6 +58,7 @@ interface InitRequest {
   settings?: SessionSettingsInput;
   branch?: string;
   initialMessage?: string;
+  initialAttachmentIds?: string[];
 }
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
@@ -91,6 +95,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestNumber: null,
     pullRequestState: null,
     pendingMessage: null,
+    pendingAttachmentIds: [],
     editorUrl: null,
     baseBranch: null,
     createdAt: new Date(),
@@ -409,6 +414,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       status: "provisioning",
       settings,
       pendingMessage: data.initialMessage ?? null,
+      pendingAttachmentIds: data.initialAttachmentIds ?? [],
     });
 
     // Provision sprite asynchronously
@@ -556,8 +562,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.broadcastMessage({ type: "session.status", status: "ready" });
 
       // If there's a pending initial message, send it to the agent now
-      if (this.state.pendingMessage) {
-        this.logger.info(`Sending pending message to vm-agent: ${this.state.pendingMessage}`, {
+      if (this.state.pendingMessage || this.state.pendingAttachmentIds.length > 0) {
+        this.logger.info("Sending pending initial message to vm-agent", {
           loggerName,
         });
         await this.sendPendingMessage();
@@ -575,18 +581,64 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   /** Send the pending initial message to the agent and store/broadcast it as a user message. */
   private async sendPendingMessage(): Promise<void> {
-    const content = this.state.pendingMessage;
-    if (!content || !this.agentSession || !this.state.sessionId) return;
+    const content = this.state.pendingMessage?.trim();
+    const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
+    if (!this.agentSession || !this.state.sessionId) return;
+    if (!content && pendingAttachmentIds.length === 0) return;
+
+    const sessionId = this.state.sessionId;
+    const attachmentService = new AttachmentService(this.env.DB);
+    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
+      sessionId,
+      pendingAttachmentIds,
+    );
+    if (attachmentRecords.length !== pendingAttachmentIds.length) {
+      this.logger.error(
+        `Some pending attachments not found: ${pendingAttachmentIds.join(", ")}`,
+        { loggerName },
+      );
+      this.setState({
+        ...this.state,
+        pendingMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
+    }
+
+    let agentAttachments: AgentInputAttachment[];
+    try {
+      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
+    } catch (error) {
+      this.logger.error("Failed to resolve pending attachments", { loggerName, error });
+      this.setState({
+        ...this.state,
+        pendingMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
+    }
 
     // Store user message and broadcast to all clients
     this.ensureClients();
+    const messageParts: UIMessage["parts"] = [];
+    if (content) {
+      messageParts.push({ type: "text", text: content });
+    }
+    for (const attachment of attachmentRecords) {
+      messageParts.push({
+        type: "file",
+        mediaType: attachment.mediaType,
+        filename: attachment.filename,
+        url: this.buildAttachmentContentUrl(attachment.id),
+      } as UIMessage["parts"][number]);
+    }
     const userMessage: UIMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      parts: [{ type: "text", text: content }],
+      parts: messageParts,
     };
     const stored = this.messageRepository!.create(
-      this.state.sessionId,
+      sessionId,
       userMessage,
     );
     this.broadcastMessage({
@@ -595,47 +647,31 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
 
     // Clear pending message from state (after broadcast so client has the real message)
-    this.setState({ ...this.state, pendingMessage: null });
+    this.setState({
+      ...this.state,
+      pendingMessage: null,
+      pendingAttachmentIds: [],
+    });
 
     // Sync to D1 history and generate title
-    this.ctx.waitUntil(this.syncMessageToHistory(content));
+    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
+    this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
 
     // Send to vm-agent
-    this.logger.info(`Sending pending message to vm-agent: ${content}`, { loggerName });
-    this.agentSession.write(encodeAgentInput({ type: "chat", content }) + "\n");
+    this.logger.info(
+      `Sending pending message to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
+      { loggerName },
+    );
+    this.agentSession.write(
+      encodeAgentInput({
+        type: "chat",
+        message: {
+          content,
+          attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
+        },
+      }) + "\n",
+    );
   }
-
-  // private async startMitmproxyOnVM(sprite: WorkersSprite): Promise<void> {
-  //   console.debug(`Starting mitmproxy on sprite ${sprite.name}`);
-  //   // Install mitmproxy for HTTP header debugging
-  //   await sprite.execHttp(`pip install mitmproxy`, {});
-
-  //   // Kill any existing mitmproxy to free port 8080
-  //   await sprite.execHttp(`pkill -f mitmdump || true`, {});
-  //   await new Promise((r) => setTimeout(r, 200));
-
-  //   const PYENV_SHIMS = "/.sprite/languages/python/pyenv/shims";
-  //   this.mitmSession = sprite.createSession(
-  //     `${PYENV_SHIMS}/mitmdump`,
-  //     [
-  //       "-p",
-  //       "8080",
-  //       "--set",
-  //       "stream_large_bodies=1",
-  //       "-w",
-  //       `${HOME_DIR}/.cloude/traffic.mitm`,
-  //     ],
-  //     {},
-  //   );
-
-  //   // Only log errors, traffic is written to file
-  //   this.mitmSession.onStderr((data) => console.log("[mitmdump err]", data));
-
-  //   await this.mitmSession.start();
-  //   // Give it a moment to bind to port
-  //   await new Promise((r) => setTimeout(r, 500));
-  //   console.log(`mitmproxy started on sprite ${sprite.name}`);
-  // }
 
   private async startAgentOnVM(spriteName: string): Promise<void> {
     const sprite = new WorkersSprite(
@@ -664,7 +700,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       "bun",
       "run",
       `${HOME_DIR}/.cloude/agent.js`,
-      ...(!isCodex && claudeSessionId ? [`--sessionId=${claudeSessionId}`] : []),
+      ...(!isCodex && claudeSessionId ? [`--sessionId=${claudeSessionId}`] : []), // TODO: SUPPORT SESSION ID FOR CODEX
     ];
 
     const baseEnv: Record<string, string> = {
@@ -828,8 +864,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleAgentStdout(data: string): void {
-    this.logger.info(`[vm-agent stdout] ${data.slice(0, 150)}`, { loggerName });
-
     for (const line of data.split("\n")) {
       if (!line.trim()) continue;
 
@@ -867,6 +901,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         break;
       }
       case "stream": {
+        // TODO: SAVE CHUNKS TO DB AS THEY COME IN. RESTRUCTURE MESSAGE PRESTISTENCE TO SAVE INCOMPLETE MSGS
         this.broadcastMessage({
           type: "agent.chunk",
           chunk: output.chunk,
@@ -1054,7 +1089,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   ): Promise<void> {
     switch (message.type) {
       case "chat.message":
-        await this.handleChatMessage(connection, message.content);
+        await this.handleChatMessage(connection, {
+          content: message.content,
+          attachments: message.attachments,
+        });
         break;
       case "stream.ack":
         // TODO: implement
@@ -1070,21 +1108,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async handleChatMessage(
     connection: Connection,
-    content: string,
+    payload: {
+      content?: string;
+      attachments?: MessageAttachmentRef[];
+    },
   ): Promise<void> {
     switch (this.state.status) {
       case "provisioning":
       case "cloning":
       case "syncing":
       case "attaching":
-        connection.send(
-          JSON.stringify({
-            type: "error",
-            code: "SESSION_TRANSITIONING",
-            message: `Session is ${this.state.status}, please wait`,
-          } satisfies ServerMessage),
-        );
-        return;
       case "waking":
         connection.send(
           JSON.stringify({
@@ -1136,14 +1169,66 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.logger.error("No session id", { loggerName });
       return;
     }
+    const sessionId = this.state.sessionId;
+    const content = payload.content?.trim();
+    const attachmentReferences = payload.attachments ?? [];
+    const attachmentService = new AttachmentService(this.env.DB);
+    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
+      sessionId,
+      attachmentReferences.map((attachment) => attachment.attachmentId),
+    );
+
+    if (attachmentRecords.length !== attachmentReferences.length) {
+      this.logger.error("Some attachments not found: " + attachmentReferences.map((attachment) => attachment.attachmentId).join(", "), { loggerName });
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "ATTACHMENT_NOT_FOUND",
+          message: "One or more attachments were not found for this session",
+        } satisfies ServerMessage),
+      );
+      return;
+    }
+
+    let agentAttachments: AgentInputAttachment[];
+    try {
+      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
+    } catch (error) {
+      this.logger.error("Failed to resolve attachments for chat", {
+        loggerName,
+        error,
+      });
+      connection.send(
+        JSON.stringify({
+          type: "error",
+          code: "ATTACHMENT_READ_FAILED",
+          message: "Failed to read one or more attachments",
+        } satisfies ServerMessage),
+      );
+      return;
+    }
+
+    const messageParts: UIMessage["parts"] = [];
+    if (content) {
+      messageParts.push({ type: "text", text: content });
+    }
+    for (const attachment of attachmentRecords) {
+      messageParts.push({
+        type: "file",
+        mediaType: attachment.mediaType,
+        filename: attachment.filename,
+        url: this.buildAttachmentContentUrl(attachment.id),
+      } as UIMessage["parts"][number]);
+    }
+
     // We also need to broadcast this to all clients who are not this connected client.
     const userMessage: UIMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      parts: [{ type: "text", text: content }],
+      parts: messageParts,
     };
     const stored = this.messageRepository!.create(
-      this.state.sessionId,
+      sessionId,
       userMessage,
     );
     this.broadcastMessage(
@@ -1155,11 +1240,21 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     // Sync to D1: update last_message_at and generate title from first message
-    this.ctx.waitUntil(this.syncMessageToHistory(content));
+    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
+    this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
 
     // Send to vm-agent
-    const encoded = encodeAgentInput({ type: "chat", content }) + "\n";
-    this.logger.info(`Sending to vm-agent: ${content}`, { loggerName });
+    const encoded = encodeAgentInput({
+      type: "chat",
+      message: {
+        content,
+        attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
+      },
+    }) + "\n";
+    this.logger.info(
+      `Sending to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
+      { loggerName },
+    );
     try {
       currentAgentSession.write(encoded);
       return;
@@ -1516,6 +1611,54 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         error,
       });
     }
+  }
+
+  private async resolveAgentAttachments(
+    attachments: AttachmentRecord[],
+  ): Promise<AgentInputAttachment[]> {
+    const resolved: AgentInputAttachment[] = [];
+    for (const attachment of attachments) {
+      const object = await this.env.ATTACHMENTS_BUCKET.get(attachment.objectKey);
+      if (!object || !object.body) {
+        throw new Error(`Attachment content missing for ${attachment.id}`);
+      }
+      const bytes = await object.arrayBuffer();
+      const base64 = this.arrayBufferToBase64(bytes);
+      resolved.push({
+        filename: attachment.filename,
+        mediaType: attachment.mediaType,
+        dataUrl: `data:${attachment.mediaType};base64,${base64}`,
+      });
+    }
+    return resolved;
+  }
+
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      const chunk = bytes.subarray(index, index + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  private toHistorySyncContent(
+    content: string | undefined,
+    attachments: AttachmentRecord[],
+  ): string {
+    if (content) {
+      return content;
+    }
+    if (attachments.length === 1) {
+      return `Uploaded image: ${attachments[0]!.filename}`;
+    }
+    return `Uploaded ${attachments.length} images`;
+  }
+
+  private buildAttachmentContentUrl(attachmentId: string): string {
+    return `/attachments/${attachmentId}/content`;
   }
 
   private broadcastMessage(message: ServerMessage, without?: string[]): void {

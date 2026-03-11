@@ -147,10 +147,10 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
             className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm border border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
             aria-label="Session actions"
           >
-            <span className="flex items-center justify-center gap-[2px]" aria-hidden="true">
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
+            <span className="flex items-center justify-center gap-[3px]" aria-hidden="true">
+              <span className="h-[3px] w-[3px] rounded-full bg-current" />
+              <span className="h-[3px] w-[3px] rounded-full bg-current" />
+              <span className="h-[3px] w-[3px] rounded-full bg-current" />
             </span>
           </button>
         </DropdownMenuTrigger>

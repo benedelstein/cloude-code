@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import type { UIMessage, UIMessagePart } from "ai";
 import { SessionStatus } from "./session";
+import { MessageAttachmentRef } from "./attachments";
 
 // Re-export AI SDK types for convenience
 export type { UIMessage, UIMessagePart };
@@ -10,9 +11,13 @@ export type { UIMessage, UIMessagePart };
 // ------------------------------------------------------------
 export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
-  content: z.string().min(1),
+  content: z.string().trim().min(1).optional(),
+  attachments: z.array(MessageAttachmentRef).max(20).optional(),
   messageId: z.uuid().optional(),
-});
+}).refine(
+  (value) => Boolean(value.content) || (value.attachments?.length ?? 0) > 0,
+  "chat.message must include content or attachments",
+);
 export type ChatMessageEvent = z.infer<typeof ChatMessageEvent>;
 
 export const StreamAckEvent = z.object({
