@@ -7,7 +7,8 @@ import { listRepos, listBranches, createSession, uploadAttachments, deleteAttach
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ClaudeSigninPanel } from "./claude-signin-panel";
-import type { Branch } from "@repo/shared";
+import type { Branch, ListReposResponse, ListBranchesResponse } from "@repo/shared";
+import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import {
@@ -90,43 +91,108 @@ export function HomePageClient() {
     ? ` (${formatClaudeMetadata(claude.rateLimitTier)})`
     : "";
 
+  // Fetch branches when selected repo changes
   useEffect(() => {
     if (!selectedRepo) {
       setBranches([]);
       setSelectedBranch(null);
       return;
     }
-    setBranchesLoading(true);
-    setBranches([]);
-    setSelectedBranch(selectedRepo.defaultBranch);
-    listBranches(selectedRepo.id)
+
+    let stale = false;
+    const repoId = selectedRepo.id;
+    const cacheKey = branchCacheKey(repoId);
+
+    // Phase 1: Restore from cache
+    const cached = readCache<ListBranchesResponse>(cacheKey);
+    if (cached) {
+      setBranches(cached.data.branches);
+      const defaultBranch = cached.data.branches.find((b) => b.default);
+      setSelectedBranch(defaultBranch?.name ?? cached.data.branches[0]?.name ?? null);
+      setBranchesLoading(false);
+    } else {
+      setBranchesLoading(true);
+      setBranches([]);
+      setSelectedBranch(selectedRepo.defaultBranch);
+    }
+
+    // Phase 2: Revalidate
+    listBranches(repoId)
       .then((data) => {
+        if (stale) return;
+        writeCache(cacheKey, data);
         setBranches(data.branches);
-        const defaultBranch = data.branches.find((b) => b.default);
-        setSelectedBranch(defaultBranch?.name ?? data.branches[0]?.name ?? null);
+
+        setSelectedBranch((currentBranch) => {
+          if (currentBranch) {
+            const stillExists = data.branches.find((b) => b.name === currentBranch);
+            if (stillExists) return currentBranch;
+          }
+          const defaultBranch = data.branches.find((b) => b.default);
+          return defaultBranch?.name ?? data.branches[0]?.name ?? null;
+        });
       })
       .catch(() => {
-        setSelectedBranch(selectedRepo.defaultBranch);
+        if (stale) return;
+        if (!cached) {
+          setSelectedBranch(selectedRepo.defaultBranch);
+        }
       })
-      .finally(() => setBranchesLoading(false));
+      .finally(() => {
+        if (!stale) setBranchesLoading(false);
+      });
+
+    return () => {
+      stale = true;
+    };
   }, [selectedRepo]);
 
   useEffect(() => {
+    // Phase 1: Restore from cache (synchronous, instant render)
+    const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
+    if (cached) {
+      setRepos(cached.data.repos);
+      setInstallUrl(cached.data.installUrl);
+      setReposLoading(false);
+
+      const lastRepoId = localStorage.getItem("lastRepoId");
+      const lastRepo = lastRepoId
+        ? cached.data.repos.find((r) => r.id === Number(lastRepoId))
+        : undefined;
+      if (lastRepo) {
+        setSelectedRepo(lastRepo);
+      } else if (cached.data.repos.length === 1) {
+        setSelectedRepo(cached.data.repos[0]);
+      }
+    }
+
+    // Phase 2: Revalidate in the background (always runs)
     listRepos()
       .then((data) => {
+        writeCache(CACHE_KEY_REPOS, data);
         setRepos(data.repos);
         setInstallUrl(data.installUrl);
-        const lastRepoId = localStorage.getItem("lastRepoId");
-        const lastRepo = lastRepoId
-          ? data.repos.find((repo) => repo.id === Number(lastRepoId))
-          : undefined;
-        if (lastRepo) {
-          setSelectedRepo(lastRepo);
-        } else if (data.repos.length === 1) {
-          setSelectedRepo(data.repos[0]);
+
+        // Reconcile selection: keep current choice if it still exists in fresh data
+        setSelectedRepo((currentSelected) => {
+          if (currentSelected) {
+            const stillExists = data.repos.find((r) => r.id === currentSelected.id);
+            return stillExists ?? null;
+          }
+          const lastRepoId = localStorage.getItem("lastRepoId");
+          const lastRepo = lastRepoId
+            ? data.repos.find((r) => r.id === Number(lastRepoId))
+            : undefined;
+          if (lastRepo) return lastRepo;
+          if (data.repos.length === 1) return data.repos[0];
+          return null;
+        });
+      })
+      .catch((err) => {
+        if (!cached) {
+          setError(err.message);
         }
       })
-      .catch((err) => setError(err.message))
       .finally(() => setReposLoading(false));
   }, []);
 
