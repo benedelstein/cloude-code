@@ -9,6 +9,7 @@ on:
       - "packages/shared/**"
       - "packages/vm-agent/**"
       - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-api-server.yml"
 
 jobs:
   deploy:
@@ -29,18 +30,18 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
-
+      
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm build --filter "@repo/api-server"
+
       - name: Typecheck
-        run: pnpm typecheck
+        run: pnpm typecheck --filter "@repo/api-server"
 
       - name: Lint
-        run: pnpm lint
-
-      - name: Build
-        run: pnpm build
+        run: pnpm lint --filter "@repo/api-server"
 
       - name: Apply D1 migrations
         run: pnpm --filter @repo/api-server db:migrate:prod

@@ -53,7 +53,13 @@
       "binding": "ATTACHMENTS_BUCKET",
       "bucket_name": "cloude-code-attachments"
     }
-  ]
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
   // Secrets (set via wrangler secret put):
   // - ANTHROPIC_API_KEY
   // - SPRITES_API_KEY

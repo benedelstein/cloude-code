@@ -6,6 +6,7 @@ import {
   authMiddleware,
   type AuthUser,
 } from "@/middleware/auth.middleware";
+import { ClaudeSessionRepository } from "@/repositories/claude-session-repository";
 import {
   getClaudeAuthRoute,
   postClaudeTokenRoute,
@@ -87,13 +88,10 @@ claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
   const state = crypto.randomUUID();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await computeCodeChallenge(codeVerifier);
+  const claudeSessionRepository = new ClaudeSessionRepository(c.env.DB);
 
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  await c.env.DB.prepare(
-    `INSERT INTO oauth_states (state, expires_at, code_verifier) VALUES (?, ?, ?)`,
-  )
-    .bind(state, expiresAt, codeVerifier)
-    .run();
+  await claudeSessionRepository.createOauthState(state, expiresAt, codeVerifier);
 
   const clientId = c.env.CLAUDE_OAUTH_CLIENT_ID ?? DEFAULT_CLAUDE_CLIENT_ID;
   const authorizeUrl = c.env.CLAUDE_OAUTH_AUTH_URL ?? DEFAULT_CLAUDE_AUTH_URL;
@@ -117,6 +115,7 @@ claudeAuthRoutes.use("/claude/token", authMiddleware);
 claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const { code, state } = c.req.valid("json");
   const user = c.get("user");
+  const claudeSessionRepository = new ClaudeSessionRepository(c.env.DB);
 
   if (!code || !state) {
     return c.json({ error: "Missing code or state" }, 400);
@@ -134,13 +133,8 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
     return c.json({ error: "State mismatch in pasted code" }, 400);
   }
 
-  const stateRow = await c.env.DB.prepare(
-    `DELETE FROM oauth_states WHERE state = ? AND datetime(expires_at) > datetime('now') RETURNING state, code_verifier`,
-  )
-    .bind(state)
-    .first<{ state: string; code_verifier: string }>();
-
-  if (!stateRow?.code_verifier) {
+  const stateRow = await claudeSessionRepository.consumeOauthState(state);
+  if (!stateRow) {
     return c.json({ error: "Invalid or expired state" }, 400);
   }
 
@@ -159,7 +153,7 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
         state,
         redirect_uri: redirectUri,
         client_id: clientId,
-        code_verifier: stateRow.code_verifier,
+        code_verifier: stateRow.codeVerifier,
       }),
     });
 
@@ -185,35 +179,15 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
     c.env.TOKEN_ENCRYPTION_KEY,
   );
 
-  await c.env.DB.prepare(
-    `INSERT INTO claude_tokens (
-       user_id,
-       encrypted_access_token,
-       encrypted_refresh_token,
-       expires_at_ms,
-       scopes_json,
-       subscription_type,
-       rate_limit_tier
-     ) VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (user_id) DO UPDATE SET
-       encrypted_access_token = excluded.encrypted_access_token,
-       encrypted_refresh_token = excluded.encrypted_refresh_token,
-       expires_at_ms = excluded.expires_at_ms,
-       scopes_json = excluded.scopes_json,
-       subscription_type = excluded.subscription_type,
-       rate_limit_tier = excluded.rate_limit_tier,
-       updated_at = datetime('now')`,
-  )
-    .bind(
-      user.id,
-      encryptedAccess,
-      encryptedRefresh,
-      credentials.expiresAt,
-      JSON.stringify(credentials.scopes),
-      credentials.subscriptionType,
-      credentials.rateLimitTier,
-    )
-    .run();
+  await claudeSessionRepository.upsertClaudeSession({
+    userId: user.id,
+    encryptedAccessToken: encryptedAccess,
+    encryptedRefreshToken: encryptedRefresh,
+    expiresAtMs: credentials.expiresAt,
+    scopesJson: JSON.stringify(credentials.scopes),
+    subscriptionType: credentials.subscriptionType,
+    rateLimitTier: credentials.rateLimitTier,
+  });
 
   return c.json({ ok: true as const }, 200);
 });
@@ -221,14 +195,8 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
 claudeAuthRoutes.use("/claude/status", authMiddleware);
 claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   const user = c.get("user");
-  const row = await c.env.DB.prepare(
-    `SELECT subscription_type, rate_limit_tier FROM claude_tokens WHERE user_id = ?`,
-  )
-    .bind(user.id)
-    .first<{
-      subscription_type: string | null;
-      rate_limit_tier: string | null;
-    }>();
+  const claudeSessionRepository = new ClaudeSessionRepository(c.env.DB);
+  const row = await claudeSessionRepository.getConnectionStatus(user.id);
 
   if (!row) {
     return c.json(
@@ -244,8 +212,8 @@ claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   return c.json(
     {
       connected: true,
-      subscriptionType: row.subscription_type ?? null,
-      rateLimitTier: row.rate_limit_tier ?? null,
+      subscriptionType: row.subscriptionType,
+      rateLimitTier: row.rateLimitTier,
     },
     200,
   );
@@ -254,8 +222,7 @@ claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
 claudeAuthRoutes.use("/claude/disconnect", authMiddleware);
 claudeAuthRoutes.openapi(postClaudeDisconnectRoute, async (c) => {
   const user = c.get("user");
-  await c.env.DB.prepare(`DELETE FROM claude_tokens WHERE user_id = ?`)
-    .bind(user.id)
-    .run();
+  const claudeSessionRepository = new ClaudeSessionRepository(c.env.DB);
+  await claudeSessionRepository.deleteByUserId(user.id);
   return c.json({ ok: true as const }, 200);
 });

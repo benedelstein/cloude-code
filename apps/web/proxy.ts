@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getSessionTokenFromRequest } from "@/lib/session";
 
 const publicRoutes = ["/login"];
 
@@ -15,8 +15,8 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const cookie = (await cookies()).get("session_token")?.value;
-  if (!cookie) {
+  const sessionToken = await getSessionTokenFromRequest(request);
+  if (!sessionToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

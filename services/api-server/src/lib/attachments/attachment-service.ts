@@ -118,6 +118,13 @@ export class AttachmentService {
     return "deleted";
   }
 
+  async deleteById(attachmentId: string): Promise<void> {
+    await this.database
+      .prepare(`DELETE FROM attachments WHERE id = ?`)
+      .bind(attachmentId)
+      .run();
+  }
+
   async clearGcTaskByObjectKey(objectKey: string): Promise<void> {
     await this.database
       .prepare(`DELETE FROM attachment_gc_queue WHERE object_key = ?`)

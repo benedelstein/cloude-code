@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  type GitHubAuthErrorMessage,
+  type GitHubAuthSuccessMessage,
+  githubAuthPopupMessageType,
+} from "@/types/auth";
+import { setSessionCookie } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -11,11 +17,15 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
 
   if (!code || !state) {
-    return new NextResponse(popupHtml(false, "Missing GitHub authorization code or state."), {
+    return new NextResponse(postPopupMessage({
+      type: githubAuthPopupMessageType.authError,
+      error: "Missing GitHub authorization code or state.",
+    }), {
       headers: { "Content-Type": "text/html" },
     });
   }
 
+  // TODO: USE API.TS 
   const response = await fetch(`${API_URL}/auth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -24,7 +34,10 @@ export async function GET(request: NextRequest) {
 
   if (!response.ok) {
     return new NextResponse(
-      popupHtml(false, await getAuthErrorMessage(response)),
+      postPopupMessage({
+        type: githubAuthPopupMessageType.authError,
+        error: await getAuthErrorMessage(response),
+      }),
       {
         headers: { "Content-Type": "text/html" },
       },
@@ -33,39 +46,31 @@ export async function GET(request: NextRequest) {
 
   const { token, user, hasInstallations, installUrl } = await response.json();
 
-  const isProduction = process.env.NODE_ENV === "production";
   const result = new NextResponse(
-    popupHtml(true, undefined, user, hasInstallations, installUrl),
+    postPopupMessage({
+      type: githubAuthPopupMessageType.authSuccess,
+      user,
+      hasInstallations,
+      installUrl,
+    }),
     {
       headers: { "Content-Type": "text/html" },
     },
   );
-  result.cookies.set("session_token", token, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    path: "/",
-  });
+  await setSessionCookie(result, token);
 
   return result;
 }
 
-function popupHtml(
-  success: boolean,
-  error?: string,
-  user?: Record<string, unknown>,
-  hasInstallations?: boolean,
-  installUrl?: string,
+function postPopupMessage(
+  message: GitHubAuthSuccessMessage | GitHubAuthErrorMessage,
 ): string {
-  const message = success
-    ? JSON.stringify({ type: "auth:success", user, hasInstallations, installUrl })
-    : JSON.stringify({ type: "auth:error", error });
+  const serializedMessage = JSON.stringify(message);
 
   // Escape characters that could break out of a <script> context.
   // JSON.stringify doesn't escape '<' or '/', so '</script>' in user data
   // would terminate the script tag and allow injection.
-  const safeMessage = message
+  const safeMessage = serializedMessage
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e");
 

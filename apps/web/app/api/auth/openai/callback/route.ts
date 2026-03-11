@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -12,15 +13,15 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
 
   if (!code || !state) {
-    return new NextResponse(popupHtml(false), {
+    return new NextResponse(postPopupuMessage(false), {
       headers: { "Content-Type": "text/html" },
     });
   }
 
   // Read session token from cookie (user must be logged in via GitHub first)
-  const sessionToken = request.cookies.get("session_token")?.value;
+  const sessionToken = await getSessionTokenFromRequest(request);
   if (!sessionToken) {
-    return new NextResponse(popupHtml(false, "Not logged in"), {
+    return new NextResponse(postPopupuMessage(false, "Not logged in"), {
       headers: { "Content-Type": "text/html" },
     });
   }
@@ -37,17 +38,18 @@ export async function GET(request: NextRequest) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    return new NextResponse(popupHtml(false, errorText), {
+    return new NextResponse(postPopupuMessage(false, errorText), {
       headers: { "Content-Type": "text/html" },
     });
   }
 
-  return new NextResponse(popupHtml(true), {
+  console.log("auth completed")
+  return new NextResponse(postPopupuMessage(true), {
     headers: { "Content-Type": "text/html" },
   });
 }
 
-function popupHtml(success: boolean, error?: string): string {
+function postPopupuMessage(success: boolean, error?: string): string {
   const message = success
     ? JSON.stringify({ type: "openai:success" })
     : JSON.stringify({ type: "openai:error", error: error ?? "Unknown error" });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -14,7 +15,7 @@ async function handler(
   const url = new URL(req.url);
   const target = `${API_URL}/${apiPath}${url.search}`;
 
-  const token = req.cookies.get("session_token")?.value;
+  const token = await getSessionTokenFromRequest(req);
 
   const headers = new Headers(req.headers);
   // Remove host/cookie — forward only the auth token
