@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Sonner } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "☁️ Cloude Code",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <Sonner />
+      </body>
     </html>
   );
 }
