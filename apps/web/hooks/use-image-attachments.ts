@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AttachmentDescriptor } from "@repo/shared";
+import { toast } from "sonner";
 
 export const DEFAULT_MAX_ATTACHMENTS = 20;
 export const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -31,7 +32,6 @@ export function useImageAttachments({
   maxAttachmentBytes = DEFAULT_MAX_ATTACHMENT_BYTES,
 }: UseImageAttachmentsOptions) {
   const [attachments, setAttachments] = useState<PendingImageAttachment[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const attachmentsRef = useRef<PendingImageAttachment[]>([]);
 
   useEffect(() => {
@@ -74,20 +74,19 @@ export function useImageAttachments({
     }
 
     if (oversizedFileName) {
-      setError(`"${oversizedFileName}" exceeds 10MB upload limit`);
+      toast.error(`"${oversizedFileName}" exceeds 10MB upload limit`);
     }
 
     if (nextAttachments.length === 0) {
       return;
     }
 
-    setError(null);
     const currentAttachments = attachmentsRef.current;
     const remainingSlots = Math.max(0, maxAttachments - currentAttachments.length);
     const acceptedAttachments = nextAttachments.slice(0, remainingSlots);
     const overflowAttachments = nextAttachments.slice(remainingSlots);
     if (overflowAttachments.length > 0) {
-      setError(`You can attach up to ${maxAttachments} images`);
+      toast.error(`You can attach up to ${maxAttachments} images`);
       for (const attachment of overflowAttachments) {
         URL.revokeObjectURL(attachment.previewUrl);
       }
@@ -108,7 +107,7 @@ export function useImageAttachments({
           if (targetIndex === -1) {
             if (deleteAttachment) {
               void deleteAttachment(descriptor.attachmentId).catch(() => {
-                setError("Failed to clean up removed attachment");
+                toast.error("Failed to clean up removed attachment");
               });
             }
             return;
@@ -141,7 +140,6 @@ export function useImageAttachments({
           };
           attachmentsRef.current = updatedAttachments;
           setAttachments(updatedAttachments);
-          setError(message);
         });
     }
   }, [deleteAttachment, maxAttachmentBytes, maxAttachments, uploadFile]);
@@ -167,7 +165,7 @@ export function useImageAttachments({
           URL.revokeObjectURL(attachment.previewUrl);
         })
         .catch(() => {
-          setError("Failed to delete attachment. Restored it.");
+          toast.error("Failed to delete attachment.");
           setAttachments((current) => {
             if (current.some((candidate) => candidate.id === attachment.id)) {
               return current;
@@ -198,8 +196,6 @@ export function useImageAttachments({
 
   return {
     attachments,
-    error,
-    setError,
     addFiles,
     removeAttachment,
     clearAttachments,

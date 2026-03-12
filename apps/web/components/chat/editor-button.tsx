@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface EditorButtonProps {
   sessionId: string;
@@ -53,7 +54,6 @@ function VSCodeIcon() {
 
 export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonProps) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [editorLink, setEditorLink] = useState<string | null>(null);
 
   // When editorUrl is set (e.g. from state on page load), eagerly fetch the token
@@ -71,7 +71,6 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
 
     event.preventDefault();
     setLoading(true);
-    setError(null);
     try {
       const result = await openEditor(sessionId);
       const fullUrl = `${result.url}?tkn=${result.token}`;
@@ -80,7 +79,7 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
       window.open(fullUrl, "_blank");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to open editor";
-      setError(message);
+      toast.error(message);
       console.error("Failed to open editor:", err);
     } finally {
       setLoading(false);
@@ -97,18 +96,16 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
           onClick={handleClick}
           aria-label={loading ? "Opening editor" : "Open editor"}
           className={`${buttonBaseClassName} ${
-            error
-              ? "border-danger/30 text-danger hover:bg-danger/10"
-              : editorLink
-                ? "border-success/30 text-success hover:bg-success/10"
-                : "border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground"
+            editorLink
+              ? "border-success/30 text-success hover:bg-success/10"
+              : "border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground"
           } ${disabled || loading ? "opacity-50 pointer-events-none" : ""}`}
         >
           {loading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <VSCodeIcon />}
         </a>
       </TooltipTrigger>
       <TooltipContent>
-        {error ?? "Open hosted VS Code to make manual edits"}
+        {loading ? "Opening hosted editor..." : "Open hosted VS Code to make manual edits"}
       </TooltipContent>
     </Tooltip>
   );

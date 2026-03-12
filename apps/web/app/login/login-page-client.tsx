@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
@@ -19,6 +20,12 @@ export function LoginPageClient({ isInstallComplete }: LoginPageClientProps) {
       router.replace("/");
     }
   }, [loading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (authError) {
+      toast.error(authError);
+    }
+  }, [authError]);
 
   if (loading || isInstallComplete) {
     return (
@@ -54,12 +61,6 @@ export function LoginPageClient({ isInstallComplete }: LoginPageClientProps) {
           <Image src="/github_logo.svg" alt="GitHub" width={20} height={20} />
           Sign in with GitHub
         </button>
-
-        {authError ? (
-          <p className="mt-4 text-sm text-red-600">
-            {authError}
-          </p>
-        ) : null}
       </div>
     </main>
   );
