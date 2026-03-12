@@ -46,10 +46,17 @@ import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import { arrayBufferToBase64 } from "@/lib/utils";
 import type { UIMessage } from "ai";
+import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
 import {
-  ClaudeOAuthError,
-  ClaudeOAuthService,
-} from "@/lib/claude-oauth-service";
+  ensureClaudeCredentialsReadyForSend,
+  getClaudeAuthRequiredFromClaudeError,
+  getClaudeCredentialsSnapshot,
+  refreshClaudeAuthRequired,
+} from "./session-agent-claude-auth";
+import {
+  handleEditorOpen,
+  handleEditorClose,
+} from "./session-agent-editor";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -74,8 +81,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private secretRepository: SecretRepository | null = null;
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
-  /** mitmproxy session for HTTP debugging */
-  private mitmSession: SpriteWebsocketSession | null = null;
   /** Mutex for reattachment to prevent race conditions */
   private reattachPromise: Promise<void> | null = null;
   /** Accumulator for building UIMessage from stream chunks */
@@ -88,6 +93,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   private editorToken: string | null = null;
+  /** Last Claude credential pair applied to the sprite for this DO instance */
+  private lastClaudeCredentialFingerprint: string | null = null;
 
   initialState: AgentState = {
     sessionId: "",
@@ -165,24 +172,15 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
+    if (claudeAuthRequired) {
+      this.lastClaudeCredentialFingerprint = null;
+    }
+
     if (this.state.claudeAuthRequired === claudeAuthRequired) {
       return;
     }
 
     this.setState({ ...this.state, claudeAuthRequired });
-  }
-
-  private getClaudeAuthRequiredFromError(
-    error: ClaudeOAuthError,
-  ): ClaudeAuthState | null {
-    switch (error.code) {
-      case "CLAUDE_AUTH_REQUIRED":
-        return "auth_required";
-      case "CLAUDE_REAUTH_REQUIRED":
-        return "reauth_required";
-      default:
-        return null;
-    }
   }
 
   // ============================================
@@ -249,10 +247,17 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Editor (VS Code) lifecycle
     if (path === "/editor/open" && request.method === "POST") {
-      return this.handleEditorOpen();
+      const result = await handleEditorOpen(this.editorContext());
+      this.editorToken = result.editorToken;
+      return result.response;
     }
     if (path === "/editor/close" && request.method === "POST") {
-      return this.handleEditorClose();
+      const result = await handleEditorClose(this.editorContext());
+      this.editorToken = result.editorToken;
+      return result.response;
+    }
+    if (path === "/claude-auth/refresh" && request.method === "POST") {
+      return this.handleRefreshClaudeAuth();
     }
 
     // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
@@ -283,6 +288,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           messages: storedMessages.map((m) => m.message),
         } satisfies ServerMessage),
       );
+    }
+
+    if (this.state.sessionId && this.state.settings.provider === "claude-code") {
+      this.ctx.waitUntil(this.refreshClaudeAuthRequiredState());
     }
 
     // Proactively trigger reattachment when client connects (non-blocking)
@@ -430,8 +439,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     if (settings.provider === "claude-code") {
       try {
-        const claudeOAuthService = new ClaudeOAuthService(this.env, this.logger);
-        await claudeOAuthService.getValidCredentialsJson(data.userId);
+        await getClaudeCredentialsSnapshot({
+          env: this.env,
+          logger: this.logger,
+          userId: data.userId,
+        });
       } catch (error) {
         if (error instanceof ClaudeOAuthError) {
           return new Response(
@@ -770,15 +782,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       baseEnv.CODEX_MODEL = this.state.settings.model;
     } else {
       try {
-        const claudeCredentialsJson = await this.buildClaudeCredentialsJson();
-        if (!claudeCredentialsJson) {
+        const claudeCredentials = await getClaudeCredentialsSnapshot({
+          env: this.env,
+          logger: this.logger,
+          userId: this.state.userId,
+        });
+        if (!claudeCredentials) {
           throw new Error("Claude authentication required. Connect Claude before creating a session.");
         }
         this.setClaudeAuthRequired(null);
-        baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentialsJson;
+        baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentials.credentialsJson;
+        this.lastClaudeCredentialFingerprint = claudeCredentials.fingerprint;
       } catch (error) {
         if (error instanceof ClaudeOAuthError) {
-          this.setClaudeAuthRequired(this.getClaudeAuthRequiredFromError(error));
+          this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
         }
         throw error;
       }
@@ -841,15 +858,62 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return JSON.stringify(authJson);
   }
 
-  /**
-   * Build Claude Code Linux credentials content from per-user OAuth tokens.
-   * Returns null if no per-user tokens are found.
-   */
-  private async buildClaudeCredentialsJson(): Promise<string | null> {
-    const userId = this.state.userId;
-    if (!userId) return null;
-    const claudeOAuthService = new ClaudeOAuthService(this.env, this.logger);
-    return claudeOAuthService.getValidCredentialsJson(userId);
+  private async refreshClaudeAuthRequiredState(): Promise<void> {
+    if (this.state.settings.provider !== "claude-code") {
+      this.setClaudeAuthRequired(null);
+      return;
+    }
+
+    try {
+      const result = await refreshClaudeAuthRequired({
+        env: this.env,
+        logger: this.logger,
+        userId: this.state.userId,
+      });
+      this.setClaudeAuthRequired(result.claudeAuthRequired);
+    } catch (error) {
+      this.logger.error("Failed to refresh Claude auth state", {
+        loggerName,
+        error,
+        fields: { sessionId: this.state.sessionId, userId: this.state.userId },
+      });
+    }
+  }
+
+  private async handleRefreshClaudeAuth(): Promise<Response> {
+    await this.refreshClaudeAuthRequiredState();
+    return Response.json({ ok: true as const });
+  }
+
+  private async ensureClaudeCredentialsReadyForSend(
+    connection: Connection,
+  ): Promise<boolean> {
+    if (this.state.settings.provider !== "claude-code") {
+      return true;
+    }
+
+    const result = await ensureClaudeCredentialsReadyForSend({
+      env: this.env,
+      logger: this.logger,
+      userId: this.state.userId,
+      spriteName: this.state.spriteName,
+      lastFingerprint: this.lastClaudeCredentialFingerprint,
+    });
+
+    this.setClaudeAuthRequired(result.claudeAuthRequired);
+    if (result.ok) {
+      this.lastClaudeCredentialFingerprint = result.nextFingerprint;
+      return true;
+    }
+
+    connection.send(
+      JSON.stringify({
+        type: "error",
+        code: result.errorCode,
+        message: result.errorMessage,
+      } satisfies ServerMessage),
+    );
+    return false;
   }
 
   private setupAgentSessionHandlers(): void {
@@ -875,6 +939,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleAgentStdout(data: string): void {
+    // some messages come in multiple lines, so we need to buffer them until we get a full line.
     this.agentStdoutBuffer += data;
     const lines = this.agentStdoutBuffer.split("\n");
     this.agentStdoutBuffer = lines.pop() ?? "";
@@ -1064,7 +1129,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Close editor if open
     if (this.state.editorUrl) {
-      await this.handleEditorClose();
+      const result = await handleEditorClose(this.editorContext());
+      this.editorToken = result.editorToken;
     }
 
     // Clean up sprite
@@ -1179,6 +1245,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return;
     }
 
+    if (!await this.ensureClaudeCredentialsReadyForSend(connection)) {
+      return;
+    }
+
     // Store user message with parts format
     this.ensureClients();
     if (!this.state.sessionId) {
@@ -1258,8 +1328,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Sync to D1: update last_message_at and generate title from first message
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
     this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
-
-    // todo: recheck claude auth credentials here? 
 
     // Send to vm-agent
     const encoded = encodeAgentInput({
@@ -1412,7 +1480,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.broadcastMessage({ type: "session.status", status: "ready" });
     } catch (error) {
       if (error instanceof ClaudeOAuthError) {
-        this.setClaudeAuthRequired(this.getClaudeAuthRequiredFromError(error));
+        this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
       }
       this.logger.error("Failed to reattach agent session", { loggerName, error });
       this.updateStatus("ready");
@@ -1429,141 +1497,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   // Editor (VS Code) Lifecycle
   // ============================================
 
-  private async handleEditorOpen(): Promise<Response> {
-    // TODO: extract to another file.
-    if (!this.state.spriteName) {
-      return Response.json({ error: "No sprite provisioned" }, { status: 400 });
-    }
-
-    // If editor is already open, return the existing URL
-    if (this.state.editorUrl && this.editorToken) {
-      return Response.json({ url: this.state.editorUrl, token: this.editorToken });
-    }
-
+  private editorContext() {
     this.ensureClients();
-    const sprite = new WorkersSprite(
-      this.state.spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    try {
-      // Ensure network policy allows GitHub release downloads (may not be set on older Sprites)
-      const workerHostname = new URL(this.env.WORKER_URL).hostname;
-      await sprite.setNetworkPolicy(
-        buildNetworkPolicy([{ domain: workerHostname, action: "allow" }]),
-      );
-
-      // Install openvscode-server if not already present
-      const checkResult = await sprite.execHttp(
-        `test -f ${HOME_DIR}/.openvscode/bin/openvscode-server && echo 'installed' || echo 'missing'`,
-        {},
-      );
-      if (checkResult.stdout.includes("missing")) {
-        this.logger.info("Installing openvscode-server on sprite", {
-          loggerName,
-        });
-        const installResult = await sprite.execHttp(
-          [
-            `curl -fsSL https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.109.5/openvscode-server-v1.109.5-linux-x64.tar.gz -o /tmp/ovs.tar.gz`,
-            `mkdir -p ${HOME_DIR}/.openvscode`,
-            `tar -xzf /tmp/ovs.tar.gz -C ${HOME_DIR}/.openvscode --strip-components=1`,
-            `rm /tmp/ovs.tar.gz`,
-          ].join(" && "),
-          {},
-        );
-        if (installResult.exitCode !== 0) {
-          throw new Error(
-            `openvscode-server install failed (exit ${installResult.exitCode}): ${installResult.stderr}`,
-          );
-        }
-        this.logger.info("openvscode-server installed successfully", {
-          loggerName,
-        });
-      }
-
-      // Generate a connection token for auth
-      const token = crypto.randomUUID();
-      this.editorToken = token;
-      this.secretRepository!.set("editor_token", token);
-
-      // Write the token to a file and start openvscode-server with --connection-token-file
-      const tokenFile = `${HOME_DIR}/.openvscode/.connection-token`;
-      // Kill any existing openvscode-server processes
-      await sprite.execHttp(
-        `pkill -f openvscode-server 2>/dev/null || true; fuser -k 8080/tcp 2>/dev/null || true; sleep 1`,
-        {},
-      );
-      await sprite.execHttp(`echo -n '${token}' > ${tokenFile}`, {});
-
-      // Start as a background process via nohup so it persists
-      await sprite.execHttp(
-        `nohup ${HOME_DIR}/.openvscode/bin/openvscode-server --host 0.0.0.0 --port 8080 --connection-token-file ${tokenFile} --default-folder ${WORKSPACE_DIR} > /tmp/openvscode.log 2>&1 &`,
-        {},
-      );
-
-      // Wait for the server to start listening
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      // Make the Sprite URL public so the browser can reach it directly
-      await sprite.setUrlAuth("public");
-
-      // Get the Sprite's public URL
-      const spriteInfo = await sprite.getSpriteInfo();
-      if (!spriteInfo.url) {
-        throw new Error("Sprite does not have a public URL");
-      }
-
-      const editorUrl = spriteInfo.url;
-      this.setState({ ...this.state, editorUrl });
-
-      this.logger.info(`Editor ready at ${editorUrl}`, { loggerName });
-      // Broadcast to all WS clients so other tabs/windows can open the editor too
-      this.broadcastMessage({
-        type: "editor.ready",
-        url: editorUrl,
-        token,
-      });
-
-      return Response.json({ url: editorUrl, token });
-    } catch (error) {
-      this.logger.error("Failed to open editor", { loggerName, error });
-      const message = error instanceof Error ? error.message : "Failed to open editor";
-      return Response.json({ error: message }, { status: 500 });
-    }
-  }
-
-  private async handleEditorClose(): Promise<Response> {
-    if (!this.state.spriteName) {
-      return Response.json({ error: "No sprite provisioned" }, { status: 400 });
-    }
-
-    this.ensureClients();
-    const sprite = new WorkersSprite(
-      this.state.spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    try {
-      // Kill openvscode-server
-      await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
-
-      // Revoke public URL access
-      await sprite.setUrlAuth("sprite");
-
-      // Clear editor state
-      this.editorToken = null;
-      this.secretRepository!.set("editor_token", "");
-      this.setState({ ...this.state, editorUrl: null });
-
-      this.logger.info("Editor closed", { loggerName });
-      return Response.json({ closed: true });
-    } catch (error) {
-      this.logger.error("Failed to close editor", { loggerName, error });
-      const message = error instanceof Error ? error.message : "Failed to close editor";
-      return Response.json({ error: message }, { status: 500 });
-    }
+    return {
+      spriteName: this.state.spriteName,
+      editorUrl: this.state.editorUrl,
+      editorToken: this.editorToken,
+      env: this.env,
+      logger: this.logger,
+      secretRepository: this.secretRepository!,
+      setEditorUrl: (url: string | null) => this.setState({ ...this.state, editorUrl: url }),
+      broadcastEditorReady: (url: string, token: string) =>
+        this.broadcastMessage({ type: "editor.ready", url, token }),
+    };
   }
 
   /**

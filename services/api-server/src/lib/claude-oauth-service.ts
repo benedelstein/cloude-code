@@ -75,10 +75,49 @@ export type ClaudeConnectionStatus = {
   rateLimitTier: string | null;
 };
 
+export type ClaudeCredentials = {
+  claudeAiOauth: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+    scopes: string[];
+    subscriptionType: string;
+    rateLimitTier: string;
+  };
+};
+
 export type ClaudeAuthorizationUrlResult = {
   url: string;
   state: string;
 };
+
+export function stringifyClaudeCredentials(
+  credentials: ClaudeCredentials,
+): string {
+  return JSON.stringify(credentials);
+}
+
+export function getClaudeCredentialFingerprint(
+  credentials: ClaudeCredentials,
+): string {
+  return JSON.stringify({
+    accessToken: credentials.claudeAiOauth.accessToken,
+    refreshToken: credentials.claudeAiOauth.refreshToken,
+  });
+}
+
+function toClaudeCredentials(credentials: ClaudeTokenPayload): ClaudeCredentials {
+  return {
+    claudeAiOauth: {
+      accessToken: credentials.accessToken,
+      refreshToken: credentials.refreshToken,
+      expiresAt: credentials.expiresAt,
+      scopes: credentials.scopes,
+      subscriptionType: credentials.subscriptionType ?? "unknown",
+      rateLimitTier: credentials.rateLimitTier ?? "default",
+    },
+  };
+}
 
 function parseScopes(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -257,20 +296,21 @@ export class ClaudeOAuthService {
   /**
    * Get the valid credentials for a user, refreshing the access token if it is expired
    * @param userId the user id to get the credentials for
+   * @returns the typed credentials object that can be written to a .credentials.json file for the vm-agent
+   */
+  async getValidCredentials(userId: string): Promise<ClaudeCredentials> {
+    const credentials = await this.loadValidCredentials(userId);
+    return toClaudeCredentials(credentials);
+  }
+
+  /**
+   * Get the valid credentials for a user, refreshing the access token if it is expired
+   * @param userId the user id to get the credentials for
    * @returns stringified json that can be written to a .credentials.json file for the vm-agent
    */
   async getValidCredentialsJson(userId: string): Promise<string> {
     const credentials = await this.getValidCredentials(userId);
-    return JSON.stringify({
-      claudeAiOauth: {
-        accessToken: credentials.accessToken,
-        refreshToken: credentials.refreshToken,
-        expiresAt: credentials.expiresAt,
-        scopes: credentials.scopes,
-        subscriptionType: credentials.subscriptionType ?? "unknown",
-        rateLimitTier: credentials.rateLimitTier ?? "default",
-      },
-    });
+    return stringifyClaudeCredentials(credentials);
   }
 
   /**
@@ -299,7 +339,7 @@ export class ClaudeOAuthService {
     }
 
     try {
-      const credentials = await this.getValidCredentials(userId, row);
+      const credentials = await this.loadValidCredentials(userId, row);
       return {
         connected: true,
         requiresReauth: false,
@@ -340,7 +380,7 @@ export class ClaudeOAuthService {
     }
   }
 
-  private async getValidCredentials(
+  private async loadValidCredentials(
     userId: string,
     existingRow?: ClaudeSessionRecord,
   ): Promise<ClaudeTokenPayload> {

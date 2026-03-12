@@ -46,7 +46,6 @@ export function ChatInput({
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
-  const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
@@ -70,9 +69,8 @@ export function ChatInput({
     },
     deleteAttachment: onDeleteAttachment,
   });
-  const isClaudeConnected = claude.connected;
   const isClaudeLoading = claude.loading;
-  const isClaudePromptBlocking = showClaudeSigninPanel && !isClaudeConnected;
+  const isClaudePromptBlocking = showClaudeSigninPanel;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -84,31 +82,13 @@ export function ChatInput({
   }, [input]);
 
   useEffect(() => {
-    if (!claudeAuthState || isClaudeConnected) {
-      return;
-    }
-    setShowClaudeSigninPanel(true);
-    setIsClaudeSigninPanelExiting(false);
-  }, [claudeAuthState, isClaudeConnected]);
-
-  useEffect(() => {
-    if (!showClaudeSigninPanel) {
-      return;
-    }
-
-    if (!isClaudeConnected) {
-      setIsClaudeSigninPanelExiting(false);
-      return;
-    }
-
-    setIsClaudeSigninPanelExiting(true);
-    const timeout = window.setTimeout(() => {
+    if (!claudeAuthState) {
       setShowClaudeSigninPanel(false);
-      setIsClaudeSigninPanelExiting(false);
-    }, 220);
+      return;
+    }
 
-    return () => window.clearTimeout(timeout);
-  }, [isClaudeConnected, showClaudeSigninPanel]);
+    setShowClaudeSigninPanel(true);
+  }, [claudeAuthState]);
 
   const handleSubmit = async (event: React.SyntheticEvent) => {
     event.preventDefault();
@@ -174,7 +154,7 @@ export function ChatInput({
       {showClaudeSigninPanel && !isClaudeLoading && (
         <ClaudeSigninPanel
           claude={claude}
-          isExiting={isClaudeSigninPanelExiting}
+          isExiting={false}
         />
       )}
       <div

@@ -8,7 +8,11 @@ import {
   exchangeClaudeCode,
 } from "@/lib/api";
 
-export function useClaudeAuth() {
+interface UseClaudeAuthOptions {
+  sessionId?: string;
+}
+
+export function useClaudeAuth({ sessionId }: UseClaudeAuthOptions = {}) {
   const [connected, setConnected] = useState(false);
   const [requiresReauth, setRequiresReauth] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
@@ -67,7 +71,7 @@ export function useClaudeAuth() {
     setSubmittingCode(true);
     setError(null);
     try {
-      await exchangeClaudeCode(code.trim(), pendingState);
+      await exchangeClaudeCode(code.trim(), pendingState, sessionId);
       await refreshStatus();
       setAwaitingCode(false);
       setPendingState(null);
@@ -80,7 +84,7 @@ export function useClaudeAuth() {
     } finally {
       setSubmittingCode(false);
     }
-  }, [code, pendingState, refreshStatus]);
+  }, [code, pendingState, refreshStatus, sessionId]);
 
   const cancelCodeEntry = useCallback(() => {
     setAwaitingCode(false);

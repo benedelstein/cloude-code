@@ -45,7 +45,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   } = useSession();
 
   const { user } = useAuth();
-  const claude = useClaudeAuth();
+  const claude = useClaudeAuth({ sessionId });
   const { updateTitle } = useSessionList();
   const sessionTitle = useSessionTitle(sessionId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
