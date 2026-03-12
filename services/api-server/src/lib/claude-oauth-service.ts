@@ -5,6 +5,7 @@ import {
   ClaudeSessionRepository,
   type ClaudeSessionRecord,
 } from "@/repositories/claude-session-repository";
+import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import type { Env } from "@/types";
 import { computeCodeChallenge, generateCodeVerifier } from "@/lib/pkce";
 
@@ -145,24 +146,30 @@ function needsRefresh(expiresAt: number): boolean {
 }
 
 export class ClaudeOAuthService {
-  private readonly repository: ClaudeSessionRepository;
+  private readonly claudeSessionRepository: ClaudeSessionRepository;
+  private readonly oauthStateRepository: OauthStateRepository;
   private readonly logger: Logger;
 
   constructor(
     private readonly env: Env,
     logger: Logger = defaultLogger,
   ) {
-    this.repository = new ClaudeSessionRepository(env.DB);
+    this.claudeSessionRepository = new ClaudeSessionRepository(env.DB);
+    this.oauthStateRepository = new OauthStateRepository(env.DB);
     this.logger = logger;
   }
 
+  /**
+   * Create a claude oauth authorization url for a user to authorize the app to access their claude account
+   * @returns the authorization url and state for the user to authorize the app to access their claude account
+   */
   async createAuthorizationUrl(): Promise<ClaudeAuthorizationUrlResult> {
     const state = crypto.randomUUID();
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await computeCodeChallenge(codeVerifier);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    await this.repository.createOauthState(state, expiresAt, codeVerifier);
+    await this.oauthStateRepository.create(state, expiresAt, codeVerifier);
 
     const params = new URLSearchParams({
       code: "true",
@@ -181,6 +188,10 @@ export class ClaudeOAuthService {
     };
   }
 
+  /**
+   * Exchange a claude oauth authorization code for access and refresh tokens
+   * @param params the parameters for the exchange
+   */
   async exchangeAuthorizationCode(params: {
     userId: string;
     code: string;
@@ -204,8 +215,8 @@ export class ClaudeOAuthService {
       );
     }
 
-    const stateRow = await this.repository.consumeOauthState(params.state);
-    if (!stateRow) {
+    const stateRow = await this.oauthStateRepository.consumeValid(params.state);
+    if (!stateRow?.codeVerifier) {
       throw new ClaudeOAuthError(
         "CLAUDE_INVALID_STATE",
         "Invalid or expired state",
@@ -240,9 +251,14 @@ export class ClaudeOAuthService {
   }
 
   async disconnect(userId: string): Promise<void> {
-    await this.repository.deleteByUserId(userId);
+    await this.claudeSessionRepository.deleteByUserId(userId);
   }
 
+  /**
+   * Get the valid credentials for a user, refreshing the access token if it is expired
+   * @param userId the user id to get the credentials for
+   * @returns stringified json that can be written to a .credentials.json file for the vm-agent
+   */
   async getValidCredentialsJson(userId: string): Promise<string> {
     const credentials = await this.getValidCredentials(userId);
     return JSON.stringify({
@@ -257,8 +273,13 @@ export class ClaudeOAuthService {
     });
   }
 
+  /**
+   * Get the claude oauth connection status for a user. Will refresh the access token if it is expired, and if refresh fails, returns unauthenticated state
+   * @param userId the user id to get the connection status for
+   * @returns the connection status for the user
+   */
   async getConnectionStatus(userId: string): Promise<ClaudeConnectionStatus> {
-    const row = await this.repository.getSessionByUserId(userId);
+    const row = await this.claudeSessionRepository.getSessionByUserId(userId);
     if (!row) {
       return {
         connected: false,
@@ -323,7 +344,7 @@ export class ClaudeOAuthService {
     userId: string,
     existingRow?: ClaudeSessionRecord,
   ): Promise<ClaudeTokenPayload> {
-    const row = existingRow ?? await this.repository.getSessionByUserId(userId);
+    const row = existingRow ?? await this.claudeSessionRepository.getSessionByUserId(userId);
     if (!row) {
       throw new ClaudeOAuthError(
         "CLAUDE_AUTH_REQUIRED",
@@ -370,7 +391,7 @@ export class ClaudeOAuthService {
     } catch (error) {
       this.logger.error("Error refreshing Claude tokens", { error });
       if (error instanceof ClaudeOAuthError && error.code === "CLAUDE_REAUTH_REQUIRED") {
-        await this.repository.markRequiresReauth(userId);
+        await this.claudeSessionRepository.markRequiresReauth(userId);
       }
       throw error;
     }
@@ -398,7 +419,7 @@ export class ClaudeOAuthService {
       this.env.TOKEN_ENCRYPTION_KEY,
     );
 
-    await this.repository.upsertClaudeSession({
+    await this.claudeSessionRepository.upsertClaudeSession({
       userId,
       encryptedAccessToken,
       encryptedRefreshToken,

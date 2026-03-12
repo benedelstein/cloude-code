@@ -1,8 +1,3 @@
-export interface ClaudeOauthState {
-  state: string;
-  codeVerifier: string;
-}
-
 export interface ClaudeSessionRecord {
   userId: string;
   encryptedAccessToken: string;
@@ -12,11 +7,6 @@ export interface ClaudeSessionRecord {
   subscriptionType: string | null;
   rateLimitTier: string | null;
   requiresReauth: boolean;
-}
-
-interface ClaudeOauthStateRow {
-  state: string;
-  code_verifier: string;
 }
 
 interface ClaudeSessionRow {
@@ -45,37 +35,6 @@ export class ClaudeSessionRepository {
 
   constructor(database: D1Database) {
     this.database = database;
-  }
-
-  async createOauthState(
-    state: string,
-    expiresAt: string,
-    codeVerifier: string,
-  ): Promise<void> {
-    await this.database.prepare(
-      `INSERT INTO oauth_states (state, expires_at, code_verifier) VALUES (?, ?, ?)`,
-    )
-      .bind(state, expiresAt, codeVerifier)
-      .run();
-  }
-
-  async consumeOauthState(state: string): Promise<ClaudeOauthState | null> {
-    const row = await this.database.prepare(
-      `DELETE FROM oauth_states
-       WHERE state = ? AND datetime(expires_at) > datetime('now')
-       RETURNING state, code_verifier`,
-    )
-      .bind(state)
-      .first<ClaudeOauthStateRow>();
-
-    if (!row?.code_verifier) {
-      return null;
-    }
-
-    return {
-      state: row.state,
-      codeVerifier: row.code_verifier,
-    };
   }
 
   async upsertClaudeSession(input: UpsertClaudeSessionInput): Promise<void> {
