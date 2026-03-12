@@ -14,6 +14,13 @@ export function ClaudeSigninPanel({
   claude,
   isExiting,
 }: ClaudeSigninPanelProps) {
+  const title = claude.requiresReauth ? "Reconnect Claude" : "Sign in with Claude";
+  const description = claude.requiresReauth
+    ? "Your Claude session expired. Reconnect your account to continue."
+    : "Follow these steps to connect your Claude account:";
+  const actionLabel = claude.requiresReauth ? "Reconnect Claude" : "Sign in with Claude";
+  const submitLabel = claude.submittingCode ? "Submitting..." : "Complete sign in";
+
   return (
     <div
       aria-hidden={isExiting}
@@ -34,11 +41,11 @@ export function ClaudeSigninPanel({
               className="h-4 w-4"
             />
             <h2 className="text-sm font-semibold text-foreground">
-              Sign in with Claude
+              {title}
             </h2>
           </div>
           <p className="mt-1 text-xs text-foreground-muted">
-            Follow these steps to connect your Claude account:
+            {description}
           </p>
           <ol className="mt-3 space-y-1 text-xs text-foreground-muted list-decimal list-inside">
             <li>
@@ -55,7 +62,7 @@ export function ClaudeSigninPanel({
                 onClick={claude.connect}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm bg-[#d97757] text-white hover:bg-[#d97757]/90 transition-colors cursor-pointer"
               >
-                Sign in with Claude
+                {actionLabel}
               </button>
             </div>
           )}
@@ -86,7 +93,7 @@ export function ClaudeSigninPanel({
                   disabled={!claude.code.trim() || claude.submittingCode}
                   className="px-3 py-1.5 text-xs font-semibold rounded-md bg-[#d97757] text-white hover:bg-[#d97757]/90 transition-colors disabled:opacity-50"
                 >
-                  {claude.submittingCode ? "Submitting..." : "Complete sign in"}
+                  {submitLabel}
                 </button>
                 <button
                   type="button"

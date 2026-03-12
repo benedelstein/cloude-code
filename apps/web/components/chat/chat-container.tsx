@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import { useAuth } from "@/hooks/use-auth";
+import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import {
   updateSessionTitle as updateSessionTitleRequest,
   uploadAttachments,
@@ -38,11 +39,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pullRequestUrl,
     pullRequestState,
     editorUrl,
+    claudeAuthRequired: claudeAuthState,
     sendMessage,
     stop,
   } = useSession();
 
   const { user } = useAuth();
+  const claude = useClaudeAuth();
   const { updateTitle } = useSessionList();
   const sessionTitle = useSessionTitle(sessionId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -219,6 +222,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onStop={stop}
                 disabled={!isReady}
                 isStreaming={isStreaming}
+                claude={claude}
+                claudeAuthRequired={claudeAuthState}
               />
             </div>
           </div>

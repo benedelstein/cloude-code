@@ -5,10 +5,15 @@ import { ImagePlus, Send, Square, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import type { useClaudeAuth } from "@/hooks/use-claude-auth";
+import { ClaudeSigninPanel } from "@/app/(app)/claude-signin-panel";
 import type {
   MessageAttachmentRef,
   AttachmentDescriptor,
+  ClaudeAuthState,
 } from "@repo/shared";
+
+type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
 
 interface ChatInputProps {
   // eslint-disable-next-line no-unused-vars
@@ -24,6 +29,8 @@ interface ChatInputProps {
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  claude: ClaudeAuth;
+  claudeAuthRequired: ClaudeAuthState | null;
 }
 
 export function ChatInput({
@@ -33,9 +40,13 @@ export function ChatInput({
   onStop,
   disabled = false,
   isStreaming = false,
+  claude,
+  claudeAuthRequired: claudeAuthState,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
+  const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
@@ -59,6 +70,9 @@ export function ChatInput({
     },
     deleteAttachment: onDeleteAttachment,
   });
+  const isClaudeConnected = claude.connected;
+  const isClaudeLoading = claude.loading;
+  const isClaudePromptBlocking = showClaudeSigninPanel && !isClaudeConnected;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -69,9 +83,36 @@ export function ChatInput({
     }
   }, [input]);
 
+  useEffect(() => {
+    if (!claudeAuthState || isClaudeConnected) {
+      return;
+    }
+    setShowClaudeSigninPanel(true);
+    setIsClaudeSigninPanelExiting(false);
+  }, [claudeAuthState, isClaudeConnected]);
+
+  useEffect(() => {
+    if (!showClaudeSigninPanel) {
+      return;
+    }
+
+    if (!isClaudeConnected) {
+      setIsClaudeSigninPanelExiting(false);
+      return;
+    }
+
+    setIsClaudeSigninPanelExiting(true);
+    const timeout = window.setTimeout(() => {
+      setShowClaudeSigninPanel(false);
+      setIsClaudeSigninPanelExiting(false);
+    }, 220);
+
+    return () => window.clearTimeout(timeout);
+  }, [isClaudeConnected, showClaudeSigninPanel]);
+
   const handleSubmit = async (event: React.SyntheticEvent) => {
     event.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || disabled) return;
+    if ((!input.trim() && attachments.length === 0) || disabled || isClaudePromptBlocking) return;
     if (hasPendingOrFailedUploads) {
       setError("Please wait for all attachments to finish uploading (or remove failed ones).");
       return;
@@ -130,6 +171,12 @@ export function ChatInput({
         addFiles(Array.from(event.dataTransfer.files));
       }}
     >
+      {showClaudeSigninPanel && !isClaudeLoading && (
+        <ClaudeSigninPanel
+          claude={claude}
+          isExiting={isClaudeSigninPanelExiting}
+        />
+      )}
       <div
         className="grid transition-all duration-300 ease-in-out"
         style={{
@@ -186,13 +233,13 @@ export function ChatInput({
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            disabled
+            disabled || isClaudePromptBlocking
               ? "Waiting for agent to be ready..."
               : isDragging
                 ? "Drop images to attach..."
                 : "Send a message..."
           }
-          disabled={disabled || isStreaming || isUploading}
+          disabled={disabled || isClaudePromptBlocking || isStreaming || isUploading}
           rows={1}
           className={`w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
             isDragging ? "opacity-70" : ""
@@ -219,7 +266,7 @@ export function ChatInput({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                disabled={disabled || isStreaming}
+                disabled={disabled || isClaudePromptBlocking || isStreaming}
                 onClick={() => fileInputRef.current?.click()}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground-muted hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -247,7 +294,7 @@ export function ChatInput({
             <TooltipTrigger asChild>
               <button
                 type="submit"
-                disabled={disabled || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
+                disabled={disabled || isClaudePromptBlocking || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="h-3.5 w-3.5" />

@@ -7,6 +7,7 @@ import type { UIMessage, UIMessageChunk } from "ai";
 import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
+  ClaudeAuthState,
   MessageAttachmentRef,
   PullRequestState,
   AttachmentDescriptor,
@@ -45,6 +46,7 @@ export interface UseCloudflareAgentReturn {
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
   editorUrl: string | null;
+  claudeAuthRequired: ClaudeAuthState | null;
   sendMessage: (message: {
     content?: string;
     attachments?: MessageAttachmentRef[];
@@ -70,6 +72,7 @@ export function useCloudflareAgent({
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
+  const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -210,6 +213,9 @@ export function useCloudflareAgent({
       if (state.editorUrl !== undefined) {
         setEditorUrl(state.editorUrl);
       }
+      if (state.claudeAuthRequired !== undefined) {
+        setClaudeAuthRequired(state.claudeAuthRequired);
+      }
     },
     onError: (message) => {
       resetPendingResponse();
@@ -291,6 +297,7 @@ export function useCloudflareAgent({
     pullRequestUrl,
     pullRequestState,
     editorUrl,
+    claudeAuthRequired,
     sendMessage,
     stop,
   };

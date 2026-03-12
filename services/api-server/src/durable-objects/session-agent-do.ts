@@ -7,6 +7,7 @@ import {
 import {
   type AgentState,
   type AgentInputAttachment,
+  type ClaudeAuthState,
   type SessionSettings as SessionSettingsType,
   type SessionSettingsInput,
   SessionSettings,
@@ -43,6 +44,7 @@ import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
+import { arrayBufferToBase64 } from "@/lib/utils";
 import type { UIMessage } from "ai";
 import {
   ClaudeOAuthError,
@@ -103,6 +105,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pendingMessage: null,
     pendingAttachmentIds: [],
     editorUrl: null,
+    claudeAuthRequired: null,
     baseBranch: null,
     createdAt: new Date(),
   };
@@ -159,6 +162,27 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private updateStatus(status: SessionStatus): void {
     this.setState({ ...this.state, status });
+  }
+
+  private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
+    if (this.state.claudeAuthRequired === claudeAuthRequired) {
+      return;
+    }
+
+    this.setState({ ...this.state, claudeAuthRequired });
+  }
+
+  private getClaudeAuthRequiredFromError(
+    error: ClaudeOAuthError,
+  ): ClaudeAuthState | null {
+    switch (error.code) {
+      case "CLAUDE_AUTH_REQUIRED":
+        return "auth_required";
+      case "CLAUDE_REAUTH_REQUIRED":
+        return "reauth_required";
+      default:
+        return null;
+    }
   }
 
   // ============================================
@@ -439,6 +463,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       settings,
       pendingMessage: data.initialMessage ?? null,
       pendingAttachmentIds: data.initialAttachmentIds ?? [],
+      claudeAuthRequired: null,
     });
 
     // Provision sprite asynchronously
@@ -744,11 +769,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
       baseEnv.CODEX_MODEL = this.state.settings.model;
     } else {
-      const claudeCredentialsJson = await this.buildClaudeCredentialsJson();
-      if (!claudeCredentialsJson) {
-        throw new Error("Claude authentication required. Connect Claude before creating a session.");
+      try {
+        const claudeCredentialsJson = await this.buildClaudeCredentialsJson();
+        if (!claudeCredentialsJson) {
+          throw new Error("Claude authentication required. Connect Claude before creating a session.");
+        }
+        this.setClaudeAuthRequired(null);
+        baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentialsJson;
+      } catch (error) {
+        if (error instanceof ClaudeOAuthError) {
+          this.setClaudeAuthRequired(this.getClaudeAuthRequiredFromError(error));
+        }
+        throw error;
       }
-      baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentialsJson;
     }
 
     this.agentSession = sprite.createSession("env", commands, {
@@ -1226,6 +1259,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
     this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
 
+    // todo: recheck claude auth credentials here? 
+
     // Send to vm-agent
     const encoded = encodeAgentInput({
       type: "chat",
@@ -1234,10 +1269,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
       },
     }) + "\n";
-    this.logger.info(
-      `Sending to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
-      { loggerName },
-    );
     try {
       currentAgentSession.write(encoded);
       return;
@@ -1284,6 +1315,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async syncRepository(sprite: WorkersSprite): Promise<void> {
+    // TODO: MAKE THIS ONE SCRIPT/BASH LINE
     // Stash any local changes
     await sprite.execHttp(
       `cd ${WORKSPACE_DIR} && git stash --include-untracked`,
@@ -1375,9 +1407,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
 
       // Set status back to ready
+      this.setClaudeAuthRequired(null);
       this.updateStatus("ready");
       this.broadcastMessage({ type: "session.status", status: "ready" });
     } catch (error) {
+      if (error instanceof ClaudeOAuthError) {
+        this.setClaudeAuthRequired(this.getClaudeAuthRequiredFromError(error));
+      }
       this.logger.error("Failed to reattach agent session", { loggerName, error });
       this.updateStatus("ready");
       this.broadcastMessage({ type: "session.status", status: "ready" });
@@ -1394,6 +1430,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   // ============================================
 
   private async handleEditorOpen(): Promise<Response> {
+    // TODO: extract to another file.
     if (!this.state.spriteName) {
       return Response.json({ error: "No sprite provisioned" }, { status: 400 });
     }
@@ -1606,7 +1643,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         throw new Error(`Attachment content missing for ${attachment.id}`);
       }
       const bytes = await object.arrayBuffer();
-      const base64 = this.arrayBufferToBase64(bytes);
+      const base64 = arrayBufferToBase64(bytes);
       resolved.push({
         filename: attachment.filename,
         mediaType: attachment.mediaType,
@@ -1614,17 +1651,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       });
     }
     return resolved;
-  }
-
-  private arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000;
-    let binary = "";
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-      const chunk = bytes.subarray(index, index + chunkSize);
-      binary += String.fromCharCode(...chunk);
-    }
-    return btoa(binary);
   }
 
   private toHistorySyncContent(

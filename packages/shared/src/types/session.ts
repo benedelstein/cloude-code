@@ -23,6 +23,7 @@ export const SessionStatus = z.enum([
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export type PullRequestState = "open" | "merged" | "closed";
+export type ClaudeAuthState = "auth_required" | "reauth_required";
 
 /** State managed by the SessionAgentDO, synced to clients via Cloudflare Agents */
 export type AgentState = {
@@ -50,6 +51,8 @@ export type AgentState = {
   pendingAttachmentIds: string[];
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
+  /** Claude auth issue blocking the current session, if any */
+  claudeAuthRequired: ClaudeAuthState | null;
   /** Branch the session was based off — used as the PR target */
   baseBranch: string | null;
   createdAt: Date;

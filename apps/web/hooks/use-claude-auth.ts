@@ -10,6 +10,7 @@ import {
 
 export function useClaudeAuth() {
   const [connected, setConnected] = useState(false);
+  const [requiresReauth, setRequiresReauth] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
   const [rateLimitTier, setRateLimitTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,20 +22,27 @@ export function useClaudeAuth() {
 
   const refreshStatus = useCallback(async () => {
     const status = await getClaudeStatus();
-    console.log("Claude status:", status);
     setConnected(status.connected);
+    setRequiresReauth(status.requiresReauth);
     setSubscriptionType(status.subscriptionType);
     setRateLimitTier(status.rateLimitTier);
   }, []);
 
   useEffect(() => {
-    refreshStatus()
-      .catch(() => {
+    const loadClaudeStatus = async () => {
+      try {
+        await refreshStatus();
+      } catch {
         setConnected(false);
+        setRequiresReauth(false);
         setSubscriptionType(null);
         setRateLimitTier(null);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadClaudeStatus();
   }, [refreshStatus]);
 
   const connect = useCallback(async () => {
@@ -84,6 +92,7 @@ export function useClaudeAuth() {
   const disconnect = useCallback(async () => {
     await disconnectClaude();
     setConnected(false);
+    setRequiresReauth(false);
     setSubscriptionType(null);
     setRateLimitTier(null);
     setAwaitingCode(false);
@@ -94,6 +103,7 @@ export function useClaudeAuth() {
 
   return {
     connected,
+    requiresReauth,
     subscriptionType,
     rateLimitTier,
     loading,
@@ -103,6 +113,7 @@ export function useClaudeAuth() {
     submittingCode,
     error,
     connect,
+    refreshStatus,
     submitCode,
     cancelCodeEntry,
     disconnect,
