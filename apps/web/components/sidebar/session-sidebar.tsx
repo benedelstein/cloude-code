@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal } from "lucide-react";
+import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal, GitFork } from "lucide-react";
 import { deleteSession, archiveSession } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
@@ -43,6 +43,32 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SessionSummary } from "@repo/shared";
+
+interface RepoGroup {
+  repoFullName: string;
+  sessions: SessionSummary[];
+}
+
+function groupSessionsByRepo(sessions: SessionSummary[]): RepoGroup[] {
+  const grouped = new Map<string, SessionSummary[]>();
+  for (const session of sessions) {
+    const existing = grouped.get(session.repoFullName);
+    if (existing) {
+      existing.push(session);
+    } else {
+      grouped.set(session.repoFullName, [session]);
+    }
+  }
+  // Order groups by the most recent session in each group
+  return Array.from(grouped.entries())
+    .map(([repoFullName, repoSessions]) => ({ repoFullName, sessions: repoSessions }))
+    .sort((a, b) => {
+      const aTime = a.sessions[0]?.updatedAt ?? "";
+      const bTime = b.sessions[0]?.updatedAt ?? "";
+      return bTime.localeCompare(aTime);
+    });
+}
 
 export function SessionSidebar() {
   const { user, logout } = useAuth();
@@ -131,65 +157,74 @@ export function SessionSidebar() {
                 No sessions yet
               </p>
             ) : (
-              <SidebarMenu>
-                {sessions.map((session) => {
-                  const isActive = session.id === activeSessionId;
-                  const displayTitle = session.title || session.repoFullName.split("/")[1] || session.id.slice(0, 8);
-                  const timestamp = session.lastMessageAt || session.updatedAt;
-                  const isLoading = terminatingSessionId === session.id || archivingSessionId === session.id;
+              <div className="flex flex-col gap-1">
+                {groupSessionsByRepo(sessions).map((group) => (
+                  <div key={group.repoFullName}>
+                    <div className="flex items-center gap-1.5 px-2 pt-2 pb-1">
+                      <GitFork className="h-3 w-3 text-foreground-muted shrink-0" />
+                      <span className="text-xs font-medium text-foreground-muted truncate">
+                        {group.repoFullName}
+                      </span>
+                    </div>
+                    <SidebarMenu>
+                      {group.sessions.map((session) => {
+                        const isActive = session.id === activeSessionId;
+                        const displayTitle = session.title || session.id.slice(0, 8);
+                        const timestamp = session.lastMessageAt || session.updatedAt;
+                        const isLoading = terminatingSessionId === session.id || archivingSessionId === session.id;
 
-                  return (
-                    <SidebarMenuItem key={session.id}>
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() => navigate(`/session/${session.id}`)}
-                        className="cursor-pointer h-auto py-2"
-                      >
-                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                          <span className="truncate text-sm">{displayTitle}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-foreground-muted truncate">
-                              {session.repoFullName.split("/")[1] || session.repoFullName}
-                            </span>
-                            {isLoading ? (
-                              <LoadingSpinner className="h-3 w-3 shrink-0" />
-                            ) : (
-                              <span className="text-xs font-mono text-foreground-muted shrink-0">
-                                · {formatRelativeTime(timestamp)}
-                              </span>
+                        return (
+                          <SidebarMenuItem key={session.id}>
+                            <SidebarMenuButton
+                              isActive={isActive}
+                              onClick={() => navigate(`/session/${session.id}`)}
+                              className="cursor-pointer h-auto py-1.5 pl-4"
+                            >
+                              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                <span className="truncate text-sm">{displayTitle}</span>
+                                <div className="flex items-center gap-1.5">
+                                  {isLoading ? (
+                                    <LoadingSpinner className="h-3 w-3 shrink-0" />
+                                  ) : (
+                                    <span className="text-xs font-mono text-foreground-muted shrink-0">
+                                      {formatRelativeTime(timestamp)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </SidebarMenuButton>
+                            {!isLoading && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <SidebarMenuAction showOnHover className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]">
+                                    <MoreHorizontal className="h-3 w-3" />
+                                  </SidebarMenuAction>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent side="right" align="start">
+                                  <DropdownMenuItem
+                                    onClick={() => handleArchiveSession(session.id)}
+                                  >
+                                    <Archive className="h-4 w-4" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeleteDialogSessionId(session.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             )}
-                          </div>
-                        </div>
-                      </SidebarMenuButton>
-                      {!isLoading && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <SidebarMenuAction showOnHover className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]">
-                              <MoreHorizontal className="h-3 w-3" />
-                            </SidebarMenuAction>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent side="right" align="start">
-                            <DropdownMenuItem
-                              onClick={() => handleArchiveSession(session.id)}
-                            >
-                              <Archive className="h-4 w-4" />
-                              Archive
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleteDialogSessionId(session.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </div>
+                ))}
+              </div>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
