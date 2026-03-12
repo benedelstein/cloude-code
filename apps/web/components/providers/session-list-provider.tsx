@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { listSessions, type SessionSummary } from "@/lib/api";
+import { listSessions, type SessionSummary } from "@/lib/client-api";
 
 interface SessionListContextValue {
   sessions: SessionSummary[];

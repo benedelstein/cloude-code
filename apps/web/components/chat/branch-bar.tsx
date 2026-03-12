@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { GitPullRequest, GitMerge, GitPullRequestClosed, GitBranch, ExternalLink, Copy, Check } from "lucide-react";
-import { createPullRequest, getPullRequestStatus } from "@/lib/api";
+import { createPullRequest, getPullRequestStatus } from "@/lib/client-api";
 import type { PullRequestState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

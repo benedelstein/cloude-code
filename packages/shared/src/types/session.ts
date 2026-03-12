@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import { z } from "zod";
 
 export const SessionStatus = z.enum([
@@ -45,8 +46,8 @@ export type AgentState = {
   pullRequestNumber: number | null;
   /** PR state: open, merged, or closed */
   pullRequestState: PullRequestState | null;
-  /** Message to send automatically once provisioning completes */
-  pendingMessage: string | null;
+  /** User message to render and send automatically once provisioning completes */
+  pendingUserMessage: UIMessage | null;
   /** Attachment IDs to send with the pending initial message */
   pendingAttachmentIds: string[];
   /** Public URL for the VS Code editor (set when editor is open) */

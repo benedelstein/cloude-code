@@ -6,7 +6,7 @@ import {
   getClaudeStatus,
   disconnectClaude,
   exchangeClaudeCode,
-} from "@/lib/api";
+} from "@/lib/client-api";
 
 interface UseClaudeAuthOptions {
   sessionId?: string;

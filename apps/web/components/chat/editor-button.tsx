@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Globe, LoaderCircle, Trash2 } from "lucide-react";
-import { archiveSession, deleteSession, openEditor } from "@/lib/api";
+import { archiveSession, deleteSession, openEditor } from "@/lib/client-api";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {

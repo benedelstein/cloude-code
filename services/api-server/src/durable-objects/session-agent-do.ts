@@ -29,7 +29,7 @@ import VM_AGENT_CODEX_SCRIPT from "@repo/vm-agent/dist/vm-agent-codex.bundle.js"
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
-import { SchemaManager } from "./repositories/schema-manager";
+import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/attachment-service";
 
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
@@ -76,9 +76,9 @@ interface InitRequest {
 
 export class SessionAgentDO extends Agent<Env, AgentState> {
   private readonly logger: Logger;
-  private spritesCoordinator: SpritesCoordinator | null = null;
-  private messageRepository: MessageRepository | null = null;
-  private secretRepository: SecretRepository | null = null;
+  private readonly spritesCoordinator: SpritesCoordinator;
+  private readonly messageRepository: MessageRepository;
+  private readonly secretRepository: SecretRepository;
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
   /** Mutex for reattachment to prevent race conditions */
@@ -109,7 +109,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestUrl: null,
     pullRequestNumber: null,
     pullRequestState: null,
-    pendingMessage: null,
+    pendingUserMessage: null,
     pendingAttachmentIds: [],
     editorUrl: null,
     claudeAuthRequired: null,
@@ -120,43 +120,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   constructor(ctx: DurableObjectState, env: Env, logger: Logger = defaultLogger) {
     super(ctx, env);
     this.logger = logger;
-    this.initializeSchema();
-    this.initializeClients();
-  }
 
-  private initializeSchema(): void {
     const sql = this.sql.bind(this);
     this.messageRepository = new MessageRepository(sql);
     this.secretRepository = new SecretRepository(sql);
+    this.spritesCoordinator = new SpritesCoordinator({
+      apiKey: this.env.SPRITES_API_KEY,
+    });
 
-    new SchemaManager([
-      this.messageRepository,
-      this.secretRepository,
-    ]).migrate();
+    migrateAll([this.messageRepository, this.secretRepository]);
 
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
     this.editorToken = this.secretRepository.get("editor_token");
-  }
-
-  private initializeClients(): void {
-    this.spritesCoordinator = new SpritesCoordinator({
-      apiKey: this.env.SPRITES_API_KEY,
-    });
-    if (!this.messageRepository) {
-      this.messageRepository = new MessageRepository(this.sql.bind(this));
-    }
-    if (!this.secretRepository) {
-      this.secretRepository = new SecretRepository(this.sql.bind(this));
-    }
-  }
-
-  // Ensure clients are initialized (may be null after hibernation)
-  private ensureClients(): void {
-    if (!this.spritesCoordinator) {
-      this.initializeClients();
-    }
   }
 
   private getConnectedAgentSession(): SpriteWebsocketSession | null {
@@ -167,8 +144,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return currentAgentSession;
   }
 
+  private updatePartialState(partial: Partial<AgentState>): void {
+    this.setState({ ...this.state, ...partial });
+  }
+
   private updateStatus(status: SessionStatus): void {
-    this.setState({ ...this.state, status });
+    this.updatePartialState({ status });
   }
 
   private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
@@ -180,7 +161,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return;
     }
 
-    this.setState({ ...this.state, claudeAuthRequired });
+    this.updatePartialState({ claudeAuthRequired });
   }
 
   // ============================================
@@ -220,7 +201,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
       // Capture pushed branch name and notify clients
       if (result.pushedBranch && result.response.ok) {
-        this.setState({ ...this.state, pushedBranch: result.pushedBranch });
+        this.updatePartialState({pushedBranch: result.pushedBranch });
         this.broadcastMessage({
           type: "branch.pushed",
           branch: result.pushedBranch,
@@ -268,26 +249,24 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   onConnect(connection: Connection): void {
     this.logger.debug(`client connected: ${connection.id}`, { loggerName });
     // Send initial connection state
-    connection.send(
-      JSON.stringify({
+    this.sendMessage({
         type: "connected",
         sessionId: this.state?.sessionId ?? "",
         status: this.state?.status ?? "unknown",
-      } satisfies ServerMessage),
+      }, 
+      connection
     );
 
     // Send message history
     if (this.state?.sessionId && this.messageRepository) {
-      this.ensureClients();
-      const storedMessages = this.messageRepository!.getAllBySession(
+  
+      const storedMessages = this.messageRepository.getAllBySession(
         this.state.sessionId,
       );
-      connection.send(
-        JSON.stringify({
-          type: "sync.response",
-          messages: storedMessages.map((m) => m.message),
-        } satisfies ServerMessage),
-      );
+      this.sendMessage({
+        type: "sync.response",
+        messages: storedMessages.map((m) => m.message),
+      }, connection);
     }
 
     if (this.state.sessionId && this.state.settings.provider === "claude-code") {
@@ -314,7 +293,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     connection: Connection,
     message: string | ArrayBuffer,
   ): Promise<void> {
-    this.ensureClients();
+
 
     const messageStr =
       typeof message === "string"
@@ -349,13 +328,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           })),
         },
       });
-      connection.send(
-        JSON.stringify({
-          type: "error",
-          code: "INVALID_MESSAGE",
-          message: "unknown request",
-        } satisfies ServerMessage),
-      );
+      this.sendMessage({
+        type: "error",
+        code: "INVALID_MESSAGE",
+        message: "unknown request",
+      }, connection);
       return;
     }
 
@@ -370,13 +347,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           type: parsedMessage.data.type,
         },
       });
-      connection.send(
-        JSON.stringify({
-          type: "error",
-          code: "MESSAGE_HANDLER_ERROR",
-          message: "request failed",
-        } satisfies ServerMessage),
-      );
+      this.sendMessage({
+        type: "error",
+        code: "MESSAGE_HANDLER_ERROR",
+        message: "request failed",
+      }, connection);
     }
   }
 
@@ -460,11 +435,17 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)
     this.gitProxySecret = crypto.randomUUID();
-    this.secretRepository!.set("git_proxy_secret", this.gitProxySecret);
+    this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
+
+    const pendingAttachmentIds = data.initialAttachmentIds ?? [];
+    const pendingUserMessage = await this.buildPendingUserMessage(
+      data.sessionId,
+      data.initialMessage,
+      pendingAttachmentIds,
+    );
 
     // Initialize agent state
-    this.setState({
-      ...this.state,
+    this.updatePartialState({
       sessionId: data.sessionId,
       userId: data.userId,
       repoFullName: data.repoFullName,
@@ -473,8 +454,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       agentProcessId: null,
       status: "provisioning",
       settings,
-      pendingMessage: data.initialMessage ?? null,
-      pendingAttachmentIds: data.initialAttachmentIds ?? [],
+      pendingUserMessage,
+      pendingAttachmentIds,
       claudeAuthRequired: null,
     });
 
@@ -497,7 +478,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
     this.getConnections();
     try {
-      this.ensureClients();
+  
 
       if (!this.gitProxySecret) {
         // this should never happen, but just in case
@@ -506,7 +487,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         );
       }
 
-      const spriteResponse = await this.spritesCoordinator!.createSprite({
+      const spriteResponse = await this.spritesCoordinator.createSprite({
         name: `${sessionId}`,
         env: {},
       });
@@ -541,8 +522,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           { loggerName },
         );
       } else {
-        this.setState({
-          ...this.state,
+        this.updatePartialState({
           spriteName: spriteResponse.name,
           status: "cloning",
         });
@@ -589,7 +569,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {},
       );
       const baseBranch = branchResult.stdout.trim() || "main";
-      this.setState({ ...this.state, baseBranch });
+      this.updatePartialState({baseBranch });
 
       // Use direct GitHub for fetch/pull and proxy URL for push-only operations.
       await sprite.execHttp(
@@ -623,7 +603,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.broadcastMessage({ type: "session.status", status: "ready" });
 
       // If there's a pending initial message, send it to the agent now
-      if (this.state.pendingMessage || this.state.pendingAttachmentIds.length > 0) {
+      if (this.state.pendingUserMessage || this.state.pendingAttachmentIds.length > 0) {
         this.logger.info("Sending pending initial message to vm-agent", {
           loggerName,
         });
@@ -642,7 +622,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   /** Send the pending initial message to the agent and store/broadcast it as a user message. */
   private async sendPendingMessage(): Promise<void> {
-    const content = this.state.pendingMessage?.trim();
+    const content = this.getUserMessageTextContent(this.state.pendingUserMessage);
     const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
     if (!this.agentSession || !this.state.sessionId) return;
     if (!content && pendingAttachmentIds.length === 0) return;
@@ -658,9 +638,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         `Some pending attachments not found: ${pendingAttachmentIds.join(", ")}`,
         { loggerName },
       );
-      this.setState({
-        ...this.state,
-        pendingMessage: null,
+      this.updatePartialState({
+        pendingUserMessage: null,
         pendingAttachmentIds: [],
       });
       return;
@@ -671,34 +650,25 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
     } catch (error) {
       this.logger.error("Failed to resolve pending attachments", { loggerName, error });
-      this.setState({
-        ...this.state,
-        pendingMessage: null,
+      this.updatePartialState({
+        pendingUserMessage: null,
         pendingAttachmentIds: [],
       });
       return;
     }
 
     // Store user message and broadcast to all clients
-    this.ensureClients();
-    const messageParts: UIMessage["parts"] = [];
-    if (content) {
-      messageParts.push({ type: "text", text: content });
+
+    const userMessage = this.state.pendingUserMessage
+      ?? this.createUserMessage(content, attachmentRecords);
+    if (!userMessage) {
+      this.updatePartialState({
+        pendingUserMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
     }
-    for (const attachment of attachmentRecords) {
-      messageParts.push({
-        type: "file",
-        mediaType: attachment.mediaType,
-        filename: attachment.filename,
-        url: this.buildAttachmentContentUrl(attachment.id),
-      } as UIMessage["parts"][number]);
-    }
-    const userMessage: UIMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      parts: messageParts,
-    };
-    const stored = this.messageRepository!.create(
+    const stored = this.messageRepository.create(
       sessionId,
       userMessage,
     );
@@ -708,9 +678,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     });
 
     // Clear pending message from state (after broadcast so client has the real message)
-    this.setState({
-      ...this.state,
-      pendingMessage: null,
+    this.updatePartialState({
+      pendingUserMessage: null,
       pendingAttachmentIds: [],
     });
 
@@ -906,12 +875,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return true;
     }
 
-    connection.send(
-      JSON.stringify({
+    this.sendMessage(
+      {
         type: "error",
         code: result.errorCode,
         message: result.errorMessage,
-      } satisfies ServerMessage),
+      },
+      connection,
     );
     return false;
   }
@@ -1016,7 +986,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.logger.info(`Storing Claude session ID: ${output.sessionId}`, {
           loggerName,
         });
-        this.setState({ ...this.state, claudeSessionId: output.sessionId });
+        this.updatePartialState({claudeSessionId: output.sessionId });
         break;
       }
     }
@@ -1028,7 +998,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.logger.info(`vm-agent session id: ${JSON.stringify(msg.session_id)}`, {
           loggerName,
         });
-        this.setState({ ...this.state, agentProcessId: msg.session_id });
+        this.updatePartialState({agentProcessId: msg.session_id });
         break;
       default:
         break;
@@ -1043,7 +1013,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       githubToken: this.githubToken,
       pushedBranch: this.state.pushedBranch,
       env: this.env,
-      secretRepository: this.secretRepository!,
+      secretRepository: this.secretRepository,
     };
   }
 
@@ -1078,7 +1048,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleGetMessages(): Response {
-    this.ensureClients();
+
 
     if (!this.state.sessionId) {
       return new Response(JSON.stringify([]), {
@@ -1086,7 +1056,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       });
     }
 
-    const storedMessages = this.messageRepository!.getAllBySession(
+    const storedMessages = this.messageRepository.getAllBySession(
       this.state.sessionId,
     );
     return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
@@ -1100,8 +1070,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       number: number;
       state: "open" | "merged" | "closed";
     };
-    this.setState({
-      ...this.state,
+    this.updatePartialState({
       pullRequestUrl: data.url,
       pullRequestNumber: data.number,
       pullRequestState: data.state,
@@ -1115,8 +1084,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const data = (await request.json()) as {
       state: "open" | "merged" | "closed";
     };
-    this.setState({
-      ...this.state,
+    this.updatePartialState({
       pullRequestState: data.state,
     });
     return new Response(JSON.stringify({ success: true }), {
@@ -1125,7 +1093,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleDeleteSession(): Promise<Response> {
-    this.ensureClients();
+
 
     // Close editor if open
     if (this.state.editorUrl) {
@@ -1134,7 +1102,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     // Clean up sprite
-    if (this.state.spriteName && this.spritesCoordinator) {
+    if (this.state.spriteName) {
       try {
         await this.spritesCoordinator.deleteSprite(this.state.spriteName);
       } catch (error) {
@@ -1149,8 +1117,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     // Reset state
-    this.setState({
-      ...this.state,
+    this.updatePartialState({
       status: "terminated",
     });
 
@@ -1201,24 +1168,25 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       case "syncing":
       case "attaching":
       case "waking":
-        connection.send(
-          JSON.stringify({
+        this.sendMessage(
+          {
             type: "error",
             code: "SESSION_TRANSITIONING",
             message: `Session is ${this.state.status}, please wait`,
-          } satisfies ServerMessage),
+          },
+          connection,
         );
         return;
       case "hibernating":
       case "error":
       case "terminated":
-        connection.send(
-          JSON.stringify({
+        this.sendMessage({
             type: "error",
             code: "SESSION_NOT_READY",
             message: `Session is ${this.state.status}`,
-          } satisfies ServerMessage),
-        );
+          },
+        connection
+      );
         return;
       case "ready":
         break;
@@ -1235,12 +1203,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const currentAgentSession = this.getConnectedAgentSession();
     if (!currentAgentSession || !currentAgentSession.isConnected) {
-      connection.send(
-        JSON.stringify({
+      this.sendMessage(
+        {
           type: "error",
           code: "NO_AGENT_SESSION",
           message: "Agent session not available",
-        } satisfies ServerMessage),
+        },
+        connection,
       );
       return;
     }
@@ -1250,7 +1219,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     // Store user message with parts format
-    this.ensureClients();
+
     if (!this.state.sessionId) {
       this.logger.error("No session id", { loggerName });
       return;
@@ -1266,13 +1235,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     if (attachmentRecords.length !== attachmentReferences.length) {
       this.logger.error("Some attachments not found: " + attachmentReferences.map((attachment) => attachment.attachmentId).join(", "), { loggerName });
-      connection.send(
-        JSON.stringify({
+      this.sendMessage(
+        {
           type: "error",
           code: "ATTACHMENT_NOT_FOUND",
           message: "One or more attachments were not found for this session",
-        } satisfies ServerMessage),
-      );
+        }, connection);
       return;
     }
 
@@ -1284,12 +1252,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         loggerName,
         error,
       });
-      connection.send(
-        JSON.stringify({
+      this.sendMessage(
+        {
           type: "error",
           code: "ATTACHMENT_READ_FAILED",
           message: "Failed to read one or more attachments",
-        } satisfies ServerMessage),
+        },
+        connection,
       );
       return;
     }
@@ -1313,7 +1282,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       role: "user",
       parts: messageParts,
     };
-    const stored = this.messageRepository!.create(
+    const stored = this.messageRepository.create(
       sessionId,
       userMessage,
     );
@@ -1354,12 +1323,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const reattachedAgentSession = this.getConnectedAgentSession();
     if (!reattachedAgentSession) {
-      connection.send(
-        JSON.stringify({
+      this.sendMessage(
+        {
           type: "error",
           code: "NO_AGENT_SESSION",
           message: "Agent session not available",
-        } satisfies ServerMessage),
+        },
+        connection,
       );
       return;
     }
@@ -1372,12 +1342,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         error,
       });
       this.agentSession = null;
-      connection.send(
-        JSON.stringify({
+      this.sendMessage(
+        {
           type: "error",
           code: "NO_AGENT_SESSION",
           message: "Agent session unavailable, please try again",
-        } satisfies ServerMessage),
+        },
+        connection,
       );
     }
   }
@@ -1414,7 +1385,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async _doReattach(spriteName: string): Promise<void> {
-    this.ensureClients();
+
     try {
       const sprite = new WorkersSprite(
         spriteName,
@@ -1445,7 +1416,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Set status to attaching
       this.updateStatus("attaching");
       this.broadcastMessage({ type: "session.status", status: "attaching" });
-      const sessions = await this.spritesCoordinator!.listSessions(spriteName);
+      const sessions = await this.spritesCoordinator.listSessions(spriteName);
       const existingSession = sessions.find(
         (s) => s.id === String(this.state?.agentProcessId),
       );
@@ -1498,15 +1469,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   // ============================================
 
   private editorContext() {
-    this.ensureClients();
     return {
       spriteName: this.state.spriteName,
       editorUrl: this.state.editorUrl,
       editorToken: this.editorToken,
       env: this.env,
       logger: this.logger,
-      secretRepository: this.secretRepository!,
-      setEditorUrl: (url: string | null) => this.setState({ ...this.state, editorUrl: url }),
+      secretRepository: this.secretRepository,
+      setEditorUrl: (url: string | null) => this.updatePartialState({editorUrl: url }),
       broadcastEditorReady: (url: string, token: string) =>
         this.broadcastMessage({ type: "editor.ready", url, token }),
     };
@@ -1517,27 +1487,21 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
    * @param connection The connection to the client.
    */
   private handleSyncRequest(connection: Connection): void {
-    this.ensureClients();
-
     if (!this.state?.sessionId) {
-      connection.send(
-        JSON.stringify({
-          type: "sync.response",
-          messages: [],
-        }),
-      );
+      this.sendMessage({
+        type: "sync.response",
+        messages: [],
+      }, connection);
       return;
     }
 
-    const storedMessages = this.messageRepository!.getAllBySession(
+    const storedMessages = this.messageRepository.getAllBySession(
       this.state.sessionId,
     );
-    connection.send(
-      JSON.stringify({
-        type: "sync.response",
-        messages: storedMessages.map((m) => m.message),
-      }),
-    );
+    this.sendMessage({
+      type: "sync.response",
+      messages: storedMessages.map((m) => m.message),
+    }, connection);
   }
 
   private handleOperationCancel(): void {
@@ -1557,7 +1521,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Check if this is the first user message — if so, generate a title via LLM
       // TODO: STORE MESSAGES IN MEMORY?
-      const userMessages = this.messageRepository!.getAllBySession(
+      const userMessages = this.messageRepository.getAllBySession(
         sessionId,
       ).filter((m) => m.message.role === "user");
 
@@ -1599,6 +1563,80 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return resolved;
   }
 
+  private async buildPendingUserMessage(
+    sessionId: string,
+    initialMessage: string | undefined,
+    attachmentIds: string[],
+  ): Promise<UIMessage | null> {
+    const content = initialMessage?.trim();
+    if (!content && attachmentIds.length === 0) {
+      return null;
+    }
+
+    let attachmentRecords: AttachmentRecord[] = [];
+    if (attachmentIds.length > 0) {
+      const attachmentService = new AttachmentService(this.env.DB);
+      attachmentRecords = await attachmentService.getByIdsBoundToSession(
+        sessionId,
+        attachmentIds,
+      );
+      if (attachmentRecords.length !== attachmentIds.length) {
+        this.logger.error(
+          `Some pending attachments missing during init: ${attachmentIds.join(", ")}`,
+          { loggerName },
+        );
+      }
+    }
+
+    return this.createUserMessage(content, attachmentRecords);
+  }
+
+  private createUserMessage(
+    content: string | undefined,
+    attachments: AttachmentRecord[],
+    id: string = crypto.randomUUID(),
+  ): UIMessage | null {
+    const messageParts: UIMessage["parts"] = [];
+    if (content) {
+      messageParts.push({ type: "text", text: content });
+    }
+    for (const attachment of attachments) {
+      messageParts.push({
+        type: "file",
+        mediaType: attachment.mediaType,
+        filename: attachment.filename,
+        url: this.buildAttachmentContentUrl(attachment.id),
+      } as UIMessage["parts"][number]);
+    }
+
+    if (messageParts.length === 0) {
+      return null;
+    }
+
+    return {
+      id,
+      role: "user",
+      parts: messageParts,
+    };
+  }
+
+  private getUserMessageTextContent(message: UIMessage | null): string | undefined {
+    if (!message) {
+      return undefined;
+    }
+
+    const text = message.parts
+      .flatMap((part) => (
+        part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part
+          ? [String(part.text)]
+          : []
+      ))
+      .join("")
+      .trim();
+
+    return text || undefined;
+  }
+
   private toHistorySyncContent(
     content: string | undefined,
     attachments: AttachmentRecord[],
@@ -1618,5 +1656,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private broadcastMessage(message: ServerMessage, without?: string[]): void {
     this.broadcast(JSON.stringify(message), without);
+  }
+
+  private sendMessage(message: ServerMessage, to: Connection) : void {
+    to.send(JSON.stringify(message));
   }
 }

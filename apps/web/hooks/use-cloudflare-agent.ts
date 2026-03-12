@@ -40,7 +40,7 @@ export interface UseCloudflareAgentReturn {
   isReady: boolean;
   isStreaming: boolean;
   isResponding: boolean;
-  pendingMessage: string | null;
+  pendingUserMessage: UIMessage | null;
   repoFullName: string | null;
   pushedBranch: string | null;
   pullRequestUrl: string | null;
@@ -61,7 +61,7 @@ export function useCloudflareAgent({
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
   const resolvedHost = DEFAULT_API_HOST;
   const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -207,8 +207,8 @@ export function useCloudflareAgent({
       if (state.pullRequestState !== undefined) {
         setPullRequestState(state.pullRequestState);
       }
-      if (state.pendingMessage !== undefined) {
-        setPendingMessage(state.pendingMessage);
+      if (state.pendingUserMessage !== undefined) {
+        setPendingUserMessage(state.pendingUserMessage);
       }
       if (state.editorUrl !== undefined) {
         setEditorUrl(state.editorUrl);
@@ -292,7 +292,7 @@ export function useCloudflareAgent({
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
     isResponding,
-    pendingMessage,
+    pendingUserMessage,
     pushedBranch,
     pullRequestUrl,
     pullRequestState,

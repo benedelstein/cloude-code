@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, ImagePlus, X } from "lucide-react";
-import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/api";
+import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ClaudeSigninPanel } from "./claude-signin-panel";

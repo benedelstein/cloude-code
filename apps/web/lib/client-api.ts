@@ -1,3 +1,5 @@
+import "client-only";
+
 import type {
   UserInfo,
   Repo,
@@ -14,6 +16,8 @@ import type {
   PullRequestStatusResponse,
   EditorOpenResponse,
   EditorCloseResponse,
+  GitHubAuthUrlResponse,
+  LogoutResponse,
   OpenAIAuthUrlResponse,
   OpenAIStatusResponse,
   OpenAIDisconnectResponse,
@@ -167,6 +171,15 @@ export async function uploadAttachments(
 
 export async function deleteAttachment(attachmentId: string): Promise<void> {
   await apiFetch<void>(`/attachments/${attachmentId}`, { method: "DELETE" });
+}
+
+// GitHub OAuth
+export async function getGitHubAuthUrl(): Promise<GitHubAuthUrlResponse> {
+  return apiFetch("/auth/github");
+}
+
+export async function logoutUser(): Promise<LogoutResponse> {
+  return apiFetch("/auth/logout", { method: "POST" });
 }
 
 // OpenAI OAuth

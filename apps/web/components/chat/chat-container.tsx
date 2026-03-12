@@ -11,7 +11,7 @@ import {
   updateSessionTitle as updateSessionTitleRequest,
   uploadAttachments,
   deleteAttachment,
-} from "@/lib/api";
+} from "@/lib/client-api";
 import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
@@ -34,7 +34,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     isStreaming,
     isResponding,
     repoFullName,
-    pendingMessage,
+    pendingUserMessage,
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
@@ -195,7 +195,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           streamingMessage={streamingMessage}
           isHistoryLoading={isHistoryLoading}
           isResponding={isResponding}
-          pendingMessage={pendingMessage}
+          pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
         />
       </div>

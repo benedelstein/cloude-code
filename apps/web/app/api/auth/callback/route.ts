@@ -5,13 +5,9 @@ import {
   githubAuthPopupMessageType,
 } from "@/types/auth";
 import { setSessionCookie } from "@/lib/session";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { exchangeGitHubCode, ServerApiError } from "@/lib/server-api";
 
 export async function GET(request: NextRequest) {
-  if (!API_URL) {
-    return new NextResponse("API URL not set", { status: 500 });
-  }
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -25,26 +21,23 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // TODO: USE API.TS 
-  const response = await fetch(`${API_URL}/auth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, state }),
-  });
-
-  if (!response.ok) {
+  let tokenResponse;
+  try {
+    tokenResponse = await exchangeGitHubCode(code, state);
+  } catch (error) {
+    const message = error instanceof ServerApiError
+      ? error.message
+      : "GitHub sign-in failed. Try again.";
     return new NextResponse(
       postPopupMessage({
         type: githubAuthPopupMessageType.authError,
-        error: await getAuthErrorMessage(response),
+        error: message,
       }),
-      {
-        headers: { "Content-Type": "text/html" },
-      },
+      { headers: { "Content-Type": "text/html" } },
     );
   }
 
-  const { token, user, hasInstallations, installUrl } = await response.json();
+  const { token, user, hasInstallations, installUrl } = tokenResponse;
 
   const result = new NextResponse(
     postPopupMessage({
@@ -81,27 +74,4 @@ function postPopupMessage(
   }
   window.close();
 </script></body></html>`;
-}
-
-async function getAuthErrorMessage(response: Response): Promise<string> {
-  const defaultMessage = "GitHub sign-in failed. Try again.";
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (contentType.includes("application/json")) {
-    try {
-      const body = await response.json();
-      if (body && typeof body.error === "string" && body.error.length > 0) {
-        return body.error;
-      }
-    } catch {
-      return defaultMessage;
-    }
-  }
-
-  try {
-    const text = await response.text();
-    return text || defaultMessage;
-  } catch {
-    return defaultMessage;
-  }
 }

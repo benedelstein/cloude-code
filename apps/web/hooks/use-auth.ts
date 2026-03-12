@@ -5,7 +5,13 @@ import {
   GitHubAuthPopupMessage,
   githubAuthPopupMessageType,
 } from "@/types/auth";
-import { getCurrentUser, type UserInfo, ApiError } from "@/lib/api";
+import {
+  ApiError,
+  getCurrentUser,
+  getGitHubAuthUrl,
+  logoutUser,
+  type UserInfo,
+} from "@/lib/client-api";
 
 const OAUTH_POPUP_NAME = "github-auth";
 const INSTALL_POPUP_NAME = "github-install";
@@ -49,15 +55,16 @@ export function useAuth() {
     setAuthError(null);
     setLoading(true);
 
-    // Fetch the OAuth URL from the API (proxied)
-    const res = await fetch("/api/auth/github");
-    if (!res.ok) {
-      console.error("Failed to get auth URL");
+    let url: string;
+    try {
+      const response = await getGitHubAuthUrl();
+      url = response.url;
+    } catch (error) {
+      console.error("Failed to get auth URL", error);
       setAuthError("Failed to start GitHub sign-in.");
       setLoading(false);
       return;
     }
-    const { url } = await res.json();
 
     const popup = openCenteredPopup(url, OAUTH_POPUP_NAME, 500, 700);
 
@@ -176,7 +183,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    await logoutUser();
     setUser(null);
     window.location.href = "/login";
   }, []);

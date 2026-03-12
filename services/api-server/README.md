@@ -1,5 +1,9 @@
 # API Server
 
+Cloudflare worker server for managing session state and communicating between clients and VM.
+- Cloudflare agents SDK
+- Hono middleware
+
 ## Routes
 
 ### REST
@@ -61,7 +65,7 @@ const { sessionId } = await fetch("/sessions", {
 }).then(r => r.json());
 
 // Connect WebSocket
-const ws = new WebSocket(`wss://api.example.com/agents/session/${sessionId}`);
+const ws = new WebSocket(`wss://${API_URL_HOST}/agents/session/${sessionId}`);
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);

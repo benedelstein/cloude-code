@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getOpenAIAuthUrl, getOpenAIStatus, disconnectOpenAI } from "@/lib/api";
+import { getOpenAIAuthUrl, getOpenAIStatus, disconnectOpenAI } from "@/lib/client-api";
 
 export function useOpenAIAuth() {
   const [connected, setConnected] = useState(false);

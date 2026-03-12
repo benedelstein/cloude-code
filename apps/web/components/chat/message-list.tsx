@@ -11,7 +11,7 @@ interface MessageListProps {
   streamingMessage: UIMessage | null;
   isHistoryLoading?: boolean;
   isResponding?: boolean;
-  pendingMessage?: string | null;
+  pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
 }
 
@@ -20,7 +20,7 @@ export function MessageList({
   streamingMessage,
   isHistoryLoading = false,
   isResponding,
-  pendingMessage,
+  pendingUserMessage,
   userAvatarUrl,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,13 +29,16 @@ export function MessageList({
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage, pendingMessage]);
+  }, [messages, streamingMessage, pendingUserMessage]);
 
   const allMessages = streamingMessage
     ? [...messages, streamingMessage]
     : messages;
+  const hasPendingUserMessage = pendingUserMessage !== null && pendingUserMessage !== undefined;
+  const shouldRenderPendingUserMessage = hasPendingUserMessage
+    && !allMessages.some((message) => message.id === pendingUserMessage.id);
 
-  if (isHistoryLoading) {
+  if (isHistoryLoading && allMessages.length === 0 && !hasPendingUserMessage) {
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="flex items-center gap-2 text-foreground-muted text-sm">
@@ -46,7 +49,7 @@ export function MessageList({
     );
   }
 
-  if (allMessages.length === 0 && !pendingMessage) {
+  if (allMessages.length === 0 && !hasPendingUserMessage) {
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -76,13 +79,9 @@ export function MessageList({
             userAvatarUrl={userAvatarUrl}
           />
         ))}
-        {pendingMessage && (
+        {shouldRenderPendingUserMessage && pendingUserMessage && (
           <MessageItem
-            message={{
-              id: "pending-message",
-              role: "user",
-              parts: [{ type: "text", text: pendingMessage }],
-            }}
+            message={pendingUserMessage}
             userAvatarUrl={userAvatarUrl}
           />
         )}
