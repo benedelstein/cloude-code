@@ -12,6 +12,7 @@ import type {
   AttachmentDescriptor,
   ClaudeAuthState,
 } from "@repo/shared";
+import { toast } from "sonner";
 
 type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
 
@@ -50,8 +51,6 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     attachments,
-    error,
-    setError,
     addFiles,
     removeAttachment,
     clearAttachments,
@@ -94,7 +93,7 @@ export function ChatInput({
     event.preventDefault();
     if ((!input.trim() && attachments.length === 0) || disabled || isClaudePromptBlocking) return;
     if (hasPendingOrFailedUploads) {
-      setError("Please wait for all attachments to finish uploading (or remove failed ones).");
+      toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
     }
 
@@ -107,7 +106,6 @@ export function ChatInput({
       optimisticAttachments: uploadedDescriptors,
     });
     setInput("");
-    setError(null);
     clearAttachments();
 
     // Reset textarea height
@@ -226,9 +224,6 @@ export function ChatInput({
           }`}
         />
       </div>
-      {error && (
-        <p className="px-4 pb-1 text-xs text-danger">{error}</p>
-      )}
       <div className="flex items-center justify-end px-3 pb-2">
         <div className="mr-auto flex items-center gap-1">
           <input

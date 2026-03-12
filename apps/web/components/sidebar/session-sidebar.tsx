@@ -151,17 +151,17 @@ export function SessionSidebar() {
                             <span className="text-xs text-foreground-muted truncate">
                               {session.repoFullName.split("/")[1] || session.repoFullName}
                             </span>
-                            {isLoading ? (
-                              <LoadingSpinner className="h-3 w-3 shrink-0" />
-                            ) : (
-                              <span className="text-xs font-mono text-foreground-muted shrink-0">
-                                · {formatRelativeTime(timestamp)}
-                              </span>
-                            )}
+                            <span className="text-xs font-mono text-foreground-muted shrink-0">
+                              · {formatRelativeTime(timestamp)}
+                            </span>
                           </div>
                         </div>
                       </SidebarMenuButton>
-                      {!isLoading && (
+                      {isLoading ? (
+                        <SidebarMenuAction className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1">
+                          <LoadingSpinner className="h-3 w-3 shrink-0" />
+                        </SidebarMenuAction>
+                      ) : (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <SidebarMenuAction showOnHover className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]">
