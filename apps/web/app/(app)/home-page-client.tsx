@@ -149,8 +149,7 @@ export function HomePageClient() {
 
   useEffect(() => {
     // Phase 1: Restore from cache (synchronous, instant render)
-    // DEBUG: skip cache to test loading state — remove before committing
-    const cached = null as ReturnType<typeof readCache<ListReposResponse>>;
+    const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
     if (cached) {
       setRepos(cached.data.repos);
       setInstallUrl(cached.data.installUrl);
