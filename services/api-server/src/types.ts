@@ -30,10 +30,4 @@ export interface Env {
   OPENAI_API_KEY?: string;
   /** JSON string of codex OAuth tokens (contents of ~/.codex/auth.json) */
   CODEX_AUTH_JSON?: string;
-
-  // Claude OAuth (optional, experimental)
-  CLAUDE_OAUTH_CLIENT_ID?: string;
-  CLAUDE_OAUTH_AUTH_URL?: string;
-  CLAUDE_OAUTH_REDIRECT_URI?: string;
-  CLAUDE_OAUTH_TOKEN_URL?: string;
 }

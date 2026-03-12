@@ -44,6 +44,10 @@ import { GitHubAppService } from "@/lib/github/github-app";
 import { SessionHistoryService } from "@/lib/session-history";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { UIMessage } from "ai";
+import {
+  ClaudeOAuthError,
+  ClaudeOAuthService,
+} from "@/lib/claude-oauth-service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -398,6 +402,24 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     } else {
       // Invalid model — fall back to the provider's default by omitting model
       settings = SessionSettings.parse({ provider, maxTokens });
+    }
+
+    if (settings.provider === "claude-code") {
+      try {
+        const claudeOAuthService = new ClaudeOAuthService(this.env, this.logger);
+        await claudeOAuthService.getValidCredentialsJson(data.userId);
+      } catch (error) {
+        if (error instanceof ClaudeOAuthError) {
+          return new Response(
+            JSON.stringify({ error: error.message, code: error.code }),
+            {
+              status: error.status,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+        throw error;
+      }
     }
 
     // Generate git proxy secret and persist in SQLite (not in state — state is sent to clients)
@@ -793,55 +815,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async buildClaudeCredentialsJson(): Promise<string | null> {
     const userId = this.state.userId;
     if (!userId) return null;
-
-    const row = await this.env.DB.prepare(
-      `SELECT encrypted_access_token, encrypted_refresh_token, expires_at_ms, scopes_json, subscription_type, rate_limit_tier
-       FROM claude_tokens WHERE user_id = ?`,
-    )
-      .bind(userId)
-      .first<{
-        encrypted_access_token: string;
-        encrypted_refresh_token: string;
-        expires_at_ms: number | string;
-        scopes_json: string;
-        subscription_type: string | null;
-        rate_limit_tier: string | null;
-      }>();
-
-    if (!row) return null;
-
-    const accessToken = await decrypt(
-      row.encrypted_access_token,
-      this.env.TOKEN_ENCRYPTION_KEY,
-    );
-    const refreshToken = await decrypt(
-      row.encrypted_refresh_token,
-      this.env.TOKEN_ENCRYPTION_KEY,
-    );
-
-    let scopes: string[] = [];
-    try {
-      const parsed = JSON.parse(row.scopes_json);
-      if (Array.isArray(parsed)) {
-        scopes = parsed.filter((scope): scope is string => typeof scope === "string");
-      }
-    } catch {
-      scopes = [];
-    }
-
-    const expiresAt = Number(row.expires_at_ms);
-    const credentials = {
-      claudeAiOauth: {
-        accessToken,
-        refreshToken,
-        expiresAt: Number.isFinite(expiresAt) ? expiresAt : Date.now() + 60 * 60 * 1000,
-        scopes,
-        subscriptionType: row.subscription_type ?? "unknown",
-        rateLimitTier: row.rate_limit_tier ?? "default",
-      },
-    };
-
-    return JSON.stringify(credentials);
+    const claudeOAuthService = new ClaudeOAuthService(this.env, this.logger);
+    return claudeOAuthService.getValidCredentialsJson(userId);
   }
 
   private setupAgentSessionHandlers(): void {

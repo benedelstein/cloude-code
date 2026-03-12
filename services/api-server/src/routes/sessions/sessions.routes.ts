@@ -36,6 +36,24 @@ export const sessionsRoutes = new OpenAPIHono<{
   Variables: { user: AuthUser };
 }>();
 
+class SessionInitializationError extends Error {
+  readonly status: number;
+  readonly details: string;
+  readonly code?: string;
+
+  constructor(
+    status: number,
+    details: string,
+    code?: string,
+  ) {
+    super(details);
+    this.name = "SessionInitializationError";
+    this.status = status;
+    this.details = details;
+    this.code = code;
+  }
+}
+
 const getSessionAgent = async (id: string, env: Env) => {
   return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
 };
@@ -139,18 +157,41 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   );
 
     if (!initResponse.ok) {
-      const error = await initResponse.text();
-      throw new Error(error || "Failed to initialize session");
+      const responseText = await initResponse.text();
+      let responseBody: { error?: string; code?: string } | null = null;
+      try {
+        responseBody = JSON.parse(responseText) as { error?: string; code?: string };
+      } catch {
+        responseBody = null;
+      }
+
+      throw new SessionInitializationError(
+        initResponse.status,
+        responseBody?.error ?? (responseText || "Failed to initialize session"),
+        responseBody?.code,
+      );
     }
   } catch (error) {
     if (attachmentsBound && attachmentIds.length > 0) {
       await attachmentService.unbindFromSession(attachmentIds, user.id, sessionId);
     }
     await sessionHistory.delete(sessionId);
-    const details = error instanceof Error ? error.message : "Unknown error";
+    const details = error instanceof SessionInitializationError
+      ? error.details
+      : error instanceof Error
+      ? error.message
+      : "Unknown error";
+    const status = error instanceof SessionInitializationError && error.status === 401
+      ? 401
+      : 500;
+    const code = error instanceof SessionInitializationError ? error.code : undefined;
     return c.json(
-      { error: "Failed to create session", details },
-      500,
+      {
+        error: "Failed to create session",
+        details,
+        ...(code ? { code } : {}),
+      },
+      status,
     ) as any;
   }
 

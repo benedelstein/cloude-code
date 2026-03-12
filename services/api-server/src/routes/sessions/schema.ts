@@ -45,6 +45,22 @@ export const createSessionRoute = createRoute({
       content: { "application/json": { schema: CreateSessionResponse } },
       description: "Created session",
     },
+    401: {
+      content: { "application/json": { schema: z.object({
+        error: z.string(),
+        details: z.string(),
+        code: z.string().optional(),
+      }) } },
+      description: "Authentication required to create a session",
+    },
+    500: {
+      content: { "application/json": { schema: z.object({
+        error: z.string(),
+        details: z.string(),
+        code: z.string().optional(),
+      }) } },
+      description: "Failed to create session",
+    },
   },
 });
 
@@ -96,10 +112,12 @@ const ErrorResponse = z.object({ error: z.string() });
 const ErrorWithDetailsResponse = z.object({
   error: z.string(),
   details: z.string(),
+  code: z.string().optional(),
 });
 const ErrorWithOptionalDetailsResponse = z.object({
   error: z.string(),
   details: z.string().optional(),
+  code: z.string().optional(),
 });
 const ErrorWithUrlResponse = z.object({
   error: z.string(),

@@ -1,0 +1,2 @@
+ALTER TABLE claude_tokens
+ADD COLUMN requires_reauth INTEGER NOT NULL DEFAULT 0;
