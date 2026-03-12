@@ -127,6 +127,7 @@ export function ChatInput({
 
   return (
     <form
+      className="relative"
       onSubmit={(event) => void handleSubmit(event)}
       onDragOver={(event) => {
         event.preventDefault();
@@ -149,6 +150,11 @@ export function ChatInput({
         addFiles(Array.from(event.dataTransfer.files));
       }}
     >
+      {isDragging && (
+        <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
+          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
+        </div>
+      )}
       {showClaudeSigninPanel && !isClaudeLoading && (
         <ClaudeSigninPanel
           claude={claude}
@@ -170,15 +176,11 @@ export function ChatInput({
           placeholder={
             disabled || isClaudePromptBlocking
               ? "Waiting for agent to be ready..."
-              : isDragging
-                ? "Drop images to attach..."
-                : "Send a message..."
+              : "Send a message..."
           }
-          disabled={disabled || isClaudePromptBlocking || isStreaming || isUploading}
+          disabled={disabled || isClaudePromptBlocking || isStreaming}
           rows={1}
-          className={`w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
-            isDragging ? "opacity-70" : ""
-          }`}
+          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
       <div className="flex items-center justify-end px-3 pb-2">

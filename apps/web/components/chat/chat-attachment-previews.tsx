@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import type { PendingImageAttachment } from "@/hooks/use-image-attachments";
@@ -53,18 +54,30 @@ export function ChatAttachmentPreviews({
   onRemove: (id: string) => void;
   className?: string;
 }) {
+  // Keep rendering the last non-empty list during the exit animation
+  // so the grid row has content to collapse smoothly.
+  const lastNonEmpty = useRef<PendingImageAttachment[]>(attachments);
+  useEffect(() => {
+    if (attachments.length > 0) {
+      lastNonEmpty.current = attachments;
+    }
+  }, [attachments]);
+
+  const isVisible = attachments.length > 0;
+  const displayedAttachments = isVisible ? attachments : lastNonEmpty.current;
+
   return (
     <div
       className="grid transition-all duration-300 ease-in-out"
       style={{
-        gridTemplateRows: attachments.length > 0 ? "1fr" : "0fr",
-        opacity: attachments.length > 0 ? 1 : 0,
+        gridTemplateRows: isVisible ? "1fr" : "0fr",
+        opacity: isVisible ? 1 : 0,
       }}
     >
       <div className="overflow-hidden">
         <div className={className ?? "px-4 pt-4"}>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {attachments.map((attachment) => (
+            {displayedAttachments.map((attachment) => (
               <AttachmentThumbnail
                 key={attachment.id}
                 attachment={attachment}

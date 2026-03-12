@@ -269,6 +269,14 @@ export function SessionCreationForm() {
   const tierLabel = claude.rateLimitTier
     ? ` (${formatClaudeMetadata(claude.rateLimitTier)})`
     : "";
+  const isFormInteractionDisabled = submitting;
+  const isSubmitDisabled = (
+    !claude.connected ||
+    !selectedRepo ||
+    hasPendingOrFailedUploads ||
+    (!message.trim() && attachments.length === 0) ||
+    submitting
+  );
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -475,7 +483,12 @@ export function SessionCreationForm() {
         addFiles(Array.from(event.dataTransfer.files));
       }}
     >
-      <div className="border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
+      <div className="relative border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
+        {isDragging && (
+          <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
+          </div>
+        )}
         {showClaudeSigninPanel && !claude.loading && (
           <ClaudeSigninPanel
             claude={claude}
@@ -490,9 +503,9 @@ export function SessionCreationForm() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isDragging ? "Drop images to attach..." : "Describe what you want to do..."}
+          placeholder="Describe what you want to do..."
           rows={claude.connected || claude.loading ? 4 : 2}
-          disabled={submitting}
+          disabled={isFormInteractionDisabled}
           className={`w-full px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
             claude.connected || claude.loading ? "pt-4" : "pt-2"
           }`}
@@ -516,7 +529,7 @@ export function SessionCreationForm() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    disabled={submitting}
+                    disabled={isFormInteractionDisabled}
                     onClick={() => fileInputRef.current?.click()}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -531,7 +544,7 @@ export function SessionCreationForm() {
               selectedRepo={selectedRepo}
               onSelect={setSelectedRepo}
               loading={reposLoading}
-              disabled={submitting}
+              disabled={isFormInteractionDisabled}
               installUrl={installUrl}
               open={repoPickerOpen}
               onOpenChange={setRepoPickerOpen}
@@ -543,7 +556,7 @@ export function SessionCreationForm() {
                 selectedBranch={selectedBranch}
                 onSelect={setSelectedBranch}
                 loading={branchesLoading}
-                disabled={submitting}
+                disabled={isFormInteractionDisabled}
                 open={branchPickerOpen}
                 onOpenChange={setBranchPickerOpen}
               />
@@ -564,13 +577,7 @@ export function SessionCreationForm() {
             )}
             <button
               type="submit"
-              disabled={
-                !claude.connected ||
-                !selectedRepo ||
-                hasPendingOrFailedUploads ||
-                (!message.trim() && attachments.length === 0) ||
-                submitting
-              }
+              disabled={isSubmitDisabled}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
             >
               {submitting || isUploadingAttachments ? (
