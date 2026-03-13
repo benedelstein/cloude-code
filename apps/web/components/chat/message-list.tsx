@@ -25,20 +25,65 @@ export function MessageList({
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const isNearBottomRef = useRef(true);
+  const autoScrollEnabled = useRef(true);
+  const userIsInteracting = useRef(false);
 
-  const checkIfNearBottom = useCallback(() => {
+  const isNearBottom = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) return true;
     const threshold = 150;
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    isNearBottomRef.current = distanceFromBottom <= threshold;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
   }, []);
 
-  // Auto-scroll to bottom only when user is already near the bottom
+  // When the user starts a manual scroll gesture, disable autoscroll
   useEffect(() => {
-    if (isNearBottomRef.current) {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleInteractionStart = () => {
+      userIsInteracting.current = true;
+      autoScrollEnabled.current = false;
+    };
+
+    const handleInteractionEnd = () => {
+      userIsInteracting.current = false;
+      // Re-enable autoscroll if they released near the bottom
+      if (isNearBottom()) {
+        autoScrollEnabled.current = true;
+      }
+    };
+
+    container.addEventListener("wheel", handleInteractionStart, { passive: true });
+    container.addEventListener("touchstart", handleInteractionStart, { passive: true });
+    container.addEventListener("pointerdown", handleInteractionStart);
+
+    // Use a short delay on end events so the momentum scroll settles
+    const endWithDelay = () => setTimeout(handleInteractionEnd, 100);
+    container.addEventListener("touchend", endWithDelay);
+    container.addEventListener("pointerup", endWithDelay);
+
+    // For wheel, there's no explicit "end" event — re-evaluate after scrolling stops
+    let wheelTimer: ReturnType<typeof setTimeout>;
+    const handleWheelEnd = () => {
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(handleInteractionEnd, 150);
+    };
+    container.addEventListener("scroll", handleWheelEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener("wheel", handleInteractionStart);
+      container.removeEventListener("touchstart", handleInteractionStart);
+      container.removeEventListener("pointerdown", handleInteractionStart);
+      container.removeEventListener("touchend", endWithDelay);
+      container.removeEventListener("pointerup", endWithDelay);
+      container.removeEventListener("scroll", handleWheelEnd);
+      clearTimeout(wheelTimer);
+    };
+  }, [isNearBottom]);
+
+  // Auto-scroll to bottom when new messages arrive, only if enabled
+  useEffect(() => {
+    if (autoScrollEnabled.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, streamingMessage, pendingUserMessage]);
@@ -80,7 +125,6 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      onScroll={checkIfNearBottom}
       className="h-full overflow-y-auto pt-20 pb-64"
     >
       <div className="max-w-4xl mx-auto px-8 space-y-4">
