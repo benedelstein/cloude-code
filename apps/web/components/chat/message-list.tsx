@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { UIMessage } from "ai";
 import { MessageCircle } from "lucide-react";
 import { MessageItem } from "./message-item";
@@ -25,10 +25,22 @@ export function MessageList({
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
-  // Auto-scroll to bottom when new messages arrive
+  const checkIfNearBottom = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const threshold = 150;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= threshold;
+  }, []);
+
+  // Auto-scroll to bottom only when user is already near the bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, streamingMessage, pendingUserMessage]);
 
   const allMessages = streamingMessage
@@ -68,6 +80,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
+      onScroll={checkIfNearBottom}
       className="h-full overflow-y-auto pt-20 pb-64"
     >
       <div className="max-w-4xl mx-auto px-8 space-y-4">
