@@ -1273,14 +1273,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  private async syncRepository(sprite: WorkersSprite): Promise<void> {
-    // Stash local changes, pull latest for the current branch, then restore
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git stash --include-untracked; (git pull --rebase || true); git stash pop || true`,
-      {},
-    );
-  }
-
   private async reattachAgentSession(spriteName: string): Promise<void> {
     // Mutex pattern: if already reattaching, wait for that to complete
     if (this.reattachPromise) {
@@ -1309,7 +1301,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       //   await this.startMitmproxyOnVM(sprite);
       // }
 
-      // Refresh GitHub token before sync (may have expired during hibernation)
+      // Refresh GitHub token (may have expired during hibernation)
       try {
         await this.refreshGitHubToken();
       } catch (error) {
@@ -1319,10 +1311,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
       }
 
-      // Sync repository before reattaching
-      this.updateStatus("syncing");
-      this.broadcastMessage({ type: "session.status", status: "syncing" });
-      await this.syncRepository(sprite);
+      // NOTE: We intentionally do NOT sync the repository here. The sprite VM's
+      // filesystem is persistent — nothing has gone stale. Silently running
+      // git pull --rebase behind the agent's back can introduce merge conflicts
+      // or change files the agent is working with without its knowledge. If the
+      // user wants latest changes, they can ask the agent to pull.
 
       // Set status to attaching
       this.updateStatus("attaching");
