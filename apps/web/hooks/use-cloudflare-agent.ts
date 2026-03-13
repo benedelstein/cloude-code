@@ -80,6 +80,7 @@ export function useCloudflareAgent({
   const resetPendingResponse = useCallback(() => {
     setIsResponding(false);
     setStreamingMessage(null);
+    isConsumingRef.current = false;
     if (streamControllerRef.current) {
       try {
         streamControllerRef.current.close();
@@ -119,6 +120,22 @@ export function useCloudflareAgent({
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
         setIsHistoryLoading(false);
+
+        // Replay buffered chunks for in-progress message (reconnect scenario)
+        const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        if (pendingChunks && pendingChunks.length > 0) {
+          setIsResponding(true);
+          const stream = new ReadableStream<UIMessageChunk>({
+            start: (controller) => {
+              streamControllerRef.current = controller;
+              for (const chunk of pendingChunks) {
+                controller.enqueue(chunk);
+              }
+              // Leave stream open for new live chunks via agent.chunk
+            },
+          });
+          consumeStream(stream);
+        }
         break;
       }
 
