@@ -33,6 +33,7 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const autoScrollEnabled = useRef(true);
   const hasNewMessages = useRef(false);
+  const pendingAutoScrollBehavior = useRef<ScrollBehavior>("auto");
   // Keep a ref to the callback so event-handler closures always see the latest
   const onHasNewMessagesRef = useRef(onHasNewMessages);
   onHasNewMessagesRef.current = onHasNewMessages;
@@ -54,8 +55,11 @@ export function MessageList({
     return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
   }, []);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior, persistBehavior = true) => {
     autoScrollEnabled.current = true;
+    if (persistBehavior) {
+      pendingAutoScrollBehavior.current = behavior;
+    }
     notifyHasNewMessages(false);
     bottomRef.current?.scrollIntoView({ behavior });
   }, [notifyHasNewMessages]);
@@ -109,7 +113,9 @@ export function MessageList({
   // Auto-scroll to bottom when new content arrives, only if enabled
   useLayoutEffect(() => {
     if (autoScrollEnabled.current) {
-      scrollToBottom("auto");
+      const behavior = pendingAutoScrollBehavior.current;
+      pendingAutoScrollBehavior.current = "auto";
+      scrollToBottom(behavior, false);
     } else {
       notifyHasNewMessages(true);
     }
