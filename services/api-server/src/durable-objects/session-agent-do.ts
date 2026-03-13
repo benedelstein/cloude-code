@@ -1274,20 +1274,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async syncRepository(sprite: WorkersSprite): Promise<void> {
-    // TODO: MAKE THIS ONE SCRIPT/BASH LINE
-    // Stash any local changes
+    // Stash local changes, pull latest for the current branch, then restore
     await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git stash --include-untracked`,
+      `cd ${WORKSPACE_DIR} && git stash --include-untracked; (git pull --rebase || true); git stash pop || true`,
       {},
     );
-    // Fetch and pull latest from main
-    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git checkout main`, {});
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git pull origin main --rebase || true`,
-      {},
-    );
-    // Restore stashed changes
-    await sprite.execHttp(`cd ${WORKSPACE_DIR} && git stash pop || true`, {});
   }
 
   private async reattachAgentSession(spriteName: string): Promise<void> {
