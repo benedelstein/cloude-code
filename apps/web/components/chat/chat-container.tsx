@@ -32,7 +32,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     errorMessage,
     isHistoryLoading,
     isReady,
-    isStreaming,
     isResponding,
     repoFullName,
     pendingUserMessage,
@@ -243,7 +242,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
                 onStop={stop}
                 disabled={!isReady}
-                isStreaming={isStreaming}
+                isStreaming={isResponding}
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
               />

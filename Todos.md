@@ -18,8 +18,24 @@
         Can we install chromium on the sprite? eh can't the user prompt this with a skill?
 - [ ] Multi-provider selection like opencode. Connect to claude, codex, gemini, whatever. 
 
+bug: if the server restarts, the DO state gets cleared and then if a message is in progress,
+the pending chunks get lost, and then we restart the agent process. clicking cancel sends the signal
+to the new process which isn't even responding, so it never gets canceled. 
+
+Need to figure out migration strategy - if we update DO state, how do we upgrade older sessions?
+- versioning the VM. like some version.json file in the VM root. 
+- Check version on boot and run any migrations if necessary. 
+- Version the DO in sqlite.
+- Create a robust Migration script that can apply migrations to the DO on boot. 
+
 Sprites are long-lived VMs. I'm kind of using them like disposable VMs - just creating 1 session and checking out a repo on a new branch.
 How can I make use of their persistence? keep a pool of sprites warm?
+
+I'm worried about DO/VM message state sync. Currently they each persist message separately. 
+We currently rely on resuming a thread id.
+- If VM gets fucked, the local filesystem loses its message history.
+- Sometimes a message gets saved to sqlite but doesnt make it to the VM agent.
+Could we have a single source of truth, pass in the message history to the VM agent from the DO on start?
 
 COMPLETE: 
 - [x] Make sure websocket types are consistent between vm<->server<->client.
