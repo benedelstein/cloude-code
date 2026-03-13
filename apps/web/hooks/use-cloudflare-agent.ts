@@ -67,6 +67,9 @@ export function useCloudflareAgent({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [isResponding, setIsResponding] = useState(false);
+  // Note: isResponding is primarily driven by server state via onStateUpdate.
+  // The local setter is only used for optimistic updates (sendMessage) and
+  // cleanup on connection loss (resetPendingResponse).
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
@@ -124,7 +127,6 @@ export function useCloudflareAgent({
         // Replay buffered chunks for in-progress message (reconnect scenario)
         const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
         if (pendingChunks && pendingChunks.length > 0) {
-          setIsResponding(true);
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {
               streamControllerRef.current = controller;
@@ -147,7 +149,6 @@ export function useCloudflareAgent({
         break;
 
       case "agent.chunk":
-        setIsResponding(true);
         if (!streamControllerRef.current) {
           // First chunk for a server-initiated response (e.g. pending message) —
           // create a stream so the UI can render it
@@ -164,7 +165,6 @@ export function useCloudflareAgent({
         break;
 
       case "agent.finish":
-        setIsResponding(false);
         if (streamControllerRef.current) {
           streamControllerRef.current.close();
           streamControllerRef.current = null;
@@ -177,7 +177,6 @@ export function useCloudflareAgent({
         break;
 
       case "user.message":
-        setIsResponding(true);
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         break;
 
@@ -232,6 +231,9 @@ export function useCloudflareAgent({
       }
       if (state.claudeAuthRequired !== undefined) {
         setClaudeAuthRequired(state.claudeAuthRequired);
+      }
+      if (state.isResponding !== undefined) {
+        setIsResponding(state.isResponding);
       }
     },
     onError: (message) => {

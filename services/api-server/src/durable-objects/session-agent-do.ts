@@ -115,6 +115,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pendingAttachmentIds: [],
     editorUrl: null,
     claudeAuthRequired: null,
+    isResponding: false,
     baseBranch: null,
     createdAt: new Date(),
   };
@@ -907,6 +908,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Clear any in-progress chunk buffer if agent exits mid-stream
       this.pendingChunks = [];
       this.messageAccumulator.reset();
+      this.updatePartialState({ isResponding: false });
     });
 
     this.agentSession.onServerMessage((msg: SpriteServerMessage) => {
@@ -987,6 +989,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           // Reset accumulator and chunk buffer for next message
           this.messageAccumulator.reset();
           this.pendingChunks = [];
+          this.updatePartialState({ isResponding: false });
         }
         break;
       }
@@ -1308,6 +1311,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
 
     // Send to vm-agent
+    this.updatePartialState({ isResponding: true });
     const encoded = encodeAgentInput({
       type: "chat",
       message: {

@@ -54,6 +54,8 @@ export type AgentState = {
   editorUrl: string | null;
   /** Claude auth issue blocking the current session, if any */
   claudeAuthRequired: ClaudeAuthState | null;
+  /** Whether the agent is currently responding to a message */
+  isResponding: boolean;
   /** Branch the session was based off — used as the PR target */
   baseBranch: string | null;
   createdAt: Date;
