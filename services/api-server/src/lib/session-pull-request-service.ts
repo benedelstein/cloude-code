@@ -1,5 +1,6 @@
 import type { SessionInfoResponse } from "@repo/shared";
 import type { UIMessage } from "ai";
+import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
 import {
   fallbackPullRequestTitle,
   generatePullRequestText,
@@ -190,15 +191,16 @@ export async function createPullRequestForSession(params: {
     );
   }
 
+  const setPullRequestBody: SetPullRequestRequest = {
+    url: createdPullRequest.url,
+    number: createdPullRequest.number,
+    state: "open",
+  };
   await sessionStub.fetch(
     new Request("http://do/pr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: createdPullRequest.url,
-        number: createdPullRequest.number,
-        state: "open",
-      }),
+      body: JSON.stringify(setPullRequestBody),
     }),
   );
 
@@ -211,14 +213,14 @@ export async function createPullRequestForSession(params: {
 
 export async function getPullRequestStatusForSession(params: {
   sessionStub: SessionAgentFetcher;
-  github: GitHubAppService;
+  githubService: GitHubAppService;
 }): Promise<{
   url: string;
   number: number;
   state: "open" | "closed" | "merged";
   merged: boolean;
 }> {
-  const { sessionStub, github } = params;
+  const { sessionStub, githubService: githubService } = params;
   const session = await getSessionInfo(sessionStub);
 
   if (!session.pullRequestNumber || !session.pullRequestUrl) {
@@ -234,7 +236,7 @@ export async function getPullRequestStatusForSession(params: {
     merged: boolean;
   };
   try {
-    const pullRequest = await github.getPullRequest(
+    const pullRequest = await githubService.getPullRequest(
       session.repoFullName,
       session.pullRequestNumber,
     );
@@ -252,11 +254,12 @@ export async function getPullRequestStatusForSession(params: {
 
   const state = pullRequestState.merged ? "merged" : pullRequestState.state;
   if (state !== session.pullRequestState) {
+    const updatePullRequestBody: UpdatePullRequestRequest = { state };
     await sessionStub.fetch(
       new Request("http://do/pr", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
+        body: JSON.stringify(updatePullRequestBody),
       }),
     );
   }

@@ -317,7 +317,7 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   try {
     const pullRequestStatus = await getPullRequestStatusForSession({
       sessionStub: stub,
-      github,
+      githubService: github,
     });
     return c.json(pullRequestStatus, 200);
   } catch (error) {

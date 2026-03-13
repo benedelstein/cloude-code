@@ -42,8 +42,6 @@ import {
 import { logger as defaultLogger } from "@/lib/logger";
 import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
-import { SessionHistoryService } from "@/lib/session-history";
-import { generateSessionTitle } from "@/lib/generate-session-title";
 import { arrayBufferToBase64 } from "@/lib/utils";
 import type { UIMessage } from "ai";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
@@ -57,6 +55,8 @@ import {
   handleEditorOpen,
   handleEditorClose,
 } from "./session-agent-editor";
+import { updateSessionHistoryData } from "./session-agent-history";
+import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -531,6 +531,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           status: "cloning",
         });
 
+        // is this needed? we broadcast it right above.
         this.broadcastMessage({
           type: "session.status",
           status: "cloning",
@@ -622,89 +623,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }
-
-  /** Send the pending initial message to the agent and store/broadcast it as a user message. */
-  private async sendPendingMessage(): Promise<void> {
-    const content = this.getUserMessageTextContent(this.state.pendingUserMessage);
-    const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
-    if (!this.agentSession || !this.state.sessionId) return;
-    if (!content && pendingAttachmentIds.length === 0) return;
-
-    const sessionId = this.state.sessionId;
-    const attachmentService = new AttachmentService(this.env.DB);
-    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
-      sessionId,
-      pendingAttachmentIds,
-    );
-    if (attachmentRecords.length !== pendingAttachmentIds.length) {
-      this.logger.error(
-        `Some pending attachments not found: ${pendingAttachmentIds.join(", ")}`,
-        { loggerName },
-      );
-      this.updatePartialState({
-        pendingUserMessage: null,
-        pendingAttachmentIds: [],
-      });
-      return;
-    }
-
-    let agentAttachments: AgentInputAttachment[];
-    try {
-      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
-    } catch (error) {
-      this.logger.error("Failed to resolve pending attachments", { loggerName, error });
-      this.updatePartialState({
-        pendingUserMessage: null,
-        pendingAttachmentIds: [],
-      });
-      return;
-    }
-
-    // Store user message and broadcast to all clients
-
-    const userMessage = this.state.pendingUserMessage
-      ?? this.createUserMessage(content, attachmentRecords);
-    if (!userMessage) {
-      this.updatePartialState({
-        pendingUserMessage: null,
-        pendingAttachmentIds: [],
-      });
-      return;
-    }
-    const stored = this.messageRepository.create(
-      sessionId,
-      userMessage,
-    );
-    this.broadcastMessage({
-      type: "user.message",
-      message: stored.message,
-    });
-
-    // Clear pending message from state (after broadcast so client has the real message)
-    this.updatePartialState({
-      pendingUserMessage: null,
-      pendingAttachmentIds: [],
-    });
-
-    // Sync to D1 history and generate title
-    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
-    this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
-
-    // Send to vm-agent
-    this.logger.info(
-      `Sending pending message to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
-      { loggerName },
-    );
-    this.agentSession.write(
-      encodeAgentInput({
-        type: "chat",
-        message: {
-          content,
-          attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
-        },
-      }) + "\n",
-    );
   }
 
   private async startAgentOnVM(spriteName: string): Promise<void> {
@@ -1060,8 +978,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleGetMessages(): Response {
-
-
     if (!this.state.sessionId) {
       return new Response(JSON.stringify([]), {
         headers: { "Content-Type": "application/json" },
@@ -1077,11 +993,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleSetPullRequest(request: Request): Promise<Response> {
-    const data = (await request.json()) as {
-      url: string;
-      number: number;
-      state: "open" | "merged" | "closed";
-    };
+    const data: SetPullRequestRequest = await request.json();
     this.updatePartialState({
       pullRequestUrl: data.url,
       pullRequestNumber: data.number,
@@ -1093,9 +1005,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleUpdatePullRequest(request: Request): Promise<Response> {
-    const data = (await request.json()) as {
-      state: "open" | "merged" | "closed";
-    };
+    const data: UpdatePullRequestRequest = await request.json();
     this.updatePartialState({
       pullRequestState: data.state,
     });
@@ -1105,8 +1015,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleDeleteSession(): Promise<Response> {
-
-
     // Close editor if open
     if (this.state.editorUrl) {
       const result = await handleEditorClose(this.editorContext());
@@ -1307,20 +1215,18 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     // Sync to D1: update last_message_at and generate title from first message
-    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
-    this.ctx.waitUntil(this.syncMessageToHistory(historyContent));
+    const synthesizedMessageContent = this.toHistorySyncContent(content, attachmentRecords);
+    this.ctx.waitUntil(updateSessionHistoryData({
+      database: this.env.DB,
+      anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      logger: this.logger,
+      sessionId,
+      messageContent: synthesizedMessageContent,
+      messageRepository: this.messageRepository,
+    }));
 
-    // Send to vm-agent
-    this.updatePartialState({ isResponding: true });
-    const encoded = encodeAgentInput({
-      type: "chat",
-      message: {
-        content,
-        attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
-      },
-    }) + "\n";
     try {
-      currentAgentSession.write(encoded);
+      await this.sendMessageToAgent(currentAgentSession, content, agentAttachments);
       return;
     } catch (error) {
       this.logger.error("Failed to write to vm-agent, attempting reattach", {
@@ -1336,6 +1242,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const reattachedAgentSession = this.getConnectedAgentSession();
     if (!reattachedAgentSession) {
+      this.logger.error("No agent session available after reattach", { loggerName });
       this.sendMessage(
         {
           type: "error",
@@ -1348,7 +1255,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     try {
-      reattachedAgentSession.write(encoded);
+      await this.sendMessageToAgent(reattachedAgentSession, content, agentAttachments);
     } catch (error) {
       this.logger.error("Failed to write to vm-agent after reattach", {
         loggerName,
@@ -1524,39 +1431,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
-  /** Sync a user message to D1: update last_message_at, and set title from first message. */
-  private async syncMessageToHistory(content: string): Promise<void> {
-    const sessionId = this.state.sessionId;
-    if (!sessionId) return;
-
-    try {
-      const sessionHistory = new SessionHistoryService(this.env.DB);
-      await sessionHistory.updateLastMessageAt(sessionId);
-
-      // Check if this is the first user message — if so, generate a title via LLM
-      // TODO: STORE MESSAGES IN MEMORY?
-      const userMessages = this.messageRepository.getAllBySession(
-        sessionId,
-      ).filter((m) => m.message.role === "user");
-
-      if (userMessages.length === 1) {
-        const title = await generateSessionTitle(
-          this.env.ANTHROPIC_API_KEY,
-          content,
-        );
-        this.logger.info(`Generated session title: ${title} for session ${sessionId}`, {
-          loggerName,
-        });
-        await sessionHistory.updateTitle(sessionId, title);
-      }
-    } catch (error) {
-      this.logger.error("Failed to sync message to D1 history", {
-        loggerName,
-        error,
-      });
-    }
-  }
-
   private async resolveAgentAttachments(
     attachments: AttachmentRecord[],
   ): Promise<AgentInputAttachment[]> {
@@ -1605,6 +1479,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return this.createUserMessage(content, attachmentRecords);
   }
 
+  private async sendMessageToAgent(session: SpriteWebsocketSession, content: string | undefined, attachments: AgentInputAttachment[]) : Promise<void> {
+    this.updatePartialState({ isResponding: true });
+    session.write(
+      encodeAgentInput({
+        type: "chat",
+        message: {
+          content,
+          attachments: attachments.length > 0 ? attachments : undefined,
+        },
+      }) + "\n",
+    );
+  }
+
   private createUserMessage(
     content: string | undefined,
     attachments: AttachmentRecord[],
@@ -1651,6 +1538,94 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return text || undefined;
   }
 
+  /** Send the pending initial message to the agent and store/broadcast it as a user message. */
+  private async sendPendingMessage(): Promise<void> {
+    const content = this.getUserMessageTextContent(this.state.pendingUserMessage);
+    const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
+    if (!this.agentSession || !this.state.sessionId) return;
+    if (!content && pendingAttachmentIds.length === 0) return;
+
+    const sessionId = this.state.sessionId;
+    const attachmentService = new AttachmentService(this.env.DB);
+    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
+      sessionId,
+      pendingAttachmentIds,
+    );
+    if (attachmentRecords.length !== pendingAttachmentIds.length) {
+      this.logger.error(
+        `Some pending attachments not found: ${pendingAttachmentIds.join(", ")}`,
+        { loggerName },
+      );
+      this.updatePartialState({
+        pendingUserMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
+    }
+
+    let agentAttachments: AgentInputAttachment[];
+    try {
+      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
+    } catch (error) {
+      this.logger.error("Failed to resolve pending attachments", { loggerName, error });
+      this.updatePartialState({
+        pendingUserMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
+    }
+
+    // Store user message and broadcast to all clients
+
+    const userMessage = this.state.pendingUserMessage
+      ?? this.createUserMessage(content, attachmentRecords);
+    if (!userMessage) {
+      this.updatePartialState({
+        pendingUserMessage: null,
+        pendingAttachmentIds: [],
+      });
+      return;
+    }
+    const stored = this.messageRepository.create(
+      sessionId,
+      userMessage,
+    );
+    this.broadcastMessage({
+      type: "user.message",
+      message: stored.message,
+    });
+
+    // Clear pending message from state (after broadcast so client has the real message)
+    this.updatePartialState({
+      pendingUserMessage: null,
+      pendingAttachmentIds: [],
+    });
+
+    // Sync to D1 history and generate title
+    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
+    this.ctx.waitUntil(updateSessionHistoryData({
+      database: this.env.DB,
+      anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      logger: this.logger,
+      sessionId,
+      messageContent: historyContent,
+      messageRepository: this.messageRepository,
+    }));
+
+    // Send to vm-agent
+    this.logger.info(
+      `Sending pending message to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
+      { loggerName },
+    );
+    await this.sendMessageToAgent(this.agentSession, content, agentAttachments);
+  }
+
+  /**
+   * Generate a content string for syncing to D1 history.
+   * @param content 
+   * @param attachments 
+   * @returns 
+   */
   private toHistorySyncContent(
     content: string | undefined,
     attachments: AttachmentRecord[],

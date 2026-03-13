@@ -12,6 +12,8 @@
 - [ ] keep session agent message history in memory for faster syncing with clients
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses?
 - [ ] Slash commands (plugins), file mentions
+        I want to be able to spawn a new session from an existing one. or even let the agent do it. 
+        /fork "follow up on this and ... in a new branch" - on an already merged session, i wanted to make some further changes. But need a new session given the scoping. Alternative is to allow a session to switch branches and make a new pr. 
 - [ ] Allow the vm to render results as screenshots with a browser in order to visually see its results. Extra tool?
         Can we install chromium on the sprite? eh can't the user prompt this with a skill?
 - [ ] Multi-provider selection like opencode. Connect to claude, codex, gemini, whatever. 

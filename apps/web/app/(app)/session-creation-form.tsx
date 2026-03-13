@@ -167,7 +167,7 @@ function BranchSelector({
                 <span className="truncate">
                   {loading ? "..." : selectedBranch ?? "Select branch"}
                 </span>
-                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>

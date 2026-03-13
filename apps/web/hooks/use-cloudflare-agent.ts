@@ -103,6 +103,7 @@ export function useCloudflareAgent({
       const messageStream = readUIMessageStream({ stream });
 
       for await (const message of messageStream) {
+        // updates the message as new chunks come in. 
         setStreamingMessage(message);
       }
     } catch (err) {
@@ -169,6 +170,7 @@ export function useCloudflareAgent({
           streamControllerRef.current.close();
           streamControllerRef.current = null;
         }
+        // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
         break;
@@ -234,6 +236,9 @@ export function useCloudflareAgent({
       }
       if (state.isResponding !== undefined) {
         setIsResponding(state.isResponding);
+      }
+      if (state.status !== undefined) {
+        setSessionStatus(state.status);
       }
     },
     onError: (message) => {
