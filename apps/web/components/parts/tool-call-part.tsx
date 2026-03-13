@@ -18,9 +18,6 @@ interface ToolCallPartProps {
 export function ToolCallPart({ part }: ToolCallPartProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Debug: log the part structure
-  console.log("ToolCallPart received:", part);
-
   // Extract tool name - try toolName property first, then fall back to parsing type
   const toolName = part.toolName ?? part.type.replace(/^tool-/, "");
   const input = part.args ?? part.input;
@@ -35,7 +32,7 @@ export function ToolCallPart({ part }: ToolCallPartProps) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center gap-2 px-3 py-2 bg-muted/50 hover:bg-muted transition-colors text-left"
       >
-        <div className="w-6 h-6 rounded bg-accent/10 flex items-center justify-center flex-shrink-0">
+        <div className="w-6 h-6 rounded bg-accent/10 flex items-center justify-center shrink-0">
           <ToolIcon />
         </div>
         <span className="font-medium text-sm flex-1 truncate">{toolName}</span>

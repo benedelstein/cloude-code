@@ -116,7 +116,6 @@ export function useCloudflareAgent({
   const handleServerMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case "connected":
-        console.log("Connected to agent", msg);
         setSessionStatus(msg.status);
         break;
 
@@ -211,8 +210,7 @@ export function useCloudflareAgent({
       // useAgent will auto-reconnect
       resetPendingResponse();
     },
-    onStateUpdate(state: AgentState, source) {
-      console.log("state update", state, source);
+    onStateUpdate(state: AgentState) {
       if (state.pushedBranch !== undefined) {
         setPushedBranch(state.pushedBranch);
       }

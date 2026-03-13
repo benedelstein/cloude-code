@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
@@ -18,6 +18,7 @@ import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
 import { BrowserButton, EditorButton, SessionActionsButton } from "./editor-button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -52,6 +53,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const [titleInput, setTitleInput] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const scrollToBottomRef = useRef<(() => void) | null>(null);
 
   const displayTitle = sessionTitle ?? repoFullName ?? "Untitled session";
   const canSaveTitle = titleInput.trim().length > 0
@@ -197,6 +200,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
+          onHasNewMessages={setShowScrollToBottom}
+          scrollToBottomRef={scrollToBottomRef}
         />
       </div>
 
@@ -204,6 +209,20 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
         <div className="pt-8">
           <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background) 32px)" }}>
+            <div className={`flex justify-center mb-2 transition-all duration-200 ${showScrollToBottom ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"}`}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => scrollToBottomRef.current?.()}
+                    className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>New messages</TooltipContent>
+              </Tooltip>
+            </div>
             <BranchBar
               sessionId={sessionId}
               pushedBranch={pushedBranch}
@@ -216,7 +235,10 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 errorMessage={errorMessage}
               />
               <ChatInput
-                onSend={sendMessage}
+                onSend={(...args) => {
+                  scrollToBottomRef.current?.();
+                  sendMessage(...args);
+                }}
                 onUploadAttachments={(files) => uploadAttachments(files, sessionId).then((response) => response.attachments)}
                 onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
                 onStop={stop}

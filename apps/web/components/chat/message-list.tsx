@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { UIMessage } from "ai";
 import { MessageCircle } from "lucide-react";
 import { MessageItem } from "./message-item";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import clsx from "clsx";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -13,6 +14,9 @@ interface MessageListProps {
   isResponding?: boolean;
   pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
+  // eslint-disable-next-line no-unused-vars
+  onHasNewMessages?: (hasNew: boolean) => void;
+  scrollToBottomRef?: React.RefObject<(() => void) | null>;
 }
 
 export function MessageList({
@@ -22,142 +26,165 @@ export function MessageList({
   isResponding,
   pendingUserMessage,
   userAvatarUrl,
+  onHasNewMessages,
+  scrollToBottomRef,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const autoScrollEnabled = useRef(true);
-  const userIsInteracting = useRef(false);
+  const hasNewMessages = useRef(false);
+  // Keep a ref to the callback so event-handler closures always see the latest
+  const onHasNewMessagesRef = useRef(onHasNewMessages);
+  onHasNewMessagesRef.current = onHasNewMessages;
+
+  const notifyHasNewMessages = useCallback((hasNew: boolean) => {
+    if (hasNewMessages.current === hasNew) {
+      return;
+    }
+    hasNewMessages.current = hasNew;
+    onHasNewMessagesRef.current?.(hasNew);
+  }, []);
 
   const isNearBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) return true;
-    const threshold = 150;
+    // pb-64 (256px) on the scroll container sits behind the floating input,
+    // so the user appears at the bottom well before scrollTop reaches the end.
+    const threshold = 200;
     return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
   }, []);
 
-  // When the user starts a manual scroll gesture, disable autoscroll
+  const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
+    autoScrollEnabled.current = true;
+    notifyHasNewMessages(false);
+    bottomRef.current?.scrollIntoView({ behavior });
+  }, [notifyHasNewMessages]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const handleInteractionStart = () => {
-      userIsInteracting.current = true;
-      autoScrollEnabled.current = false;
-    };
+    const handleScroll = () => {
+      const nearBottom = isNearBottom();
+      autoScrollEnabled.current = nearBottom;
 
-    const handleInteractionEnd = () => {
-      userIsInteracting.current = false;
-      // Re-enable autoscroll if they released near the bottom
-      if (isNearBottom()) {
-        autoScrollEnabled.current = true;
+      if (nearBottom) {
+        notifyHasNewMessages(false);
       }
     };
 
-    container.addEventListener("wheel", handleInteractionStart, { passive: true });
-    container.addEventListener("touchstart", handleInteractionStart, { passive: true });
-    container.addEventListener("pointerdown", handleInteractionStart);
-
-    // Use a short delay on end events so the momentum scroll settles
-    const endWithDelay = () => setTimeout(handleInteractionEnd, 100);
-    container.addEventListener("touchend", endWithDelay);
-    container.addEventListener("pointerup", endWithDelay);
-
-    // For wheel, there's no explicit "end" event — re-evaluate after scrolling stops.
-    // Only run during user interaction so programmatic scrollIntoView doesn't trigger this.
-    let wheelTimer: ReturnType<typeof setTimeout>;
-    const handleScrollIdle = () => {
-      if (!userIsInteracting.current) return;
-      clearTimeout(wheelTimer);
-      wheelTimer = setTimeout(handleInteractionEnd, 150);
-    };
-    container.addEventListener("scroll", handleScrollIdle, { passive: true });
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      container.removeEventListener("wheel", handleInteractionStart);
-      container.removeEventListener("touchstart", handleInteractionStart);
-      container.removeEventListener("pointerdown", handleInteractionStart);
-      container.removeEventListener("touchend", endWithDelay);
-      container.removeEventListener("pointerup", endWithDelay);
-      container.removeEventListener("scroll", handleScrollIdle);
-      clearTimeout(wheelTimer);
+      container.removeEventListener("scroll", handleScroll);
     };
-  }, [isNearBottom]);
+  }, [isNearBottom, notifyHasNewMessages]);
 
-  // Auto-scroll to bottom when new messages arrive, only if enabled
+  // Expose a scroll-to-bottom function to the parent
   useEffect(() => {
-    if (autoScrollEnabled.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollToBottomRef) {
+      scrollToBottomRef.current = () => {
+        scrollToBottom("smooth");
+      };
     }
-  }, [messages, streamingMessage, pendingUserMessage]);
+    return () => {
+      if (scrollToBottomRef) {
+        scrollToBottomRef.current = null;
+      }
+    };
+  }, [scrollToBottom, scrollToBottomRef]);
+
+  // Include streaming part growth so active assistant responses stay pinned while autoscroll is enabled.
+  const streamingContentSignal = streamingMessage
+    ? `${streamingMessage.id}:${JSON.stringify(streamingMessage.parts ?? []).length}`
+    : "idle";
+  const contentSignal = [
+    messages.length,
+    streamingContentSignal,
+    pendingUserMessage?.id ?? "none",
+    isResponding ? "responding" : "idle",
+  ].join(":");
+
+  // Auto-scroll to bottom when new content arrives, only if enabled
+  useLayoutEffect(() => {
+    if (autoScrollEnabled.current) {
+      scrollToBottom("auto");
+    } else {
+      notifyHasNewMessages(true);
+    }
+  }, [contentSignal, notifyHasNewMessages, scrollToBottom]);
 
   const allMessages = streamingMessage
     ? [...messages, streamingMessage]
     : messages;
-  const hasPendingUserMessage = pendingUserMessage !== null && pendingUserMessage !== undefined;
+  const hasPendingUserMessage = !!pendingUserMessage;
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
 
-  if (isHistoryLoading && allMessages.length === 0 && !hasPendingUserMessage) {
-    return (
-      <div className="h-full flex items-center justify-center p-4">
-        <div className="flex items-center gap-2 text-foreground-muted text-sm">
-          <LoadingSpinner className="h-4 w-4" />
-          Loading messages...
-        </div>
-      </div>
-    );
-  }
-
-  if (allMessages.length === 0 && !hasPendingUserMessage) {
-    return (
-      <div className="h-full flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent-subtle flex items-center justify-center">
-            <MessageCircle className="w-8 h-8 text-accent" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
-          <p className="text-foreground-muted text-sm">
-            Send a message to begin working with the agent on your repository.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const showLoading = isHistoryLoading && allMessages.length === 0 && !hasPendingUserMessage;
+  const showEmpty = !showLoading && allMessages.length === 0 && !hasPendingUserMessage;
 
   return (
     <div
       ref={containerRef}
       className="h-full overflow-y-auto pt-20 pb-64"
     >
-      <div className="max-w-4xl mx-auto px-8 space-y-4">
-        {allMessages.map((message) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            isStreaming={streamingMessage?.id === message.id}
-            userAvatarUrl={userAvatarUrl}
-          />
-        ))}
-        {shouldRenderPendingUserMessage && pendingUserMessage && (
-          <MessageItem
-            message={pendingUserMessage}
-            userAvatarUrl={userAvatarUrl}
-          />
-        )}
-        {isResponding && <TypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
+      {showLoading && (
+        <div className="h-full flex items-center justify-center p-4">
+          <div className="flex items-center gap-2 text-foreground-muted text-sm">
+            <LoadingSpinner className="h-4 w-4" />
+            Loading messages...
+          </div>
+        </div>
+      )}
+      {showEmpty && (
+        <div className="h-full flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent-subtle flex items-center justify-center">
+              <MessageCircle className="w-8 h-8 text-accent" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
+            <p className="text-foreground-muted text-sm">
+              Send a message to begin working with the agent on your repository.
+            </p>
+          </div>
+        </div>
+      )}
+      {!showLoading && !showEmpty && (
+        <div className="max-w-4xl mx-auto px-8 space-y-4">
+          {allMessages.map((message) => (
+            <MessageItem
+              key={message.id}
+              message={message}
+              isStreaming={streamingMessage?.id === message.id}
+              userAvatarUrl={userAvatarUrl}
+            />
+          ))}
+          {shouldRenderPendingUserMessage && pendingUserMessage && (
+            <MessageItem
+              message={pendingUserMessage}
+              userAvatarUrl={userAvatarUrl}
+            />
+          )}
+          {isResponding && <TypingIndicator />}
+          <div ref={bottomRef} />
+        </div>
+      )}
     </div>
   );
 }
 
 function TypingIndicator() {
+  const dotClass = "w-1.5 h-1.5 bg-accent rounded-full animate-pulse";
   return (
-    <div className="flex items-center gap-2 px-4 py-3 w-fit rounded-lg bg-background border border-border text-foreground-muted shadow-shadow shadow-md">
+    <div className="flex items-center text-sm gap-1.5 px-2 py-1 w-fit text-foreground-muted">
       Working
-      <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse" />
-      <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse [animation-delay:0.2s]" />
-      <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse [animation-delay:0.4s]" />
+      <div className="flex items-center gap-1 translate-y-[1.5px]">
+        <span className={dotClass} />
+        <span className={clsx([dotClass, "[animation-delay:0.2s]"])} />
+        <span className={clsx([dotClass, "[animation-delay:0.4s]"])} />
+      </div>
     </div>
   );
 }
