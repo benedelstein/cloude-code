@@ -62,13 +62,15 @@ export function MessageList({
     container.addEventListener("touchend", endWithDelay);
     container.addEventListener("pointerup", endWithDelay);
 
-    // For wheel, there's no explicit "end" event — re-evaluate after scrolling stops
+    // For wheel, there's no explicit "end" event — re-evaluate after scrolling stops.
+    // Only run during user interaction so programmatic scrollIntoView doesn't trigger this.
     let wheelTimer: ReturnType<typeof setTimeout>;
-    const handleWheelEnd = () => {
+    const handleScrollIdle = () => {
+      if (!userIsInteracting.current) return;
       clearTimeout(wheelTimer);
       wheelTimer = setTimeout(handleInteractionEnd, 150);
     };
-    container.addEventListener("scroll", handleWheelEnd, { passive: true });
+    container.addEventListener("scroll", handleScrollIdle, { passive: true });
 
     return () => {
       container.removeEventListener("wheel", handleInteractionStart);
@@ -76,7 +78,7 @@ export function MessageList({
       container.removeEventListener("pointerdown", handleInteractionStart);
       container.removeEventListener("touchend", endWithDelay);
       container.removeEventListener("pointerup", endWithDelay);
-      container.removeEventListener("scroll", handleWheelEnd);
+      container.removeEventListener("scroll", handleScrollIdle);
       clearTimeout(wheelTimer);
     };
   }, [isNearBottom]);
