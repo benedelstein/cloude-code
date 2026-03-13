@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { UIMessage } from "ai";
 import { MessageCircle } from "lucide-react";
 import { MessageItem } from "./message-item";
@@ -25,10 +25,69 @@ export function MessageList({
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoScrollEnabled = useRef(true);
+  const userIsInteracting = useRef(false);
 
-  // Auto-scroll to bottom when new messages arrive
+  const isNearBottom = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return true;
+    const threshold = 150;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  }, []);
+
+  // When the user starts a manual scroll gesture, disable autoscroll
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleInteractionStart = () => {
+      userIsInteracting.current = true;
+      autoScrollEnabled.current = false;
+    };
+
+    const handleInteractionEnd = () => {
+      userIsInteracting.current = false;
+      // Re-enable autoscroll if they released near the bottom
+      if (isNearBottom()) {
+        autoScrollEnabled.current = true;
+      }
+    };
+
+    container.addEventListener("wheel", handleInteractionStart, { passive: true });
+    container.addEventListener("touchstart", handleInteractionStart, { passive: true });
+    container.addEventListener("pointerdown", handleInteractionStart);
+
+    // Use a short delay on end events so the momentum scroll settles
+    const endWithDelay = () => setTimeout(handleInteractionEnd, 100);
+    container.addEventListener("touchend", endWithDelay);
+    container.addEventListener("pointerup", endWithDelay);
+
+    // For wheel, there's no explicit "end" event — re-evaluate after scrolling stops.
+    // Only run during user interaction so programmatic scrollIntoView doesn't trigger this.
+    let wheelTimer: ReturnType<typeof setTimeout>;
+    const handleScrollIdle = () => {
+      if (!userIsInteracting.current) return;
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(handleInteractionEnd, 150);
+    };
+    container.addEventListener("scroll", handleScrollIdle, { passive: true });
+
+    return () => {
+      container.removeEventListener("wheel", handleInteractionStart);
+      container.removeEventListener("touchstart", handleInteractionStart);
+      container.removeEventListener("pointerdown", handleInteractionStart);
+      container.removeEventListener("touchend", endWithDelay);
+      container.removeEventListener("pointerup", endWithDelay);
+      container.removeEventListener("scroll", handleScrollIdle);
+      clearTimeout(wheelTimer);
+    };
+  }, [isNearBottom]);
+
+  // Auto-scroll to bottom when new messages arrive, only if enabled
+  useEffect(() => {
+    if (autoScrollEnabled.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, streamingMessage, pendingUserMessage]);
 
   const allMessages = streamingMessage
