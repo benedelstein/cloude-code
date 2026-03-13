@@ -210,7 +210,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               pullRequestUrl={pullRequestUrl}
               pullRequestState={pullRequestState}
             />
-            <div className="rounded-lg border border-border bg-background shadow-shadow shadow-xl">
+            <div className="rounded-lg border border-border-strong bg-background shadow-shadow shadow-xl focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow">
               <StatusBanner
                 sessionStatus={sessionStatus}
                 errorMessage={errorMessage}
