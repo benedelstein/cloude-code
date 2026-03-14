@@ -18,6 +18,7 @@ import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
 import { BrowserButton, EditorButton, SessionActionsButton } from "./editor-button";
+import { InputFrame } from "./input-frame";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatContainerProps {
@@ -231,7 +232,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               pullRequestUrl={pullRequestUrl}
               pullRequestState={pullRequestState}
             />
-            <div className="rounded-lg border border-border-strong bg-background shadow-shadow shadow-xl focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow">
+            <InputFrame>
               <StatusBanner
                 sessionStatus={sessionStatus}
                 errorMessage={errorMessage}
@@ -251,7 +252,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
               />
-            </div>
+            </InputFrame>
           </div>
         </div>
       </div>

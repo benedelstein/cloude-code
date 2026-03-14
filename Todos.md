@@ -17,6 +17,7 @@
 - [ ] Allow the vm to render results as screenshots with a browser in order to visually see its results. Extra tool?
         Can we install chromium on the sprite? eh can't the user prompt this with a skill?
 - [ ] Multi-provider selection like opencode. Connect to claude, codex, gemini, whatever. 
+- [ ] Upload files to propagate into the agent for use in filesystem, not just for reading as tokens.
 
 bug: if the server restarts, the DO state gets cleared and then if a message is in progress,
 the pending chunks get lost, and then we restart the agent process. clicking cancel sends the signal

@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { ModelSelector } from "@/components/model-selector";
+import { InputFrame } from "@/components/chat/input-frame";
 import type { ClaudeModel } from "@repo/shared";
 import Link from "next/link";
 
@@ -217,14 +218,6 @@ function BranchSelector({
   );
 }
 
-function formatClaudeMetadata(value: string): string {
-  return value
-    .split(/[_\s-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export function SessionCreationForm() {
   const router = useRouter();
   const { addSession } = useSessionList();
@@ -245,6 +238,7 @@ export function SessionCreationForm() {
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const claude = useClaudeAuth();
   const {
@@ -266,12 +260,6 @@ export function SessionCreationForm() {
     },
     deleteAttachment,
   });
-  const subscriptionLabel = claude.subscriptionType
-    ? `${formatClaudeMetadata(claude.subscriptionType)} subscription`
-    : "Claude subscription";
-  const tierLabel = claude.rateLimitTier
-    ? ` (${formatClaudeMetadata(claude.rateLimitTier)})`
-    : "";
   const isFormInteractionDisabled = submitting;
   const isSubmitDisabled = (
     !claude.connected ||
@@ -280,6 +268,16 @@ export function SessionCreationForm() {
     (!message.trim() && attachments.length === 0) ||
     submitting
   );
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 280)}px`;
+  }, [message, claude.connected, claude.loading]);
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -486,62 +484,9 @@ export function SessionCreationForm() {
         addFiles(Array.from(event.dataTransfer.files));
       }}
     >
-      <div className="relative border border-border-strong rounded-lg bg-background overflow-hidden focus-within:ring-1 focus-within:ring-accent/50 focus-within:border-accent/50 transition-shadow shadow-shadow shadow-xl">
-        {isDragging && (
-          <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
-            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
-          </div>
-        )}
-        {showClaudeSigninPanel && !claude.loading && (
-          <ClaudeSigninPanel
-            claude={claude}
-            isExiting={isClaudeSigninPanelExiting}
-          />
-        )}
-        <ChatAttachmentPreviews
-          attachments={attachments}
-          onRemove={removeAttachment}
-        />
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Describe what you want to do..."
-          rows={claude.connected || claude.loading ? 4 : 2}
-          disabled={isFormInteractionDisabled}
-          className={`w-full px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
-            claude.connected || claude.loading ? "pt-4" : "pt-2"
-          }`}
-        />
-
-        <div className="flex items-center justify-between px-3 pb-3">
+      <InputFrame
+        footer={
           <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = "";
-              }}
-            />
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={isFormInteractionDisabled}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Add images</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
             <RepoSelector
               repos={repos}
               selectedRepo={selectedRepo}
@@ -552,7 +497,6 @@ export function SessionCreationForm() {
               open={repoPickerOpen}
               onOpenChange={setRepoPickerOpen}
             />
-
             {selectedRepo && (branches.length > 0 || branchesLoading) && (
               <BranchSelector
                 branches={branches}
@@ -565,42 +509,94 @@ export function SessionCreationForm() {
               />
             )}
           </div>
+        }
+      >
+          {isDragging && (
+            <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
+            </div>
+          )}
+          {showClaudeSigninPanel && !claude.loading && (
+            <ClaudeSigninPanel
+              claude={claude}
+              isExiting={isClaudeSigninPanelExiting}
+            />
+          )}
+          <ChatAttachmentPreviews
+            attachments={attachments}
+            onRemove={removeAttachment}
+          />
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe what you want to do..."
+            rows={claude.connected || claude.loading ? 4 : 2}
+            disabled={isFormInteractionDisabled}
+          className={`w-full overflow-y-auto px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
+            claude.connected || claude.loading ? "pt-4" : "pt-2"
+          }`}
+        />
 
-          <div className="flex items-center gap-3">
-            {claude.connected && (
-              <div className="flex items-center gap-2">
-                <div className="text-right leading-tight">
-                  <p className="text-[10px] text-foreground-muted">
-                    via {subscriptionLabel}{tierLabel}
-                  </p>
-                </div>
+          <div className="flex items-center justify-between px-3 pb-3">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  addFiles(Array.from(event.currentTarget.files ?? []));
+                  event.currentTarget.value = "";
+                }}
+              />
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isFormInteractionDisabled}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Add images</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {claude.connected && (
                 <ModelSelector
                   selectedModel={selectedModel}
                   onSelect={setSelectedModel}
                   disabled={isFormInteractionDisabled}
                 />
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={isSubmitDisabled}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {submitting || isUploadingAttachments ? (
-                <>
-                  <LoadingSpinner className="h-3 w-3" />
-                  {submitting ? "Creating..." : "Uploading..."}
-                </>
-              ) : (
-                <>
-                  Start
-                  <ArrowRight className="h-3 w-3" />
-                </>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={isSubmitDisabled}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {submitting || isUploadingAttachments ? (
+                  <>
+                    <LoadingSpinner className="h-3 w-3" />
+                    {submitting ? "Creating..." : "Uploading..."}
+                  </>
+                ) : (
+                  <>
+                    Start
+                    <ArrowRight className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+      </InputFrame>
 
       <div className="flex items-center justify-between mt-3">
         <div>

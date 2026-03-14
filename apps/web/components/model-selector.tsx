@@ -34,7 +34,7 @@ export function ModelSelector({ selectedModel, onSelect, disabled }: ModelSelect
         <button
           type="button"
           disabled={disabled}
-          className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer"
+          className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer"
         >
           <span className="truncate">
             {CLAUDE_MODEL_DISPLAY_NAMES[selectedModel]}
@@ -42,7 +42,7 @@ export function ModelSelector({ selectedModel, onSelect, disabled }: ModelSelect
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[220px] p-0" align="start">
+      <PopoverContent className="w-[220px] p-0" align="end">
         <Command>
           <CommandList>
             <CommandGroup>

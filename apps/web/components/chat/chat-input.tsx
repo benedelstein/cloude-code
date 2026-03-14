@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ImagePlus, Send, Square } from "lucide-react";
+import { ArrowUp, ImagePlus, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
@@ -217,6 +217,8 @@ export function ChatInput({
             </TooltipTrigger>
             <TooltipContent>Add images</TooltipContent>
           </Tooltip>
+        </div>
+        <div className="flex items-center gap-1">
           {model && onModelChange && (
             <ModelSelector
               selectedModel={model}
@@ -224,7 +226,6 @@ export function ChatInput({
               disabled={isStreaming}
             />
           )}
-        </div>
         {isStreaming ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -246,7 +247,7 @@ export function ChatInput({
                 disabled={disabled || isClaudePromptBlocking || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <Send className="h-3.5 w-3.5" />
+                <ArrowUp className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -258,6 +259,7 @@ export function ChatInput({
             </TooltipContent>
           </Tooltip>
         )}
+        </div>
       </div>
     </form>
   );
