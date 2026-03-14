@@ -11,6 +11,8 @@ import {
   type SessionSettings as SessionSettingsType,
   type SessionSettingsInput,
   SessionSettings,
+  ClaudeModel,
+  CodexModel,
   type Logger,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
@@ -25,7 +27,6 @@ import {
 } from "@repo/shared";
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
-import VM_AGENT_CODEX_SCRIPT from "@repo/vm-agent/dist/vm-agent-codex.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
@@ -61,8 +62,6 @@ import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/se
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 const loggerName = "session-agent-do.ts";
-
-/** IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE. */
 
 interface InitRequest {
   sessionId: string;
@@ -103,7 +102,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     userId: "",
     repoFullName: "",
     spriteName: null,
-    claudeSessionId: null,
+    agentSessionId: null,
     agentProcessId: null,
     status: "provisioning",
     settings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
@@ -454,7 +453,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       userId: data.userId,
       repoFullName: data.repoFullName,
       spriteName: null,
-      claudeSessionId: null,
+      agentSessionId: null,
       agentProcessId: null,
       status: "provisioning",
       settings,
@@ -635,24 +634,16 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const provider = this.state.settings.provider;
     const isCodex = provider === "codex-cli";
 
-    let agentScript: string;
-    switch (provider) {
-      case "codex-cli":
-        agentScript = VM_AGENT_CODEX_SCRIPT;
-        break;
-      case "claude-code":
-        agentScript = VM_AGENT_SCRIPT;
-        break;
-    }
-    console.log(`Using agent script: ${provider}`);
-    await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, agentScript);
-
-    const claudeSessionId = this.state.claudeSessionId;
+    await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
+    
+    console.log(`Starting agent on sprite ${spriteName} with settings ${JSON.stringify(this.state.settings)} and sessionId ${this.state.agentSessionId}`);
+    const agentSessionId = this.state.agentSessionId;
     const commands = [
       "bun",
       "run",
       `${HOME_DIR}/.cloude/agent.js`,
-      ...(!isCodex && claudeSessionId ? [`--sessionId=${claudeSessionId}`] : []), // TODO: SUPPORT SESSION ID FOR CODEX
+      `--provider=${JSON.stringify(this.state.settings)}`,
+      ...(agentSessionId ? [`--sessionId=${agentSessionId}`] : []),
     ];
 
     const baseEnv: Record<string, string> = {
@@ -670,7 +661,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       if (this.env.OPENAI_API_KEY) {
         baseEnv.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
       }
-      baseEnv.CODEX_MODEL = this.state.settings.model;
     } else {
       try {
         const claudeCredentials = await getClaudeCredentialsSnapshot({
@@ -916,7 +906,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.logger.info(`Storing Claude session ID: ${output.sessionId}`, {
           loggerName,
         });
-        this.updatePartialState({claudeSessionId: output.sessionId });
+        this.updatePartialState({agentSessionId: output.sessionId });
         break;
       }
     }
@@ -1061,6 +1051,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         await this.handleChatMessage(connection, {
           content: message.content,
           attachments: message.attachments,
+          model: message.model,
         });
         break;
       case "stream.ack":
@@ -1080,6 +1071,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     payload: {
       content?: string;
       attachments?: MessageAttachmentRef[];
+      model?: string;
     },
   ): Promise<void> {
     switch (this.state.status) {
@@ -1225,8 +1217,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       messageRepository: this.messageRepository,
     }));
 
+    // Validate and resolve model switch (if requested and different from current)
+    let modelForAgent: string | undefined;
+    if (payload.model && payload.model !== this.state.settings.model) {
+      modelForAgent = this.validateAndApplyModelSwitch(payload.model);
+    }
+
     try {
-      await this.sendMessageToAgent(currentAgentSession, content, agentAttachments);
+      await this.sendMessageToAgent(currentAgentSession, content, agentAttachments, modelForAgent);
       return;
     } catch (error) {
       this.logger.error("Failed to write to vm-agent, attempting reattach", {
@@ -1255,7 +1253,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
 
     try {
-      await this.sendMessageToAgent(reattachedAgentSession, content, agentAttachments);
+      await this.sendMessageToAgent(reattachedAgentSession, content, agentAttachments, modelForAgent);
     } catch (error) {
       this.logger.error("Failed to write to vm-agent after reattach", {
         loggerName,
@@ -1415,6 +1413,39 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
+  /** Validates the model against the current provider and updates DO state. Returns the validated model, or undefined if invalid. */
+  private validateAndApplyModelSwitch(model: string): string | undefined {
+    const currentProvider = this.state.settings.provider;
+
+    let validatedModel: string;
+    if (currentProvider === "claude-code") {
+      const result = ClaudeModel.safeParse(model);
+      if (!result.success) {
+        this.logger.warn("Invalid Claude model in model switch", { fields: { model } });
+        return undefined;
+      }
+      validatedModel = result.data;
+    } else if (currentProvider === "codex-cli") {
+      const result = CodexModel.safeParse(model);
+      if (!result.success) {
+        this.logger.warn("Invalid Codex model in model switch", { fields: { model } });
+        return undefined;
+      }
+      validatedModel = result.data;
+    } else {
+      this.logger.warn("Unknown provider in model switch", { fields: { provider: currentProvider } });
+      return undefined;
+    }
+
+    // Update state (auto-syncs to clients via Agents SDK)
+    this.updatePartialState({
+      settings: { ...this.state.settings, model: validatedModel } as AgentState["settings"],
+    });
+
+    this.logger.info("Model updated", { fields: { provider: currentProvider, model: validatedModel } });
+    return validatedModel;
+  }
+
   private async resolveAgentAttachments(
     attachments: AttachmentRecord[],
   ): Promise<AgentInputAttachment[]> {
@@ -1463,7 +1494,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return this.createUserMessage(content, attachmentRecords);
   }
 
-  private async sendMessageToAgent(session: SpriteWebsocketSession, content: string | undefined, attachments: AgentInputAttachment[]) : Promise<void> {
+  private async sendMessageToAgent(session: SpriteWebsocketSession, content: string | undefined, attachments: AgentInputAttachment[], model?: string) : Promise<void> {
     this.updatePartialState({ isResponding: true });
     session.write(
       encodeAgentInput({
@@ -1472,6 +1503,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           content,
           attachments: attachments.length > 0 ? attachments : undefined,
         },
+        model,
       }) + "\n",
     );
   }

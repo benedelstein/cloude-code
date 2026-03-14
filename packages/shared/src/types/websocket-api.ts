@@ -14,6 +14,8 @@ export const ChatMessageEvent = z.object({
   content: z.string().trim().min(1).optional(),
   attachments: z.array(MessageAttachmentRef).max(20).optional(),
   messageId: z.uuid().optional(),
+  /** If provided, switch to this model before processing the message. */
+  model: z.string().optional(),
 }).refine(
   (value) => Boolean(value.content) || (value.attachments?.length ?? 0) > 0,
   "chat.message must include content or attachments",

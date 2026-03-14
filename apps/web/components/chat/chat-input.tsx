@@ -8,10 +8,12 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import type { useClaudeAuth } from "@/hooks/use-claude-auth";
 import { ClaudeSigninPanel } from "@/app/(app)/claude-signin-panel";
 import type {
+  ClaudeModel,
   MessageAttachmentRef,
   AttachmentDescriptor,
   ClaudeAuthState,
 } from "@repo/shared";
+import { ModelSelector } from "@/components/model-selector";
 import { toast } from "sonner";
 
 type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
@@ -30,6 +32,9 @@ interface ChatInputProps {
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  model?: ClaudeModel;
+  // eslint-disable-next-line no-unused-vars
+  onModelChange?: (model: ClaudeModel) => void;
   claude: ClaudeAuth;
   claudeAuthRequired: ClaudeAuthState | null;
 }
@@ -41,6 +46,8 @@ export function ChatInput({
   onStop,
   disabled = false,
   isStreaming = false,
+  model,
+  onModelChange,
   claude,
   claudeAuthRequired: claudeAuthState,
 }: ChatInputProps) {
@@ -91,7 +98,8 @@ export function ChatInput({
 
   const handleSubmit = async (event: React.SyntheticEvent) => {
     event.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || disabled || isClaudePromptBlocking) return;
+    if ((!input.trim() && attachments.length === 0) || disabled || isClaudePromptBlocking || isStreaming)
+      return;
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
@@ -178,7 +186,7 @@ export function ChatInput({
               ? "Waiting for agent to be ready..."
               : "Send a message..."
           }
-          disabled={disabled || isClaudePromptBlocking || isStreaming}
+          disabled={disabled || isClaudePromptBlocking}
           rows={1}
           className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -209,6 +217,13 @@ export function ChatInput({
             </TooltipTrigger>
             <TooltipContent>Add images</TooltipContent>
           </Tooltip>
+          {model && onModelChange && (
+            <ModelSelector
+              selectedModel={model}
+              onSelect={onModelChange}
+              disabled={isStreaming}
+            />
+          )}
         </div>
         {isStreaming ? (
           <Tooltip>

@@ -3,12 +3,12 @@
         This will require keeping an index of which sprite is associated with which session & repository. 
         When a session is complete, we can mark the sprite as available for reuse.
         Maybe,...run multiple sessions on one cpu for different repos. would need to handle resource sharing.
-- [ ] BUG: Sometimes vm state gets reset and loses local branch progress. Why? (sprite crash?)
 - [ ] Bug: sometimes sessions STILL get stuck as syncing on restore and can't be recovered. Make the session agent state management bulletproof.
 - [ ] Proactive push notifications to the user when something is ready.
         Track session state (responding, pending input, done) so user can passively monitor multiple sessions.
 - [ ] **** Visualize sessions by repo — make it more useful for high-level orchestration.
 - [ ] Mobile client
+- [ ] Nice aesthetic landing page.
 - [ ] keep session agent message history in memory for faster syncing with clients
 - [ ] Ask user question tool - how do we handle interactive tool calls that wait for responses?
 - [ ] Slash commands (plugins), file mentions
@@ -38,6 +38,7 @@ We currently rely on resuming a thread id.
 Could we have a single source of truth, pass in the message history to the VM agent from the DO on start?
 
 COMPLETE: 
+- [x] BUG: Sometimes vm state gets reset and loses local branch progress. Why? (sprite crash?)
 - [x] Make sure websocket types are consistent between vm<->server<->client.
 - [x] Use cloudflare agents sdk for message storage and streaming and websockets.
 - [x] Figure out repo pulling and cloning synchronization.

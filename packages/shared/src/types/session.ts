@@ -26,15 +26,18 @@ export type SessionStatus = z.infer<typeof SessionStatus>;
 export type PullRequestState = "open" | "merged" | "closed";
 export type ClaudeAuthState = "auth_required" | "reauth_required";
 
-/** State managed by the SessionAgentDO, synced to clients via Cloudflare Agents */
+/** 
+ * State managed by the SessionAgentDO, synced to clients via Cloudflare Agents
+ * IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+ */
 export type AgentState = {
   sessionId: string | null;
   userId: string | null;
   repoFullName: string | null;
   spriteName: string | null;
-  /** Session ID given by the Claude Agent SDK */
-  claudeSessionId: string | null;
-  /** ID of the agent process session running on the sprite */
+  /** Session ID given by the agent provider (Claude or Codex) */
+  agentSessionId: string | null;
+  /** ID of the agent process running on the sprite */
   agentProcessId: number | null;
   status: SessionStatus;
   settings: SessionSettings;
@@ -79,13 +82,19 @@ export const ClaudeModel = z.enum([
 ]);
 export type ClaudeModel = z.infer<typeof ClaudeModel>;
 
-const SessionSettingsCodex = z.object({
+export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
+  opus: "Claude Opus 4.6",
+  sonnet: "Claude Sonnet 4.6",
+  haiku: "Claude Haiku 4.5",
+};
+
+export const SessionSettingsCodex = z.object({
   provider: z.literal("codex-cli"),
   model: CodexModel.default("gpt-5.3-codex"),
   maxTokens: z.number().default(8192),
 });
 
-const SessionSettingsClaude = z.object({
+export const SessionSettingsClaude = z.object({
   provider: z.literal("claude-code"),
   model: ClaudeModel.default("opus"),
   maxTokens: z.number().default(8192),

@@ -33,6 +33,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
+import { ModelSelector } from "@/components/model-selector";
+import type { ClaudeModel } from "@repo/shared";
 import Link from "next/link";
 
 function RepoSelector({
@@ -239,6 +241,7 @@ export function SessionCreationForm() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<ClaudeModel>("opus");
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -425,7 +428,7 @@ export function SessionCreationForm() {
         selectedRepo.fullName,
         trimmedMessage || undefined,
         branchToUse,
-        { provider: "claude-code", model: "opus" },
+        { provider: "claude-code", model: selectedModel },
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
       );
 
@@ -565,14 +568,17 @@ export function SessionCreationForm() {
 
           <div className="flex items-center gap-3">
             {claude.connected && (
-              <div className="text-right leading-tight">
-                <p className="text-[11px] font-medium text-foreground">
-                  {/* TODO: make dynamic */}
-                  Claude Opus 4.6 
-                </p>
-                <p className="text-[10px] text-foreground-muted">
-                  via {subscriptionLabel}{tierLabel}
-                </p>
+              <div className="flex items-center gap-2">
+                <div className="text-right leading-tight">
+                  <p className="text-[10px] text-foreground-muted">
+                    via {subscriptionLabel}{tierLabel}
+                  </p>
+                </div>
+                <ModelSelector
+                  selectedModel={selectedModel}
+                  onSelect={setSelectedModel}
+                  disabled={isFormInteractionDisabled}
+                />
               </div>
             )}
             <button

@@ -39,6 +39,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pullRequestUrl,
     pullRequestState,
     editorUrl,
+    settings,
+    selectedModel,
+    setSelectedModel,
     claudeAuthRequired: claudeAuthState,
     sendMessage,
     stop,
@@ -243,6 +246,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onStop={stop}
                 disabled={!isReady}
                 isStreaming={isResponding}
+                model={settings?.provider === "claude-code" ? selectedModel ?? undefined : undefined}
+                onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
               />

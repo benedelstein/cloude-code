@@ -7,11 +7,13 @@ import type { UIMessage, UIMessageChunk } from "ai";
 import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
+  ClaudeModel,
   ClaudeAuthState,
   MessageAttachmentRef,
   PullRequestState,
   AttachmentDescriptor,
   ServerMessage,
+  SessionSettings,
   SessionStatus,
 } from "@repo/shared";
 
@@ -45,6 +47,10 @@ export interface UseCloudflareAgentReturn {
   pushedBranch: string | null;
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
+  settings: SessionSettings | null;
+  selectedModel: ClaudeModel | null;
+  // eslint-disable-next-line no-unused-vars
+  setSelectedModel: (model: ClaudeModel) => void;
   editorUrl: string | null;
   claudeAuthRequired: ClaudeAuthState | null;
   sendMessage: (message: {
@@ -76,6 +82,8 @@ export function useCloudflareAgent({
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
+  const [settings, setSettings] = useState<SessionSettings | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -232,6 +240,13 @@ export function useCloudflareAgent({
       if (state.claudeAuthRequired !== undefined) {
         setClaudeAuthRequired(state.claudeAuthRequired);
       }
+      if (state.settings !== undefined) {
+        setSettings(state.settings);
+        // Initialize selected model from server settings (only if not yet set locally)
+        if (state.settings.provider === "claude-code") {
+          setSelectedModel((prev) => prev ?? state.settings!.model as ClaudeModel);
+        }
+      }
       if (state.isResponding !== undefined) {
         setIsResponding(state.isResponding);
       }
@@ -292,13 +307,15 @@ export function useCloudflareAgent({
     // Start consuming the stream
     consumeStream(stream);
 
-    // Send via useAgent's connection
+    // Send via useAgent's connection, include model if it differs from server settings
+    const modelToSend = selectedModel && selectedModel !== settings?.model ? selectedModel : undefined;
     agent.send(JSON.stringify({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
+      model: modelToSend,
     }));
-  }, [agent, consumeStream]);
+  }, [agent, consumeStream, selectedModel, settings?.model]);
 
   const stop = useCallback(() => {
     agent.send(JSON.stringify({ type: "operation.cancel" }));
@@ -318,6 +335,9 @@ export function useCloudflareAgent({
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
+    settings,
+    selectedModel,
+    setSelectedModel,
     editorUrl,
     claudeAuthRequired,
     sendMessage,

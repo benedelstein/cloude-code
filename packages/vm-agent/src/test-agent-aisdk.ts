@@ -6,7 +6,7 @@ import { encodeAgentInput } from "@repo/shared";
 console.log("🤖 vm-agent (AI SDK) test harness");
 
 // Spawn the AI SDK agent process
-const agent = spawn("bun", ["run", "src/index-aisdk.ts"], {
+const agent = spawn("bun", ["run", "src/index.ts"], {
   stdio: ["pipe", "pipe", "inherit"],
   cwd: process.cwd(),
 });

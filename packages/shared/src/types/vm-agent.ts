@@ -30,6 +30,8 @@ export type AgentInputMessage = z.infer<typeof AgentInputMessage>;
 export const AgentChatInput = z.object({
   type: z.literal("chat"),
   message: AgentInputMessage,
+  /** If provided, switch to this model before processing the message. */
+  model: z.string().optional(),
 });
 
 export const AgentCancelInput = z.object({
