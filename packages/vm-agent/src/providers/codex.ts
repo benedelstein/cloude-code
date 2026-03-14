@@ -8,7 +8,7 @@ import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "../system-prompt";
 import type { SessionSettings } from "@repo/shared";
-import type { AgentProviderConfig, ProviderSetupContext, SetupResult } from "../agent-harness";
+import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type CodexSettings = Extract<SessionSettings, { provider: "codex-cli" }>;
 
@@ -45,6 +45,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     }
 
     const modelId = settings.model;
+    let agentSessionId: string | undefined = args.sessionId;
 
     const provider = createCodexAppServer({
       defaultSettings: {
@@ -54,16 +55,31 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
         personality: "pragmatic",
         baseInstructions: systemPromptAppend,
         codexPath,
-        resume: args.sessionId,
+        threadMode: "persistent",
+        resume: agentSessionId,
       },
     });
 
     emit({ type: "debug", message: `Codex app-server provider initialized (model: ${modelId})` });
 
+    // NOTE: codex-app-server in persistent mode automatically resumes thread state
+    // even when the model is changed. No need to pass in a thread id. 
     return {
       modelId,
-      getModel: (id) => provider(id),
-      // TODO: CAPTURE SESSION ID from extras.
+      getModel: (id) => provider(id), 
+      getStreamTextExtras: (): StreamTextExtras => ({
+        onStepFinish: (step) => {
+          const stepSessionId = (step.providerMetadata?.["codex-app-server"] as { threadId?: string })?.threadId;
+          emit({ type: "debug", message: `Codex step session ID: ${stepSessionId}` });
+          if (stepSessionId && stepSessionId !== agentSessionId) {
+            agentSessionId = stepSessionId;
+            emit({ type: "sessionId", sessionId: agentSessionId });
+            if (args.sessionId && agentSessionId !== args.sessionId) {
+              emit({ type: "debug", message: `Codex session ID mismatch: ${agentSessionId} !== ${args.sessionId}` });
+            }
+          }
+        },
+      }),
       cleanup: async () => {
         await provider.close();
       },

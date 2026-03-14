@@ -1,12 +1,39 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
+import { parseArgs } from "util";
 import { encodeAgentInput } from "@repo/shared";
 
+const { values } = parseArgs({
+  options: {
+    provider: { type: "string", short: "p", default: "claude-code" },
+    model: { type: "string", short: "m" },
+    sessionId: { type: "string", short: "s" },
+    rotateModels: { type: "boolean", short: "r", default: false },
+  },
+  strict: false,
+});
 
-console.log("🤖 vm-agent (AI SDK) test harness");
+const provider = String(values.provider ?? "claude-code");
+const defaultModel = provider === "codex-cli" ? "gpt-5.3-codex" : "opus";
+const model = String(values.model ?? defaultModel);
+const sessionId = values.sessionId ? String(values.sessionId) : undefined;
+const rotateModels = values.rotateModels === true;
+
+const MODEL_ROTATION: Record<string, string[]> = {
+  "claude-code": ["opus", "sonnet", "haiku"],
+  "codex-cli": ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.2"],
+};
+let rotationIndex = 0;
+const settings = JSON.stringify({ provider, model });
+
+console.log(`vm-agent test harness (provider: ${provider}, model: ${model})`);
 
 // Spawn the AI SDK agent process
-const agent = spawn("bun", ["run", "src/index.ts"], {
+const spawnArgs = ["run", "src/index.ts", "--provider", settings];
+if (sessionId) {
+  spawnArgs.push("--sessionId", sessionId);
+}
+const agent = spawn("bun", spawnArgs, {
   stdio: ["pipe", "pipe", "inherit"],
   cwd: process.cwd(),
 });
@@ -19,35 +46,31 @@ agentOutput.on("line", (line) => {
     // Format based on AI SDK part types
     switch (output.type) {
       case "ready":
-        console.log(`\n✅ Agent ready (session: ${output.sessionId})`);
+        console.log(`\nAgent ready`);
         break;
-      case "text-delta":
-        process.stdout.write(output.textDelta);
+      case "debug":
+        console.log(`[debug] ${output.message}`);
         break;
-      case "tool-call":
-        console.log(`\n🔧 Tool call: ${output.toolName}(${JSON.stringify(output.args)})`);
-        break;
-      case "tool-result": {
-        const result = typeof output.result === "string"
-          ? output.result.slice(0, 200) + (output.result.length > 200 ? "..." : "")
-          : JSON.stringify(output.result).slice(0, 200);
-        console.log(`\n📋 Tool result: ${result}`);
-        break;
-      }
-      case "finish":
-        console.log(`\n✔ Finished (${output.finishReason})`);
-        if (output.usage) {
-          console.log(`  Tokens: ${output.usage.promptTokens} prompt, ${output.usage.completionTokens} completion`);
+      case "stream":
+        if (output.chunk?.type === "text-delta") {
+          process.stdout.write(output.chunk.textDelta);
+        } else if (output.chunk?.type === "finish") {
+          console.log(`\nFinished (${output.chunk.finishReason})`);
+        } else {
+          console.log("chunk:", JSON.stringify(output.chunk));
         }
         break;
       case "error":
-        console.log(`\n❌ Error: ${output.error}`);
+        console.log(`\nError: ${output.error}`);
+        break;
+      case "sessionId":
+        console.log(`[session] ${output.sessionId}`);
         break;
       default:
-        console.log("\n📤 Output:", JSON.stringify(output, null, 2));
+        console.log("output:", JSON.stringify(output, null, 2));
     }
   } catch {
-    console.log("\n📤 Raw output (unhandled):", line);
+    console.log("raw:", line);
   }
 });
 
@@ -59,13 +82,21 @@ console.log("Type a message to send to the agent. Ctrl+C to exit.\n");
 userInput.on("line", (line) => {
   if (line === "/cancel") {
     const message = encodeAgentInput({ type: "cancel" });
-    console.log(`\n⏹ Cancelling...`);
+    console.log(`\nCancelling...`);
     agent.stdin!.write(message + "\n");
     return;
   }
 
-  const message = encodeAgentInput({ type: "chat", message: { content: line } });
-  console.log(`\n📥 Sending: ${line}`);
+  let nextModel: string | undefined;
+  if (rotateModels) {
+    const models = MODEL_ROTATION[provider] ?? [];
+    nextModel = models[rotationIndex % models.length];
+    rotationIndex++;
+    console.log(`\n[rotate] model: ${nextModel}`);
+  }
+
+  const message = encodeAgentInput({ type: "chat", message: { content: line }, model: nextModel });
+  console.log(`\nSending: ${line}`);
   agent.stdin!.write(message + "\n");
 });
 
