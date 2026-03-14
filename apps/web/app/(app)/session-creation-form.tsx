@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch, ImagePlus } from "lucide-react";
+import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
@@ -35,6 +35,7 @@ import {
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { ModelSelector } from "@/components/model-selector";
 import { InputFrame } from "@/components/chat/input-frame";
+import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import type { ClaudeModel } from "@repo/shared";
 import Link from "next/link";
 
@@ -239,7 +240,6 @@ export function SessionCreationForm() {
   const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const claude = useClaudeAuth();
   const {
     attachments,
@@ -540,34 +540,10 @@ export function SessionCreationForm() {
         />
 
           <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  addFiles(Array.from(event.currentTarget.files ?? []));
-                  event.currentTarget.value = "";
-                }}
-              />
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={isFormInteractionDisabled}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ImagePlus className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Add images</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+            <ImageAttachButton
+              onFiles={addFiles}
+              disabled={isFormInteractionDisabled}
+            />
 
             <div className="flex items-center gap-3">
               {claude.connected && (

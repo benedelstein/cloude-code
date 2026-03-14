@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, ImagePlus, Square } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
@@ -14,6 +14,7 @@ import type {
   ClaudeAuthState,
 } from "@repo/shared";
 import { ModelSelector } from "@/components/model-selector";
+import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { toast } from "sonner";
 
 type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
@@ -55,7 +56,6 @@ export function ChatInput({
   const [isDragging, setIsDragging] = useState(false);
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     attachments,
     addFiles,
@@ -139,7 +139,7 @@ export function ChatInput({
       onSubmit={(event) => void handleSubmit(event)}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!disabled && !isStreaming) {
+        if (!disabled && !isClaudePromptBlocking) {
           setIsDragging(true);
         }
       }}
@@ -152,7 +152,7 @@ export function ChatInput({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        if (disabled || isStreaming) {
+        if (disabled || isClaudePromptBlocking) {
           return;
         }
         addFiles(Array.from(event.dataTransfer.files));
@@ -193,37 +193,17 @@ export function ChatInput({
       </div>
       <div className="flex items-center justify-end px-3 pb-2">
         <div className="mr-auto flex items-center gap-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              addFiles(Array.from(event.currentTarget.files ?? []));
-              event.currentTarget.value = "";
-            }}
+          <ImageAttachButton
+            onFiles={addFiles}
+            disabled={disabled || isClaudePromptBlocking}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                disabled={disabled || isClaudePromptBlocking || isStreaming}
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground-muted hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ImagePlus className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Add images</TooltipContent>
-          </Tooltip>
         </div>
         <div className="flex items-center gap-1">
           {model && onModelChange && (
             <ModelSelector
               selectedModel={model}
               onSelect={onModelChange}
-              disabled={isStreaming}
+              disabled={disabled || isClaudePromptBlocking}
             />
           )}
         {isStreaming ? (
