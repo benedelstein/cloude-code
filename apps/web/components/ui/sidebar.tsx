@@ -31,6 +31,7 @@ const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_HEADER_HEIGHT_CLASS = "h-14"
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -59,6 +60,9 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean
     open?: boolean
     onOpenChange?: (open: boolean) => void
+    cookieName?: string
+    keyboardShortcut?: string | null
+    layout?: "default" | "contents"
   }
 >(
   (
@@ -66,6 +70,9 @@ const SidebarProvider = React.forwardRef<
       defaultOpen = true,
       open: openProp,
       onOpenChange: setOpenProp,
+      cookieName = SIDEBAR_COOKIE_NAME,
+      keyboardShortcut = SIDEBAR_KEYBOARD_SHORTCUT,
+      layout = "default",
       className,
       style,
       children,
@@ -89,9 +96,9 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState)
         }
 
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+        document.cookie = `${cookieName}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
-      [setOpenProp, open]
+      [cookieName, setOpenProp, open]
     )
 
     // Helper to toggle the sidebar.
@@ -105,7 +112,8 @@ const SidebarProvider = React.forwardRef<
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         if (
-          event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+          keyboardShortcut &&
+          event.key === keyboardShortcut &&
           (event.metaKey || event.ctrlKey)
         ) {
           event.preventDefault()
@@ -115,7 +123,7 @@ const SidebarProvider = React.forwardRef<
 
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [toggleSidebar])
+    }, [keyboardShortcut, toggleSidebar])
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
@@ -146,7 +154,9 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
             className={cn(
-              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
+              layout === "default"
+                ? "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar"
+                : "group/sidebar-wrapper contents",
               className
             )}
             ref={ref}
@@ -167,6 +177,7 @@ const Sidebar = React.forwardRef<
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
+    reserveSpace?: boolean
   }
 >(
   (
@@ -174,6 +185,7 @@ const Sidebar = React.forwardRef<
       side = "left",
       variant = "sidebar",
       collapsible = "offcanvas",
+      reserveSpace = true,
       className,
       children,
       ...props
@@ -231,16 +243,18 @@ const Sidebar = React.forwardRef<
         data-side={side}
       >
         {/* This is what handles the sidebar gap on desktop */}
-        <div
-          className={cn(
-            "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-            "group-data-[collapsible=offcanvas]:w-0",
-            "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
-          )}
-        />
+        {reserveSpace && (
+          <div
+            className={cn(
+              "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+              "group-data-[collapsible=offcanvas]:w-0",
+              "group-data-[side=right]:rotate-180",
+              variant === "floating" || variant === "inset"
+                ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+            )}
+          />
+        )}
         <div
           className={cn(
             "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
@@ -745,6 +759,7 @@ const SidebarMenuSubButton = React.forwardRef<
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
 export {
+  SIDEBAR_HEADER_HEIGHT_CLASS,
   Sidebar,
   SidebarContent,
   SidebarFooter,

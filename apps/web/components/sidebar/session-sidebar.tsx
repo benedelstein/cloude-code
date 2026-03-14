@@ -16,6 +16,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupAction,
+  SIDEBAR_HEADER_HEIGHT_CLASS,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
@@ -95,8 +96,8 @@ export function SessionSidebar() {
   return (
     <>
       <Sidebar collapsible="offcanvas" variant="floating">
-        <SidebarHeader className="h-14 justify-center border-b border-sidebar-border">
-          <SidebarMenu>
+        <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-center border-b border-sidebar-border`}>
+          {/* <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => navigate("/")}
@@ -110,7 +111,7 @@ export function SessionSidebar() {
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          </SidebarMenu>
+          </SidebarMenu> */}
         </SidebarHeader>
 
         <SidebarContent>
