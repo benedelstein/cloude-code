@@ -30,8 +30,17 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
-const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_KEYBOARD_SHORTCUT = { code: "KeyB", shiftKey: false, altKey: false } as const
 const SIDEBAR_HEADER_HEIGHT_CLASS = "h-14"
+
+type SidebarKeyboardShortcut =
+  | {
+      code: string
+      shiftKey?: boolean
+      altKey?: boolean
+    }
+  | string
+  | null
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -61,7 +70,7 @@ const SidebarProvider = React.forwardRef<
     open?: boolean
     onOpenChange?: (open: boolean) => void
     cookieName?: string
-    keyboardShortcut?: string | null
+    keyboardShortcut?: SidebarKeyboardShortcut
     layout?: "default" | "contents"
   }
 >(
@@ -111,9 +120,18 @@ const SidebarProvider = React.forwardRef<
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
+        if (!keyboardShortcut) {
+          return
+        }
+
+        const matchesShortcut = typeof keyboardShortcut === "string"
+          ? event.key === keyboardShortcut
+          : event.code === keyboardShortcut.code
+            && event.shiftKey === Boolean(keyboardShortcut.shiftKey)
+            && event.altKey === Boolean(keyboardShortcut.altKey)
+
         if (
-          keyboardShortcut &&
-          event.key === keyboardShortcut &&
+          matchesShortcut &&
           (event.metaKey || event.ctrlKey)
         ) {
           event.preventDefault()

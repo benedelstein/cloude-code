@@ -15,6 +15,7 @@ import {
   uploadAttachments,
   deleteAttachment,
 } from "@/lib/client-api";
+import { getFadeScaleVisibilityClasses } from "@/lib/utils";
 import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
@@ -218,7 +219,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           style={{ paddingRight: rightSidebarInset }}
         >
           <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background) 32px)" }}>
-            <div className={`flex justify-center mb-2 transition-all duration-200 ${showScrollToBottom ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"}`}>
+            <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
+              className: "mb-2 flex justify-center",
+            })}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

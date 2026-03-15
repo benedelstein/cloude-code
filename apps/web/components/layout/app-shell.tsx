@@ -19,6 +19,7 @@ import {
 } from "@/components/layout/app-right-sidebar-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { cn, getFadeScaleVisibilityClasses } from "@/lib/utils";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -32,7 +33,11 @@ export function AppShell({
   defaultRightSidebarOpen,
 }: AppShellProps) {
   return (
-    <SidebarProvider defaultOpen={defaultSidebarOpen} className="relative min-h-0! h-svh">
+    <SidebarProvider
+      defaultOpen={defaultSidebarOpen}
+      keyboardShortcut={{ code: "Digit0", shiftKey: false }}
+      className="relative min-h-0! h-svh"
+    >
       <AppHeaderProvider>
         <AppRightSidebarProvider defaultOpen={defaultRightSidebarOpen}>
           <AppShellLayout>{children}</AppShellLayout>
@@ -45,9 +50,10 @@ export function AppShell({
 function AppShellLayout({ children }: { children: React.ReactNode }) {
   const { open: isLeftSidebarOpen, toggleSidebar } = useSidebar();
   const { enabled, open, setOpen } = useAppRightSidebar();
+  const isRightSidebarOpen = enabled && open;
   const rightHeaderReserve = !enabled
     ? "0rem"
-    : open
+    : isRightSidebarOpen
       ? APP_RIGHT_SIDEBAR_WIDTH
       : APP_RIGHT_SIDEBAR_BUTTON_GUTTER;
 
@@ -66,39 +72,44 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
               >
                 <PanelLeft className="h-4 w-4" />
                 <span className="sr-only">
-                  {isLeftSidebarOpen ? "Collapse session list" : "Open session list"}
+                  {isLeftSidebarOpen ? "Collapse left sidebar" : "Open left sidebar"}
                 </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {isLeftSidebarOpen ? "Collapse session list" : "Open session list"}
+              {isLeftSidebarOpen ? "Collapse left sidebar (⌘0)" : "Open left sidebar (⌘0)"}
             </TooltipContent>
           </Tooltip>
         </div>
 
-        {enabled && (
-          <div className={`absolute right-5 top-2 hidden ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center md:flex`}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
-                  onClick={() => setOpen(!open)}
-                >
-                  <PanelRight className="h-4 w-4" />
-                  <span className="sr-only">
-                    {open ? "Collapse session sidebar" : "Open session sidebar"}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                {open ? "Collapse session sidebar" : "Open session sidebar"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        )}
+        <div
+          className={cn(
+            `absolute right-5 top-2 hidden ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center md:flex`,
+            getFadeScaleVisibilityClasses(enabled, {
+              durationClass: "duration-120",
+            }),
+          )}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
+                onClick={() => setOpen(!isRightSidebarOpen)}
+              >
+                <PanelRight className="h-4 w-4" />
+                <span className="sr-only">
+                  {isRightSidebarOpen ? "Collapse right sidebar" : "Open right sidebar"}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {isRightSidebarOpen ? "Collapse right sidebar (⌘⌥0)" : "Open right sidebar (⌘⌥0)"}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <SessionSidebar />
@@ -121,25 +132,23 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 min-h-0">{children}</div>
       </SidebarInset>
 
-      {enabled && (
-        <SidebarProvider
-          open={open}
-          onOpenChange={setOpen}
-          cookieName="right_sidebar_state"
-          keyboardShortcut={null}
-          layout="contents"
+      <SidebarProvider
+        open={isRightSidebarOpen}
+        onOpenChange={setOpen}
+        cookieName="right_sidebar_state"
+        keyboardShortcut={{ code: "Digit0", altKey: true }}
+        layout="contents"
+      >
+        <Sidebar
+          side="right"
+          collapsible="offcanvas"
+          variant="floating"
+          reserveSpace={false}
+          className="**:data-[sidebar=sidebar]:bg-sidebar"
         >
-          <Sidebar
-            side="right"
-            collapsible="offcanvas"
-            variant="floating"
-            reserveSpace={false}
-            className="[&_[data-sidebar=sidebar]]:bg-sidebar"
-          >
-            <AppRightSidebarSlot />
-          </Sidebar>
-        </SidebarProvider>
-      )}
+          <AppRightSidebarSlot />
+        </Sidebar>
+      </SidebarProvider>
     </>
   );
 }
