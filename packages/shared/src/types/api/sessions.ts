@@ -23,17 +23,12 @@ export const SessionPlanResponse = z.object({
 export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
 
 export const CreateSessionRequest = z.object({
-  /** Numeric GitHub repo ID (stable across renames) */
-  repoId: z.number(),
-  /** "owner/repo" full name */
-  repoFullName: z.string().min(1),
-  settings: SessionSettingsInput.optional(),
-  /** Optional branch to base the session on (defaults to repo's default branch) */
-  branch: z.string().min(1).optional(),
-  /** Optional first message to send immediately after session creation */
-  initialMessage: z.string().min(1).optional(),
-  /** Optional uploaded attachment IDs to bind to this session on create */
-  attachmentIds: z.array(z.uuid()).max(20).optional(),
+  /** Numeric GitHub repo ID */
+  repoId: z.number().describe("Numeric GitHub repo ID"),
+  settings: SessionSettingsInput.optional().describe("Agent provider settings"),
+  branch: z.string().min(1).optional().describe("Optional branch to base the session on (defaults to repo's default branch)"),
+  initialMessage: z.string().min(1).optional().describe("Optional first message to send immediately after session creation"),
+  attachmentIds: z.array(z.uuid()).max(20).optional().describe("Optional uploaded attachment IDs to bind to this session on create"),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 

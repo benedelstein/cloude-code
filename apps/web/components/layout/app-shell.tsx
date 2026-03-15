@@ -1,6 +1,11 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen, PanelRightOpen, PanelRightClose } from "lucide-react";
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightOpen,
+  PanelRightClose,
+} from "lucide-react";
 import { SessionSidebar } from "@/components/sidebar/session-sidebar";
 import {
   SidebarProvider,
@@ -9,7 +14,10 @@ import {
   SIDEBAR_HEADER_HEIGHT_CLASS,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { AppHeaderProvider, AppHeaderSlot } from "@/components/layout/app-header-context";
+import {
+  AppHeaderProvider,
+  AppHeaderSlot,
+} from "@/components/layout/app-header-context";
 import {
   AppRightSidebarProvider,
   AppRightSidebarSlot,
@@ -17,7 +25,11 @@ import {
   APP_RIGHT_SIDEBAR_WIDTH,
   useAppRightSidebar,
 } from "@/components/layout/app-right-sidebar-context";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { cn, getFadeScaleVisibilityClasses } from "@/lib/utils";
 
@@ -49,24 +61,24 @@ export function AppShell({
 
 function AppShellLayout({ children }: { children: React.ReactNode }) {
   const { open: isLeftSidebarOpen, toggleSidebar, isMobile } = useSidebar();
-  const { enabled, open, mobileOpen, setOpen, setMobileOpen } = useAppRightSidebar();
+  const { enabled, open, mobileOpen, setOpen, setMobileOpen } =
+    useAppRightSidebar();
   const isRightSidebarOpen = enabled && (isMobile ? mobileOpen : open);
   const headerMaxWidth = "56rem";
-  const desktopRightSidebarReserve = enabled && !isMobile && open
-    ? APP_RIGHT_SIDEBAR_WIDTH
-    : "0rem";
-  const leftHeaderOverlayReserve = isMobile || !isLeftSidebarOpen
-    ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER
-    : "0rem";
-  const rightHeaderOverlayReserve = enabled && (isMobile || !open)
-    ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER
-    : "0rem";
+  const desktopRightSidebarReserve =
+    enabled && !isMobile && open ? APP_RIGHT_SIDEBAR_WIDTH : "0rem";
+  const leftHeaderOverlayReserve =
+    isMobile || !isLeftSidebarOpen ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER : "0rem";
+  const rightHeaderOverlayReserve =
+    enabled && (isMobile || !open) ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER : "0rem";
   const centeredHeaderMargin = `calc((100% - ${headerMaxWidth} - ${desktopRightSidebarReserve}) / 2)`;
 
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 top-0 z-20 h-0">
-        <div className={`absolute left-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`}>
+        <div
+          className={`absolute left-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`}
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -76,14 +88,22 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                 className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
                 onClick={toggleSidebar}
               >
-                {isLeftSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                {isLeftSidebarOpen ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeftOpen className="h-4 w-4" />
+                )}
                 <span className="sr-only">
-                  {isLeftSidebarOpen ? "Collapse left sidebar" : "Open left sidebar"}
+                  {isLeftSidebarOpen
+                    ? "Collapse left sidebar"
+                    : "Open left sidebar"}
                 </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {isLeftSidebarOpen ? "Collapse left sidebar (⌘0)" : "Open left sidebar (⌘0)"}
+              {isLeftSidebarOpen
+                ? "Collapse left sidebar (⌘0)"
+                : "Open left sidebar (⌘0)"}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -112,14 +132,22 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                   setOpen(!open);
                 }}
               >
-                {isRightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                {isRightSidebarOpen ? (
+                  <PanelRightClose className="h-4 w-4" />
+                ) : (
+                  <PanelRightOpen className="h-4 w-4" />
+                )}
                 <span className="sr-only">
-                  {isRightSidebarOpen ? "Collapse right sidebar" : "Open right sidebar"}
+                  {isRightSidebarOpen
+                    ? "Collapse right sidebar"
+                    : "Open right sidebar"}
                 </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
-              {isRightSidebarOpen ? "Collapse right sidebar (⌘⌥0)" : "Open right sidebar (⌘⌥0)"}
+              {isRightSidebarOpen
+                ? "Collapse right sidebar (⌘⌥0)"
+                : "Open right sidebar (⌘⌥0)"}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -136,7 +164,9 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                 marginRight: `calc(${desktopRightSidebarReserve} + max(${rightHeaderOverlayReserve}, ${centeredHeaderMargin}))`,
               }}
             >
-              <div className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}>
+              <div
+                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}
+              >
                 <AppHeaderSlot />
               </div>
             </div>
@@ -145,6 +175,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 min-h-0">{children}</div>
       </SidebarInset>
 
+      {/* right sidebar */}
       <SidebarProvider
         open={enabled ? open : false}
         onOpenChange={setOpen}

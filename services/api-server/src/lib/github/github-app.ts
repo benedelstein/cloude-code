@@ -64,6 +64,14 @@ export interface PullRequestData {
   merged: boolean;
 }
 
+export interface GitHubRepositoryData {
+  id: number;
+  fullName: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+}
+
 export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
   | "REPO_NOT_ACCESSIBLE"
@@ -335,13 +343,84 @@ export class GitHubAppService {
   }
 
   /**
+   * Resolve a repository using the user's OAuth token.
+   * This is the source of truth for whether the user can access the repo.
+   */
+  async getUserAccessibleRepo(
+    userAccessToken: string,
+    owner: string,
+    repo: string,
+  ): Promise<GitHubRepositoryData> {
+    const octokit = new Octokit({ auth: userAccessToken });
+
+    try {
+      const { data } = await octokit.rest.repos.get({ owner, repo });
+      return {
+        id: data.id,
+        fullName: data.full_name,
+        owner: data.owner.login,
+        name: data.name,
+        defaultBranch: data.default_branch,
+      };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        throw new GitHubAppError(
+          "REPO_NOT_ACCESSIBLE",
+          `Repository ${owner}/${repo} is not accessible to the authenticated user`,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  async getUserAccessibleRepoById(
+    userAccessToken: string,
+    repoId: number,
+  ): Promise<GitHubRepositoryData> {
+    const octokit = new Octokit({ auth: userAccessToken });
+
+    try {
+      const { data } = await octokit.request("GET /repositories/{repository_id}", {
+        repository_id: repoId,
+      });
+      return {
+        id: data.id,
+        fullName: data.full_name,
+        owner: data.owner.login,
+        name: data.name,
+        defaultBranch: data.default_branch,
+      };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        throw new GitHubAppError(
+          "REPO_NOT_ACCESSIBLE",
+          `Repository ${repoId} is not accessible to the authenticated user`,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * Find the GitHub App installation for a given repo.
    * First checks D1, then falls back to the GitHub API.
    */
   async findInstallationForRepo(
     owner: string,
     repo: string,
-  ): Promise<{ installation: { id: number; repository_selection: string }, repo: { id: number; } }> {
+  ): Promise<{ id: number; repository_selection: string }> {
     // Check D1 first
     const installation = await this.db
       .prepare(
@@ -367,7 +446,7 @@ export class GitHubAppService {
           `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
         );
       }
-      return { installation, repo: { id: repoRow.repo_id } };
+      return installation;
     }
 
     this.logger.log(`installation/repo not found in d1, trying api for ${owner}/${repo}`)
@@ -391,6 +470,61 @@ export class GitHubAppService {
       throw new GitHubAppError(
         "INSTALLATION_NOT_FOUND",
         `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
+      );
+    }
+  }
+
+  /**
+   * Find the GitHub App installation for a repo using its numeric GitHub ID.
+   * This avoids assuming the installation account login matches the repo owner.
+   */
+  async findInstallationForRepoId(
+    repoId: number,
+    repoFullName: string,
+  ): Promise<{ id: number; repository_selection: string }> {
+    // first check d1
+    const installation = await this.db
+      .prepare(
+        `SELECT installations.id, installations.repository_selection
+         FROM github_installation_repos repos
+         JOIN github_installations installations
+           ON installations.id = repos.installation_id
+         WHERE repos.repo_id = ?
+           AND installations.suspended_at IS NULL
+         LIMIT 1`,
+      )
+      .bind(repoId)
+      .first<{ id: number; repository_selection: string }>();
+
+    if (installation) {
+      return installation;
+    }
+
+    const [owner, repo] = repoFullName.split("/");
+    if (!owner || !repo) {
+      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
+    }
+
+    this.logger.log(`installation/repo not found in d1, trying api for ${repoFullName}`);
+
+    try {
+      const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
+        owner,
+        repo,
+      });
+
+      return {
+        id: data.id,
+        repository_selection: data.repository_selection ?? "all",
+      };
+    } catch (_error) {
+      this.logger.error(`Failed to get repository installation for ${repoFullName}`, {
+        loggerName,
+        error: _error,
+      });
+      throw new GitHubAppError(
+        "INSTALLATION_NOT_FOUND",
+        `No GitHub App installation found for ${repoFullName}. Is the app installed on this account?`,
       );
     }
   }

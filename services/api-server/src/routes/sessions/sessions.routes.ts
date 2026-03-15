@@ -93,30 +93,23 @@ sessionsRoutes.openapi(listSessionsRoute, async (c) => {
 sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const createSessionData = c.req.valid("json");
   const user = c.get("user");
-  const [owner, repo] = createSessionData.repoFullName.split("/");
-  if (!owner || !repo) {
-    return c.json(
-      { error: "Invalid repository name" },
-      422,
-    ) as any;
-  }
 
-  // Verify the GitHub App installation exists for this repo before creating the session
+  // Verify that the user can access this repo, and that the
+  // GitHub App installation exists for this repo before creating the session
   const github = new GitHubAppService(c.env, logger);
+  let repository: {
+    id: number;
+    fullName: string;
+    owner: string;
+    name: string;
+    defaultBranch: string;
+  };
   try {
-    await github.findInstallationForRepo(
-      owner,
-      repo,
+    repository = await github.getUserAccessibleRepoById(
+      user.githubAccessToken,
+      createSessionData.repoId,
     );
-    // ensure the user has access to the repo
-    const permissions = await github.getUserRepoPermissions(user.githubAccessToken, owner, repo);
-    if (!permissions || !permissions.push) {
-      console.error("User does not have write access to repository", user.id, owner, repo, permissions);
-      return c.json(
-        { error: "You do not have access to this repository" },
-        403,
-      ) as any;
-    }
+    await github.findInstallationForRepoId(repository.id, repository.fullName);
   } catch (error) {
     if (error instanceof GitHubAppError) {
       return c.json({ error: error.message, code: error.code }, 422) as any;
@@ -125,7 +118,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   }
 
   const sessionId = crypto.randomUUID();
-  console.log("creating session agent", sessionId, "user", user.id);
+  console.log("creating session agent", sessionId, "user", user.id, "repository", repository.fullName);
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const attachmentService = new AttachmentService(c.env.DB);
   const attachmentIds = [...new Set(createSessionData.attachmentIds ?? [])];
@@ -134,8 +127,8 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
-    repoId: createSessionData.repoId, // TODO: WE NEED TO KNOW IF THIS IS THE RIGHT REPO ID. 
-    repoFullName: createSessionData.repoFullName,
+    repoId: repository.id,
+    repoFullName: repository.fullName,
   });
   let attachmentsBound = false;
 
@@ -167,7 +160,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         body: JSON.stringify({
           sessionId,
           userId: user.id,
-          repoFullName: createSessionData.repoFullName,
+          repoFullName: repository.fullName,
         settings: createSessionData.settings,
         branch: createSessionData.branch,
         initialMessage: createSessionData.initialMessage,

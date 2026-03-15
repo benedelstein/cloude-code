@@ -423,7 +423,6 @@ export function SessionCreationForm() {
         : undefined;
       const session = await createSession(
         selectedRepo.id,
-        selectedRepo.fullName,
         trimmedMessage || undefined,
         branchToUse,
         { provider: "claude-code", model: selectedModel },

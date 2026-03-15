@@ -89,7 +89,6 @@ export async function listBranches(repoId: number): Promise<ListBranchesResponse
 
 export async function createSession(
   repoId: number,
-  repoFullName: string,
   initialMessage?: string,
   branch?: string,
   settings?: SessionSettingsInput,
@@ -100,7 +99,6 @@ export async function createSession(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       repoId,
-      repoFullName,
       initialMessage,
       branch,
       settings,
