@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Pencil, Check, X, ArrowDown } from "lucide-react";
+import { Pencil, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import {
@@ -129,65 +129,48 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       <AppHeaderPortal>
         <div className="flex min-w-0 w-full items-center justify-between gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
-            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-              {isEditingTitle ? (
-                <>
-                  <input
-                    ref={titleInputRef}
-                    value={titleInput}
-                    onChange={(event) => setTitleInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        if (canSaveTitle) {
-                          void saveTitle();
-                        }
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        cancelEditingTitle();
-                      }
-                    }}
-                    maxLength={60}
-                    className="h-7 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent/50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void saveTitle()}
-                    disabled={isSavingTitle || !canSaveTitle}
-                    className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
-                    title="Save title"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEditingTitle}
-                    disabled={isSavingTitle}
-                    className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
-                    title="Cancel"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="w-0 flex-1 truncate text-sm font-medium">
-                    {displayTitle}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={startEditingTitle}
-                    disabled={isSavingTitle}
-                    className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-foreground-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
-                    title="Rename session"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  {isSavingTitle && (
-                    <span className="text-xs text-foreground-muted">Saving...</span>
-                  )}
-                </>
+            <div className="group/title flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+              <input
+                ref={titleInputRef}
+                value={isEditingTitle ? titleInput : displayTitle}
+                readOnly={!isEditingTitle}
+                onChange={(event) => setTitleInput(event.target.value)}
+                onFocus={() => {
+                  if (!isEditingTitle && !isSavingTitle) {
+                    startEditingTitle();
+                  }
+                }}
+                onBlur={() => {
+                  if (isEditingTitle) {
+                    if (canSaveTitle) {
+                      void saveTitle();
+                    } else {
+                      cancelEditingTitle();
+                    }
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    if (canSaveTitle) {
+                      void saveTitle();
+                    } else {
+                      cancelEditingTitle();
+                    }
+                    titleInputRef.current?.blur();
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelEditingTitle();
+                    titleInputRef.current?.blur();
+                  }
+                }}
+                maxLength={60}
+                className="h-7 w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
+              />
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-foreground-muted opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0 pointer-events-none" />
+              {isSavingTitle && (
+                <span className="text-xs text-foreground-muted shrink-0">Saving...</span>
               )}
             </div>
           </div>
