@@ -19,14 +19,13 @@ reposRoutes.openapi(listReposRoute, async (c) => {
   const user = c.get("user");
   const octokit = new Octokit({ auth: user.githubAccessToken });
 
-  const { data } =
-    await octokit.rest.apps.listInstallationsForAuthenticatedUser();
+  const { data } = await octokit.rest.apps.listInstallationsForAuthenticatedUser();
 
   const repos: Repo[] = [];
 
   for (const installation of data.installations) {
-    const { data: repoData } =
-      await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
+    // TODO: Paginate this.
+    const { data: repoData } = await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
         installation_id: installation.id,
       });
 
