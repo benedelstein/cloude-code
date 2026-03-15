@@ -36,6 +36,11 @@ export const SessionTodo = z.object({
 });
 export type SessionTodo = z.infer<typeof SessionTodo>;
 
+export const SessionPlanMetadata = z.object({
+  lastUpdated: z.string(),
+});
+export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
+
 /** 
  * State managed by the SessionAgentDO, synced to clients via Cloudflare Agents
  * IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
@@ -61,10 +66,8 @@ export type AgentState = {
   pullRequestState: PullRequestState | null;
   /** Latest streamed todo snapshot from TodoWrite */
   todos: SessionTodo[] | null;
-  /** Whether the session has a persisted latest plan */
-  planAvailable: boolean;
-  /** Timestamp for the latest persisted plan */
-  planUpdatedAt: string | null;
+  /** Metadata for the latest persisted plan */
+  plan?: SessionPlanMetadata | null;
   /** User message to render and send automatically once provisioning completes */
   pendingUserMessage: UIMessage | null;
   /** Attachment IDs to send with the pending initial message */

@@ -19,8 +19,7 @@ export function applyDerivedStateFromParts(
   }
 
   let nextTodos: SessionTodo[] | null | undefined;
-  let nextPlanUpdatedAt: string | null = null;
-  let planAvailable = context.state.planAvailable;
+  let nextPlanLastUpdated: string | null = null;
 
   for (const completedPart of completedParts) {
     const todos = extractTodoSnapshotFromPart(completedPart);
@@ -35,18 +34,18 @@ export function applyDerivedStateFromParts(
         plan,
         sourceMessageId,
       );
-      nextPlanUpdatedAt = storedPlan.updatedAt;
-      planAvailable = true;
+      nextPlanLastUpdated = storedPlan.updatedAt;
     }
   }
 
-  if (nextTodos !== undefined || nextPlanUpdatedAt !== null) {
+  if (nextTodos !== undefined || nextPlanLastUpdated !== null) {
     context.updatePartialState({
       ...(nextTodos !== undefined ? { todos: nextTodos } : {}),
-      ...(nextPlanUpdatedAt !== null
+      ...(nextPlanLastUpdated !== null
         ? {
-            planAvailable,
-            planUpdatedAt: nextPlanUpdatedAt,
+            plan: {
+              lastUpdated: nextPlanLastUpdated,
+            },
           }
         : {}),
     });

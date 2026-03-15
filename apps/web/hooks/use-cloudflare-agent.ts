@@ -14,6 +14,7 @@ import type {
   AttachmentDescriptor,
   ServerMessage,
   SessionTodo,
+  SessionPlanMetadata,
   SessionSettings,
   SessionStatus,
 } from "@repo/shared";
@@ -50,8 +51,7 @@ export interface UseCloudflareAgentReturn {
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
   todos: SessionTodo[] | null;
-  planAvailable: boolean;
-  planUpdatedAt: string | null;
+  plan: SessionPlanMetadata | null;
   settings: SessionSettings | null;
   selectedModel: ClaudeModel | null;
   // eslint-disable-next-line no-unused-vars
@@ -86,8 +86,7 @@ export function useCloudflareAgent({
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
-  const [planAvailable, setPlanAvailable] = useState(false);
-  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | null>(null);
+  const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [settings, setSettings] = useState<SessionSettings | null>(null);
@@ -242,11 +241,8 @@ export function useCloudflareAgent({
       if (state.todos !== undefined) {
         setTodos(state.todos);
       }
-      if (state.planAvailable !== undefined) {
-        setPlanAvailable(state.planAvailable);
-      }
-      if (state.planUpdatedAt !== undefined) {
-        setPlanUpdatedAt(state.planUpdatedAt);
+      if (state.plan !== undefined) {
+        setPlan(state.plan ?? null);
       }
       if (state.pendingUserMessage !== undefined) {
         setPendingUserMessage(state.pendingUserMessage);
@@ -354,8 +350,7 @@ export function useCloudflareAgent({
     pullRequestUrl,
     pullRequestState,
     todos,
-    planAvailable,
-    planUpdatedAt,
+    plan,
     settings,
     selectedModel,
     setSelectedModel,
