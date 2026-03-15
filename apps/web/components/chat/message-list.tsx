@@ -14,6 +14,7 @@ interface MessageListProps {
   isResponding?: boolean;
   pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
+  rightInset?: string;
   // eslint-disable-next-line no-unused-vars
   onHasNewMessages?: (hasNew: boolean) => void;
   scrollToBottomRef?: React.RefObject<(() => void) | null>;
@@ -26,6 +27,7 @@ export function MessageList({
   isResponding,
   pendingUserMessage,
   userAvatarUrl,
+  rightInset = "0rem",
   onHasNewMessages,
   scrollToBottomRef,
 }: MessageListProps) {
@@ -134,7 +136,8 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-y-auto pt-20 pb-64"
+      className="h-full overflow-y-auto pt-20 pb-64 transition-[padding] duration-200 ease-linear"
+      style={{ paddingRight: rightInset }}
     >
       {showLoading && (
         <div className="h-full flex items-center justify-center p-4">

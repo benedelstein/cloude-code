@@ -26,6 +26,21 @@ export type SessionStatus = z.infer<typeof SessionStatus>;
 export type PullRequestState = "open" | "merged" | "closed";
 export type ClaudeAuthState = "auth_required" | "reauth_required";
 
+export const SessionTodoStatus = z.enum(["pending", "in_progress", "completed"]);
+export type SessionTodoStatus = z.infer<typeof SessionTodoStatus>;
+
+export const SessionTodo = z.object({
+  content: z.string(),
+  activeForm: z.string().optional(),
+  status: SessionTodoStatus,
+});
+export type SessionTodo = z.infer<typeof SessionTodo>;
+
+export const SessionPlanMetadata = z.object({
+  lastUpdated: z.string(),
+});
+export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
+
 /** 
  * State managed by the SessionAgentDO, synced to clients via Cloudflare Agents
  * IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
@@ -49,6 +64,10 @@ export type AgentState = {
   pullRequestNumber: number | null;
   /** PR state: open, merged, or closed */
   pullRequestState: PullRequestState | null;
+  /** Latest streamed todo snapshot from TodoWrite */
+  todos: SessionTodo[] | null;
+  /** Metadata for the latest persisted plan */
+  plan?: SessionPlanMetadata | null;
   /** User message to render and send automatically once provisioning completes */
   pendingUserMessage: UIMessage | null;
   /** Attachment IDs to send with the pending initial message */

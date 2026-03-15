@@ -19,3 +19,30 @@ export function normalizeHost(value: string): string {
       .replace(/\/+$/, "");
   }
 }
+
+interface FadeScaleVisibilityOptions {
+  hiddenScaleClass?: string;
+  durationClass?: string;
+  easingClass?: string;
+  className?: ClassValue;
+}
+
+export function getFadeScaleVisibilityClasses(
+  isVisible: boolean,
+  {
+    hiddenScaleClass = "scale-90",
+    durationClass = "duration-200",
+    easingClass = "ease-linear",
+    className,
+  }: FadeScaleVisibilityOptions = {},
+) {
+  return cn(
+    "transition-all",
+    durationClass,
+    easingClass,
+    isVisible
+      ? "scale-100 opacity-100"
+      : ["pointer-events-none opacity-0", hiddenScaleClass],
+    className,
+  );
+}

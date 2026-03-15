@@ -20,7 +20,7 @@ export function AppHeaderProvider({ children }: { children: ReactNode }) {
 
 export function AppHeaderSlot() {
   const setSlotNode = useContext(AppHeaderSlotSetterContext);
-  return <div ref={setSlotNode} className="flex-1 min-w-0 h-full flex items-center empty:hidden" />;
+  return <div ref={setSlotNode} className="flex-1 min-w-0 h-full flex items-center overflow-hidden empty:hidden" />;
 }
 
 export function AppHeaderPortal({ children }: { children: ReactNode }) {

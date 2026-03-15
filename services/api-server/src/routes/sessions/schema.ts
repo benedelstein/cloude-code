@@ -5,6 +5,7 @@ import {
   UpdateSessionTitleRequest,
   UpdateSessionTitleResponse,
   SessionInfoResponse,
+  SessionPlanResponse,
   ListSessionsResponse,
   PullRequestResponse,
   PullRequestStatusResponse,
@@ -13,6 +14,22 @@ import {
   EditorOpenResponse,
   EditorCloseResponse,
 } from "@repo/shared";
+
+const ErrorResponse = z.object({ error: z.string() });
+const ErrorWithDetailsResponse = z.object({
+  error: z.string(),
+  details: z.string(),
+  code: z.string().optional(),
+});
+const ErrorWithOptionalDetailsResponse = z.object({
+  error: z.string(),
+  details: z.string().optional(),
+  code: z.string().optional(),
+});
+const ErrorWithUrlResponse = z.object({
+  error: z.string(),
+  url: z.string(),
+});
 
 export const listSessionsRoute = createRoute({
   method: "get",
@@ -108,20 +125,22 @@ export const getSessionMessagesRoute = createRoute({
   },
 });
 
-const ErrorResponse = z.object({ error: z.string() });
-const ErrorWithDetailsResponse = z.object({
-  error: z.string(),
-  details: z.string(),
-  code: z.string().optional(),
-});
-const ErrorWithOptionalDetailsResponse = z.object({
-  error: z.string(),
-  details: z.string().optional(),
-  code: z.string().optional(),
-});
-const ErrorWithUrlResponse = z.object({
-  error: z.string(),
-  url: z.string(),
+export const getSessionPlanRoute = createRoute({
+  method: "get",
+  path: "/{sessionId}/plan",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: SessionPlanResponse } },
+      description: "Latest session plan",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Plan not found",
+    },
+  },
 });
 
 export const createPullRequestRoute = createRoute({

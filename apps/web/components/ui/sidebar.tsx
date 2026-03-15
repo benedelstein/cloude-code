@@ -30,14 +30,24 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
-const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_KEYBOARD_SHORTCUT = { code: "KeyB", shiftKey: false, altKey: false } as const
+const SIDEBAR_HEADER_HEIGHT_CLASS = "h-14"
+
+type SidebarKeyboardShortcut =
+  | {
+      code: string
+      shiftKey?: boolean
+      altKey?: boolean
+    }
+  | string
+  | null
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
   setOpen: (open: boolean) => void
   openMobile: boolean
-  setOpenMobile: (open: boolean) => void
+  setOpenMobile: React.Dispatch<React.SetStateAction<boolean>>
   isMobile: boolean
   toggleSidebar: () => void
 }
@@ -59,6 +69,11 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean
     open?: boolean
     onOpenChange?: (open: boolean) => void
+    openMobile?: boolean
+    onOpenMobileChange?: (open: boolean) => void
+    cookieName?: string
+    keyboardShortcut?: SidebarKeyboardShortcut
+    layout?: "default" | "contents"
   }
 >(
   (
@@ -66,6 +81,11 @@ const SidebarProvider = React.forwardRef<
       defaultOpen = true,
       open: openProp,
       onOpenChange: setOpenProp,
+      openMobile: openMobileProp,
+      onOpenMobileChange: setOpenMobileProp,
+      cookieName = SIDEBAR_COOKIE_NAME,
+      keyboardShortcut = SIDEBAR_KEYBOARD_SHORTCUT,
+      layout = "default",
       className,
       style,
       children,
@@ -74,7 +94,19 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
-    const [openMobile, setOpenMobile] = React.useState(false)
+    const [_openMobile, _setOpenMobile] = React.useState(false)
+    const openMobile = openMobileProp ?? _openMobile
+    const setOpenMobile = React.useCallback<React.Dispatch<React.SetStateAction<boolean>>>(
+      (value) => {
+        const openState = typeof value === "function" ? value(openMobile) : value
+        if (setOpenMobileProp) {
+          setOpenMobileProp(openState)
+        } else {
+          _setOpenMobile(openState)
+        }
+      },
+      [openMobile, setOpenMobileProp]
+    )
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
@@ -89,9 +121,9 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState)
         }
 
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+        document.cookie = `${cookieName}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
-      [setOpenProp, open]
+      [cookieName, setOpenProp, open]
     )
 
     // Helper to toggle the sidebar.
@@ -104,8 +136,18 @@ const SidebarProvider = React.forwardRef<
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
+        if (!keyboardShortcut) {
+          return
+        }
+
+        const matchesShortcut = typeof keyboardShortcut === "string"
+          ? event.key === keyboardShortcut
+          : event.code === keyboardShortcut.code
+            && event.shiftKey === Boolean(keyboardShortcut.shiftKey)
+            && event.altKey === Boolean(keyboardShortcut.altKey)
+
         if (
-          event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+          matchesShortcut &&
           (event.metaKey || event.ctrlKey)
         ) {
           event.preventDefault()
@@ -115,7 +157,7 @@ const SidebarProvider = React.forwardRef<
 
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [toggleSidebar])
+    }, [keyboardShortcut, toggleSidebar])
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
@@ -146,7 +188,9 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
             className={cn(
-              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
+              layout === "default"
+                ? "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar"
+                : "group/sidebar-wrapper contents",
               className
             )}
             ref={ref}
@@ -167,6 +211,7 @@ const Sidebar = React.forwardRef<
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
+    reserveSpace?: boolean
   }
 >(
   (
@@ -174,6 +219,7 @@ const Sidebar = React.forwardRef<
       side = "left",
       variant = "sidebar",
       collapsible = "offcanvas",
+      reserveSpace = true,
       className,
       children,
       ...props
@@ -231,16 +277,18 @@ const Sidebar = React.forwardRef<
         data-side={side}
       >
         {/* This is what handles the sidebar gap on desktop */}
-        <div
-          className={cn(
-            "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-            "group-data-[collapsible=offcanvas]:w-0",
-            "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
-          )}
-        />
+        {reserveSpace && (
+          <div
+            className={cn(
+              "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+              "group-data-[collapsible=offcanvas]:w-0",
+              "group-data-[side=right]:rotate-180",
+              variant === "floating" || variant === "inset"
+                ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+            )}
+          />
+        )}
         <div
           className={cn(
             "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
@@ -745,6 +793,7 @@ const SidebarMenuSubButton = React.forwardRef<
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
 export {
+  SIDEBAR_HEADER_HEIGHT_CLASS,
   Sidebar,
   SidebarContent,
   SidebarFooter,

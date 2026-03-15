@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pencil, Check, X, ArrowDown } from "lucide-react";
-import Link from "next/link";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
+import {
+  APP_RIGHT_SIDEBAR_WIDTH,
+  useAppRightSidebar,
+} from "@/components/layout/app-right-sidebar-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import {
@@ -12,6 +16,7 @@ import {
   uploadAttachments,
   deleteAttachment,
 } from "@/lib/client-api";
+import { getFadeScaleVisibilityClasses } from "@/lib/utils";
 import { AppHeaderPortal } from "@/components/layout/app-header-context";
 import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
@@ -47,6 +52,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     sendMessage,
     stop,
   } = useSession();
+  const { enabled: isRightSidebarEnabled, open: isRightSidebarOpen } = useAppRightSidebar();
+  const isMobile = useIsMobile();
 
   const { user } = useAuth();
   const claude = useClaudeAuth({ sessionId });
@@ -58,6 +65,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
+  const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
+    ? APP_RIGHT_SIDEBAR_WIDTH
+    : "0rem";
 
   const displayTitle = sessionTitle ?? repoFullName ?? "Untitled session";
   const canSaveTitle = titleInput.trim().length > 0
@@ -117,9 +127,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   return (
     <div className="h-full flex flex-col">
       <AppHeaderPortal>
-        <div className="flex items-center justify-between w-full gap-4">
-          <div className="flex flex-col gap-0 min-w-0">
-            <div className="flex items-center gap-1 min-w-0">
+        <div className="flex min-w-0 w-full items-center justify-between gap-3">
+          <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               {isEditingTitle ? (
                 <>
                   <input
@@ -162,7 +172,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium truncate">
+                  <p className="w-0 flex-1 truncate text-sm font-medium">
                     {displayTitle}
                   </p>
                   <button
@@ -180,13 +190,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 </>
               )}
             </div>
-            {repoFullName && (
-              <Link href={`https://github.com/${repoFullName}`} target="_blank" className="text-xs text-foreground-muted truncate hover:underline">
-                {repoFullName}
-              </Link>
-            )}
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             <BrowserButton />
             <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} />
             <SessionActionsButton sessionId={sessionId} />
@@ -203,6 +208,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
+          rightInset={rightSidebarInset}
           onHasNewMessages={setShowScrollToBottom}
           scrollToBottomRef={scrollToBottomRef}
         />
@@ -210,9 +216,14 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
 
       {/* Branch Bar + Input - floating at bottom */}
       <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
-        <div className="pt-8">
+        <div
+          className="pt-8 transition-[padding] duration-200 ease-linear"
+          style={{ paddingRight: rightSidebarInset }}
+        >
           <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background) 32px)" }}>
-            <div className={`flex justify-center mb-2 transition-all duration-200 ${showScrollToBottom ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"}`}>
+            <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
+              className: "mb-2 flex justify-center",
+            })}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
