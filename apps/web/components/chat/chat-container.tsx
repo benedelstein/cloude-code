@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Pencil, ArrowDown } from "lucide-react";
+import { Pencil, Loader2, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import {
@@ -166,11 +166,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   }
                 }}
                 maxLength={60}
-                className="h-7 w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
+                size={isEditingTitle ? undefined : (displayTitle?.length || 1)}
+                className="h-7 max-w-full min-w-[2ch] shrink truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:w-full focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
               />
-              <Pencil className="h-3.5 w-3.5 shrink-0 text-foreground-muted opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0 pointer-events-none" />
-              {isSavingTitle && (
-                <span className="text-xs text-foreground-muted shrink-0">Saving...</span>
+              {isSavingTitle ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-foreground-muted" />
+              ) : (
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-foreground-muted opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0 pointer-events-none" />
               )}
             </div>
           </div>
