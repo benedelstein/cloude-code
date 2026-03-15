@@ -15,6 +15,13 @@ export const SessionInfoResponse = z.object({
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
+export const SessionPlanResponse = z.object({
+  plan: z.string(),
+  updatedAt: z.iso.datetime(),
+  sourceMessageId: z.string().nullable(),
+});
+export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
+
 export const CreateSessionRequest = z.object({
   /** Numeric GitHub repo ID (stable across renames) */
   repoId: z.number(),

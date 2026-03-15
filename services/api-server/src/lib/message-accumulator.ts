@@ -3,6 +3,11 @@ import type { UIMessage, UIMessageChunk } from "ai";
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
 
+export interface ProcessChunkResult {
+  finished: boolean;
+  completedParts: MessagePart[];
+}
+
 /**
  * Accumulates UIMessageStream chunks into a complete UIMessage.
  * Used by the DO to build the final message for storage while streaming parts to clients.
@@ -37,195 +42,225 @@ export class MessageAccumulator {
 
   /**
    * Process a stream chunk and accumulate it into the message.
-   * @returns true if the message is now complete (finish received)
+   * @returns message completion state plus any parts fully materialized by this chunk
    */
-  process(chunk: unknown): boolean {
-    const part = chunk as UIMessageChunk;
+  process(chunk: UIMessageChunk): ProcessChunkResult {
+    const completedParts: MessagePart[] = [];
 
-    switch (part.type) {
+    switch (chunk.type) {
       case "start":
-        this.messageId = part.messageId;
+        this.messageId = chunk.messageId;
         break;
 
       case "text-start":
-        this.currentTextId = part.id;
+        this.currentTextId = chunk.id;
         this.currentText = "";
         break;
 
       case "text-delta":
-        if (this.currentTextId === part.id) {
-          this.currentText += part.delta;
+        if (this.currentTextId === chunk.id) {
+          this.currentText += chunk.delta;
         }
         break;
 
       case "text-end":
-        if (this.currentTextId === part.id && this.currentText) {
-          this.parts.push({ type: "text", text: this.currentText, state: "done" } as MessagePart);
+        if (this.currentTextId === chunk.id && this.currentText) {
+          const messagePart = { type: "text", text: this.currentText, state: "done" } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
           this.currentTextId = null;
           this.currentText = "";
         }
         break;
 
       case "reasoning-start":
-        this.currentReasoningId = part.id;
+        this.currentReasoningId = chunk.id;
         this.currentReasoning = "";
         break;
 
       case "reasoning-delta":
-        if (this.currentReasoningId === part.id) {
-          this.currentReasoning += part.delta;
+        if (this.currentReasoningId === chunk.id) {
+          this.currentReasoning += chunk.delta;
         }
         break;
 
       case "reasoning-end":
-        if (this.currentReasoningId === part.id && this.currentReasoning) {
-          this.parts.push({ type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart);
+        if (this.currentReasoningId === chunk.id && this.currentReasoning) {
+          const messagePart = { type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
           this.currentReasoningId = null;
           this.currentReasoning = "";
         }
         break;
 
       case "tool-input-start":
-        this.toolCalls.set(part.toolCallId, {
-          toolName: part.toolName,
+        this.toolCalls.set(chunk.toolCallId, {
+          toolName: chunk.toolName,
           inputText: "",
           state: "input-streaming",
-          title: part.title,
-          providerExecuted: part.providerExecuted,
+          title: chunk.title,
+          providerExecuted: chunk.providerExecuted,
         });
         break;
 
       case "tool-input-delta": {
-        const toolCall = this.toolCalls.get(part.toolCallId);
+        const toolCall = this.toolCalls.get(chunk.toolCallId);
         if (toolCall) {
-          toolCall.inputText += part.inputTextDelta;
+          toolCall.inputText += chunk.inputTextDelta;
         }
         break;
       }
 
       case "tool-input-available": {
-        const availableTool = this.toolCalls.get(part.toolCallId);
+        const availableTool = this.toolCalls.get(chunk.toolCallId);
         if (availableTool) {
-          availableTool.input = part.input;
+          availableTool.input = chunk.input;
           availableTool.state = "input-available";
         } else {
-          this.toolCalls.set(part.toolCallId, {
-            toolName: part.toolName,
+          this.toolCalls.set(chunk.toolCallId, {
+            toolName: chunk.toolName,
             inputText: "",
-            input: part.input,
+            input: chunk.input,
             state: "input-available",
-            title: part.title,
-            providerExecuted: part.providerExecuted,
+            title: chunk.title,
+            providerExecuted: chunk.providerExecuted,
           });
         }
         break;
       }
 
       case "tool-output-available": {
-        const outputTool = this.toolCalls.get(part.toolCallId);
+        const outputTool = this.toolCalls.get(chunk.toolCallId);
         if (outputTool) {
-          outputTool.output = part.output;
+          outputTool.output = chunk.output;
           outputTool.state = "output-available";
-          this.parts.push({
+          const messagePart = {
             type: "dynamic-tool",
             toolName: outputTool.toolName,
-            toolCallId: part.toolCallId,
+            toolCallId: chunk.toolCallId,
             state: "output-available",
             input: outputTool.input,
-            output: part.output,
+            output: chunk.output,
             title: outputTool.title,
             providerExecuted: outputTool.providerExecuted,
-          } as MessagePart);
-          this.toolCalls.delete(part.toolCallId);
+          } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+          this.toolCalls.delete(chunk.toolCallId);
         }
         break;
       }
 
       case "tool-output-error": {
-        const errorTool = this.toolCalls.get(part.toolCallId);
+        const errorTool = this.toolCalls.get(chunk.toolCallId);
         if (errorTool) {
-          this.parts.push({
+          const messagePart = {
             type: "dynamic-tool",
             toolName: errorTool.toolName,
-            toolCallId: part.toolCallId,
+            toolCallId: chunk.toolCallId,
             state: "output-error",
             input: errorTool.input,
-            errorText: part.errorText,
+            errorText: chunk.errorText,
             title: errorTool.title,
             providerExecuted: errorTool.providerExecuted,
-          } as MessagePart);
-          this.toolCalls.delete(part.toolCallId);
+          } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+          this.toolCalls.delete(chunk.toolCallId);
         }
         break;
       }
 
       case "source-url":
-        this.parts.push({
+        {
+          const messagePart = {
           type: "source-url",
-          sourceId: part.sourceId,
-          url: part.url,
-          title: part.title,
-          providerMetadata: part.providerMetadata,
-        } as MessagePart);
+          sourceId: chunk.sourceId,
+          url: chunk.url,
+          title: chunk.title,
+          providerMetadata: chunk.providerMetadata,
+          } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+        }
         break;
 
       case "source-document":
-        this.parts.push({
+        {
+          const messagePart = {
           type: "source-document",
-          sourceId: part.sourceId,
-          mediaType: part.mediaType,
-          title: part.title,
-          filename: part.filename,
-          providerMetadata: part.providerMetadata,
-        } as MessagePart);
+          sourceId: chunk.sourceId,
+          mediaType: chunk.mediaType,
+          title: chunk.title,
+          filename: chunk.filename,
+          providerMetadata: chunk.providerMetadata,
+          } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+        }
         break;
 
       case "file":
-        this.parts.push({
+        {
+          const messagePart = {
           type: "file",
-          mediaType: part.mediaType,
-          url: part.url,
-          providerMetadata: part.providerMetadata,
-        } as MessagePart);
+          mediaType: chunk.mediaType,
+          url: chunk.url,
+          providerMetadata: chunk.providerMetadata,
+          } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+        }
         break;
 
       case "start-step":
-        this.parts.push({ type: "step-start" } as MessagePart);
+        {
+          const messagePart = { type: "step-start" } as MessagePart;
+          this.parts.push(messagePart);
+          completedParts.push(messagePart);
+        }
         break;
 
       case "finish":
-        this.finalizePendingParts();
-        this.metadata = part.messageMetadata;
+        completedParts.push(...this.finalizePendingParts());
+        this.metadata = chunk.messageMetadata;
         this.finished = true;
-        return true;
+        return { finished: true, completedParts };
 
       case "finish-step":
         break;
 
       case "abort":
-        this.finalizePendingParts();
+        completedParts.push(...this.finalizePendingParts());
         this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
         this.finished = true;
-        return true;
+        return { finished: true, completedParts };
 
       case "error":
-        this.finalizePendingParts();
+        completedParts.push(...this.finalizePendingParts());
         this.finished = true;
-        return true;
+        return { finished: true, completedParts };
     }
 
-    return false;
+    return { finished: false, completedParts };
   }
 
-  private finalizePendingParts(): void {
+  private finalizePendingParts(): MessagePart[] {
+    const completedParts: MessagePart[] = [];
+
     if (this.currentText) {
-      this.parts.push({ type: "text", text: this.currentText, state: "done" } as MessagePart);
+      const messagePart = { type: "text", text: this.currentText, state: "done" } as MessagePart;
+      this.parts.push(messagePart);
+      completedParts.push(messagePart);
       this.currentText = "";
       this.currentTextId = null;
     }
 
     if (this.currentReasoning) {
-      this.parts.push({ type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart);
+      const messagePart = { type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart;
+      this.parts.push(messagePart);
+      completedParts.push(messagePart);
       this.currentReasoning = "";
       this.currentReasoningId = null;
     }
@@ -240,7 +275,7 @@ export class MessageAccumulator {
         }
       }
 
-      this.parts.push({
+      const messagePart = {
         type: "dynamic-tool",
         toolName: tool.toolName,
         toolCallId,
@@ -249,9 +284,12 @@ export class MessageAccumulator {
         ...(tool.output !== undefined && { output: tool.output }),
         title: tool.title,
         providerExecuted: tool.providerExecuted,
-      } as MessagePart);
+      } as MessagePart;
+      this.parts.push(messagePart);
+      completedParts.push(messagePart);
     }
     this.toolCalls.clear();
+    return completedParts;
   }
 
   /**
@@ -271,6 +309,10 @@ export class MessageAccumulator {
 
   isFinished(): boolean {
     return this.finished;
+  }
+
+  getMessageId(): string | null {
+    return this.messageId ?? null;
   }
 
   reset(): void {

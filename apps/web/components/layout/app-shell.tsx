@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelLeft, PanelRight } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, PanelRightOpen, PanelRightClose } from "lucide-react";
 import { SessionSidebar } from "@/components/sidebar/session-sidebar";
 import {
   SidebarProvider,
@@ -70,7 +70,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                 className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
                 onClick={toggleSidebar}
               >
-                <PanelLeft className="h-4 w-4" />
+                {isLeftSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                 <span className="sr-only">
                   {isLeftSidebarOpen ? "Collapse left sidebar" : "Open left sidebar"}
                 </span>
@@ -99,7 +99,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                 className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
                 onClick={() => setOpen(!isRightSidebarOpen)}
               >
-                <PanelRight className="h-4 w-4" />
+                {isRightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 <span className="sr-only">
                   {isRightSidebarOpen ? "Collapse right sidebar" : "Open right sidebar"}
                 </span>

@@ -13,6 +13,7 @@ import type {
   PullRequestState,
   AttachmentDescriptor,
   ServerMessage,
+  SessionTodo,
   SessionSettings,
   SessionStatus,
 } from "@repo/shared";
@@ -34,6 +35,7 @@ export interface UseCloudflareAgentOptions {
 }
 
 export interface UseCloudflareAgentReturn {
+  sessionId: string;
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
   sessionStatus: SessionStatus;
@@ -47,6 +49,9 @@ export interface UseCloudflareAgentReturn {
   pushedBranch: string | null;
   pullRequestUrl: string | null;
   pullRequestState: PullRequestState | null;
+  todos: SessionTodo[] | null;
+  planAvailable: boolean;
+  planUpdatedAt: string | null;
   settings: SessionSettings | null;
   selectedModel: ClaudeModel | null;
   // eslint-disable-next-line no-unused-vars
@@ -80,6 +85,9 @@ export function useCloudflareAgent({
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
+  const [todos, setTodos] = useState<SessionTodo[] | null>(null);
+  const [planAvailable, setPlanAvailable] = useState(false);
+  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [settings, setSettings] = useState<SessionSettings | null>(null);
@@ -231,6 +239,15 @@ export function useCloudflareAgent({
       if (state.pullRequestState !== undefined) {
         setPullRequestState(state.pullRequestState);
       }
+      if (state.todos !== undefined) {
+        setTodos(state.todos);
+      }
+      if (state.planAvailable !== undefined) {
+        setPlanAvailable(state.planAvailable);
+      }
+      if (state.planUpdatedAt !== undefined) {
+        setPlanUpdatedAt(state.planUpdatedAt);
+      }
       if (state.pendingUserMessage !== undefined) {
         setPendingUserMessage(state.pendingUserMessage);
       }
@@ -322,6 +339,7 @@ export function useCloudflareAgent({
   }, [agent]);
 
   return {
+    sessionId,
     repoFullName,
     messages,
     streamingMessage,
@@ -335,6 +353,9 @@ export function useCloudflareAgent({
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
+    todos,
+    planAvailable,
+    planUpdatedAt,
     settings,
     selectedModel,
     setSelectedModel,

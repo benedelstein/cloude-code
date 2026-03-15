@@ -22,6 +22,7 @@ import {
   encodeAgentInput,
   // Session,
   SessionInfoResponse,
+  SessionPlanResponse,
   SessionStatus,
   type MessageAttachmentRef,
 } from "@repo/shared";
@@ -30,6 +31,7 @@ import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
 import { SecretRepository } from "./repositories/secret-repository";
+import { LatestPlanRepository } from "./repositories/latest-plan-repository";
 import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/attachment-service";
 
@@ -45,6 +47,7 @@ import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { arrayBufferToBase64 } from "@/lib/utils";
 import type { UIMessage } from "ai";
+import type { UIMessageChunk } from "ai";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
 import {
   ensureClaudeCredentialsReadyForSend,
@@ -56,6 +59,7 @@ import {
   handleEditorOpen,
   handleEditorClose,
 } from "./session-agent-editor";
+import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
 
@@ -78,6 +82,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private readonly spritesCoordinator: SpritesCoordinator;
   private readonly messageRepository: MessageRepository;
   private readonly secretRepository: SecretRepository;
+  private readonly latestPlanRepository: LatestPlanRepository;
   /** vm-agent session running on the sprite */
   private agentSession: SpriteWebsocketSession | null = null;
   /** Mutex for reattachment to prevent race conditions */
@@ -110,6 +115,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     pullRequestUrl: null,
     pullRequestNumber: null,
     pullRequestState: null,
+    todos: null,
+    planAvailable: false,
+    planUpdatedAt: null,
     pendingUserMessage: null,
     pendingAttachmentIds: [],
     editorUrl: null,
@@ -126,11 +134,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     const sql = this.sql.bind(this);
     this.messageRepository = new MessageRepository(sql);
     this.secretRepository = new SecretRepository(sql);
+    this.latestPlanRepository = new LatestPlanRepository(sql);
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
 
-    migrateAll([this.messageRepository, this.secretRepository]);
+    migrateAll([this.messageRepository, this.secretRepository, this.latestPlanRepository]);
 
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
@@ -226,6 +235,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Sub-resources
     if (path === "/messages" && request.method === "GET") {
       return this.handleGetMessages();
+    }
+    if (path === "/plan" && request.method === "GET") {
+      return this.handleGetPlan();
     }
 
     // Editor (VS Code) lifecycle
@@ -877,8 +889,20 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         });
 
         // Accumulate chunks into UIMessage
-        const isFinished = this.messageAccumulator.process(output.chunk);
-        if (isFinished) {
+        const { finished, completedParts } = this.messageAccumulator.process(
+          output.chunk as UIMessageChunk,
+        );
+        applyDerivedStateFromParts(
+          {
+            state: this.state,
+            latestPlanRepository: this.latestPlanRepository,
+            updatePartialState: (partial) => this.updatePartialState(partial),
+          },
+          completedParts,
+          this.messageAccumulator.getMessageId(),
+        );
+
+        if (finished) {
           // Save the accumulated message to DB
           const message = this.messageAccumulator.getMessage();
           if (message && this.state.sessionId && this.messageRepository) {
@@ -980,6 +1004,34 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  private handleGetPlan(): Response {
+    if (!this.state.sessionId) {
+      return new Response(JSON.stringify({ error: "Session not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const latestPlan = this.latestPlanRepository.getBySession(this.state.sessionId);
+    if (!latestPlan) {
+      return new Response(JSON.stringify({ error: "Plan not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        plan: latestPlan.plan,
+        updatedAt: latestPlan.updatedAt,
+        sourceMessageId: latestPlan.sourceMessageId,
+      } satisfies SessionPlanResponse),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   private async handleSetPullRequest(request: Request): Promise<Response> {

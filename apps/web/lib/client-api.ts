@@ -9,6 +9,7 @@ import type {
   DeleteSessionResponse,
   ArchiveSessionResponse,
   SessionInfoResponse,
+  SessionPlanResponse,
   ListSessionsResponse,
   SessionSummary,
   UpdateSessionTitleResponse,
@@ -115,6 +116,17 @@ export async function listSessions(repoId?: number): Promise<ListSessionsRespons
 
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
   return apiFetch(`/sessions/${sessionId}`);
+}
+
+export async function getSessionPlan(sessionId: string): Promise<SessionPlanResponse | null> {
+  try {
+    return await apiFetch(`/sessions/${sessionId}/plan`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function updateSessionTitle(

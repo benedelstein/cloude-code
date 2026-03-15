@@ -23,6 +23,7 @@ import {
   getSessionRoute,
   updateSessionTitleRoute,
   getSessionMessagesRoute,
+  getSessionPlanRoute,
   createPullRequestRoute,
   getPullRequestRoute,
   archiveSessionRoute,
@@ -255,6 +256,25 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
   const response = await stub.fetch(new Request("http://do/messages"));
   if (!response.ok) {
     return c.json({ error: "Failed to get messages" }, 500);
+  }
+
+  return c.json(await response.json(), 200);
+});
+
+sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
+  const { sessionId } = c.req.valid("param");
+  const user = c.get("user");
+  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  if (!stub) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
+
+  const response = await stub.fetch(new Request("http://do/plan"));
+  if (response.status === 404) {
+    return c.json({ error: "Plan not found" }, 404) as any;
+  }
+  if (!response.ok) {
+    return c.json({ error: "Failed to get plan" }, 500) as any;
   }
 
   return c.json(await response.json(), 200);

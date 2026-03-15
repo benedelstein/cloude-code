@@ -1,27 +1,71 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-// import { GitBranch, GitPullRequest, Split } from "lucide-react";
+import { CheckCircle2, Circle, FileText, Loader2 } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { AppRightSidebarPortal } from "@/components/layout/app-right-sidebar-context";
+import { getSessionPlan } from "@/lib/client-api";
 import {
   SidebarContent,
-  // SidebarGroup,
-  // SidebarGroupContent,
-  // SidebarGroupLabel,
   SidebarHeader,
   SIDEBAR_HEADER_HEIGHT_CLASS,
   SidebarGroupContent,
   SidebarGroup,
+  SidebarGroupLabel,
 } from "@/components/ui/sidebar";
+import type { SessionPlanResponse } from "@repo/shared";
 
 export function SessionRightSidebar() {
   const {
-    // pushedBranch,
-    // pullRequestUrl,
-    // pullRequestState,
+    sessionId,
     repoFullName,
+    todos,
+    planAvailable,
+    planUpdatedAt,
   } = useSession();
+  const [plan, setPlan] = useState<SessionPlanResponse | null>(null);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!planAvailable) {
+      setPlan(null);
+      setPlanError(null);
+      setIsPlanLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsPlanLoading(true);
+    setPlanError(null);
+
+    void getSessionPlan(sessionId)
+      .then((latestPlan) => {
+        if (isCancelled) {
+          return;
+        }
+        setPlan(latestPlan);
+      })
+      .catch((error: unknown) => {
+        if (isCancelled) {
+          return;
+        }
+        console.error("Failed to load session plan", error);
+        setPlanError("Failed to load plan.");
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsPlanLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [planAvailable, planUpdatedAt, sessionId]);
+
+  const completedTodos = todos?.filter((todo) => todo.status === "completed").length ?? 0;
 
   return (
     <AppRightSidebarPortal>
@@ -38,118 +82,97 @@ export function SessionRightSidebar() {
 
       <SidebarContent className="gap-1 px-0">
         <SidebarGroup>
-          <SidebarGroupContent>
-            <p className="text-sm text-foreground-muted max-w-full text-center my-4">Coming soon.</p>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        {/* <SidebarGroup>
           <SidebarGroupLabel>Todo List</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarSection
-              badge="Stub"
-              emptyState="No session todo data yet. This will eventually come from server-owned parsed message state."
-            />
-          </SidebarGroupContent>
-        </SidebarGroup> */}
-
-        {/* <SidebarGroup>
-          <SidebarGroupLabel>Workspace State</SidebarGroupLabel>
-          <SidebarGroupContent>
             <section className="rounded-xl border border-sidebar-border bg-background/55 p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="rounded-md bg-foreground/10 p-1.5 text-foreground-muted">
-                    <Split className="h-4 w-4" />
+              {todos && todos.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-foreground">Tasks</p>
+                    <span className="text-xs text-foreground-muted">
+                      {completedTodos}/{todos.length} completed
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">Prototype summary</p>
-                    <p className="text-xs text-foreground-muted">Session-level placeholders</p>
+                  <div className="space-y-2">
+                    {todos.map((todo, index) => (
+                      <div key={`${todo.content}-${index}`} className="flex items-start gap-2 text-sm">
+                        <TodoStatusIcon status={todo.status} />
+                        <div className="min-w-0 pt-0.5">
+                          <p className="break-words text-foreground">{todo.content}</p>
+                          {todo.activeForm ? (
+                            <p className="break-words text-xs text-foreground-muted">{todo.activeForm}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground-muted">
-                  Stub
-                </span>
-              </div>
-
-              <div className="space-y-2 text-sm">
-                <div className="rounded-lg border border-border bg-background p-2.5">
-                  <div className="mb-0.5 flex items-center gap-2 text-foreground">
-                    <GitBranch className="h-4 w-4 text-foreground-muted" />
-                    <span className="font-medium">Branch</span>
-                  </div>
-                  <p className="break-all text-foreground-muted">
-                    {pushedBranch ?? "No pushed branch yet."}
-                  </p>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-foreground-muted">
+                  No session todo data yet.
                 </div>
-
-                <div className="rounded-lg border border-border bg-background p-2.5">
-                  <div className="mb-0.5 flex items-center gap-2 text-foreground">
-                    <GitPullRequest className="h-4 w-4 text-foreground-muted" />
-                    <span className="font-medium">Pull Request</span>
-                  </div>
-                  {pullRequestUrl ? (
-                    <div className="space-y-1">
-                      <p className="text-foreground-muted">
-                        Status: <span className="font-medium capitalize text-foreground">{pullRequestState ?? "open"}</span>
-                      </p>
-                      <Link
-                        href={pullRequestUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block break-all text-accent hover:underline"
-                      >
-                        {pullRequestUrl}
-                      </Link>
-                    </div>
-                  ) : (
-                    <p className="text-foreground-muted">No pull request created yet.</p>
-                  )}
-                </div>
-
-                <div className="rounded-lg border border-dashed border-border bg-background p-2.5">
-                  <p className="font-medium text-foreground">Diff Summary</p>
-                  <p className="mt-0.5 text-foreground-muted">
-                    Git diff state is not wired yet. This section is reserved for server-provided file change status.
-                  </p>
-                </div>
-              </div>
+              )}
             </section>
           </SidebarGroupContent>
-        </SidebarGroup> */}
+        </SidebarGroup>
 
-        {/* <SidebarGroup>
+        <SidebarGroup>
           <SidebarGroupLabel>Plan</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarSection
-              badge="Stub"
-              emptyState="No plan captured yet. This will eventually show a persisted session plan summary."
-            />
+            <section className="rounded-xl border border-sidebar-border bg-background/55 p-3">
+              {isPlanLoading ? (
+                <div className="flex items-center gap-2 text-sm text-foreground-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading plan...</span>
+                </div>
+              ) : planError ? (
+                <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-foreground-muted">
+                  {planError}
+                </div>
+              ) : plan ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div className="rounded-md bg-foreground/10 p-1.5 text-foreground-muted">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">Latest plan</p>
+                      <p className="text-xs text-foreground-muted">
+                        {new Date(plan.updatedAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-dashed border-border bg-background p-3">
+                    <pre className="whitespace-pre-wrap break-words text-xs text-foreground-muted">
+                      {plan.plan}
+                    </pre>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-foreground-muted">
+                  No plan captured yet.
+                </div>
+              )}
+            </section>
           </SidebarGroupContent>
-        </SidebarGroup> */}
+        </SidebarGroup>
       </SidebarContent>
     </AppRightSidebarPortal>
   );
 }
 
-// interface SidebarSectionProps {
-//   badge: string;
-//   emptyState: string;
-// }
+function TodoStatusIcon({
+  status,
+}: {
+  status: "pending" | "in_progress" | "completed";
+}) {
+  if (status === "completed") {
+    return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />;
+  }
 
-// function SidebarSection({
-//   badge,
-//   emptyState,
-// }: SidebarSectionProps) {
-//   return (
-//     <section className="rounded-xl border border-sidebar-border bg-background/55 p-3">
-//       <div className="mb-2 flex items-center justify-end gap-3">
-//         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground-muted">
-//           {badge}
-//         </span>
-//       </div>
-//       <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-foreground-muted">
-//         {emptyState}
-//       </div>
-//     </section>
-//   );
-// }
+  if (status === "in_progress") {
+    return <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-600" />;
+  }
+
+  return <Circle className="mt-0.5 h-4 w-4 shrink-0 text-foreground-muted" />;
+}
