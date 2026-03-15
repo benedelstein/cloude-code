@@ -3,7 +3,7 @@ import "./globals.css";
 import { Sonner } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "☁️ Cloude Code",
+  title: "Cloude Code",
   description: "Develop in the cloud.",
 };
 

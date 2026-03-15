@@ -146,12 +146,12 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
       </SidebarInset>
 
       <SidebarProvider
-        open={open}
+        open={enabled ? open : false}
         onOpenChange={setOpen}
-        openMobile={mobileOpen}
+        openMobile={enabled ? mobileOpen : false}
         onOpenMobileChange={setMobileOpen}
         cookieName="right_sidebar_state"
-        keyboardShortcut={{ code: "Digit0", altKey: true }}
+        keyboardShortcut={enabled ? { code: "Digit0", altKey: true } : null}
         layout="contents"
       >
         <Sidebar
