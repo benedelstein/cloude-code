@@ -48,19 +48,25 @@ export function AppShell({
 }
 
 function AppShellLayout({ children }: { children: React.ReactNode }) {
-  const { open: isLeftSidebarOpen, toggleSidebar } = useSidebar();
-  const { enabled, open, setOpen } = useAppRightSidebar();
-  const isRightSidebarOpen = enabled && open;
-  const rightHeaderReserve = !enabled
-    ? "0rem"
-    : isRightSidebarOpen
-      ? APP_RIGHT_SIDEBAR_WIDTH
-      : APP_RIGHT_SIDEBAR_BUTTON_GUTTER;
+  const { open: isLeftSidebarOpen, toggleSidebar, isMobile } = useSidebar();
+  const { enabled, open, mobileOpen, setOpen, setMobileOpen } = useAppRightSidebar();
+  const isRightSidebarOpen = enabled && (isMobile ? mobileOpen : open);
+  const headerMaxWidth = "56rem";
+  const desktopRightSidebarReserve = enabled && !isMobile && open
+    ? APP_RIGHT_SIDEBAR_WIDTH
+    : "0rem";
+  const leftHeaderOverlayReserve = isMobile || !isLeftSidebarOpen
+    ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER
+    : "0rem";
+  const rightHeaderOverlayReserve = enabled && (isMobile || !open)
+    ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER
+    : "0rem";
+  const centeredHeaderMargin = `calc((100% - ${headerMaxWidth} - ${desktopRightSidebarReserve}) / 2)`;
 
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 top-0 z-20 h-0">
-        <div className={`absolute left-5 top-2 hidden ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center md:flex`}>
+        <div className={`absolute left-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -84,7 +90,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
 
         <div
           className={cn(
-            `absolute right-5 top-2 hidden ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center md:flex`,
+            `absolute right-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`,
             getFadeScaleVisibilityClasses(enabled, {
               durationClass: "duration-120",
             }),
@@ -97,7 +103,14 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
                 variant="ghost"
                 size="icon"
                 className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
-                onClick={() => setOpen(!isRightSidebarOpen)}
+                onClick={() => {
+                  if (isMobile) {
+                    setMobileOpen(!mobileOpen);
+                    return;
+                  }
+
+                  setOpen(!open);
+                }}
               >
                 {isRightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 <span className="sr-only">
@@ -119,8 +132,8 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
             <div
               className="max-w-4xl px-4 h-full flex items-center transition-[margin] duration-200 ease-linear"
               style={{
-                marginLeft: `max(0rem, calc((100% - 56rem - ${rightHeaderReserve}) / 2))`,
-                marginRight: `max(${rightHeaderReserve}, calc((100% - 56rem + ${rightHeaderReserve}) / 2))`,
+                marginLeft: `max(${leftHeaderOverlayReserve}, ${centeredHeaderMargin})`,
+                marginRight: `calc(${desktopRightSidebarReserve} + max(${rightHeaderOverlayReserve}, ${centeredHeaderMargin}))`,
               }}
             >
               <div className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}>
@@ -133,8 +146,10 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
       </SidebarInset>
 
       <SidebarProvider
-        open={isRightSidebarOpen}
+        open={open}
         onOpenChange={setOpen}
+        openMobile={mobileOpen}
+        onOpenMobileChange={setMobileOpen}
         cookieName="right_sidebar_state"
         keyboardShortcut={{ code: "Digit0", altKey: true }}
         layout="contents"
@@ -144,7 +159,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
           collapsible="offcanvas"
           variant="floating"
           reserveSpace={false}
-          className="**:data-[sidebar=sidebar]:bg-sidebar"
+          className="[&_[data-sidebar=sidebar]]:bg-sidebar"
         >
           <AppRightSidebarSlot />
         </Sidebar>

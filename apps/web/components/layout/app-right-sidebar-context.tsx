@@ -13,8 +13,10 @@ const AppRightSidebarSlotSetterContext = createContext<((node: HTMLDivElement | 
 interface AppRightSidebarControls {
   enabled: boolean;
   open: boolean;
+  mobileOpen: boolean;
   setEnabled: (enabled: boolean) => void;
   setOpen: (open: boolean) => void;
+  setMobileOpen: (open: boolean) => void;
 }
 
 const AppRightSidebarControlsContext = createContext<AppRightSidebarControls | null>(null);
@@ -33,6 +35,7 @@ export function AppRightSidebarProvider({
   const [slotNode, setSlotNode] = useState<HTMLDivElement | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [open, setOpenState] = useState(defaultOpen);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const setOpen = useCallback((nextOpen: boolean) => {
     setOpenState(nextOpen);
@@ -42,9 +45,11 @@ export function AppRightSidebarProvider({
   const controls = useMemo<AppRightSidebarControls>(() => ({
     enabled,
     open,
+    mobileOpen,
     setEnabled,
     setOpen,
-  }), [enabled, open, setOpen]);
+    setMobileOpen,
+  }), [enabled, mobileOpen, open, setOpen]);
 
   return (
     <AppRightSidebarControlsContext.Provider value={controls}>

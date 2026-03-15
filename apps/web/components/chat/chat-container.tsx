@@ -8,6 +8,7 @@ import {
   APP_RIGHT_SIDEBAR_WIDTH,
   useAppRightSidebar,
 } from "@/components/layout/app-right-sidebar-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
 import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import {
@@ -52,6 +53,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     stop,
   } = useSession();
   const { enabled: isRightSidebarEnabled, open: isRightSidebarOpen } = useAppRightSidebar();
+  const isMobile = useIsMobile();
 
   const { user } = useAuth();
   const claude = useClaudeAuth({ sessionId });
@@ -63,7 +65,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
-  const rightSidebarInset = isRightSidebarEnabled && isRightSidebarOpen
+  const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
     ? APP_RIGHT_SIDEBAR_WIDTH
     : "0rem";
 
@@ -125,9 +127,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   return (
     <div className="h-full flex flex-col">
       <AppHeaderPortal>
-        <div className="flex w-full items-center justify-between gap-3">
-          <div className="min-w-0 flex flex-1 flex-col gap-0">
-            <div className="flex items-center gap-1 min-w-0">
+        <div className="flex min-w-0 w-full items-center justify-between gap-3">
+          <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               {isEditingTitle ? (
                 <>
                   <input
@@ -170,7 +172,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium truncate">
+                  <p className="w-0 flex-1 truncate text-sm font-medium">
                     {displayTitle}
                   </p>
                   <button

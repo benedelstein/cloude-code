@@ -66,7 +66,7 @@ export function SessionRightSidebar() {
   return (
     <AppRightSidebarPortal>
       <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-center border-b border-sidebar-border`}>
-        <div className="px-2">
+        <div className="px-1">
           <div className="min-w-0 flex gap-0 flex-col">
             <p className="truncate text-sm font-medium">Session Context</p>
             <Link href={`https://github.com/${repoFullName}`} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-foreground-muted hover:underline">

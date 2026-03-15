@@ -47,7 +47,7 @@ type SidebarContextProps = {
   open: boolean
   setOpen: (open: boolean) => void
   openMobile: boolean
-  setOpenMobile: (open: boolean) => void
+  setOpenMobile: React.Dispatch<React.SetStateAction<boolean>>
   isMobile: boolean
   toggleSidebar: () => void
 }
@@ -69,6 +69,8 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean
     open?: boolean
     onOpenChange?: (open: boolean) => void
+    openMobile?: boolean
+    onOpenMobileChange?: (open: boolean) => void
     cookieName?: string
     keyboardShortcut?: SidebarKeyboardShortcut
     layout?: "default" | "contents"
@@ -79,6 +81,8 @@ const SidebarProvider = React.forwardRef<
       defaultOpen = true,
       open: openProp,
       onOpenChange: setOpenProp,
+      openMobile: openMobileProp,
+      onOpenMobileChange: setOpenMobileProp,
       cookieName = SIDEBAR_COOKIE_NAME,
       keyboardShortcut = SIDEBAR_KEYBOARD_SHORTCUT,
       layout = "default",
@@ -90,7 +94,19 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
-    const [openMobile, setOpenMobile] = React.useState(false)
+    const [_openMobile, _setOpenMobile] = React.useState(false)
+    const openMobile = openMobileProp ?? _openMobile
+    const setOpenMobile = React.useCallback<React.Dispatch<React.SetStateAction<boolean>>>(
+      (value) => {
+        const openState = typeof value === "function" ? value(openMobile) : value
+        if (setOpenMobileProp) {
+          setOpenMobileProp(openState)
+        } else {
+          _setOpenMobile(openState)
+        }
+      },
+      [openMobile, setOpenMobileProp]
+    )
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
