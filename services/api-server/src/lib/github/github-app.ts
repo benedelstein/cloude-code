@@ -341,7 +341,7 @@ export class GitHubAppService {
   async findInstallationForRepo(
     owner: string,
     repo: string,
-  ): Promise<{ id: number; repository_selection: string }> {
+  ): Promise<{ installation: { id: number; repository_selection: string }, repo: { id: number; } }> {
     // Check D1 first
     const installation = await this.db
       .prepare(
@@ -351,26 +351,26 @@ export class GitHubAppService {
       .bind(owner)
       .first<{ id: number; repository_selection: string }>();
 
-    if (installation) {
-      // If selection is "selected", verify this specific repo is accessible
-      if (installation.repository_selection === "selected") {
-        const repoRow = await this.db
-          .prepare(
-            `SELECT 1 FROM github_installation_repos
-             WHERE installation_id = ? AND repo_name = ?`,
-          )
-          .bind(installation.id, `${owner}/${repo}`)
-          .first();
+    // if access is "all", we need to verify that the repo actually exists.
+    if (installation && installation.repository_selection === "selected") {
+      const repoRow = await this.db
+        .prepare(
+          `SELECT repo_id FROM github_installation_repos
+               WHERE installation_id = ? AND repo_name = ?`,
+        )
+        .bind(installation.id, `${owner}/${repo}`)
+        .first<{ repo_id: number }>();
 
-        if (!repoRow) {
-          throw new GitHubAppError(
-            "REPO_NOT_ACCESSIBLE",
-            `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
-          );
-        }
+      if (!repoRow) {
+        throw new GitHubAppError(
+          "REPO_NOT_ACCESSIBLE",
+          `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
+        );
       }
-      return installation;
+      return { installation, repo: { id: repoRow.repo_id } };
     }
+
+    this.logger.log(`installation/repo not found in d1, trying api for ${owner}/${repo}`)
 
     // Fallback: query GitHub API directly
     try {
@@ -384,6 +384,10 @@ export class GitHubAppService {
         repository_selection: data.repository_selection ?? "all",
       };
     } catch (_error) {
+      this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
+        loggerName,
+        error: _error,
+      });
       throw new GitHubAppError(
         "INSTALLATION_NOT_FOUND",
         `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
@@ -391,8 +395,31 @@ export class GitHubAppService {
     }
   }
 
+  async getUserRepoPermissions(userAccessToken: string, owner: string, repo: string): Promise<{
+    admin: boolean;
+    maintain?: boolean;
+    push: boolean;
+    triage?: boolean;
+    pull: boolean;
+  } | null> {
+    const octokit = new Octokit({ auth: userAccessToken });
+    const { data } = await octokit.rest.repos.get({ owner, repo });
+    const permissions = data.permissions;
+    if (!permissions) {
+      return null;
+    }
+    return {
+      admin: permissions.admin,
+      maintain: permissions.maintain,
+      push: permissions.push,
+      triage: permissions.triage,
+      pull: permissions.pull,
+    };
+  }
+
   /**
    * Get an installation access token, using D1 cache with 5-minute buffer.
+   * This token allows to make requests as the app on the installation.
    */
   async getInstallationToken(
     installationId: number,

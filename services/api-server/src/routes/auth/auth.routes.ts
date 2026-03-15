@@ -4,7 +4,7 @@ import type { Env } from "@/types";
 import { GitHubAppService } from "@/lib/github";
 import { logger } from "@/lib/logger";
 import { encrypt } from "@/lib/crypto";
-import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
+import type { AuthUser } from "@/middleware/auth.middleware";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import { UserRepository } from "@/repositories/user-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
@@ -225,7 +225,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
 });
 
 // GET /auth/me — returns current user info
-authRoutes.use("/me", authMiddleware);
 authRoutes.openapi(getMeRoute, async (c) => {
   const user = c.get("user");
   return c.json(
@@ -240,7 +239,6 @@ authRoutes.openapi(getMeRoute, async (c) => {
 });
 
 // POST /auth/logout — deletes auth session
-authRoutes.use("/logout", authMiddleware);
 authRoutes.openapi(postLogoutRoute, async (c) => {
   const authHeader = c.req.header("Authorization")!;
   const token = authHeader.slice(7);

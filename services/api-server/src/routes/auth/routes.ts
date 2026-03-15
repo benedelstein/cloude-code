@@ -6,6 +6,7 @@ import {
   UserInfo,
   LogoutResponse,
 } from "@repo/shared";
+import { authMiddleware } from "@/middleware/auth.middleware";
 
 export const getGithubRoute = createRoute({
   method: "get",
@@ -37,6 +38,7 @@ export const postTokenRoute = createRoute({
 export const getMeRoute = createRoute({
   method: "get",
   path: "/me",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: UserInfo } },
@@ -48,6 +50,7 @@ export const getMeRoute = createRoute({
 export const postLogoutRoute = createRoute({
   method: "post",
   path: "/logout",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: LogoutResponse } },

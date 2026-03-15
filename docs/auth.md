@@ -76,3 +76,15 @@ Browser                    Next.js proxy (/api/*)       API Server
 | `apps/web/app/api/auth/callback/route.ts` | OAuth callback, sets cookie |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
 | `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout) |
+
+## Authentication Rules
+
+- You can only create a session on a repo if you have write access to it.
+- You can only view a session if you created it (for now).
+- You can only install the github app on a repo if you have admin access to it (this is a limitation of the github api).
+
+
+edge case: if a user has access to a repo and creates a session, then their admin removes them later. 
+We need to disallow them from accessing that repo later. 
+This is tricky because the installation token still allows access for the app, but the user should be blocked
+from it.

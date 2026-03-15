@@ -8,10 +8,7 @@ import {
 } from "@/lib/claude-oauth-service";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { SessionHistoryService } from "@/lib/session-history";
-import {
-  authMiddleware,
-  type AuthUser,
-} from "@/middleware/auth.middleware";
+import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   getClaudeAuthRoute,
   postClaudeTokenRoute,
@@ -30,7 +27,6 @@ claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
   return c.json(authUrl, 200);
 });
 
-claudeAuthRoutes.use("/claude/token", authMiddleware);
 claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const { code, state, sessionId } = c.req.valid("json");
   const user = c.get("user");
@@ -83,7 +79,6 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   return c.json({ ok: true as const }, 200);
 });
 
-claudeAuthRoutes.use("/claude/status", authMiddleware);
 claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   const user = c.get("user");
   const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
@@ -91,7 +86,6 @@ claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   return c.json(status, 200);
 });
 
-claudeAuthRoutes.use("/claude/disconnect", authMiddleware);
 claudeAuthRoutes.openapi(postClaudeDisconnectRoute, async (c) => {
   const user = c.get("user");
   const claudeOAuthService = new ClaudeOAuthService(c.env, logger);

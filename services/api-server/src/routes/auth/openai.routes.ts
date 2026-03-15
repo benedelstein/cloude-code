@@ -47,6 +47,7 @@ const getOpenAIAuthRoute = createRoute({
 const postOpenAITokenRoute = createRoute({
   method: "post",
   path: "/openai/token",
+  middleware: [authMiddleware] as const,
   request: {
     body: {
       content: { "application/json": { schema: OpenAITokenRequest } },
@@ -63,6 +64,7 @@ const postOpenAITokenRoute = createRoute({
 const getOpenAIStatusRoute = createRoute({
   method: "get",
   path: "/openai/status",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: OpenAIStatusResponse } },
@@ -74,6 +76,7 @@ const getOpenAIStatusRoute = createRoute({
 const postOpenAIDisconnectRoute = createRoute({
   method: "post",
   path: "/openai/disconnect",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: OpenAIDisconnectResponse } },
@@ -137,7 +140,6 @@ openaiAuthRoutes.openapi(getOpenAIAuthRoute, async (c) => {
  * POST /auth/openai/token — Exchange authorization code for tokens
  * Requires authentication (user must be logged in via GitHub first).
  */
-openaiAuthRoutes.use("/openai/token", authMiddleware);
 openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
   const { code, state } = c.req.valid("json");
   const user = c.get("user");
@@ -237,7 +239,6 @@ openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
 /**
  * GET /auth/openai/status — Check if user has connected OpenAI
  */
-openaiAuthRoutes.use("/openai/status", authMiddleware);
 openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
   const user = c.get("user");
 
@@ -253,7 +254,6 @@ openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
 /**
  * POST /auth/openai/disconnect — Remove OpenAI tokens
  */
-openaiAuthRoutes.use("/openai/disconnect", authMiddleware);
 openaiAuthRoutes.openapi(postOpenAIDisconnectRoute, async (c) => {
   const user = c.get("user");
 

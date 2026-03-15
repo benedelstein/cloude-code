@@ -7,6 +7,7 @@ import {
   ClaudeStatusResponse,
   ClaudeDisconnectResponse,
 } from "@repo/shared";
+import { authMiddleware } from "@/middleware/auth.middleware";
 
 const ErrorResponse = z.object({
   error: z.string(),
@@ -26,6 +27,7 @@ export const getClaudeAuthRoute = createRoute({
 export const postClaudeTokenRoute = createRoute({
   method: "post",
   path: "/claude/token",
+  middleware: [authMiddleware] as const,
   description: "Exchange Claude OAuth code for tokens",
   request: {
     body: {
@@ -47,6 +49,7 @@ export const postClaudeTokenRoute = createRoute({
 export const getClaudeStatusRoute = createRoute({
   method: "get",
   path: "/claude/status",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: ClaudeStatusResponse } },
@@ -58,6 +61,7 @@ export const getClaudeStatusRoute = createRoute({
 export const postClaudeDisconnectRoute = createRoute({
   method: "post",
   path: "/claude/disconnect",
+  middleware: [authMiddleware] as const,
   responses: {
     200: {
       content: { "application/json": { schema: ClaudeDisconnectResponse } },

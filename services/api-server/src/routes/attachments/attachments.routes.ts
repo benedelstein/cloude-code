@@ -1,6 +1,6 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import type { AuthUser } from "@/middleware/auth.middleware";
+import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "@/lib/attachments/attachment-service";
 import { SessionHistoryService } from "@/lib/session-history";
 import {
@@ -14,6 +14,8 @@ export const attachmentsRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+
+attachmentsRoutes.use("/", authMiddleware);
 
 attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   const user = c.get("user");

@@ -16,7 +16,7 @@ import {
 } from "@/lib/session-pull-request-service";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
-import type { AuthUser } from "@/middleware/auth.middleware";
+import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import {
   listSessionsRoute,
   createSessionRoute,
@@ -36,6 +36,8 @@ export const sessionsRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+
+sessionsRoutes.use("/", authMiddleware);
 
 class SessionInitializationError extends Error {
   readonly status: number;
@@ -89,14 +91,32 @@ sessionsRoutes.openapi(listSessionsRoute, async (c) => {
 
 // Create a new session
 sessionsRoutes.openapi(createSessionRoute, async (c) => {
-  const parsed = c.req.valid("json");
+  const createSessionData = c.req.valid("json");
+  const user = c.get("user");
+  const [owner, repo] = createSessionData.repoFullName.split("/");
+  if (!owner || !repo) {
+    return c.json(
+      { error: "Invalid repository name" },
+      422,
+    ) as any;
+  }
 
   // Verify the GitHub App installation exists for this repo before creating the session
   const github = new GitHubAppService(c.env, logger);
   try {
     await github.findInstallationForRepo(
-      ...parsed.repoFullName.split("/") as [string, string],
+      owner,
+      repo,
     );
+    // ensure the user has access to the repo
+    const permissions = await github.getUserRepoPermissions(user.githubAccessToken, owner, repo);
+    if (!permissions || !permissions.push) {
+      console.error("User does not have write access to repository", user.id, owner, repo, permissions);
+      return c.json(
+        { error: "You do not have access to this repository" },
+        403,
+      ) as any;
+    }
   } catch (error) {
     if (error instanceof GitHubAppError) {
       return c.json({ error: error.message, code: error.code }, 422) as any;
@@ -104,19 +124,18 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     throw error;
   }
 
-  const user = c.get("user");
   const sessionId = crypto.randomUUID();
-  console.log("creating session agent", sessionId, "user", user.githubLogin);
+  console.log("creating session agent", sessionId, "user", user.id);
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const attachmentService = new AttachmentService(c.env.DB);
-  const attachmentIds = [...new Set(parsed.attachmentIds ?? [])];
+  const attachmentIds = [...new Set(createSessionData.attachmentIds ?? [])];
 
   // Record session in D1 for history listing. Attachments reference sessions via FK.
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
-    repoId: parsed.repoId,
-    repoFullName: parsed.repoFullName,
+    repoId: createSessionData.repoId, // TODO: WE NEED TO KNOW IF THIS IS THE RIGHT REPO ID. 
+    repoFullName: createSessionData.repoFullName,
   });
   let attachmentsBound = false;
 
@@ -148,10 +167,10 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         body: JSON.stringify({
           sessionId,
           userId: user.id,
-          repoFullName: parsed.repoFullName,
-        settings: parsed.settings,
-        branch: parsed.branch,
-        initialMessage: parsed.initialMessage,
+          repoFullName: createSessionData.repoFullName,
+        settings: createSessionData.settings,
+        branch: createSessionData.branch,
+        initialMessage: createSessionData.initialMessage,
         initialAttachmentIds: attachmentIds,
       }),
     }),
@@ -198,9 +217,9 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
 
   // If an initial message was provided, generate a title immediately
   let title: string | null = null;
-  if (parsed.initialMessage) {
+  if (createSessionData.initialMessage) {
     try {
-      title = await generateSessionTitle(c.env.ANTHROPIC_API_KEY, parsed.initialMessage);
+      title = await generateSessionTitle(c.env.ANTHROPIC_API_KEY, createSessionData.initialMessage);
       await sessionHistory.updateTitle(sessionId, title);
     } catch (error) {
       console.error("Failed to generate title at creation:", error);
