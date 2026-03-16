@@ -15,17 +15,24 @@ export function useOpenAIAuth() {
   }, []);
 
   const connect = useCallback(async () => {
-    const { url } = await getOpenAIAuthUrl();
-
+    // Open popup synchronously with user gesture to avoid Safari popup blocker.
     const width = 500;
     const height = 700;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
     const popup = window.open(
-      url,
+      "about:blank",
       "openai-auth",
       `width=${width},height=${height},left=${left},top=${top}`,
     );
+
+    const { url } = await getOpenAIAuthUrl();
+
+    if (!popup || popup.closed) {
+      return;
+    }
+
+    popup.location.href = url;
 
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
