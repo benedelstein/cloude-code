@@ -6,25 +6,34 @@ import type {
 import type { Logger } from "@repo/shared";
 import { decrypt, encrypt } from "@/lib/crypto";
 import type { Env } from "@/types";
+import { GitHubInstallationRepository } from "@/repositories/github-installation-repository";
+import type {
+  GitHubInstallationWithRepo,
+  RepositorySelection,
+} from "@/repositories/github-installation-repository";
+import { GitHubUserRepoAccessCacheRepository } from "@/repositories/github-user-repo-access-cache-repository";
+import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
+import { UserSessionRepository } from "@/repositories/user-session-repository";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
 
 const loggerName = "github-app.ts";
+const USER_REPO_ACCESS_CACHE_TTL_MS = 5 * 60 * 1000;
 
-export interface OAuthUser {
+export interface GithubOAuthUser {
   id: number;
   login: string;
   name: string | null;
   avatarUrl: string;
 }
 
-export interface OAuthTokenResult {
+export interface GithubOAuthTokenResult {
   accessToken: string;
   refreshToken: string | undefined;
   refreshTokenExpiresAt: string | undefined;
   expiresAt: string | undefined;
-  user: OAuthUser;
+  user: GithubOAuthUser;
 }
 
 export interface RefreshedToken {
@@ -69,7 +78,7 @@ export interface GitHubRepositoryData {
   fullName: string;
   owner: string;
   name: string;
-  defaultBranch: string;
+  defaultBranch?: string;
 }
 
 export type GitHubAppErrorCode =
@@ -88,12 +97,15 @@ export class GitHubAppError extends Error {
 }
 
 export class GitHubAppService {
-  private app: App;
-  private db: D1Database;
-  private clientId: string;
-  private appSlug: string;
-  private logger: Logger;
-  private tokenEncryptionKey: string;
+  private readonly app: App;
+  private readonly installationRepository: GitHubInstallationRepository;
+  private readonly userRepoAccessCacheRepository: GitHubUserRepoAccessCacheRepository;
+  private readonly tokenCacheRepository: InstallationTokenCacheRepository;
+  private readonly userSessionRepository: UserSessionRepository;
+  private readonly clientId: string;
+  private readonly appSlug: string;
+  private readonly logger: Logger;
+  private readonly tokenEncryptionKey: string;
 
   constructor(env: Env, logger: Logger) {
     this.app = new App({
@@ -105,7 +117,10 @@ export class GitHubAppService {
         clientSecret: env.GITHUB_APP_CLIENT_SECRET,
       },
     });
-    this.db = env.DB;
+    this.installationRepository = new GitHubInstallationRepository(env.DB);
+    this.userRepoAccessCacheRepository = new GitHubUserRepoAccessCacheRepository(env.DB);
+    this.tokenCacheRepository = new InstallationTokenCacheRepository(env.DB);
+    this.userSessionRepository = new UserSessionRepository(env.DB);
     this.clientId = env.GITHUB_APP_CLIENT_ID;
     this.appSlug = env.GITHUB_APP_SLUG;
     this.logger = logger;
@@ -131,7 +146,7 @@ export class GitHubAppService {
   /**
    * Exchange an OAuth authorization code for user tokens + profile info.
    */
-  async exchangeOAuthCode(code: string): Promise<OAuthTokenResult> {
+  async exchangeOAuthCode(code: string): Promise<GithubOAuthTokenResult> {
     const { authentication } = await this.app.oauth.createToken({ code });
 
     // Fetch user profile with the new token
@@ -172,7 +187,7 @@ export class GitHubAppService {
    * Resolve a repo (owner/name) to an installation access token.
    * Checks D1 for installation, verifies repo access, and returns a cached or fresh token.
    */
-  async getTokenForRepo(repoFullName: string): Promise<string> {
+  async getInstallationTokenForRepo(repoFullName: string): Promise<string> {
     const [owner, repo] = repoFullName.split("/");
     if (!owner || !repo) {
       throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
@@ -286,14 +301,9 @@ export class GitHubAppService {
    * Checks D1 first, falls back to the GitHub API.
    */
   async getRepoNameById(repoId: number): Promise<string> {
-    const row = await this.db
-      .prepare(
-        `SELECT repo_name FROM github_installation_repos WHERE repo_id = ?`,
-      )
-      .bind(repoId)
-      .first<{ repo_name: string }>();
+    const installationRepo = await this.installationRepository.findInstallationRepoById(repoId);
 
-    if (row) return row.repo_name;
+    if (installationRepo) return installationRepo.repoName;
 
     // Fallback: query GitHub API using an app-level request
     const { data } = await this.app.octokit.request("GET /repositories/{id}", {
@@ -302,19 +312,17 @@ export class GitHubAppService {
     return data.full_name;
   }
 
+  private buildUserRepoAccessCacheExpiry(): string {
+    return new Date(Date.now() + USER_REPO_ACCESS_CACHE_TTL_MS).toISOString();
+  }
+
   /**
    * Resolve a repo's numeric GitHub ID. Checks D1 first, falls back to the API.
    */
   private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {
-    const row = await this.db
-      .prepare(
-        `SELECT repo_id FROM github_installation_repos
-         WHERE installation_id = ? AND repo_name = ?`,
-      )
-      .bind(installationId, `${owner}/${repo}`)
-      .first<{ repo_id: number }>();
+    const installationRepo = await this.installationRepository.findRepo(installationId, `${owner}/${repo}`);
 
-    if (row) return row.repo_id;
+    if (installationRepo) return installationRepo.repoId;
 
     // Fallback: query GitHub API
     const octokit = await this.app.getInstallationOctokit(installationId);
@@ -342,105 +350,161 @@ export class GitHubAppService {
     };
   }
 
-  /**
-   * Resolve a repository using the user's OAuth token.
-   * This is the source of truth for whether the user can access the repo.
-   */
-  async getUserAccessibleRepo(
-    userAccessToken: string,
-    owner: string,
-    repo: string,
-  ): Promise<GitHubRepositoryData> {
-    const octokit = new Octokit({ auth: userAccessToken });
-
-    try {
-      const { data } = await octokit.rest.repos.get({ owner, repo });
-      return {
-        id: data.id,
-        fullName: data.full_name,
-        owner: data.owner.login,
-        name: data.name,
-        defaultBranch: data.default_branch,
-      };
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "status" in error &&
-        error.status === 404
-      ) {
-        throw new GitHubAppError(
-          "REPO_NOT_ACCESSIBLE",
-          `Repository ${owner}/${repo} is not accessible to the authenticated user`,
-        );
-      }
-
-      throw error;
-    }
+  private async cacheUserAccessibleInstallationRepos(
+    userId: string,
+    installationId: number,
+    repositories: GitHubRepositoryData[],
+  ): Promise<void> {
+    await this.userRepoAccessCacheRepository.setAllowedMany(
+      userId,
+      installationId,
+      repositories,
+      this.buildUserRepoAccessCacheExpiry(),
+    );
   }
 
-  async getUserAccessibleRepoById(
+  async warmUserAccessibleInstallationReposCache(
+    userId: string,
+    installationId: number,
+    repositories: GitHubRepositoryData[],
+  ): Promise<void> {
+    await this.cacheUserAccessibleInstallationRepos(
+      userId,
+      installationId,
+      repositories,
+    );
+  }
+
+  async warmUserAccessibleRepoAccessCache(
+    userId: string,
+    entries: Array<{
+      installationId: number;
+      repository: GitHubRepositoryData;
+    }>,
+  ): Promise<void> {
+    await this.userRepoAccessCacheRepository.setAllowedEntries(
+      userId,
+      entries,
+      this.buildUserRepoAccessCacheExpiry(),
+    );
+  }
+
+  async listUserAccessibleInstallationRepos(
+    userId: string,
     userAccessToken: string,
+    installationId: number,
+  ): Promise<GitHubRepositoryData[]> {
+    const userOctokit = new Octokit({ auth: userAccessToken });
+    const repositories = await userOctokit.paginate(
+      userOctokit.rest.apps.listInstallationReposForAuthenticatedUser,
+      {
+        installation_id: installationId,
+        per_page: 100,
+      },
+    );
+    const repositoryData = repositories.map((repo) => ({
+      id: repo.id,
+      fullName: repo.full_name,
+      owner: repo.owner.login,
+      name: repo.name,
+      defaultBranch: repo.default_branch,
+    }));
+
+    await this.cacheUserAccessibleInstallationRepos(
+      userId,
+      installationId,
+      repositoryData,
+    );
+
+    return repositoryData;
+  }
+
+  /**
+   * Finds a repo accessible by a user id for a given installation id and repo id.
+   * @param userId - The user id.
+   * @param userAccessToken - The user's access token.
+   * @param installationId - The installation id.
+   * @param repoId - The repo id.
+   * @returns The repository data.
+   * 
+   * See https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app
+   */
+  async getUserAccessibleInstallationRepoById(
+    userId: string,
+    userAccessToken: string,
+    installationId: number,
     repoId: number,
   ): Promise<GitHubRepositoryData> {
-    const octokit = new Octokit({ auth: userAccessToken });
-
-    try {
-      const { data } = await octokit.request("GET /repositories/{repository_id}", {
-        repository_id: repoId,
-      });
-      return {
-        id: data.id,
-        fullName: data.full_name,
-        owner: data.owner.login,
-        name: data.name,
-        defaultBranch: data.default_branch,
-      };
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "status" in error &&
-        error.status === 404
-      ) {
+    const cached = await this.userRepoAccessCacheRepository.get(
+      userId,
+      installationId,
+      repoId,
+    );
+    if (cached) {
+      if (!cached.allowed) {
         throw new GitHubAppError(
           "REPO_NOT_ACCESSIBLE",
           `Repository ${repoId} is not accessible to the authenticated user`,
         );
       }
 
-      throw error;
+      if (cached.repoFullName) {
+        const [owner, name] = cached.repoFullName.split("/");
+        if (owner && name) {
+        return {
+          id: repoId,
+          fullName: cached.repoFullName,
+          owner,
+          name,
+        };
+        }
+      }
     }
+
+    const repositories = await this.listUserAccessibleInstallationRepos(
+      userId,
+      userAccessToken,
+      installationId,
+    );
+    const matchingRepository = repositories.find((repo) => repo.id === repoId);
+
+    if (!matchingRepository) {
+      await this.userRepoAccessCacheRepository.setDenied(
+        userId,
+        installationId,
+        repoId,
+        this.buildUserRepoAccessCacheExpiry(),
+      );
+      throw new GitHubAppError(
+        "REPO_NOT_ACCESSIBLE",
+        `Repository ${repoId} is not accessible to the authenticated user`,
+      );
+    }
+
+    return matchingRepository;
   }
 
   /**
-   * Find the GitHub App installation for a given repo.
+   * Find the GitHub App installation for a given repo by its owner and name.
+   * NOTE: Prefer to use findInstallationForRepoId instead. it is more efficient and canonical.
    * First checks D1, then falls back to the GitHub API.
    */
   async findInstallationForRepo(
     owner: string,
     repo: string,
-  ): Promise<{ id: number; repository_selection: string }> {
+  ): Promise<GitHubInstallationWithRepo> {
     // Check D1 first
-    const installation = await this.db
-      .prepare(
-        `SELECT id, repository_selection FROM github_installations
-         WHERE account_login = ? AND suspended_at IS NULL`,
-      )
-      .bind(owner)
-      .first<{ id: number; repository_selection: string }>();
+    const installation = await this.installationRepository.findByAccountLogin(owner);
 
-    // if access is "all", we need to verify that the repo actually exists.
-    if (installation && installation.repository_selection === "selected") {
-      const repoRow = await this.db
-        .prepare(
-          `SELECT repo_id FROM github_installation_repos
-               WHERE installation_id = ? AND repo_name = ?`,
-        )
-        .bind(installation.id, `${owner}/${repo}`)
-        .first<{ repo_id: number }>();
+    // if access is "selected", the repo should be stored in the db.
+    // if access is "all", we need to verify that the repo actually exists via api.
+    if (installation && installation.repositorySelection === "selected") {
+      const installationRepo = await this.installationRepository.findRepo(
+        installation.id,
+        `${owner}/${repo}`, // use full name
+      );
 
-      if (!repoRow) {
+      if (!installationRepo) {
         throw new GitHubAppError(
           "REPO_NOT_ACCESSIBLE",
           `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
@@ -449,18 +513,18 @@ export class GitHubAppService {
       return installation;
     }
 
-    this.logger.log(`installation/repo not found in d1, trying api for ${owner}/${repo}`)
+    this.logger.log(`installation/repo not found in d1 or not scoped to this repo, trying api for ${owner}/${repo}`);
 
     // Fallback: query GitHub API directly
     try {
       const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
         owner,
-        repo
+        repo,
       });
 
       return {
         id: data.id,
-        repository_selection: data.repository_selection ?? "all",
+        repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
       };
     } catch (_error) {
       this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
@@ -476,36 +540,26 @@ export class GitHubAppService {
 
   /**
    * Find the GitHub App installation for a repo using its numeric GitHub ID.
-   * This avoids assuming the installation account login matches the repo owner.
    */
   async findInstallationForRepoId(
     repoId: number,
-    repoFullName: string,
-  ): Promise<{ id: number; repository_selection: string }> {
+  ): Promise<GitHubInstallationWithRepo> {
     // first check d1
-    const installation = await this.db
-      .prepare(
-        `SELECT installations.id, installations.repository_selection
-         FROM github_installation_repos repos
-         JOIN github_installations installations
-           ON installations.id = repos.installation_id
-         WHERE repos.repo_id = ?
-           AND installations.suspended_at IS NULL
-         LIMIT 1`,
-      )
-      .bind(repoId)
-      .first<{ id: number; repository_selection: string }>();
+    const installation = await this.installationRepository.findByRepoId(repoId);
 
     if (installation) {
       return installation;
     }
 
-    const [owner, repo] = repoFullName.split("/");
-    if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
-    }
+    const response = await this.app.octokit.request("GET /repositories/{id}", {
+      id: repoId,
+    });
+    const repoData: Awaited<ReturnType<typeof this.app.octokit.rest.repos.get>>["data"] = response.data;
+    const owner = repoData.owner.login;
+    const repo = repoData.name;
+    const repoFullName = repoData.full_name;
 
-    this.logger.log(`installation/repo not found in d1, trying api for ${repoFullName}`);
+    this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
 
     try {
       const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
@@ -515,7 +569,7 @@ export class GitHubAppService {
 
       return {
         id: data.id,
-        repository_selection: data.repository_selection ?? "all",
+        repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
       };
     } catch (_error) {
       this.logger.error(`Failed to get repository installation for ${repoFullName}`, {
@@ -527,28 +581,6 @@ export class GitHubAppService {
         `No GitHub App installation found for ${repoFullName}. Is the app installed on this account?`,
       );
     }
-  }
-
-  async getUserRepoPermissions(userAccessToken: string, owner: string, repo: string): Promise<{
-    admin: boolean;
-    maintain?: boolean;
-    push: boolean;
-    triage?: boolean;
-    pull: boolean;
-  } | null> {
-    const octokit = new Octokit({ auth: userAccessToken });
-    const { data } = await octokit.rest.repos.get({ owner, repo });
-    const permissions = data.permissions;
-    if (!permissions) {
-      return null;
-    }
-    return {
-      admin: permissions.admin,
-      maintain: permissions.maintain,
-      push: permissions.push,
-      triage: permissions.triage,
-      pull: permissions.pull,
-    };
   }
 
   /**
@@ -564,14 +596,7 @@ export class GitHubAppService {
     const cacheRepoId = repo?.repoId ?? 0;
     const permissionSuffix = permissions.contents === "read" ? ":ro" : "";
     const cacheKey = `${cacheRepoId}${permissionSuffix}`;
-    const cached = await this.db
-      .prepare(
-        `SELECT token, expires_at FROM installation_token_cache
-         WHERE installation_id = ? AND repo_id = ?
-         AND datetime(expires_at) > datetime('now', '+5 minutes')`,
-      )
-      .bind(installationId, cacheKey)
-      .first<{ token: string; expires_at: string }>();
+    const cached = await this.tokenCacheRepository.get(installationId, cacheKey);
 
     if (cached) {
       try {
@@ -592,13 +617,7 @@ export class GitHubAppService {
 
     // Cache it
     const encryptedToken = await encrypt(data.token, this.tokenEncryptionKey);
-    await this.db
-      .prepare(
-        `INSERT OR REPLACE INTO installation_token_cache (installation_id, repo_id, token, expires_at)
-         VALUES (?, ?, ?, ?)`,
-      )
-      .bind(installationId, cacheKey, encryptedToken, data.expires_at)
-      .run();
+    await this.tokenCacheRepository.set(installationId, cacheKey, encryptedToken, data.expires_at);
 
     return data.token;
   }
@@ -645,6 +664,10 @@ export class GitHubAppService {
     this.app.webhooks.on("installation.unsuspend", async ({ payload }) => {
       await this.handleInstallationUnsuspended(payload);
     });
+    // user revoked their oauth tokens.
+    this.app.webhooks.on("github_app_authorization.revoked", async ({ payload }) => {
+      await this.handleUserAuthorizationRevoked(payload);
+    });
 
     this.app.webhooks.on(
       "installation_repositories.added",
@@ -678,25 +701,17 @@ export class GitHubAppService {
       `github installation created: ${installation.id}\ntarget_type:${installation.target_type}`,
       { loggerName },
     );
-    await this.db
-      .prepare(
-        `INSERT OR REPLACE INTO github_installations
-         (id, app_id, account_id, account_login, account_type, target_type,
-          permissions, events, repository_selection, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      )
-      .bind(
-        installation.id,
-        installation.app_id,
-        account.id,
-        account.login,
-        account.type,
-        installation.target_type,
-        JSON.stringify(installation.permissions),
-        JSON.stringify(installation.events),
-        installation.repository_selection,
-      )
-      .run();
+    await this.installationRepository.upsert({
+      id: installation.id,
+      appId: installation.app_id,
+      accountId: account.id,
+      accountLogin: account.login,
+      accountType: account.type,
+      targetType: installation.target_type,
+      permissions: JSON.stringify(installation.permissions),
+      events: JSON.stringify(installation.events),
+      repositorySelection: installation.repository_selection as RepositorySelection,
+    });
 
     // Insert selected repos if any
     if (payload.repositories && payload.repositories.length > 0) {
@@ -704,16 +719,10 @@ export class GitHubAppService {
         `installation ${installation.id} has ${payload.repositories.length} repositories`,
         { loggerName },
       );
-      const batch = payload.repositories.map((repo) =>
-        this.db
-          .prepare(
-            `INSERT OR IGNORE INTO github_installation_repos
-             (installation_id, repo_id, repo_name)
-             VALUES (?, ?, ?)`,
-          )
-          .bind(installation.id, repo.id, repo.full_name), // full_name is "owner/repo"
+      await this.installationRepository.addRepos(
+        installation.id,
+        payload.repositories.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
       );
-      await this.db.batch(batch);
     } else {
       this.logger.info(`installation ${installation.id} has no repositories specified`, {
         loggerName,
@@ -727,11 +736,7 @@ export class GitHubAppService {
     this.logger.info(`github installation deleted: ${payload.installation.id}`, {
       loggerName,
     });
-    // CASCADE will clean up repos and token cache
-    await this.db
-      .prepare(`DELETE FROM github_installations WHERE id = ?`)
-      .bind(payload.installation.id)
-      .run();
+    await this.installationRepository.delete(payload.installation.id);
   }
 
   private async handleInstallationSuspended(
@@ -740,13 +745,7 @@ export class GitHubAppService {
     this.logger.info(`github installation suspended: ${payload.installation.id}`, {
       loggerName,
     });
-    await this.db
-      .prepare(
-        `UPDATE github_installations SET suspended_at = datetime('now'), updated_at = datetime('now')
-         WHERE id = ?`,
-      )
-      .bind(payload.installation.id)
-      .run();
+    await this.installationRepository.setSuspended(payload.installation.id, true);
   }
 
   private async handleInstallationUnsuspended(
@@ -755,13 +754,7 @@ export class GitHubAppService {
     this.logger.info(`github installation unsuspended: ${payload.installation.id}`, {
       loggerName,
     });
-    await this.db
-      .prepare(
-        `UPDATE github_installations SET suspended_at = NULL, updated_at = datetime('now')
-         WHERE id = ?`,
-      )
-      .bind(payload.installation.id)
-      .run();
+    await this.installationRepository.setSuspended(payload.installation.id, false);
   }
 
   private async handleReposAdded(
@@ -776,18 +769,22 @@ export class GitHubAppService {
       },
     );
 
-    if (repos.length > 0) {
-      const batch = repos.map((repo) =>
-        this.db
-          .prepare(
-            `INSERT OR IGNORE INTO github_installation_repos
-             (installation_id, repo_id, repo_name)
-             VALUES (?, ?, ?)`,
-          )
-          .bind(installationId, repo.id, repo.full_name),
-      );
-      await this.db.batch(batch);
-    }
+    await this.installationRepository.addRepos(
+      installationId,
+      repos.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
+    );
+  }
+
+  private async handleUserAuthorizationRevoked(
+    payload: WebhookPayload<"github_app_authorization.revoked">,
+  ): Promise<void> {
+    const githubUserId = payload.sender.id;
+    this.logger.info(`github user authorization revoked: ${githubUserId}`, {
+      loggerName,
+    });
+    // Revoke all sessions and the refresh token. The GitHub access token is
+    // already invalid, so we must not attempt to use it again.
+    await this.userSessionRepository.revokeAllSessionsByGithubId(githubUserId);
   }
 
   private async handleReposRemoved(
@@ -796,16 +793,9 @@ export class GitHubAppService {
     const installationId = payload.installation.id;
     const repos = payload.repositories_removed;
 
-    if (repos.length > 0) {
-      const batch = repos.map((repo) =>
-        this.db
-          .prepare(
-            `DELETE FROM github_installation_repos
-             WHERE installation_id = ? AND repo_id = ?`,
-          )
-          .bind(installationId, repo.id),
-      );
-      await this.db.batch(batch);
-    }
+    await this.installationRepository.removeRepos(
+      installationId,
+      repos.map((repo) => repo.id),
+    );
   }
 }

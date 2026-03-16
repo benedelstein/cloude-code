@@ -64,6 +64,11 @@ export class UserSessionRepository {
     };
   }
 
+  /**
+   * Get the github refresh token for a user.
+   * @param userId the user id
+   * @returns The github refresh token for the user, if it exists.
+   */
   async getRefreshTokenByUserId(userId: string): Promise<string | null> {
     const row = await this.database.prepare(
       `SELECT encrypted_token FROM user_refresh_tokens WHERE user_id = ?`,
@@ -136,5 +141,33 @@ export class UserSessionRepository {
     await this.database.prepare(`DELETE FROM auth_sessions WHERE token = ?`)
       .bind(sessionToken)
       .run();
+  }
+
+  /**
+   * Revoke all sessions for a user and delete their refresh token.
+   * Use for "sign out everywhere" or account deletion flows.
+   * For single-session logout, use deleteByToken instead.
+   */
+  async revokeAllSessionsForUser(userId: string): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(`DELETE FROM auth_sessions WHERE user_id = ?`).bind(userId),
+      this.database.prepare(`DELETE FROM user_refresh_tokens WHERE user_id = ?`).bind(userId),
+    ]);
+  }
+
+  /**
+   * Revoke all sessions for a user identified by their GitHub numeric ID.
+   * Used when GitHub sends a github_app_authorization.revoked webhook,
+   * where only the GitHub user ID is available in the payload.
+   */
+  async revokeAllSessionsByGithubId(githubId: number): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+      ).bind(githubId),
+      this.database.prepare(
+        `DELETE FROM user_refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+      ).bind(githubId),
+    ]);
   }
 }

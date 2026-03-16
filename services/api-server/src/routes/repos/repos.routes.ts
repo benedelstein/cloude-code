@@ -18,18 +18,47 @@ reposRoutes.use("*", authMiddleware);
 reposRoutes.openapi(listReposRoute, async (c) => {
   const user = c.get("user");
   const octokit = new Octokit({ auth: user.githubAccessToken });
-
-  const { data } = await octokit.rest.apps.listInstallationsForAuthenticatedUser();
-
+  const github = new GitHubAppService(c.env, logger);
   const repos: Repo[] = [];
+  const cacheWarmEntries: Array<{
+    installationId: number;
+    repository: {
+      id: number;
+      fullName: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+    };
+  }> = [];
 
-  for (const installation of data.installations) {
-    // TODO: Paginate this.
-    const { data: repoData } = await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
+  const installations = await octokit.paginate(
+    octokit.rest.apps.listInstallationsForAuthenticatedUser,
+    { per_page: 100 },
+  );
+
+  for (const installation of installations) {
+    const installationRepositories = await octokit.paginate(
+      octokit.rest.apps.listInstallationReposForAuthenticatedUser,
+      {
         installation_id: installation.id,
-      });
+        per_page: 100,
+      },
+    );
+    const repositoriesForCache = installationRepositories.map((repo) => ({
+      id: repo.id,
+      fullName: repo.full_name,
+      owner: repo.owner.login,
+      name: repo.name,
+      defaultBranch: repo.default_branch,
+    }));
+    cacheWarmEntries.push(
+      ...repositoriesForCache.map((repository) => ({
+        installationId: installation.id,
+        repository,
+      })),
+    );
 
-    for (const repo of repoData.repositories) {
+    for (const repo of installationRepositories) {
       repos.push({
         id: repo.id,
         name: repo.name,
@@ -42,12 +71,30 @@ reposRoutes.openapi(listReposRoute, async (c) => {
     }
   }
 
-  const github = new GitHubAppService(c.env, logger);
+  // cache the results for session creation
+  // todo use redis or something.
+  c.executionCtx.waitUntil(
+    github.warmUserAccessibleRepoAccessCache(
+      user.id,
+      cacheWarmEntries,
+    ).catch((error) => {
+      logger.error("Failed to warm GitHub user repo access cache", {
+        error,
+        fields: {
+          userId: user.id,
+        },
+      });
+    }),
+  );
+
   return c.json({ repos, installUrl: github.getInstallUrl() }, 200);
 });
 
 // GET /repos/:repoId/branches — list branches for a repo
 reposRoutes.openapi(listBranchesRoute, async (c) => {
+  // Note: no need to check via installation here because it is just for branches. 
+  // We do need to know if the user can access the repo itself via their installation, 
+  // but there is no branch scoping if they do have access.
   const user = c.get("user");
   const { repoId } = c.req.valid("param");
   const octokit = new Octokit({ auth: user.githubAccessToken });

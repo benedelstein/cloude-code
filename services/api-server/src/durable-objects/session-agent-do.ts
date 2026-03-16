@@ -37,11 +37,8 @@ import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/atta
 
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { MessageAccumulator } from "@/lib/message-accumulator";
-import {
-  handleGitProxy,
-  ensureValidToken,
-  type GitProxyContext,
-} from "@/lib/git-proxy";
+import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
+import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
 import { logger as defaultLogger } from "@/lib/logger";
 import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
@@ -961,7 +958,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async refreshGitHubToken(): Promise<void> {
-    const token = await ensureValidToken(this.gitProxyContext());
+    const token = await ensureValidInstallationToken(this.gitProxyContext());
     if (token) {
       this.githubToken = token;
     }

@@ -1,7 +1,6 @@
-import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
 import type { Env } from "@/types";
 import type { SecretRepository } from "@/durable-objects/repositories/secret-repository";
+import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
 
 export interface GitProxyContext {
   gitProxySecret: string | null;
@@ -84,7 +83,7 @@ async function forwardToGitHub(
   context: GitProxyContext,
 ): Promise<GitProxyResult> {
   console.log(`[git-proxy] forwarding to GitHub: ${githubPath}`);
-  const githubToken = await ensureValidToken(context);
+  const githubToken = await ensureValidInstallationToken(context);
 
   const url = new URL(originalRequest.url);
   const targetUrl = `https://github.com/${githubPath}${url.search}`;
@@ -139,18 +138,4 @@ function validatePush(
     detectedBranch = branch;
   }
   return { allowed: true, branch: detectedBranch };
-}
-
-/**
- * Ensures a valid GitHub token is available, refreshing if needed.
- * Returns the (possibly refreshed) token and persists it to the secret repository.
- */
-export async function ensureValidToken(context: GitProxyContext): Promise<string | null> {
-  if (!context.repoFullName) return context.githubToken;
-
-  // GitHubAppService handles caching with a 5-minute buffer before expiry
-  const github = new GitHubAppService(context.env, logger);
-  const token = await github.getTokenForRepo(context.repoFullName);
-  context.secretRepository.set("github_token", token);
-  return token;
 }

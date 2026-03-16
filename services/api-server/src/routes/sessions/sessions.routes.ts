@@ -37,7 +37,7 @@ export const sessionsRoutes = new OpenAPIHono<{
   Variables: { user: AuthUser };
 }>();
 
-sessionsRoutes.use("/", authMiddleware);
+sessionsRoutes.use("*", authMiddleware);
 
 class SessionInitializationError extends Error {
   readonly status: number;
@@ -94,22 +94,26 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const createSessionData = c.req.valid("json");
   const user = c.get("user");
 
-  // Verify that the user can access this repo, and that the
-  // GitHub App installation exists for this repo before creating the session
+  // Verify that the GitHub App installation exists for this repo before creating the session
   const github = new GitHubAppService(c.env, logger);
   let repository: {
     id: number;
     fullName: string;
     owner: string;
     name: string;
-    defaultBranch: string;
+    defaultBranch?: string;
   };
   try {
-    repository = await github.getUserAccessibleRepoById(
-      user.githubAccessToken,
+    // first find the installation for the repo
+    const installation = await github.findInstallationForRepoId(
       createSessionData.repoId,
     );
-    await github.findInstallationForRepoId(repository.id, repository.fullName);
+    repository = await github.getUserAccessibleInstallationRepoById(
+      user.id,
+      user.githubAccessToken,
+      installation.id,
+      createSessionData.repoId,
+    );
   } catch (error) {
     if (error instanceof GitHubAppError) {
       return c.json({ error: error.message, code: error.code }, 422) as any;

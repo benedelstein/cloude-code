@@ -15,7 +15,7 @@ export const attachmentsRoutes = new OpenAPIHono<{
   Variables: { user: AuthUser };
 }>();
 
-attachmentsRoutes.use("/", authMiddleware);
+attachmentsRoutes.use("*", authMiddleware);
 
 attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   const user = c.get("user");

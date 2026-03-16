@@ -5,7 +5,7 @@ export {
   type GitHubCompareData,
   type CreatePullRequestInput,
   type PullRequestData,
-  type OAuthUser,
-  type OAuthTokenResult,
+  type GithubOAuthUser as OAuthUser,
+  type GithubOAuthTokenResult as OAuthTokenResult,
   type RefreshedToken,
 } from "./github-app";
