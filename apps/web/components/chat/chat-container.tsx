@@ -166,7 +166,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   }
                 }}
                 maxLength={60}
-                size={isEditingTitle ? undefined : (displayTitle?.length || 1)}
+                style={isEditingTitle ? undefined : { width: `${(displayTitle?.length || 1) + 1}ch` }}
                 className="h-7 max-w-full min-w-[2ch] shrink truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:w-full focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
               />
               {isSavingTitle ? (
