@@ -205,7 +205,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           className="pt-8 transition-[padding] duration-200 ease-linear"
           style={{ paddingRight: rightSidebarInset }}
         >
-          <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background) 32px)" }}>
+          <div className="max-w-4xl mx-auto px-4 pb-6" style={{ background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)" }}>
             <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
               className: "mb-2 flex justify-center",
             })}>

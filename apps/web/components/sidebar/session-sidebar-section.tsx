@@ -41,7 +41,7 @@ export function SessionSidebarCard({
       className={cn(
         "rounded-xl p-3",
         variant === "default"
-          ? "border border-sidebar-border bg-background-secondary"
+          ? "flex flex-col border border-sidebar-border bg-background-secondary"
           : "border border-dashed border-border bg-background-secondary text-center text-sm text-foreground-muted flex flex-col items-center justify-center",
         className,
       )}

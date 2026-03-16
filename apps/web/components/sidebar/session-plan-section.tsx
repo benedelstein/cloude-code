@@ -60,9 +60,9 @@ export function SessionPlanSection({
       <SessionSidebarSection title="Plan">
         <SessionSidebarCard className={cn(minHeight, "overflow-hidden p-0")}>
           {isLoading ? (
-            <div className="flex items-center gap-2 p-3 text-sm text-foreground-muted">
+            <div className="flex flex-1 items-center justify-center gap-2 p-3 text-sm text-foreground-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading plan...</span>
+              <span>Loading plan</span>
             </div>
           ) : plan ? (
             <div

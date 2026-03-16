@@ -46,18 +46,18 @@ export function AppShell({
   defaultRightSidebarOpen,
 }: AppShellProps) {
   const pathname = usePathname();
-  const hasRightSidebar = pathname.startsWith("/session/");
+  const isSessionPage = pathname.startsWith("/session/");
 
   return (
     <SidebarProvider
       defaultOpen={defaultSidebarOpen}
       keyboardShortcut={{ code: "Digit0", shiftKey: false }}
-      className="relative min-h-0! h-svh"
+      className="relative min-h-0! h-svh bg-background-secondary"
     >
       <AppHeaderProvider>
         <AppRightSidebarProvider
           defaultOpen={defaultRightSidebarOpen}
-          defaultEnabled={hasRightSidebar}
+          defaultEnabled={isSessionPage}
         >
           <AppShellLayout>{children}</AppShellLayout>
         </AppRightSidebarProvider>
@@ -161,7 +161,7 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <SessionSidebar />
-      <SidebarInset className="overflow-hidden">
+      <SidebarInset className="overflow-hidden bg-background-secondary">
         <div className="sticky top-0 z-10 h-0">
           <div className="pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
             <div

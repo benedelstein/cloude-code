@@ -18,7 +18,7 @@ interface TodoItem {
   todo: SessionTodo;
 }
 
-const DEFAULT_VISIBLE_TODO_COUNT = 5;
+const DEFAULT_VISIBLE_TODO_COUNT = 4;
 const TODO_STATUS_ICON_CLASS_NAME =
   "flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-200";
 
@@ -42,7 +42,14 @@ export function SessionTodoListSection({
       title="Todo List"
       meta={todos && todos.length > 0 ? `${completedTodos}/${todos.length} completed` : undefined}
     >
-      {todos && todos.length > 0 ? (
+      {todos === null ? (
+        <SessionSidebarCard className={minHeight}>
+          <div className="flex flex-1 items-center justify-center gap-2 p-3 text-sm text-foreground-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading todos</span>
+          </div>
+        </SessionSidebarCard>
+      ) : todos.length > 0 ? (
         <SessionSidebarCard className={minHeight}>
           <div className="flex flex-col">
             {todoItems.map((todoItem, index) => (
