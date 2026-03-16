@@ -55,24 +55,29 @@ export function useAuth() {
     setAuthError(null);
     setLoading(true);
 
-    let url: string;
-    try {
-      const response = await getGitHubAuthUrl();
-      url = response.url;
-    } catch (error) {
-      console.error("Failed to get auth URL", error);
-      setAuthError("Failed to start GitHub sign-in.");
-      setLoading(false);
-      return;
-    }
-
-    const popup = openCenteredPopup(url, OAUTH_POPUP_NAME, 500, 700);
+    // Open popup synchronously with user gesture to avoid Safari popup blocker.
+    // Safari blocks window.open() calls that happen after an await.
+    const popup = openCenteredPopup("about:blank", OAUTH_POPUP_NAME, 500, 700);
 
     if (!popup) {
       setAuthError("GitHub sign-in popup was blocked.");
       setLoading(false);
       return;
     }
+
+    let url: string;
+    try {
+      const response = await getGitHubAuthUrl();
+      url = response.url;
+    } catch (error) {
+      console.error("Failed to get auth URL", error);
+      popup.close();
+      setAuthError("Failed to start GitHub sign-in.");
+      setLoading(false);
+      return;
+    }
+
+    popup.location.href = url;
 
     let installPopup: Window | null = null;
     let authFinished = false;
