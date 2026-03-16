@@ -5,7 +5,7 @@ import type { SessionStatus } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 interface StatusBannerProps {
-  sessionStatus: SessionStatus;
+  sessionStatus: SessionStatus | null;
   errorMessage: string | null;
 }
 
@@ -33,14 +33,14 @@ const statusColors: Record<SessionStatus, string> = {
   terminated: "border-danger/30 bg-danger/10 text-danger",
 };
 
-const isVisible = (status: SessionStatus) => status !== "ready";
+const isVisible = (status: SessionStatus | null) => status !== null && status !== "ready";
 
 export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps) {
   const visible = isVisible(sessionStatus);
 
   const message = sessionStatus === "error" && errorMessage
     ? errorMessage
-    : statusMessages[sessionStatus];
+    : sessionStatus ? statusMessages[sessionStatus] : "";
 
   return (
     <div
@@ -51,7 +51,7 @@ export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps)
       }}
     >
       <div className="overflow-hidden">
-        <div className={`mx-3 mt-3 rounded-md border px-3 py-2 flex items-center gap-2.5 ${visible ? statusColors[sessionStatus] : ""}`}>
+        <div className={`mx-3 mt-3 rounded-md border px-3 py-2 flex items-center gap-2.5 ${visible && sessionStatus ? statusColors[sessionStatus] : ""}`}>
           {sessionStatus !== "error" && sessionStatus !== "terminated" && (
             <LoadingSpinner className="h-3.5 w-3.5" />
           )}
