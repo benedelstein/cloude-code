@@ -6,6 +6,7 @@ import type {
   ListReposResponse,
   ListBranchesResponse,
   CreateSessionResponse,
+  SessionWebSocketTokenResponse,
   DeleteSessionResponse,
   ArchiveSessionResponse,
   SessionInfoResponse,
@@ -114,6 +115,15 @@ export async function listSessions(repoId?: number): Promise<ListSessionsRespons
 
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
   return apiFetch(`/sessions/${sessionId}`);
+}
+
+export async function createSessionWebSocketToken(
+  sessionId: string,
+): Promise<SessionWebSocketTokenResponse> {
+  return apiFetch(`/sessions/${sessionId}/websocket-token`, {
+    method: "POST",
+    cache: "no-store",
+  });
 }
 
 export async function getSessionPlan(sessionId: string): Promise<SessionPlanResponse | null> {

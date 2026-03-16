@@ -10,6 +10,7 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ClaudeSigninPanel } from "./claude-signin-panel";
 import type { Branch, ListReposResponse, ListBranchesResponse } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
+import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import {
@@ -438,6 +439,11 @@ export function SessionCreationForm() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastMessageAt: new Date().toISOString(),
+      });
+
+      storeInitialSessionWebSocketToken(session.sessionId, {
+        token: session.websocketToken,
+        expiresAt: session.websocketTokenExpiresAt,
       });
 
       clearAttachments();

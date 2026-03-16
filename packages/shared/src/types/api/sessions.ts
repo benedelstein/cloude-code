@@ -35,8 +35,18 @@ export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 export const CreateSessionResponse = z.object({
   sessionId: z.uuid(),
   title: z.string().nullable(),
+  websocketToken: z.string(),
+  websocketTokenExpiresAt: z.iso.datetime(),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
+
+export const SessionWebSocketTokenResponse = z.object({
+  token: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type SessionWebSocketTokenResponse = z.infer<
+  typeof SessionWebSocketTokenResponse
+>;
 
 export const UpdateSessionTitleRequest = z.object({
   title: z.string().trim().min(1).max(60),

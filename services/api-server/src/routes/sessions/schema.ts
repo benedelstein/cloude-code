@@ -2,6 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   CreateSessionRequest,
   CreateSessionResponse,
+  SessionWebSocketTokenResponse,
   UpdateSessionTitleRequest,
   UpdateSessionTitleResponse,
   SessionInfoResponse,
@@ -91,6 +92,24 @@ export const getSessionRoute = createRoute({
     200: {
       content: { "application/json": { schema: SessionInfoResponse } },
       description: "Session info",
+    },
+  },
+});
+
+export const createSessionWebSocketTokenRoute = createRoute({
+  method: "post",
+  path: "/{sessionId}/websocket-token",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: SessionWebSocketTokenResponse } },
+      description: "Session WebSocket token",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
     },
   },
 });

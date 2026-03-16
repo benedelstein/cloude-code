@@ -208,12 +208,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
       // Capture pushed branch name and notify clients
       if (result.pushedBranch && result.response.ok) {
-        this.updatePartialState({pushedBranch: result.pushedBranch });
-        this.broadcastMessage({
-          type: "branch.pushed",
-          branch: result.pushedBranch,
-          repoFullName: this.state.repoFullName ?? "",
-        });
+        if (result.pushedBranch !== this.state.pushedBranch) {
+          this.updatePartialState({ pushedBranch: result.pushedBranch });
+          this.broadcastMessage({
+            type: "branch.pushed",
+            branch: result.pushedBranch,
+            repoFullName: this.state.repoFullName ?? "",
+          });
+        }
       }
       return result.response;
     }

@@ -21,6 +21,7 @@ import {
   listSessionsRoute,
   createSessionRoute,
   getSessionRoute,
+  createSessionWebSocketTokenRoute,
   updateSessionTitleRoute,
   getSessionMessagesRoute,
   getSessionPlanRoute,
@@ -31,6 +32,7 @@ import {
   openEditorRoute,
   closeEditorRoute,
 } from "./schema";
+import { mintSessionWebSocketToken } from "@/lib/session-websocket-token";
 
 export const sessionsRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -223,7 +225,20 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     }
   }
 
-  return c.json({ sessionId, title }, 201);
+  const webSocketToken = await mintSessionWebSocketToken(
+    c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
+    {
+      sessionId,
+      userId: user.id,
+    },
+  );
+
+  return c.json({
+    sessionId,
+    title,
+    websocketToken: webSocketToken.token,
+    websocketTokenExpiresAt: webSocketToken.expiresAt,
+  }, 201);
 });
 
 // Get session info
@@ -242,6 +257,27 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
 
   const session = (await response.json()) as SessionInfoResponse;
   return c.json(session, 200);
+});
+
+sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
+  const user = c.get("user");
+  const { sessionId } = c.req.valid("param");
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
+
+  if (!isOwnedByUser) {
+    return c.json({ error: "Session not found" }, 404) as any;
+  }
+
+  const webSocketToken = await mintSessionWebSocketToken(
+    c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
+    {
+      sessionId,
+      userId: user.id,
+    },
+  );
+
+  return c.json(webSocketToken, 200);
 });
 
 // Update session title

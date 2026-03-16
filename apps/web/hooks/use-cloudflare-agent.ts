@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
+import { useSessionWebSocketToken } from "@/hooks/use-session-websocket-token";
 import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
@@ -32,6 +33,7 @@ const DEFAULT_API_HOST = resolveDefaultApiHost();
 
 export interface UseCloudflareAgentOptions {
   sessionId: string;
+  // eslint-disable-next-line no-unused-vars
   onError?: (error: Error) => void;
 }
 
@@ -58,6 +60,7 @@ export interface UseCloudflareAgentReturn {
   setSelectedModel: (model: ClaudeModel) => void;
   editorUrl: string | null;
   claudeAuthRequired: ClaudeAuthState | null;
+  // eslint-disable-next-line no-unused-vars
   sendMessage: (message: {
     content?: string;
     attachments?: MessageAttachmentRef[];
@@ -205,11 +208,27 @@ export function useCloudflareAgent({
     }
   }, [onError, resetPendingResponse]);
 
+  const webSocketToken = useSessionWebSocketToken({
+    sessionId,
+    onAuthError: () => {
+      setSessionStatus("error");
+      setErrorMessage("Session authentication failed");
+      setIsHistoryLoading(false);
+    },
+    onReconnectPending: () => {
+      setErrorMessage((currentError) => currentError ?? "Reconnecting...");
+    },
+    onReconnectRecovered: () => {
+      setErrorMessage((currentError) => currentError === "Reconnecting..." ? null : currentError);
+    },
+  });
+
   // Use Cloudflare's useAgent hook
   const agent = useAgent<AgentState>({
     agent: "session",
     name: sessionId,
     host: resolvedHost,
+    startClosed: true,
     onMessage: (event) => {
       try {
         const msg = JSON.parse(event.data) as ServerMessage;
@@ -269,13 +288,23 @@ export function useCloudflareAgent({
     },
     onError: (message) => {
       resetPendingResponse();
-      setSessionStatus("error");
-      setErrorMessage("Connection error");
-      setIsHistoryLoading(false);
-      console.error("Connection error", { host: resolvedHost, sessionId, message });
-      onError?.(new Error(`Connection error (${resolvedHost})`));
+      console.warn("Transient websocket error", { host: resolvedHost, sessionId, message });
     },
   });
+
+  useEffect(() => {
+    if (!webSocketToken) {
+      return;
+    }
+
+    agent.updateProperties({
+      query: { token: webSocketToken.token },
+    });
+
+    if (agent.readyState === WebSocket.CLOSED) {
+      agent.reconnect();
+    }
+  }, [agent, webSocketToken]);
 
   const sendMessage = useCallback((message: {
     content?: string;

@@ -11,6 +11,8 @@ import { attachmentsRoutes } from "./routes/attachments/attachments.routes";
 import type { Env } from "./types";
 import type { SessionAgentDO } from "./durable-objects/session-agent-do";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
+import { SessionHistoryService } from "./lib/session-history";
+import { verifySessionWebSocketToken } from "./lib/session-websocket-token";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
@@ -32,17 +34,45 @@ app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-// Agent WebSocket route (for useAgent hook)
-// TODO: AUTHENTICATE WEBSOCKET MIDDLEWARE.!!!!
 app.all("/agents/session/:sessionId", async (c) => {
-  console.log("Agent WebSocket route", c.req.url);
   const sessionId = c.req.param("sessionId");
+  const requestUrl = new URL(c.req.url);
+  const token = requestUrl.searchParams.get("token");
+
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const tokenPayload = await verifySessionWebSocketToken(
+    c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
+    token,
+  );
+
+  if (!tokenPayload || tokenPayload.sessionId !== sessionId) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const isOwnedByUser = await sessionHistory.isOwnedByUser(
+    sessionId,
+    tokenPayload.userId,
+  );
+
+  if (!isOwnedByUser) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+
+  requestUrl.searchParams.delete("token");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
-  return stub.fetch(c.req.raw);
+  const doRequest = new Request(`http://do${requestUrl.pathname}${requestUrl.search}`, {
+    method: c.req.method,
+    headers: c.req.raw.headers,
+    body: c.req.raw.body,
+  });
+  return stub.fetch(doRequest);
 });
 
 // Git proxy: forward to the session's DO for authenticated git operations
-// TODO: AUTHENTICATE GIT PROXY MIDDLEWARE.!!!!
 app.all("/git-proxy/:sessionId/*", async (c) => {
   const sessionId = c.req.param("sessionId");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
