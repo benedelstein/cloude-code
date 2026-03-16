@@ -6,6 +6,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { SessionSidebar } from "@/components/sidebar/session-sidebar";
 import {
   SidebarProvider,
@@ -44,6 +45,9 @@ export function AppShell({
   defaultSidebarOpen,
   defaultRightSidebarOpen,
 }: AppShellProps) {
+  const pathname = usePathname();
+  const hasRightSidebar = pathname.startsWith("/session/");
+
   return (
     <SidebarProvider
       defaultOpen={defaultSidebarOpen}
@@ -51,7 +55,10 @@ export function AppShell({
       className="relative min-h-0! h-svh"
     >
       <AppHeaderProvider>
-        <AppRightSidebarProvider defaultOpen={defaultRightSidebarOpen}>
+        <AppRightSidebarProvider
+          defaultOpen={defaultRightSidebarOpen}
+          defaultEnabled={hasRightSidebar}
+        >
           <AppShellLayout>{children}</AppShellLayout>
         </AppRightSidebarProvider>
       </AppHeaderProvider>

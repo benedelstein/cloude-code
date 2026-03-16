@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const RIGHT_SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -14,8 +14,11 @@ interface AppRightSidebarControls {
   enabled: boolean;
   open: boolean;
   mobileOpen: boolean;
+  // eslint-disable-next-line no-unused-vars
   setEnabled: (enabled: boolean) => void;
+  // eslint-disable-next-line no-unused-vars
   setOpen: (open: boolean) => void;
+  // eslint-disable-next-line no-unused-vars
   setMobileOpen: (open: boolean) => void;
 }
 
@@ -24,18 +27,24 @@ const AppRightSidebarControlsContext = createContext<AppRightSidebarControls | n
 interface AppRightSidebarProviderProps {
   children: ReactNode;
   defaultOpen?: boolean;
+  defaultEnabled?: boolean;
   cookieName?: string;
 }
 
 export function AppRightSidebarProvider({
   children,
   defaultOpen = true,
+  defaultEnabled = false,
   cookieName = "right_sidebar_state",
 }: AppRightSidebarProviderProps) {
   const [slotNode, setSlotNode] = useState<HTMLDivElement | null>(null);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(defaultEnabled);
   const [open, setOpenState] = useState(defaultOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    setEnabled(defaultEnabled);
+  }, [defaultEnabled]);
 
   const setOpen = useCallback((nextOpen: boolean) => {
     setOpenState(nextOpen);
@@ -79,7 +88,7 @@ export function AppRightSidebarPortal({ children }: { children: ReactNode }) {
   const slotNode = useContext(AppRightSidebarSlotContext);
   const { setEnabled } = useAppRightSidebar();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setEnabled(true);
     return () => setEnabled(false);
   }, [setEnabled]);
