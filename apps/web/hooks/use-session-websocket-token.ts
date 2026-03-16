@@ -45,7 +45,6 @@ export function useSessionWebSocketToken({
   }, []);
 
   const fetchWebSocketToken = useCallback(async () => {
-    console.log("fetching websocket token", sessionId);
     try {
       const nextToken = await createSessionWebSocketToken(sessionId);
       webSocketTokenRetryCountRef.current = 0;
@@ -126,7 +125,6 @@ export function useSessionWebSocketToken({
     const refreshAt =
       new Date(webSocketToken.expiresAt).getTime() - WEBSOCKET_TOKEN_REFRESH_BUFFER_MS;
     const refreshDelay = Math.max(refreshAt - Date.now(), 0);
-    console.log("setting up websocket token refresh timeout", new Date(refreshAt).toISOString());
 
     webSocketTokenRefreshTimeoutRef.current = window.setTimeout(() => {
       void fetchWebSocketToken();
