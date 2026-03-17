@@ -11,13 +11,14 @@ import { agentRoutes } from "./routes/agent.routes";
 import { gitProxyRoutes } from "./routes/git-proxy.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
-import { logger as honoLogger } from "hono/logger";
+// import { logger as honoLogger } from "hono/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use(honoLogger()); // logs request timings
+// DISABLED FOR NOW - dont log sensitive query params etc.
+// app.use(honoLogger()); // logs request timings
 
 app.use(
   "*",

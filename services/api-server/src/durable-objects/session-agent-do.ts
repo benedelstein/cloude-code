@@ -52,10 +52,11 @@ import {
   getClaudeCredentialsSnapshot,
   refreshClaudeAuthRequired,
 } from "./session-agent-claude-auth";
-import {
-  handleEditorOpen,
-  handleEditorClose,
-} from "./session-agent-editor";
+// DISABLED: editor feature imports — security issue (sprite URL set to public)
+// import {
+//   handleEditorOpen,
+//   handleEditorClose,
+// } from "./session-agent-editor";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
@@ -241,16 +242,19 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       return this.handleGetPlan();
     }
 
-    // Editor (VS Code) lifecycle
-    if (path === "/editor/open" && request.method === "POST") {
-      const result = await handleEditorOpen(this.editorContext());
-      this.editorToken = result.editorToken;
-      return result.response;
-    }
-    if (path === "/editor/close" && request.method === "POST") {
-      const result = await handleEditorClose(this.editorContext());
-      this.editorToken = result.editorToken;
-      return result.response;
+    // Editor (VS Code) lifecycle — DISABLED: security issue (sprite URL set to public)
+    // if (path === "/editor/open" && request.method === "POST") {
+    //   const result = await handleEditorOpen(this.editorContext());
+    //   this.editorToken = result.editorToken;
+    //   return result.response;
+    // }
+    // if (path === "/editor/close" && request.method === "POST") {
+    //   const result = await handleEditorClose(this.editorContext());
+    //   this.editorToken = result.editorToken;
+    //   return result.response;
+    // }
+    if ((path === "/editor/open" || path === "/editor/close") && request.method === "POST") {
+      return new Response("editor feature temporarily disabled", { status: 503 });
     }
     if (path === "/claude-auth/refresh" && request.method === "POST") {
       return this.handleRefreshClaudeAuth();
@@ -1064,11 +1068,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async handleDeleteSession(): Promise<Response> {
-    // Close editor if open
-    if (this.state.editorUrl) {
-      const result = await handleEditorClose(this.editorContext());
-      this.editorToken = result.editorToken;
-    }
+    // Editor close skipped — editor feature is disabled
+    // if (this.state.editorUrl) {
+    //   const result = await handleEditorClose(this.editorContext());
+    //   this.editorToken = result.editorToken;
+    // }
 
     // Clean up sprite
     if (this.state.spriteName) {
@@ -1333,6 +1337,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async reattachAgentSession(spriteName: string): Promise<void> {
     // Mutex pattern: if already reattaching, wait for that to complete
     if (this.reattachPromise) {
+      this.logger.info("Already reattaching, waiting for that to complete", { loggerName });
       return this.reattachPromise;
     }
 
@@ -1353,11 +1358,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.env.SPRITES_API_URL,
       );
 
-      // Restart mitmproxy if not running (it doesn't survive hibernation)
-      // if (!this.mitmSession) {
-      //   await this.startMitmproxyOnVM(sprite);
-      // }
-
       // Refresh GitHub token (may have expired during hibernation)
       try {
         await this.refreshGitHubToken();
@@ -1376,7 +1376,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Set status to attaching
       this.updateStatus("attaching");
-      this.broadcastMessage({ type: "session.status", status: "attaching" });
       const sessions = await this.spritesCoordinator.listSessions(spriteName);
       const existingSession = sessions.find(
         (s) => s.id === String(this.state?.agentProcessId),
@@ -1410,14 +1409,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Set status back to ready
       this.setClaudeAuthRequired(null);
       this.updateStatus("ready");
-      this.broadcastMessage({ type: "session.status", status: "ready" });
     } catch (error) {
       if (error instanceof ClaudeOAuthError) {
         this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
       }
       this.logger.error("Failed to reattach agent session", { loggerName, error });
-      this.updateStatus("ready");
-      this.broadcastMessage({ type: "session.status", status: "ready" });
+      this.updateStatus("ready"); // FIXME: WHY IS THIS READY? WE SHOULD BE ERRORING.
       this.broadcastMessage({
         type: "error",
         code: "reattach_failed",

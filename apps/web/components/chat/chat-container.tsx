@@ -22,7 +22,7 @@ import { StatusBanner } from "./status-banner";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { BranchBar } from "./branch-bar";
-import { BrowserButton, EditorButton, SessionActionsButton } from "./editor-button";
+import { SessionActionsButton } from "./editor-button";
 import { InputFrame } from "./input-frame";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -177,8 +177,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <BrowserButton />
-            <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} />
+            {/* TODO: REENABLE WHEN THESE WORK. */}
+            {/* <BrowserButton /> */}
+            {/* <EditorButton sessionId={sessionId} editorUrl={editorUrl} disabled={!isReady} /> */}
             <SessionActionsButton sessionId={sessionId} />
           </div>
         </div>
