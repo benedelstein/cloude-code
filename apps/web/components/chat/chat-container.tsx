@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Pencil, Loader2, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
@@ -63,6 +63,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const [titleInput, setTitleInput] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleMeasureRef = useRef<HTMLSpanElement>(null);
+  const [titleWidth, setTitleWidth] = useState<number | undefined>(undefined);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
   const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
@@ -84,6 +86,18 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     titleInputRef.current?.focus();
     titleInputRef.current?.select();
   }, [isEditingTitle]);
+
+  const measureTitleWidth = useCallback(() => {
+    if (titleMeasureRef.current) {
+      setTitleWidth(titleMeasureRef.current.scrollWidth);
+    }
+  }, []);
+
+  const currentTitleText = isEditingTitle ? titleInput : displayTitle;
+
+  useEffect(() => {
+    measureTitleWidth();
+  }, [currentTitleText, measureTitleWidth]);
 
   const startEditingTitle = () => {
     setTitleInput(sessionTitle ?? "");
@@ -130,6 +144,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         <div className="flex min-w-0 w-full items-center justify-between gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
             <div className="group/title flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+              <span
+                ref={titleMeasureRef}
+                aria-hidden
+                className="pointer-events-none invisible absolute whitespace-pre text-sm font-medium"
+              >
+                {currentTitleText || "\u00A0"}
+              </span>
               <input
                 ref={titleInputRef}
                 value={isEditingTitle ? titleInput : displayTitle}
@@ -166,7 +187,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   }
                 }}
                 maxLength={60}
-                size={Math.max(1, (isEditingTitle ? titleInput : displayTitle)?.length || 1)}
+                style={{ width: titleWidth != null ? `${titleWidth + 17}px` : undefined }}
                 className="h-7 max-w-full min-w-[2ch] shrink truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
               />
               {isSavingTitle ? (
