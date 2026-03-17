@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { useSessionTitle } from "@/components/providers/session-list-provider";
 import { ChatContainer } from "@/components/chat/chat-container";
@@ -12,18 +11,11 @@ interface SessionPageClientProps {
 
 function SessionDocumentTitle({ sessionId }: { sessionId: string }) {
   const sessionTitle = useSessionTitle(sessionId);
-
-  useEffect(() => {
-    const previous = document.title;
-    document.title = sessionTitle
-      ? `${sessionTitle} | Cloude Code`
-      : "Cloude Code";
-    return () => {
-      document.title = previous;
-    };
-  }, [sessionTitle]);
-
-  return null;
+  return (
+    <title>
+      {sessionTitle ? `${sessionTitle} | Cloude Code` : "Cloude Code"}
+    </title>
+  );
 }
 
 export function SessionPageClient({
