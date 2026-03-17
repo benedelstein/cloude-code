@@ -14,10 +14,13 @@ import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service"
 import { SessionHistoryService } from "./lib/session-history";
 import { verifySessionWebSocketToken } from "./lib/session-websocket-token";
 import { logger } from "./lib/logger";
+import { logger as honoLogger } from "hono/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
 const app = new Hono<{ Bindings: Env }>();
+
+app.use(honoLogger()); // logs request timings
 
 app.use(
   "*",
