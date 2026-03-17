@@ -118,7 +118,7 @@ export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
                 }`}
               >
                 {imageParts.length > 0 && (
-                  <div className="mb-2 flex items-end gap-2 overflow-x-auto pb-1">
+                  <div className="mb-2 flex items-end gap-2 overflow-x-auto pb-1 justify-end">
                     {imageParts.map(({ part, index }) => {
                       const key = `${message.id}-image-${index}`;
                       const imageUrl = resolveAttachmentUrl(part.url);
@@ -208,10 +208,10 @@ export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
                 <img
                   src={userAvatarUrl}
                   alt="You"
-                  className="flex-shrink-0 w-8 h-8 rounded-full"
+                  className="shrink-0 w-8 h-8 rounded-full"
                 />
               ) : (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                <div className="shrink-0 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
                   <User className="w-4 h-4 text-accent-foreground" />
                 </div>
               )
@@ -229,7 +229,7 @@ export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
               setExpandedImageUrl(null);
             }
           }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-4 cursor-zoom-out"
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-black p-4 cursor-zoom-out"
           aria-label="Close image preview"
         >
           <img

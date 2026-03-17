@@ -142,6 +142,7 @@ export function MessageList({
       {showLoading && (
         <div className="h-full flex items-center justify-center p-4">
           <div className="flex items-center gap-2 text-foreground-muted text-sm">
+            {/* TODO: USE SKELETON */}
             <LoadingSpinner className="h-4 w-4" />
             Loading messages...
           </div>
