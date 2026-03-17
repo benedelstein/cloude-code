@@ -26,6 +26,9 @@ export interface SessionOptions {
 
 import { z } from "zod";
 
+/**
+ * This message is sent by the sprite - not controlled by us
+ */
 export const SessionInfoMessageSchema = z.object({
     type: z.literal("session_info"),
     session_id: z.coerce.number(),
@@ -37,11 +40,17 @@ export const SessionInfoMessageSchema = z.object({
     tty: z.boolean(),
 });
 
+/**
+ * This message is sent by the sprite - not controlled by us
+ */
 export const ExitMessageSchema = z.object({
     type: z.literal("exit"),
     exit_code: z.number(),
 });
 
+/**
+ * This message is sent by the sprite - not controlled by us
+ */
 export const PortNotificationMessageSchema = z.object({
     type: z.enum(["port_opened", "port_closed"]),
     port: z.number(),

@@ -37,5 +37,9 @@ When your task is done:
 After pushing the branch, the user may create a pull request to merge the branch into the main branch.
 
 </git-workflow>
+
+<other-information>
+For multi-step tasks, you should use the TodoWrite tool to track your progress and surface information to the user.
+</other-information>
 `;
 }

@@ -6,6 +6,7 @@ import {
   generatePullRequestText,
 } from "@/lib/generate-pull-request-text";
 import type { GitHubAppService, GitHubCompareData } from "@/lib/github";
+import { logger } from "./logger";
 
 const MAX_CONTEXT_MESSAGES = 12;
 const MAX_CONTEXT_CHARS = 280;
@@ -69,7 +70,17 @@ function buildPullRequestContextMessages(messages: UIMessage[]): string[] {
 }
 
 async function getSessionInfo(sessionStub: SessionAgentFetcher): Promise<SessionInfoResponse> {
-  const sessionResponse = await sessionStub.fetch(new Request("http://do/"));
+  let sessionResponse: Response;
+  try {
+    sessionResponse = await sessionStub.fetch(new Request("http://do/"));
+  } catch (error) {
+    logger.error("Failed to fetch session info", { error });
+    throw new SessionPullRequestServiceError(
+      "Failed to reach session",
+      500,
+      { error: "Failed to reach session" },
+    );
+  }
   if (!sessionResponse.ok) {
     throw new SessionPullRequestServiceError(
       "Session not found",
@@ -88,7 +99,7 @@ async function getSessionMessages(sessionStub: SessionAgentFetcher): Promise<UIM
     }
     return (await messagesResponse.json()) as UIMessage[];
   } catch (error) {
-    console.error("Failed to fetch session messages for PR text generation:", error);
+    logger.error("Failed to fetch session messages for PR text generation:", { error });
     return [];
   }
 }
@@ -196,13 +207,19 @@ export async function createPullRequestForSession(params: {
     number: createdPullRequest.number,
     state: "open",
   };
-  await sessionStub.fetch(
-    new Request("http://do/pr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(setPullRequestBody),
-    }),
-  );
+  try {
+    await sessionStub.fetch(
+      new Request("http://do/pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(setPullRequestBody),
+      }),
+    );
+  } catch (error) {
+    // PR was created on GitHub but state failed to persist in the DO.
+    // Log the error but still return success — the PR exists on GitHub.
+    console.error("Failed to persist PR state in session after creation:", error);
+  }
 
   return {
     url: createdPullRequest.url,
@@ -245,6 +262,7 @@ export async function getPullRequestStatusForSession(params: {
       merged: pullRequest.merged,
     };
   } catch (_error) {
+    logger.error("Failed to fetch PR status", { error: _error });
     throw new SessionPullRequestServiceError(
       "Failed to fetch PR status",
       500,
@@ -255,13 +273,18 @@ export async function getPullRequestStatusForSession(params: {
   const state = pullRequestState.merged ? "merged" : pullRequestState.state;
   if (state !== session.pullRequestState) {
     const updatePullRequestBody: UpdatePullRequestRequest = { state };
-    await sessionStub.fetch(
-      new Request("http://do/pr", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatePullRequestBody),
-      }),
-    );
+    try {
+      await sessionStub.fetch(
+        new Request("http://do/pr", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatePullRequestBody),
+        }),
+      );
+    } catch (error) {
+      // Non-fatal: state sync failure shouldn't prevent returning PR status
+      logger.error("Failed to update PR state in session:", { error });
+    }
   }
 
   return {

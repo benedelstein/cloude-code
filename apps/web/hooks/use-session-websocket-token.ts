@@ -7,6 +7,24 @@ import { consumeInitialSessionWebSocketToken } from "@/lib/session-websocket-tok
 
 const WEBSOCKET_TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
 const MAX_WEBSOCKET_TOKEN_RETRY_DELAY_MS = 30 * 1000;
+const inFlightWebSocketTokenRequests = new Map<string, Promise<SessionWebSocketTokenResponse>>();
+
+function requestSessionWebSocketToken(
+  sessionId: string,
+): Promise<SessionWebSocketTokenResponse> {
+  const inFlightRequest = inFlightWebSocketTokenRequests.get(sessionId);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const nextRequest = createSessionWebSocketToken(sessionId)
+    .finally(() => {
+      inFlightWebSocketTokenRequests.delete(sessionId);
+    });
+
+  inFlightWebSocketTokenRequests.set(sessionId, nextRequest);
+  return nextRequest;
+}
 
 interface UseSessionWebSocketTokenOptions {
   sessionId: string;
@@ -46,7 +64,7 @@ export function useSessionWebSocketToken({
 
   const fetchWebSocketToken = useCallback(async () => {
     try {
-      const nextToken = await createSessionWebSocketToken(sessionId);
+      const nextToken = await requestSessionWebSocketToken(sessionId);
       webSocketTokenRetryCountRef.current = 0;
       clearWebSocketTokenRetryTimeout();
       setHasTerminalAuthError(false);

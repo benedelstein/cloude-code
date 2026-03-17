@@ -1,4 +1,4 @@
-import { createRoute } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import {
   GitHubAuthUrlResponse,
   TokenRequest,
@@ -7,6 +7,10 @@ import {
   LogoutResponse,
 } from "@repo/shared";
 import { authMiddleware } from "@/middleware/auth.middleware";
+
+const ErrorResponse = z.object({
+  error: z.string(),
+});
 
 export const getGithubRoute = createRoute({
   method: "get",
@@ -31,6 +35,18 @@ export const postTokenRoute = createRoute({
     200: {
       content: { "application/json": { schema: TokenResponse } },
       description: "Session token and user info",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Bad request",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "User not allowed",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to create user",
     },
   },
 });

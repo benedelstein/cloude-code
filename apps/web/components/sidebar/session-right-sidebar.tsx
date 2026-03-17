@@ -14,11 +14,13 @@ import {
   SidebarGroupContent,
   SidebarGroup,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { SessionPlanResponse } from "@repo/shared";
 
 export function SessionRightSidebar() {
   const {
     sessionId,
+    hasHydratedState,
     repoFullName,
     todos,
     plan: planMetadata,
@@ -69,9 +71,17 @@ export function SessionRightSidebar() {
         <div className="px-1">
           <div className="min-w-0 flex gap-0 flex-col">
             <p className="truncate text-sm font-medium">Session Context</p>
-            <Link href={`https://github.com/${repoFullName}`} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-foreground-muted hover:underline">
-              {repoFullName ?? "Unknown repository"}
-            </Link>
+            {hasHydratedState ? (
+              repoFullName ? (
+                <Link href={`https://github.com/${repoFullName}`} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-foreground-muted hover:underline">
+                  {repoFullName}
+                </Link>
+              ) : (
+                <p className="truncate text-xs text-foreground-muted">Unknown repository</p>
+              )
+            ) : (
+              <Skeleton className="mt-1 h-3 w-32" />
+            )}
           </div>
         </div>
       </SidebarHeader>
@@ -79,13 +89,14 @@ export function SessionRightSidebar() {
       <SidebarContent className="gap-4 px-0 py-0">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SessionTodoListSection todos={todos} />
+            <SessionTodoListSection isLoading={!hasHydratedState} todos={todos} />
           </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupContent>
             <SessionPlanSection
+              isHydrated={hasHydratedState}
               plan={plan}
               isLoading={isPlanLoading}
               errorMessage={planError}

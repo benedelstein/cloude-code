@@ -4,11 +4,12 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal } from "lucide-react";
-import { deleteSession, archiveSession } from "@/lib/client-api";
+import { deleteSession, archiveSession, type SessionSummary } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { formatRelativeTime } from "./utils";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sidebar,
   SidebarContent,
@@ -45,8 +46,41 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+const SESSION_LIST_LOADING_ITEMS: SessionSummary[] = [
+  {
+    id: "loading-session-1",
+    repoId: 0,
+    repoFullName: "loading/repository",
+    title: "Loading session",
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+    lastMessageAt: null,
+  },
+  {
+    id: "loading-session-2",
+    repoId: 0,
+    repoFullName: "loading/repository",
+    title: "Loading session",
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+    lastMessageAt: null,
+  },
+  {
+    id: "loading-session-3",
+    repoId: 0,
+    repoFullName: "loading/repository",
+    title: "Loading session",
+    archived: false,
+    createdAt: "",
+    updatedAt: "",
+    lastMessageAt: null,
+  },
+];
+
 export function SessionSidebar() {
-  const { user, logout } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { setOpenMobile } = useSidebar();
@@ -93,25 +127,97 @@ export function SessionSidebar() {
     }
   };
 
+  function SessionSidebarRow({
+    session,
+    loading = false,
+    isActive = false,
+    isActionLoading = false,
+  }: {
+    session: SessionSummary;
+    loading?: boolean;
+    isActive?: boolean;
+    isActionLoading?: boolean;
+  }) {
+    const repositoryName = session.repoFullName.split("/")[1] || session.repoFullName;
+    const displayTitle = session.title || repositoryName || session.id.slice(0, 8);
+    const timestamp = session.lastMessageAt || session.updatedAt;
+
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          isActive={!loading && isActive}
+          onClick={loading ? undefined : () => navigate(`/session/${session.id}`)}
+          className="cursor-pointer h-auto min-h-[46px] py-2"
+        >
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            {loading ? (
+              <>
+                <Skeleton className="h-5 w-11/12" />
+                <div className="flex h-4 items-center gap-1.5">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-12" />
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="truncate text-sm">
+                  {displayTitle}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-foreground-muted truncate">
+                    {repositoryName}
+                  </span>
+                  <span className="text-xs font-mono text-foreground-muted shrink-0">
+                    · {formatRelativeTime(timestamp)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </SidebarMenuButton>
+        {loading ? (
+          <></> // dont show
+        ) : isActionLoading ? (
+          <SidebarMenuAction className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1">
+            <LoadingSpinner className="h-3 w-3 shrink-0" />
+          </SidebarMenuAction>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuAction
+                showOnHover
+                className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+              </SidebarMenuAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="start">
+              <DropdownMenuItem onClick={() => handleArchiveSession(session.id)}>
+                <Archive className="h-4 w-4" />
+                Archive
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteDialogSessionId(session.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </SidebarMenuItem>
+    );
+  }
+
   return (
     <>
       <Sidebar collapsible="offcanvas" variant="floating">
-        <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-center border-b border-sidebar-border`}>
-          {/* <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => navigate("/")}
-                className="cursor-pointer"
-              >
-                <div className="flex flex-row gap-0.5 items-center">
-                  <div className="flex h-8 w-8 text-2xl">☁️</div>
-                  <span className="text-[10px] font-mono text-foreground-tertiary">
-                    (BETA)
-                  </span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu> */}
+        <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right border-b border-sidebar-border p-0`}>
+          <div className="flex flex-row items-center justify-end h-full">
+            <div className="flex h-8 w-8 text-2xl">☁️</div>
+          </div>
         </SidebarHeader>
 
         <SidebarContent>
@@ -132,86 +238,32 @@ export function SessionSidebar() {
             </Tooltip>
             <SidebarGroupContent>
               {sessionsLoading ? (
-                <div className="flex justify-center py-6">
-                  <LoadingSpinner className="h-4 w-4 text-foreground-muted" />
-                </div>
+                <SidebarMenu>
+                  {SESSION_LIST_LOADING_ITEMS.map((session) => (
+                    <SessionSidebarRow
+                      key={session.id}
+                      session={session}
+                      loading
+                    />
+                  ))}
+                </SidebarMenu>
               ) : sessions.length === 0 ? (
                 <p className="px-2 py-6 text-center text-xs text-foreground-muted">
                   No sessions yet
                 </p>
               ) : (
                 <SidebarMenu>
-                  {sessions.map((session) => {
-                    const isActive = session.id === activeSessionId;
-                    const displayTitle =
-                      session.title ||
-                      session.repoFullName.split("/")[1] ||
-                      session.id.slice(0, 8);
-                    const timestamp =
-                      session.lastMessageAt || session.updatedAt;
-                    const isLoading =
-                      terminatingSessionId === session.id ||
-                      archivingSessionId === session.id;
-
-                    return (
-                      <SidebarMenuItem key={session.id}>
-                        <SidebarMenuButton
-                          isActive={isActive}
-                          onClick={() => navigate(`/session/${session.id}`)}
-                          className="cursor-pointer h-auto py-2"
-                        >
-                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <span className="truncate text-sm">
-                              {displayTitle}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-foreground-muted truncate">
-                                {session.repoFullName.split("/")[1] ||
-                                  session.repoFullName}
-                              </span>
-                              <span className="text-xs font-mono text-foreground-muted shrink-0">
-                                · {formatRelativeTime(timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </SidebarMenuButton>
-                        {isLoading ? (
-                          <SidebarMenuAction className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1">
-                            <LoadingSpinner className="h-3 w-3 shrink-0" />
-                          </SidebarMenuAction>
-                        ) : (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <SidebarMenuAction
-                                showOnHover
-                                className="!top-1/2 -translate-y-1/2 !aspect-auto !w-auto px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]"
-                              >
-                                <MoreHorizontal className="h-3 w-3" />
-                              </SidebarMenuAction>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent side="right" align="start">
-                              <DropdownMenuItem
-                                onClick={() => handleArchiveSession(session.id)}
-                              >
-                                <Archive className="h-4 w-4" />
-                                Archive
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() =>
-                                  setDeleteDialogSessionId(session.id)
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </SidebarMenuItem>
-                    );
-                  })}
+                  {sessions.map((session) => (
+                    <SessionSidebarRow
+                      key={session.id}
+                      session={session}
+                      isActive={session.id === activeSessionId}
+                      isActionLoading={
+                        terminatingSessionId === session.id
+                        || archivingSessionId === session.id
+                      }
+                    />
+                  ))}
                 </SidebarMenu>
               )}
             </SidebarGroupContent>
@@ -224,7 +276,12 @@ export function SessionSidebar() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton size="lg" className="cursor-pointer">
-                    {user?.avatarUrl ? (
+                    {authLoading ? (
+                      <>
+                        <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                        <Skeleton className="h-4 w-24" />
+                      </>
+                    ) : user?.avatarUrl ? (
                       <img
                         src={user.avatarUrl}
                         alt={user.login}
@@ -233,9 +290,11 @@ export function SessionSidebar() {
                     ) : (
                       <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
                     )}
-                    <span className="truncate text-sm">
-                      {user?.login ?? "User"}
-                    </span>
+                    {!authLoading ? (
+                      <span className="truncate text-sm">
+                        {user?.login ?? "User"}
+                      </span>
+                    ) : null}
                     <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-muted" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>

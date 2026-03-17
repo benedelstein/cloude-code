@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -18,8 +17,10 @@ import {
   SessionSidebarCard,
   SessionSidebarSection,
 } from "@/components/sidebar/session-sidebar-section";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SessionPlanSectionProps {
+  isHydrated: boolean;
   plan: SessionPlanResponse | null;
   isLoading: boolean;
   errorMessage: string | null;
@@ -28,12 +29,29 @@ interface SessionPlanSectionProps {
 const COLLAPSED_PLAN_MAX_HEIGHT_CLASS = "max-h-[220px]";
 
 export function SessionPlanSection({
+  isHydrated,
   plan,
   isLoading,
   errorMessage,
 }: SessionPlanSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const minHeight = "min-h-[200px]";
+
+  if (!isHydrated) {
+    return (
+      <SessionSidebarSection title="Plan">
+        <SessionSidebarCard className={cn(minHeight, "gap-3")}>
+          <Skeleton className="h-4 w-20" />
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        </SessionSidebarCard>
+      </SessionSidebarSection>
+    );
+  }
 
   if (errorMessage) {
     return (
@@ -60,9 +78,11 @@ export function SessionPlanSection({
       <SessionSidebarSection title="Plan">
         <SessionSidebarCard className={cn(minHeight, "overflow-hidden p-0")}>
           {isLoading ? (
-            <div className="flex flex-1 items-center justify-center gap-2 p-3 text-sm text-foreground-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading plan</span>
+            <div className="space-y-3 p-3">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-5/6" />
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-3 w-3/4" />
             </div>
           ) : plan ? (
             <div

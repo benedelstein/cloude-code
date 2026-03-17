@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
-import { useSessionWebSocketToken } from "@/hooks/use-session-websocket-token";
 import { normalizeHost } from "@/lib/utils";
 import type {
   AgentState,
@@ -18,6 +17,7 @@ import type {
   SessionPlanMetadata,
   SessionSettings,
   SessionStatus,
+  SessionWebSocketTokenResponse,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -33,6 +33,7 @@ const DEFAULT_API_HOST = resolveDefaultApiHost();
 
 export interface UseCloudflareAgentOptions {
   sessionId: string;
+  webSocketToken: SessionWebSocketTokenResponse;
   // eslint-disable-next-line no-unused-vars
   onError?: (error: Error) => void;
 }
@@ -41,9 +42,10 @@ export interface UseCloudflareAgentReturn {
   sessionId: string;
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
-  sessionStatus: SessionStatus;
+  sessionStatus: SessionStatus | null;
   errorMessage: string | null;
   isHistoryLoading: boolean;
+  hasHydratedState: boolean;
   isReady: boolean;
   isStreaming: boolean;
   isResponding: boolean;
@@ -71,15 +73,16 @@ export interface UseCloudflareAgentReturn {
 
 export function useCloudflareAgent({
   sessionId,
+  webSocketToken,
   onError,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
-  const resolvedHost = DEFAULT_API_HOST;
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("provisioning");
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [hasHydratedState, setHasHydratedState] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
   // Note: isResponding is primarily driven by server state via onStateUpdate.
   // The local setter is only used for optimistic updates (sendMessage) and
@@ -208,27 +211,12 @@ export function useCloudflareAgent({
     }
   }, [onError, resetPendingResponse]);
 
-  const webSocketToken = useSessionWebSocketToken({
-    sessionId,
-    onAuthError: () => {
-      setSessionStatus("error");
-      setErrorMessage("Session authentication failed");
-      setIsHistoryLoading(false);
-    },
-    onReconnectPending: () => {
-      setErrorMessage((currentError) => currentError ?? "Reconnecting...");
-    },
-    onReconnectRecovered: () => {
-      setErrorMessage((currentError) => currentError === "Reconnecting..." ? null : currentError);
-    },
-  });
-
   // Use Cloudflare's useAgent hook
   const agent = useAgent<AgentState>({
     agent: "session",
     name: sessionId,
-    host: resolvedHost,
-    startClosed: true,
+    host: DEFAULT_API_HOST,
+    query: { token: webSocketToken.token },
     onMessage: (event) => {
       try {
         const msg = JSON.parse(event.data) as ServerMessage;
@@ -245,6 +233,7 @@ export function useCloudflareAgent({
       resetPendingResponse();
     },
     onStateUpdate(state: AgentState) {
+      setHasHydratedState(true);
       if (state.pushedBranch !== undefined) {
         setPushedBranch(state.pushedBranch);
       }
@@ -288,23 +277,9 @@ export function useCloudflareAgent({
     },
     onError: (message) => {
       resetPendingResponse();
-      console.warn("Transient websocket error", { host: resolvedHost, sessionId, message });
+      console.warn("Transient websocket error", { host: DEFAULT_API_HOST, sessionId, message });
     },
   });
-
-  useEffect(() => {
-    if (!webSocketToken) {
-      return;
-    }
-
-    agent.updateProperties({
-      query: { token: webSocketToken.token },
-    });
-
-    if (agent.readyState === WebSocket.CLOSED) {
-      agent.reconnect();
-    }
-  }, [agent, webSocketToken]);
 
   const sendMessage = useCallback((message: {
     content?: string;
@@ -371,6 +346,7 @@ export function useCloudflareAgent({
     sessionStatus,
     errorMessage,
     isHistoryLoading,
+    hasHydratedState,
     isReady: sessionStatus === "ready",
     isStreaming: streamingMessage !== null,
     isResponding,

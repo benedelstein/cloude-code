@@ -13,6 +13,7 @@ import type { SessionAgentDO } from "./durable-objects/session-agent-do";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
 import { SessionHistoryService } from "./lib/session-history";
 import { verifySessionWebSocketToken } from "./lib/session-websocket-token";
+import { logger } from "./lib/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
@@ -57,12 +58,13 @@ app.all("/agents/session/:sessionId", async (c) => {
     sessionId,
     tokenPayload.userId,
   );
+  logger.log(`${sessionId} isOwnedByUser?: ${isOwnedByUser}`);
 
   if (!isOwnedByUser) {
     return c.json({ error: "Session not found" }, 404);
   }
 
-  requestUrl.searchParams.delete("token");
+  requestUrl.searchParams.delete("token"); // sanitize token, no longer needed
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
   const doRequest = new Request(`http://do${requestUrl.pathname}${requestUrl.search}`, {
     method: c.req.method,
@@ -73,6 +75,7 @@ app.all("/agents/session/:sessionId", async (c) => {
 });
 
 // Git proxy: forward to the session's DO for authenticated git operations
+// the DO handles authentication internally via a shared secret.
 app.all("/git-proxy/:sessionId/*", async (c) => {
   const sessionId = c.req.param("sessionId");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);

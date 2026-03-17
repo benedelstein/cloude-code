@@ -141,6 +141,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.githubToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
     this.editorToken = this.secretRepository.get("editor_token");
+    this.logger.log("SessionAgentDO constructed", {
+      loggerName
+    });
   }
 
   private getConnectedAgentSession(): SpriteWebsocketSession | null {
@@ -396,6 +399,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async handleInit(request: Request): Promise<Response> {
     // Prevent re-initialization
     if (this.state.sessionId) {
+      this.logger.error("Session already initialized - refusing to re-initialize", {
+        loggerName,
+        fields: {
+          sessionId: this.state.sessionId,
+        },
+      });
       return new Response(
         JSON.stringify({ error: "Session already initialized" }),
         {
@@ -586,6 +595,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.updatePartialState({baseBranch });
 
       // Use direct GitHub for fetch/pull and proxy URL for push-only operations.
+      // TODO: MAKE THIS ONE LINER.
       await sprite.execHttp(
         `cd ${WORKSPACE_DIR} && git remote set-url origin ${githubRemoteUrl} && git remote set-url --push origin ${cloneUrl}`,
         {},
@@ -607,10 +617,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         {},
       );
 
-      // this.updateStatus("attaching");
-      // this.broadcastMessage({ type: "session.status", status: "attaching" });
-      // Start mitmproxy as a session, then vm-agent
-      // await this.startMitmproxyOnVM(sprite);
       await this.startAgentOnVM(spriteResponse.name);
 
       this.updateStatus("ready");
@@ -934,9 +940,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     }
   }
 
+  // for server control messages - not stdout.
   private handleAgentServerMessage(msg: SpriteServerMessage): void {
     switch (msg.type) {
       case "session_info":
+        // NOTE: session_id is the process id of the agent on the sprite.
+        // it is NOT the session id used by the agent to persist message state.
         this.logger.info(`vm-agent session id: ${JSON.stringify(msg.session_id)}`, {
           loggerName,
         });
@@ -1395,6 +1404,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           loggerName,
         });
         await this.startAgentOnVM(spriteName);
+        // TODO: kill the old session.
       }
 
       // Set status back to ready

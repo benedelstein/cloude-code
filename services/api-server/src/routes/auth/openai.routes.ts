@@ -1,5 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { createRoute } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { encrypt } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
@@ -20,6 +20,10 @@ const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_AUTH_URL = "https://auth.openai.com/oauth/authorize";
 const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const OPENAI_SCOPES = "openid profile email offline_access";
+
+const ErrorResponse = z.object({
+  error: z.string(),
+});
 
 /** Decode JWT payload without signature verification (for expiry tracking only). */
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -57,6 +61,10 @@ const postOpenAITokenRoute = createRoute({
     200: {
       content: { "application/json": { schema: OpenAITokenResponse } },
       description: "Token exchange success",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Bad request",
     },
   },
 });
@@ -145,7 +153,7 @@ openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
   const user = c.get("user");
 
   if (!code || !state) {
-    return c.json({ error: "Missing code or state" }, 400) as any;
+    return c.json({ error: "Missing code or state" }, 400);
   }
 
   // Validate and consume state, retrieve code_verifier
@@ -156,7 +164,7 @@ openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
     .first<{ state: string; code_verifier: string }>();
 
   if (!stateRow?.code_verifier) {
-    return c.json({ error: "Invalid or expired state" }, 400) as any;
+    return c.json({ error: "Invalid or expired state" }, 400);
   }
 
   // Must match the redirect_uri used in the authorize request
@@ -187,13 +195,13 @@ openaiAuthRoutes.openapi(postOpenAITokenRoute, async (c) => {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error(`OpenAI token exchange failed: ${errorText}`);
-      return c.json({ error: "Failed to exchange code" }, 400) as any;
+      return c.json({ error: "Failed to exchange code" }, 400);
     }
 
     tokenData = await response.json();
   } catch (error) {
     logger.error("OpenAI token exchange error", { error });
-    return c.json({ error: "Failed to exchange code" }, 400) as any;
+    return c.json({ error: "Failed to exchange code" }, 400);
   }
 
   // Encrypt tokens before storing

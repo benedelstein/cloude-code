@@ -14,6 +14,7 @@ import {
   ArchiveSessionResponse,
   EditorOpenResponse,
   EditorCloseResponse,
+  UIMessageSchema,
 } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
@@ -63,20 +64,20 @@ export const createSessionRoute = createRoute({
       content: { "application/json": { schema: CreateSessionResponse } },
       description: "Created session",
     },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Invalid request",
+    },
     401: {
-      content: { "application/json": { schema: z.object({
-        error: z.string(),
-        details: z.string(),
-        code: z.string().optional(),
-      }) } },
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Authentication required to create a session",
     },
+    422: {
+      content: { "application/json": { schema: ErrorWithOptionalDetailsResponse } },
+      description: "Repository access validation failed",
+    },
     500: {
-      content: { "application/json": { schema: z.object({
-        error: z.string(),
-        details: z.string(),
-        code: z.string().optional(),
-      }) } },
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to create session",
     },
   },
@@ -92,6 +93,10 @@ export const getSessionRoute = createRoute({
     200: {
       content: { "application/json": { schema: SessionInfoResponse } },
       description: "Session info",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
     },
   },
 });
@@ -128,6 +133,10 @@ export const updateSessionTitleRoute = createRoute({
       content: { "application/json": { schema: UpdateSessionTitleResponse } },
       description: "Session title updated",
     },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
+    },
   },
 });
 
@@ -139,7 +148,16 @@ export const getSessionMessagesRoute = createRoute({
   },
   responses: {
     200: {
+      content: { "application/json": { schema: z.array(UIMessageSchema) } },
       description: "Session messages",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to get messages",
     },
   },
 });
@@ -158,6 +176,10 @@ export const getSessionPlanRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Plan not found",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to get plan",
     },
   },
 });
@@ -225,6 +247,10 @@ export const archiveSessionRoute = createRoute({
       content: { "application/json": { schema: ArchiveSessionResponse } },
       description: "Session archived",
     },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
+    },
   },
 });
 
@@ -238,6 +264,10 @@ export const deleteSessionRoute = createRoute({
     200: {
       content: { "application/json": { schema: DeleteSessionResponse } },
       description: "Session deleted",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -257,6 +287,14 @@ export const openEditorRoute = createRoute({
       content: { "application/json": { schema: EditorOpenResponse } },
       description: "Editor URL and connection token",
     },
+    400: {
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
+      description: "Editor cannot be opened",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
+    },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to open editor",
@@ -274,6 +312,14 @@ export const closeEditorRoute = createRoute({
     200: {
       content: { "application/json": { schema: EditorCloseResponse } },
       description: "Editor closed",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorWithDetailsResponse } },
+      description: "Editor cannot be closed",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Session not found",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },

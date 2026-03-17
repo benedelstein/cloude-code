@@ -8,8 +8,10 @@ import {
   SessionSidebarCard,
   SessionSidebarSection,
 } from "@/components/sidebar/session-sidebar-section";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SessionTodoListSectionProps {
+  isLoading: boolean;
   todos: SessionTodo[] | null;
 }
 
@@ -23,6 +25,7 @@ const TODO_STATUS_ICON_CLASS_NAME =
   "flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-200";
 
 export function SessionTodoListSection({
+  isLoading,
   todos,
 }: SessionTodoListSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -40,16 +43,18 @@ export function SessionTodoListSection({
   return (
     <SessionSidebarSection
       title="Todo List"
-      meta={todos && todos.length > 0 ? `${completedTodos}/${todos.length} completed` : undefined}
+      meta={!isLoading && todos && todos.length > 0 ? `${completedTodos}/${todos.length} completed` : undefined}
     >
-      {todos === null ? (
-        <SessionSidebarCard className={minHeight}>
-          <div className="flex flex-1 items-center justify-center gap-2 p-3 text-sm text-foreground-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading todos</span>
+      {isLoading ? (
+        <SessionSidebarCard className={cn(minHeight, "gap-3")}>
+          <Skeleton className="h-4 w-24" />
+          <div className="space-y-3">
+            <TodoSkeletonRow />
+            <TodoSkeletonRow />
+            <TodoSkeletonRow />
           </div>
         </SessionSidebarCard>
-      ) : todos.length > 0 ? (
+      ) : todos && todos.length > 0 ? (
         <SessionSidebarCard className={minHeight}>
           <div className="flex flex-col">
             {todoItems.map((todoItem, index) => (
@@ -77,6 +82,18 @@ export function SessionTodoListSection({
         </SessionSidebarCard>
       )}
     </SessionSidebarSection>
+  );
+}
+
+function TodoSkeletonRow() {
+  return (
+    <div className="flex items-start gap-2">
+      <Skeleton className="mt-0.5 h-4 w-4 rounded-[4px]" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+    </div>
   );
 }
 

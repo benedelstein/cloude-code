@@ -65,6 +65,14 @@ Browser                    Next.js proxy (/api/*)       API Server
 - **Allowlist**: Only GitHub logins in `ALLOWED_GITHUB_LOGINS` can authenticate.
 - **Token refresh**: The auth middleware transparently refreshes expired GitHub access tokens using the stored refresh token.
 
+## Websocket Auth
+
+Websockets send directly to the server, so they cannot carry a cookie as auth. 
+Instead, we generate a short-lived token for websocket authentication.
+
+This isn't exactly a JWT, but it's a stateless token with a known structure that can be verified by the server.
+Before initiating a websocket connection, the client fetches a token from the server using /sessions/{sessionId}/websocket-token.
+
 ## Relevant Files
 
 | File | Purpose |
@@ -79,7 +87,9 @@ Browser                    Next.js proxy (/api/*)       API Server
 
 ## Authentication Rules
 
-- You can only create a session on a repo if you have write access to it.
+- You can only create a session on a repo if you have access to it via its github app installation.
+  We first check the installation that the repo is associated with, and then use the user's github access token to verify that the user can access that repo via the installation.
+  Even if a user can access a repo, they may not have access to it via the installation.
 - You can only view a session if you created it (for now).
 - You can only install the github app on a repo if you have admin access to it (this is a limitation of the github api).
 

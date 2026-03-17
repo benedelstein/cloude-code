@@ -1,5 +1,11 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
-import type { SessionInfoResponse } from "@repo/shared";
+import { OpenAPIHono, z } from "@hono/zod-openapi";
+import {
+  EditorCloseResponse,
+  EditorOpenResponse,
+  SessionInfoResponse,
+  SessionPlanResponse,
+  UIMessageSchema,
+} from "@repo/shared";
 import type { Env } from "@/types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
@@ -76,6 +82,8 @@ const getAuthorizedSessionAgent = async (
   return getSessionAgent(sessionId, env);
 };
 
+const sessionMessagesResponseSchema = z.array(UIMessageSchema);
+
 // List sessions for the current user
 sessionsRoutes.openapi(listSessionsRoute, async (c) => {
   const user = c.get("user");
@@ -118,7 +126,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     );
   } catch (error) {
     if (error instanceof GitHubAppError) {
-      return c.json({ error: error.message, code: error.code }, 422) as any;
+      return c.json({ error: error.message, code: error.code }, 422);
     }
     throw error;
   }
@@ -152,7 +160,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
             error: "Failed to bind one or more attachments. Ensure they exist, are unbound, and are owned by you.",
           },
           400,
-        ) as any;
+        );
       }
       attachmentsBound = true;
     }
@@ -204,14 +212,17 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
       ? 401
       : 500;
     const code = error instanceof SessionInitializationError ? error.code : undefined;
-    return c.json(
-      {
-        error: "Failed to create session",
-        details,
-        ...(code ? { code } : {}),
-      },
-      status,
-    ) as any;
+    const responseBody = {
+      error: "Failed to create session",
+      details,
+      ...(code ? { code } : {}),
+    };
+
+    if (status === 401) {
+      return c.json(responseBody, 401);
+    }
+
+    return c.json(responseBody, 500);
   }
 
   // If an initial message was provided, generate a title immediately
@@ -245,28 +256,33 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
 sessionsRoutes.openapi(getSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
+  const d1 = new Date();
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  console.log(`fetched session agent in ${new Date().getTime() - d1.getTime()}ms`)
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
+  const d2 = new Date();
   const response = await stub.fetch(new Request("http://do/"));
+  console.log(`fetched session info in ${new Date().getTime() - d2.getTime()}ms`)
   if (!response.ok) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
-  const session = (await response.json()) as SessionInfoResponse;
+  const session = SessionInfoResponse.parse(await response.json());
   return c.json(session, 200);
 });
 
 sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
   const user = c.get("user");
   const { sessionId } = c.req.valid("param");
+  logger.log(`creating session websocket token for ${sessionId}`);
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
 
   if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const webSocketToken = await mintSessionWebSocketToken(
@@ -276,6 +292,7 @@ sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
       userId: user.id,
     },
   );
+  logger.log(`created session websocket token for ${sessionId}`);
 
   return c.json(webSocketToken, 200);
 });
@@ -289,7 +306,7 @@ sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
 
   const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
   if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   await sessionHistory.updateTitle(sessionId, title);
@@ -302,7 +319,7 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const response = await stub.fetch(new Request("http://do/messages"));
@@ -310,7 +327,8 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
     return c.json({ error: "Failed to get messages" }, 500);
   }
 
-  return c.json(await response.json(), 200);
+  const messages = sessionMessagesResponseSchema.parse(await response.json());
+  return c.json(messages, 200);
 });
 
 sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
@@ -318,18 +336,19 @@ sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const response = await stub.fetch(new Request("http://do/plan"));
   if (response.status === 404) {
-    return c.json({ error: "Plan not found" }, 404) as any;
+    return c.json({ error: "Plan not found" }, 404);
   }
   if (!response.ok) {
-    return c.json({ error: "Failed to get plan" }, 500) as any;
+    return c.json({ error: "Failed to get plan" }, 500);
   }
 
-  return c.json(await response.json(), 200);
+  const plan = SessionPlanResponse.parse(await response.json());
+  return c.json(plan, 200);
 });
 
 // Create a pull request for a session's pushed branch
@@ -338,7 +357,7 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
   const github = new GitHubAppService(c.env, logger);
   try {
@@ -383,7 +402,7 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
   const github = new GitHubAppService(c.env, logger);
   try {
@@ -413,7 +432,7 @@ sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
   if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
   await sessionHistory.archive(sessionId);
   return c.json({ archived: true as const }, 200);
@@ -425,7 +444,7 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const response = await stub.fetch(
@@ -450,7 +469,7 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const response = await stub.fetch(
@@ -459,10 +478,13 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
 
   if (!response.ok) {
     const error = await response.text();
-    return c.json({ error: "Failed to open editor", details: error }, response.status as 500);
+    if (response.status === 400) {
+      return c.json({ error: "Failed to open editor", details: error }, 400);
+    }
+    return c.json({ error: "Failed to open editor", details: error }, 500);
   }
 
-  const body = (await response.json()) as { url: string; token: string };
+  const body = EditorOpenResponse.parse(await response.json());
   return c.json(body, 200);
 });
 
@@ -472,7 +494,7 @@ sessionsRoutes.openapi(closeEditorRoute, async (c) => {
   const user = c.get("user");
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
   if (!stub) {
-    return c.json({ error: "Session not found" }, 404) as any;
+    return c.json({ error: "Session not found" }, 404);
   }
 
   const response = await stub.fetch(
@@ -481,9 +503,12 @@ sessionsRoutes.openapi(closeEditorRoute, async (c) => {
 
   if (!response.ok) {
     const error = await response.text();
-    return c.json({ error: "Failed to close editor", details: error }, response.status as 500);
+    if (response.status === 400) {
+      return c.json({ error: "Failed to close editor", details: error }, 400);
+    }
+    return c.json({ error: "Failed to close editor", details: error }, 500);
   }
 
-  const body = (await response.json()) as { closed: true };
+  const body = EditorCloseResponse.parse(await response.json());
   return c.json(body, 200);
 });

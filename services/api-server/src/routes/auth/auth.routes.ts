@@ -80,7 +80,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
         requestId: c.req.header("cf-ray") ?? null,
       },
     });
-    return c.json({ error: "Missing code or state" }, 400) as any;
+    return c.json({ error: "Missing code or state" }, 400);
   }
 
   // Validate and consume state

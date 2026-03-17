@@ -493,6 +493,7 @@ export class GitHubAppService {
     owner: string,
     repo: string,
   ): Promise<GitHubInstallationWithRepo> {
+    const d1 = new Date();
     // Check D1 first
     const installation = await this.installationRepository.findByAccountLogin(owner);
 
@@ -510,6 +511,7 @@ export class GitHubAppService {
           `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
         );
       }
+      this.logger.log(`found installation for ${owner}/${repo} in d1 in ${new Date().getTime() - d1.getTime()}ms`);
       return installation;
     }
 
@@ -522,6 +524,7 @@ export class GitHubAppService {
         repo,
       });
 
+      this.logger.log(`found installation for ${owner}/${repo} in api in ${new Date().getTime() - d1.getTime()}ms`);
       return {
         id: data.id,
         repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
