@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import type { useClaudeAuth } from "@/hooks/use-claude-auth";
 
 type ClaudeAuthState = ReturnType<typeof useClaudeAuth>;
@@ -14,6 +15,12 @@ export function ClaudeSigninPanel({
   claude,
   isExiting,
 }: ClaudeSigninPanelProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const title = claude.requiresReauth ? "Reconnect Claude" : "Sign in with Claude";
   const description = claude.requiresReauth
     ? "Your Claude session expired. Reconnect your account to continue."
@@ -25,7 +32,7 @@ export function ClaudeSigninPanel({
     <div
       aria-hidden={isExiting}
       className={`overflow-hidden transition-all duration-200 ease-out ${
-        isExiting
+        isExiting || !mounted
           ? "max-h-0 opacity-0 -translate-y-1 pointer-events-none"
           : "max-h-[640px] opacity-100 translate-y-0"
       }`}

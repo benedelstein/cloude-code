@@ -16,7 +16,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupAction,
   SIDEBAR_HEADER_HEIGHT_CLASS,
   SidebarGroupLabel,
   SidebarHeader,
@@ -44,7 +43,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const SESSION_LIST_LOADING_ITEMS: SessionSummary[] = [
   {
@@ -216,26 +214,27 @@ export function SessionSidebar() {
       <Sidebar collapsible="offcanvas" variant="floating">
         <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right border-b border-sidebar-border p-0`}>
           <div className="flex flex-row items-center justify-end h-full">
-            <div className="flex h-8 w-8 text-2xl">☁️</div>
+            {/* <div className="flex h-8 w-8 text-2xl">☁️</div> */}
           </div>
         </SidebarHeader>
 
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Sessions</SidebarGroupLabel>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarGroupAction
-                  aria-label="New session"
+          <SidebarGroup className="pb-0">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
                   onClick={() => navigate("/")}
+                  className="cursor-pointer"
+                  tooltip="New session"
                 >
-                  <Plus />
-                </SidebarGroupAction>
-              </TooltipTrigger>
-              <TooltipContent side="right" align="center">
-                New session
-              </TooltipContent>
-            </Tooltip>
+                  <span>New session</span>
+                  <Plus className="ml-auto" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+          <SidebarGroup className="pt-0">
+            <SidebarGroupLabel>Sessions</SidebarGroupLabel>
             <SidebarGroupContent>
               {sessionsLoading ? (
                 <SidebarMenu>

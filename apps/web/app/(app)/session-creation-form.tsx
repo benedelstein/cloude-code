@@ -579,9 +579,9 @@ export function SessionCreationForm() {
           </div>
       </InputFrame>
 
-      <div className="flex items-center justify-between mt-3">
-        <div>
-          {isDevelopment && claude.connected && (
+      <div className="relative flex items-center justify-center mt-3">
+        {isDevelopment && claude.connected && (
+          <div className="absolute left-0">
             <button
               type="button"
               onClick={claude.disconnect}
@@ -589,8 +589,8 @@ export function SessionCreationForm() {
             >
               Debug: Disconnect Claude
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <p className="text-xs text-foreground-muted/60">
           Press Enter to submit, Shift+Enter for new line
         </p>
