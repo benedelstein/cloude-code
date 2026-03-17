@@ -195,7 +195,10 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
 
 // GitHub OAuth
 export async function getGitHubAuthUrl(): Promise<GitHubAuthUrlResponse> {
-  return apiFetch("/auth/github");
+  const redirectUri = encodeURIComponent(
+    `${window.location.origin}/api/auth/callback`,
+  );
+  return apiFetch(`/auth/github?redirectUri=${redirectUri}`);
 }
 
 export async function logoutUser(): Promise<LogoutResponse> {

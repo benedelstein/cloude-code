@@ -5,39 +5,56 @@ import {
   githubAuthPopupMessageType,
 } from "@/types/auth";
 import { setSessionCookie } from "@/lib/session";
-import { exchangeGitHubCode, ServerApiError } from "@/lib/server-api";
+import { UserInfo } from "@repo/shared";
 
+/**
+ * GitHub OAuth callback handler.
+ * The API server performs the full token exchange and redirects here with
+ * the session token and user info as query params. This route just sets the
+ * session cookie and closes the popup via postMessage.
+ */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
 
-  if (!code || !state) {
-    return new NextResponse(postPopupMessage({
-      type: githubAuthPopupMessageType.authError,
-      error: "Missing GitHub authorization code or state.",
-    }), {
-      headers: { "Content-Type": "text/html" },
-    });
-  }
-
-  let tokenResponse;
-  try {
-    tokenResponse = await exchangeGitHubCode(code, state);
-  } catch (error) {
-    const message = error instanceof ServerApiError
-      ? error.message
-      : "GitHub sign-in failed. Try again.";
+  // Check for error from the API server
+  const error = searchParams.get("error");
+  if (error) {
     return new NextResponse(
       postPopupMessage({
         type: githubAuthPopupMessageType.authError,
-        error: message,
+        error,
       }),
       { headers: { "Content-Type": "text/html" } },
     );
   }
 
-  const { token, user, hasInstallations, installUrl } = tokenResponse;
+  const token = searchParams.get("token");
+  const userJson = searchParams.get("user");
+  const hasInstallations = searchParams.get("hasInstallations") === "true";
+  const installUrl = searchParams.get("installUrl");
+
+  if (!token || !userJson || !installUrl) {
+    return new NextResponse(
+      postPopupMessage({
+        type: githubAuthPopupMessageType.authError,
+        error: "Missing authentication data.",
+      }),
+      { headers: { "Content-Type": "text/html" } },
+    );
+  }
+
+  let user: UserInfo;
+  try {
+    user = UserInfo.parse(JSON.parse(userJson));
+  } catch {
+    return new NextResponse(
+      postPopupMessage({
+        type: githubAuthPopupMessageType.authError,
+        error: "Invalid user data.",
+      }),
+      { headers: { "Content-Type": "text/html" } },
+    );
+  }
 
   const result = new NextResponse(
     postPopupMessage({
@@ -61,8 +78,6 @@ function postPopupMessage(
   const serializedMessage = JSON.stringify(message);
 
   // Escape characters that could break out of a <script> context.
-  // JSON.stringify doesn't escape '<' or '/', so '</script>' in user data
-  // would terminate the script tag and allow injection.
   const safeMessage = serializedMessage
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e");

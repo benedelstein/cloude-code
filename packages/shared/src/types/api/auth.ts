@@ -8,6 +8,11 @@ export const UserInfo = z.object({
 });
 export type UserInfo = z.infer<typeof UserInfo>;
 
+export const GitHubAuthUrlRequest = z.object({
+  redirectUri: z.string().url().optional(),
+});
+export type GitHubAuthUrlRequest = z.infer<typeof GitHubAuthUrlRequest>;
+
 export const GitHubAuthUrlResponse = z.object({
   url: z.string(),
   state: z.string(),

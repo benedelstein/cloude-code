@@ -1,11 +1,13 @@
 export interface OauthStateRecord {
   state: string;
   codeVerifier: string | null;
+  redirectUri: string | null;
 }
 
 interface OauthStateRow {
   state: string;
   code_verifier: string | null;
+  redirect_uri: string | null;
 }
 
 /**
@@ -22,11 +24,12 @@ export class OauthStateRepository {
     state: string,
     expiresAt: string,
     codeVerifier: string | null = null,
+    redirectUri: string | null = null,
   ): Promise<void> {
     await this.database.prepare(
-      `INSERT INTO oauth_states (state, expires_at, code_verifier) VALUES (?, ?, ?)`,
+      `INSERT INTO oauth_states (state, expires_at, code_verifier, redirect_uri) VALUES (?, ?, ?, ?)`,
     )
-      .bind(state, expiresAt, codeVerifier)
+      .bind(state, expiresAt, codeVerifier, redirectUri)
       .run();
   }
 
@@ -34,7 +37,7 @@ export class OauthStateRepository {
     const row = await this.database.prepare(
       `DELETE FROM oauth_states
        WHERE state = ? AND datetime(expires_at) > datetime('now')
-       RETURNING state, code_verifier`,
+       RETURNING state, code_verifier, redirect_uri`,
     )
       .bind(state)
       .first<OauthStateRow>();
@@ -46,6 +49,7 @@ export class OauthStateRepository {
     return {
       state: row.state,
       codeVerifier: row.code_verifier ?? null,
+      redirectUri: row.redirect_uri ?? null,
     };
   }
 }

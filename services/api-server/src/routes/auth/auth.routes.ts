@@ -10,6 +10,7 @@ import { UserRepository } from "@/repositories/user-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 import {
   getGithubRoute,
+  getGithubCallbackRoute,
   postTokenRoute,
   getMeRoute,
   postLogoutRoute,
@@ -31,21 +32,170 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
   const oauthStateRepository = new OauthStateRepository(c.env.DB);
 
+  const { redirectUri } = c.req.valid("query");
+
   logger.info("Starting GitHub OAuth flow", {
     loggerName,
     fields: {
       expiresAt,
+      redirectUri: redirectUri ?? null,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     },
   });
 
-  await oauthStateRepository.create(state, expiresAt);
+  await oauthStateRepository.create(state, expiresAt, null, redirectUri ?? null);
 
   const github = new GitHubAppService(c.env, logger);
   const url = github.getAuthUrl(state);
 
   return c.json({ url, state }, 200);
+});
+
+/**
+ * GET /auth/github/callback — GitHub redirects here after user authorizes.
+ * Performs the full token exchange, creates a session, then redirects to the
+ * frontend callback with the session token so it can set a cookie and close the popup.
+ */
+authRoutes.openapi(getGithubCallbackRoute, async (c) => {
+  const { code, state } = c.req.valid("query");
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
+  const userRepository = new UserRepository(c.env.DB);
+  const userSessionRepository = new UserSessionRepository(c.env.DB);
+
+  // Consume the state atomically (validates + prevents replay)
+  const stateRecord = await oauthStateRepository.consumeValid(state);
+
+  if (!stateRecord || !stateRecord.redirectUri) {
+    logger.error("GitHub callback: invalid state or missing redirect URI", {
+      loggerName,
+      fields: {
+        hasState: Boolean(stateRecord),
+        hasRedirectUri: Boolean(stateRecord?.redirectUri),
+        statePrefix: state.slice(0, 8),
+      },
+    });
+    return c.text("Invalid or expired authorization state.", 400);
+  }
+
+  const redirectUrl = new URL(stateRecord.redirectUri);
+
+  // Exchange code for tokens
+  const github = new GitHubAppService(c.env, logger);
+  let result;
+  try {
+    result = await github.exchangeOAuthCode(code);
+  } catch (error) {
+    logger.error("GitHub OAuth code exchange failed", {
+      loggerName,
+      error,
+      fields: { statePrefix: state.slice(0, 8) },
+    });
+    redirectUrl.searchParams.set("error", "Failed to exchange OAuth code");
+    return c.redirect(redirectUrl.toString(), 302);
+  }
+
+  // Check allowlist
+  const allowedRaw = c.env.ALLOWED_GITHUB_LOGINS ?? "";
+  const allowedLogins = allowedRaw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (
+    allowedLogins.length === 0 ||
+    !allowedLogins.includes(result.user.login.toLowerCase())
+  ) {
+    logger.error("GitHub OAuth callback rejected: user not allowlisted", {
+      loggerName,
+      fields: { githubLogin: result.user.login },
+    });
+    redirectUrl.searchParams.set("error", "User not allowed");
+    return c.redirect(redirectUrl.toString(), 302);
+  }
+
+  // Encrypt tokens before storing
+  const encryptedAccess = await encrypt(
+    result.accessToken,
+    c.env.TOKEN_ENCRYPTION_KEY,
+  );
+  const encryptedRefresh = result.refreshToken
+    ? await encrypt(result.refreshToken, c.env.TOKEN_ENCRYPTION_KEY)
+    : null;
+
+  // Upsert user
+  const userId = crypto.randomUUID();
+  await userRepository.upsertGitHubUser({
+    id: userId,
+    githubId: result.user.id,
+    githubLogin: result.user.login,
+    githubName: result.user.name,
+    githubAvatarUrl: result.user.avatarUrl,
+  });
+
+  const user = await userRepository.getByGitHubId(result.user.id);
+  if (!user) {
+    redirectUrl.searchParams.set("error", "Failed to create user");
+    return c.redirect(redirectUrl.toString(), 302);
+  }
+
+  // Create auth session (30 days)
+  const sessionToken = crypto.randomUUID();
+  const sessionExpires = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  await userSessionRepository.createAuthSession(
+    sessionToken,
+    user.id,
+    encryptedAccess,
+    result.expiresAt ?? null,
+    sessionExpires,
+  );
+
+  // Upsert refresh token
+  if (encryptedRefresh) {
+    await userSessionRepository.upsertRefreshToken(
+      user.id,
+      encryptedRefresh,
+      result.refreshTokenExpiresAt ?? null,
+    );
+  }
+
+  // Check if user has any GitHub App installations
+  const userOctokit = new Octokit({ auth: result.accessToken });
+  let hasInstallations = false;
+  try {
+    const { data } = await userOctokit.request("GET /user/installations", {
+      per_page: 1,
+    });
+    hasInstallations = data.total_count > 0;
+  } catch {
+    console.error("Failed to check for GitHub app installations");
+  }
+
+  const installUrl = github.getInstallUrl();
+
+  logger.info("GitHub OAuth login succeeded via callback", {
+    loggerName,
+    fields: {
+      githubLogin: user.githubLogin,
+      hasInstallations,
+    },
+  });
+
+  // Redirect to the frontend callback with session info as query params
+  redirectUrl.searchParams.set("token", sessionToken);
+  redirectUrl.searchParams.set("hasInstallations", String(hasInstallations));
+  redirectUrl.searchParams.set("installUrl", installUrl);
+  redirectUrl.searchParams.set("user", JSON.stringify({
+    id: user.id,
+    login: user.githubLogin,
+    name: user.githubName,
+    avatarUrl: user.githubAvatarUrl,
+  }));
+
+  return c.redirect(redirectUrl.toString(), 302);
 });
 
 /**

@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import {
+  GitHubAuthUrlRequest,
   GitHubAuthUrlResponse,
   TokenRequest,
   TokenResponse,
@@ -15,10 +16,33 @@ const ErrorResponse = z.object({
 export const getGithubRoute = createRoute({
   method: "get",
   path: "/github",
+  request: {
+    query: GitHubAuthUrlRequest,
+  },
   responses: {
     200: {
       content: { "application/json": { schema: GitHubAuthUrlResponse } },
       description: "GitHub OAuth authorization URL",
+    },
+  },
+});
+
+export const getGithubCallbackRoute = createRoute({
+  method: "get",
+  path: "/github/callback",
+  request: {
+    query: z.object({
+      code: z.string(),
+      state: z.string(),
+    }),
+  },
+  responses: {
+    302: {
+      description: "Redirect to frontend callback with code and state",
+    },
+    400: {
+      content: { "text/plain": { schema: z.string() } },
+      description: "Invalid or expired state",
     },
   },
 });
