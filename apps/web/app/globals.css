@@ -64,7 +64,7 @@ body {
 }
 
 body {
-  background: var(--background);
+  background: var(--background-secondary);
   color: var(--foreground);
   font-family:
     -apple-system,
