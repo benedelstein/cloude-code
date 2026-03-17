@@ -44,7 +44,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
-    editorUrl,
     settings,
     selectedModel,
     setSelectedModel,
