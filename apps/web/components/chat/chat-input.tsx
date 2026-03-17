@@ -188,7 +188,7 @@ export function ChatInput({
           }
           disabled={disabled || isClaudePromptBlocking}
           rows={1}
-          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-base focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
       <div className="flex items-center justify-end px-3 pb-2">

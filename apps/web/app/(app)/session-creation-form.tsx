@@ -539,7 +539,7 @@ export function SessionCreationForm() {
             placeholder="Describe what you want to do..."
             rows={claude.connected || claude.loading ? 4 : 2}
             disabled={isFormInteractionDisabled}
-          className={`w-full overflow-y-auto px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
+          className={`w-full overflow-y-auto px-4 pb-2 bg-transparent text-base resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
             claude.connected || claude.loading ? "pt-4" : "pt-2"
           }`}
         />
