@@ -3,7 +3,7 @@ import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import { listReposRoute, listBranchesRoute } from "./routes";
 import type { Repo } from "@repo/shared";
 
@@ -11,6 +11,7 @@ export const reposRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const logger = createLogger("repos.routes.ts");
 
 reposRoutes.use("*", authMiddleware);
 

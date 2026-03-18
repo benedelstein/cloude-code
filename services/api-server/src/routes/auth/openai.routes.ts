@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { encrypt } from "@/lib/crypto";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import {
   authMiddleware,
   type AuthUser,
@@ -99,6 +99,7 @@ export const openaiAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const logger = createLogger("openai.routes.ts");
 
 /**
  * GET /auth/openai — Generate OpenAI OAuth URL with PKCE

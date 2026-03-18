@@ -2,7 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { Env } from "@/types";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 
 export interface AuthUser {
@@ -18,6 +18,8 @@ type AuthEnv = {
   Bindings: Env;
   Variables: { user: AuthUser };
 };
+
+const logger = createLogger("auth.middleware.ts");
 
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const authHeader = c.req.header("Authorization");

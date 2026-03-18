@@ -12,7 +12,10 @@ The api-server is a Cloudflare Workers application using Hono for routing. The c
 
 ## Key Architecture
 
-Note: this package follows a controller-service-repository architecture pattern. Keep separation of concerns!
+Note: this package follows a controller-service-repository architecture pattern. Keep separation of concerns between different layers.
+- Do not place logic inside route handlers. That should go inside a service file inside of lib/. 
+E.g.
+`src/routes/sessions/sessions.routes.ts` -> `src/lib/sessions/sessions.service.ts` -> `src/repositories/sessions/sessions.repository.ts`
 
 ### SessionAgentDO (`src/durable-objects/session-agent-do.ts`)
 

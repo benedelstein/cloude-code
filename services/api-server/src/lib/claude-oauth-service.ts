@@ -1,6 +1,6 @@
 import type { Logger } from "@repo/shared";
 import { decrypt, encrypt } from "@/lib/crypto";
-import { logger as defaultLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import {
   ClaudeSessionRepository,
   type ClaudeSessionRecord,
@@ -9,7 +9,6 @@ import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import type { Env } from "@/types";
 import { computeCodeChallenge, generateCodeVerifier } from "@/lib/pkce";
 
-const loggerName = "claude-oauth-service.ts";
 const CLAUDE_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 export const DEFAULT_CLAUDE_SCOPES = [
@@ -191,11 +190,11 @@ export class ClaudeOAuthService {
 
   constructor(
     private readonly env: Env,
-    logger: Logger = defaultLogger,
+    logger: Logger = createLogger("claude-oauth-service.ts"),
   ) {
     this.claudeSessionRepository = new ClaudeSessionRepository(env.DB);
     this.oauthStateRepository = new OauthStateRepository(env.DB);
-    this.logger = logger;
+    this.logger = logger.scope("claude-oauth-service.ts");
   }
 
   /**
@@ -277,7 +276,7 @@ export class ClaudeOAuthService {
       if (error instanceof ClaudeOAuthError) {
         throw error;
       }
-      this.logger.error("Claude token exchange error", { loggerName, error });
+      this.logger.error("Claude token exchange error", { error });
       throw new ClaudeOAuthError(
         "CLAUDE_TOKEN_EXCHANGE_FAILED",
         "Failed to exchange Claude OAuth code.",
@@ -367,7 +366,6 @@ export class ClaudeOAuthService {
       }
 
       this.logger.error("Failed to determine Claude connection status", {
-        loggerName,
         error,
         fields: { userId },
       });
@@ -441,7 +439,7 @@ export class ClaudeOAuthService {
       subscriptionType: row.subscriptionType,
       rateLimitTier: row.rateLimitTier,
     });
-    this.logger.info("successfully refreshed Claude tokens", { loggerName, fields: { userId } });
+    this.logger.info("successfully refreshed Claude tokens", { fields: { userId } });
     await this.persistTokens(userId, credentials);
     return credentials;
   }

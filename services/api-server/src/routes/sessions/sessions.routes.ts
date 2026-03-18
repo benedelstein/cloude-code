@@ -13,7 +13,7 @@ import {
   GitHubAppService,
   GitHubAppError,
 } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import { SessionHistoryService } from "@/lib/session-history";
 import {
   createPullRequestForSession,
@@ -44,6 +44,7 @@ export const sessionsRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const logger = createLogger("sessions.routes.ts");
 
 sessionsRoutes.use("*", authMiddleware);
 

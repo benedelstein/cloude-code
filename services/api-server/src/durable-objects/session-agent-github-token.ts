@@ -1,7 +1,9 @@
 import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import type { Env } from "@/types";
 import type { SecretRepository } from "./repositories/secret-repository";
+
+const logger = createLogger("session-agent-github-token.ts");
 
 export interface GitHubTokenContext {
   repoFullName: string | null;

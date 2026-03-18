@@ -6,7 +6,6 @@ import type { SecretRepository } from "./repositories/secret-repository";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
-const loggerName = "session-agent-editor.ts";
 
 type EditorContext = {
   spriteName: string | null;
@@ -25,7 +24,8 @@ export type EditorOpenResult = {
 };
 
 export async function handleEditorOpen(context: EditorContext): Promise<EditorOpenResult> {
-  const { env, logger, secretRepository } = context;
+  const { env, secretRepository } = context;
+  const logger = context.logger.scope("session-agent-editor.ts");
 
   if (!context.spriteName) {
     return {
@@ -62,9 +62,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
       {},
     );
     if (checkResult.stdout.includes("missing")) {
-      logger.info("Installing openvscode-server on sprite", {
-        loggerName,
-      });
+      logger.info("Installing openvscode-server on sprite");
       const installResult = await sprite.execHttp(
         [
           `curl -fsSL https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.109.5/openvscode-server-v1.109.5-linux-x64.tar.gz -o /tmp/ovs.tar.gz`,
@@ -79,9 +77,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
           `openvscode-server install failed (exit ${installResult.exitCode}): ${installResult.stderr}`,
         );
       }
-      logger.info("openvscode-server installed successfully", {
-        loggerName,
-      });
+      logger.info("openvscode-server installed successfully");
     }
 
     // Generate a connection token for auth
@@ -118,7 +114,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
     const editorUrl = spriteInfo.url;
     context.setEditorUrl(editorUrl);
 
-    logger.info(`Editor ready at ${editorUrl}`, { loggerName });
+    logger.info(`Editor ready at ${editorUrl}`);
     // Broadcast to all WS clients so other tabs/windows can open the editor too
     context.broadcastEditorReady(editorUrl, token);
 
@@ -127,7 +123,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
       editorToken: token,
     };
   } catch (error) {
-    logger.error("Failed to open editor", { loggerName, error });
+    logger.error("Failed to open editor", { error });
     const message = error instanceof Error ? error.message : "Failed to open editor";
     return {
       response: Response.json({ error: message }, { status: 500 }),
@@ -137,7 +133,8 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
 }
 
 export async function handleEditorClose(context: EditorContext): Promise<EditorOpenResult> {
-  const { env, logger, secretRepository } = context;
+  const { env, secretRepository } = context;
+  const logger = context.logger.scope("session-agent-editor.ts");
 
   if (!context.spriteName) {
     return {
@@ -163,13 +160,13 @@ export async function handleEditorClose(context: EditorContext): Promise<EditorO
     secretRepository.set("editor_token", "");
     context.setEditorUrl(null);
 
-    logger.info("Editor closed", { loggerName });
+    logger.info("Editor closed");
     return {
       response: Response.json({ closed: true }),
       editorToken: null,
     };
   } catch (error) {
-    logger.error("Failed to close editor", { loggerName, error });
+    logger.error("Failed to close editor", { error });
     const message = error instanceof Error ? error.message : "Failed to close editor";
     return {
       response: Response.json({ error: message }, { status: 500 }),

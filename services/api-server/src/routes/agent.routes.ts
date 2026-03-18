@@ -4,9 +4,10 @@ import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { SessionHistoryService } from "@/lib/session-history";
 import { verifySessionWebSocketToken } from "@/lib/session-websocket-token";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();
+const logger = createLogger("agent.routes.ts");
 
 agentRoutes.all("/session/:sessionId", async (c) => {
   const sessionId = c.req.param("sessionId");

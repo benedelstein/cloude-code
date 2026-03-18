@@ -1,9 +1,13 @@
 import { ComposedLogger, ConsoleLogger, type Logger } from "@repo/shared";
 
-export const logger: Logger = new ComposedLogger(
+const rootLogger: Logger = new ComposedLogger(
   [
     new ConsoleLogger({
       format: "pretty",
     }),
   ],
 );
+
+export function createLogger(loggerName: string): Logger {
+  return rootLogger.scope(loggerName);
+}

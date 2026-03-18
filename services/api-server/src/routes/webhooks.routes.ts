@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import type { Env } from "@/types";
 
 export const webhooksRoutes = new Hono<{ Bindings: Env }>();
+const logger = createLogger("webhooks.routes.ts");
 
 webhooksRoutes.post("/github", async (c) => {
   const id = c.req.header("x-github-delivery");

@@ -33,8 +33,11 @@ export interface Logger {
   info(message: string, params?: LogParams): void;
   warn(message: string, params?: LogParams): void;
   error(message: string, params?: LogParams): void;
+  scope(loggerName: string): Logger;
 }
 /* eslint-enable no-unused-vars */
+
+type LogMethod = "log" | "debug" | "info" | "warn" | "error";
 
 export interface ConsoleLoggerOptions {
   includeTimestamp?: boolean;
@@ -71,6 +74,10 @@ export class ConsoleLogger implements Logger {
 
   public error(message: string, params?: LogParams): void {
     this.write("error", message, params);
+  }
+
+  public scope(loggerName: string): Logger {
+    return new ScopedLogger(this, loggerName);
   }
 
   private write(level: LogLevel, message: string, params?: LogParams): void {
@@ -211,8 +218,12 @@ export class ComposedLogger implements Logger {
     this.dispatch("error", message, params);
   }
 
+  public scope(loggerName: string): Logger {
+    return new ScopedLogger(this, loggerName);
+  }
+
   private dispatch(
-    method: "log" | "debug" | "info" | "warn" | "error",
+    method: LogMethod,
     message: string,
     params?: LogParams,
   ): void {
@@ -238,5 +249,46 @@ export class ComposedLogger implements Logger {
       loggingErrors,
       "ComposedLogger encountered multiple logger failures",
     );
+  }
+}
+
+export class ScopedLogger implements Logger {
+  private readonly parent: Logger;
+  private readonly loggerName: string;
+
+  public constructor(parent: Logger, loggerName: string) {
+    this.parent = parent;
+    this.loggerName = loggerName;
+  }
+
+  public log(message: string, params?: LogParams): void {
+    this.dispatch("log", message, params);
+  }
+
+  public debug(message: string, params?: LogParams): void {
+    this.dispatch("debug", message, params);
+  }
+
+  public info(message: string, params?: LogParams): void {
+    this.dispatch("info", message, params);
+  }
+
+  public warn(message: string, params?: LogParams): void {
+    this.dispatch("warn", message, params);
+  }
+
+  public error(message: string, params?: LogParams): void {
+    this.dispatch("error", message, params);
+  }
+
+  public scope(loggerName: string): Logger {
+    return new ScopedLogger(this.parent, loggerName);
+  }
+
+  private dispatch(method: LogMethod, message: string, params?: LogParams): void {
+    this.parent[method](message, {
+      ...params,
+      loggerName: this.loggerName,
+    });
   }
 }

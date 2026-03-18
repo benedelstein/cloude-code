@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { GitHubAppService } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import { encrypt } from "@/lib/crypto";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
@@ -19,7 +19,7 @@ export const authRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
-const loggerName = "auth.routes.ts";
+const logger = createLogger("auth.routes.ts");
 
 /**
  * GET auth/github — returns the install + authorize URL
@@ -32,7 +32,6 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   const oauthStateRepository = new OauthStateRepository(c.env.DB);
 
   logger.info("Starting GitHub OAuth flow", {
-    loggerName,
     fields: {
       expiresAt,
       requestId: c.req.header("cf-ray") ?? null,
@@ -62,7 +61,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   const userSessionRepository = new UserSessionRepository(c.env.DB);
 
   logger.info("Received GitHub OAuth callback", {
-    loggerName,
     fields: {
       hasCode: Boolean(code),
       requestId: c.req.header("cf-ray") ?? null,
@@ -73,7 +71,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
 
   if (!code || !state) {
     logger.error("GitHub OAuth callback missing code or state", {
-      loggerName,
       fields: {
         hasCode: Boolean(code),
         hasState: Boolean(state),
@@ -86,7 +83,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   // Validate and consume state
   if (!(await oauthStateRepository.consumeValid(state))) {
     logger.error("GitHub OAuth callback rejected: invalid or expired state", {
-      loggerName,
       fields: {
         requestId: c.req.header("cf-ray") ?? null,
         statePrefix: state.slice(0, 8),
@@ -102,7 +98,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     result = await github.exchangeOAuthCode(code);
   } catch (error) {
     logger.error("GitHub OAuth code exchange failed", {
-      loggerName,
       error,
       fields: {
         requestId: c.req.header("cf-ray") ?? null,
@@ -124,7 +119,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     !allowedLogins.includes(result.user.login.toLowerCase())
   ) {
     logger.error("GitHub OAuth callback rejected: user not allowlisted", {
-      loggerName,
       fields: {
         githubLogin: result.user.login,
         requestId: c.req.header("cf-ray") ?? null,
@@ -200,7 +194,6 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   const installUrl = github.getInstallUrl();
 
   logger.info("GitHub OAuth login succeeded", {
-    loggerName,
     fields: {
       githubLogin: user.githubLogin,
       hasInstallations,

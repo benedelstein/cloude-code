@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { getAgentByName } from "agents";
 import type { Env } from "@/types";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 import {
   ClaudeOAuthError,
   ClaudeOAuthService,
@@ -20,6 +20,7 @@ export const claudeAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const logger = createLogger("claude.routes.ts");
 
 claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
   const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
@@ -57,19 +58,17 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
 
         if (!refreshResponse.ok) {
           logger.error("Failed to refresh Claude auth state for session", {
-            loggerName: "claude.routes.ts",
             fields: { sessionId, userId: user.id, status: refreshResponse.status },
           });
         }
       } else {
         logger.warn("Skipping Claude auth refresh for unauthorized session", {
-          loggerName: "claude.routes.ts",
           fields: { sessionId, userId: user.id },
         });
       }
     }
   } catch (error) {
-    logger.error("Claude token exchange error", { loggerName: "claude.routes.ts", error });
+    logger.error("Claude token exchange error", { error });
     if (error instanceof ClaudeOAuthError) {
       return c.json({ error: error.message }, 400);
     }

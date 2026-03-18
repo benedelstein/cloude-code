@@ -8,12 +8,13 @@ import {
   getAttachmentContentRoute,
   deleteAttachmentRoute,
 } from "./schema";
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
 
 export const attachmentsRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
+const logger = createLogger("attachments.routes.ts");
 
 attachmentsRoutes.use("*", authMiddleware);
 

@@ -11,7 +11,15 @@ export async function updateSessionHistoryData(params: {
   messageContent: string;
   messageRepository: MessageRepository;
 }): Promise<void> {
-  const { database, anthropicApiKey, logger, sessionId, messageContent, messageRepository } = params;
+  const {
+    database,
+    anthropicApiKey,
+    logger: baseLogger,
+    sessionId,
+    messageContent,
+    messageRepository,
+  } = params;
+  const logger = baseLogger.scope("session-agent-history.ts");
 
   try {
     const sessionHistory = new SessionHistoryService(database);
@@ -24,15 +32,10 @@ export async function updateSessionHistoryData(params: {
 
     if (userMessages.length === 1) {
       const title = await generateSessionTitle(anthropicApiKey, messageContent);
-      logger.info(`Generated session title: ${title} for session ${sessionId}`, {
-        loggerName: "session-agent-history.ts",
-      });
+      logger.info(`Generated session title: ${title} for session ${sessionId}`);
       await sessionHistory.updateTitle(sessionId, title);
     }
   } catch (error) {
-    logger.error("Failed to sync message to D1 history", {
-      loggerName: "session-agent-history.ts",
-      error,
-    });
+    logger.error("Failed to sync message to D1 history", { error });
   }
 }

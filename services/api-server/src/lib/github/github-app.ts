@@ -18,7 +18,6 @@ import { UserSessionRepository } from "@/repositories/user-session-repository";
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
 
-const loggerName = "github-app.ts";
 const USER_REPO_ACCESS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface GithubOAuthUser {
@@ -123,7 +122,7 @@ export class GitHubAppService {
     this.userSessionRepository = new UserSessionRepository(env.DB);
     this.clientId = env.GITHUB_APP_CLIENT_ID;
     this.appSlug = env.GITHUB_APP_SLUG;
-    this.logger = logger;
+    this.logger = logger.scope("github-app.ts");
     this.tokenEncryptionKey = env.TOKEN_ENCRYPTION_KEY;
   }
 
@@ -531,7 +530,6 @@ export class GitHubAppService {
       };
     } catch (_error) {
       this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
-        loggerName,
         error: _error,
       });
       throw new GitHubAppError(
@@ -576,7 +574,6 @@ export class GitHubAppService {
       };
     } catch (_error) {
       this.logger.error(`Failed to get repository installation for ${repoFullName}`, {
-        loggerName,
         error: _error,
       });
       throw new GitHubAppError(
@@ -639,9 +636,7 @@ export class GitHubAppService {
     payload: string;
   }): Promise<void> {
     this.registerWebhookHandlers();
-    this.logger.info(`github webhook received: ${params.id} - ${params.name}`, {
-      loggerName,
-    });
+    this.logger.info(`github webhook received: ${params.id} - ${params.name}`);
 
     await this.app.webhooks.verifyAndReceive({
       id: params.id,
@@ -695,14 +690,12 @@ export class GitHubAppService {
     if (!account || !("login" in account)) {
       this.logger.error(
         `github installation created: ${installation.id} - ${installation.target_type} - no account`,
-        { loggerName },
       );
       return;
     }
 
     this.logger.info(
       `github installation created: ${installation.id}\ntarget_type:${installation.target_type}`,
-      { loggerName },
     );
     await this.installationRepository.upsert({
       id: installation.id,
@@ -720,43 +713,34 @@ export class GitHubAppService {
     if (payload.repositories && payload.repositories.length > 0) {
       this.logger.info(
         `installation ${installation.id} has ${payload.repositories.length} repositories`,
-        { loggerName },
       );
       await this.installationRepository.addRepos(
         installation.id,
         payload.repositories.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
       );
     } else {
-      this.logger.info(`installation ${installation.id} has no repositories specified`, {
-        loggerName,
-      });
+      this.logger.info(`installation ${installation.id} has no repositories specified`);
     }
   }
 
   private async handleInstallationDeleted(
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
-    this.logger.info(`github installation deleted: ${payload.installation.id}`, {
-      loggerName,
-    });
+    this.logger.info(`github installation deleted: ${payload.installation.id}`);
     await this.installationRepository.delete(payload.installation.id);
   }
 
   private async handleInstallationSuspended(
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
-    this.logger.info(`github installation suspended: ${payload.installation.id}`, {
-      loggerName,
-    });
+    this.logger.info(`github installation suspended: ${payload.installation.id}`);
     await this.installationRepository.setSuspended(payload.installation.id, true);
   }
 
   private async handleInstallationUnsuspended(
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
-    this.logger.info(`github installation unsuspended: ${payload.installation.id}`, {
-      loggerName,
-    });
+    this.logger.info(`github installation unsuspended: ${payload.installation.id}`);
     await this.installationRepository.setSuspended(payload.installation.id, false);
   }
 
@@ -767,9 +751,6 @@ export class GitHubAppService {
     const repos = payload.repositories_added;
     this.logger.info(
       `github installation repositories added: ${installationId} - ${repos.length} repos`,
-      {
-        loggerName,
-      },
     );
 
     await this.installationRepository.addRepos(
@@ -782,9 +763,7 @@ export class GitHubAppService {
     payload: WebhookPayload<"github_app_authorization.revoked">,
   ): Promise<void> {
     const githubUserId = payload.sender.id;
-    this.logger.info(`github user authorization revoked: ${githubUserId}`, {
-      loggerName,
-    });
+    this.logger.info(`github user authorization revoked: ${githubUserId}`);
     // Revoke all sessions and the refresh token. The GitHub access token is
     // already invalid, so we must not attempt to use it again.
     await this.userSessionRepository.revokeAllSessionsByGithubId(githubUserId);

@@ -6,7 +6,9 @@ import {
   generatePullRequestText,
 } from "@/lib/generate-pull-request-text";
 import type { GitHubAppService, GitHubCompareData } from "@/lib/github";
-import { logger } from "./logger";
+import { createLogger } from "./logger";
+
+const logger = createLogger("session-pull-request-service.ts");
 
 const MAX_CONTEXT_MESSAGES = 12;
 const MAX_CONTEXT_CHARS = 280;
