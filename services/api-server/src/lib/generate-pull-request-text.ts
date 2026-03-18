@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { dedent } from "@repo/shared";
 import { generateText, Output } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 
 const MAX_TITLE_CHARS = 120;
 const MAX_BODY_CHARS = 6000;
@@ -24,6 +25,8 @@ const pullRequestTextSchema = z.object({
   title: z.string().min(1).max(MAX_TITLE_CHARS),
   body: z.string().min(1).max(MAX_BODY_CHARS),
 });
+
+const logger = createLogger("generate-pull-request-text.ts");
 
 export interface PullRequestDiffFile {
   filename: string;
@@ -170,7 +173,7 @@ export async function generatePullRequestText(
 
     return { title, body: result.output.body };
   } catch (error) {
-    console.error("Failed to generate pull request text via LLM:", error);
+    logger.error("Failed to generate pull request text via LLM", { error });
     return null;
   }
 }

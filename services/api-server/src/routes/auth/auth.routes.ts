@@ -186,9 +186,9 @@ authRoutes.openapi(postTokenRoute, async (c) => {
         per_page: 1,
       });
     hasInstallations = data.total_count > 0;
-  } catch {
+  } catch (error) {
     // If the check fails, assume no installations to prompt setup
-    console.error("Failed to check for GitHub app installations");
+    logger.error("Failed to check for GitHub app installations", { error });
   }
 
   const installUrl = github.getInstallUrl();

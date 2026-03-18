@@ -140,7 +140,7 @@ openaiAuthRoutes.openapi(getOpenAIAuthRoute, async (c) => {
   ];
 
   const url = `${OPENAI_AUTH_URL}?${queryParts.join("&")}`;
-  console.log(`OpenAI OAuth URL: ${url}`);
+  logger.debug(`OpenAI OAuth URL: ${url}`);
 
   return c.json({ url, state }, 200);
 });

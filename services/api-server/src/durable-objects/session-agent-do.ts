@@ -60,6 +60,7 @@ import {
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
+import { Session } from "@fly/sprites";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -81,7 +82,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private readonly secretRepository: SecretRepository;
   private readonly latestPlanRepository: LatestPlanRepository;
   /** vm-agent session running on the sprite */
-  private agentSession: SpriteWebsocketSession | null = null;
+  private agentWebsocketSession: SpriteWebsocketSession | null = null;
   /** Mutex for reattachment to prevent race conditions */
   private reattachPromise: Promise<void> | null = null;
   /** Accumulator for building UIMessage from stream chunks */
@@ -145,7 +146,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private getConnectedAgentSession(): SpriteWebsocketSession | null {
-    const currentAgentSession = this.agentSession;
+    const currentAgentSession = this.agentWebsocketSession;
     if (!currentAgentSession || !currentAgentSession.isConnected) {
       return null;
     }
@@ -638,7 +639,9 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
     
-    console.log(`Starting agent on sprite ${spriteName} with settings ${JSON.stringify(this.state.settings)} and sessionId ${this.state.agentSessionId}`);
+    this.logger.debug(
+      `Starting agent on sprite ${spriteName} with settings ${JSON.stringify(this.state.settings)} and sessionId ${this.state.agentSessionId}`,
+    );
     const agentSessionId = this.state.agentSessionId;
     const commands = [
       "bun",
@@ -684,14 +687,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
     }
 
-    this.agentSession = sprite.createSession("env", commands, {
+    this.agentWebsocketSession = sprite.createSession("env", commands, {
       cwd: WORKSPACE_DIR,
       tty: false,
       env: baseEnv,
     });
 
-    this.setupAgentSessionHandlers();
-    await this.agentSession.start();
+    this.setupAgentSessionHandlers(this.agentWebsocketSession!);
+    await this.agentWebsocketSession.start();
     this.logger.info(`vm-agent (${provider}) started on sprite ${spriteName}`);
   }
 
@@ -799,28 +802,26 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return false;
   }
 
-  private setupAgentSessionHandlers(): void {
-    if (!this.agentSession) return;
-
-    this.agentSession.onStdout((data: string) => {
+  private setupAgentSessionHandlers(session: SpriteWebsocketSession): void {
+    session.onStdout((data: string) => {
       this.handleAgentStdout(data);
     });
 
-    this.agentSession.onStderr((data: string) => {
+    session.onStderr((data: string) => {
       this.logger.error(`vm-agent stderr: ${data}`);
     });
 
-    this.agentSession.onExit((code: number) => {
+    session.onExit((code: number) => {
       this.logger.info(`vm-agent exited with code ${code}`);
       this.agentStdoutBuffer = "";
-      this.agentSession = null;
+      this.agentWebsocketSession = null;
       // Clear any in-progress chunk buffer if agent exits mid-stream
       this.pendingChunks = [];
       this.messageAccumulator.reset();
-      this.updatePartialState({ isResponding: false });
+      this.updatePartialState({ isResponding: false, agentProcessId: null });
     });
 
-    this.agentSession.onServerMessage((msg: SpriteServerMessage) => {
+    session.onServerMessage((msg: SpriteServerMessage) => {
       this.handleAgentServerMessage(msg);
     });
   }
@@ -1155,6 +1156,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     const currentAgentSession = this.getConnectedAgentSession();
     if (!currentAgentSession || !currentAgentSession.isConnected) {
+      this.logger.error(`No agent session available ${this.state.spriteName} ${this.state.sessionId}`);
       this.sendMessage(
         {
           type: "error",
@@ -1269,7 +1271,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.logger.error("Failed to write to vm-agent, attempting reattach", {
         error,
       });
-      this.agentSession = null;
+      this.agentWebsocketSession = null;
     }
 
     if (this.state.spriteName) {
@@ -1296,7 +1298,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.logger.error("Failed to write to vm-agent after reattach", {
         error,
       });
-      this.agentSession = null;
+      this.agentWebsocketSession = null;
       this.sendMessage(
         {
           type: "error",
@@ -1324,7 +1326,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async _doReattach(spriteName: string): Promise<void> {
-
     try {
       const sprite = new WorkersSprite(
         spriteName,
@@ -1332,7 +1333,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.env.SPRITES_API_URL,
       );
 
-      // Refresh GitHub token (may have expired during hibernation)
+      // Refresh GitHub installation token (may have expired during hibernation)
       try {
         await this.refreshGitHubToken();
       } catch (error) {
@@ -1349,7 +1350,12 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Set status to attaching
       this.updateStatus("attaching");
-      const sessions = await this.spritesCoordinator.listSessions(spriteName);
+      let sessions: Session[] = [];
+      try {
+        sessions = await this.spritesCoordinator.listSessions(spriteName);
+      } catch (error) {
+        this.logger.error("Failed to list sessions", { error });
+      }
       const existingSession = sessions.find(
         (s) => s.id === String(this.state?.agentProcessId),
       );
@@ -1363,12 +1369,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.logger.info(
           `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
         );
-        this.agentSession = sprite.attachSession(
+        // FIXME: is it really ncessary to attach here? 
+        // Nobody is using this session (since the DO is the single source of truth), we can still just restart.
+        this.agentWebsocketSession = sprite.attachSession(
           String(existingSession.id),
           {},
         );
-        this.setupAgentSessionHandlers();
-        await this.agentSession.start();
+        this.setupAgentSessionHandlers(this.agentWebsocketSession!);
+        await this.agentWebsocketSession.start();
       } else {
         // Solo: start fresh with latest script (old session orphaned)
         this.logger.info("No other clients connected, starting fresh vm-agent");
@@ -1384,7 +1392,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
       }
       this.logger.error("Failed to reattach agent session", { error });
-      this.updateStatus("ready"); // FIXME: WHY IS THIS READY? WE SHOULD BE ERRORING.
+      this.updateStatus("error"); // FIXME: WHY IS THIS READY? WE SHOULD BE ERRORING.
       this.broadcastMessage({
         type: "error",
         code: "reattach_failed",
@@ -1435,8 +1443,8 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private handleOperationCancel(): void {
-    if (this.agentSession) {
-      this.agentSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
+    if (this.agentWebsocketSession) {
+      this.agentWebsocketSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
     }
   }
 
@@ -1584,7 +1592,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async sendPendingMessage(): Promise<void> {
     const content = this.getUserMessageTextContent(this.state.pendingUserMessage);
     const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
-    if (!this.agentSession || !this.state.sessionId) return;
+    if (!this.agentWebsocketSession || !this.state.sessionId) return;
     if (!content && pendingAttachmentIds.length === 0) return;
 
     const sessionId = this.state.sessionId;
@@ -1657,7 +1665,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.logger.info(
       `Sending pending message to vm-agent: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
     );
-    await this.sendMessageToAgent(this.agentSession, content, agentAttachments);
+    await this.sendMessageToAgent(this.agentWebsocketSession, content, agentAttachments);
   }
 
   /**

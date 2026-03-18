@@ -133,7 +133,13 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   }
 
   const sessionId = crypto.randomUUID();
-  console.log("creating session agent", sessionId, "user", user.id, "repository", repository.fullName);
+  logger.info("Creating session agent", {
+    fields: {
+      sessionId,
+      userId: user.id,
+      repositoryFullName: repository.fullName,
+    },
+  });
   const sessionHistory = new SessionHistoryService(c.env.DB);
   const attachmentService = new AttachmentService(c.env.DB);
   const attachmentIds = [...new Set(createSessionData.attachmentIds ?? [])];
@@ -233,7 +239,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
       title = await generateSessionTitle(c.env.ANTHROPIC_API_KEY, createSessionData.initialMessage);
       await sessionHistory.updateTitle(sessionId, title);
     } catch (error) {
-      console.error("Failed to generate title at creation:", error);
+      logger.error("Failed to generate title at creation", { error });
     }
   }
 
@@ -259,14 +265,14 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
   const user = c.get("user");
   const d1 = new Date();
   const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  console.log(`fetched session agent in ${new Date().getTime() - d1.getTime()}ms`)
+  logger.debug(`Fetched session agent in ${new Date().getTime() - d1.getTime()}ms`);
   if (!stub) {
     return c.json({ error: "Session not found" }, 404);
   }
 
   const d2 = new Date();
   const response = await stub.fetch(new Request("http://do/"));
-  console.log(`fetched session info in ${new Date().getTime() - d2.getTime()}ms`)
+  logger.debug(`Fetched session info in ${new Date().getTime() - d2.getTime()}ms`);
   if (!response.ok) {
     return c.json({ error: "Session not found" }, 404);
   }

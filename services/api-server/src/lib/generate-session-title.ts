@@ -1,10 +1,12 @@
 import { generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { dedent } from "@repo/shared";
+import { createLogger } from "@/lib/logger";
 
 const DEFAULT_SESSION_TITLE = "Unknown request";
 const MAX_TITLE_WORDS = 6;
 const MAX_TITLE_CHARS = 60;
+const logger = createLogger("generate-session-title.ts");
 const SESSION_TITLE_SYSTEM_PROMPT = dedent`
   Generate a short title (max 6 words) summarizing what the user wants to do.
   Respond with only the title, no quotes or punctuation.
@@ -72,7 +74,7 @@ export async function generateSessionTitle(
       return text;
     }
   } catch (error) {
-    console.error("Failed to generate session title via LLM:", error);
+    logger.error("Failed to generate session title via LLM", { error });
   }
 
   return DEFAULT_SESSION_TITLE;

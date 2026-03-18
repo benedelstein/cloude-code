@@ -1,8 +1,11 @@
 import { SessionOptions, SpriteServerMessage, SpriteServerMessageSchema } from "./types";
+import { createLogger } from "@/lib/logger";
 
 interface WorkersSessionOptions extends SessionOptions {
     sessionId?: string;
 }
+
+const logger = createLogger("SpriteWebsocketSession.ts");
 
 /**
  * Websocket session client compatible with cloudflare workers api.
@@ -94,8 +97,8 @@ export class SpriteWebsocketSession {
       const ws = response.webSocket;
       if (!ws) {
         const body = await response.text();
-        console.error(
-          `WebSocket upgrade failed. Status: ${response.status}, Body: ${body}`
+        logger.error(
+          `WebSocket upgrade failed. Status: ${response.status}, Body: ${body}`,
         );
         throw new Error(
           `Server didn't accept WebSocket connection: ${response.status} - ${body}`
@@ -177,7 +180,9 @@ export class SpriteWebsocketSession {
     private dispatchServerMessage(msg: unknown): void {
       const result = SpriteServerMessageSchema.safeParse(msg);
       if (!result.success) {
-        console.warn("[SpriteWebsocketSession] Unknown server message:", msg, result.error.format());
+        logger.warn(
+          `[SpriteWebsocketSession] Unknown server message: ${JSON.stringify(msg)} ${JSON.stringify(result.error.format())}`,
+        );
         return;
       }
 

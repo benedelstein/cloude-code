@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Session, SpritesClient } from "@fly/sprites";
+import { createLogger } from "@/lib/logger";
 
 // =============================================================================
 // Zod Schemas
@@ -42,6 +43,8 @@ export interface SpritesClientConfig {
   timeout?: number;
 }
 
+const logger = createLogger("sprites.ts");
+
 export class SpritesCoordinator {
   private spritesClient: SpritesClient;
 
@@ -61,8 +64,8 @@ export class SpritesCoordinator {
       : undefined;
     const d0 = Date.now();
     const sprite = await this.spritesClient.createSprite(request.name, config);
-    console.log(
-      `created sprite ${sprite.name} ${sprite.id} in ${Date.now() - d0}ms`
+    logger.info(
+      `created sprite ${sprite.name} ${sprite.id} in ${Date.now() - d0}ms`,
     );
     return SpriteResponse.parse({
       id: sprite.id,

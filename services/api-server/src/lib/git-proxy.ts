@@ -1,6 +1,7 @@
 import type { Env } from "@/types";
 import type { SecretRepository } from "@/durable-objects/repositories/secret-repository";
 import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
+import { createLogger } from "@/lib/logger";
 
 export interface GitProxyContext {
   gitProxySecret: string | null;
@@ -21,17 +22,19 @@ export interface GitProxyResult {
   pushedBranch: string | null;
 }
 
+const logger = createLogger("git-proxy.ts");
+
 export async function handleGitProxy(
   request: Request,
   path: string,
   context: GitProxyContext,
 ): Promise<GitProxyResult> {
-  console.log(`[git-proxy] request: ${request.method} ${request.url}`);
+  logger.debug(`[git-proxy] request: ${request.method} ${request.url}`);
 
   // Authenticate: check Bearer token matches session secret
   const authHeader = request.headers.get("Authorization");
   if (!context.gitProxySecret || authHeader !== `Bearer ${context.gitProxySecret}`) {
-    console.error(`[git-proxy] auth failed: secret=${context.gitProxySecret ? "set" : "null"}, header=${authHeader ? "present" : "missing"}, match=${authHeader === `Bearer ${context.gitProxySecret}`}`);
+    logger.warn(`[git-proxy] auth failed: secret=${context.gitProxySecret ? "set" : "null"}, header=${authHeader ? "present" : "missing"}, match=${authHeader === `Bearer ${context.gitProxySecret}`}`);
     return { response: new Response("unauthorized", { status: 401 }), githubToken: null, pushedBranch: null };
   }
 
@@ -44,7 +47,7 @@ export async function handleGitProxy(
 
   // Enforce: only the configured repo (match with .git suffix to prevent prefix collisions)
   if (context.repoFullName && !githubPath.startsWith(`${context.repoFullName}.git`)) {
-    console.error(`[git-proxy] repo not allowed: ${githubPath} !== ${context.repoFullName}.git`);
+    logger.warn(`[git-proxy] repo not allowed: ${githubPath} !== ${context.repoFullName}.git`);
     return { 
       response: new Response("repo not allowed", { status: 403 }),
       githubToken: null,
@@ -57,7 +60,7 @@ export async function handleGitProxy(
     const body = await request.arrayBuffer();
     const pushCheck = validatePush(new Uint8Array(body), context.sessionId, context.pushedBranch);
     if (!pushCheck.allowed) {
-      console.error(`[git-proxy] push rejected: ${pushCheck.reason}`);
+      logger.warn(`[git-proxy] push rejected: ${pushCheck.reason}`);
       return {
         response: new Response(`push rejected: ${pushCheck.reason}`, { status: 403 }),
         githubToken: null,
@@ -82,7 +85,7 @@ async function forwardToGitHub(
   body: ArrayBuffer | ReadableStream<Uint8Array> | null,
   context: GitProxyContext,
 ): Promise<GitProxyResult> {
-  console.log(`[git-proxy] forwarding to GitHub: ${githubPath}`);
+  logger.debug(`[git-proxy] forwarding to GitHub: ${githubPath}`);
   const githubToken = await ensureValidInstallationToken(context);
 
   const url = new URL(originalRequest.url);
@@ -107,7 +110,7 @@ async function forwardToGitHub(
     body,
   });
 
-  console.log(`[git-proxy] GitHub response: ${response.status} for ${originalRequest.method} ${githubPath}`);
+  logger.debug(`[git-proxy] GitHub response: ${response.status} for ${originalRequest.method} ${githubPath}`);
   return { response, githubToken, pushedBranch: null };
 }
 

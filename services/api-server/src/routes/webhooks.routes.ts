@@ -26,7 +26,7 @@ webhooksRoutes.post("/github", async (c) => {
     });
     return c.json({ ok: true });
   } catch (error) {
-    console.error("Webhook processing failed:", error);
+    logger.error("Webhook processing failed", { error });
     return c.json({ error: "Webhook processing failed" }, 500);
   }
 });

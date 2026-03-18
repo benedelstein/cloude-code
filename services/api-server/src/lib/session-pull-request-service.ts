@@ -156,7 +156,7 @@ export async function createPullRequestForSession(params: {
       branchName,
     );
   } catch (error) {
-    console.error("Failed to fetch GitHub compare data for PR text generation:", error);
+    logger.error("Failed to fetch GitHub compare data for PR text generation", { error });
   }
 
   const compareFiles = compareData?.files ?? [];
@@ -220,7 +220,7 @@ export async function createPullRequestForSession(params: {
   } catch (error) {
     // PR was created on GitHub but state failed to persist in the DO.
     // Log the error but still return success — the PR exists on GitHub.
-    console.error("Failed to persist PR state in session after creation:", error);
+    logger.error("Failed to persist PR state in session after creation", { error });
   }
 
   return {

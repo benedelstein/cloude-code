@@ -1,5 +1,6 @@
 import { SpriteWebsocketSession } from "./SpriteWebsocketSession";
 import { ExecResult, SessionOptions, SpritesError } from "./types";
+import { createLogger } from "@/lib/logger";
 
 export interface NetworkPolicyRule {
   domain: string;
@@ -16,6 +17,8 @@ export interface SpriteInfoResponse {
   url_settings?: { auth: string };
   status?: string;
 }
+
+const logger = createLogger("WorkersSprite.ts");
 
 export class WorkersSprite {
     private baseUrl: string;
@@ -66,7 +69,7 @@ export class WorkersSprite {
   
       if (!response.ok) {
         const text = await response.text();
-        console.error(`Exec failed: ${text}`);
+        logger.error(`Exec failed: ${text}`);
         throw new SpritesError(
           `Exec failed: ${response.status}`,
           response.status,

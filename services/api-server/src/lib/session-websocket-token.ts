@@ -1,8 +1,10 @@
 import { decodeBase64Url, encodeBase64Url } from "@repo/shared";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 
 const TOKEN_TYPE = "session-websocket";
 const TOKEN_TTL_MS = 5 * 60 * 1000;
+const logger = createLogger("session-websocket-token.ts");
 
 const SessionWebSocketTokenPayloadSchema = z.object({
   type: z.literal(TOKEN_TYPE),
@@ -89,7 +91,7 @@ export async function verifySessionWebSocketToken(
 
     return payload;
   } catch (error) {
-    console.error("Error verifying session websocket token", error);
+    logger.error("Error verifying session websocket token", { error });
     return null;
   }
 }
