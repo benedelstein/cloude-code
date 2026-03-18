@@ -156,7 +156,7 @@ describe("URL Construction: attach mode", () => {
     assert.strictEqual(url.pathname, "/v1/sprites/my-sprite/exec/42");
   });
 
-  it("should only include stdin=true, no cmd/path/tty/env/dir params", () => {
+  it("should skip cmd/path/tty but pass env/dir (matching upstream)", () => {
     const url = buildAttachUrl("42", {
       tty: true,
       cwd: "/workspace",
@@ -164,13 +164,13 @@ describe("URL Construction: attach mode", () => {
     });
 
     assert.strictEqual(url.searchParams.get("stdin"), "true");
-    // These should NOT be present in attach mode
+    // cmd, path, tty are NOT sent on attach
     assert.strictEqual(url.searchParams.get("cmd"), null);
     assert.strictEqual(url.searchParams.get("path"), null);
     assert.strictEqual(url.searchParams.get("tty"), null);
-    assert.strictEqual(url.searchParams.get("dir"), null);
-    assert.strictEqual(url.searchParams.get("env"), null);
-    assert.strictEqual(url.searchParams.get("detachable"), null);
+    // env and dir ARE sent on attach (upstream passes them through)
+    assert.deepStrictEqual(url.searchParams.getAll("env"), ["FOO=bar"]);
+    assert.strictEqual(url.searchParams.get("dir"), "/workspace");
   });
 
   it("should not use ?id= query param (uses path instead)", () => {

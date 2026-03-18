@@ -160,31 +160,35 @@ export class SpriteWebsocketSession {
      * Build the WebSocket URL based on mode.
      *
      * exec mode:   /v1/sprites/{name}/exec  + cmd, path, env, dir, tty, rows, cols, detachable, stdin
-     * attach mode: /v1/sprites/{name}/exec/{sessionId}  + stdin only (no cmd/path/tty)
+     * attach mode: /v1/sprites/{name}/exec/{sessionId}  + env, dir, detachable, stdin
+     *              (skips cmd, path, tty, rows, cols — TTY is auto-detected from session_info)
      */
     private buildUrl(): URL {
-        if (this.mode.kind === "attach") {
-            const url = new URL(
-                `${this.baseUrl}/v1/sprites/${this.spriteName}/exec/${this.mode.options.sessionId}`
-            );
-            url.searchParams.set("stdin", "true");
-            return url;
-        }
+        const mode = this.mode;
 
-        // exec mode
-        const { command, args, options } = this.mode;
-        const url = new URL(`${this.baseUrl}/v1/sprites/${this.spriteName}/exec`);
+        // Path: /exec/{sessionId} for attach, /exec for new commands
+        const path = mode.kind === "attach"
+            ? `/v1/sprites/${this.spriteName}/exec/${mode.options.sessionId}`
+            : `/v1/sprites/${this.spriteName}/exec`;
+        const url = new URL(`${this.baseUrl}${path}`);
 
-        if (command) {
-            url.searchParams.append("cmd", command);
-            for (const arg of args) {
-                url.searchParams.append("cmd", arg);
+        const options: SessionOptions = mode.options;
+
+        // cmd/path only for new commands
+        if (mode.kind === "exec") {
+            const { command, args } = mode;
+            if (command) {
+                url.searchParams.append("cmd", command);
+                for (const arg of args) {
+                    url.searchParams.append("cmd", arg);
+                }
+                url.searchParams.set("path", command);
             }
-            url.searchParams.set("path", command);
         }
 
         url.searchParams.set("stdin", "true");
 
+        // env and cwd are always sent (upstream passes them on attach too)
         if (options.env) {
             for (const [key, value] of Object.entries(options.env)) {
                 url.searchParams.append("env", `${key}=${value}`);
@@ -195,7 +199,8 @@ export class SpriteWebsocketSession {
             url.searchParams.set("dir", options.cwd);
         }
 
-        if (options.tty) {
+        // tty/rows/cols only for new commands (attach auto-detects via session_info)
+        if (mode.kind === "exec" && options.tty) {
             url.searchParams.set("tty", "true");
             if (options.rows) {
                 url.searchParams.set("rows", options.rows.toString());
@@ -205,6 +210,7 @@ export class SpriteWebsocketSession {
             }
         }
 
+        // detachable is always sent
         if (options.detachable) {
             url.searchParams.set("detachable", "true");
         }
