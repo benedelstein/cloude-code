@@ -182,6 +182,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
+    // TODO: USE SOME NICER MIDDLEWARE FOR THIS. 
     // Root path = session operations (the DO *is* the session)
     if (path === "/" || path === "") {
       switch (request.method) {
@@ -266,16 +267,15 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     // Send initial connection state
     this.sendMessage({
         type: "connected",
-        sessionId: this.state?.sessionId ?? "",
-        status: this.state?.status ?? "unknown",
+        sessionId: this.state.sessionId ?? "",
+        status: this.state.status ?? "unknown",
       }, 
       connection
     );
 
     // Send message history
-    if (this.state?.sessionId && this.messageRepository) {
-  
-      const storedMessages = this.messageRepository.getAllBySession(
+    if (this.state.sessionId) {
+      const storedMessages = this.messageRepository.getAllBySession( // todo only return first page. pagination
         this.state.sessionId,
       );
       this.sendMessage({
@@ -291,7 +291,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     // Proactively trigger reattachment when client connects (non-blocking)
     if (
-      this.state.status === "ready" &&
       !this.getConnectedAgentSession() &&
       this.state.spriteName
     ) {
@@ -308,8 +307,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     connection: Connection,
     message: string | ArrayBuffer,
   ): Promise<void> {
-
-
     const messageStr =
       typeof message === "string"
         ? message
@@ -1119,7 +1116,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       case "cloning":
       case "syncing":
       case "attaching":
-      case "waking":
         this.sendMessage(
           {
             type: "error",
@@ -1129,7 +1125,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           connection,
         );
         return;
-      case "hibernating":
       case "error":
       case "terminated":
         this.sendMessage({
@@ -1311,6 +1306,21 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private async reattachAgentSession(spriteName: string): Promise<void> {
+    switch (this.state.status) {
+      case "cloning":
+      case "provisioning":
+      case "terminated":
+      case "syncing":
+        return;
+      case "attaching":
+      case "error":
+      case "ready":
+        break;
+      default: {
+        const _exhaustive: never = this.state.status;
+        throw new Error(`Unhandled status: ${_exhaustive}`);
+      }
+    }
     // Mutex pattern: if already reattaching, wait for that to complete
     if (this.reattachPromise) {
       this.logger.info("Already reattaching, waiting for that to complete");
@@ -1327,12 +1337,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   private async _doReattach(spriteName: string): Promise<void> {
     try {
-      const sprite = new WorkersSprite(
-        spriteName,
-        this.env.SPRITES_API_KEY,
-        this.env.SPRITES_API_URL,
-      );
-
       // Refresh GitHub installation token (may have expired during hibernation)
       try {
         await this.refreshGitHubToken();
@@ -1349,40 +1353,26 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // user wants latest changes, they can ask the agent to pull.
 
       // Set status to attaching
-      this.updateStatus("attaching");
+      this.updateStatus("attaching"); // TODO: MAYBE make this a local variable and not part of the persisted agent state.
+      // that way if the do gets killed and restarted, we won't get stuck in a bad state.
       let sessions: Session[] = [];
       try {
         sessions = await this.spritesCoordinator.listSessions(spriteName);
       } catch (error) {
         this.logger.error("Failed to list sessions", { error });
       }
+
+      // state.agentProcssId may have been killed due to inactivity. check
       const existingSession = sessions.find(
-        (s) => s.id === String(this.state?.agentProcessId),
+        (s) => s.id === String(this.state.agentProcessId),
       );
+      this.logger.debug(`Agent process already running? ${existingSession ? "yes" : "no"} ${this.state.agentProcessId}`);
 
-      // Check if other clients are connected (current client is already counted)
-      const connectionCount = [...this.getConnections()].length;
-      const otherClientsConnected = connectionCount > 1;
-
-      if (existingSession && otherClientsConnected) {
-        // Multiplayer: attach to existing session to not disrupt others
-        this.logger.info(
-          `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
-        );
-        // FIXME: is it really ncessary to attach here? 
-        // Nobody is using this session (since the DO is the single source of truth), we can still just restart.
-        this.agentWebsocketSession = sprite.attachSession(
-          String(existingSession.id),
-          {},
-        );
-        this.setupAgentSessionHandlers(this.agentWebsocketSession!);
-        await this.agentWebsocketSession.start();
-      } else {
-        // Solo: start fresh with latest script (old session orphaned)
-        this.logger.info("No other clients connected, starting fresh vm-agent");
-        await this.startAgentOnVM(spriteName);
-        // TODO: kill the old session.
-      }
+      this.updatePartialState({ isResponding: false, agentProcessId: null }); // need to reset these otherwise get stuck
+      // Always start a fresh session even if another process exists. 
+      this.logger.info("No other clients connected, starting fresh vm-agent");
+      await this.startAgentOnVM(spriteName);
+      // TODO: kill the old session.
 
       // Set status back to ready
       this.setClaudeAuthRequired(null);
@@ -1392,7 +1382,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
       }
       this.logger.error("Failed to reattach agent session", { error });
-      this.updateStatus("error"); // FIXME: WHY IS THIS READY? WE SHOULD BE ERRORING.
+      this.updateStatus("error");
       this.broadcastMessage({
         type: "error",
         code: "reattach_failed",
@@ -1424,7 +1414,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
    * @param connection The connection to the client.
    */
   private handleSyncRequest(connection: Connection): void {
-    if (!this.state?.sessionId) {
+    if (!this.state.sessionId) {
       this.sendMessage({
         type: "sync.response",
         messages: [],
@@ -1481,6 +1471,10 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     return validatedModel;
   }
 
+  // ============================================
+  // MARK: MESSAGE HANDLING
+  // ============================================
+
   private async resolveAgentAttachments(
     attachments: AttachmentRecord[],
   ): Promise<AgentInputAttachment[]> {
@@ -1527,6 +1521,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
     return this.createUserMessage(content, attachmentRecords);
   }
+
 
   private async sendMessageToAgent(session: SpriteWebsocketSession, content: string | undefined, attachments: AgentInputAttachment[], model?: string) : Promise<void> {
     this.updatePartialState({ isResponding: true });
@@ -1688,13 +1683,23 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   }
 
   private buildAttachmentContentUrl(attachmentId: string): string {
-    return `/attachments/${attachmentId}/content`;
+    return `/attachments/${attachmentId}/content`; // todo move to another service
   }
 
+  /**
+   * Broadcast a websocket message to all clients
+   * @param message the message to broadcast
+   * @param without the client ids to exclude from the broadcast, if any
+   */
   private broadcastMessage(message: ServerMessage, without?: string[]): void {
     this.broadcast(JSON.stringify(message), without);
   }
 
+  /**
+   * Send a websocket message to a specific client
+   * @param message the message to send
+   * @param to the client to send the message to
+   */
   private sendMessage(message: ServerMessage, to: Connection) : void {
     to.send(JSON.stringify(message));
   }

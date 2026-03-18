@@ -16,10 +16,19 @@ export interface ExecResult {
     exitCode: number;
 }
 
-export interface SessionOptions {
+export interface NewExecSessionOptions {
     cwd?: string;
     env?: Record<string, string>;
     tty?: boolean;
+    cols?: number;
+    rows?: number;
+    detachable?: boolean;
+}
+
+export interface AttachSessionOptions {
+    cwd?: string;
+    env?: Record<string, string>;
+    detachable?: boolean;
 }
 
 // Server message types from Sprites exec WebSocket

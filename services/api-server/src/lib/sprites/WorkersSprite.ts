@@ -1,5 +1,10 @@
 import { SpriteWebsocketSession } from "./SpriteWebsocketSession";
-import { ExecResult, SessionOptions, SpritesError } from "./types";
+import {
+  AttachSessionOptions,
+  ExecResult,
+  NewExecSessionOptions,
+  SpritesError,
+} from "./types";
 import { createLogger } from "@/lib/logger";
 
 export interface NetworkPolicyRule {
@@ -117,26 +122,35 @@ export class WorkersSprite {
     createSession(
       command: string,
       args: string[] = [],
-      options: SessionOptions = {}
+      options: NewExecSessionOptions = {}
     ): SpriteWebsocketSession {
       return new SpriteWebsocketSession(
         this.name,
         this.apiKey,
         this.baseUrl,
-        command,
-        args,
-        options
+        {
+          mode: "exec",
+          command,
+          args,
+          options,
+        },
       );
     }
   
     attachSession(
       sessionId: string,
-      options: SessionOptions = {}
+      options: AttachSessionOptions = {}
     ): SpriteWebsocketSession {
-      return new SpriteWebsocketSession(this.name, this.apiKey, this.baseUrl, "", [], {
-        ...options,
-        sessionId,
-      });
+      return new SpriteWebsocketSession(
+        this.name,
+        this.apiKey,
+        this.baseUrl,
+        {
+          mode: "attach",
+          sessionId,
+          options,
+        },
+      );
     }
 
     async setNetworkPolicy(rules: NetworkPolicyRule[]): Promise<void> {

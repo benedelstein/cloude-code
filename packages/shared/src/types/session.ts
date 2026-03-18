@@ -10,10 +10,6 @@ export const SessionStatus = z.enum([
   "syncing",
   /** Attaching to the agent process running on the vm */
   "attaching",
-  /** Waking up the vm */
-  "waking",
-  /** Hibernating the vm */
-  "hibernating",
   /** Error occurred */
   "error",
   /** Session is terminated. No more messages can be sent or received. */
