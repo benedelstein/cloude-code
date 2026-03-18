@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Plus, Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal } from "lucide-react";
+import { Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal, Edit } from "lucide-react";
 import { deleteSession, archiveSession, type SessionSummary } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
@@ -224,11 +224,11 @@ export function SessionSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => navigate("/")}
-                  className="cursor-pointer"
+                  className="cursor-pointer font-medium py-5"
                   tooltip="New session"
                 >
+                  <Edit className="h-4 w-4" />
                   <span>New session</span>
-                  <Plus className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
