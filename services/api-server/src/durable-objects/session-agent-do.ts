@@ -60,7 +60,7 @@ import {
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
-import { Session } from "@fly/sprites";
+
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -687,7 +687,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
     }
 
-    this.agentWebsocketSession = sprite.createSession("env", commands, {
+    this.agentWebsocketSession = sprite.createExecSession("env", commands, {
       cwd: WORKSPACE_DIR,
       tty: false,
       env: baseEnv,
@@ -1350,38 +1350,37 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
       // Set status to attaching
       this.updateStatus("attaching");
-      let sessions: Session[] = [];
-      try {
-        sessions = await this.spritesCoordinator.listSessions(spriteName);
-      } catch (error) {
-        this.logger.error("Failed to list sessions", { error });
+
+      // Only attempt attach/recovery when there is evidence of in-flight work
+      // worth recovering. The DO is the coordinator — a lingering sprite session
+      // without active agent work is treated as orphaned.
+      let shouldAttach = false;
+      if (this.state.isResponding && this.state.agentProcessId) {
+        try {
+          const sessions = await this.spritesCoordinator.listSessions(spriteName);
+          const existingSession = sessions.find(
+            (s) => s.id === String(this.state.agentProcessId),
+          );
+          if (existingSession) {
+            shouldAttach = true;
+            this.logger.info(
+              `Agent is responding and session ${existingSession.id} still active, attaching`,
+            );
+          }
+        } catch (error) {
+          this.logger.error("Failed to list sessions during reattach", { error });
+        }
       }
-      const existingSession = sessions.find(
-        (s) => s.id === String(this.state?.agentProcessId),
-      );
 
-      // Check if other clients are connected (current client is already counted)
-      const connectionCount = [...this.getConnections()].length;
-      const otherClientsConnected = connectionCount > 1;
-
-      if (existingSession && otherClientsConnected) {
-        // Multiplayer: attach to existing session to not disrupt others
-        this.logger.info(
-          `${connectionCount} clients connected and vm-agent session exists, attaching to existing session ${existingSession.id}`,
-        );
-        // FIXME: is it really ncessary to attach here? 
-        // Nobody is using this session (since the DO is the single source of truth), we can still just restart.
+      if (shouldAttach) {
         this.agentWebsocketSession = sprite.attachSession(
-          String(existingSession.id),
-          {},
+          String(this.state.agentProcessId),
         );
         this.setupAgentSessionHandlers(this.agentWebsocketSession!);
         await this.agentWebsocketSession.start();
       } else {
-        // Solo: start fresh with latest script (old session orphaned)
-        this.logger.info("No other clients connected, starting fresh vm-agent");
+        this.logger.info("Starting fresh vm-agent (no in-flight work to recover)");
         await this.startAgentOnVM(spriteName);
-        // TODO: kill the old session.
       }
 
       // Set status back to ready

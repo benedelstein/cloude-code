@@ -114,29 +114,41 @@ export class WorkersSprite {
       return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
     }
   
-    createSession(
+    /**
+     * Start a new command over a WebSocket exec connection.
+     * Pass { detachable: true, tty: true } for a tmux-backed session that
+     * survives disconnects and can be reattached with attachSession().
+     */
+    createExecSession(
       command: string,
       args: string[] = [],
       options: SessionOptions = {}
     ): SpriteWebsocketSession {
-      return new SpriteWebsocketSession(
+      return SpriteWebsocketSession.createExec(
         this.name,
         this.apiKey,
         this.baseUrl,
         command,
         args,
-        options
+        options,
       );
     }
-  
+
+    /**
+     * Attach to an existing detachable session by ID.
+     * Uses upstream /exec/{sessionId} path and waits for session_info.
+     */
     attachSession(
       sessionId: string,
       options: SessionOptions = {}
     ): SpriteWebsocketSession {
-      return new SpriteWebsocketSession(this.name, this.apiKey, this.baseUrl, "", [], {
-        ...options,
+      return SpriteWebsocketSession.createAttach(
+        this.name,
+        this.apiKey,
+        this.baseUrl,
         sessionId,
-      });
+        options,
+      );
     }
 
     async setNetworkPolicy(rules: NetworkPolicyRule[]): Promise<void> {

@@ -20,6 +20,9 @@ export interface SessionOptions {
     cwd?: string;
     env?: Record<string, string>;
     tty?: boolean;
+    rows?: number;
+    cols?: number;
+    detachable?: boolean;
 }
 
 // Server message types from Sprites exec WebSocket

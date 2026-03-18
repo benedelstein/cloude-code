@@ -1,274 +1,393 @@
 import { SessionOptions, SpriteServerMessage, SpriteServerMessageSchema } from "./types";
 import { createLogger } from "@/lib/logger";
 
-interface WorkersSessionOptions extends SessionOptions {
-    sessionId?: string;
+/** Options for attaching to an existing detachable session */
+interface AttachOptions extends SessionOptions {
+    sessionId: string;
 }
 
-const logger = createLogger("SpriteWebsocketSession.ts");
+/** Internal discriminated config for the two transport modes */
+type SessionMode =
+    | { kind: "exec"; command: string; args: string[]; options: SessionOptions }
+    | { kind: "attach"; options: AttachOptions };
+
+const logger = createLogger("SpriteWebsocketSession");
 
 /**
- * Websocket session client compatible with cloudflare workers api.
+ * WebSocket session client compatible with Cloudflare Workers fetch-upgrade API.
+ *
+ * Two transport modes:
+ *  - "exec": raw command execution (used for the long-lived vm-agent process)
+ *  - "attach": attach to an existing detachable tmux session using
+ *    upstream /exec/{sessionId} path semantics
  */
 export class SpriteWebsocketSession {
     private ws: WebSocket | null = null;
     private spriteName: string;
     private apiKey: string;
     private baseUrl: string;
-    private command: string;
-    private args: string[];
-    private options: WorkersSessionOptions;
-  
+    private mode: SessionMode;
+
+    /** Whether we are waiting for session_info before decoding binary frames */
+    private waitingForSessionInfo: boolean = false;
+    /** Resolved TTY mode (may be overridden by session_info on attach) */
+    private ttyMode: boolean;
+
     private stdoutHandlers: Set<(data: string) => void> = new Set();
     private stderrHandlers: Set<(data: string) => void> = new Set();
     private exitHandlers: Set<(code: number) => void> = new Set();
     private errorHandlers: Set<(error: Error) => void> = new Set();
     private serverMessageHandlers: Set<(msg: SpriteServerMessage) => void> = new Set();
-  
-    constructor(
-      spriteName: string,
-      apiKey: string,
-      baseUrl: string,
-      command: string,
-      args: string[],
-      options: WorkersSessionOptions = {}
+
+    private constructor(
+        spriteName: string,
+        apiKey: string,
+        baseUrl: string,
+        mode: SessionMode,
     ) {
-      this.spriteName = spriteName;
-      this.apiKey = apiKey;
-      this.baseUrl = baseUrl;
-      this.command = command;
-      this.args = args;
-      this.options = options;
+        this.spriteName = spriteName;
+        this.apiKey = apiKey;
+        this.baseUrl = baseUrl;
+        this.mode = mode;
+        // Default TTY from options; attach mode overrides after session_info
+        this.ttyMode = mode.kind === "exec"
+            ? mode.options.tty ?? false
+            : mode.options.tty ?? false;
     }
-  
+
+    /**
+     * Create a raw exec WebSocket session for running a command.
+     * Used for long-lived processes like the vm-agent.
+     */
+    static createExec(
+        spriteName: string,
+        apiKey: string,
+        baseUrl: string,
+        command: string,
+        args: string[],
+        options: SessionOptions = {},
+    ): SpriteWebsocketSession {
+        return new SpriteWebsocketSession(spriteName, apiKey, baseUrl, {
+            kind: "exec",
+            command,
+            args,
+            options,
+        });
+    }
+
+    /**
+     * Create an attach WebSocket session for reconnecting to a detachable session.
+     * Uses upstream /exec/{sessionId} path and waits for session_info.
+     */
+    static createAttach(
+        spriteName: string,
+        apiKey: string,
+        baseUrl: string,
+        sessionId: string,
+        options: SessionOptions = {},
+    ): SpriteWebsocketSession {
+        return new SpriteWebsocketSession(spriteName, apiKey, baseUrl, {
+            kind: "attach",
+            options: { ...options, sessionId },
+        });
+    }
+
     async start(): Promise<void> {
-      const wsUrl = new URL(`${this.baseUrl}/v1/sprites/${this.spriteName}/exec`);
-  
-      // Build command params (Sprites API format)
-      if (this.command) {
-        // Add command and each argument as separate 'cmd' params
-        wsUrl.searchParams.append("cmd", this.command);
-        for (const arg of this.args) {
-          wsUrl.searchParams.append("cmd", arg);
+        const wsUrl = this.buildUrl();
+
+        // Sanitized connection log (no env values)
+        const options = this.mode.kind === "exec" ? this.mode.options : this.mode.options;
+        logger.info("Connecting WebSocket", {
+            fields: {
+                mode: this.mode.kind,
+                spriteName: this.spriteName,
+                tty: this.ttyMode,
+                stdin: true,
+                hasDir: !!options.cwd,
+                envCount: options.env ? Object.keys(options.env).length : 0,
+                urlLength: wsUrl.toString().length,
+                ...(this.mode.kind === "attach" && { sessionId: this.mode.options.sessionId }),
+            },
+        });
+
+        const response = await fetch(wsUrl.toString(), {
+            headers: {
+                Upgrade: "websocket",
+                Authorization: `Bearer ${this.apiKey}`,
+            },
+        });
+
+        const ws = response.webSocket;
+        if (!ws) {
+            const body = await response.text();
+            logger.error("WebSocket upgrade failed", {
+                fields: {
+                    status: response.status,
+                    mode: this.mode.kind,
+                    spriteName: this.spriteName,
+                    body,
+                },
+            });
+            throw new Error(
+                `Server didn't accept WebSocket connection: ${response.status} - ${body}`
+            );
         }
-        // Also set 'path' to the command
-        wsUrl.searchParams.set("path", this.command);
-      }
-  
-      // Enable stdin so server accepts input frames
-      wsUrl.searchParams.set("stdin", "true");
-  
-      // Session ID for reattachment
-      if (this.options.sessionId) {
-        wsUrl.searchParams.set("id", this.options.sessionId);
-      }
-  
-      // Working directory (Sprites uses 'dir' not 'cwd')
-      if (this.options.cwd) {
-        wsUrl.searchParams.set("dir", this.options.cwd);
-      }
-  
-      // TTY mode
-      if (this.options.tty) {
-        wsUrl.searchParams.set("tty", "true");
-      }
-  
-      // Environment variables
-      if (this.options.env) {
-        for (const [key, value] of Object.entries(this.options.env)) {
-          wsUrl.searchParams.append("env", `${key}=${value}`);
+
+        ws.accept();
+        this.ws = ws;
+
+        // In attach mode, wait for session_info before processing binary frames.
+        // session_info tells us the actual TTY mode of the existing session.
+        if (this.mode.kind === "attach") {
+            this.waitingForSessionInfo = true;
         }
-      }
-  
-      // Detachable session (tmux)
-      if (!this.options.sessionId) {
-        wsUrl.searchParams.set("detachable", "true");
-      }
-  
-      // Workers fetch upgrade uses https:// (not wss://) - Workers handles the protocol
-      const response = await fetch(wsUrl.toString(), {
-        headers: {
-          Upgrade: "websocket",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-      });
-  
-      // Workers WebSocket from fetch response
-      const ws = response.webSocket;
-      if (!ws) {
-        const body = await response.text();
-        logger.error(
-          `WebSocket upgrade failed. Status: ${response.status}, Body: ${body}`,
-        );
-        throw new Error(
-          `Server didn't accept WebSocket connection: ${response.status} - ${body}`
-        );
-      }
-  
-      // Accept the WebSocket connection to handle it in JS
-      ws.accept();
-      this.ws = ws;
-  
-      // Set up message handling
-      ws.addEventListener("message", (event) => {
-        this.handleMessage(event.data);
-      });
-  
-      ws.addEventListener("close", () => {
-        this.ws = null;
-      });
-  
-      ws.addEventListener("error", () => {
-        const error = new Error("WebSocket error");
-        this.errorHandlers.forEach((h) => h(error));
-      });
+
+        ws.addEventListener("message", (event) => {
+            this.handleMessage(event.data);
+        });
+
+        ws.addEventListener("close", () => {
+            this.ws = null;
+        });
+
+        ws.addEventListener("error", () => {
+            const error = new Error("WebSocket error");
+            this.errorHandlers.forEach((h) => h(error));
+        });
     }
-  
-    private handleMessage(data: unknown): void {
-      // Workers runtime quirk: ArrayBuffer comes as typeof "object" but instanceof ArrayBuffer may be false
-      const isBinary = data instanceof ArrayBuffer ||
-        (typeof data === "object" && data !== null && "byteLength" in data);
-  
-      if (this.options.tty) {
-        // TTY mode: binary = raw stdout, string = JSON control messages
-        if (isBinary) {
-          const buffer = data as ArrayBuffer;
-          const text = new TextDecoder().decode(buffer);
-          this.stdoutHandlers.forEach((h) => h(text));
-        } else if (typeof data === "string") {
-          try {
-            const msg: unknown = JSON.parse(data);
-            this.dispatchServerMessage(msg);
-          } catch {
-            // Non-JSON string - treat as stdout
-            this.stdoutHandlers.forEach((h) => h(data));
-          }
+
+    /**
+     * Build the WebSocket URL based on mode.
+     *
+     * exec mode:   /v1/sprites/{name}/exec  + cmd, path, env, dir, tty, rows, cols, detachable, stdin
+     * attach mode: /v1/sprites/{name}/exec/{sessionId}  + stdin only (no cmd/path/tty)
+     */
+    private buildUrl(): URL {
+        if (this.mode.kind === "attach") {
+            const url = new URL(
+                `${this.baseUrl}/v1/sprites/${this.spriteName}/exec/${this.mode.options.sessionId}`
+            );
+            url.searchParams.set("stdin", "true");
+            return url;
         }
-      } else {
-        // Non-TTY mode: stream-based binary protocol
-        if (data instanceof ArrayBuffer) {
-          const view = new DataView(data);
-          const streamId = view.getUint8(0);
-          const payload = new Uint8Array(data, 1);
-          const text = new TextDecoder().decode(payload);
-  
-          switch (streamId) {
-            case 1: // stdout
-              this.stdoutHandlers.forEach((h) => h(text));
-              break;
-            case 2: // stderr
-              this.stderrHandlers.forEach((h) => h(text));
-              break;
-            case 3: { // exit
-              const exitCode = view.getUint8(1);
-              this.exitHandlers.forEach((h) => h(exitCode));
-              break;
+
+        // exec mode
+        const { command, args, options } = this.mode;
+        const url = new URL(`${this.baseUrl}/v1/sprites/${this.spriteName}/exec`);
+
+        if (command) {
+            url.searchParams.append("cmd", command);
+            for (const arg of args) {
+                url.searchParams.append("cmd", arg);
             }
-          }
-        } else if (typeof data === "string") {
-          // JSON server messages in non-TTY mode
-          try {
-            const msg: unknown = JSON.parse(data);
-            this.dispatchServerMessage(msg);
-          } catch {
-            // Non-JSON string - unexpected in non-TTY mode
-          }
+            url.searchParams.set("path", command);
         }
-      }
+
+        url.searchParams.set("stdin", "true");
+
+        if (options.env) {
+            for (const [key, value] of Object.entries(options.env)) {
+                url.searchParams.append("env", `${key}=${value}`);
+            }
+        }
+
+        if (options.cwd) {
+            url.searchParams.set("dir", options.cwd);
+        }
+
+        if (options.tty) {
+            url.searchParams.set("tty", "true");
+            if (options.rows) {
+                url.searchParams.set("rows", options.rows.toString());
+            }
+            if (options.cols) {
+                url.searchParams.set("cols", options.cols.toString());
+            }
+        }
+
+        if (options.detachable) {
+            url.searchParams.set("detachable", "true");
+        }
+
+        return url;
     }
-  
+
+    private handleMessage(data: unknown): void {
+        const isBinary = data instanceof ArrayBuffer ||
+            (typeof data === "object" && data !== null && "byteLength" in data);
+
+        // While waiting for session_info (attach mode), only process text JSON messages.
+        // Binary frames during this phase are historical output replay — ignore them.
+        if (this.waitingForSessionInfo) {
+            if (typeof data === "string") {
+                try {
+                    const msg: unknown = JSON.parse(data);
+                    if (typeof msg === "object" && msg !== null && "type" in msg) {
+                        const typed = msg as Record<string, unknown>;
+                        if (typed.type === "session_info") {
+                            this.waitingForSessionInfo = false;
+                            // Auto-detect TTY mode from the existing session
+                            if (typeof typed.tty === "boolean") {
+                                this.ttyMode = typed.tty;
+                            }
+                        }
+                    }
+                    this.dispatchServerMessage(msg);
+                } catch {
+                    // Non-JSON during session_info wait — ignore
+                }
+            }
+            // Ignore binary during session_info wait
+            return;
+        }
+
+        if (this.ttyMode) {
+            // TTY mode: binary = raw stdout, string = JSON control messages
+            if (isBinary) {
+                const buffer = data as ArrayBuffer;
+                const text = new TextDecoder().decode(buffer);
+                this.stdoutHandlers.forEach((h) => h(text));
+            } else if (typeof data === "string") {
+                try {
+                    const msg: unknown = JSON.parse(data);
+                    this.dispatchServerMessage(msg);
+                } catch {
+                    // Non-JSON string — treat as stdout
+                    this.stdoutHandlers.forEach((h) => h(data));
+                }
+            }
+        } else {
+            // Non-TTY mode: stream-based binary protocol
+            if (data instanceof ArrayBuffer) {
+                const view = new DataView(data);
+                if (data.byteLength === 0) return;
+
+                const streamId = view.getUint8(0);
+                const payload = new Uint8Array(data, 1);
+                const text = new TextDecoder().decode(payload);
+
+                switch (streamId) {
+                    case 1: // stdout
+                        this.stdoutHandlers.forEach((h) => h(text));
+                        break;
+                    case 2: // stderr
+                        this.stderrHandlers.forEach((h) => h(text));
+                        break;
+                    case 3: { // exit
+                        const exitCode = view.getUint8(1);
+                        this.exitHandlers.forEach((h) => h(exitCode));
+                        break;
+                    }
+                }
+            } else if (typeof data === "string") {
+                // JSON server messages in non-TTY mode
+                try {
+                    const msg: unknown = JSON.parse(data);
+                    this.dispatchServerMessage(msg);
+                } catch {
+                    // Non-JSON string — unexpected in non-TTY mode
+                }
+            }
+        }
+    }
+
     private dispatchServerMessage(msg: unknown): void {
-      const result = SpriteServerMessageSchema.safeParse(msg);
-      if (!result.success) {
-        logger.warn(
-          `[SpriteWebsocketSession] Unknown server message: ${JSON.stringify(msg)} ${JSON.stringify(result.error.format())}`,
-        );
-        return;
-      }
+        const result = SpriteServerMessageSchema.safeParse(msg);
+        if (!result.success) {
+            logger.warn(
+                `Unknown server message: ${JSON.stringify(msg)} ${JSON.stringify(result.error.format())}`,
+            );
+            return;
+        }
 
-      const parsed = result.data;
-      this.serverMessageHandlers.forEach((h) => h(parsed));
+        const parsed = result.data;
+        this.serverMessageHandlers.forEach((h) => h(parsed));
 
-      // Also dispatch to legacy exitHandlers for backwards compatibility
-      if (parsed.type === "exit") {
-        this.exitHandlers.forEach((h) => h(parsed.exit_code));
-      }
+        // Also dispatch to exitHandlers for backwards compatibility
+        if (parsed.type === "exit") {
+            this.exitHandlers.forEach((h) => h(parsed.exit_code));
+        }
     }
 
     write(data: string): void {
-      if (!this.ws) throw new Error("WebSocket not connected");
+        if (!this.ws) throw new Error("WebSocket not connected");
 
-      const encoder = new TextEncoder();
-      const textBytes = encoder.encode(data);
+        const encoder = new TextEncoder();
+        const textBytes = encoder.encode(data);
 
-      if (this.options.tty) {
-        // TTY mode: send raw text
-        this.ws.send(textBytes);
-      } else {
-        // Non-TTY mode: prefix with stream ID 0 (stdin)
-        const buffer = new ArrayBuffer(1 + textBytes.length);
-        const view = new Uint8Array(buffer);
-        view[0] = 0; // stdin stream ID
-        view.set(textBytes, 1);
-        this.ws.send(buffer);
-      }
+        if (this.ttyMode) {
+            // TTY mode: send raw text
+            this.ws.send(textBytes);
+        } else {
+            // Non-TTY mode: prefix with stream ID 0 (stdin)
+            const buffer = new ArrayBuffer(1 + textBytes.length);
+            const view = new Uint8Array(buffer);
+            view[0] = 0; // stdin stream ID
+            view.set(textBytes, 1);
+            this.ws.send(buffer);
+        }
     }
 
     closeStdin(): void {
-      if (!this.ws) throw new Error("WebSocket not connected");
+        if (!this.ws) throw new Error("WebSocket not connected");
 
-      if (this.options.tty) {
-        // TTY mode: send Ctrl+D (EOT character)
-        const encoder = new TextEncoder();
-        this.ws.send(encoder.encode("\x04"));
-      } else {
-        // Non-TTY mode: send stdin_eof (stream ID 4)
-        const buffer = new ArrayBuffer(1);
-        const view = new DataView(buffer);
-        view.setUint8(0, 4); // stdin_eof stream ID
-        this.ws.send(buffer);
-      }
+        if (this.ttyMode) {
+            // TTY mode: send Ctrl+D (EOT character)
+            const encoder = new TextEncoder();
+            this.ws.send(encoder.encode("\x04"));
+        } else {
+            // Non-TTY mode: send stdin_eof (stream ID 4)
+            const buffer = new ArrayBuffer(1);
+            const view = new DataView(buffer);
+            view.setUint8(0, 4); // stdin_eof stream ID
+            this.ws.send(buffer);
+        }
     }
 
     resize(cols: number, rows: number): void {
-      if (!this.ws) throw new Error("WebSocket not connected");
-      if (!this.options.tty) throw new Error("Resize only supported in TTY mode");
+        if (!this.ws) throw new Error("WebSocket not connected");
+        if (!this.ttyMode) throw new Error("Resize only supported in TTY mode");
 
-      this.ws.send(JSON.stringify({ type: "resi", cols, rows }));
+        this.ws.send(JSON.stringify({ type: "resize", cols, rows }));
+    }
+
+    signal(sig: string): void {
+        if (!this.ws) throw new Error("WebSocket not connected");
+
+        this.ws.send(JSON.stringify({ type: "signal", signal: sig }));
     }
 
     onStdout(handler: (data: string) => void): () => void {
-      this.stdoutHandlers.add(handler);
-      return () => this.stdoutHandlers.delete(handler);
+        this.stdoutHandlers.add(handler);
+        return () => this.stdoutHandlers.delete(handler);
     }
-  
+
     onStderr(handler: (data: string) => void): () => void {
-      this.stderrHandlers.add(handler);
-      return () => this.stderrHandlers.delete(handler);
+        this.stderrHandlers.add(handler);
+        return () => this.stderrHandlers.delete(handler);
     }
-  
+
     onExit(handler: (code: number) => void): () => void {
-      this.exitHandlers.add(handler);
-      return () => this.exitHandlers.delete(handler);
+        this.exitHandlers.add(handler);
+        return () => this.exitHandlers.delete(handler);
     }
-  
+
     onError(handler: (error: Error) => void): () => void {
-      this.errorHandlers.add(handler);
-      return () => this.errorHandlers.delete(handler);
+        this.errorHandlers.add(handler);
+        return () => this.errorHandlers.delete(handler);
     }
 
     onServerMessage(handler: (msg: SpriteServerMessage) => void): () => void {
-      this.serverMessageHandlers.add(handler);
-      return () => this.serverMessageHandlers.delete(handler);
+        this.serverMessageHandlers.add(handler);
+        return () => this.serverMessageHandlers.delete(handler);
     }
-  
+
     close(): void {
-      this.ws?.close();
-      this.ws = null;
+        this.ws?.close();
+        this.ws = null;
     }
-  
+
     get isConnected(): boolean {
-      return this.ws !== null;
+        return this.ws !== null;
     }
-  }
-  
+}
