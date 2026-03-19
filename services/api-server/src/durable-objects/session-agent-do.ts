@@ -60,7 +60,6 @@ import {
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
-import { Session } from "@fly/sprites";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -70,6 +69,7 @@ interface InitRequest {
   userId: string;
   repoFullName: string;
   settings?: SessionSettingsInput;
+  /** Base branch */
   branch?: string;
   initialMessage?: string;
   initialAttachmentIds?: string[];
@@ -88,7 +88,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   /** Accumulator for building UIMessage from stream chunks */
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
   /** Buffer of raw stream chunks for the current in-progress message, replayed on reconnect */
-  private pendingChunks: unknown[] = [];
+  private pendingChunks: UIMessageChunk[] = [];
   /** Buffers partial vm-agent stdout until a full NDJSON line arrives. */
   private agentStdoutBuffer = "";
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
@@ -126,8 +126,23 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
 
   constructor(ctx: DurableObjectState, env: Env, logger: Logger = createLogger("session-agent-do.ts")) {
     super(ctx, env);
-    this.logger = logger.scope("session-agent-do.ts");
+    // NOTE:  There is a weird bug with Durable Objects where the `name` (ie the sessionId) is not available in the constructor.
+    // so we wait for the initialization route handler to set it.
 
+    // The Agents SDK allows clients to overwrite state via { type: "cf_agent_state" } WebSocket messages.
+    // There is no validation hook before the write, so we intercept at _setStateInternal.
+    // When source is a Connection (client), we reject the update entirely.
+    const superSetStateInternal = (this as any)._setStateInternal.bind(this);
+    (this as any)._setStateInternal = (state: AgentState, source: Connection | "server") => {
+      if (source !== "server") {
+        this.logger.warn("Rejecting client-initiated state update attempt");
+        return;
+      }
+      return superSetStateInternal(state, source);
+    };
+
+    this.logger = logger.scope("session-agent-do.ts");
+    
     const sql = this.sql.bind(this);
     this.messageRepository = new MessageRepository(sql);
     this.secretRepository = new SecretRepository(sql);
@@ -135,14 +150,13 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
-
+    
     migrateAll([this.messageRepository, this.secretRepository, this.latestPlanRepository]);
-
+    
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
     this.editorToken = this.secretRepository.get("editor_token");
-    this.logger.log("SessionAgentDO constructed");
   }
 
   private getConnectedAgentSession(): SpriteWebsocketSession | null {
@@ -482,25 +496,22 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async provisionSprite(
     sessionId: string,
     repoFullName: string,
-    branch?: string,
+    baseBranch?: string,
   ): Promise<void> {
     this.logger.debug(
       `Provisioning sprite for session ${sessionId} and repo ${repoFullName}`,
     );
-    this.getConnections();
     try {
-  
-
       if (!this.gitProxySecret) {
         // this should never happen, but just in case
+        // TODO: WHY NOT JUST CREATE THE SECRET HERE?
         throw new Error(
           "gitProxySecret is not set — cannot provision sprite without it",
         );
       }
 
       const spriteResponse = await this.spritesCoordinator.createSprite({
-        name: `${sessionId}`,
-        env: {},
+        name: sessionId,
       });
 
       const sprite = new WorkersSprite(
@@ -512,7 +523,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Lock down outbound network access to known-good domains
       const workerHostname = new URL(this.env.WORKER_URL).hostname;
       const networkPolicy = buildNetworkPolicy([
-        { domain: workerHostname, action: "allow" },
+        { domain: workerHostname, action: "allow" }, 
       ]);
       await sprite.setNetworkPolicy(networkPolicy);
 
@@ -521,7 +532,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
       const githubRemoteUrl = `https://github.com/${repoFullName}.git`;
 
-      // Clone the repo
       // check if the repo is already cloned
       const isCloned = await sprite.execHttp(
         `test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`,
@@ -536,13 +546,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
           spriteName: spriteResponse.name,
           status: "cloning",
         });
-
-        // is this needed? we broadcast it right above.
-        this.broadcastMessage({
-          type: "session.status",
-          status: "cloning",
-          message: `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
-        });
         this.logger.info(
           `Cloning repo ${repoFullName} on sprite ${spriteResponse.name}`,
         );
@@ -556,7 +559,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         // Also refresh the write token for the proxy (used after clone)
         await this.refreshGitHubToken();
         const cloneStart = Date.now();
-        const branchFlag = branch ? `--branch ${branch} ` : "";
+        const branchFlag = baseBranch ? `--branch ${baseBranch} ` : "";
         const cloneResult = await sprite.execHttp(
           `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
           {},
@@ -577,8 +580,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         `cd ${WORKSPACE_DIR} && git rev-parse --abbrev-ref HEAD`,
         {},
       );
-      const baseBranch = branchResult.stdout.trim() || "main";
-      this.updatePartialState({baseBranch });
+      const actualBaseBranch = branchResult.stdout.trim() || "main";
+      if (actualBaseBranch !== baseBranch && baseBranch) {
+        this.logger.warn(`Base branch ${baseBranch} does not match actual base branch ${actualBaseBranch}`);
+      }
+      this.updatePartialState({ baseBranch: actualBaseBranch });
 
       // Use direct GitHub for fetch/pull and proxy URL for push-only operations.
       // TODO: MAKE THIS ONE LINER.
@@ -632,7 +638,6 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
     );
 
     const provider = this.state.settings.provider;
-    const isCodex = provider === "codex-cli";
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
     
@@ -652,35 +657,43 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       SESSION_ID: this.state.sessionId ?? "",
     };
 
-    if (isCodex) {
-      // Try per-user OpenAI OAuth tokens first, then fall back to server-wide env vars
-      const codexAuthJson = await this.buildCodexAuthJson();
-      if (codexAuthJson) {
-        baseEnv.CODEX_AUTH_JSON = codexAuthJson;
-      } else if (this.env.CODEX_AUTH_JSON) {
-        baseEnv.CODEX_AUTH_JSON = this.env.CODEX_AUTH_JSON;
-      }
-      if (this.env.OPENAI_API_KEY) {
-        baseEnv.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
-      }
-    } else {
-      try {
-        const claudeCredentials = await getClaudeCredentialsSnapshot({
-          env: this.env,
-          logger: this.logger,
-          userId: this.state.userId,
-        });
-        if (!claudeCredentials) {
-          throw new Error("Claude authentication required. Connect Claude before creating a session.");
+    switch (provider) {
+      case "codex-cli": {
+        // Try per-user OpenAI OAuth tokens first, then fall back to server-wide env vars
+        const codexAuthJson = await this.buildCodexAuthJson();
+        if (codexAuthJson) {
+          baseEnv.CODEX_AUTH_JSON = codexAuthJson;
+        } else if (this.env.CODEX_AUTH_JSON) {
+          baseEnv.CODEX_AUTH_JSON = this.env.CODEX_AUTH_JSON;
         }
-        this.setClaudeAuthRequired(null);
-        baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentials.credentialsJson;
-        this.lastClaudeCredentialFingerprint = claudeCredentials.fingerprint;
-      } catch (error) {
-        if (error instanceof ClaudeOAuthError) {
-          this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
+        if (this.env.OPENAI_API_KEY) {
+          baseEnv.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
         }
-        throw error;
+        break;
+      }
+      case "claude-code": {
+        try {
+          const claudeCredentials = await getClaudeCredentialsSnapshot({
+            env: this.env,
+            logger: this.logger,
+            userId: this.state.userId,
+          });
+          if (!claudeCredentials) {
+            throw new Error(
+              "Claude authentication required. Connect Claude before creating a session.",
+            );
+          }
+          this.setClaudeAuthRequired(null);
+          baseEnv.CLAUDE_CREDENTIALS_JSON = claudeCredentials.credentialsJson;
+          this.lastClaudeCredentialFingerprint = claudeCredentials.fingerprint;
+        } catch (error) {
+          if (error instanceof ClaudeOAuthError) {
+            this.setClaudeAuthRequired(
+              getClaudeAuthRequiredFromClaudeError(error),
+            );
+          }
+          throw error;
+        }
       }
     }
 
@@ -846,7 +859,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private handleAgentOutput(output: AgentOutput): void {
     switch (output.type) {
       case "ready": {
-        this.broadcastMessage({
+        this.broadcastMessage({ // TODO: necessary? 
           type: "agent.ready",
         });
         break;
@@ -866,7 +879,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
       case "stream": {
         // Buffer chunk for reconnect replay
-        this.pendingChunks.push(output.chunk);
+        this.pendingChunks.push(output.chunk as UIMessageChunk);
 
         this.broadcastMessage({
           type: "agent.chunk",
@@ -1056,18 +1069,14 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       }
     }
 
-    // Clear messages
-    if (this.state.sessionId) {
-      const sessionId = this.state.sessionId;
-      this.sql`DELETE FROM messages WHERE session_id = ${sessionId}`;
-    }
-
     // Reset state
     this.updatePartialState({
       status: "terminated",
     });
 
-    // maybe delete the sprite.
+    // Clear all storage on the DO
+    // Once the DO shuts down, it will cease to exist.
+    this.ctx.storage.deleteAll();
 
     return new Response(JSON.stringify({ deleted: true }), {
       headers: { "Content-Type": "application/json" },
@@ -1338,6 +1347,7 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
   private async _doReattach(spriteName: string): Promise<void> {
     try {
       // Refresh GitHub installation token (may have expired during hibernation)
+      // TODO: move this somewhere else. its unrelated to reattaching the agent.
       try {
         await this.refreshGitHubToken();
       } catch (error) {
@@ -1355,24 +1365,24 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       // Set status to attaching
       this.updateStatus("attaching"); // TODO: MAYBE make this a local variable and not part of the persisted agent state.
       // that way if the do gets killed and restarted, we won't get stuck in a bad state.
-      let sessions: Session[] = [];
-      try {
-        sessions = await this.spritesCoordinator.listSessions(spriteName);
-      } catch (error) {
-        this.logger.error("Failed to list sessions", { error });
+      if (this.state.agentProcessId) {
+        try {
+          const sessions = await this.spritesCoordinator.listSessions(spriteName);
+          // state.agentProcssId may have been killed due to inactivity. check
+          const existingSession = sessions.find(
+            (s) => s.id === String(this.state.agentProcessId),
+          );
+          this.logger.debug(`Agent process already running? ${existingSession ? "yes" : "no"} ${this.state.agentProcessId}`);
+        } catch (error) {
+          this.logger.error("Failed to list sessions", { error });
+        }
       }
 
-      // state.agentProcssId may have been killed due to inactivity. check
-      const existingSession = sessions.find(
-        (s) => s.id === String(this.state.agentProcessId),
-      );
-      this.logger.debug(`Agent process already running? ${existingSession ? "yes" : "no"} ${this.state.agentProcessId}`);
 
       this.updatePartialState({ isResponding: false, agentProcessId: null }); // need to reset these otherwise get stuck
       // Always start a fresh session even if another process exists. 
-      this.logger.info("No other clients connected, starting fresh vm-agent");
       await this.startAgentOnVM(spriteName);
-      // TODO: kill the old session.
+      // TODO: kill the old session if it exists
 
       // Set status back to ready
       this.setClaudeAuthRequired(null);

@@ -6,6 +6,8 @@ import type { LatestPlanRepository } from "./repositories/latest-plan-repository
 type DerivedStateContext = {
   state: AgentState;
   latestPlanRepository: LatestPlanRepository;
+  // TODO: scope this down so it can only update todos and plan.
+  // eslint-disable-next-line no-unused-vars
   updatePartialState: (partial: Partial<AgentState>) => void;
 };
 
