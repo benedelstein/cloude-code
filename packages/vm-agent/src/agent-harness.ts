@@ -199,7 +199,7 @@ export async function runAgentHarness<S extends SessionSettings>(config: AgentPr
     switch (input.type) {
       case "chat":
         if (!isRunning) {
-          runAgent();
+          await runAgent();
         }
         // Apply model switch if provided
         if (input.model && setupResult) {

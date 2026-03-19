@@ -1362,17 +1362,30 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         this.logger.error("Failed to list sessions", { error });
       }
 
-      // state.agentProcssId may have been killed due to inactivity. check
+      // state.agentProcessId may have been killed due to inactivity. check
       const existingSession = sessions.find(
         (s) => s.id === String(this.state.agentProcessId),
       );
       this.logger.debug(`Agent process already running? ${existingSession ? "yes" : "no"} ${this.state.agentProcessId}`);
 
+      // Kill old agent session before starting a new one to prevent multiple
+      // concurrent agent processes on the same sprite.
+      if (existingSession) {
+        try {
+          const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+          const oldSession = sprite.attachSession(existingSession.id, { detachable: true });
+          await oldSession.start();
+          oldSession.signal("SIGTERM");
+          oldSession.close();
+          this.logger.info(`Killed old agent session ${existingSession.id}`);
+        } catch (error) {
+          this.logger.warn("Failed to kill old agent session, proceeding anyway", { error });
+        }
+      }
+
       this.updatePartialState({ isResponding: false, agentProcessId: null }); // need to reset these otherwise get stuck
-      // Always start a fresh session even if another process exists. 
-      this.logger.info("No other clients connected, starting fresh vm-agent");
+      this.logger.info("Starting fresh vm-agent");
       await this.startAgentOnVM(spriteName);
-      // TODO: kill the old session.
 
       // Set status back to ready
       this.setClaudeAuthRequired(null);
@@ -1604,6 +1617,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
         pendingUserMessage: null,
         pendingAttachmentIds: [],
       });
+      this.broadcastMessage({
+        type: "error",
+        code: "ATTACHMENT_NOT_FOUND",
+        message: "Some attachments could not be found. Please re-upload and try again.",
+      });
       return;
     }
 
@@ -1615,6 +1633,11 @@ export class SessionAgentDO extends Agent<Env, AgentState> {
       this.updatePartialState({
         pendingUserMessage: null,
         pendingAttachmentIds: [],
+      });
+      this.broadcastMessage({
+        type: "error",
+        code: "ATTACHMENT_RESOLVE_FAILED",
+        message: "Failed to process attachments. Please re-upload and try again.",
       });
       return;
     }

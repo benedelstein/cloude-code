@@ -371,7 +371,7 @@ export class SpriteWebsocketSession {
     }
   
     get isConnected(): boolean {
-      return this.ws !== null;
+      return this.ws !== null && this.ws.readyState === WebSocket.READY_STATE_OPEN;
     }
   }
   
