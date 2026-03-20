@@ -6,7 +6,7 @@ import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { normalizeHost } from "@/lib/utils";
 import type {
-  AgentState,
+  ClientState,
   ClaudeModel,
   ClaudeAuthState,
   MessageAttachmentRef,
@@ -164,7 +164,7 @@ export function useCloudflareAgent({
 
       case "session.status":
         setSessionStatus(msg.status);
-        if (msg.status === "error" && msg.message) {
+        if (msg.message) {
           setErrorMessage(msg.message);
         }
         break;
@@ -212,7 +212,7 @@ export function useCloudflareAgent({
   }, [onError, resetPendingResponse]);
 
   // Use Cloudflare's useAgent hook
-  const agent = useAgent<AgentState>({
+  const agent = useAgent<ClientState>({
     agent: "session",
     name: sessionId,
     host: DEFAULT_API_HOST,
@@ -232,7 +232,7 @@ export function useCloudflareAgent({
       // useAgent will auto-reconnect
       resetPendingResponse();
     },
-    onStateUpdate(state: AgentState) {
+    onStateUpdate(state: ClientState) {
       setHasHydratedState(true);
       if (state.pushedBranch !== undefined) {
         setPushedBranch(state.pushedBranch);
@@ -273,6 +273,9 @@ export function useCloudflareAgent({
       }
       if (state.status !== undefined) {
         setSessionStatus(state.status);
+      }
+      if (state.lastError !== undefined) {
+        setErrorMessage(state.lastError);
       }
     },
     onError: (message) => {

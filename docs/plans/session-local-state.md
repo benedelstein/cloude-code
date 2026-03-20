@@ -79,7 +79,7 @@ Would be better to refactor some of these like:
 }
 ```
 
-### Startup scripts
+### Provisioning
 
 The DO needs to go through several steps before it is ready to serve messages.
 
@@ -133,10 +133,12 @@ There are some fields we don't care to propagate
 - agentSessionId
 
 ```typescript
+// Fields that only the server needs to know about.
 type ServerState = {
     /** set after the init method is complete */
     initialized: boolean;
-    sessionId: string;
+    /** theoretically this should be known from constructor, but due to a bug in DO lifecycle we don't know it until the init method is called. */
+    sessionId: string | null;
     spriteCreated: boolean;
     repoCloned: boolean;
     lastKnownAgentProcessId: number | null;
@@ -152,29 +154,42 @@ type ClientState = {
     // they will be reset when the DO restarts. 
     lastError: string | null;
     /** not an authoritative status. just for the client to display. */
-    status: AgentStatus; // synthesized from both provisioningStatus and agentConnectionStatus
+    status: AgentStatus; // synthesized from both provisioning and agent connection statuses
     claudeAuthRequired: ClaudeAuthState | null;
+    isResponding: boolean;
+    // ... other fields...
 }
+type AgentStatus = "initializing" | "provisioning" | "cloning" | "attaching" | "ready";
 
 class SessionAgentDO extends Agent<Env, ClientState> {
     // ...
     private readonly ServerStateRepository: ServerStateRepository;
-    private agentWebsocketSession: SpriteWebsocketSession | null = null;
+    private readonly agentProcessManager: AgentProcessManager;
     private messageAccumulator: MessageAccumulator;
     private pendingChunks: UIMessageChunk[];
     private isResponding: boolean;
-    private ensureReadyPromise: Promise<void> | null = null;
-    // private agentConnectionStatus: "connecting" | "connected" | "disconnected";
-    // private provisioningStatus: "provisioning" | "provisioned" | "error";
+    private ensureProvisionedPromise: Promise<void> | null = null;
+    private ensureAgentStartedPromise: Promise<void> | null = null;
     private ServerState: ServerState;
+
+    private isAgentConnected(): boolean { return this.agentProcessManager.isConnected(); }
+    private isProvisioned(): boolean {
+        return this.serverState.spriteCreated && this.serverState.repoCloned;
+    }
+    private isProvisioning(): boolean {
+        return this.ensureProvisionedPromise !== null;
+    }
+    private isAgentStarting(): boolean {
+        return this.ensureAgentStartedPromise !== null;
+    }
 
     constructor(ctx: DurableObjectState, env: Env, logger: Logger) {
         super(ctx, env);
         // ...
         this.serverState = this.ctx.storage.get("serverState") ?? {
+            sessionId: "",
             spriteCreated: false,
             repoCloned: false,
-            baseBranch: null,
         };
         // calculate synthesized client states from server state.
         this.updatePartialState({
@@ -201,29 +216,48 @@ class SessionAgentDO extends Agent<Env, ClientState> {
         if (!this.serverState.repoCloned) {
             return "cloning";
         }
-        if (!this.agentWebsocketSession.isConnected) {
-            return "connecting";
+        if (!this.isAgentConnected()) {
+            return "attaching";
         }
         return "ready";
     }
 
     // Single entry point for getting the session to a ready state.
     // Called by both handleInit (HTTP) and onConnect (WebSocket).
-    // Uses a mutex so concurrent callers share one in-flight operation.
+    // Uses mutexes so concurrent callers share one in-flight operation.
     // Each step is idempotent - skipped if already completed via serverState checkpoints.
-    ensureReady(): Promise<void> {
-        if (this.ensureReadyPromise) return this.ensureReadyPromise;
-        this.ensureReadyPromise = this._ensureReady().finally(() => {
-            this.ensureReadyPromise = null;
-        });
-        return this.ensureReadyPromise;
+    async ensureReady(): Promise<void> {
+        await this.ensureProvisioned();
+        await this.ensureAgentStarted();
     }
 
-    private async _ensureReady(): Promise<void> {
-        if (this.serverState.terminated) throw new Error("Session terminated");
+    async handleInit(request: Request): Promise<void> {
+        if (this.serverState.initialized) {
+            throw new Error("Session already initialized");
+        }
+        const { sessionId, ... } = request.json() as InitRequest;
+        // other provisioning steps...
+        this.updateServerState({ sessionId, initialized: true });
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        this.ctx.waitUntil(this.ensureReady());
+    }
 
+    /** 
+     * Ensures that the session is provisioned. 
+     * These steps are durable and idempotent, and should not need to be repeated after a restart.
+    */
+    ensureProvisioned(): Promise<void> {
+        if (this.ensureProvisionedPromise) return this.ensureProvisionedPromise;
+        this.ensureProvisionedPromise = this._provision().finally(() => {
+            this.ensureProvisionedPromise = null;
+        });
+        return this.ensureProvisionedPromise;
+    }
+
+    private async _provision(): Promise<void> {
         if (!this.serverState.spriteCreated) {
             // create sprite...
+            // configure network policy...
             this.updatePartialState({ status: this.synthesizeStatus() });
             this.updateServerState({ spriteCreated: true });
         }
@@ -233,17 +267,23 @@ class SessionAgentDO extends Agent<Env, ClientState> {
             this.updatePartialState({ status: this.synthesizeStatus() });
             this.updateServerState({ repoCloned: true });
         }
+        this.updatePartialState({ status: this.synthesizeStatus() });
+    }
 
-        // start/reattach agent - same flow for both first-time and reattach.
-        if (!this.agentWebsocketSession?.isConnected) {
-            this.updatePartialState({ status: this.synthesizeStatus() });
-            await this._startAgent();
-            this.updatePartialState({ status: this.synthesizeStatus() });
-        }
+    private ensureAgentStarted(): Promise<void> {
+        if (this.ensureAgentStartedPromise) return this.ensureAgentStartedPromise;
+        this.ensureAgentStartedPromise = this._startAgent().finally(() => {
+            this.ensureAgentStartedPromise = null;
+        });
+        return this.ensureAgentStartedPromise;
     }
 
     private async _startAgent(): Promise<void> {
+        if (!this.isProvisioned()) throw new Error("Session not provisioned"); // can't start agent if not provisioned. or maybe await the provision promise if it exists?
+        if (this.isAgentConnected()) return;
         // one flow for both starting and reattaching the agent.
+        // start agent...
+        this.updatePartialState({ status: this.synthesizeStatus() });
     }
 }
 ```
@@ -286,6 +326,8 @@ Unfortunately we can't extend the class (like swift) into multiple files, so we 
 
 `src/durable-objects/lib`
 
+for example:
+
 ```typescript
 // src/durable-objects/lib/agent-process-manager.ts
 export class AgentProcessManager {
@@ -293,10 +335,20 @@ export class AgentProcessManager {
     private readonly logger: Logger;
     private readonly env: Env;
     private readonly spritesCoordinator: SpritesCoordinator;
+    private readonly messageRepository: MessageRepository;
     private readonly messageAccumulator: MessageAccumulator;
-    agentWebsocketSession: SpriteWebsocketSession | null = null; // can this be shared with the DO? 
+    // TODO: HOW TO SHARE THIS STATE UP TO THE DO? 
+    agentWebsocketSession: SpriteWebsocketSession | null = null;
+    pendingChunks: UIMessageChunk[] = [];
+    broadcastMessage: (message: ServerMessage) => void;
+    updateClientState: (partial: Partial<ClientState>) => void;
+    updateServerState: (partial: Partial<ServerState>) => void;
 
-    async startAgentSession(session: SpriteWebsocketSession): Promise<void> {
+    isConnected(): boolean {
+        return this.agentWebsocketSession?.isConnected ?? false;
+    }
+
+    async startAgentSession(): Promise<void> {
         // ...
         this.agentWebsocketSession = sprite.createSession("env", commands, {
             cwd: WORKSPACE_DIR,
@@ -315,15 +367,13 @@ export class AgentProcessManager {
     private handleAgentServerMessage(msg: SpriteServerMessage): void {
         // ...
     }
-}
 
-// ...
-{
-    // .. inside session-agent-do.ts
-    private readonly agentProcessManager: AgentProcessManager;
+    private handleAgentOutput(output: AgentOutput): void {
+        // ...
+    }
 
-    private startAgentSession(): Promise<void> {
-        return this.agentProcessManager.startAgentSession(this.agentWebsocketSession!);
+    async handleUserMessage(message: UIMessage): Promise<void> {
+        // ensure credentials are fresh...
+        // send to agent...
     }
 }
-```

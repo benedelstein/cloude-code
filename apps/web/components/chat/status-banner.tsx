@@ -10,33 +10,39 @@ interface StatusBannerProps {
 }
 
 const statusMessages: Record<SessionStatus, string> = {
+  initializing: "Initializing session...",
   provisioning: "Provisioning VM...",
   cloning: "Cloning repository...",
-  syncing: "Syncing repository...",
   attaching: "Connecting to agent...",
   ready: "",
-  error: "An error occurred",
-  terminated: "Session terminated",
 };
 
 const statusColors: Record<SessionStatus, string> = {
+  initializing: "border-accent/30 bg-accent-subtle text-accent",
   provisioning: "border-accent/30 bg-accent-subtle text-accent",
   cloning: "border-accent/30 bg-accent-subtle text-accent",
-  syncing: "border-accent/30 bg-accent-subtle text-accent",
   attaching: "border-accent/30 bg-accent-subtle text-accent",
   ready: "",
-  error: "border-danger/30 bg-danger/10 text-danger",
-  terminated: "border-danger/30 bg-danger/10 text-danger",
 };
 
-const isVisible = (status: SessionStatus | null) => status !== null && status !== "ready";
+const isVisible = (status: SessionStatus | null, errorMessage: string | null) =>
+  errorMessage !== null || (status !== null && status !== "ready");
 
 export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps) {
-  const visible = isVisible(sessionStatus);
+  const visible = isVisible(sessionStatus, errorMessage);
+  const isError = errorMessage !== null;
 
-  const message = sessionStatus === "error" && errorMessage
+  const message = isError
     ? errorMessage
-    : sessionStatus ? statusMessages[sessionStatus] : "";
+    : sessionStatus
+      ? statusMessages[sessionStatus]
+      : "";
+
+  const colorClass = isError
+    ? "border-danger/30 bg-danger/10 text-danger"
+    : sessionStatus
+      ? statusColors[sessionStatus]
+      : "";
 
   return (
     <div
@@ -47,13 +53,9 @@ export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps)
       }}
     >
       <div className="overflow-hidden">
-        <div className={`mx-3 mt-3 rounded-md border px-3 py-2 flex items-center gap-2.5 ${visible && sessionStatus ? statusColors[sessionStatus] : ""}`}>
-          {sessionStatus !== "error" && sessionStatus !== "terminated" && (
-            <LoadingSpinner className="h-3.5 w-3.5" />
-          )}
-          {(sessionStatus === "error" || sessionStatus === "terminated") && (
-            <AlertTriangle className="h-3.5 w-3.5" />
-          )}
+        <div className={`mx-3 mt-3 rounded-md border px-3 py-2 flex items-center gap-2.5 ${visible ? colorClass : ""}`}>
+          {!isError && <LoadingSpinner className="h-3.5 w-3.5" />}
+          {isError && <AlertTriangle className="h-3.5 w-3.5" />}
           <span className="text-xs font-medium">{message}</span>
         </div>
       </div>

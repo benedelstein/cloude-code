@@ -1,14 +1,14 @@
 import type { UIMessage } from "ai";
-import type { AgentState, SessionTodo } from "@repo/shared";
+import type { ClientState, SessionTodo } from "@repo/shared";
 import { extractPlanSnapshotFromPart, extractTodoSnapshotFromPart } from "@/lib/session-derived-state";
 import type { LatestPlanRepository } from "./repositories/latest-plan-repository";
 
-type DerivedStateContext = {
-  state: AgentState;
+export type DerivedStateContext = {
+  state: ClientState;
   latestPlanRepository: LatestPlanRepository;
   // TODO: scope this down so it can only update todos and plan.
   // eslint-disable-next-line no-unused-vars
-  updatePartialState: (partial: Partial<AgentState>) => void;
+  updatePartialState: (partial: Partial<ClientState>) => void;
 };
 
 export function applyDerivedStateFromParts(

@@ -39,7 +39,7 @@ function createPendingSession(
     streamingMessage: null,
     sessionStatus,
     errorMessage,
-    isHistoryLoading: sessionStatus !== "error",
+    isHistoryLoading: errorMessage === null,
     hasHydratedState: false,
     isReady: false,
     isStreaming: false,
@@ -92,7 +92,6 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const webSocketToken = useSessionWebSocketToken({
     sessionId,
     onAuthError: () => {
-      setTokenSessionStatus("error");
       setTokenErrorMessage("Session authentication failed");
     },
     onReconnectPending: () => {

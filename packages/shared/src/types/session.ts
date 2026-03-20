@@ -2,18 +2,14 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 
 export const SessionStatus = z.enum([
-  /** Provisioning the session */
+  /** DO initialized but handleInit not yet called */
+  "initializing",
+  /** Provisioning the sprite VM */
   "provisioning",
-  /** Cloning the repository */
+  /** Cloning the repository onto the sprite */
   "cloning",
-  /** Syncing the repository via git */
-  "syncing",
   /** Attaching to the agent process running on the vm */
   "attaching",
-  /** Error occurred */
-  "error",
-  /** Session is terminated. No more messages can be sent or received. */
-  "terminated",
   /** Ready to send and receive messages */
   "ready",
 ]);
@@ -37,19 +33,18 @@ export const SessionPlanMetadata = z.object({
 });
 export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
 
-/** 
- * State managed by the SessionAgentDO, synced to clients via Cloudflare Agents
- * IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+/**
+ * Durable state synced to clients via Cloudflare Agents SDK.
+ * IMPORTANT: ClientState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+ *
+ * Fields marked "reset on restart" are overwritten in the DO constructor so they
+ * never get stuck from a previous instance's in-progress operation.
  */
-export type AgentState = {
+export type ClientState = {
   sessionId: string | null;
   userId: string | null;
   repoFullName: string | null;
-  spriteName: string | null;
-  /** Session ID given by the agent provider (Claude or Codex) */
-  agentSessionId: string | null;
-  /** ID of the agent process running on the sprite */
-  agentProcessId: number | null;
+  /** Synthesized from ServerState checkpoints — reset on restart */
   status: SessionStatus;
   settings: SessionSettings;
   /** Branch name locked after first push (for "Create PR" flow) */
@@ -70,14 +65,19 @@ export type AgentState = {
   pendingAttachmentIds: string[];
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
-  /** Claude auth issue blocking the current session, if any */
+  /** Claude auth issue blocking the current session — reset on restart */
   claudeAuthRequired: ClaudeAuthState | null;
-  /** Whether the agent is currently responding to a message */
+  /** Whether the agent is currently responding to a message — reset on restart */
   isResponding: boolean;
+  /** Last error message from provisioning or agent start — reset on restart */
+  lastError: string | null;
   /** Branch the session was based off — used as the PR target */
   baseBranch: string | null;
   createdAt: Date;
 };
+
+/** @deprecated Use ClientState instead */
+export type AgentState = ClientState;
 
 /** Supported agent providers */
 export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
