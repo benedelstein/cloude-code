@@ -10,6 +10,7 @@ export interface Env {
 
   // Environment variables
   ENVIRONMENT: string;
+  LOG_LEVEL: string;
   WORKER_URL: string;
 
   // Secrets

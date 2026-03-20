@@ -19,6 +19,7 @@ import {
   SessionPlanResponse,
   SessionStatus,
   type MessageAttachmentRef,
+  LogLevel,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
@@ -34,7 +35,7 @@ import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/atta
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
 import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
-import { createLogger } from "@/lib/logger";
+import { createLogger, initializeLogger } from "@/lib/logger";
 import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
 import { arrayBufferToBase64 } from "@/lib/utils";
@@ -113,8 +114,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     createdAt: new Date(),
   };
 
-  constructor(ctx: DurableObjectState, env: Env, logger: Logger = createLogger("session-agent-do.ts")) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+
+    initializeLogger({
+      level: env.LOG_LEVEL as LogLevel,
+      format: "pretty",
+    });
+    this.logger = createLogger("session-agent-do.ts");
 
     // The Agents SDK allows clients to overwrite state via { type: "cf_agent_state" } WebSocket messages.
     // There is no validation hook before the write, so we intercept at _setStateInternal.
@@ -127,8 +134,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
       return superSetStateInternal(state, source);
     };
-
-    this.logger = logger.scope("session-agent-do.ts");
 
     const sql = this.sql.bind(this);
     this.messageRepository = new MessageRepository(sql);
