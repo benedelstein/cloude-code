@@ -911,29 +911,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.logger.error("Failed to create user UI message");
         return;
       }
-      const stored = this.messageRepository.create(
-        this.serverState.sessionId!,
-        userUiMessage,
-      );
-      this.broadcastMessage({ type: "user.message", message: stored.message }, [
-        connection.id,
-      ]);
-
-      // Sync to D1: update last_message_at and generate title from first message
-      const synthesizedMessageContent = this.toHistorySyncContent(
-        payload.content?.trim(),
-        attachments,
-      );
-      this.ctx.waitUntil(
-        updateSessionHistoryData({
-          database: this.env.DB,
-          anthropicApiKey: this.env.ANTHROPIC_API_KEY,
-          logger: this.logger,
-          sessionId: this.serverState.sessionId!,
-          messageContent: synthesizedMessageContent,
-          messageRepository: this.messageRepository,
-        }),
-      );
+      await this.onUserMessageSent(userUiMessage, attachments);
     } catch (error) {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
@@ -1005,6 +983,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    */
   private async maybeSendPendingMessage(): Promise<void> {
     if (!this.agentProcessManager.isConnected()) return;
+    const userMessage = this.state.pendingUserMessage?.message;
+    if (!userMessage) {
+      return;
+    }
 
     const content = getUserMessageTextContent(this.state.pendingUserMessage?.message ?? null);
     const pendingAttachmentIds = this.state.pendingUserMessage?.attachmentIds ?? [];
@@ -1016,18 +998,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // send to the agent.
     this.logger.info("Sending pending message");
     const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, pendingAttachmentIds);
-    // persist UIMessage and broadcast to other clients.
-    // TODO: DRY UP with handleChatMessage
-    const userMessage = this.state.pendingUserMessage?.message;
-    if (!userMessage) {
-      this.updatePartialState({ pendingUserMessage: null });
-      return;
-    }
-    const stored = this.messageRepository.create(sessionId, userMessage);
-    this.broadcastMessage({ type: "user.message", message: stored.message });
-    // Clear pending message from state (after broadcast so client has the real message)
+    await this.onUserMessageSent(userMessage, attachmentRecords);
     this.updatePartialState({ pendingUserMessage: null });
+  }
+
+  private async onUserMessageSent(message: UIMessage, attachmentRecords: AttachmentRecord[]): Promise<void> {
+    const sessionId = this.serverState.sessionId;
+    if (!sessionId) return;
+    const stored = this.messageRepository.create(sessionId, message);
+    this.broadcastMessage({ type: "user.message", message: stored.message });
     // Sync to D1 history row and generate title
+    const content = getUserMessageTextContent(message);
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
     this.ctx.waitUntil(
       updateSessionHistoryData({
