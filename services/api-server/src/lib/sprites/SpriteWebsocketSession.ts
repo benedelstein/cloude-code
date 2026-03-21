@@ -197,7 +197,9 @@ export class SpriteWebsocketSession {
           const result = SessionInfoMessageSchema.safeParse(message);
           if (result.success) {
             cleanup();
-            logger.info(`Session info received: ${result.data.tty ? "TTY" : "non-TTY"}`);
+            logger.info(
+              `Session info received: ${result.data.tty ? "TTY" : "non-TTY"}`,
+            );
             this.ttyMode = result.data.tty;
             this.dispatchServerMessage(result.data);
             resolve();
@@ -530,6 +532,10 @@ export class SpriteWebsocketSession {
   // Public session commands
   // ==========================================================================================================
 
+  /**
+   * Waits for a websocket exec to complete synchronously.
+   * @returns a promise that resolves to the exit code of the session
+   */
   wait(): Promise<number> {
     if (this.done) {
       if (this.exitCode !== null) {
@@ -555,7 +561,9 @@ export class SpriteWebsocketSession {
   resize(cols: number, rows: number): void {
     if (!this.ttyMode) throw new Error("Resize only supported in TTY mode");
 
-    this.getOpenWebSocket().send(JSON.stringify({ type: "resize", cols, rows }));
+    this.getOpenWebSocket().send(
+      JSON.stringify({ type: "resize", cols, rows }),
+    );
   }
 
   signal(signal: string): void {
