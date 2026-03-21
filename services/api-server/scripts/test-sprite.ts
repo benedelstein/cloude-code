@@ -4,7 +4,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { Sprite, SpritesClient } from "@fly/sprites";
-import { SpritesCoordinator, WorkersSprite } from "../src/lib/sprites";
+import { SpritesCoordinator, WorkersSpriteClient } from "../src/lib/sprites";
 
 const SPRITES_API_KEY = process.env.SPRITES_API_KEY!;
 const SPRITES_API_URL = process.env.SPRITES_API_URL || "https://api.sprites.dev";
@@ -64,7 +64,7 @@ const connectClaude = async (nativeSprite: Sprite) => {
   return session;
 }
 
-const cloneRepo = async (workersSprite: WorkersSprite) => {
+const cloneRepo = async (workersSprite: WorkersSpriteClient) => {
   console.log(`\n--- Cloning ${REPO_ID} ---`);
   await workersSprite.execHttp("rm -rf ~/workspace && mkdir -p ~/workspace");
 
@@ -83,14 +83,14 @@ async function main() {
   // Native SDK for WebSocket (since Workers WebSocket doesn't work in Node.js)
   const nativeClient = new SpritesClient(SPRITES_API_KEY);
 
-  let workersSprite: WorkersSprite;
+  let workersSprite: WorkersSpriteClient;
   let nativeSprite: Awaited<ReturnType<typeof nativeClient.getSprite>>;
   let createdSprite = false;
   let finalSpriteName: string;
 
   if (spriteName) {
     console.log(`Connecting to existing sprite: ${spriteName}`);
-    workersSprite = new WorkersSprite(spriteName, SPRITES_API_KEY, SPRITES_API_URL);
+    workersSprite = new WorkersSpriteClient(spriteName, SPRITES_API_KEY, SPRITES_API_URL);
     nativeSprite = await nativeClient.getSprite(spriteName);
     finalSpriteName = spriteName;
     console.log(`Connected to sprite: ${spriteName}`);
@@ -99,7 +99,7 @@ async function main() {
     console.log(`Creating new sprite: ${name}`);
     const spriteResponse = await coordinator.createSprite({ name });
     console.log(`Created sprite: ${spriteResponse.name} (status: ${spriteResponse.status})`);
-    workersSprite = new WorkersSprite(spriteResponse.name, SPRITES_API_KEY, SPRITES_API_URL);
+    workersSprite = new WorkersSpriteClient(spriteResponse.name, SPRITES_API_KEY, SPRITES_API_URL);
     nativeSprite = await nativeClient.getSprite(spriteResponse.name);
     finalSpriteName = spriteResponse.name;
     createdSprite = true;

@@ -4,7 +4,7 @@ import { extractPlanSnapshotFromPart, extractTodoSnapshotFromPart } from "@/lib/
 import type { LatestPlanRepository } from "./repositories/latest-plan-repository";
 
 export type DerivedStateContext = {
-  state: ClientState;
+  sessionId: string;
   latestPlanRepository: LatestPlanRepository;
   // TODO: scope this down so it can only update todos and plan.
   // eslint-disable-next-line no-unused-vars
@@ -16,7 +16,7 @@ export function applyDerivedStateFromParts(
   completedParts: UIMessage["parts"],
   sourceMessageId: string | null,
 ): void {
-  if (!context.state.sessionId || completedParts.length === 0) {
+  if (!context.sessionId || completedParts.length === 0) {
     return;
   }
 
@@ -32,7 +32,7 @@ export function applyDerivedStateFromParts(
     const plan = extractPlanSnapshotFromPart(completedPart);
     if (plan) {
       const storedPlan = context.latestPlanRepository.upsert(
-        context.state.sessionId,
+        context.sessionId,
         plan,
         sourceMessageId,
       );

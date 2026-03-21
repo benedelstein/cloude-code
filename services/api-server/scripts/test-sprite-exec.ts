@@ -1,9 +1,9 @@
-// Test script for Sprites HTTP exec via WorkersSprite — verifies binary protocol parsing.
+// Test script for Sprites HTTP exec via WorkersSpriteClient — verifies binary protocol parsing.
 // Usage: npx tsx scripts/test-sprite-exec.ts <sprite-name> [command]
 // Default command: "echo hello && exit 1"
 
 import dotenv from "dotenv";
-import { WorkersSprite } from "../src/lib/sprites/WorkersSprite";
+import { WorkersSpriteClient } from "../src/lib/sprites/WorkersSpriteClient";
 
 dotenv.config({ path: ".env.local" });
 
@@ -23,7 +23,7 @@ if (!spriteName) {
   process.exit(1);
 }
 
-const sprite = new WorkersSprite(spriteName, SPRITES_API_KEY, SPRITES_API_URL);
+const sprite = new WorkersSpriteClient(spriteName, SPRITES_API_KEY, SPRITES_API_URL);
 
 async function runTest(label: string, cmd: string) {
   console.log(`\n--- ${label}: ${cmd}`);

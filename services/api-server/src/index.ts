@@ -9,6 +9,7 @@ import { reposRoutes } from "./routes/repos/repos.routes";
 import { attachmentsRoutes } from "./routes/attachments/attachments.routes";
 import { agentRoutes } from "./routes/agent.routes";
 import { gitProxyRoutes } from "./routes/git-proxy.routes";
+import { debugRoutes } from "./routes/debug.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
 import { initializeLogger } from "./lib/logger";
@@ -48,6 +49,7 @@ app.get("/health", (c) => {
 
 app.route("/agents", agentRoutes);
 app.route("/git-proxy", gitProxyRoutes);
+app.route("/_debug", debugRoutes);
 
 app.route("/auth", authRoutes);
 app.route("/auth", openaiAuthRoutes);

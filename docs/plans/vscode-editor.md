@@ -42,6 +42,6 @@ The Worker adds an authenticated `/sessions/:sessionId/editor/*` route:
 ## Files
 
 - `services/api-server/src/routes/sessions/sessions.routes.ts` — add authenticated `/editor/*` proxy route
-- `services/api-server/src/lib/sprites/WorkersSprite.ts` — add `proxyTcp(port)` method wrapping the Sprites proxy WebSocket API
+- `services/api-server/src/lib/sprites/WorkersSpriteClient.ts` — add `proxyTcp(port)` method wrapping the Sprites proxy WebSocket API
 - `services/api-server/src/durable-objects/session-agent-editor.ts` — remove `setUrlAuth("public")`, drop connection token
 - `services/api-server/src/durable-objects/session-agent-do.ts` — re-enable editor routes

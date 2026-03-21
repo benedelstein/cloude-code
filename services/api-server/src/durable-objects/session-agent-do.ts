@@ -1,6 +1,6 @@
 import {
   SpritesCoordinator,
-  WorkersSprite,
+  WorkersSpriteClient,
 } from "@/lib/sprites";
 import {
   type ClientState,
@@ -30,6 +30,7 @@ import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
+import { configureGitRemote } from "@/lib/git-setup";
 import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
 import { GitHubAppService } from "@/lib/github/github-app";
@@ -232,7 +233,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         );
         applyDerivedStateFromParts(
           {
-            state: this.state,
+            sessionId: this.serverState.sessionId!,
             latestPlanRepository: this.latestPlanRepository,
             updatePartialState: (partial) => this.updatePartialState(partial),
           },
@@ -272,6 +273,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.pendingChunks = [];
     this.messageAccumulator.reset();
     this.updatePartialState({ isResponding: false });
+    // TODO: RESTART THE AGENT?
   }
 
   // ============================================
@@ -517,7 +519,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       });
 
       // Lock down outbound network access to known-good domains
-      const sprite = new WorkersSprite(
+      const sprite = new WorkersSpriteClient(
         spriteResponse.name,
         this.env.SPRITES_API_KEY,
         this.env.SPRITES_API_URL,
@@ -585,7 +587,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     const repoFullName = this.state.repoFullName!;
     const sessionId = this.serverState.sessionId!;
 
-    const sprite = new WorkersSprite(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+    const sprite = new WorkersSpriteClient(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
     const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
     const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
@@ -637,27 +639,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
     this.updatePartialState({ baseBranch: actualBaseBranch });
 
-    // Use direct GitHub for fetch/pull and proxy URL for push-only operations
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git remote set-url origin ${githubRemoteUrl} && git remote set-url --push origin ${cloneUrl}`,
-      {},
-    );
+    if (!this.gitProxySecret) {
+      this.gitProxySecret = crypto.randomUUID();
+      this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
+    }
 
-    // Set up git config for commits
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git config user.email "cloude@cloude.dev" && git config user.name "Cloude Code"`,
-      {},
-    );
-
-    // Configure git to send the proxy auth header only for proxy URL requests
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git config --unset-all http.extraHeader || true`,
-      {},
-    );
-    await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true && git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${this.gitProxySecret}"`,
-      {},
-    );
+    // Configure remote URLs, git identity, and proxy auth header
+    await configureGitRemote(sprite, {
+      workspaceDir: WORKSPACE_DIR,
+      githubRemoteUrl,
+      cloneUrl,
+      proxyBaseUrl,
+      gitProxySecret: this.gitProxySecret,
+    });
   }
 
   // ============================================
@@ -997,9 +991,21 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // send to the agent.
     this.logger.info("Sending pending message");
-    const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, pendingAttachmentIds);
-    await this.onUserMessageSent(userMessage, attachmentRecords);
-    this.updatePartialState({ pendingUserMessage: null });
+    try {
+      const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, pendingAttachmentIds);
+      await this.onUserMessageSent(userMessage, attachmentRecords);
+      this.updatePartialState({ pendingUserMessage: null });
+    } catch (error) {
+      this.logger.error("Failed to send pending message", { error });
+      this.updatePartialState({ lastError: "Failed to send pending message", status: this.synthesizeStatus() });
+      this.broadcastMessage(
+        {
+          type: "error",
+          code: "CHAT_MESSAGE_FAILED",
+          message: "Failed to handle chat message",
+        },
+      );
+    }
   }
 
   private async onUserMessageSent(message: UIMessage, attachmentRecords: AttachmentRecord[]): Promise<void> {

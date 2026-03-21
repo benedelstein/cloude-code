@@ -12,7 +12,7 @@ import {
   ChatMessageEvent,
 } from "@repo/shared";
 import {
-  WorkersSprite,
+  WorkersSpriteClient,
   type SpriteWebsocketSession,
   type SpriteServerMessage,
 } from "@/lib/sprites";
@@ -116,7 +116,7 @@ export class AgentProcessManager {
     if (!sessionId) {
       throw new Error("Session id not found");
     }
-    const sprite = new WorkersSprite(serverState.spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+    const sprite = new WorkersSpriteClient(serverState.spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
 
     await sprite.writeFile(`${HOME_DIR}/.cloude/agent.js`, VM_AGENT_SCRIPT);
 
@@ -261,6 +261,13 @@ export class AgentProcessManager {
       this.agentStdoutBuffer = "";
       this.agentWebsocketSession = null;
       this.onAgentExit(code);
+    });
+
+    session.onError((error: Error) => {
+      this.logger.error(`vm-agent websocket error: ${error.message}`);
+      this.agentStdoutBuffer = "";
+      this.agentWebsocketSession = null;
+      this.onAgentError(error.message);
     });
 
     session.onServerMessage((msg: SpriteServerMessage) => {

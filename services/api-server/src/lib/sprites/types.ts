@@ -6,6 +6,8 @@ export class SpritesError extends Error {
     ) {
         super(message);
         this.name = "SpritesError";
+        this.statusCode = statusCode;
+        this.responseBody = responseBody;
     }
 }
 

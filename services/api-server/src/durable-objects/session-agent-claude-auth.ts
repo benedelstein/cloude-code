@@ -1,5 +1,5 @@
 import type { ClaudeAuthState, Logger } from "@repo/shared";
-import { WorkersSprite } from "@/lib/sprites";
+import { WorkersSpriteClient } from "@/lib/sprites";
 import {
   ClaudeOAuthError,
   ClaudeOAuthService,
@@ -123,7 +123,7 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
       };
     }
 
-    const sprite = new WorkersSprite(
+    const sprite = new WorkersSpriteClient(
       params.spriteName,
       params.env.SPRITES_API_KEY,
       params.env.SPRITES_API_URL,
