@@ -9,6 +9,8 @@ export type ServerState = {
   initialized: boolean;
   /** The DO's sessionId — null until handleInit is called (DO name bug workaround) */
   sessionId: string | null;
+  /** The user id who owns the session */
+  userId: string | null;
   /** Sprite VM name — null until sprite is created */
   spriteName: string | null;
   /** True after the repo has been cloned onto the sprite */
@@ -23,6 +25,7 @@ function defaultServerState(): ServerState {
   return {
     initialized: false,
     sessionId: null,
+    userId: null,
     spriteName: null,
     repoCloned: false,
     agentSessionId: null,

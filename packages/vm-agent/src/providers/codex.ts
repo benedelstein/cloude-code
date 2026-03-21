@@ -7,10 +7,10 @@ import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "../system-prompt";
-import type { SessionSettings } from "@repo/shared";
+import type { AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
-type CodexSettings = Extract<SessionSettings, { provider: "codex-cli" }>;
+type CodexSettings = Extract<AgentSettings, { provider: "codex-cli" }>;
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
   const authJson = process.env.CODEX_AUTH_JSON;

@@ -33,10 +33,6 @@ export const CreateSpriteRequest = z.object({
 });
 export type CreateSpriteRequest = z.infer<typeof CreateSpriteRequest>;
 
-// =============================================================================
-// SpritesCoordinator - Wraps @fly/sprites for sprite lifecycle management
-// Uses HTTP-based operations (create/delete/get) which work in Workers
-// =============================================================================
 
 export interface SpritesClientConfig {
   apiKey: string;
@@ -45,6 +41,10 @@ export interface SpritesClientConfig {
 
 const logger = createLogger("sprites.ts");
 
+/**
+ * SpritesCoordinator - Wraps @fly/sprites for sprite lifecycle management
+ * Uses HTTP-based operations (create/delete/get) which work in Workers
+ */
 export class SpritesCoordinator {
   private spritesClient: SpritesClient;
 

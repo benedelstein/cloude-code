@@ -7,10 +7,10 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend } from "../system-prompt";
-import type { SessionSettings } from "@repo/shared";
+import type { AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
-type ClaudeSettings = Extract<SessionSettings, { provider: "claude-code" }>;
+type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
 
 type ClaudeCredentials = {
   claudeAiOauth: {

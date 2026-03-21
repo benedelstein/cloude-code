@@ -27,7 +27,7 @@ import type {
   ClaudeTokenResponse,
   ClaudeStatusResponse,
   ClaudeDisconnectResponse,
-  SessionSettingsInput,
+  AgentSettingsInput,
   UploadAttachmentResponse,
 } from "@repo/shared";
 
@@ -92,7 +92,7 @@ export async function createSession(
   repoId: number,
   initialMessage?: string,
   branch?: string,
-  settings?: SessionSettingsInput,
+  settings?: AgentSettingsInput,
   attachmentIds?: string[],
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {

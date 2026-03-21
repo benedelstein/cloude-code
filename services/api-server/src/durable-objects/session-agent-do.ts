@@ -4,13 +4,7 @@ import {
 } from "@/lib/sprites";
 import {
   type ClientState,
-  type AgentInputAttachment,
-  type ClaudeAuthState,
-  type SessionSettings as SessionSettingsType,
-  type SessionSettingsInput,
-  SessionSettings,
-  ClaudeModel,
-  CodexModel,
+  type AgentSettingsInput,
   type Logger,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
@@ -18,8 +12,10 @@ import {
   SessionInfoResponse,
   SessionPlanResponse,
   SessionStatus,
-  type MessageAttachmentRef,
   LogLevel,
+  ChatMessageEvent,
+  AgentOutput,
+  AgentSettings,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
@@ -31,22 +27,13 @@ import {
   type ServerState,
 } from "./repositories/server-state-repository";
 import { migrateAll } from "./repositories/schema-manager";
-import { AttachmentService, type AttachmentRecord } from "@/lib/attachments/attachment-service";
+import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
 import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
-import { decrypt } from "@/lib/crypto";
 import { GitHubAppService } from "@/lib/github/github-app";
-import { arrayBufferToBase64 } from "@/lib/utils";
-import type { UIMessage } from "ai";
-import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
-import {
-  ensureClaudeCredentialsReadyForSend,
-  getClaudeAuthRequiredFromClaudeError,
-  getClaudeCredentialsSnapshot,
-  refreshClaudeAuthRequired,
-} from "./session-agent-claude-auth";
+import type { UIMessage, UIMessageChunk } from "ai";
 // DISABLED: editor feature imports — security issue (sprite URL set to public)
 // import {
 //   handleEditorOpen,
@@ -55,6 +42,10 @@ import {
 import { updateSessionHistoryData } from "./session-agent-history";
 import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
 import { AgentProcessManager } from "./lib/agent-process-manager";
+import { createUserUiMessage, getUserMessageTextContent } from "@/lib/utils/uimessage-utils";
+import { MessageAccumulator } from "@/lib/message-accumulator";
+import { applyDerivedStateFromParts } from "./session-agent-derived-state";
+import { AttachmentRecord } from "@/types/attachments";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -62,7 +53,7 @@ interface InitRequest {
   sessionId: string;
   userId: string;
   repoFullName: string;
-  settings?: SessionSettingsInput;
+  agentSettings?: AgentSettingsInput;
   /** Base branch */
   branch?: string;
   initialMessage?: string;
@@ -89,23 +80,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   private editorToken: string | null = null;
-  /** Last Claude credential fingerprint pushed to the sprite this DO instance */
-  private lastClaudeCredentialFingerprint: string | null = null;
+  private pendingChunks: UIMessageChunk[] = [];
+  private messageAccumulator: MessageAccumulator = new MessageAccumulator();
 
   initialState: ClientState = {
-    sessionId: null,
-    userId: null,
     repoFullName: null,
     status: "initializing",
-    settings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
+    agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
     pushedBranch: null,
-    pullRequestUrl: null,
-    pullRequestNumber: null,
-    pullRequestState: null,
+    pullRequest: null,
     todos: null,
     plan: null,
     pendingUserMessage: null,
-    pendingAttachmentIds: [],
     editorUrl: null,
     claudeAuthRequired: null,
     isResponding: false,
@@ -162,13 +148,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.agentProcessManager = new AgentProcessManager({
       logger: this.logger,
       env,
-      spritesCoordinator: this.spritesCoordinator,
-      messageRepository: this.messageRepository,
-      latestPlanRepository: this.latestPlanRepository,
-      broadcastMessage: (msg) => this.broadcastMessage(msg),
-      updateClientState: (partial) => this.updatePartialState(partial),
-      updateServerState: (partial) => this.updateServerState(partial),
       getClientState: () => this.state,
+      getServerState: () => this.serverState,
+      onAgentOutput: (output) => this.handleAgentOutput(output),
+      onAgentError: (error) => this.handleAgentError(error),
+      onAgentExit: (code) => this.handleAgentExit(code),
+      updateLastKnownAgentProcessId: (processId) => this.updateServerState({ lastKnownAgentProcessId: processId }),
+      updateClaudeAuthRequired: (claudeAuthRequired) => this.updatePartialState({ claudeAuthRequired }),
+      updateAgentSettings: (settings) => this.updatePartialState({ agentSettings: settings }),
     });
 
     // Reset transient ClientState fields on every restart so they never get
@@ -207,14 +194,84 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     return "ready";
   }
 
-  private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
-    if (claudeAuthRequired) {
-      this.lastClaudeCredentialFingerprint = null;
+  // ============================================
+  // Agent lifecycle
+  // ============================================
+
+  private handleAgentOutput(output: AgentOutput): void {
+    switch (output.type) {
+      case "ready": {
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        break;
+      }
+      case "error": {
+        this.logger.error(`vm-agent error: ${output.error}`);
+        this.broadcastMessage({
+          type: "error",
+          code: "AGENT_ERROR",
+          message: output.error,
+        });
+        break;
+      }
+      case "debug": {
+        this.logger.debug(`[vm-agent debug] ${output.message}`);
+        break;
+      }
+      case "stream": {
+        // Buffer chunk for reconnect replay
+        this.pendingChunks.push(output.chunk as UIMessageChunk);
+
+        this.broadcastMessage({
+          type: "agent.chunk",
+          chunk: output.chunk,
+        });
+
+        // Accumulate chunks into UIMessage and extract derived state (todos, plan)
+        const { finishedMessage, completedParts } = this.messageAccumulator.process(
+          output.chunk as UIMessageChunk,
+        );
+        applyDerivedStateFromParts(
+          {
+            state: this.state,
+            latestPlanRepository: this.latestPlanRepository,
+            updatePartialState: (partial) => this.updatePartialState(partial),
+          },
+          completedParts,
+          this.messageAccumulator.getMessageId(),
+        );
+
+        if (finishedMessage) {
+          const sessionId = this.serverState.sessionId!;
+          const stored = this.messageRepository.create(sessionId, finishedMessage);
+          this.broadcastMessage({
+            type: "agent.finish",
+            message: stored.message,
+          });
+
+          // Reset accumulator and chunk buffer for next message
+          this.messageAccumulator.reset();
+          this.pendingChunks = [];
+          this.updatePartialState({ isResponding: false });
+        }
+        break;
+      }
+      case "sessionId": {
+        // Persist the agent provider's session ID so it can be resumed on reconnect
+        this.logger.info(`Storing agent session ID: ${output.sessionId}`);
+        this.updateServerState({ agentSessionId: output.sessionId });
+        break;
+      }
     }
-    if (this.state.claudeAuthRequired === claudeAuthRequired) {
-      return;
-    }
-    this.updatePartialState({ claudeAuthRequired });
+  }
+  private handleAgentError(error: string): void {
+    this.logger.error("Agent error", { error });
+  }
+
+  private handleAgentExit(code: number): void {
+    this.logger.info(`Agent exited with code ${code}`);
+    this.pendingChunks = [];
+    this.messageAccumulator.reset();
+    this.updatePartialState({ isResponding: false });
   }
 
   // ============================================
@@ -226,6 +283,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
+    // TODO: BETTER MIDDLEWARE
     // Root path = session operations (the DO *is* the session)
     if (path === "/" || path === "") {
       switch (request.method) {
@@ -274,6 +332,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
     }
 
+    // Notify the session that the user has completed Claude OAuth
+    if (path === "/claude-auth/refresh" && request.method === "POST") {
+      await this.agentProcessManager.refreshClaudeAuth();
+      return new Response(null, { status: 204 });
+    }
+
     // Sub-resources
     if (path === "/messages" && request.method === "GET") {
       return this.handleGetMessages();
@@ -285,9 +349,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // Editor (VS Code) lifecycle — DISABLED: security issue (sprite URL set to public)
     if ((path === "/editor/open" || path === "/editor/close") && request.method === "POST") {
       return new Response("editor feature temporarily disabled", { status: 503 });
-    }
-    if (path === "/claude-auth/refresh" && request.method === "POST") {
-      return this.handleRefreshClaudeAuth();
     }
 
     // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
@@ -305,28 +366,24 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.sendMessage(
       {
         type: "connected",
-        sessionId: this.serverState.sessionId ?? this.state.sessionId ?? "",
+        sessionId: this.serverState.sessionId ?? "",
         status: this.state.status,
       },
       connection,
     );
 
     // Send message history
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;
     if (sessionId) {
       const storedMessages = this.messageRepository.getAllBySession(sessionId);
       this.sendMessage({
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
         pendingChunks:
-          this.agentProcessManager.getPendingChunks().length > 0
-            ? this.agentProcessManager.getPendingChunks()
+          this.pendingChunks.length > 0
+            ? this.pendingChunks
             : undefined,
       }, connection);
-    }
-
-    if (sessionId && this.state.settings.provider === "claude-code") {
-      this.ctx.waitUntil(this.refreshClaudeAuthRequiredState());
     }
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
@@ -406,7 +463,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     reason: string,
     wasClean: boolean,
   ): void {
-    this.logger.info("WebSocket closed", {
+    this.logger.debug("WebSocket closed", {
       fields: {
         connectionId: connection.id,
         code,
@@ -423,7 +480,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   // ============================================
-  // Provisioning — ensureReady() entry point
+  // Provisioning
   // ============================================
 
   /**
@@ -435,6 +492,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   async ensureReady(): Promise<void> {
     if (!this.serverState.initialized) {
       // handleInit has not been called yet — nothing to do
+      this.logger.warn("Session not initialized — skipping ensureReady");
       return;
     }
     await this.ensureProvisioned();
@@ -506,85 +564,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.logger.error("Failed to refresh GitHub token during agent start", { error });
       }
 
-      const envVars = await this.buildAgentEnvVars();
-
-      await this.agentProcessManager.startAgentSession({
-        spriteName: this.serverState.spriteName,
-        agentSessionId: this.serverState.agentSessionId,
-        settings: this.state.settings,
-        sessionId: this.serverState.sessionId!,
-        envVars,
-      });
-
-      this.setClaudeAuthRequired(null);
-      this.updatePartialState({ status: this.synthesizeStatus() }); // "ready"
-      this.broadcastMessage({ type: "session.status", status: "ready" });
+      await this.agentProcessManager.startAgentSession();
+      this.updatePartialState({ status: this.synthesizeStatus() });
 
       // Send the pending initial message if one was stored
       await this.maybeSendPendingMessage();
     } catch (error) {
-      if (error instanceof ClaudeOAuthError) {
-        this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
-      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to start agent", { error });
       this.updatePartialState({ lastError: errorMessage, status: this.synthesizeStatus() });
-      this.broadcastMessage({
-        type: "session.status",
-        status: this.synthesizeStatus(),
-        message: errorMessage,
-      });
       throw error;
     }
-  }
-
-  /**
-   * Builds the provider-specific environment variables for the agent process.
-   * Fetches and validates credentials for the configured provider.
-   */
-  private async buildAgentEnvVars(): Promise<Record<string, string>> {
-    const provider = this.state.settings.provider;
-    const envVars: Record<string, string> = {};
-
-    switch (provider) {
-      case "codex-cli": {
-        const codexAuthJson = await this.buildCodexAuthJson();
-        if (codexAuthJson) {
-          envVars.CODEX_AUTH_JSON = codexAuthJson;
-        } else if (this.env.CODEX_AUTH_JSON) {
-          envVars.CODEX_AUTH_JSON = this.env.CODEX_AUTH_JSON;
-        }
-        if (this.env.OPENAI_API_KEY) {
-          envVars.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
-        }
-        break;
-      }
-      case "claude-code": {
-        try {
-          const claudeCredentials = await getClaudeCredentialsSnapshot({
-            env: this.env,
-            logger: this.logger,
-            userId: this.state.userId,
-          });
-          if (!claudeCredentials) {
-            throw new Error(
-              "Claude authentication required. Connect Claude before creating a session.",
-            );
-          }
-          this.setClaudeAuthRequired(null);
-          envVars.CLAUDE_CREDENTIALS_JSON = claudeCredentials.credentialsJson;
-          this.lastClaudeCredentialFingerprint = claudeCredentials.fingerprint;
-        } catch (error) {
-          if (error instanceof ClaudeOAuthError) {
-            this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
-          }
-          throw error;
-        }
-        break;
-      }
-    }
-
-    return envVars;
   }
 
   /**
@@ -688,67 +678,53 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     const data = (await request.json()) as InitRequest;
 
-    const provider = data.settings?.provider ?? "claude-code";
-    const maxTokens = data.settings?.maxTokens ?? 8192;
+    const provider = data.agentSettings?.provider ?? "claude-code";
+    const maxTokens = data.agentSettings?.maxTokens ?? 8192;
 
-    let settings: SessionSettingsType;
-    const parsed = SessionSettings.safeParse({
+    let settings: AgentSettings;
+    const parsed = AgentSettings.safeParse({
       provider,
-      model: data.settings?.model,
+      model: data.agentSettings?.model,
       maxTokens,
     });
     if (parsed.success) {
       settings = parsed.data;
     } else {
       // Invalid model — fall back to the provider's default by omitting model
-      settings = SessionSettings.parse({ provider, maxTokens });
+      settings = AgentSettings.parse({ provider, maxTokens });
     }
 
-    if (settings.provider === "claude-code") {
-      try {
-        await getClaudeCredentialsSnapshot({
-          env: this.env,
-          logger: this.logger,
-          userId: data.userId,
-        });
-      } catch (error) {
-        if (error instanceof ClaudeOAuthError) {
-          return new Response(
-            JSON.stringify({ error: error.message, code: error.code }),
-            { status: error.status, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        throw error;
-      }
+    // Generate git proxy secret and persist
+    if (!this.gitProxySecret) {
+      this.gitProxySecret = crypto.randomUUID();
+      this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
+    } else {
+      // should never happen
+      this.logger.warn("Git proxy secret already exists, skipping generation(?)");
     }
-
-    // Generate git proxy secret and persist in SQLite (not in ClientState — state is sent to clients)
-    this.gitProxySecret = crypto.randomUUID();
-    this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
 
     const pendingAttachmentIds = data.initialAttachmentIds ?? [];
-    const pendingUserMessage = await this.buildPendingUserMessage(
+    const pendingUserUiMessage = await this.buildPendingUserUiMessage(
       data.sessionId,
       data.initialMessage,
       pendingAttachmentIds,
     );
+    // Mark initialized in ServerState
+    this.updateServerState({ initialized: true, sessionId: data.sessionId, userId: data.userId });
 
     // Store the durable initial fields in ClientState
     this.updatePartialState({
-      sessionId: data.sessionId,
-      userId: data.userId,
       repoFullName: data.repoFullName,
-      settings,
-      pendingUserMessage,
-      pendingAttachmentIds,
+      agentSettings: settings,
+      pendingUserMessage: pendingUserUiMessage ? {
+        message: pendingUserUiMessage,
+        attachmentIds: pendingAttachmentIds,
+      } : null,
       claudeAuthRequired: null,
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
+      status: this.synthesizeStatus(),
     });
-
-    // Mark initialized in ServerState
-    this.updateServerState({ initialized: true, sessionId: data.sessionId });
-    this.updatePartialState({ status: this.synthesizeStatus() });
 
     // Provision sprite asynchronously
     this.ctx.waitUntil(this.ensureReady());
@@ -763,7 +739,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // ============================================
 
   private handleGetSession(): Response {
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;;
     if (!sessionId || !this.state.repoFullName) {
       return new Response("Session not found", { status: 404 });
     }
@@ -775,9 +751,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         repoFullName: this.state.repoFullName,
         baseBranch: this.state.baseBranch ?? undefined,
         pushedBranch: this.state.pushedBranch ?? undefined,
-        pullRequestUrl: this.state.pullRequestUrl ?? undefined,
-        pullRequestNumber: this.state.pullRequestNumber ?? undefined,
-        pullRequestState: this.state.pullRequestState ?? undefined,
+        pullRequestUrl: this.state.pullRequest?.url ?? undefined,
+        pullRequestNumber: this.state.pullRequest?.number ?? undefined,
+        pullRequestState: this.state.pullRequest?.state ?? undefined,
         editorUrl: this.state.editorUrl ?? undefined,
       } satisfies SessionInfoResponse),
       { headers: { "Content-Type": "application/json" } },
@@ -785,7 +761,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private handleGetMessages(): Response {
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;
     if (!sessionId) {
       return new Response(JSON.stringify([]), {
         headers: { "Content-Type": "application/json" },
@@ -799,7 +775,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private handleGetPlan(): Response {
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;
     if (!sessionId) {
       return new Response(JSON.stringify({ error: "Session not found" }), {
         status: 404,
@@ -828,9 +804,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private async handleSetPullRequest(request: Request): Promise<Response> {
     const data: SetPullRequestRequest = await request.json();
     this.updatePartialState({
-      pullRequestUrl: data.url,
-      pullRequestNumber: data.number,
-      pullRequestState: data.state,
+      pullRequest: {
+        url: data.url,
+        number: data.number,
+        state: data.state,
+      },
     });
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -839,7 +817,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   private async handleUpdatePullRequest(request: Request): Promise<Response> {
     const data: UpdatePullRequestRequest = await request.json();
-    this.updatePartialState({ pullRequestState: data.state });
+    const pullRequest = this.state.pullRequest;
+    if (!pullRequest) {
+      return new Response(JSON.stringify({ error: "Pull request not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    pullRequest.state = data.state;
+    this.updatePartialState({ pullRequest });
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
@@ -866,71 +852,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   // ============================================
-  // Claude auth handlers
-  // ============================================
-
-  private async refreshClaudeAuthRequiredState(): Promise<void> {
-    if (this.state.settings.provider !== "claude-code") {
-      this.setClaudeAuthRequired(null);
-      return;
-    }
-
-    try {
-      const result = await refreshClaudeAuthRequired({
-        env: this.env,
-        logger: this.logger,
-        userId: this.state.userId,
-      });
-      this.setClaudeAuthRequired(result.claudeAuthRequired);
-    } catch (error) {
-      this.logger.error("Failed to refresh Claude auth state", {
-        error,
-        fields: {
-          sessionId: this.serverState.sessionId,
-          userId: this.state.userId,
-        },
-      });
-    }
-  }
-
-  private async handleRefreshClaudeAuth(): Promise<Response> {
-    await this.refreshClaudeAuthRequiredState();
-    return Response.json({ ok: true as const });
-  }
-
-  private async ensureClaudeCredentialsReadyForSend(
-    connection: Connection,
-  ): Promise<boolean> {
-    if (this.state.settings.provider !== "claude-code") {
-      return true;
-    }
-
-    const result = await ensureClaudeCredentialsReadyForSend({
-      env: this.env,
-      logger: this.logger,
-      userId: this.state.userId,
-      spriteName: this.serverState.spriteName,
-      lastFingerprint: this.lastClaudeCredentialFingerprint,
-    });
-
-    this.setClaudeAuthRequired(result.claudeAuthRequired);
-    if (result.ok) {
-      this.lastClaudeCredentialFingerprint = result.nextFingerprint;
-      return true;
-    }
-
-    this.sendMessage(
-      {
-        type: "error",
-        code: result.errorCode,
-        message: result.errorMessage,
-      },
-      connection,
-    );
-    return false;
-  }
-
-  // ============================================
   // Client message handlers
   // ============================================
 
@@ -940,14 +861,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   ): Promise<void> {
     switch (message.type) {
       case "chat.message":
-        await this.handleChatMessage(connection, {
-          content: message.content,
-          attachments: message.attachments,
-          model: message.model,
-        });
-        break;
-      case "stream.ack":
-        // TODO: implement
+        await this.handleChatMessage(connection, message);
         break;
       case "sync.request":
         this.handleSyncRequest(connection);
@@ -960,11 +874,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   private async handleChatMessage(
     connection: Connection,
-    payload: {
-      content?: string;
-      attachments?: MessageAttachmentRef[];
-      model?: string;
-    },
+    payload: ChatMessageEvent,
   ): Promise<void> {
     const currentStatus = this.synthesizeStatus();
     switch (currentStatus) {
@@ -972,7 +882,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       case "provisioning":
       case "cloning":
       case "attaching":
-        this.sendMessage(
+        // TODO: dont throw, just make it pending
+        this.sendMessage( 
           {
             type: "error",
             code: "SESSION_TRANSITIONING",
@@ -989,124 +900,55 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
     }
 
-    // Reattach agent session if needed (after hibernation)
-    if (!this.agentProcessManager.isConnected()) {
-      this.logger.info("Agent not connected — triggering ensureReady");
-      await this.ensureReady();
-    }
-
-    if (!this.agentProcessManager.isConnected()) {
-      this.logger.error(`Agent session unavailable after ensureReady: spriteName=${this.serverState.spriteName}, sessionId=${this.serverState.sessionId}`);
-      this.sendMessage(
-        {
-          type: "error",
-          code: "NO_AGENT_SESSION",
-          message: "Agent session not available",
-        },
-        connection,
-      );
-      return;
-    }
-
-    if (!await this.ensureClaudeCredentialsReadyForSend(connection)) {
-      return;
-    }
-
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
-    if (!sessionId) {
-      this.logger.error("No session id");
-      return;
-    }
-
-    const content = payload.content?.trim();
-    const attachmentReferences = payload.attachments ?? [];
-    const attachmentService = new AttachmentService(this.env.DB);
-    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
-      sessionId,
-      attachmentReferences.map((attachment) => attachment.attachmentId),
-    );
-
-    if (attachmentRecords.length !== attachmentReferences.length) {
-      this.logger.error(
-        "Some attachments not found: " +
-          attachmentReferences.map((a) => a.attachmentId).join(", "),
-      );
-      this.sendMessage(
-        {
-          type: "error",
-          code: "ATTACHMENT_NOT_FOUND",
-          message: "One or more attachments were not found for this session",
-        },
-        connection,
-      );
-      return;
-    }
-
-    let agentAttachments: AgentInputAttachment[];
     try {
-      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
+      const { attachments } = await this.agentProcessManager.handleChatMessage(payload);
+      // persist the message to db and such.
+      const userUiMessage = createUserUiMessage(
+        payload.content,
+        attachments,
+      );
+      if (!userUiMessage) {
+        this.logger.error("Failed to create user UI message");
+        return;
+      }
+      const stored = this.messageRepository.create(
+        this.serverState.sessionId!,
+        userUiMessage,
+      );
+      this.broadcastMessage({ type: "user.message", message: stored.message }, [
+        connection.id,
+      ]);
+
+      // Sync to D1: update last_message_at and generate title from first message
+      const synthesizedMessageContent = this.toHistorySyncContent(
+        payload.content?.trim(),
+        attachments,
+      );
+      this.ctx.waitUntil(
+        updateSessionHistoryData({
+          database: this.env.DB,
+          anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+          logger: this.logger,
+          sessionId: this.serverState.sessionId!,
+          messageContent: synthesizedMessageContent,
+          messageRepository: this.messageRepository,
+        }),
+      );
     } catch (error) {
-      this.logger.error("Failed to resolve attachments for chat", { error });
+      this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
         {
           type: "error",
-          code: "ATTACHMENT_READ_FAILED",
-          message: "Failed to read one or more attachments",
+          code: "CHAT_MESSAGE_FAILED",
+          message: "Failed to handle chat message",
         },
         connection,
       );
-      return;
     }
-
-    const messageParts: UIMessage["parts"] = [];
-    if (content) {
-      messageParts.push({ type: "text", text: content });
-    }
-    for (const attachment of attachmentRecords) {
-      messageParts.push({
-        type: "file",
-        mediaType: attachment.mediaType,
-        filename: attachment.filename,
-        url: this.buildAttachmentContentUrl(attachment.id),
-      } as UIMessage["parts"][number]);
-    }
-
-    // Store and broadcast the user message
-    const userMessage: UIMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      parts: messageParts,
-    };
-    const stored = this.messageRepository.create(sessionId, userMessage);
-    this.broadcastMessage(
-      { type: "user.message", message: stored.message },
-      [connection.id],
-    );
-
-    // Sync to D1: update last_message_at and generate title from first message
-    const synthesizedMessageContent = this.toHistorySyncContent(content, attachmentRecords);
-    this.ctx.waitUntil(
-      updateSessionHistoryData({
-        database: this.env.DB,
-        anthropicApiKey: this.env.ANTHROPIC_API_KEY,
-        logger: this.logger,
-        sessionId,
-        messageContent: synthesizedMessageContent,
-        messageRepository: this.messageRepository,
-      }),
-    );
-
-    // Validate and apply model switch (if requested and different from current)
-    let modelForAgent: string | undefined;
-    if (payload.model && payload.model !== this.state.settings.model) {
-      modelForAgent = this.validateAndApplyModelSwitch(payload.model);
-    }
-
-    await this.agentProcessManager.sendMessage(content, agentAttachments, modelForAgent);
   }
 
   private handleSyncRequest(connection: Connection): void {
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;
     if (!sessionId) {
       this.sendMessage({ type: "sync.response", messages: [] }, connection);
       return;
@@ -1118,74 +960,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
         pendingChunks:
-          this.agentProcessManager.getPendingChunks().length > 0
-            ? this.agentProcessManager.getPendingChunks()
+          this.pendingChunks.length > 0
+            ? this.pendingChunks
             : undefined,
       },
       connection,
     );
   }
 
-  /** Validates the model against the current provider and updates DO state. Returns the validated model, or undefined if invalid. */
-  private validateAndApplyModelSwitch(model: string): string | undefined {
-    const currentProvider = this.state.settings.provider;
-
-    let validatedModel: string;
-    if (currentProvider === "claude-code") {
-      const result = ClaudeModel.safeParse(model);
-      if (!result.success) {
-        this.logger.warn("Invalid Claude model in model switch", { fields: { model } });
-        return undefined;
-      }
-      validatedModel = result.data;
-    } else if (currentProvider === "codex-cli") {
-      const result = CodexModel.safeParse(model);
-      if (!result.success) {
-        this.logger.warn("Invalid Codex model in model switch", { fields: { model } });
-        return undefined;
-      }
-      validatedModel = result.data;
-    } else {
-      this.logger.warn("Unknown provider in model switch", { fields: { provider: currentProvider } });
-      return undefined;
-    }
-
-    // Update state (auto-syncs to clients via Agents SDK)
-    this.updatePartialState({
-      settings: { ...this.state.settings, model: validatedModel } as ClientState["settings"],
-    });
-
-    this.logger.info("Model updated", {
-      fields: { provider: currentProvider, model: validatedModel },
-    });
-    return validatedModel;
-  }
-
   // ============================================
   // Attachment helpers
   // ============================================
 
-  private async resolveAgentAttachments(
-    attachments: AttachmentRecord[],
-  ): Promise<AgentInputAttachment[]> {
-    const resolved: AgentInputAttachment[] = [];
-    for (const attachment of attachments) {
-      const object = await this.env.ATTACHMENTS_BUCKET.get(attachment.objectKey);
-      if (!object || !object.body) {
-        throw new Error(`Attachment content missing for ${attachment.id}`);
-      }
-      const bytes = await object.arrayBuffer();
-      const base64 = arrayBufferToBase64(bytes);
-      resolved.push({
-        filename: attachment.filename,
-        mediaType: attachment.mediaType,
-        dataUrl: `data:${attachment.mediaType};base64,${base64}`,
-      });
-    }
-    return resolved;
-  }
-
-  private async buildPendingUserMessage(
+  private async buildPendingUserUiMessage(
     sessionId: string,
     initialMessage: string | undefined,
     attachmentIds: string[],
@@ -1209,102 +996,38 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
     }
 
-    return this.createUserMessage(content, attachmentRecords);
+    return createUserUiMessage(content, attachmentRecords);
   }
 
-  private createUserMessage(
-    content: string | undefined,
-    attachments: AttachmentRecord[],
-    id: string = crypto.randomUUID(),
-  ): UIMessage | null {
-    const messageParts: UIMessage["parts"] = [];
-    if (content) {
-      messageParts.push({ type: "text", text: content });
-    }
-    for (const attachment of attachments) {
-      messageParts.push({
-        type: "file",
-        mediaType: attachment.mediaType,
-        filename: attachment.filename,
-        url: this.buildAttachmentContentUrl(attachment.id),
-      } as UIMessage["parts"][number]);
-    }
-
-    if (messageParts.length === 0) {
-      return null;
-    }
-
-    return { id, role: "user", parts: messageParts };
-  }
-
-  private getUserMessageTextContent(message: UIMessage | null): string | undefined {
-    if (!message) {
-      return undefined;
-    }
-
-    const text = message.parts
-      .flatMap((part) =>
-        part &&
-        typeof part === "object" &&
-        "type" in part &&
-        part.type === "text" &&
-        "text" in part
-          ? [String(part.text)]
-          : [],
-      )
-      .join("")
-      .trim();
-
-    return text || undefined;
-  }
-
-  /** Sends the pending initial message to the agent if one is stored. */
+  /** 
+   * Sends the pending initial message to the agent if one is stored. 
+   * @returns true if the message was sent, false if not.
+   */
   private async maybeSendPendingMessage(): Promise<void> {
     if (!this.agentProcessManager.isConnected()) return;
 
-    const content = this.getUserMessageTextContent(this.state.pendingUserMessage);
-    const pendingAttachmentIds = this.state.pendingAttachmentIds ?? [];
+    const content = getUserMessageTextContent(this.state.pendingUserMessage?.message ?? null);
+    const pendingAttachmentIds = this.state.pendingUserMessage?.attachmentIds ?? [];
     if (!content && pendingAttachmentIds.length === 0) return;
 
-    const sessionId = this.serverState.sessionId ?? this.state.sessionId;
+    const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
 
-    const attachmentService = new AttachmentService(this.env.DB);
-    const attachmentRecords = await attachmentService.getByIdsBoundToSession(
-      sessionId,
-      pendingAttachmentIds,
-    );
-    if (attachmentRecords.length !== pendingAttachmentIds.length) {
-      this.logger.error(
-        `Some pending attachments not found: ${pendingAttachmentIds.join(", ")}`,
-      );
-      this.updatePartialState({ pendingUserMessage: null, pendingAttachmentIds: [] });
-      return;
-    }
-
-    let agentAttachments: AgentInputAttachment[];
-    try {
-      agentAttachments = await this.resolveAgentAttachments(attachmentRecords);
-    } catch (error) {
-      this.logger.error("Failed to resolve pending attachments", { error });
-      this.updatePartialState({ pendingUserMessage: null, pendingAttachmentIds: [] });
-      return;
-    }
-
-    const userMessage =
-      this.state.pendingUserMessage ?? this.createUserMessage(content, attachmentRecords);
+    // send to the agent.
+    this.logger.info("Sending pending message");
+    const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, pendingAttachmentIds);
+    // persist UIMessage and broadcast to other clients.
+    // TODO: DRY UP with handleChatMessage
+    const userMessage = this.state.pendingUserMessage?.message;
     if (!userMessage) {
-      this.updatePartialState({ pendingUserMessage: null, pendingAttachmentIds: [] });
+      this.updatePartialState({ pendingUserMessage: null });
       return;
     }
-
     const stored = this.messageRepository.create(sessionId, userMessage);
     this.broadcastMessage({ type: "user.message", message: stored.message });
-
     // Clear pending message from state (after broadcast so client has the real message)
-    this.updatePartialState({ pendingUserMessage: null, pendingAttachmentIds: [] });
-
-    // Sync to D1 history and generate title
+    this.updatePartialState({ pendingUserMessage: null });
+    // Sync to D1 history row and generate title
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
     this.ctx.waitUntil(
       updateSessionHistoryData({
@@ -1316,12 +1039,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         messageRepository: this.messageRepository,
       }),
     );
-
-    // Send to vm-agent
-    this.logger.info(
-      `Sending pending message: contentLength=${content?.length ?? 0} attachments=${agentAttachments.length}`,
-    );
-    await this.agentProcessManager.sendMessage(content, agentAttachments);
   }
 
   private toHistorySyncContent(
@@ -1337,10 +1054,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     return `Uploaded ${attachments.length} images`;
   }
 
-  private buildAttachmentContentUrl(attachmentId: string): string {
-    return `/attachments/${attachmentId}/content`;
-  }
-
   // ============================================
   // GitHub token helpers
   // ============================================
@@ -1349,7 +1062,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     return {
       gitProxySecret: this.gitProxySecret,
       repoFullName: this.state.repoFullName,
-      sessionId: this.serverState.sessionId ?? this.state.sessionId,
+      sessionId: this.serverState.sessionId,
       githubToken: this.githubToken,
       pushedBranch: this.state.pushedBranch,
       env: this.env,
@@ -1362,49 +1075,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     if (token) {
       this.githubToken = token;
     }
-  }
-
-  /**
-   * Build Codex auth.json content from per-user OpenAI OAuth tokens stored in D1.
-   * Returns null if no per-user tokens are found.
-   */
-  private async buildCodexAuthJson(): Promise<string | null> {
-    const userId = this.state.userId;
-    if (!userId) return null;
-
-    const row = await this.env.DB.prepare(
-      `SELECT encrypted_access_token, encrypted_refresh_token, encrypted_id_token, token_expires_at
-       FROM openai_tokens WHERE user_id = ?`,
-    )
-      .bind(userId)
-      .first<{
-        encrypted_access_token: string;
-        encrypted_refresh_token: string | null;
-        encrypted_id_token: string | null;
-        token_expires_at: string | null;
-      }>();
-
-    if (!row) return null;
-
-    const accessToken = await decrypt(row.encrypted_access_token, this.env.TOKEN_ENCRYPTION_KEY);
-    const refreshToken = row.encrypted_refresh_token
-      ? await decrypt(row.encrypted_refresh_token, this.env.TOKEN_ENCRYPTION_KEY)
-      : undefined;
-    const idToken = row.encrypted_id_token
-      ? await decrypt(row.encrypted_id_token, this.env.TOKEN_ENCRYPTION_KEY)
-      : undefined;
-
-    const authJson: Record<string, unknown> = {
-      auth_mode: "chatgpt",
-      tokens: {
-        access_token: accessToken,
-        ...(refreshToken && { refresh_token: refreshToken }),
-        ...(idToken && { id_token: idToken }),
-        ...(row.token_expires_at && { expires_at: row.token_expires_at }),
-      },
-    };
-
-    return JSON.stringify(authJson);
   }
 
   // ============================================

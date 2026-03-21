@@ -4,7 +4,13 @@ type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
 
 export interface ProcessChunkResult {
-  finished: boolean;
+  /**
+   * If finished, the complete message.
+   */
+  finishedMessage?: UIMessage;
+  /**
+   * The parts that were completed by this chunk.
+   */
   completedParts: MessagePart[];
 }
 
@@ -226,7 +232,7 @@ export class MessageAccumulator {
         completedParts.push(...this.finalizePendingParts());
         this.metadata = chunk.messageMetadata;
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "finish-step":
         break;
@@ -235,15 +241,15 @@ export class MessageAccumulator {
         completedParts.push(...this.finalizePendingParts());
         this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "error":
         completedParts.push(...this.finalizePendingParts());
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
     }
 
-    return { finished: false, completedParts };
+    return { completedParts };
   }
 
   private finalizePendingParts(): MessagePart[] {

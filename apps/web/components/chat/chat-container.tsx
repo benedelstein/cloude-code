@@ -44,7 +44,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pushedBranch,
     pullRequestUrl,
     pullRequestState,
-    settings,
+    agentSettings: settings,
     selectedModel,
     setSelectedModel,
     claudeAuthRequired: claudeAuthState,

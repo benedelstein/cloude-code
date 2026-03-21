@@ -51,7 +51,7 @@ function createPendingSession(
     pullRequestState: null,
     todos: null,
     plan: null,
-    settings: null,
+    agentSettings: null,
     selectedModel: null,
     setSelectedModel: () => {},
     editorUrl: null,

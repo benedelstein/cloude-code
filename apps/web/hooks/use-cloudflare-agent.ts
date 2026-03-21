@@ -15,7 +15,7 @@ import type {
   ServerMessage,
   SessionTodo,
   SessionPlanMetadata,
-  SessionSettings,
+  AgentSettings,
   SessionStatus,
   SessionWebSocketTokenResponse,
 } from "@repo/shared";
@@ -56,7 +56,7 @@ export interface UseCloudflareAgentReturn {
   pullRequestState: PullRequestState | null;
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
-  settings: SessionSettings | null;
+  agentSettings: AgentSettings | null;
   selectedModel: ClaudeModel | null;
   // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: ClaudeModel) => void;
@@ -95,7 +95,7 @@ export function useCloudflareAgent({
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
-  const [settings, setSettings] = useState<SessionSettings | null>(null);
+  const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
@@ -161,13 +161,6 @@ export function useCloudflareAgent({
         }
         break;
       }
-
-      case "session.status":
-        setSessionStatus(msg.status);
-        if (msg.message) {
-          setErrorMessage(msg.message);
-        }
-        break;
 
       case "agent.chunk":
         if (!streamControllerRef.current) {
@@ -240,20 +233,16 @@ export function useCloudflareAgent({
       if (state.repoFullName !== undefined) {
         setRepoFullName(state.repoFullName);
       }
-      if (state.pullRequestUrl !== undefined) {
-        setPullRequestUrl(state.pullRequestUrl);
-      }
-      if (state.pullRequestState !== undefined) {
-        setPullRequestState(state.pullRequestState);
-      }
+      setPullRequestUrl(state.pullRequest?.url ?? null);
+      setPullRequestState(state.pullRequest?.state ?? null);
       if (state.todos !== undefined) {
         setTodos(state.todos);
       }
       if (state.plan !== undefined) {
         setPlan(state.plan ?? null);
       }
-      if (state.pendingUserMessage !== undefined) {
-        setPendingUserMessage(state.pendingUserMessage);
+      if (state.pendingUserMessage?.message !== undefined) {
+        setPendingUserMessage(state.pendingUserMessage?.message ?? null);
       }
       if (state.editorUrl !== undefined) {
         setEditorUrl(state.editorUrl);
@@ -261,11 +250,11 @@ export function useCloudflareAgent({
       if (state.claudeAuthRequired !== undefined) {
         setClaudeAuthRequired(state.claudeAuthRequired);
       }
-      if (state.settings !== undefined) {
-        setSettings(state.settings);
+      if (state.agentSettings !== undefined) {
+        setAgentSettings(state.agentSettings);
         // Initialize selected model from server settings (only if not yet set locally)
-        if (state.settings.provider === "claude-code") {
-          setSelectedModel((prev) => prev ?? state.settings!.model as ClaudeModel);
+        if (state.agentSettings.provider === "claude-code") {
+          setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
         }
       }
       if (state.isResponding !== undefined) {
@@ -328,14 +317,14 @@ export function useCloudflareAgent({
     consumeStream(stream);
 
     // Send via useAgent's connection, include model if it differs from server settings
-    const modelToSend = selectedModel && selectedModel !== settings?.model ? selectedModel : undefined;
+    const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
     agent.send(JSON.stringify({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
     }));
-  }, [agent, consumeStream, selectedModel, settings?.model]);
+  }, [agent, consumeStream, selectedModel, agentSettings?.model]);
 
   const stop = useCallback(() => {
     agent.send(JSON.stringify({ type: "operation.cancel" }));
@@ -359,7 +348,7 @@ export function useCloudflareAgent({
     pullRequestState,
     todos,
     plan,
-    settings,
+    agentSettings,
     selectedModel,
     setSelectedModel,
     editorUrl,

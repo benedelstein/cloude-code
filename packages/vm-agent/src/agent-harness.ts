@@ -16,12 +16,12 @@ import {
   type AgentInput,
   type AgentInputMessage,
   type AgentOutput,
-  type SessionSettings,
+  type AgentSettings,
   decodeAgentInput,
   encodeAgentOutput,
 } from "@repo/shared";
 
-export interface ProviderSetupContext<S extends SessionSettings = SessionSettings> {
+export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   // eslint-disable-next-line no-unused-vars
   emit: (_output: AgentOutput) => void;
   settings: S;
@@ -35,7 +35,7 @@ export type StreamTextExtras = {
   onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>;
 };
 
-export interface SetupResult<ModelId extends string = SessionSettings["model"]> {
+export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
   // eslint-disable-next-line no-unused-vars
   getModel: (_modelId: ModelId) => LanguageModel;
@@ -43,12 +43,12 @@ export interface SetupResult<ModelId extends string = SessionSettings["model"]> 
   cleanup?: () => Promise<void>;
 }
 
-export interface AgentProviderConfig<S extends SessionSettings = SessionSettings> {
+export interface AgentProviderConfig<S extends AgentSettings = AgentSettings> {
   // eslint-disable-next-line no-unused-vars
   setup(_context: ProviderSetupContext<S>): Promise<SetupResult<S["model"]>>;
 }
 
-export async function runAgentHarness<S extends SessionSettings>(config: AgentProviderConfig<S>, settings: S): Promise<void> {
+export async function runAgentHarness<S extends AgentSettings>(config: AgentProviderConfig<S>, settings: S): Promise<void> {
   const { values: parsedValues } = parseArgs({
     options: {
       sessionId: { type: "string", short: "s" },

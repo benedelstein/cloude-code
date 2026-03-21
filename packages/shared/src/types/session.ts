@@ -41,28 +41,29 @@ export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
  * never get stuck from a previous instance's in-progress operation.
  */
 export type ClientState = {
-  sessionId: string | null;
-  userId: string | null;
   repoFullName: string | null;
   /** Synthesized from ServerState checkpoints — reset on restart */
   status: SessionStatus;
-  settings: SessionSettings;
+  agentSettings: AgentSettings;
+  pullRequest: {
+    url: string;
+    number: number;
+    state: PullRequestState;
+  } | null;
   /** Branch name locked after first push (for "Create PR" flow) */
   pushedBranch: string | null;
-  /** GitHub PR URL after creation */
-  pullRequestUrl: string | null;
-  /** GitHub PR number for API lookups */
-  pullRequestNumber: number | null;
-  /** PR state: open, merged, or closed */
-  pullRequestState: PullRequestState | null;
+  /** Branch the session was based off — used as the PR target */
+  baseBranch: string | null;
   /** Latest streamed todo snapshot from TodoWrite */
   todos: SessionTodo[] | null;
   /** Metadata for the latest persisted plan */
-  plan?: SessionPlanMetadata | null;
-  /** User message to render and send automatically once provisioning completes */
-  pendingUserMessage: UIMessage | null;
-  /** Attachment IDs to send with the pending initial message */
-  pendingAttachmentIds: string[];
+  plan: SessionPlanMetadata | null;
+  pendingUserMessage: {
+    /** A formatted UIMessage for display to the client. */
+    message: UIMessage;
+    /** Attachments to send with the message. Also found within UIMessage parts but here they are more easily accessible. */
+    attachmentIds: string[];
+  } | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
   /** Claude auth issue blocking the current session — reset on restart */
@@ -71,13 +72,8 @@ export type ClientState = {
   isResponding: boolean;
   /** Last error message from provisioning or agent start — reset on restart */
   lastError: string | null;
-  /** Branch the session was based off — used as the PR target */
-  baseBranch: string | null;
   createdAt: Date;
 };
-
-/** @deprecated Use ClientState instead */
-export type AgentState = ClientState;
 
 /** Supported agent providers */
 export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
@@ -103,31 +99,31 @@ export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
   haiku: "Claude Haiku 4.5",
 };
 
-export const SessionSettingsCodex = z.object({
+export const AgentSettingsCodex = z.object({
   provider: z.literal("codex-cli"),
   model: CodexModel.default("gpt-5.3-codex"),
   maxTokens: z.number().default(8192),
 });
 
-export const SessionSettingsClaude = z.object({
+export const AgentSettingsClaude = z.object({
   provider: z.literal("claude-code"),
   model: ClaudeModel.default("opus"),
   maxTokens: z.number().default(8192),
 });
 
-export const SessionSettings = z.discriminatedUnion("provider", [
-  SessionSettingsCodex,
-  SessionSettingsClaude,
+export const AgentSettings = z.discriminatedUnion("provider", [
+  AgentSettingsCodex,
+  AgentSettingsClaude,
 ]);
-export type SessionSettings = z.infer<typeof SessionSettings>;
+export type AgentSettings = z.infer<typeof AgentSettings>;
 
 /** Partial settings for create/init requests; validated and merged in the DO */
-export const SessionSettingsInput = z.object({
+export const AgentSettingsInput = z.object({
   provider: AgentProvider.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
 });
-export type SessionSettingsInput = z.infer<typeof SessionSettingsInput>;
+export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 
 export const Message = z.object({
   id: z.uuid(),
