@@ -381,7 +381,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
-    this.ctx.waitUntil(this.ensureReady());
+    this.queueEnsureReady();
   }
 
   async onMessage(
@@ -493,6 +493,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     await this.ensureAgentStarted();
   }
 
+  private queueEnsureReady(): void {
+    this.ctx.waitUntil(
+      this.ensureReady().catch((error) => {
+        this.logger.error("ensureReady failed", { error });
+      }),
+    );
+  }
+
   private ensureProvisioned(): Promise<void> {
     if (this.ensureProvisionedPromise) return this.ensureProvisionedPromise;
     this.ensureProvisionedPromise = this._provision().finally(() => {
@@ -502,35 +510,47 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async _provision(): Promise<void> {
-    if (!this.serverState.spriteName) {
-      this.updatePartialState({ status: this.synthesizeStatus() });
-      this.logger.debug(`Provisioning sprite for session ${this.serverState.sessionId}`);
+    try {
+      if (!this.serverState.spriteName) {
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        this.logger.debug(`Provisioning sprite for session ${this.serverState.sessionId}`);
 
-      const spriteResponse = await this.spritesCoordinator.createSprite({
-        name: this.serverState.sessionId!,
+        const spriteResponse = await this.spritesCoordinator.createSprite({
+          name: this.serverState.sessionId!,
+        });
+
+        // Lock down outbound network access to known-good domains
+        const sprite = new WorkersSpriteClient(
+          spriteResponse.name,
+          this.env.SPRITES_API_KEY,
+          this.env.SPRITES_API_URL,
+        );
+        const workerHostname = new URL(this.env.WORKER_URL).hostname;
+        const networkPolicy = buildNetworkPolicy([
+          { domain: workerHostname, action: "allow" },
+        ]);
+        await sprite.setNetworkPolicy(networkPolicy);
+
+        this.updateServerState({ spriteName: spriteResponse.name });
+        this.updatePartialState({ status: this.synthesizeStatus() });
+      }
+
+      if (!this.serverState.repoCloned) {
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        await this.cloneRepo(this.serverState.spriteName!);
+        this.updateServerState({ repoCloned: true });
+        this.updatePartialState({ status: this.synthesizeStatus(), lastError: null });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error("Failed to provision session", { error });
+      this.updatePartialState({ lastError: errorMessage, status: this.synthesizeStatus() });
+      this.broadcastMessage({
+        type: "error",
+        code: "SESSION_PROVISION_FAILED",
+        message: errorMessage,
       });
-
-      // Lock down outbound network access to known-good domains
-      const sprite = new WorkersSpriteClient(
-        spriteResponse.name,
-        this.env.SPRITES_API_KEY,
-        this.env.SPRITES_API_URL,
-      );
-      const workerHostname = new URL(this.env.WORKER_URL).hostname;
-      const networkPolicy = buildNetworkPolicy([
-        { domain: workerHostname, action: "allow" },
-      ]);
-      await sprite.setNetworkPolicy(networkPolicy);
-
-      this.updateServerState({ spriteName: spriteResponse.name });
-      this.updatePartialState({ status: this.synthesizeStatus() });
-    }
-
-    if (!this.serverState.repoCloned) {
-      this.updatePartialState({ status: this.synthesizeStatus() });
-      await this.cloneRepo(this.serverState.spriteName!);
-      this.updateServerState({ repoCloned: true });
-      this.updatePartialState({ status: this.synthesizeStatus() });
+      throw error;
     }
   }
 
@@ -712,7 +732,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
 
     // Provision sprite asynchronously
-    this.ctx.waitUntil(this.ensureReady());
+    this.queueEnsureReady();
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
