@@ -875,7 +875,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       case "initializing":
       case "provisioning":
       case "cloning":
-      case "attaching":
         // TODO: dont throw, just make it pending
         this.sendMessage( 
           {
@@ -887,6 +886,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         );
         return;
       case "ready":
+      case "attaching": // if attaching, the mutex will await that attach promise and then send.
         break;
       default: {
         const _exhaustive: never = currentStatus;

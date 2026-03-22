@@ -220,7 +220,7 @@ export class AgentProcessManager {
   async handleChatMessage(
     payload: ChatMessageEvent
   ): Promise<{attachments: AttachmentRecord[]}> {
-    // Reattach agent session if needed (after hibernation)
+    // Reattach agent session if needed (after hibernation, or if the ws connection to the sprite dies)
     await this.ensureAgentSessionStarted();
 
     if (!this.isConnected()) {
