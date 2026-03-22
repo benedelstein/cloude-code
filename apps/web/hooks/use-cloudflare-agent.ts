@@ -17,6 +17,7 @@ import type {
   AgentSettings,
   SessionStatus,
   SessionWebSocketTokenResponse,
+  ClientMessage,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -249,6 +250,10 @@ export function useCloudflareAgent({
     },
   });
 
+  const sendToAgent = useCallback((message: ClientMessage) => {
+    agent.send(JSON.stringify(message));
+  }, [agent]);
+
   const sendMessage = useCallback((message: {
     content?: string;
     attachments?: MessageAttachmentRef[];
@@ -294,17 +299,17 @@ export function useCloudflareAgent({
 
     // Send via useAgent's connection, include model if it differs from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
-    agent.send(JSON.stringify({
+    sendToAgent({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
-    }));
-  }, [agent, consumeStream, selectedModel, agentSettings?.model]);
+    });
+  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model]);
 
   const stop = useCallback(() => {
-    agent.send(JSON.stringify({ type: "operation.cancel" }));
-  }, [agent]);
+    sendToAgent({ type: "operation.cancel" });
+  }, [sendToAgent]);
 
   return {
     sessionId,

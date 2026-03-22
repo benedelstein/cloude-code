@@ -1,7 +1,4 @@
-import {
-  SpritesCoordinator,
-  WorkersSpriteClient,
-} from "@/lib/sprites";
+import { SpritesCoordinator, WorkersSpriteClient } from "@/lib/sprites";
 import {
   type ClientState,
   type AgentSettingsInput,
@@ -41,12 +38,19 @@ import type { UIMessage, UIMessageChunk } from "ai";
 //   handleEditorClose,
 // } from "./session-agent-editor";
 import { updateSessionHistoryData } from "./session-agent-history";
-import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
+import type {
+  SetPullRequestRequest,
+  UpdatePullRequestRequest,
+} from "@/types/session-agent";
 import { AgentProcessManager } from "./lib/agent-process-manager";
-import { createUserUiMessage, getUserMessageTextContent } from "@/lib/utils/uimessage-utils";
+import {
+  createUserUiMessage,
+  getUserMessageTextContent,
+} from "@/lib/utils/uimessage-utils";
 import { MessageAccumulator } from "@/lib/message-accumulator";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { AttachmentRecord } from "@/types/attachments";
+import { buildUserUiMessage } from "@/lib/create-user-message";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -113,7 +117,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // There is no validation hook before the write, so we intercept at _setStateInternal.
     // When source is a Connection (client), we reject the update entirely.
     const superSetStateInternal = (this as any)._setStateInternal.bind(this);
-    (this as any)._setStateInternal = (state: ClientState, source: Connection | "server") => {
+    (this as any)._setStateInternal = (
+      state: ClientState,
+      source: Connection | "server",
+    ) => {
       if (source !== "server") {
         this.logger.warn("Rejecting client-initiated state update attempt");
         return;
@@ -153,10 +160,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       onAgentOutput: (output) => this.handleAgentOutput(output),
       onAgentError: (error) => this.handleAgentError(error),
       onAgentExit: (code) => this.handleAgentExit(code),
-      updateLastKnownAgentProcessId: (processId) => this.updateServerState({ lastKnownAgentProcessId: processId }),
-      updateClaudeAuthRequired: (claudeAuthRequired) => this.updatePartialState({ claudeAuthRequired }),
-      updateAgentSettings: (settings) => this.updatePartialState({ agentSettings: settings }),
-      updateIsResponding: (isResponding) => this.updatePartialState({ isResponding }),
+      updateLastKnownAgentProcessId: (processId) =>
+        this.updateServerState({ lastKnownAgentProcessId: processId }),
+      updateClaudeAuthRequired: (claudeAuthRequired) =>
+        this.updatePartialState({ claudeAuthRequired }),
+      updateAgentSettings: (settings) =>
+        this.updatePartialState({ agentSettings: settings }),
+      updateIsResponding: (isResponding) =>
+        this.updatePartialState({ isResponding }),
     });
 
     // Reset transient ClientState fields on every restart so they never get
@@ -225,9 +236,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         });
 
         // Accumulate chunks into UIMessage and extract derived state (todos, plan)
-        const { finishedMessage, completedParts } = this.messageAccumulator.process(
-          output.chunk as UIMessageChunk,
-        );
+        const { finishedMessage, completedParts } =
+          this.messageAccumulator.process(output.chunk as UIMessageChunk);
         applyDerivedStateFromParts(
           {
             sessionId: this.serverState.sessionId!,
@@ -240,7 +250,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
         if (finishedMessage) {
           const sessionId = this.serverState.sessionId!;
-          const stored = this.messageRepository.create(sessionId, finishedMessage);
+          const stored = this.messageRepository.create(
+            sessionId,
+            finishedMessage,
+          );
           this.broadcastMessage({
             type: "agent.finish",
             message: stored.message,
@@ -344,8 +357,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
 
     // Editor (VS Code) lifecycle — DISABLED: security issue (sprite URL set to public)
-    if ((path === "/editor/open" || path === "/editor/close") && request.method === "POST") {
-      return new Response("editor feature temporarily disabled", { status: 503 });
+    if (
+      (path === "/editor/open" || path === "/editor/close") &&
+      request.method === "POST"
+    ) {
+      return new Response("editor feature temporarily disabled", {
+        status: 503,
+      });
     }
 
     // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
@@ -373,11 +391,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     const sessionId = this.serverState.sessionId;
     if (sessionId) {
       const storedMessages = this.messageRepository.getAllBySession(sessionId);
-      this.sendMessage({
-        type: "sync.response",
-        messages: storedMessages.map((m) => m.message),
-        pendingChunks: this.messageAccumulator.getPendingChunks(),
-      }, connection);
+      this.sendMessage(
+        {
+          type: "sync.response",
+          messages: storedMessages.map((m) => m.message),
+          pendingChunks: this.messageAccumulator.getPendingChunks(),
+        },
+        connection,
+      );
     }
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
@@ -389,9 +410,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     message: string | ArrayBuffer,
   ): Promise<void> {
     const messageStr =
-      typeof message === "string"
-        ? message
-        : new TextDecoder().decode(message);
+      typeof message === "string" ? message : new TextDecoder().decode(message);
 
     let messageData: unknown;
     try {
@@ -513,7 +532,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     try {
       if (!this.serverState.spriteName) {
         this.updatePartialState({ status: this.synthesizeStatus() });
-        this.logger.debug(`Provisioning sprite for session ${this.serverState.sessionId}`);
+        this.logger.debug(
+          `Provisioning sprite for session ${this.serverState.sessionId}`,
+        );
 
         const spriteResponse = await this.spritesCoordinator.createSprite({
           name: this.serverState.sessionId!,
@@ -539,12 +560,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.updatePartialState({ status: this.synthesizeStatus() });
         await this.cloneRepo(this.serverState.spriteName!);
         this.updateServerState({ repoCloned: true });
-        this.updatePartialState({ status: this.synthesizeStatus(), lastError: null });
+        this.updatePartialState({
+          status: this.synthesizeStatus(),
+          lastError: null,
+        });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to provision session", { error });
-      this.updatePartialState({ lastError: errorMessage, status: this.synthesizeStatus() });
+      this.updatePartialState({
+        lastError: errorMessage,
+        status: this.synthesizeStatus(),
+      });
       this.broadcastMessage({
         type: "error",
         code: "SESSION_PROVISION_FAILED",
@@ -574,18 +602,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       try {
         await this.refreshGitHubToken();
       } catch (error) {
-        this.logger.error("Failed to refresh GitHub token during agent start", { error });
+        this.logger.error("Failed to refresh GitHub token during agent start", {
+          error,
+        });
       }
 
       await this.agentProcessManager.ensureAgentSessionStarted();
-      this.updatePartialState({ status: this.synthesizeStatus(), lastError: null });
+      this.updatePartialState({
+        status: this.synthesizeStatus(),
+        lastError: null,
+      });
 
       // Send the pending initial message if one was stored
       await this.maybeSendPendingMessage();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to start agent", { error });
-      this.updatePartialState({ lastError: errorMessage, status: this.synthesizeStatus() });
+      this.updatePartialState({
+        lastError: errorMessage,
+        status: this.synthesizeStatus(),
+      });
       throw error;
     }
   }
@@ -598,7 +635,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     const repoFullName = this.state.repoFullName!;
     const sessionId = this.serverState.sessionId!;
 
-    const sprite = new WorkersSpriteClient(spriteName, this.env.SPRITES_API_KEY, this.env.SPRITES_API_URL);
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
 
     const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
     const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
@@ -610,7 +651,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       {},
     );
     if (isCloned.stdout.includes("exists")) {
-      this.logger.info(`Repo ${repoFullName} already cloned on sprite ${spriteName}`);
+      this.logger.info(
+        `Repo ${repoFullName} already cloned on sprite ${spriteName}`,
+      );
     } else {
       this.logger.info(`Cloning repo ${repoFullName} on sprite ${spriteName}`);
       await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
@@ -633,7 +676,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         `Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`,
       );
       if (cloneResult.exitCode !== 0) {
-        throw new Error(`Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`);
+        throw new Error(
+          `Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`,
+        );
       }
     }
 
@@ -672,9 +717,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private async handleInit(request: Request): Promise<Response> {
     // Prevent re-initialization
     if (this.serverState.initialized) {
-      this.logger.error("Session already initialized — refusing to re-initialize", {
-        fields: { sessionId: this.serverState.sessionId },
-      });
+      this.logger.error(
+        "Session already initialized — refusing to re-initialize",
+        {
+          fields: { sessionId: this.serverState.sessionId },
+        },
+      );
       return new Response(
         JSON.stringify({ error: "Session already initialized" }),
         { status: 400, headers: { "Content-Type": "application/json" } },
@@ -705,26 +753,37 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
     } else {
       // should never happen
-      this.logger.warn("Git proxy secret already exists, skipping generation(?)");
+      this.logger.warn(
+        "Git proxy secret already exists, skipping generation(?)",
+      );
     }
 
     const pendingAttachmentIds = data.initialAttachmentIds ?? [];
-    const pendingUserUiMessage = await this.buildPendingUserUiMessage(
+    const pendingUserUiMessage = await buildUserUiMessage(
       data.sessionId,
       data.initialMessage,
       pendingAttachmentIds,
+      {
+        attachmentService: new AttachmentService(this.env.DB),
+      },
     );
     // Mark initialized in ServerState
-    this.updateServerState({ initialized: true, sessionId: data.sessionId, userId: data.userId });
+    this.updateServerState({
+      initialized: true,
+      sessionId: data.sessionId,
+      userId: data.userId,
+    });
 
     // Store the durable initial fields in ClientState
     this.updatePartialState({
       repoFullName: data.repoFullName,
       agentSettings: settings,
-      pendingUserMessage: pendingUserUiMessage ? {
-        message: pendingUserUiMessage,
-        attachmentIds: pendingAttachmentIds,
-      } : null,
+      pendingUserMessage: pendingUserUiMessage
+        ? {
+            message: pendingUserUiMessage,
+            attachmentIds: pendingAttachmentIds,
+          }
+        : null,
       claudeAuthRequired: null,
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
@@ -744,7 +803,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // ============================================
 
   private handleGetSession(): Response {
-    const sessionId = this.serverState.sessionId;;
+    const sessionId = this.serverState.sessionId;
     if (!sessionId || !this.state.repoFullName) {
       return new Response("Session not found", { status: 404 });
     }
@@ -872,6 +931,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
+        // TODO: If the process isnt running, reset `isResponding` back to false so we dont get stuck.
         this.agentProcessManager.cancel();
         break;
     }
@@ -881,37 +941,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     connection: Connection,
     payload: ChatMessageEvent,
   ): Promise<void> {
-    const currentStatus = this.synthesizeStatus();
-    switch (currentStatus) {
-      case "initializing":
-      case "provisioning":
-      case "cloning":
-        // TODO: dont throw, just make it pending
-        this.sendMessage( 
-          {
-            type: "error",
-            code: "SESSION_TRANSITIONING",
-            message: `Session is ${currentStatus}, please wait`,
-          },
-          connection,
-        );
-        return;
-      case "ready":
-      case "attaching": // if attaching, the mutex will await that attach promise and then send.
-        break;
-      default: {
-        const _exhaustive: never = currentStatus;
-        throw new Error(`Unhandled status: ${_exhaustive}`);
-      }
-    }
-
     try {
+      await this.ensureReady(); // await any startup steps synchronously. 
       const { attachments } = await this.agentProcessManager.handleChatMessage(payload);
       // persist the message to db and such.
-      const userUiMessage = createUserUiMessage(
-        payload.content,
-        attachments,
-      );
+      const userUiMessage = createUserUiMessage(payload.content, attachments);
       if (!userUiMessage) {
         this.logger.error("Failed to create user UI message");
         return;
@@ -952,35 +986,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // Attachment helpers
   // ============================================
 
-  private async buildPendingUserUiMessage(
-    sessionId: string,
-    initialMessage: string | undefined,
-    attachmentIds: string[],
-  ): Promise<UIMessage | null> {
-    const content = initialMessage?.trim();
-    if (!content && attachmentIds.length === 0) {
-      return null;
-    }
-
-    let attachmentRecords: AttachmentRecord[] = [];
-    if (attachmentIds.length > 0) {
-      const attachmentService = new AttachmentService(this.env.DB);
-      attachmentRecords = await attachmentService.getByIdsBoundToSession(
-        sessionId,
-        attachmentIds,
-      );
-      if (attachmentRecords.length !== attachmentIds.length) {
-        this.logger.error(
-          `Some pending attachments missing during init: ${attachmentIds.join(", ")}`,
-        );
-      }
-    }
-
-    return createUserUiMessage(content, attachmentRecords);
-  }
-
-  /** 
-   * Sends the pending initial message to the agent if one is stored. 
+  /**
+   * Sends the pending initial message to the agent if one is stored.
    * @returns true if the message was sent, false if not.
    */
   private async maybeSendPendingMessage(): Promise<void> {
@@ -1000,30 +1007,46 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.info("Sending pending message");
     try {
       this.updatePartialState({ isResponding: true });
-      const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, attachmentIds);
+      const attachmentRecords =
+        await this.agentProcessManager.sendMessageToAgent(
+          sessionId,
+          content,
+          attachmentIds,
+        );
       await this.onUserMessageSent(userMessage, attachmentRecords);
       this.updatePartialState({ pendingUserMessage: null });
     } catch (error) {
       this.logger.error("Failed to send pending message", { error });
-      this.updatePartialState({ lastError: "Failed to send pending message", status: this.synthesizeStatus() });
-      this.broadcastMessage(
-        {
-          type: "error",
-          code: "CHAT_MESSAGE_FAILED",
-          message: "Failed to handle chat message",
-        },
-      );
+      this.updatePartialState({
+        lastError: "Failed to send pending message",
+        status: this.synthesizeStatus(),
+      });
+      this.broadcastMessage({
+        type: "error",
+        code: "CHAT_MESSAGE_FAILED",
+        message: "Failed to handle chat message",
+      });
     }
   }
 
-  private async onUserMessageSent(message: UIMessage, attachmentRecords: AttachmentRecord[], connectionId?: string): Promise<void> {
+  private async onUserMessageSent(
+    message: UIMessage,
+    attachmentRecords: AttachmentRecord[],
+    connectionId?: string,
+  ): Promise<void> {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
     const stored = this.messageRepository.create(sessionId, message);
-    this.broadcastMessage({ type: "user.message", message: stored.message }, connectionId ? [connectionId] : undefined);
+    this.broadcastMessage(
+      { type: "user.message", message: stored.message },
+      connectionId ? [connectionId] : undefined,
+    );
     // Sync to D1 history row and generate title
     const content = getUserMessageTextContent(message);
-    const historyContent = this.toHistorySyncContent(content, attachmentRecords);
+    const historyContent = this.toHistorySyncContent(
+      content,
+      attachmentRecords,
+    );
     this.ctx.waitUntil(
       updateSessionHistoryData({
         database: this.env.DB,
