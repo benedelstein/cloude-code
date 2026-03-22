@@ -16,6 +16,7 @@ type DebugExecWsRequest = {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  idleTimeoutMs?: number;
 };
 
 type DebugExecWsResponse = {
@@ -51,7 +52,7 @@ const testCases: TestCase[] = [
     name: "stdout/stderr/exit",
     request: {
       spriteName,
-      command: "echo out; echo err >&2; exit 7",
+      command: "echo out; sleep 0.1; echo err >&2; exit 7",
     },
     expectedExitCode: 7,
     stdoutIncludes: "out",
@@ -66,6 +67,16 @@ const testCases: TestCase[] = [
     },
     expectedExitCode: 0,
     stdoutIncludes: "/tmp",
+  },
+  {
+    name: "sleep 60",
+    request: {
+      spriteName,
+      command: "sleep 2; echo 'done'",
+      idleTimeoutMs: 3000,
+    },
+    expectedExitCode: 0,
+    stdoutIncludes: "done",
   },
   {
     name: "env handling",
@@ -138,8 +149,8 @@ function escapeRegExp(value: string): string {
 }
 
 async function main(): Promise<void> {
-  // console.log(`Using sprite: ${spriteName}`);
-  // console.log(`Endpoint: ${endpoint}`);
+  console.log(`Using sprite: ${spriteName}`);
+  console.log(`Endpoint: ${endpoint}`);
 
   for (const testCase of testCases) {
     await runCase(testCase);

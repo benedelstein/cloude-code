@@ -35,9 +35,6 @@ type WorkersSessionConfig = NewExecSessionConfig | AttachSessionConfig;
 
 const logger = createLogger("SpriteWebsocketSession.ts");
 
-const KEEPALIVE_INTERVAL_MS = 15_000;
-const KEEPALIVE_TIMEOUT_MS = 45_000;
-
 const WEBSOCKET_CLOSED_OK_CODE = 1000;
 const WEBSOCKET_CLOSED_GOING_AWAY_CODE = 1001;
 
@@ -56,10 +53,10 @@ export class SpriteWebsocketSession {
   private ttyMode: boolean;
   private exitCode: number | null = null;
   private started = false;
+  /** Session has exited */
   private done = false;
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
-  private lastActivityTime = 0;
   private terminalError: Error | null = null;
+  private idleTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly pendingWaiters = new Set<{
     resolve: (code: number) => void;
     reject: (error: Error) => void;
@@ -145,6 +142,13 @@ export class SpriteWebsocketSession {
     });
 
     ws.addEventListener("error", (error) => {
+      if (this.done) {
+        logger.debug("Ignoring websocket error after terminal state", {
+          error: error.message,
+        });
+        return;
+      }
+
       logger.error("WebSocket error", {
         error: error.message,
       });
@@ -154,7 +158,7 @@ export class SpriteWebsocketSession {
       });
     });
 
-    this.startKeepalive();
+    this.resetIdleTimeout();
   }
 
   /**
@@ -260,38 +264,6 @@ export class SpriteWebsocketSession {
     }
   }
 
-  private startKeepalive(): void {
-    this.lastActivityTime = Date.now();
-    this.pingInterval = setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        this.stopKeepalive();
-        return;
-      }
-
-      if (Date.now() - this.lastActivityTime > KEEPALIVE_TIMEOUT_MS) {
-        logger.error("WebSocket keepalive timeout");
-        this.finalizeTransportFailure(
-          new Error("WebSocket keepalive timeout"),
-          {
-            emitError: true,
-            closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE,
-          },
-        );
-      }
-    }, KEEPALIVE_INTERVAL_MS);
-  }
-
-  private stopKeepalive(): void {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
-  }
-
-  private resetKeepalive(): void {
-    this.lastActivityTime = Date.now();
-  }
-
   private getBinaryPayload(data: unknown): Uint8Array | null {
     if (data instanceof ArrayBuffer) {
       return new Uint8Array(data);
@@ -304,12 +276,76 @@ export class SpriteWebsocketSession {
     return null;
   }
 
+  private getIdleTimeoutMs(): number | null {
+    const idleTimeoutMs = this.config.options.idleTimeoutMs;
+    if (
+      typeof idleTimeoutMs !== "number" ||
+      !Number.isFinite(idleTimeoutMs) ||
+      idleTimeoutMs <= 0
+    ) {
+      return null;
+    }
+
+    return idleTimeoutMs;
+  }
+
+  private clearIdleTimeout(): void {
+    if (this.idleTimeout) {
+      clearTimeout(this.idleTimeout);
+      this.idleTimeout = null;
+    }
+  }
+
+  private resetIdleTimeout(): void {
+    this.clearIdleTimeout();
+
+    const idleTimeoutMs = this.getIdleTimeoutMs();
+    if (idleTimeoutMs === null || this.done) {
+      return;
+    }
+
+    this.idleTimeout = setTimeout(() => {
+      logger.error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
+      this.finalizeTransportFailure(
+        new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`),
+        {
+          emitError: true,
+          closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE,
+        },
+      );
+    }, idleTimeoutMs);
+  }
+
   private getOpenWebSocket(): WebSocket {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket not connected");
     }
 
     return this.ws;
+  }
+
+  private getStreamName(streamId: number): string {
+    switch (streamId) {
+      case StreamID.Stdin:
+        return "stdin";
+      case StreamID.Stdout:
+        return "stdout";
+      case StreamID.Stderr:
+        return "stderr";
+      case StreamID.Exit:
+        return "exit";
+      case StreamID.StdinEOF:
+        return "stdin_eof";
+      default:
+        return `unknown(${streamId})`;
+    }
+  }
+
+  private getPayloadPreview(text: string): string {
+    const normalizedText = text.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+    return normalizedText.length > 120
+      ? `${normalizedText.slice(0, 120)}...`
+      : normalizedText;
   }
 
   private sendBinaryFrame(streamId: StreamID, payload?: Uint8Array): void {
@@ -325,7 +361,7 @@ export class SpriteWebsocketSession {
       return;
     }
 
-    this.resetKeepalive();
+    this.resetIdleTimeout();
     const binaryPayload = this.getBinaryPayload(data);
 
     if (this.ttyMode) {
@@ -349,9 +385,12 @@ export class SpriteWebsocketSession {
           return;
         }
 
-        const streamId = binaryPayload[0];
+        const streamId = binaryPayload[0]!;
         const payload = binaryPayload.subarray(1);
         const text = this.textDecoder.decode(payload);
+        logger.debug(
+          `Received non-TTY frame stream=${this.getStreamName(streamId)} bytes=${payload.length} preview=${JSON.stringify(this.getPayloadPreview(text))}`,
+        );
 
         switch (streamId) {
           case StreamID.Stdout: // stdout
@@ -382,17 +421,10 @@ export class SpriteWebsocketSession {
    * @param event
    */
   private handleWSClose(event: CloseEvent): void {
-    this.stopKeepalive();
+    this.clearIdleTimeout();
     this.ws = null;
 
     if (this.done) {
-      return;
-    }
-
-    if (this.exitCode !== null) {
-      this.done = true;
-      this.resolvePendingWaits(this.exitCode);
-      this.exitHandlers.forEach((handler) => handler(this.exitCode!));
       return;
     }
 
@@ -418,13 +450,15 @@ export class SpriteWebsocketSession {
     this.serverMessageHandlers.forEach((h) => h(parsed));
 
     if (parsed.type === "exit") {
+      logger.debug(`Received exit message}`);
       this.finalizeExit(parsed.exit_code);
     }
   }
 
   private finalizeExit(exitCode: number): void {
-    if (this.exitCode !== null) {
-      if (this.exitCode !== exitCode) {
+    if (this.done) {
+      // the sprite may send an exit message both via ExitMessage json and a binary frame - `done` makes this idempotent.
+      if (this.exitCode !== null && this.exitCode !== exitCode) {
         logger.warn(
           `Ignoring duplicate exit code ${exitCode}; already recorded ${this.exitCode}`,
         );
@@ -432,9 +466,16 @@ export class SpriteWebsocketSession {
       return;
     }
 
+    logger.debug(`Finalizing exit with code ${exitCode}`);
+    this.done = true;
     this.exitCode = exitCode;
+    this.clearIdleTimeout();
+    this.resolvePendingWaits(exitCode);
+    this.exitHandlers.forEach((handler) => handler(exitCode));
+    this.close();
   }
 
+  /** Call when websocket transport fails */
   private finalizeTransportFailure(
     error: Error,
     options: {
@@ -447,7 +488,7 @@ export class SpriteWebsocketSession {
     }
     this.done = true;
     this.terminalError = error;
-    this.stopKeepalive();
+    this.clearIdleTimeout();
 
     if (options.emitError) {
       this.errorHandlers.forEach((handler) => handler(error));
@@ -472,30 +513,6 @@ export class SpriteWebsocketSession {
       waiter.reject(error);
     }
     this.pendingWaiters.clear();
-  }
-
-  /**
-   * Write data to stdin
-   * @param data
-   */
-  write(data: string): void {
-    const textBytes = this.textEncoder.encode(data);
-
-    if (this.ttyMode) {
-      // TTY mode: send raw text
-      this.getOpenWebSocket().send(textBytes);
-    } else {
-      this.sendBinaryFrame(StreamID.Stdin, textBytes);
-    }
-  }
-
-  closeStdin(): void {
-    if (this.ttyMode) {
-      // TTY mode: send Ctrl+D (EOT character)
-      this.getOpenWebSocket().send(this.textEncoder.encode("\x04"));
-    } else {
-      this.sendBinaryFrame(StreamID.StdinEOF);
-    }
   }
 
   //==========================================================================================================
@@ -533,6 +550,30 @@ export class SpriteWebsocketSession {
   // ==========================================================================================================
 
   /**
+   * Write data to stdin
+   * @param data
+   */
+  write(data: string): void {
+    const textBytes = this.textEncoder.encode(data);
+
+    if (this.ttyMode) {
+      // TTY mode: send raw text
+      this.getOpenWebSocket().send(textBytes);
+    } else {
+      this.sendBinaryFrame(StreamID.Stdin, textBytes);
+    }
+  }
+
+  closeStdin(): void {
+    if (this.ttyMode) {
+      // TTY mode: send Ctrl+D (EOT character)
+      this.getOpenWebSocket().send(this.textEncoder.encode("\x04"));
+    } else {
+      this.sendBinaryFrame(StreamID.StdinEOF);
+    }
+  }
+  
+  /**
    * Waits for a websocket exec to complete synchronously.
    * @returns a promise that resolves to the exit code of the session
    */
@@ -552,7 +593,6 @@ export class SpriteWebsocketSession {
   }
 
   close(code: number = WEBSOCKET_CLOSED_OK_CODE): void {
-    this.stopKeepalive();
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.close(code, "");
     }

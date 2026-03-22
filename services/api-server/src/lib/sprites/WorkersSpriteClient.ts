@@ -127,11 +127,17 @@ export class WorkersSpriteClient {
    */
   async execWs(
     command: string,
-    options: { env?: Record<string, string>; cwd?: string } = {},
+    options: {
+      env?: Record<string, string>;
+      cwd?: string;
+      idleTimeoutMs?: number;
+    } = {},
   ): Promise<ExecResult> {
     const session = this.createSession("sh", ["-c", command], {
       env: options.env,
       cwd: options.cwd,
+      idleTimeoutMs: options.idleTimeoutMs,
+      tty: false // dont use tty for one-off commands, create a session.
     });
 
     let stdout = "";

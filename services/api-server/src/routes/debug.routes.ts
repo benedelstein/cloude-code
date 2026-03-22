@@ -11,6 +11,7 @@ const debugExecWsRequestSchema = z.object({
   command: z.string().min(1),
   cwd: z.string().optional(),
   env: z.record(z.string(), z.string()).optional(),
+  idleTimeoutMs: z.number().positive().optional(),
 });
 
 export const debugRoutes = new Hono<{ Bindings: Env }>();
@@ -48,6 +49,7 @@ debugRoutes.post("/sprites-exec-ws", async (c) => {
     const result = await sprite.execWs(request.command, {
       cwd: request.cwd,
       env: request.env,
+      idleTimeoutMs: request.idleTimeoutMs,
     });
 
     return c.json({
