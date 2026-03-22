@@ -573,11 +573,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         lastError: errorMessage,
         status: this.synthesizeStatus(),
       });
-      this.broadcastMessage({
-        type: "error",
-        code: "SESSION_PROVISION_FAILED",
-        message: errorMessage,
-      });
       throw error;
     }
   }
