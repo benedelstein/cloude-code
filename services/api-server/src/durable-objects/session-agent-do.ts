@@ -567,7 +567,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
 
       await this.agentProcessManager.ensureAgentSessionStarted();
-      this.updatePartialState({ status: this.synthesizeStatus() });
+      this.updatePartialState({ status: this.synthesizeStatus(), lastError: null });
 
       // Send the pending initial message if one was stored
       await this.maybeSendPendingMessage();
