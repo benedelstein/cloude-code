@@ -42,7 +42,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     repoFullName,
     pendingUserMessage,
     pushedBranch,
-    pullRequestUrl,
     pullRequestState,
     agentSettings: settings,
     selectedModel,
@@ -225,7 +224,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             <BranchBar
               sessionId={sessionId}
               pushedBranch={pushedBranch}
-              pullRequestUrl={pullRequestUrl}
               pullRequestState={pullRequestState}
             />
             <InputFrame>

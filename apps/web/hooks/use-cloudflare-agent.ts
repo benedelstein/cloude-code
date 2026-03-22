@@ -10,7 +10,6 @@ import type {
   ClaudeModel,
   ClaudeAuthState,
   MessageAttachmentRef,
-  PullRequestState,
   AttachmentDescriptor,
   ServerMessage,
   SessionTodo,
@@ -52,8 +51,7 @@ export interface UseCloudflareAgentReturn {
   pendingUserMessage: UIMessage | null;
   repoFullName: string | null;
   pushedBranch: string | null;
-  pullRequestUrl: string | null;
-  pullRequestState: PullRequestState | null;
+  pullRequestState: ClientState["pullRequest"] | null;
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
   agentSettings: AgentSettings | null;
@@ -89,8 +87,7 @@ export function useCloudflareAgent({
   // cleanup on connection loss (resetPendingResponse).
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
-  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
-  const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
+  const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
@@ -227,45 +224,24 @@ export function useCloudflareAgent({
     },
     onStateUpdate(state: ClientState) {
       setHasHydratedState(true);
-      if (state.pushedBranch !== undefined) {
-        setPushedBranch(state.pushedBranch);
-      }
-      if (state.repoFullName !== undefined) {
-        setRepoFullName(state.repoFullName);
-      }
-      setPullRequestUrl(state.pullRequest?.url ?? null);
-      setPullRequestState(state.pullRequest?.state ?? null);
-      if (state.todos !== undefined) {
-        setTodos(state.todos);
-      }
-      if (state.plan !== undefined) {
-        setPlan(state.plan ?? null);
-      }
-      if (state.pendingUserMessage?.message !== undefined) {
-        setPendingUserMessage(state.pendingUserMessage?.message ?? null);
-      }
-      if (state.editorUrl !== undefined) {
-        setEditorUrl(state.editorUrl);
-      }
-      if (state.claudeAuthRequired !== undefined) {
-        setClaudeAuthRequired(state.claudeAuthRequired);
-      }
-      if (state.agentSettings !== undefined) {
-        setAgentSettings(state.agentSettings);
+      setPushedBranch(state.pushedBranch);
+      setRepoFullName(state.repoFullName);
+      // for objects, we need to diff them to prevent excessive re-renders
+      setPullRequestState(prev => JSON.stringify(prev) === JSON.stringify(state.pullRequest) ? prev : state.pullRequest ?? null);
+      setTodos(prev => JSON.stringify(prev) === JSON.stringify(state.todos) ? prev : state.todos);
+      setPlan(prev => JSON.stringify(prev) === JSON.stringify(state.plan) ? prev : state.plan);
+      setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
+      setEditorUrl(state.editorUrl);
+      setClaudeAuthRequired(state.claudeAuthRequired);
+      setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
+      // TODO: ACCOMMODATE OTHER PROVIDERS
+      if (state.agentSettings.provider === "claude-code") {
         // Initialize selected model from server settings (only if not yet set locally)
-        if (state.agentSettings.provider === "claude-code") {
-          setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
-        }
+        setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
       }
-      if (state.isResponding !== undefined) {
-        setIsResponding(state.isResponding);
-      }
-      if (state.status !== undefined) {
-        setSessionStatus(state.status);
-      }
-      if (state.lastError !== undefined) {
-        setErrorMessage(state.lastError);
-      }
+      setIsResponding(state.isResponding);
+      setSessionStatus(state.status);
+      setErrorMessage(state.lastError);
     },
     onError: (message) => {
       resetPendingResponse();
@@ -344,7 +320,6 @@ export function useCloudflareAgent({
     isResponding,
     pendingUserMessage,
     pushedBranch,
-    pullRequestUrl,
     pullRequestState,
     todos,
     plan,

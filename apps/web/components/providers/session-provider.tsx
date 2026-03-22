@@ -47,7 +47,6 @@ function createPendingSession(
     pendingUserMessage: null,
     repoFullName: null,
     pushedBranch: null,
-    pullRequestUrl: null,
     pullRequestState: null,
     todos: null,
     plan: null,

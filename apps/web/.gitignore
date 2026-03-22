@@ -12,3 +12,5 @@ node_modules/
 .DS_Store
 *.pem
 .vercel
+
+next-env.d.ts

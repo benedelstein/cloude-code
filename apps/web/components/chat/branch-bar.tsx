@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { GitPullRequest, GitMerge, GitPullRequestClosed, GitBranch, ExternalLink, Copy, Check } from "lucide-react";
 import { createPullRequest, getPullRequestStatus } from "@/lib/client-api";
-import type { PullRequestState } from "@repo/shared";
+import type { ClientState, PullRequestState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -12,16 +12,16 @@ const POLL_INTERVAL_MS = 30_000;
 interface BranchBarProps {
   sessionId: string;
   pushedBranch: string | null;
-  pullRequestUrl: string | null;
-  pullRequestState: PullRequestState | null;
+  pullRequestState: ClientState["pullRequest"] | null;
 }
 
 export function BranchBar({
   sessionId,
   pushedBranch,
-  pullRequestUrl,
   pullRequestState,
 }: BranchBarProps) {
+  const url = pullRequestState?.url ?? null;
+  const state = pullRequestState?.state ?? null;
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -35,7 +35,7 @@ export function BranchBar({
 
   // Poll PR status when PR exists and is open
   useEffect(() => {
-    if (!pullRequestUrl || pullRequestState !== "open") return;
+    if (!url || state !== "open") return;
 
     const pollStatus = async () => {
       try {
@@ -51,7 +51,7 @@ export function BranchBar({
     const interval = setInterval(pollStatus, POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [sessionId, pullRequestUrl, pullRequestState]);
+  }, [sessionId, url, state]);
 
   const handleCreatePR = useCallback(async () => {
     setIsCreating(true);
@@ -73,7 +73,7 @@ export function BranchBar({
     <div className="shrink-0 rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
       <div className="px-4 py-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-foreground-muted min-w-0">
-          <PrStatusIcon pullRequestUrl={pullRequestUrl} pullRequestState={pullRequestState} />
+          <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
           <span className="text-foreground font-medium">main</span>
           {" \u2190 "}
           <button
@@ -96,9 +96,9 @@ export function BranchBar({
             <span className="text-xs text-danger">{error}</span>
           )}
 
-          {pullRequestUrl ? (
+          {url ? (
             <a
-              href={pullRequestUrl}
+              href={url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-md bg-accent-subtle px-3 py-1 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
