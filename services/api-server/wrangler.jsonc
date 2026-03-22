@@ -55,6 +55,11 @@
       "bucket_name": "cloude-code-attachments"
     }
   ],
+  "custom_domains": [
+    {
+      "pattern": "api.cloudecode.dev"
+    }
+  ],
   "observability": {
     "logs": {
       "enabled": true,
