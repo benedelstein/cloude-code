@@ -23,6 +23,7 @@ export class MessageAccumulator {
   private parts: MessageParts = [];
   private metadata: unknown = undefined;
   private finished = false;
+  private pendingChunks: UIMessageChunk[] = [];
 
   // In-progress text accumulation
   private currentTextId: string | null = null;
@@ -51,6 +52,7 @@ export class MessageAccumulator {
    * @returns message completion state plus any parts fully materialized by this chunk
    */
   process(chunk: UIMessageChunk): ProcessChunkResult {
+    this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 
     switch (chunk.type) {
@@ -321,7 +323,14 @@ export class MessageAccumulator {
     return this.messageId ?? null;
   }
 
+  getPendingChunks(): UIMessageChunk[] | undefined {
+    return this.pendingChunks.length > 0
+      ? [...this.pendingChunks]
+      : undefined;
+  }
+
   reset(): void {
+    this.pendingChunks = [];
     this.messageId = undefined;
     this.parts = [];
     this.metadata = undefined;

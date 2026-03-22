@@ -81,7 +81,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   private editorToken: string | null = null;
-  private pendingChunks: UIMessageChunk[] = [];
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
 
   initialState: ClientState = {
@@ -220,9 +219,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         break;
       }
       case "stream": {
-        // Buffer chunk for reconnect replay
-        this.pendingChunks.push(output.chunk as UIMessageChunk);
-
         this.broadcastMessage({
           type: "agent.chunk",
           chunk: output.chunk,
@@ -250,9 +246,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
             message: stored.message,
           });
 
-          // Reset accumulator and chunk buffer for next message
+          // Reset in-progress message state for the next response
           this.messageAccumulator.reset();
-          this.pendingChunks = [];
           this.updatePartialState({ isResponding: false });
         }
         break;
@@ -271,7 +266,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
-    this.pendingChunks = [];
     this.messageAccumulator.reset();
     this.updatePartialState({ isResponding: false });
     // TODO: RESTART THE AGENT?
@@ -382,10 +376,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.sendMessage({
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
-        pendingChunks:
-          this.pendingChunks.length > 0
-            ? this.pendingChunks
-            : undefined,
+        pendingChunks: this.messageAccumulator.getPendingChunks(),
       }, connection);
     }
 
@@ -931,10 +922,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       {
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
-        pendingChunks:
-          this.pendingChunks.length > 0
-            ? this.pendingChunks
-            : undefined,
+        pendingChunks: this.messageAccumulator.getPendingChunks(),
       },
       connection,
     );
