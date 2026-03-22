@@ -18,7 +18,7 @@ export async function configureGitRemote(
 ): Promise<void> {
   const { workspaceDir, githubRemoteUrl, cloneUrl, proxyBaseUrl, gitProxySecret } = options;
 
-  await sprite.execWs(dedent`
+  await sprite.execHttp(dedent`
     set -e
     cd ${workspaceDir}
     git remote set-url origin ${githubRemoteUrl}

@@ -49,6 +49,7 @@ export interface AgentProcessManagerOptions {
   updateLastKnownAgentProcessId: (processId: number | null) => void;
   updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
+  updateIsResponding: (isResponding: boolean) => void;
   /* eslint-enable no-unused-vars */
 }
 
@@ -69,7 +70,10 @@ export class AgentProcessManager {
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
   private readonly updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
+  private readonly updateIsResponding: (isResponding: boolean) => void;
   private agentWebsocketSession: SpriteWebsocketSession | null = null;
+  /** Shares a single in-flight session start across concurrent callers. */
+  private ensureAgentSessionStartedPromise: Promise<void> | null = null;
   private agentStdoutBuffer = "";
   /** Last Claude credential fingerprint pushed to the sprite VM instance */
   private lastClaudeCredentialFingerprint: string | null = null;
@@ -87,6 +91,7 @@ export class AgentProcessManager {
     this.getServerState = options.getServerState;
     this.updateClaudeAuthRequired = options.updateClaudeAuthRequired;
     this.updateAgentSettings = options.updateAgentSettings;
+    this.updateIsResponding = options.updateIsResponding;
   }
 
   isConnected(): boolean {
@@ -99,11 +104,27 @@ export class AgentProcessManager {
     }
   }
 
+  async ensureAgentSessionStarted(): Promise<void> {
+    if (this.isConnected()) {
+      return;
+    }
+    // mutex
+    if (this.ensureAgentSessionStartedPromise) {
+      return this.ensureAgentSessionStartedPromise;
+    }
+
+    this.logger.info("Agent not connected — ensuring agent session is started");
+    this.ensureAgentSessionStartedPromise = this.startAgentSession().finally(() => {
+      this.ensureAgentSessionStartedPromise = null;
+    });
+    return this.ensureAgentSessionStartedPromise;
+  }
+
   /**
    * Starts a new agent process session on the sprite VM.
    * Writes the agent script, launches the process, and attaches stdin/stdout handlers.
    */
-  async startAgentSession(): Promise<void> {
+  private async startAgentSession(): Promise<void> {
     const serverState = this.getServerState();
     const clientState = this.getClientState();
     const spriteName = serverState.spriteName;
@@ -161,7 +182,7 @@ export class AgentProcessManager {
     if (!this.agentWebsocketSession || !this.agentWebsocketSession.isConnected) {
       throw new Error("Agent session not connected");
     }
-    // this.updateClientState({ isResponding: true }); // TODO: implement
+    this.updateIsResponding(true);
     this.agentWebsocketSession.write(
       encodeAgentInput({
         type: "chat",
@@ -200,13 +221,10 @@ export class AgentProcessManager {
     payload: ChatMessageEvent
   ): Promise<{attachments: AttachmentRecord[]}> {
     // Reattach agent session if needed (after hibernation)
-    if (!this.isConnected()) {
-      this.logger.info("Agent not connected — triggering startAgentSession");
-      await this.startAgentSession(); // TODO: MUTEX
-    }
+    await this.ensureAgentSessionStarted();
 
     if (!this.isConnected()) {
-      this.logger.error(`Agent session unavailable after ensureReady: spriteName=${this.getServerState().spriteName}, sessionId=${this.getServerState().sessionId}`);
+      this.logger.error(`Agent session unavailable after ensureAgentSessionStarted: spriteName=${this.getServerState().spriteName}, sessionId=${this.getServerState().sessionId}`);
       throw new Error("Agent session not available");
     }
 
@@ -468,8 +486,6 @@ export class AgentProcessManager {
       return true;
     }
     const serverState = this.getServerState();
-
-    // TODO: switch on provider.
     const result = await ensureClaudeCredentialsReadyForSend({
       env: this.env,
       logger: this.logger,

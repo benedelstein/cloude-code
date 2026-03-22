@@ -157,6 +157,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       updateLastKnownAgentProcessId: (processId) => this.updateServerState({ lastKnownAgentProcessId: processId }),
       updateClaudeAuthRequired: (claudeAuthRequired) => this.updatePartialState({ claudeAuthRequired }),
       updateAgentSettings: (settings) => this.updatePartialState({ agentSettings: settings }),
+      updateIsResponding: (isResponding) => this.updatePartialState({ isResponding }),
     });
 
     // Reset transient ClientState fields on every restart so they never get
@@ -556,8 +557,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
     if (this.agentProcessManager.isConnected()) return;
 
-    this.updatePartialState({ status: this.synthesizeStatus() }); // "attaching"
-
+    this.updatePartialState({ status: this.synthesizeStatus() });
     try {
       // Refresh GitHub installation token (may have expired during hibernation)
       try {
@@ -566,7 +566,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.logger.error("Failed to refresh GitHub token during agent start", { error });
       }
 
-      await this.agentProcessManager.startAgentSession();
+      await this.agentProcessManager.ensureAgentSessionStarted();
       this.updatePartialState({ status: this.synthesizeStatus() });
 
       // Send the pending initial message if one was stored
@@ -905,7 +905,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.logger.error("Failed to create user UI message");
         return;
       }
-      await this.onUserMessageSent(userUiMessage, attachments);
+      await this.onUserMessageSent(userUiMessage, attachments, connection.id);
     } catch (error) {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
@@ -977,14 +977,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    */
   private async maybeSendPendingMessage(): Promise<void> {
     if (!this.agentProcessManager.isConnected()) return;
-    const userMessage = this.state.pendingUserMessage?.message;
-    if (!userMessage) {
+    const msg = this.state.pendingUserMessage;
+    if (!msg) {
       return;
     }
+    const { message: userMessage, attachmentIds } = msg;
 
-    const content = getUserMessageTextContent(this.state.pendingUserMessage?.message ?? null);
-    const pendingAttachmentIds = this.state.pendingUserMessage?.attachmentIds ?? [];
-    if (!content && pendingAttachmentIds.length === 0) return;
+    const content = getUserMessageTextContent(userMessage);
 
     const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
@@ -992,7 +991,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // send to the agent.
     this.logger.info("Sending pending message");
     try {
-      const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, pendingAttachmentIds);
+      this.updatePartialState({ isResponding: true });
+      const attachmentRecords = await this.agentProcessManager.sendMessageToAgent(sessionId, content, attachmentIds);
       await this.onUserMessageSent(userMessage, attachmentRecords);
       this.updatePartialState({ pendingUserMessage: null });
     } catch (error) {
@@ -1008,11 +1008,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
-  private async onUserMessageSent(message: UIMessage, attachmentRecords: AttachmentRecord[]): Promise<void> {
+  private async onUserMessageSent(message: UIMessage, attachmentRecords: AttachmentRecord[], connectionId?: string): Promise<void> {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
     const stored = this.messageRepository.create(sessionId, message);
-    this.broadcastMessage({ type: "user.message", message: stored.message });
+    this.broadcastMessage({ type: "user.message", message: stored.message }, connectionId ? [connectionId] : undefined);
     // Sync to D1 history row and generate title
     const content = getUserMessageTextContent(message);
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
