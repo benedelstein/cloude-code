@@ -218,10 +218,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
       case "error": {
         this.logger.error(`vm-agent error: ${output.error}`);
-        this.broadcastMessage({
-          type: "error",
-          code: "AGENT_ERROR",
-          message: output.error,
+        this.messageAccumulator.reset();
+        this.updatePartialState({
+          isResponding: false,
+          lastError: output.error,
+          status: this.synthesizeStatus(),
         });
         break;
       }
@@ -440,7 +441,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       });
       this.sendMessage(
         {
-          type: "error",
+          type: "operation.error",
           code: "INVALID_MESSAGE",
           message: "unknown request",
         },
@@ -461,7 +462,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       });
       this.sendMessage(
         {
-          type: "error",
+          type: "operation.error",
           code: "MESSAGE_HANDLER_ERROR",
           message: "request failed",
         },
@@ -950,7 +951,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
         {
-          type: "error",
+          type: "operation.error",
           code: "CHAT_MESSAGE_FAILED",
           message: "Failed to handle chat message",
         },
@@ -1013,11 +1014,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     } catch (error) {
       this.logger.error("Failed to send pending message", { error });
       this.updatePartialState({
-        lastError: "Failed to send pending message",
+        isResponding: false,
         status: this.synthesizeStatus(),
       });
       this.broadcastMessage({
-        type: "error",
+        type: "operation.error",
         code: "CHAT_MESSAGE_FAILED",
         message: "Failed to handle chat message",
       });

@@ -6,7 +6,7 @@ import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 interface StatusBannerProps {
   sessionStatus: SessionStatus | null;
-  errorMessage: string | null;
+  sessionErrorMessage: string | null;
 }
 
 const statusMessages: Record<SessionStatus, string> = {
@@ -25,15 +25,15 @@ const statusColors: Record<SessionStatus, string> = {
   ready: "",
 };
 
-const isVisible = (status: SessionStatus | null, errorMessage: string | null) =>
-  errorMessage !== null || (status !== null && status !== "ready");
+const isVisible = (status: SessionStatus | null, sessionErrorMessage: string | null) =>
+  sessionErrorMessage !== null || (status !== null && status !== "ready");
 
-export function StatusBanner({ sessionStatus, errorMessage }: StatusBannerProps) {
-  const visible = isVisible(sessionStatus, errorMessage);
-  const isError = errorMessage !== null;
+export function StatusBanner({ sessionStatus, sessionErrorMessage }: StatusBannerProps) {
+  const visible = isVisible(sessionStatus, sessionErrorMessage);
+  const isError = sessionErrorMessage !== null;
 
   const message = isError
-    ? errorMessage
+    ? sessionErrorMessage
     : sessionStatus
       ? statusMessages[sessionStatus]
       : "";

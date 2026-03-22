@@ -67,12 +67,19 @@ export const SyncResponseEvent = z.object({
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
 
-export const ErrorEvent = z.object({
-  type: z.literal("error"),
-  code: z.string(),
+export const OperationErrorCode = z.enum([
+  "INVALID_MESSAGE",
+  "MESSAGE_HANDLER_ERROR",
+  "CHAT_MESSAGE_FAILED",
+]);
+export type OperationErrorCode = z.infer<typeof OperationErrorCode>;
+
+export const OperationErrorEvent = z.object({
+  type: z.literal("operation.error"),
+  code: OperationErrorCode,
   message: z.string(),
 });
-export type ErrorEvent = z.infer<typeof ErrorEvent>;
+export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 
 // AI SDK UIMessageStream chunk (for real-time streaming)
 export const AgentChunkEvent = z.object({
@@ -116,7 +123,7 @@ export type EditorReadyEvent = z.infer<typeof EditorReadyEvent>;
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
   SyncResponseEvent,
-  ErrorEvent,
+  OperationErrorEvent,
   AgentChunkEvent,
   AgentFinishEvent,
   AgentReadyEvent,

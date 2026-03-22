@@ -35,7 +35,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     messages,
     streamingMessage,
     sessionStatus,
-    errorMessage,
+    sessionErrorMessage,
+    operationError,
     isHistoryLoading,
     isReady,
     isResponding,
@@ -229,7 +230,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             <InputFrame>
               <StatusBanner
                 sessionStatus={sessionStatus}
-                errorMessage={errorMessage}
+                sessionErrorMessage={sessionErrorMessage}
               />
               <ChatInput
                 onSend={(...args) => {
@@ -245,6 +246,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
+                operationErrorMessage={operationError?.message ?? null}
               />
             </InputFrame>
             <p className="mt-2 text-center text-xs text-foreground-muted/60">

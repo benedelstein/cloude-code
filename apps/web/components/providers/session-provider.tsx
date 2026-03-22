@@ -31,15 +31,16 @@ interface SessionProviderWithTokenProps extends SessionProviderProps {
 function createPendingSession(
   sessionId: string,
   sessionStatus: SessionStatus | null,
-  errorMessage: string | null,
+  sessionErrorMessage: string | null,
 ): UseCloudflareAgentReturn {
   return {
     sessionId,
     messages: [],
     streamingMessage: null,
     sessionStatus,
-    errorMessage,
-    isHistoryLoading: errorMessage === null,
+    sessionErrorMessage,
+    operationError: null,
+    isHistoryLoading: sessionErrorMessage === null,
     hasHydratedState: false,
     isReady: false,
     isStreaming: false,

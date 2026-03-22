@@ -38,6 +38,7 @@ interface ChatInputProps {
   onModelChange?: (model: ClaudeModel) => void;
   claude: ClaudeAuth;
   claudeAuthRequired: ClaudeAuthState | null;
+  operationErrorMessage?: string | null;
 }
 
 export function ChatInput({
@@ -51,6 +52,7 @@ export function ChatInput({
   onModelChange,
   claude,
   claudeAuthRequired: claudeAuthState,
+  operationErrorMessage,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -174,6 +176,13 @@ export function ChatInput({
         onRemove={removeAttachment}
         className="px-4 pt-3"
       />
+      {operationErrorMessage && (
+        <div className="px-4 pt-3">
+          <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs font-medium text-danger">
+            {operationErrorMessage}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 pt-3">
         <textarea

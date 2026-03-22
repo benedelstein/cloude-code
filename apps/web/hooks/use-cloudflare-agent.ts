@@ -11,6 +11,7 @@ import type {
   ClaudeAuthState,
   MessageAttachmentRef,
   AttachmentDescriptor,
+  OperationErrorEvent,
   ServerMessage,
   SessionTodo,
   SessionPlanMetadata,
@@ -43,7 +44,8 @@ export interface UseCloudflareAgentReturn {
   messages: UIMessage[];
   streamingMessage: UIMessage | null;
   sessionStatus: SessionStatus | null;
-  errorMessage: string | null;
+  sessionErrorMessage: string | null;
+  operationError: OperationErrorEvent | null;
   isHistoryLoading: boolean;
   hasHydratedState: boolean;
   isReady: boolean;
@@ -79,7 +81,8 @@ export function useCloudflareAgent({
   const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sessionErrorMessage, setSessionErrorMessage] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
@@ -190,12 +193,13 @@ export function useCloudflareAgent({
         break;
 
       case "user.message":
+        setOperationError(null);
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         break;
 
-      case "error":
+      case "operation.error":
         resetPendingResponse();
-        setErrorMessage(msg.message);
+        setOperationError(msg);
         setIsHistoryLoading(false);
         onError?.(new Error(msg.message));
         break;
@@ -222,6 +226,7 @@ export function useCloudflareAgent({
     onClose: () => {
       // useAgent will auto-reconnect
       resetPendingResponse();
+      setOperationError(null);
     },
     onStateUpdate(state: ClientState) {
       setHasHydratedState(true);
@@ -242,10 +247,11 @@ export function useCloudflareAgent({
       }
       setIsResponding(state.isResponding);
       setSessionStatus(state.status);
-      setErrorMessage(state.lastError);
+      setSessionErrorMessage(state.lastError);
     },
     onError: (message) => {
       resetPendingResponse();
+      setOperationError(null);
       console.warn("Transient websocket error", { host: DEFAULT_API_HOST, sessionId, message });
     },
   });
@@ -264,6 +270,7 @@ export function useCloudflareAgent({
     if (!content && attachmentReferences.length === 0) {
       return;
     }
+    setOperationError(null);
 
     // Create optimistic user message
     const parts: UIMessage["parts"] = [];
@@ -317,7 +324,8 @@ export function useCloudflareAgent({
     messages,
     streamingMessage,
     sessionStatus,
-    errorMessage,
+    sessionErrorMessage,
+    operationError,
     isHistoryLoading,
     hasHydratedState,
     isReady: sessionStatus === "ready",
