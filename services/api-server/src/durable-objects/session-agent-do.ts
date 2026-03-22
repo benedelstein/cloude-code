@@ -829,8 +829,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         headers: { "Content-Type": "application/json" },
       });
     }
-    pullRequest.state = data.state;
-    this.updatePartialState({ pullRequest });
+    const newState = { ...pullRequest, state: data.state };
+    this.updatePartialState({ pullRequest: newState });
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
