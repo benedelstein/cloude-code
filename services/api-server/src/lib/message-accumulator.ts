@@ -4,7 +4,13 @@ type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
 
 export interface ProcessChunkResult {
-  finished: boolean;
+  /**
+   * If finished, the complete message.
+   */
+  finishedMessage?: UIMessage;
+  /**
+   * The parts that were completed by this chunk.
+   */
   completedParts: MessagePart[];
 }
 
@@ -17,6 +23,7 @@ export class MessageAccumulator {
   private parts: MessageParts = [];
   private metadata: unknown = undefined;
   private finished = false;
+  private pendingChunks: UIMessageChunk[] = [];
 
   // In-progress text accumulation
   private currentTextId: string | null = null;
@@ -45,6 +52,7 @@ export class MessageAccumulator {
    * @returns message completion state plus any parts fully materialized by this chunk
    */
   process(chunk: UIMessageChunk): ProcessChunkResult {
+    this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 
     switch (chunk.type) {
@@ -226,7 +234,7 @@ export class MessageAccumulator {
         completedParts.push(...this.finalizePendingParts());
         this.metadata = chunk.messageMetadata;
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "finish-step":
         break;
@@ -235,15 +243,15 @@ export class MessageAccumulator {
         completedParts.push(...this.finalizePendingParts());
         this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "error":
         completedParts.push(...this.finalizePendingParts());
         this.finished = true;
-        return { finished: true, completedParts };
+        return { finishedMessage: this.getMessage() ?? undefined, completedParts };
     }
 
-    return { finished: false, completedParts };
+    return { completedParts };
   }
 
   private finalizePendingParts(): MessagePart[] {
@@ -315,7 +323,14 @@ export class MessageAccumulator {
     return this.messageId ?? null;
   }
 
+  getPendingChunks(): UIMessageChunk[] | undefined {
+    return this.pendingChunks.length > 0
+      ? [...this.pendingChunks]
+      : undefined;
+  }
+
   reset(): void {
+    this.pendingChunks = [];
     this.messageId = undefined;
     this.parts = [];
     this.metadata = undefined;

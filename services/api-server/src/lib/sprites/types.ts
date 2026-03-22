@@ -6,6 +6,8 @@ export class SpritesError extends Error {
     ) {
         super(message);
         this.name = "SpritesError";
+        this.statusCode = statusCode;
+        this.responseBody = responseBody;
     }
 }
 
@@ -23,12 +25,14 @@ export interface NewExecSessionOptions {
     cols?: number;
     rows?: number;
     detachable?: boolean;
+    idleTimeoutMs?: number;
 }
 
 export interface AttachSessionOptions {
     cwd?: string;
     env?: Record<string, string>;
     detachable?: boolean;
+    idleTimeoutMs?: number;
 }
 
 // Server message types from Sprites exec WebSocket

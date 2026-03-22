@@ -6,18 +6,18 @@ import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { normalizeHost } from "@/lib/utils";
 import type {
-  AgentState,
+  ClientState,
   ClaudeModel,
   ClaudeAuthState,
   MessageAttachmentRef,
-  PullRequestState,
   AttachmentDescriptor,
   ServerMessage,
   SessionTodo,
   SessionPlanMetadata,
-  SessionSettings,
+  AgentSettings,
   SessionStatus,
   SessionWebSocketTokenResponse,
+  ClientMessage,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -52,11 +52,10 @@ export interface UseCloudflareAgentReturn {
   pendingUserMessage: UIMessage | null;
   repoFullName: string | null;
   pushedBranch: string | null;
-  pullRequestUrl: string | null;
-  pullRequestState: PullRequestState | null;
+  pullRequestState: ClientState["pullRequest"] | null;
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
-  settings: SessionSettings | null;
+  agentSettings: AgentSettings | null;
   selectedModel: ClaudeModel | null;
   // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: ClaudeModel) => void;
@@ -89,13 +88,12 @@ export function useCloudflareAgent({
   // cleanup on connection loss (resetPendingResponse).
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
-  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
-  const [pullRequestState, setPullRequestState] = useState<PullRequestState | null>(null);
+  const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
-  const [settings, setSettings] = useState<SessionSettings | null>(null);
+  const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
@@ -162,13 +160,6 @@ export function useCloudflareAgent({
         break;
       }
 
-      case "session.status":
-        setSessionStatus(msg.status);
-        if (msg.status === "error" && msg.message) {
-          setErrorMessage(msg.message);
-        }
-        break;
-
       case "agent.chunk":
         if (!streamControllerRef.current) {
           // First chunk for a server-initiated response (e.g. pending message) —
@@ -212,7 +203,7 @@ export function useCloudflareAgent({
   }, [onError, resetPendingResponse]);
 
   // Use Cloudflare's useAgent hook
-  const agent = useAgent<AgentState>({
+  const agent = useAgent<ClientState>({
     agent: "session",
     name: sessionId,
     host: DEFAULT_API_HOST,
@@ -232,54 +223,36 @@ export function useCloudflareAgent({
       // useAgent will auto-reconnect
       resetPendingResponse();
     },
-    onStateUpdate(state: AgentState) {
+    onStateUpdate(state: ClientState) {
       setHasHydratedState(true);
-      if (state.pushedBranch !== undefined) {
-        setPushedBranch(state.pushedBranch);
-      }
-      if (state.repoFullName !== undefined) {
-        setRepoFullName(state.repoFullName);
-      }
-      if (state.pullRequestUrl !== undefined) {
-        setPullRequestUrl(state.pullRequestUrl);
-      }
-      if (state.pullRequestState !== undefined) {
-        setPullRequestState(state.pullRequestState);
-      }
-      if (state.todos !== undefined) {
-        setTodos(state.todos);
-      }
-      if (state.plan !== undefined) {
-        setPlan(state.plan ?? null);
-      }
-      if (state.pendingUserMessage !== undefined) {
-        setPendingUserMessage(state.pendingUserMessage);
-      }
-      if (state.editorUrl !== undefined) {
-        setEditorUrl(state.editorUrl);
-      }
-      if (state.claudeAuthRequired !== undefined) {
-        setClaudeAuthRequired(state.claudeAuthRequired);
-      }
-      if (state.settings !== undefined) {
-        setSettings(state.settings);
+      setPushedBranch(state.pushedBranch);
+      setRepoFullName(state.repoFullName);
+      // for objects, we need to diff them to prevent excessive re-renders
+      setPullRequestState(prev => JSON.stringify(prev) === JSON.stringify(state.pullRequest) ? prev : state.pullRequest ?? null);
+      setTodos(prev => JSON.stringify(prev) === JSON.stringify(state.todos) ? prev : state.todos);
+      setPlan(prev => JSON.stringify(prev) === JSON.stringify(state.plan) ? prev : state.plan);
+      setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
+      setEditorUrl(state.editorUrl);
+      setClaudeAuthRequired(state.claudeAuthRequired);
+      setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
+      // TODO: ACCOMMODATE OTHER PROVIDERS
+      if (state.agentSettings.provider === "claude-code") {
         // Initialize selected model from server settings (only if not yet set locally)
-        if (state.settings.provider === "claude-code") {
-          setSelectedModel((prev) => prev ?? state.settings!.model as ClaudeModel);
-        }
+        setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
       }
-      if (state.isResponding !== undefined) {
-        setIsResponding(state.isResponding);
-      }
-      if (state.status !== undefined) {
-        setSessionStatus(state.status);
-      }
+      setIsResponding(state.isResponding);
+      setSessionStatus(state.status);
+      setErrorMessage(state.lastError);
     },
     onError: (message) => {
       resetPendingResponse();
       console.warn("Transient websocket error", { host: DEFAULT_API_HOST, sessionId, message });
     },
   });
+
+  const sendToAgent = useCallback((message: ClientMessage) => {
+    agent.send(JSON.stringify(message));
+  }, [agent]);
 
   const sendMessage = useCallback((message: {
     content?: string;
@@ -325,18 +298,18 @@ export function useCloudflareAgent({
     consumeStream(stream);
 
     // Send via useAgent's connection, include model if it differs from server settings
-    const modelToSend = selectedModel && selectedModel !== settings?.model ? selectedModel : undefined;
-    agent.send(JSON.stringify({
+    const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
+    sendToAgent({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
-    }));
-  }, [agent, consumeStream, selectedModel, settings?.model]);
+    });
+  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model]);
 
   const stop = useCallback(() => {
-    agent.send(JSON.stringify({ type: "operation.cancel" }));
-  }, [agent]);
+    sendToAgent({ type: "operation.cancel" });
+  }, [sendToAgent]);
 
   return {
     sessionId,
@@ -352,11 +325,10 @@ export function useCloudflareAgent({
     isResponding,
     pendingUserMessage,
     pushedBranch,
-    pullRequestUrl,
     pullRequestState,
     todos,
     plan,
-    settings,
+    agentSettings,
     selectedModel,
     setSelectedModel,
     editorUrl,

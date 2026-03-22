@@ -2,7 +2,7 @@
  * VM-agent entry point. Parses --provider flag and delegates to the agent harness.
  */
 import { parseArgs } from "util";
-import { SessionSettings } from "@repo/shared";
+import { AgentSettings } from "@repo/shared";
 import { runAgentHarness } from "./agent-harness";
 import { claudeCodeProvider } from "./providers/claude-code";
 import { codexProvider } from "./providers/codex";
@@ -18,7 +18,7 @@ if (typeof values.provider !== "string") {
   throw new Error("Missing --provider flag");
 }
 
-const settings = SessionSettings.parse(JSON.parse(values.provider));
+const settings = AgentSettings.parse(JSON.parse(values.provider));
 
 switch (settings.provider) {
   case "claude-code":

@@ -1,3 +1,4 @@
+import { AttachmentRecord } from "@/types/attachments";
 import type { AttachmentDescriptor } from "@repo/shared";
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -23,18 +24,6 @@ interface AttachmentRow {
   created_at: string;
   session_id: string | null;
   bound_at: string | null;
-}
-
-export interface AttachmentRecord {
-  id: string;
-  uploaderUserId: string;
-  objectKey: string;
-  filename: string;
-  mediaType: string;
-  sizeBytes: number;
-  createdAt: string;
-  sessionId: string | null;
-  boundAt: string | null;
 }
 
 interface AttachmentGcQueueRow {

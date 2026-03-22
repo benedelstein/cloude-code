@@ -1,4 +1,4 @@
-import type { NetworkPolicyRule } from "./WorkersSprite";
+import type { NetworkPolicyRule } from "./WorkersSpriteClient";
 
 /** Allow rule helper */
 function allow(domain: string): NetworkPolicyRule {

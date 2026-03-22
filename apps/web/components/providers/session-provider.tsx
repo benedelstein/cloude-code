@@ -39,7 +39,7 @@ function createPendingSession(
     streamingMessage: null,
     sessionStatus,
     errorMessage,
-    isHistoryLoading: sessionStatus !== "error",
+    isHistoryLoading: errorMessage === null,
     hasHydratedState: false,
     isReady: false,
     isStreaming: false,
@@ -47,11 +47,10 @@ function createPendingSession(
     pendingUserMessage: null,
     repoFullName: null,
     pushedBranch: null,
-    pullRequestUrl: null,
     pullRequestState: null,
     todos: null,
     plan: null,
-    settings: null,
+    agentSettings: null,
     selectedModel: null,
     setSelectedModel: () => {},
     editorUrl: null,
@@ -92,7 +91,6 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const webSocketToken = useSessionWebSocketToken({
     sessionId,
     onAuthError: () => {
-      setTokenSessionStatus("error");
       setTokenErrorMessage("Session authentication failed");
     },
     onReconnectPending: () => {

@@ -9,13 +9,24 @@ import { reposRoutes } from "./routes/repos/repos.routes";
 import { attachmentsRoutes } from "./routes/attachments/attachments.routes";
 import { agentRoutes } from "./routes/agent.routes";
 import { gitProxyRoutes } from "./routes/git-proxy.routes";
+import { debugRoutes } from "./routes/debug.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
+import { initializeLogger } from "./lib/logger";
+import { LogLevel } from "@repo/shared";
 // import { logger as honoLogger } from "hono/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 
 const app = new Hono<{ Bindings: Env }>();
+
+app.use("*", async (c, next) => {
+  initializeLogger({
+    format: c.env.ENVIRONMENT === "production" ? "json" : "pretty",
+    level: c.env.LOG_LEVEL as LogLevel,
+  });
+  await next();
+});
 
 // DISABLED FOR NOW - dont log sensitive query params etc.
 // app.use(honoLogger()); // logs request timings
@@ -38,6 +49,7 @@ app.get("/health", (c) => {
 
 app.route("/agents", agentRoutes);
 app.route("/git-proxy", gitProxyRoutes);
+app.route("/_debug", debugRoutes);
 
 app.route("/auth", authRoutes);
 app.route("/auth", openaiAuthRoutes);

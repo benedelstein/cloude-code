@@ -2,18 +2,14 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 
 export const SessionStatus = z.enum([
-  /** Provisioning the session */
+  /** DO initialized but handleInit not yet called */
+  "initializing",
+  /** Provisioning the sprite VM */
   "provisioning",
-  /** Cloning the repository */
+  /** Cloning the repository onto the sprite */
   "cloning",
-  /** Syncing the repository via git */
-  "syncing",
   /** Attaching to the agent process running on the vm */
   "attaching",
-  /** Error occurred */
-  "error",
-  /** Session is terminated. No more messages can be sent or received. */
-  "terminated",
   /** Ready to send and receive messages */
   "ready",
 ]);
@@ -37,45 +33,45 @@ export const SessionPlanMetadata = z.object({
 });
 export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
 
-/** 
- * State managed by the SessionAgentDO, synced to clients via Cloudflare Agents
- * IMPORTANT: AgentState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+/**
+ * Durable state synced to clients via Cloudflare Agents SDK.
+ * IMPORTANT: ClientState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
+ *
+ * Fields marked "reset on restart" are overwritten in the DO constructor so they
+ * never get stuck from a previous instance's in-progress operation.
  */
-export type AgentState = {
-  sessionId: string | null;
-  userId: string | null;
+export type ClientState = {
   repoFullName: string | null;
-  spriteName: string | null;
-  /** Session ID given by the agent provider (Claude or Codex) */
-  agentSessionId: string | null;
-  /** ID of the agent process running on the sprite */
-  agentProcessId: number | null;
+  /** Synthesized from ServerState checkpoints — reset on restart */
   status: SessionStatus;
-  settings: SessionSettings;
+  agentSettings: AgentSettings;
+  pullRequest: {
+    url: string;
+    number: number;
+    state: PullRequestState;
+  } | null;
   /** Branch name locked after first push (for "Create PR" flow) */
   pushedBranch: string | null;
-  /** GitHub PR URL after creation */
-  pullRequestUrl: string | null;
-  /** GitHub PR number for API lookups */
-  pullRequestNumber: number | null;
-  /** PR state: open, merged, or closed */
-  pullRequestState: PullRequestState | null;
+  /** Branch the session was based off — used as the PR target */
+  baseBranch: string | null;
   /** Latest streamed todo snapshot from TodoWrite */
   todos: SessionTodo[] | null;
   /** Metadata for the latest persisted plan */
-  plan?: SessionPlanMetadata | null;
-  /** User message to render and send automatically once provisioning completes */
-  pendingUserMessage: UIMessage | null;
-  /** Attachment IDs to send with the pending initial message */
-  pendingAttachmentIds: string[];
+  plan: SessionPlanMetadata | null;
+  pendingUserMessage: {
+    /** A formatted UIMessage for display to the client. */
+    message: UIMessage;
+    /** Attachments to send with the message. Also found within UIMessage parts but here they are more easily accessible. */
+    attachmentIds: string[];
+  } | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
-  /** Claude auth issue blocking the current session, if any */
+  /** Claude auth issue blocking the current session — reset on restart */
   claudeAuthRequired: ClaudeAuthState | null;
-  /** Whether the agent is currently responding to a message */
+  /** Whether the agent is currently responding to a message — reset on restart */
   isResponding: boolean;
-  /** Branch the session was based off — used as the PR target */
-  baseBranch: string | null;
+  /** Last error message from provisioning or agent start — reset on restart */
+  lastError: string | null;
   createdAt: Date;
 };
 
@@ -103,31 +99,31 @@ export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
   haiku: "Claude Haiku 4.5",
 };
 
-export const SessionSettingsCodex = z.object({
+export const AgentSettingsCodex = z.object({
   provider: z.literal("codex-cli"),
   model: CodexModel.default("gpt-5.3-codex"),
   maxTokens: z.number().default(8192),
 });
 
-export const SessionSettingsClaude = z.object({
+export const AgentSettingsClaude = z.object({
   provider: z.literal("claude-code"),
   model: ClaudeModel.default("opus"),
   maxTokens: z.number().default(8192),
 });
 
-export const SessionSettings = z.discriminatedUnion("provider", [
-  SessionSettingsCodex,
-  SessionSettingsClaude,
+export const AgentSettings = z.discriminatedUnion("provider", [
+  AgentSettingsCodex,
+  AgentSettingsClaude,
 ]);
-export type SessionSettings = z.infer<typeof SessionSettings>;
+export type AgentSettings = z.infer<typeof AgentSettings>;
 
 /** Partial settings for create/init requests; validated and merged in the DO */
-export const SessionSettingsInput = z.object({
+export const AgentSettingsInput = z.object({
   provider: AgentProvider.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
 });
-export type SessionSettingsInput = z.infer<typeof SessionSettingsInput>;
+export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 
 export const Message = z.object({
   id: z.uuid(),

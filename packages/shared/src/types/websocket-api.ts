@@ -22,13 +22,6 @@ export const ChatMessageEvent = z.object({
 );
 export type ChatMessageEvent = z.infer<typeof ChatMessageEvent>;
 
-export const StreamAckEvent = z.object({
-  type: z.literal("stream.ack"),
-  messageId: z.uuid(),
-  chunkIndex: z.number(),
-});
-export type StreamAckEvent = z.infer<typeof StreamAckEvent>;
-
 export const SyncRequestEvent = z.object({
   type: z.literal("sync.request"),
   lastMessageId: z.uuid().optional(),
@@ -43,7 +36,6 @@ export type OperationCancelEvent = z.infer<typeof OperationCancelEvent>;
 
 export const ClientMessage = z.discriminatedUnion("type", [
   ChatMessageEvent,
-  StreamAckEvent,
   SyncRequestEvent,
   OperationCancelEvent,
 ]);
@@ -59,14 +51,6 @@ export const ConnectedEvent = z.object({
   lastMessageId: z.uuid().optional(),
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
-
-
-export const SessionStatusEvent = z.object({
-  type: z.literal("session.status"),
-  status: SessionStatus,
-  message: z.string().optional(),
-});
-export type SessionStatusEvent = z.infer<typeof SessionStatusEvent>;
 
 // Zod schema for UIMessage (runtime validation)
 export const UIMessageSchema = z.object({
@@ -131,7 +115,6 @@ export type EditorReadyEvent = z.infer<typeof EditorReadyEvent>;
 
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
-  SessionStatusEvent,
   SyncResponseEvent,
   ErrorEvent,
   AgentChunkEvent,

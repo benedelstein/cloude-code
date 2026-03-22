@@ -37,23 +37,37 @@ export interface Logger {
 }
 /* eslint-enable no-unused-vars */
 
-type LogMethod = "log" | "debug" | "info" | "warn" | "error";
-
 export interface ConsoleLoggerOptions {
   includeTimestamp?: boolean;
   now?: () => Date;
   format?: "pretty" | "json";
+  minimumLevel?: LogLevel;
+}
+
+function numericLogLevel(level: LogLevel): number {
+  switch (level) {
+    case "debug":
+      return 0;
+    case "info":
+      return 1;
+    case "warn":
+      return 2;
+    case "error":
+      return 3;
+  }
 }
 
 export class ConsoleLogger implements Logger {
   private readonly includeTimestamp: boolean;
   private readonly now: () => Date;
   private readonly format: "pretty" | "json";
+  private readonly minimumLevel?: LogLevel;
 
   public constructor(options?: ConsoleLoggerOptions) {
     this.includeTimestamp = options?.includeTimestamp ?? true;
     this.now = options?.now ?? (() => new Date());
     this.format = options?.format ?? "pretty";
+    this.minimumLevel = options?.minimumLevel;
   }
 
   public log(message: string, params?: LogParams): void {
@@ -81,6 +95,9 @@ export class ConsoleLogger implements Logger {
   }
 
   private write(level: LogLevel, message: string, params?: LogParams): void {
+    if (this.minimumLevel && numericLogLevel(level) < numericLogLevel(this.minimumLevel)) {
+      return;
+    }
     const entry = this.buildEntry(level, message, params);
     const serializedEntry = this.buildSerializedEntry(entry);
     const line =
@@ -193,13 +210,15 @@ export class ConsoleLogger implements Logger {
 
 export class ComposedLogger implements Logger {
   private readonly loggers: readonly Logger[];
+  private readonly minimumLevel?: LogLevel;
 
-  public constructor(loggers: readonly Logger[]) {
+  public constructor(loggers: readonly Logger[], minimumLevel?: LogLevel) {
     this.loggers = loggers;
+    this.minimumLevel = minimumLevel;
   }
 
   public log(message: string, params?: LogParams): void {
-    this.dispatch("log", message, params);
+    this.dispatch("info", message, params);
   }
 
   public debug(message: string, params?: LogParams): void {
@@ -223,15 +242,18 @@ export class ComposedLogger implements Logger {
   }
 
   private dispatch(
-    method: LogMethod,
+    level: LogLevel,
     message: string,
     params?: LogParams,
   ): void {
+    if (this.minimumLevel && numericLogLevel(level) < numericLogLevel(this.minimumLevel)) {
+      return;
+    }
     const loggingErrors: unknown[] = [];
 
     for (const logger of this.loggers) {
       try {
-        logger[method](message, params);
+        logger[level](message, params);
       } catch (error) {
         loggingErrors.push(error);
       }
@@ -262,7 +284,7 @@ export class ScopedLogger implements Logger {
   }
 
   public log(message: string, params?: LogParams): void {
-    this.dispatch("log", message, params);
+    this.dispatch("info", message, params);
   }
 
   public debug(message: string, params?: LogParams): void {
@@ -285,8 +307,8 @@ export class ScopedLogger implements Logger {
     return new ScopedLogger(this.parent, loggerName);
   }
 
-  private dispatch(method: LogMethod, message: string, params?: LogParams): void {
-    this.parent[method](message, {
+  private dispatch(level: LogLevel, message: string, params?: LogParams): void {
+    this.parent[level](message, {
       ...params,
       loggerName: this.loggerName,
     });

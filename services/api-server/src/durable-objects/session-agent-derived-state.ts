@@ -1,12 +1,14 @@
 import type { UIMessage } from "ai";
-import type { AgentState, SessionTodo } from "@repo/shared";
+import type { ClientState, SessionTodo } from "@repo/shared";
 import { extractPlanSnapshotFromPart, extractTodoSnapshotFromPart } from "@/lib/session-derived-state";
 import type { LatestPlanRepository } from "./repositories/latest-plan-repository";
 
-type DerivedStateContext = {
-  state: AgentState;
+export type DerivedStateContext = {
+  sessionId: string;
   latestPlanRepository: LatestPlanRepository;
-  updatePartialState: (partial: Partial<AgentState>) => void;
+  // TODO: scope this down so it can only update todos and plan.
+  // eslint-disable-next-line no-unused-vars
+  updatePartialState: (partial: Partial<ClientState>) => void;
 };
 
 export function applyDerivedStateFromParts(
@@ -14,7 +16,7 @@ export function applyDerivedStateFromParts(
   completedParts: UIMessage["parts"],
   sourceMessageId: string | null,
 ): void {
-  if (!context.state.sessionId || completedParts.length === 0) {
+  if (!context.sessionId || completedParts.length === 0) {
     return;
   }
 
@@ -30,7 +32,7 @@ export function applyDerivedStateFromParts(
     const plan = extractPlanSnapshotFromPart(completedPart);
     if (plan) {
       const storedPlan = context.latestPlanRepository.upsert(
-        context.state.sessionId,
+        context.sessionId,
         plan,
         sourceMessageId,
       );

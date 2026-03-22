@@ -1,89 +1,165 @@
-// Test script for the native @fly/sprites SDK - interactive shell via websocket
+// Test script for the wrangler debug websocket exec endpoint.
+// Usage:
+//   tsx scripts/test-sprite-exec-ws.ts <sprite-name> [base-url]
+//
+// Examples:
+//   tsx scripts/test-sprite-exec-ws.ts my-sprite
+//   tsx scripts/test-sprite-exec-ws.ts my-sprite http://127.0.0.1:8787
 
-import { SpritesClient } from "@fly/sprites";
+import assert from "node:assert/strict";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true, debug: false});
 
-const SPRITES_TOKEN = process.env.SPRITES_API_KEY;
-const SPRITES_API_URL = process.env.SPRITES_API_URL ?? "https://api.sprites.dev";
+type DebugExecWsRequest = {
+  spriteName: string;
+  command: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  idleTimeoutMs?: number;
+};
 
-if (!SPRITES_TOKEN) {
-  console.error("Error: SPRITES_API_KEY environment variable is required");
+type DebugExecWsResponse = {
+  exitCode?: number;
+  error?: string;
+  stdout: string;
+  stderr: string;
+};
+
+type TestCase = {
+  name: string;
+  request: DebugExecWsRequest;
+  expectedExitCode: number;
+  stdoutIncludes?: string;
+  stderrIncludes?: string;
+};
+
+const spriteName = process.argv[2];
+const baseUrl =
+  process.argv[3] ?? process.env.DEBUG_API_BASE_URL ?? "http://127.0.0.1:8787";
+
+if (!spriteName) {
+  console.error(
+    "Usage: tsx scripts/test-sprite-exec-ws.ts <sprite-name> [base-url]",
+  );
   process.exit(1);
 }
 
-async function main() {
-  const token = SPRITES_TOKEN as string;
-  const spriteName = process.argv[2] ?? "test-1768976896129";
+const endpoint = new URL("/_debug/sprites-exec-ws", baseUrl).toString();
 
-  console.error(`Connecting to sprite: ${spriteName}`);
-  console.error(`API URL: ${SPRITES_API_URL}\n`);
+const testCases: TestCase[] = [
+  {
+    name: "stdout/stderr/exit",
+    request: {
+      spriteName,
+      command: "echo out; sleep 0.1; echo err >&2; exit 7",
+    },
+    expectedExitCode: 7,
+    stdoutIncludes: "out",
+    stderrIncludes: "err",
+  },
+  {
+    name: "cwd handling",
+    request: {
+      spriteName,
+      command: "pwd",
+      cwd: "/tmp",
+    },
+    expectedExitCode: 0,
+    stdoutIncludes: "/tmp",
+  },
+  {
+    name: "sleep 60",
+    request: {
+      spriteName,
+      command: "sleep 2; echo 'done'",
+      idleTimeoutMs: 3000,
+    },
+    expectedExitCode: 0,
+    stdoutIncludes: "done",
+  },
+  {
+    name: "env handling",
+    request: {
+      spriteName,
+      command: 'printf "%s" "$DEBUG_EXEC_WS_VALUE"',
+      env: {
+        DEBUG_EXEC_WS_VALUE: "hello from env",
+      },
+    },
+    expectedExitCode: 0,
+    stdoutIncludes: "hello from env",
+  },
+];
 
-  const client = new SpritesClient(token, { baseURL: SPRITES_API_URL });
-  const sprite = client.sprite(spriteName);
-
-  // Spawn interactive bash with TTY
-  const cmd = sprite.spawn("claude", [], {
-    cwd: "/home/sprite/workspace",
-    tty: true,
-    cols: 80,
-    rows: 24,
+async function callDebugRoute(
+  request: DebugExecWsRequest,
+): Promise<DebugExecWsResponse> {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(request),
   });
 
-  cmd.on("spawn", () => {
-    console.log("[connected]");
+  const body = (await response.json()) as DebugExecWsResponse;
 
-    // Set up stdin -> sprite
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(true);
-    }
-    process.stdin.resume();
-    process.stdin.on("data", (data) => {
-      cmd.stdin.write(data);
-    });
-  });
-
-  cmd.on("message", (msg: unknown) => {
-    console.log("[receivedmessage]", JSON.stringify(msg));
-  });
-
-  // Sprite stdout -> terminal
-  cmd.stdout.on("data", (data: Buffer) => {
-    process.stdout.write(data);
-  });
-
-  // Sprite stderr -> terminal
-  cmd.stderr.on("data", (data: Buffer) => {
-    process.stderr.write(data);
-  });
-
-  cmd.on("exit", (code: number) => {
-    console.log(`\n[exit] code=${code}`);
-    process.exit(code);
-  });
-
-  cmd.on("error", (err: Error) => {
-    console.error("[error]", err.message);
-    process.exit(1);
-  });
-
-  // Handle SIGINT
-  process.on("SIGINT", () => {
-    // Forward Ctrl+C to the remote shell
-    cmd.stdin.write("\x03");
-  });
-
-  // Handle terminal resize
-  if (process.stdout.isTTY) {
-    process.stdout.on("resize", () => {
-      console.log("[resize]", process.stdout.columns, process.stdout.rows);
-      cmd.resize(process.stdout.columns, process.stdout.rows);
-    });
+  if (!response.ok) {
+    throw new Error(
+      `Debug route failed with ${response.status}: ${JSON.stringify(body)}`,
+    );
   }
+
+  return body;
 }
 
-main().catch((err) => {
-  console.error(err);
+async function runCase(testCase: TestCase): Promise<void> {
+  console.log(`\n[${testCase.name}]`);
+  console.log(`command: ${testCase.request.command.trim()}`);
+
+  const result = await callDebugRoute(testCase.request);
+
+  console.log(`exitCode: ${result.exitCode} expected: ${testCase.expectedExitCode}`.trim());
+
+  assert.equal(result.exitCode, testCase.expectedExitCode);
+
+  if (testCase.stdoutIncludes) {
+    assert.match(result.stdout, new RegExp(escapeRegExp(testCase.stdoutIncludes)), [
+      `stdout did not include ${JSON.stringify(testCase.stdoutIncludes)}`,
+      `actual stdout: ${JSON.stringify(result.stdout)}`,
+      `actual stderr: ${JSON.stringify(result.stderr)}`,
+    ].join("\n"));
+  }
+
+  if (testCase.stderrIncludes) {
+    assert.match(result.stderr, new RegExp(escapeRegExp(testCase.stderrIncludes)), [
+      `stderr did not include ${JSON.stringify(testCase.stderrIncludes)}`,
+      `actual stdout: ${JSON.stringify(result.stdout)}`,
+      `actual stderr: ${JSON.stringify(result.stderr)}`,
+    ].join("\n"));
+  }
+
+  console.log(`stdout: ${JSON.stringify(result.stdout)}`);
+  console.log(`stderr: ${JSON.stringify(result.stderr)}`);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function main(): Promise<void> {
+  console.log(`Using sprite: ${spriteName}`);
+  console.log(`Endpoint: ${endpoint}`);
+
+  for (const testCase of testCases) {
+    await runCase(testCase);
+  }
+
+  console.log("\nAll websocket debug-route checks passed.");
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

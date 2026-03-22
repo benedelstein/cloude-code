@@ -1,4 +1,4 @@
 export * from "./sprites";
-export * from "./WorkersSprite";
+export * from "./WorkersSpriteClient";
 export * from "./SpriteWebsocketSession";
 export * from "./types";

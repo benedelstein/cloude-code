@@ -1,4 +1,4 @@
-import { WorkersSprite } from "@/lib/sprites";
+import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import type { Logger } from "@repo/shared";
 import type { Env } from "@/types";
@@ -42,7 +42,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
     };
   }
 
-  const sprite = new WorkersSprite(
+  const sprite = new WorkersSpriteClient(
     context.spriteName,
     env.SPRITES_API_KEY,
     env.SPRITES_API_URL,
@@ -143,7 +143,7 @@ export async function handleEditorClose(context: EditorContext): Promise<EditorO
     };
   }
 
-  const sprite = new WorkersSprite(
+  const sprite = new WorkersSpriteClient(
     context.spriteName,
     env.SPRITES_API_KEY,
     env.SPRITES_API_URL,

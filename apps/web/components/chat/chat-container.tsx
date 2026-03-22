@@ -42,9 +42,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     repoFullName,
     pendingUserMessage,
     pushedBranch,
-    pullRequestUrl,
     pullRequestState,
-    settings,
+    agentSettings: settings,
     selectedModel,
     setSelectedModel,
     claudeAuthRequired: claudeAuthState,
@@ -225,7 +224,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             <BranchBar
               sessionId={sessionId}
               pushedBranch={pushedBranch}
-              pullRequestUrl={pullRequestUrl}
               pullRequestState={pullRequestState}
             />
             <InputFrame>
