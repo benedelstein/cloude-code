@@ -115,6 +115,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     defaultBranch?: string;
   };
   try {
+    logger.info(`finding installation for repo ${createSessionData.repoId}`);
     // first find the installation for the repo
     const installation = await github.findInstallationForRepoId(
       createSessionData.repoId,
@@ -126,6 +127,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
       createSessionData.repoId,
     );
   } catch (error) {
+    logger.error(`Failed to find installation for repo ${createSessionData.repoId}`, { error });
     if (error instanceof GitHubAppError) {
       return c.json({ error: error.message, code: error.code }, 422);
     }
