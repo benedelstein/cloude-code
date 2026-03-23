@@ -1,8 +1,47 @@
 import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { AttachmentRecord } from "@/types/attachments";
 import { arrayBufferToBase64 } from "@/lib/utils";
-import { AgentInputAttachment, Logger } from "@repo/shared";
+import {
+  type AgentInputAttachment,
+  type DomainError,
+  type Logger,
+  type Result,
+  failure,
+  success,
+} from "@repo/shared";
 import { Env } from "@/types";
+
+const ATTACHMENT_RESOLUTION_DOMAIN = "attachment_resolution";
+
+export type ResolveAttachmentsResult = Result<{
+  agentAttachments: AgentInputAttachment[];
+  attachmentRecords: AttachmentRecord[];
+}, AttachmentResolutionError>;
+
+export type AttachmentResolutionError =
+  | DomainError<
+      typeof ATTACHMENT_RESOLUTION_DOMAIN,
+      "ATTACHMENTS_NOT_FOUND",
+      { attachmentIds: string[] }
+    >
+  | DomainError<
+      typeof ATTACHMENT_RESOLUTION_DOMAIN,
+      "ATTACHMENTS_RESOLUTION_FAILED",
+      { attachmentIds: string[] }
+    >;
+
+function attachmentResolutionError<Code extends AttachmentResolutionError["code"]>(
+  code: Code,
+  message: string,
+  details: Omit<Extract<AttachmentResolutionError, { code: Code }>, "domain" | "code" | "message">,
+): Extract<AttachmentResolutionError, { code: Code }> {
+  return {
+    domain: ATTACHMENT_RESOLUTION_DOMAIN,
+    code,
+    message,
+    ...details,
+  } as Extract<AttachmentResolutionError, { code: Code }>;
+}
 
 export class AgentAttachmentService {
   private readonly env: Env;
@@ -19,11 +58,11 @@ export class AgentAttachmentService {
    * Resolves attachments and downloads them to data urls for submitting to the agent.
    * @param sessionId - session id to resolve attachments for.
    * @param attachmentReferences - references to attachments to resolve.
-   * @returns - resolved attachments as data urls for submitting to the agent. Throws an error if some attachments are not found.
+   * @returns - resolved attachments as data urls for submitting to the agent.
    */
-  async resolveAttachments(sessionId: string, attachmentIds: string[]): Promise<{ agentAttachments: AgentInputAttachment[], attachmentRecords: AttachmentRecord[] }> {
+  async resolveAttachments(sessionId: string, attachmentIds: string[]): Promise<ResolveAttachmentsResult> {
     if (attachmentIds.length === 0) {
-      return { agentAttachments: [], attachmentRecords: [] };
+      return success({ agentAttachments: [], attachmentRecords: [] });
     }
     const attachmentRecords = await this.attachmentService.getByIdsBoundToSession(
       sessionId,
@@ -35,8 +74,11 @@ export class AgentAttachmentService {
         "Some attachments not found: " +
           attachmentIds.join(", "),
       );
-      // todo: typed errors?
-      throw new Error("Some attachments not found");
+      return failure(attachmentResolutionError(
+        "ATTACHMENTS_NOT_FOUND",
+        "Some attachments not found.",
+        { attachmentIds },
+      ));
     }
 
     let agentAttachments: AgentInputAttachment[];
@@ -44,9 +86,13 @@ export class AgentAttachmentService {
       agentAttachments = await this.downloadAttachments(attachmentRecords);
     } catch (error) {
       this.logger.error("Failed to resolve attachments for chat", { error });
-      throw new Error("Failed to resolve attachments for chat", { cause: error });
+      return failure(attachmentResolutionError(
+        "ATTACHMENTS_RESOLUTION_FAILED",
+        "Failed to resolve attachments for chat.",
+        { attachmentIds },
+      ));
     }
-    return { agentAttachments, attachmentRecords };
+    return success({ agentAttachments, attachmentRecords });
   }
 
   /**

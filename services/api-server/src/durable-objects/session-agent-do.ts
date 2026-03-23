@@ -938,8 +938,21 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     payload: ChatMessageEvent,
   ): Promise<void> {
     try {
-      await this.ensureReady(); // await any startup steps synchronously. 
-      const { attachments } = await this.agentProcessManager.handleChatMessage(payload);
+      await this.ensureReady(); // await any startup steps synchronously.
+      const result = await this.agentProcessManager.handleChatMessage(payload);
+      if (!result.ok) {
+        this.logger.warn("Modeled chat message failure", { fields: { code: result.error.code } });
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "CHAT_MESSAGE_FAILED",
+            message: result.error.message,
+          },
+          connection,
+        );
+        return;
+      }
+      const { attachments } = result.value;
       // persist the message to db and such.
       const userUiMessage = createUserUiMessage(payload.content, attachments);
       if (!userUiMessage) {

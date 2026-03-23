@@ -2,14 +2,18 @@ import {
   type AgentOutput,
   type AgentInputAttachment,
   type ClientState,
+  type DomainError,
   type Logger,
   type AgentSettings,
+  type Result,
   decodeAgentOutput,
   encodeAgentInput,
   ClaudeAuthState,
   ClaudeModel,
   CodexModel,
   ChatMessageEvent,
+  failure,
+  success,
 } from "@repo/shared";
 import {
   WorkersSpriteClient,
@@ -19,14 +23,76 @@ import {
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import type { ServerState } from "@/durable-objects/repositories/server-state-repository";
-import { ensureClaudeCredentialsReadyForSend, getClaudeAuthRequiredFromClaudeError, getClaudeCredentialsSnapshot, refreshClaudeAuthRequired } from "../session-agent-claude-auth";
+import {
+  ensureClaudeCredentialsReadyForSend,
+  getClaudeAuthRequiredFromClaudeError,
+  getClaudeCredentialsSnapshot,
+  refreshClaudeAuthRequired,
+  type ClaudeCredentialsSyncError,
+} from "../session-agent-claude-auth";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
 import { AttachmentRecord } from "@/types/attachments";
 import { decrypt } from "@/lib/crypto";
-import { AgentAttachmentService } from "./attachment-service";
+import {
+  AgentAttachmentService,
+  type AttachmentResolutionError,
+} from "./attachment-service";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";
+const AGENT_PROCESS_DOMAIN = "agent_process";
+
+type AgentProcessMessageResult = {
+  attachments: AttachmentRecord[];
+};
+
+export type AgentProcessError =
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "AGENT_SESSION_UNAVAILABLE", { retryable: true }>
+  | DomainError<
+      typeof AGENT_PROCESS_DOMAIN,
+      "CLAUDE_AUTH_REQUIRED" | "CLAUDE_REAUTH_REQUIRED",
+      { claudeAuthRequired: ClaudeAuthState }
+    >
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "CLAUDE_CREDENTIALS_SYNC_FAILED", { claudeAuthRequired: null }>
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "CODEX_AUTH_REQUIRED", { provider: "codex-cli" }>
+  | DomainError<
+      typeof AGENT_PROCESS_DOMAIN,
+      "INVALID_MODEL",
+      { provider: AgentSettings["provider"]; model: string }
+    >
+  | DomainError<
+      typeof AGENT_PROCESS_DOMAIN,
+      "ATTACHMENTS_NOT_FOUND" | "ATTACHMENTS_RESOLUTION_FAILED",
+      { attachmentIds: string[] }
+    >;
+
+function agentProcessError<Code extends AgentProcessError["code"]>(
+  code: Code,
+  message: string,
+  details: Record<string, unknown>,
+): Extract<AgentProcessError, { code: Code }> {
+  return {
+    domain: AGENT_PROCESS_DOMAIN,
+    code,
+    message,
+    ...details,
+  } as Extract<AgentProcessError, { code: Code }>;
+}
+
+function mapAttachmentResolutionError(
+  error: AttachmentResolutionError,
+): AgentProcessError {
+  switch (error.code) {
+    case "ATTACHMENTS_NOT_FOUND":
+      return agentProcessError("ATTACHMENTS_NOT_FOUND", error.message, {
+        attachmentIds: error.attachmentIds,
+      });
+    case "ATTACHMENTS_RESOLUTION_FAILED":
+      return agentProcessError("ATTACHMENTS_RESOLUTION_FAILED", error.message, {
+        attachmentIds: error.attachmentIds,
+      });
+  }
+}
 
 export interface StartAgentParams {
   spriteName: string;
@@ -207,7 +273,11 @@ export class AgentProcessManager {
     content: string | undefined,
     attachmentIds: string[],
   ): Promise<AttachmentRecord[]> {
-    const { agentAttachments, attachmentRecords } = await this.agentAttachmentService.resolveAttachments(sessionId, attachmentIds);
+    const attachmentResult = await this.agentAttachmentService.resolveAttachments(sessionId, attachmentIds);
+    if (!attachmentResult.ok) {
+      throw new Error(attachmentResult.error.message);
+    }
+    const { agentAttachments, attachmentRecords } = attachmentResult.value;
     await this._sendMessageToAgent(content, agentAttachments);
     return attachmentRecords;
   }
@@ -219,25 +289,27 @@ export class AgentProcessManager {
    */
   async handleChatMessage(
     payload: ChatMessageEvent
-  ): Promise<{attachments: AttachmentRecord[]}> {
+  ): Promise<Result<AgentProcessMessageResult, AgentProcessError>> {
     // Reattach agent session if needed (after hibernation, or if the ws connection to the sprite dies)
     await this.ensureAgentSessionStarted();
 
     if (!this.isConnected()) {
       this.logger.error(`Agent session unavailable after ensureAgentSessionStarted: spriteName=${this.getServerState().spriteName}, sessionId=${this.getServerState().sessionId}`);
-      throw new Error("Agent session not available");
+      return failure(agentProcessError("AGENT_SESSION_UNAVAILABLE", "Agent session not available.", { retryable: true }));
     }
 
     switch (this.getClientState().agentSettings.provider) {
       case "claude-code": {
-        if (!await this.ensureClaudeCredentialsReadyForSend()) {
-          throw new Error("Claude credentials not ready");
+        const credentialsResult = await this.ensureClaudeCredentialsReadyForSend();
+        if (!credentialsResult.ok) {
+          return failure(credentialsResult.error);
         }
         break;
       }
       case "codex-cli": {
-        if (!await this.ensureCodexCredentialsReadyForSend()) {
-          throw new Error("Codex credentials not ready");
+        const credentialsResult = await this.ensureCodexCredentialsReadyForSend();
+        if (!credentialsResult.ok) {
+          return failure(credentialsResult.error);
         }
         break;
       }
@@ -248,20 +320,29 @@ export class AgentProcessManager {
       throw new Error("Session id not found");
     }
     const content = payload.content?.trim();
+    const attachmentIds = payload.attachments?.map((attachment) => attachment.attachmentId) ?? [];
 
-   const { agentAttachments, attachmentRecords } = await this.agentAttachmentService.resolveAttachments(sessionId, payload.attachments?.map(a => a.attachmentId) ?? []);
+    const attachmentResult = await this.agentAttachmentService.resolveAttachments(sessionId, attachmentIds);
+    if (!attachmentResult.ok) {
+      return failure(mapAttachmentResolutionError(attachmentResult.error));
+    }
+    const { agentAttachments, attachmentRecords } = attachmentResult.value;
 
     // Validate and apply model switch (if requested and different from current)
     let modelForAgent: string | undefined;
     if (payload.model && payload.model !== this.getClientState().agentSettings.model) {
-      modelForAgent = this.validateAndApplyModelSwitch(payload.model);
+      const modelResult = this.validateAndApplyModelSwitch(payload.model);
+      if (!modelResult.ok) {
+        return modelResult;
+      }
+      modelForAgent = modelResult.value;
     }
 
     await this._sendMessageToAgent(content, agentAttachments, modelForAgent);
-    
-    return {
+
+    return success({
       attachments: attachmentRecords,
-    }
+    });
   }
 
   private setupAgentSessionHandlers(session: SpriteWebsocketSession): void {
@@ -448,7 +529,7 @@ export class AgentProcessManager {
   /** Validates the model against the current provider and updates DO state. 
    * Returns the validated model, or throws an error if invalid.
    * */
-  private validateAndApplyModelSwitch(model: string): string | undefined {
+  private validateAndApplyModelSwitch(model: string): Result<string | undefined, AgentProcessError> {
     const currentProvider = this.getClientState().agentSettings.provider;
 
     let validatedModel: string;
@@ -456,14 +537,20 @@ export class AgentProcessManager {
       const result = ClaudeModel.safeParse(model);
       if (!result.success) {
         this.logger.warn("Invalid Claude model in model switch", { fields: { model } });
-        throw new Error("Invalid Claude model in model switch");
+        return failure(agentProcessError("INVALID_MODEL", "Invalid Claude model in model switch.", {
+          provider: currentProvider,
+          model,
+        }));
       }
       validatedModel = result.data;
     } else if (currentProvider === "codex-cli") {
       const result = CodexModel.safeParse(model);
       if (!result.success) {
         this.logger.warn("Invalid Codex model in model switch", { fields: { model } });
-        throw new Error("Invalid Codex model in model switch");
+        return failure(agentProcessError("INVALID_MODEL", "Invalid Codex model in model switch.", {
+          provider: currentProvider,
+          model,
+        }));
       }
       validatedModel = result.data;
     } else {
@@ -478,12 +565,26 @@ export class AgentProcessManager {
     this.logger.info("Model updated", {
       fields: { provider: currentProvider, model: validatedModel },
     });
-    return validatedModel;
+    return success(validatedModel);
   }
 
-  private async ensureClaudeCredentialsReadyForSend(): Promise<boolean> {
+  private mapClaudeCredentialError(
+    error: ClaudeCredentialsSyncError,
+  ): AgentProcessError {
+    if (error.code === "CLAUDE_AUTH_REQUIRED" || error.code === "CLAUDE_REAUTH_REQUIRED") {
+      return agentProcessError(error.code, error.message, {
+        claudeAuthRequired: error.claudeAuthRequired,
+      });
+    }
+
+    return agentProcessError("CLAUDE_CREDENTIALS_SYNC_FAILED", error.message, {
+      claudeAuthRequired: null,
+    });
+  }
+
+  private async ensureClaudeCredentialsReadyForSend(): Promise<Result<void, AgentProcessError>> {
     if (this.getClientState().agentSettings.provider !== "claude-code") {
-      return true;
+      return success(undefined);
     }
     const serverState = this.getServerState();
     const result = await ensureClaudeCredentialsReadyForSend({
@@ -494,19 +595,23 @@ export class AgentProcessManager {
       lastFingerprint: this.lastClaudeCredentialFingerprint,
     });
 
-    this.setClaudeAuthRequired(result.claudeAuthRequired);
-    if (result.ok) {
-      this.lastClaudeCredentialFingerprint = result.nextFingerprint;
-      return true;
+    if (!result.ok) {
+      this.setClaudeAuthRequired(result.error.claudeAuthRequired);
+      return failure(this.mapClaudeCredentialError(result.error));
     }
-    return false;
+
+    this.setClaudeAuthRequired(result.value.claudeAuthRequired);
+    this.lastClaudeCredentialFingerprint = result.value.nextFingerprint;
+    return success(undefined);
   }
 
-  private async ensureCodexCredentialsReadyForSend(): Promise<boolean> {
+  private async ensureCodexCredentialsReadyForSend(): Promise<Result<void, AgentProcessError>> {
     if (this.getClientState().agentSettings.provider !== "codex-cli") {
-      return true;
+      return success(undefined);
     }
     // TODO: implement
-    return false;
+    return failure(agentProcessError("CODEX_AUTH_REQUIRED", "Codex credentials not ready.", {
+      provider: "codex-cli",
+    }));
   }
 }

@@ -103,4 +103,11 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 - Write instructive and clarifying comments where needed, but do not be too verbose. 
 - Always prefer to use async/await over callbacks and .then()/.catch()
 
+## Error handling
+
+- Use `Result<T, E>` for expected business logic and operational failures.
+- Define `E` as a small tagged plain-object union with a stable `code` string; do not use `Error` subclasses for normal control flow.
+- Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
+- Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
+
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.

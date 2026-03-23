@@ -1,4 +1,11 @@
-import type { ClaudeAuthState, Logger } from "@repo/shared";
+import {
+  type DomainError,
+  type ClaudeAuthState,
+  type Logger,
+  type Result,
+  failure,
+  success,
+} from "@repo/shared";
 import { WorkersSpriteClient } from "@/lib/sprites";
 import {
   ClaudeOAuthError,
@@ -20,19 +27,33 @@ export type ClaudeAuthRefreshResult = {
   claudeAuthRequired: ClaudeAuthState | null;
 };
 
-export type EnsureClaudeCredentialsReadyForSendResult =
-  | {
-      ok: true;
-      claudeAuthRequired: null;
-      nextFingerprint: string;
-      credentialsChanged: boolean;
-    }
-  | {
-      ok: false;
-      claudeAuthRequired: ClaudeAuthState | null;
-      errorCode: string;
-      errorMessage: string;
-    };
+export type ClaudeCredentialsReadyValue = {
+  claudeAuthRequired: null;
+  nextFingerprint: string;
+  credentialsChanged: boolean;
+};
+
+export type ClaudeCredentialsSyncError =
+  | DomainError<
+      "claude_credentials",
+      "CLAUDE_CREDENTIALS_SYNC_FAILED",
+      { claudeAuthRequired: null }
+    >
+  | DomainError<
+      "claude_credentials",
+      "CLAUDE_AUTH_REQUIRED" | "CLAUDE_REAUTH_REQUIRED",
+      { claudeAuthRequired: ClaudeAuthState }
+    >
+  | DomainError<
+      "claude_credentials",
+      "CLAUDE_INVALID_STATE" | "CLAUDE_INVALID_CODE" | "CLAUDE_TOKEN_EXCHANGE_FAILED" | "CLAUDE_TOKEN_REFRESH_FAILED",
+      { claudeAuthRequired: ClaudeAuthState | null }
+    >;
+
+export type EnsureClaudeCredentialsReadyForSendResult = Result<
+  ClaudeCredentialsReadyValue,
+  ClaudeCredentialsSyncError
+>;
 
 export function getClaudeAuthRequiredFromClaudeError(
   error: ClaudeOAuthError,
@@ -90,12 +111,12 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
   lastFingerprint: string | null;
 }): Promise<EnsureClaudeCredentialsReadyForSendResult> {
   if (!params.spriteName) {
-    return {
-      ok: false,
+    return failure({
+      domain: "claude_credentials",
+      code: "CLAUDE_CREDENTIALS_SYNC_FAILED",
+      message: "Session sprite is unavailable.",
       claudeAuthRequired: null,
-      errorCode: "CLAUDE_CREDENTIALS_SYNC_FAILED",
-      errorMessage: "Session sprite is unavailable.",
-    };
+    });
   }
 
   try {
@@ -106,21 +127,20 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
     });
 
     if (!credentials) {
-      return {
-        ok: false,
+      return failure({
+        domain: "claude_credentials",
+        code: "CLAUDE_AUTH_REQUIRED",
+        message: "Claude authentication required for this session.",
         claudeAuthRequired: "auth_required",
-        errorCode: "CLAUDE_AUTH_REQUIRED",
-        errorMessage: "Claude authentication required for this session.",
-      };
+      });
     }
 
     if (credentials.fingerprint === params.lastFingerprint) {
-      return {
-        ok: true,
+      return success({
         claudeAuthRequired: null,
         nextFingerprint: credentials.fingerprint,
         credentialsChanged: false,
-      };
+      });
     }
 
     const sprite = new WorkersSpriteClient(
@@ -134,28 +154,43 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
       { mode: "0600" },
     );
 
-    return {
-      ok: true,
+    return success({
       claudeAuthRequired: null,
       nextFingerprint: credentials.fingerprint,
       credentialsChanged: true,
-    };
+    });
   } catch (error) {
     if (error instanceof ClaudeOAuthError) {
-      return {
-        ok: false,
-        claudeAuthRequired: getClaudeAuthRequiredFromClaudeError(error),
-        errorCode: error.code,
-        errorMessage: error.message,
-      };
+      switch (error.code) {
+        case "CLAUDE_AUTH_REQUIRED":
+        case "CLAUDE_REAUTH_REQUIRED":
+          return failure({
+            domain: "claude_credentials",
+            code: error.code,
+            message: error.message,
+            claudeAuthRequired: error.code === "CLAUDE_AUTH_REQUIRED"
+              ? "auth_required"
+              : "reauth_required",
+          });
+        case "CLAUDE_INVALID_STATE":
+        case "CLAUDE_INVALID_CODE":
+        case "CLAUDE_TOKEN_EXCHANGE_FAILED":
+        case "CLAUDE_TOKEN_REFRESH_FAILED":
+          return failure({
+            domain: "claude_credentials",
+            code: error.code,
+            message: error.message,
+            claudeAuthRequired: getClaudeAuthRequiredFromClaudeError(error),
+          });
+      }
     }
 
-    return {
-      ok: false,
+    return failure({
+      domain: "claude_credentials",
+      code: "CLAUDE_CREDENTIALS_SYNC_FAILED",
+      message: "Failed to sync Claude credentials for this session.",
       claudeAuthRequired: null,
-      errorCode: "CLAUDE_CREDENTIALS_SYNC_FAILED",
-      errorMessage: "Failed to sync Claude credentials for this session.",
-    };
+    });
   }
 }
 

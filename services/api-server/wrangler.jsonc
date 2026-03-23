@@ -15,7 +15,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev",
-    "WORKER_URL": "https://cloude-code-api.bedelstein12.workers.dev",
+    "WORKER_URL": "https://api.cloudecode.dev",
     "GITHUB_APP_SLUG": "cloude-code",
     "GITHUB_APP_ID": "2799576",
     "ALLOWED_GITHUB_LOGINS": "benedelstein,evancarter,sidkasbekar,sidgilly,161siegels",

@@ -592,6 +592,7 @@ export class GitHubAppService {
     repo?: { repoName: string; repoId: number },
     permissions: { contents: "read" | "write"; metadata: "read" } = { contents: "write", metadata: "read" },
   ): Promise<string> {
+    this.logger.info(`getting installation token for installation ${installationId} and repo ${repo?.repoName}`);
     // Cache key includes installation, repo, and permission scope to avoid cross-token leaks
     const cacheRepoId = repo?.repoId ?? 0;
     const permissionSuffix = permissions.contents === "read" ? ":ro" : "";
