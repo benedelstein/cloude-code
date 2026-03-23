@@ -105,7 +105,8 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const createSessionData = c.req.valid("json");
   const user = c.get("user");
 
-  // Verify that the GitHub App installation exists for this repo before creating the session
+  // Verify that the GitHub App installation exists for this repo and is accessible to the user
+  // before creating the session
   const github = new GitHubAppService(c.env, logger);
   let repository: {
     id: number;
@@ -115,10 +116,10 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     defaultBranch?: string;
   };
   try {
-    logger.info(`finding installation for repo ${createSessionData.repoId}`);
     // first find the installation for the repo
     const installation = await github.findInstallationForRepoId(
       createSessionData.repoId,
+      user.githubAccessToken,
     );
     repository = await github.getUserAccessibleInstallationRepoById(
       user.id,

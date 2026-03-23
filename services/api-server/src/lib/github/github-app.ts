@@ -313,13 +313,14 @@ export class GitHubAppService {
    * Resolve a repo's full name (owner/repo) from its numeric GitHub ID.
    * Checks D1 first, falls back to the GitHub API.
    */
-  async getRepoNameById(repoId: number): Promise<string> {
+  async getRepoNameById(repoId: number, userAccessToken: string): Promise<string> {
     const installationRepo = await this.installationRepository.findInstallationRepoById(repoId);
 
     if (installationRepo) return installationRepo.repoName;
 
     // Fallback: query GitHub API using an app-level request
-    const { data } = await this.app.octokit.request("GET /repositories/{id}", {
+    const octokit = new Octokit({ auth: userAccessToken });
+    const { data } = await octokit.request("GET /repositories/{id}", {
       id: repoId,
     });
     return data.full_name;
@@ -572,43 +573,28 @@ export class GitHubAppService {
    */
   async findInstallationForRepoId(
     repoId: number,
+    userAccessToken: string,
   ): Promise<GitHubInstallationWithRepo> {
     // first check d1
     const installation = await this.installationRepository.findByRepoId(repoId);
 
     if (installation) {
+      this.logger.debug(`found installation for repo ${repoId} in d1`);
       return installation;
     }
 
-    const response = await this.app.octokit.request("GET /repositories/{id}", {
-      id: repoId,
+    this.logger.info(`installation for repo ${repoId} not found in d1, trying api`);
+    const userOctokit = new Octokit({ auth: userAccessToken });
+    const response = await userOctokit.request("GET /repositories/{repository_id}", {
+      repository_id: repoId,
     });
-    const repoData: Awaited<ReturnType<typeof this.app.octokit.rest.repos.get>>["data"] = response.data;
+    const repoData = response.data;
     const owner = repoData.owner.login;
     const repo = repoData.name;
     const repoFullName = repoData.full_name;
 
     this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
-
-    try {
-      const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
-        owner,
-        repo,
-      });
-
-      return {
-        id: data.id,
-        repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
-      };
-    } catch (_error) {
-      this.logger.error(`Failed to get repository installation for ${repoFullName}`, {
-        error: _error,
-      });
-      throw new GitHubAppError(
-        "INSTALLATION_NOT_FOUND",
-        `No GitHub App installation found for ${repoFullName}. Is the app installed on this account?`,
-      );
-    }
+    return this.findInstallationForRepo(owner, repo);
   }
 
   /**

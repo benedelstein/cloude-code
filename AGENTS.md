@@ -102,6 +102,7 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 - Do not use emojis in your git messages or comments unless absolutely relevant and necessary.
 - Write instructive and clarifying comments where needed, but do not be too verbose. 
 - Always prefer to use async/await over callbacks and .then()/.catch()
+- For public methods, add doc comments describing the method, its parameters and return value.
 
 ## Error handling
 
