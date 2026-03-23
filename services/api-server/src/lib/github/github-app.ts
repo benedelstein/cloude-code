@@ -193,6 +193,13 @@ export class GitHubAppService {
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);
+    this.logger.info("resolved installation for repo token request", {
+      fields: {
+        repoFullName,
+        installationId: installation.id,
+        repositorySelection: installation.repositorySelection,
+      },
+    });
     const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
     return this.getInstallationToken(installation.id, { repoName: repo, repoId: numericRepoId });
   }
@@ -208,6 +215,13 @@ export class GitHubAppService {
     }
 
     const installation = await this.findInstallationForRepo(owner, repo);
+    this.logger.info("resolved installation for read-only repo token request", {
+      fields: {
+        repoFullName,
+        installationId: installation.id,
+        repositorySelection: installation.repositorySelection,
+      },
+    });
     const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
     return this.getInstallationToken(
       installation.id,
@@ -510,6 +524,13 @@ export class GitHubAppService {
           `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
         );
       }
+      this.logger.info("resolved installation for repo from d1", {
+        fields: {
+          repoFullName: `${owner}/${repo}`,
+          installationId: installation.id,
+          repositorySelection: installation.repositorySelection,
+        },
+      });
       this.logger.log(`found installation for ${owner}/${repo} in d1 in ${new Date().getTime() - d1.getTime()}ms`);
       return installation;
     }
@@ -521,6 +542,13 @@ export class GitHubAppService {
       const { data } = await this.app.octokit.rest.apps.getRepoInstallation({
         owner,
         repo,
+      });
+      this.logger.info("resolved installation for repo from github api", {
+        fields: {
+          repoFullName: `${owner}/${repo}`,
+          installationId: data.id,
+          repositorySelection: data.repository_selection ?? "all",
+        },
       });
 
       this.logger.log(`found installation for ${owner}/${repo} in api in ${new Date().getTime() - d1.getTime()}ms`);
@@ -593,6 +621,20 @@ export class GitHubAppService {
     permissions: { contents: "read" | "write"; metadata: "read" } = { contents: "write", metadata: "read" },
   ): Promise<string> {
     this.logger.info(`getting installation token for installation ${installationId} and repo ${repo?.repoName}`);
+    if (!installationId) {
+      this.logger.error("missing installation id for installation token request", {
+        fields: {
+          installationId,
+          installationIdType: typeof installationId,
+          repoName: repo?.repoName ?? null,
+          repoId: repo?.repoId ?? null,
+          contentsPermission: permissions.contents,
+        },
+      });
+      throw new Error(
+        `Missing installationId for installation token request (repo=${repo?.repoName ?? "unknown"}, repoId=${repo?.repoId ?? "unknown"})`,
+      );
+    }
     // Cache key includes installation, repo, and permission scope to avoid cross-token leaks
     const cacheRepoId = repo?.repoId ?? 0;
     const permissionSuffix = permissions.contents === "read" ? ":ro" : "";
