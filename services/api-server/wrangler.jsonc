@@ -55,9 +55,10 @@
       "bucket_name": "cloude-code-attachments"
     }
   ],
-  "custom_domains": [
+  "routes": [
     {
-      "pattern": "api.cloudecode.dev"
+      "pattern": "api.cloudecode.dev",
+      "custom_domain": true
     }
   ],
   "observability": {
