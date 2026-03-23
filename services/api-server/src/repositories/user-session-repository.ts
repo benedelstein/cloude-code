@@ -26,6 +26,18 @@ interface RefreshTokenRow {
   encrypted_token: string;
 }
 
+export interface AuthSessionTokenRecord {
+  sessionToken: string;
+  githubAccessToken: string;
+  tokenExpiresAt: string | null;
+}
+
+interface AuthSessionTokenRow {
+  session_token: string;
+  github_access_token: string;
+  token_expires_at: string | null;
+}
+
 export class UserSessionRepository {
   private readonly database: D1Database;
 
@@ -77,6 +89,30 @@ export class UserSessionRepository {
       .first<RefreshTokenRow>();
 
     return row?.encrypted_token ?? null;
+  }
+
+  async getLatestActiveAuthSessionByUserId(
+    userId: string,
+  ): Promise<AuthSessionTokenRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT token as session_token, github_access_token, token_expires_at
+       FROM auth_sessions
+       WHERE user_id = ? AND datetime(expires_at) > datetime('now')
+       ORDER BY datetime(expires_at) DESC
+       LIMIT 1`,
+    )
+      .bind(userId)
+      .first<AuthSessionTokenRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      sessionToken: row.session_token,
+      githubAccessToken: row.github_access_token,
+      tokenExpiresAt: row.token_expires_at,
+    };
   }
 
   async createAuthSession(

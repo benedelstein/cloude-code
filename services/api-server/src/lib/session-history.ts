@@ -1,6 +1,7 @@
 import type { SessionSummary } from "@repo/shared";
 import {
   type CreateSessionParams,
+  type SessionAccessRow,
   SessionsRepository,
 } from "@/repositories/sessions.repository";
 
@@ -44,6 +45,21 @@ export class SessionHistoryService {
 
   async getById(sessionId: string): Promise<SessionSummary | null> {
     return this.repository.getById(sessionId);
+  }
+
+  async getAccessRowForUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionAccessRow | null> {
+    return this.repository.getAccessRowForUser(sessionId, userId);
+  }
+
+  async updateInstallationId(sessionId: string, installationId: number): Promise<void> {
+    await this.repository.updateInstallationId(sessionId, installationId);
+  }
+
+  async markRevoked(sessionId: string, reason: string): Promise<void> {
+    await this.repository.markRevoked(sessionId, reason);
   }
 
   async isOwnedByUser(sessionId: string, userId: string): Promise<boolean> {

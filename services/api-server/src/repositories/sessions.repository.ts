@@ -4,6 +4,7 @@ export interface CreateSessionParams {
   id: string;
   userId: string;
   repoId: number;
+  installationId: number;
   repoFullName: string;
 }
 
@@ -11,12 +12,25 @@ interface SessionRow {
   id: string;
   user_id: string;
   repo_id: number;
+  installation_id: number | null;
   repo_full_name: string;
   title: string | null;
   archived: number;
+  revoked_at: string | null;
+  revoked_reason: string | null;
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
+}
+
+export interface SessionAccessRow {
+  id: string;
+  userId: string;
+  repoId: number;
+  installationId: number | null;
+  repoFullName: string;
+  revokedAt: string | null;
+  revokedReason: string | null;
 }
 
 function rowToSummary(row: SessionRow): SessionSummary {
@@ -41,9 +55,15 @@ export class SessionsRepository {
 
   async create(params: CreateSessionParams): Promise<void> {
     await this.database.prepare(
-      `INSERT INTO sessions (id, user_id, repo_id, repo_full_name) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, user_id, repo_id, installation_id, repo_full_name) VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(params.id, params.userId, params.repoId, params.repoFullName)
+      .bind(
+        params.id,
+        params.userId,
+        params.repoId,
+        params.installationId,
+        params.repoFullName,
+      )
       .run();
   }
 
@@ -134,6 +154,53 @@ export class SessionsRepository {
       .first<SessionRow>();
 
     return row ? rowToSummary(row) : null;
+  }
+
+  async getAccessRowForUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionAccessRow | null> {
+    const row = await this.database.prepare(
+      `SELECT id, user_id, repo_id, installation_id, repo_full_name, revoked_at, revoked_reason
+       FROM sessions
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind(sessionId, userId)
+      .first<SessionRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      userId: row.user_id,
+      repoId: row.repo_id,
+      installationId: row.installation_id,
+      repoFullName: row.repo_full_name,
+      revokedAt: row.revoked_at,
+      revokedReason: row.revoked_reason,
+    };
+  }
+
+  async updateInstallationId(sessionId: string, installationId: number): Promise<void> {
+    await this.database.prepare(
+      `UPDATE sessions SET installation_id = ?, updated_at = datetime('now') WHERE id = ?`,
+    )
+      .bind(installationId, sessionId)
+      .run();
+  }
+
+  async markRevoked(sessionId: string, reason: string): Promise<void> {
+    await this.database.prepare(
+      `UPDATE sessions
+       SET revoked_at = COALESCE(revoked_at, datetime('now')),
+           revoked_reason = COALESCE(revoked_reason, ?),
+           updated_at = datetime('now')
+       WHERE id = ?`,
+    )
+      .bind(reason, sessionId)
+      .run();
   }
 
   async isOwnedByUser(sessionId: string, userId: string): Promise<boolean> {

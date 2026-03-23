@@ -71,6 +71,7 @@ export const OperationErrorCode = z.enum([
   "INVALID_MESSAGE",
   "MESSAGE_HANDLER_ERROR",
   "CHAT_MESSAGE_FAILED",
+  "REPO_ACCESS_REVOKED",
 ]);
 export type OperationErrorCode = z.infer<typeof OperationErrorCode>;
 

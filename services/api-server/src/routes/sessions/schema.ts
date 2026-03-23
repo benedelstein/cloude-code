@@ -18,6 +18,10 @@ import {
 } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
+const ErrorWithCodeResponse = z.object({
+  error: z.string(),
+  code: z.string(),
+});
 const ErrorWithDetailsResponse = z.object({
   error: z.string(),
   details: z.string(),
@@ -98,6 +102,10 @@ export const getSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
+    },
   },
 });
 
@@ -155,6 +163,10 @@ export const getSessionMessagesRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get messages",
@@ -176,6 +188,10 @@ export const getSessionPlanRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Plan not found",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -203,6 +219,10 @@ export const createPullRequestRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
+    },
     409: {
       content: { "application/json": { schema: ErrorWithUrlResponse } },
       description: "Pull request already exists",
@@ -228,6 +248,10 @@ export const getPullRequestRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session or PR not found",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -269,6 +293,10 @@ export const deleteSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to delete session",
@@ -295,6 +323,10 @@ export const openEditorRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to open editor",
@@ -320,6 +352,10 @@ export const closeEditorRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access revoked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },

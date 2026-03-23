@@ -16,6 +16,11 @@ import {
 import { createLogger } from "@/lib/logger";
 import { SessionHistoryService } from "@/lib/session-history";
 import {
+  assertSessionRepoAccess,
+  REPO_ACCESS_REVOKED_CODE,
+} from "@/lib/session-repo-access";
+import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
+import {
   createPullRequestForSession,
   getPullRequestStatusForSession,
   SessionPullRequestServiceError,
@@ -72,15 +77,40 @@ const getSessionAgent = async (id: string, env: Env) => {
 
 const getAuthorizedSessionAgent = async (
   sessionId: string,
-  userId: string,
+  user: AuthUser,
   env: Env,
-): Promise<Awaited<ReturnType<typeof getSessionAgent>> | null> => {
-  const sessionHistory = new SessionHistoryService(env.DB);
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, userId);
-  if (!isOwnedByUser) {
-    return null;
+): Promise<
+  | { ok: true; stub: Awaited<ReturnType<typeof getSessionAgent>> }
+  | { ok: false; status: 404; body: { error: string } }
+  | { ok: false; status: 403; body: { error: string; code: string } }
+> => {
+  const accessResult = await assertSessionRepoAccess({
+    env,
+    sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+  if (!accessResult.ok) {
+    if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+      await requestSessionRevocationCleanup(env, sessionId);
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          error: accessResult.error.message,
+          code: accessResult.error.code,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      body: { error: "Session not found" },
+    };
   }
-  return getSessionAgent(sessionId, env);
+
+  return { ok: true, stub: await getSessionAgent(sessionId, env) };
 };
 
 const sessionMessagesResponseSchema = z.array(UIMessageSchema);
@@ -108,6 +138,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   // Verify that the GitHub App installation exists for this repo and is accessible to the user
   // before creating the session
   const github = new GitHubAppService(c.env, logger);
+  let installation: { id: number };
   let repository: {
     id: number;
     fullName: string;
@@ -117,7 +148,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   };
   try {
     // first find the installation for the repo
-    const installation = await github.findInstallationForRepoId(
+    installation = await github.findInstallationForRepoId(
       createSessionData.repoId,
       user.githubAccessToken,
     );
@@ -152,6 +183,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     id: sessionId,
     userId: user.id,
     repoId: repository.id,
+    installationId: installation.id,
     repoFullName: repository.fullName,
   });
   let attachmentsBound = false;
@@ -267,14 +299,17 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
   const d1 = new Date();
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
   logger.debug(`Fetched session agent in ${new Date().getTime() - d1.getTime()}ms`);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
   const d2 = new Date();
-  const response = await stub.fetch(new Request("http://do/"));
+  const response = await authorized.stub.fetch(new Request("http://do/"));
   logger.debug(`Fetched session info in ${new Date().getTime() - d2.getTime()}ms`);
   if (!response.ok) {
     return c.json({ error: "Session not found" }, 404);
@@ -327,12 +362,15 @@ sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
 sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
-  const response = await stub.fetch(new Request("http://do/messages"));
+  const response = await authorized.stub.fetch(new Request("http://do/messages"));
   if (!response.ok) {
     return c.json({ error: "Failed to get messages" }, 500);
   }
@@ -344,12 +382,15 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
 sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
-  const response = await stub.fetch(new Request("http://do/plan"));
+  const response = await authorized.stub.fetch(new Request("http://do/plan"));
   if (response.status === 404) {
     return c.json({ error: "Plan not found" }, 404);
   }
@@ -365,14 +406,17 @@ sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
 sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
   const github = new GitHubAppService(c.env, logger);
   try {
     const pullRequest = await createPullRequestForSession({
-      sessionStub: stub,
+      sessionStub: authorized.stub,
       github,
       anthropicApiKey: c.env.ANTHROPIC_API_KEY,
     });
@@ -410,14 +454,17 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
 sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
   const github = new GitHubAppService(c.env, logger);
   try {
     const pullRequestStatus = await getPullRequestStatusForSession({
-      sessionStub: stub,
+      sessionStub: authorized.stub,
       githubService: github,
     });
     return c.json(pullRequestStatus, 200);
@@ -452,12 +499,15 @@ sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
 sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
-  const response = await stub.fetch(
+  const response = await authorized.stub.fetch(
     new Request("http://do/", { method: "DELETE" }),
   );
 
@@ -477,12 +527,15 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
 sessionsRoutes.openapi(openEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
-  const response = await stub.fetch(
+  const response = await authorized.stub.fetch(
     new Request("http://do/editor/open", { method: "POST" }),
   );
 
@@ -502,12 +555,15 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
 sessionsRoutes.openapi(closeEditorRoute, async (c) => {
   const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const authorized = await getAuthorizedSessionAgent(sessionId, user, c.env);
+  if (!authorized.ok) {
+    if (authorized.status === 403) {
+      return c.json(authorized.body, 403);
+    }
+    return c.json(authorized.body, 404);
   }
 
-  const response = await stub.fetch(
+  const response = await authorized.stub.fetch(
     new Request("http://do/editor/close", { method: "POST" }),
   );
 

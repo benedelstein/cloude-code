@@ -21,10 +21,8 @@ function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
     }
     writeFileSync(join(codexDir, "auth.json"), authJson, { mode: 0o600 });
     emit({ type: "debug", message: "Wrote ~/.codex/auth.json from CODEX_AUTH_JSON env" });
-  } else if (process.env.OPENAI_API_KEY) {
-    emit({ type: "debug", message: "Using OPENAI_API_KEY for codex authentication" });
   } else {
-    throw new Error("No codex authentication found. Set CODEX_AUTH_JSON or OPENAI_API_KEY.");
+    throw new Error("No codex authentication found. Set CODEX_AUTH_JSON.");
   }
 }
 

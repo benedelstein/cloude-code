@@ -51,6 +51,10 @@ import { MessageAccumulator } from "@/lib/message-accumulator";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
+import {
+  assertSessionRepoAccess,
+  REPO_ACCESS_REVOKED_CODE,
+} from "@/lib/session-repo-access";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -86,6 +90,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   private editorToken: string | null = null;
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
+  private sessionAccessRevoked = false;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -311,6 +316,31 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
+      const accessResult = await this.assertSessionRepoAccess();
+      if (!accessResult.ok) {
+        if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+          await this.enforceSessionRevoked();
+          return new Response(
+            JSON.stringify({
+              error: accessResult.error.message,
+              code: accessResult.error.code,
+            }),
+            {
+              status: accessResult.error.status,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ error: accessResult.error.message }),
+          {
+            status: accessResult.error.status,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
       const result = await handleGitProxy(
         request,
         path,
@@ -341,6 +371,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       if (request.method === "PATCH") {
         return this.handleUpdatePullRequest(request);
       }
+    }
+
+    if (path === "/revoke" && request.method === "POST") {
+      await this.enforceSessionRevoked();
+      return new Response(null, { status: 204 });
     }
 
     // Notify the session that the user has completed Claude OAuth
@@ -938,6 +973,32 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     payload: ChatMessageEvent,
   ): Promise<void> {
     try {
+      const accessResult = await this.assertSessionRepoAccess();
+      if (!accessResult.ok) {
+        if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+          await this.enforceSessionRevoked();
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: REPO_ACCESS_REVOKED_CODE,
+              message: accessResult.error.message,
+            },
+            connection,
+          );
+          return;
+        }
+
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "CHAT_MESSAGE_FAILED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return;
+      }
+
       await this.ensureReady(); // await any startup steps synchronously.
       const result = await this.agentProcessManager.handleChatMessage(payload);
       if (!result.ok) {
@@ -1101,6 +1162,70 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     const token = await ensureValidInstallationToken(this.gitProxyContext());
     if (token) {
       this.githubToken = token;
+    }
+  }
+
+  private async assertSessionRepoAccess() {
+    if (this.sessionAccessRevoked) {
+      return {
+        ok: false as const,
+        error: {
+          code: REPO_ACCESS_REVOKED_CODE,
+          status: 403 as const,
+          message: "Repository access for this session has been revoked.",
+          justRevoked: false,
+        },
+      };
+    }
+
+    const sessionId = this.serverState.sessionId;
+    const userId = this.serverState.userId;
+    if (!sessionId || !userId) {
+      return {
+        ok: false as const,
+        error: {
+          code: "SESSION_NOT_FOUND" as const,
+          status: 404 as const,
+          message: "Session not found",
+        },
+      };
+    }
+
+    return assertSessionRepoAccess({
+      env: this.env,
+      sessionId,
+      userId,
+    });
+  }
+
+  private async enforceSessionRevoked(): Promise<void> {
+    if (this.sessionAccessRevoked) {
+      return;
+    }
+
+    this.sessionAccessRevoked = true;
+    this.updatePartialState({
+      isResponding: false,
+      lastError: REPO_ACCESS_REVOKED_CODE,
+    });
+    this.broadcastMessage({
+      type: "operation.error",
+      code: REPO_ACCESS_REVOKED_CODE,
+      message: "Repository access for this session has been revoked.",
+    });
+    this.agentProcessManager.cancel();
+
+    if (!this.serverState.spriteName) {
+      return;
+    }
+
+    try {
+      await this.spritesCoordinator.deleteSprite(this.serverState.spriteName);
+    } catch (error) {
+      this.logger.error("Failed to delete sprite for revoked session", {
+        error,
+        fields: { sessionId: this.serverState.sessionId },
+      });
     }
   }
 
