@@ -88,6 +88,7 @@ export interface GitHubRepositoryData {
 export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
   | "REPO_NOT_ACCESSIBLE"
+  | "INVALID_REPO"
   | "GITHUB_API_ERROR";
 
 export type GitHubAppServiceError = {
@@ -560,6 +561,18 @@ export class GitHubAppService {
         installationId,
       );
     } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        return failure({
+          code: "INSTALLATION_NOT_FOUND",
+          message: `No GitHub App installation found for installation ${installationId}.`,
+        });
+      }
+
       return this.githubApiFailure(
         `Failed to list accessible repositories for installation ${installationId}.`,
         error,
@@ -633,10 +646,23 @@ export class GitHubAppService {
       this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
         error,
       });
-      return failure({
-        code: "INSTALLATION_NOT_FOUND",
-        message: `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
-      });
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        return failure({
+          code: "INSTALLATION_NOT_FOUND",
+          message: `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
+        });
+      }
+
+      return this.githubApiFailure(
+        `Failed to get repository installation for ${owner}/${repo}.`,
+        error,
+      );
     }
   }
 
@@ -681,7 +707,7 @@ export class GitHubAppService {
     const [owner, repo] = repoFullName.split("/");
     if (!owner || !repo) {
       return failure({
-        code: "REPO_NOT_ACCESSIBLE",
+        code: "INVALID_REPO",
         message: `Invalid repoFullName: ${repoFullName}`,
       });
     }

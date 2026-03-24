@@ -25,6 +25,11 @@ type UserRepoAccessError = {
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
 
+type NonRevokingSessionRepoAccessErrorCode = Exclude<
+  GitHubAppErrorCode,
+  "REPO_NOT_ACCESSIBLE"
+>;
+
 export type SessionRepoAccessError =
   | {
       code: "SESSION_NOT_FOUND";
@@ -41,6 +46,16 @@ export type SessionRepoAccessError =
       status: 403;
       message: string;
       justRevoked: boolean;
+    }
+  | {
+      code: NonRevokingSessionRepoAccessErrorCode;
+      status: 503;
+      message: string;
+    }
+  | {
+      code: "INVALID_REPO";
+      status: 400;
+      message: string;
     };
 
 export type SessionRepoAccessResult = Result<RepoAccessValue, SessionRepoAccessError>;
@@ -172,19 +187,38 @@ export async function assertSessionRepoAccess(params: {
   });
 
   if (!repoAccessResult.ok) {
-    if (repoAccessResult.error.code === "REPO_NOT_ACCESSIBLE") {
-      await sessionsRepository.markRevoked(sessionId, "REPO_ACCESS_REVOKED");
-      return failure({
-        code: "REPO_ACCESS_REVOKED",
-        status: 403,
-        message: "Repository access for this session has been revoked.",
-        justRevoked: true,
-      });
+    switch (repoAccessResult.error.code) {
+      case "REPO_NOT_ACCESSIBLE":
+        await sessionsRepository.markRevoked(sessionId, "REPO_ACCESS_REVOKED");
+        return failure({
+          code: "REPO_ACCESS_REVOKED",
+          status: 403,
+          message: "Repository access for this session has been revoked.",
+          justRevoked: true,
+        });
+      case "INSTALLATION_NOT_FOUND":
+      case "GITHUB_API_ERROR":
+        logger.warn("GitHub session repo access check failed without an authoritative revoke result.", {
+          fields: {
+            userId,
+            sessionId,
+            repoId: session.repoId,
+            installationId: session.installationId,
+            code: repoAccessResult.error.code,
+          },
+        });
+        return failure({
+          code: repoAccessResult.error.code,
+          status: 503,
+          message: "GitHub repository access could not be verified right now. Please retry.",
+        });
+      case "INVALID_REPO":
+        return failure({
+          code: "INVALID_REPO",
+          status: 400,
+          message: "Invalid repository.",
+        });
     }
-
-    throw new Error(
-      `Unexpected session repo access failure: ${repoAccessResult.error.code}`,
-    );
   }
 
   if (session.installationId !== repoAccessResult.value.installationId) {

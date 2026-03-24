@@ -97,6 +97,12 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
     }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
 
     return c.json({ error: result.error.message }, 404);
   }
@@ -155,6 +161,12 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
     }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
     if (result.error.status === 500) {
       return c.json({ error: result.error.message }, 500);
     }
@@ -180,6 +192,12 @@ sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
         error: result.error.message,
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
     if (result.error.status === 500) {
       return c.json({ error: result.error.message }, 500);
@@ -207,6 +225,12 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
         error: result.error.message,
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
     if (result.error.status === 409) {
       return c.json({
@@ -243,6 +267,12 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
         error: result.error.message,
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
     if (result.error.status === 500) {
       return c.json({ error: result.error.message }, 500);
@@ -289,6 +319,12 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
         error: result.error.message,
         code: result.error.code ?? "REPO_ACCESS_REVOKED",
       }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
     if (result.error.status === 500) {
       return c.json({ error: result.error.message }, 500);

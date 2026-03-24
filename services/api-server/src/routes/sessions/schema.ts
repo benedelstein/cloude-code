@@ -106,6 +106,10 @@ export const getSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access revoked for this session",
     },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
   },
 });
 
@@ -171,6 +175,10 @@ export const getSessionMessagesRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get messages",
     },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
   },
 });
 
@@ -196,6 +204,10 @@ export const getSessionPlanRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get plan",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -227,6 +239,10 @@ export const createPullRequestRoute = createRoute({
       content: { "application/json": { schema: ErrorWithUrlResponse } },
       description: "Pull request already exists",
     },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
   },
 });
 
@@ -256,6 +272,10 @@ export const getPullRequestRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to fetch PR status",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -300,6 +320,10 @@ export const deleteSessionRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to delete session",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });

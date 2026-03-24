@@ -607,6 +607,7 @@ export class AgentProcessManager {
       return success(undefined);
     }
     try {
+      // TODO: INJECT THE CREDENTIALS IF THEY CHANGED.
       await this.buildCodexAuthJson();
       return success(undefined);
     } catch {

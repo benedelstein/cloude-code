@@ -345,6 +345,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           );
         }
 
+        if (accessResult.error.status === 503) {
+          return new Response(
+            JSON.stringify({
+              error: accessResult.error.message,
+              code: accessResult.error.code,
+            }),
+            {
+              status: 503,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({ error: accessResult.error.message }),
           {
@@ -1231,7 +1244,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
     this.agentProcessManager.cancel();
 
-    await this.handleDeleteSession();
+    if (this.serverState.spriteName) {
+      try {
+        await this.spritesCoordinator.deleteSprite(this.serverState.spriteName);
+      } catch (error) {
+        this.logger.error("Failed to delete sprite for revoked session", { error });
+      }
+    }
+    // NOTE: DONT delete the do state here. just preserve it.
   }
 
   // ============================================

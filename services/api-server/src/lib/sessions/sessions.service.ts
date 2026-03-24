@@ -51,7 +51,7 @@ interface SessionAgentFetcher {
   fetch(_request: Request): Promise<Response>;
 }
 
-type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500;
+type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503;
 
 export interface SessionsServiceError {
   domain: "sessions";
@@ -698,6 +698,21 @@ export class SessionsService {
         throw new Error(
           "GitHub auth required unexpectedly for authenticated session route",
         );
+      }
+
+      if (accessResult.error.status === 503) {
+        logger.warn("Temporary GitHub failure while authorizing session route", {
+          fields: {
+            sessionId: params.sessionId,
+            userId: params.userId,
+            code: accessResult.error.code,
+          },
+        });
+        return failure(this.buildError({
+          status: 503,
+          message: accessResult.error.message,
+          code: accessResult.error.code,
+        }));
       }
 
       return failure(this.buildError({
