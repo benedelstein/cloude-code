@@ -70,7 +70,7 @@ export type ClientState = {
   claudeAuthRequired: ClaudeAuthState | null;
   /** Whether the agent is currently responding to a message — reset on restart */
   isResponding: boolean;
-  /** Last error message from provisioning or agent start — reset on restart */
+  /** Last error message from provisioning or agent start — reset on restart. Used moreso for persistent errors - use a stream event for a transient error */
   lastError: string | null;
   createdAt: Date;
 };

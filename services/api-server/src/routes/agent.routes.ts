@@ -6,7 +6,6 @@ import { verifySessionWebSocketToken } from "@/lib/session-websocket-token";
 import { createLogger } from "@/lib/logger";
 import {
   assertSessionRepoAccess,
-  REPO_ACCESS_REVOKED_CODE,
 } from "@/lib/user-session/session-repo-access";
 import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
 
@@ -38,7 +37,7 @@ agentRoutes.all("/session/:sessionId", async (c) => {
   });
 
   if (!accessResult.ok) {
-    if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+    if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
       await requestSessionRevocationCleanup(c.env, sessionId);
       return c.json(
         {

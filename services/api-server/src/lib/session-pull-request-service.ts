@@ -14,6 +14,7 @@ const MAX_CONTEXT_MESSAGES = 12;
 const MAX_CONTEXT_CHARS = 280;
 
 interface SessionAgentFetcher {
+  // eslint-disable-next-line no-unused-vars
   fetch(_request: Request): Promise<Response>;
 }
 

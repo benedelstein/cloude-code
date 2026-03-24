@@ -53,7 +53,7 @@ import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
 import {
   assertSessionRepoAccess,
-  REPO_ACCESS_REVOKED_CODE,
+  type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -316,9 +316,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
-      const accessResult = await this.assertSessionRepoAccess();
+      const accessResult = await this.assertSessionRepoAccess(); // ensure user still has access to the repo.
       if (!accessResult.ok) {
-        if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+        if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
           await this.enforceSessionRevoked();
           return new Response(
             JSON.stringify({
@@ -944,7 +944,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async handleDeleteSession(): Promise<Response> {
-    // Editor close skipped — editor feature is disabled
+    // TODO: CLOSE EDITOR
 
     // Clean up sprite
     if (this.serverState.spriteName) {
@@ -956,7 +956,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
 
     // Clear all storage on the DO (DO will cease to exist after this)
-    this.ctx.storage.deleteAll();
+    await this.ctx.storage.deleteAll();
 
     return new Response(JSON.stringify({ deleted: true }), {
       headers: { "Content-Type": "application/json" },
@@ -992,16 +992,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     try {
       const accessResult = await this.assertSessionRepoAccess();
       if (!accessResult.ok) {
-        if (accessResult.error.code === REPO_ACCESS_REVOKED_CODE) {
+        if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
           await this.enforceSessionRevoked();
-          this.sendMessage(
-            {
-              type: "operation.error",
-              code: REPO_ACCESS_REVOKED_CODE,
-              message: accessResult.error.message,
-            },
-            connection,
-          );
           return;
         }
 
@@ -1194,12 +1186,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
-  private async assertSessionRepoAccess() {
+  private async assertSessionRepoAccess(): Promise<SessionRepoAccessResult> {
     if (this.sessionAccessRevoked) {
       return {
         ok: false as const,
         error: {
-          code: REPO_ACCESS_REVOKED_CODE,
+          code: "REPO_ACCESS_REVOKED",
           status: 403 as const,
           message: "Repository access for this session has been revoked.",
           justRevoked: false,
@@ -1235,27 +1227,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.sessionAccessRevoked = true;
     this.updatePartialState({
       isResponding: false,
-      lastError: REPO_ACCESS_REVOKED_CODE,
-    });
-    this.broadcastMessage({
-      type: "operation.error",
-      code: REPO_ACCESS_REVOKED_CODE,
-      message: "Repository access for this session has been revoked.",
+      lastError: "REPO_ACCESS_REVOKED",
     });
     this.agentProcessManager.cancel();
 
-    if (!this.serverState.spriteName) {
-      return;
-    }
-
-    try {
-      await this.spritesCoordinator.deleteSprite(this.serverState.spriteName);
-    } catch (error) {
-      this.logger.error("Failed to delete sprite for revoked session", {
-        error,
-        fields: { sessionId: this.serverState.sessionId },
-      });
-    }
+    await this.handleDeleteSession();
   }
 
   // ============================================

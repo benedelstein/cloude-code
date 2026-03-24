@@ -331,6 +331,10 @@ export const openEditorRoute = createRoute({
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to open editor",
     },
+    501: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Editor feature not implemented",
+    },
   },
 });
 
@@ -361,5 +365,9 @@ export const closeEditorRoute = createRoute({
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to close editor",
     },
+    501: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Editor feature not implemented",
+    },  
   },
 });

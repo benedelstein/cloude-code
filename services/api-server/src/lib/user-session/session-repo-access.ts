@@ -3,14 +3,12 @@ import {
   type GitHubAppErrorCode,
 } from "@/lib/github";
 import { createLogger } from "@/lib/logger";
-import { SessionHistoryService } from "@/lib/session-history";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import { UserSessionService } from "@/lib/user-session/user-session.service";
 import type { Env } from "@/types";
 import { failure, success, type Result } from "@repo/shared";
 
 const logger = createLogger("session-repo-access.ts");
-
-export const REPO_ACCESS_REVOKED_CODE = "REPO_ACCESS_REVOKED" as const;
 
 type RepoAccessValue = {
   userId: string;
@@ -39,7 +37,7 @@ export type SessionRepoAccessError =
       message: string;
     }
   | {
-      code: typeof REPO_ACCESS_REVOKED_CODE;
+      code: "REPO_ACCESS_REVOKED";
       status: 403;
       message: string;
       justRevoked: boolean;
@@ -126,8 +124,8 @@ export async function assertSessionRepoAccess(params: {
   githubAccessToken?: string;
 }): Promise<SessionRepoAccessResult> {
   const { env, sessionId, userId } = params;
-  const sessionHistory = new SessionHistoryService(env.DB);
-  const session = await sessionHistory.getAccessRowForUser(sessionId, userId);
+  const sessionsRepository = new SessionsRepository(env.DB);
+  const session = await sessionsRepository.getAccessRowForUser(sessionId, userId);
 
   if (!session) {
     return failure({
@@ -139,7 +137,7 @@ export async function assertSessionRepoAccess(params: {
 
   if (session.revokedAt) {
     return failure({
-      code: REPO_ACCESS_REVOKED_CODE,
+      code: "REPO_ACCESS_REVOKED",
       status: 403,
       message: "Repository access for this session has been revoked.",
       justRevoked: false,
@@ -175,9 +173,9 @@ export async function assertSessionRepoAccess(params: {
 
   if (!repoAccessResult.ok) {
     if (repoAccessResult.error.code === "REPO_NOT_ACCESSIBLE") {
-      await sessionHistory.markRevoked(sessionId, REPO_ACCESS_REVOKED_CODE);
+      await sessionsRepository.markRevoked(sessionId, "REPO_ACCESS_REVOKED");
       return failure({
-        code: REPO_ACCESS_REVOKED_CODE,
+        code: "REPO_ACCESS_REVOKED",
         status: 403,
         message: "Repository access for this session has been revoked.",
         justRevoked: true,
@@ -191,7 +189,7 @@ export async function assertSessionRepoAccess(params: {
 
   if (session.installationId !== repoAccessResult.value.installationId) {
     logger.warn(`Session id ${sessionId} has a different installation id than the repo access result. Updating session record. ${session.installationId} -> ${repoAccessResult.value.installationId}`)
-    await sessionHistory.updateInstallationId(
+    await sessionsRepository.updateInstallationId(
       sessionId,
       repoAccessResult.value.installationId,
     );
