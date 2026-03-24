@@ -67,12 +67,14 @@ export const SyncResponseEvent = z.object({
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
 
+/**
+ * Transient error codes from operations (sending a message, etc)
+ */
 export const OperationErrorCode = z.enum([
   "INVALID_MESSAGE",
   "MESSAGE_HANDLER_ERROR",
   "CHAT_MESSAGE_FAILED",
-  "GITHUB_AUTH_REQUIRED",
-  "REPO_ACCESS_REVOKED",
+  "GITHUB_AUTH_REQUIRED"
 ]);
 export type OperationErrorCode = z.infer<typeof OperationErrorCode>;
 

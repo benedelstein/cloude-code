@@ -127,17 +127,14 @@ export class UserSessionService {
         this.env.TOKEN_ENCRYPTION_KEY,
       );
 
-      // TODO: DO these IN ONE QUERY.
-      await this.repository.updateSessionAccessToken(
-        params.sessionToken,
-        encryptedAccessToken,
-        refreshed.expiresAt,
-      );
-      await this.repository.updateRefreshToken(
-        params.userId,
-        encryptedRefreshTokenNext,
-        refreshed.refreshTokenExpiresAt ?? null,
-      );
+      await this.repository.updateSessionAndRefreshToken({
+        sessionToken: params.sessionToken,
+        githubAccessToken: encryptedAccessToken,
+        tokenExpiresAt: refreshed.expiresAt,
+        userId: params.userId,
+        encryptedRefreshToken: encryptedRefreshTokenNext,
+        refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt ?? null,
+      });
 
       return refreshed.accessToken;
     } catch (error) {
