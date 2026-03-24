@@ -53,7 +53,8 @@ The guard should:
 - read `repoId`, `installationId`, `revoked_at`, and `revoked_reason`
 - fail fast if the session is already revoked
 - call `GitHubAppService.getUserAccessibleInstallationRepoById(...)`
-- on denial, mark the session revoked and return a stable `403` error such as `REPO_ACCESS_REVOKED`
+- if GitHub explicitly denies repo access, mark the session revoked and return a stable `403` error such as `REPO_ACCESS_REVOKED`
+- if the system cannot currently obtain a GitHub user access token for the check, return a temporary auth-required error instead and do not revoke the session
 
 Use it from only these entrypoints:
 - `getAuthorizedSessionAgent(...)` in `services/api-server/src/routes/sessions/sessions.routes.ts`
@@ -93,7 +94,13 @@ This is a hard-lock model, not read-only fallback.
 Concretely, "mark the session revoked" means:
 - add `revoked_at` and `revoked_reason` columns to the `sessions` row in D1
 - add a repository/service method that performs one durable update on that row, for example setting `revoked_at = datetime('now')`, `revoked_reason = 'REPO_ACCESS_REVOKED'`, and `updated_at = datetime('now')`
-- call that update exactly once on the first failed access check; later detections should be idempotent and leave the existing revocation timestamp intact
+- call that update exactly once on the first explicit repo-access denial from GitHub; later detections should be idempotent and leave the existing revocation timestamp intact
+
+Do not mark the session revoked for temporary auth problems such as:
+- no active GitHub auth session available to source a user token
+- expired or invalid user OAuth state that can be fixed by logging in again
+
+Those cases should fail closed for the current request, but the session should remain recoverable after the user re-authenticates.
 
 After a session has been marked revoked:
 - every future guard call fails fast on `revoked_at IS NOT NULL` before making any GitHub call
@@ -111,8 +118,10 @@ This is what prevents further access in practice:
 
 Recommended implementation detail:
 - have the core guard return a structured result that distinguishes `not_found`, `revoked`, and `revoked_now`
+- also distinguish a temporary `github_auth_required` case that does not persist revocation
 - for `revoked_now`, first persist revocation on the session row, then trigger Sprite deletion, then return the stable authorization failure
 - for `revoked`, skip all external work and just return the same stable authorization failure
+- for `github_auth_required`, return a temporary auth failure and skip revocation writes
 
 It is reasonable for the DO to also mirror revocation in memory after it observes a revoked result. That is only an optimization for the current DO instance, not a source of truth. The durable source of truth should remain the D1 session row so that revocation survives DO restarts and applies consistently across HTTP routes, websocket connect, and future DO instances.
 

@@ -332,6 +332,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           );
         }
 
+        if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
+          return new Response(
+            JSON.stringify({
+              error: accessResult.error.message,
+              code: accessResult.error.code,
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({ error: accessResult.error.message }),
           {
@@ -981,6 +994,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
             {
               type: "operation.error",
               code: REPO_ACCESS_REVOKED_CODE,
+              message: accessResult.error.message,
+            },
+            connection,
+          );
+          return;
+        }
+
+        if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "GITHUB_AUTH_REQUIRED",
               message: accessResult.error.message,
             },
             connection,

@@ -4,17 +4,14 @@
 
 The api-server is a Cloudflare Workers application using Hono for routing. The core abstraction is the `SessionAgentDO` Durable Object, which manages the full lifecycle of a coding session.
 
-## Important Best practices
-
-- For creating routes, define the openapi schemas in schema.ts and then import those into your routes (e.g. sessions.routes.ts). 
-- Always define each return type for your routes, do not use `as any` for casting. Be type-safe!
-- For route handler logic, prefer to place the logic inside lib/<name>.service.ts (or inside the DO for routes that need it), not directly in the route handler. The route handler should be only for verifying input, handling errors, and returning to the client.
-
 ## Key Architecture
 
 Note: this package follows a controller-service-repository architecture pattern. Keep separation of concerns between different layers.
-- Do not place logic inside route handlers. That should go inside a service file inside of lib/. 
-E.g.
+1. Route (controller) is responsible for verifying input, handling errors, and returning data to the client.
+2. Service (business logic) is responsible for the core logic of the application.
+3. Repository (data access) is responsible for interacting with the database. (Pure CRUD operations)
+
+Services may take other services as dependencies, for composability.
 `src/routes/sessions/sessions.routes.ts` -> `src/lib/sessions/sessions.service.ts` -> `src/repositories/sessions/sessions.repository.ts`
 
 ### SessionAgentDO (`src/durable-objects/session-agent-do.ts`)
@@ -26,10 +23,14 @@ The Durable Object is the source of truth for each session. It:
 - Handles VM lifecycle (provisioning, health checks, cleanup)
 - Communicates with the vm-agent process on Sprites VMs via stdin/stdout NDJSON
 
+A Durable Object is a stateful, on-demand class that can write to durable SQLite storage. It starts up as needed and shuts down after inactivity. The DO acts like a "mini-server" for each session, coordinating state in a thread-safe manner.
+
+Prefer to split out logic into scoped, separate service files inside of `lib/` for clarity and maintainability. See agent-process-manager.ts for an example.
+
 ### Request Routing
 
 Hono route handlers that authenticate requests. `src/routes/`
-Within each route group is a schema defining the OpenAPI spec, and handlers that use that schema.
+Within each route group is a `schema.ts` file defining the zod OpenAPI spec, and handlers that use that schema.
 
 Some routes forward to the session agent DO. Internal DO requests use `http://do/` prefix:
 - `GET /` - Session info
@@ -40,9 +41,17 @@ etc.
 
 SQLite-backed data access layer within the DO:
 - `MessageRepository` - Chat message persistence
-- `AttachmentRepository` - Attachment metadata
 - `SecretRepository` - Encrypted secrets
 
-### Lib (`src/lib/`)
+D1 Repositories (`src/repositories/`)
+- `AttachmentRepository` - Attachment metadata
+- `UserSessionRepository` - User session persistence
+- `SessionHistoryRepository` - Session history persistence
 
-Business logic - Service modules for GitHub integration, pull request management, Sprites VM coordination, etc.
+
+## Important Best practices
+
+- For creating routes, define the openapi schemas in `schema.ts` and then import those into your routes (e.g. `sessions.routes.ts`). 
+- Always define each return type for your routes, do not use `as any` for casting. Be type-safe!
+- For route handler logic, place the logic inside `lib/<domain>/<name>.service.ts` (or inside the DO for routes that need it), not directly in the route handler. The route handler should be only for verifying input, handling errors, and returning to the client.
+- Add doc comments to public-facing methods, for clarity. And add concise(!) inline comments where necessary.

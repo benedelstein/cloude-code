@@ -103,6 +103,13 @@ const getAuthorizedSessionAgent = async (
       };
     }
 
+    if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
+      logger.error("GitHub auth required unexpectedly for authenticated session route", { fields: { sessionId, userId: user.id } });
+      // HTTP session routes already run behind authMiddleware and should always
+      // have a current GitHub user access token available.
+      throw new Error("GitHub auth required unexpectedly for authenticated session route");
+    }
+
     return {
       ok: false,
       status: 404,

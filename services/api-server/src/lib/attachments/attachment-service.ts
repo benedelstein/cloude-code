@@ -45,7 +45,7 @@ export class AttachmentService {
     const now = new Date().toISOString();
     const sessionId = params.sessionId ?? null;
     const boundAt = sessionId ? now : null;
-
+    // TODO: separate this into a repository
     await this.database
       .prepare(
         `INSERT INTO attachments (

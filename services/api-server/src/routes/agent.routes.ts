@@ -49,6 +49,16 @@ agentRoutes.all("/session/:sessionId", async (c) => {
       );
     }
 
+    if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
+      return c.json(
+        {
+          error: accessResult.error.message,
+          code: accessResult.error.code,
+        },
+        401,
+      );
+    }
+
     logger.log(`${sessionId} session access denied: ${accessResult.error.code}`);
     return c.json({ error: "Session not found" }, 404);
   }

@@ -1,6 +1,6 @@
 import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { AttachmentRecord } from "@/types/attachments";
-import { arrayBufferToBase64 } from "@/lib/utils";
+import { arrayBufferToBase64 } from "@/lib/utils/utils";
 import {
   type AgentInputAttachment,
   type DomainError,
