@@ -54,7 +54,7 @@ import { buildUserUiMessage } from "@/lib/create-user-message";
 import {
   assertSessionRepoAccess,
   REPO_ACCESS_REVOKED_CODE,
-} from "@/lib/session-repo-access";
+} from "@/lib/user-session/session-repo-access";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -704,7 +704,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
       // Fetch a read-only token scoped to contents:read for the initial clone
       const github = new GitHubAppService(this.env, this.logger);
-      const cloneToken = await github.getReadOnlyTokenForRepo(repoFullName);
+      const cloneTokenResult = await github.getReadOnlyTokenForRepo(repoFullName);
+      if (!cloneTokenResult.ok) {
+        throw new Error(cloneTokenResult.error.message);
+      }
+      const cloneToken = cloneTokenResult.value;
       const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
       // Also refresh the write token for the proxy (used after clone)

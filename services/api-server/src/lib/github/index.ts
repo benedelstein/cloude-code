@@ -1,7 +1,8 @@
 export {
   GitHubAppService,
-  GitHubAppError,
   type GitHubAppErrorCode,
+  type GitHubAppResult,
+  type GitHubAppServiceError,
   type GitHubCompareData,
   type CreatePullRequestInput,
   type PullRequestData,

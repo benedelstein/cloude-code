@@ -7,7 +7,7 @@ import { createLogger } from "@/lib/logger";
 import {
   assertSessionRepoAccess,
   REPO_ACCESS_REVOKED_CODE,
-} from "@/lib/session-repo-access";
+} from "@/lib/user-session/session-repo-access";
 import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();

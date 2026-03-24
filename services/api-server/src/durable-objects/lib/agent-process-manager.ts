@@ -32,7 +32,7 @@ import {
 } from "../session-agent-claude-auth";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
 import { AttachmentRecord } from "@/types/attachments";
-import { decrypt } from "@/lib/crypto";
+import { decrypt } from "@/lib/utils/crypto";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,

@@ -149,14 +149,17 @@ export async function createPullRequestForSession(params: {
   const pullRequestContextMessages = buildPullRequestContextMessages(sessionMessages);
 
   let compareData: GitHubCompareData | null = null;
-  try {
-    compareData = await github.compareBranches(
-      session.repoFullName,
-      baseBranch,
-      branchName,
-    );
-  } catch (error) {
-    logger.error("Failed to fetch GitHub compare data for PR text generation", { error });
+  const compareDataResult = await github.compareBranches(
+    session.repoFullName,
+    baseBranch,
+    branchName,
+  );
+  if (!compareDataResult.ok) {
+    logger.error("Failed to fetch GitHub compare data for PR text generation", {
+      fields: { code: compareDataResult.error.code, message: compareDataResult.error.message },
+    });
+  } else {
+    compareData = compareDataResult.value;
   }
 
   const compareFiles = compareData?.files ?? [];
@@ -184,29 +187,27 @@ export async function createPullRequestForSession(params: {
     }
   }
 
-  let createdPullRequest: {
-    number: number;
-    url: string;
-  };
-  try {
-    createdPullRequest = await github.createPullRequest(session.repoFullName, {
-      title: pullRequestTitle,
-      body: pullRequestBody,
-      head: branchName,
-      base: baseBranch,
-    });
-  } catch (error) {
-    const details = error instanceof Error ? error.message : String(error);
+  const createPullRequestResult = await github.createPullRequest(session.repoFullName, {
+    title: pullRequestTitle,
+    body: pullRequestBody,
+    head: branchName,
+    base: baseBranch,
+  });
+  if (!createPullRequestResult.ok) {
     throw new SessionPullRequestServiceError(
       "Failed to create pull request",
       400,
-      { error: "Failed to create pull request", details },
+      {
+        error: "Failed to create pull request",
+        details: createPullRequestResult.error.message,
+      },
     );
   }
+  const createdPullRequestValue = createPullRequestResult.value;
 
   const setPullRequestBody: SetPullRequestRequest = {
-    url: createdPullRequest.url,
-    number: createdPullRequest.number,
+    url: createdPullRequestValue.url,
+    number: createdPullRequestValue.number,
     state: "open",
   };
   try {
@@ -224,8 +225,8 @@ export async function createPullRequestForSession(params: {
   }
 
   return {
-    url: createdPullRequest.url,
-    number: createdPullRequest.number,
+    url: createdPullRequestValue.url,
+    number: createdPullRequestValue.number,
     state: "open",
   };
 }
@@ -250,29 +251,26 @@ export async function getPullRequestStatusForSession(params: {
     );
   }
 
-  let pullRequestState: {
-    state: "open" | "closed";
-    merged: boolean;
-  };
-  try {
-    const pullRequest = await githubService.getPullRequest(
-      session.repoFullName,
-      session.pullRequestNumber,
-    );
-    pullRequestState = {
-      state: pullRequest.state,
-      merged: pullRequest.merged,
-    };
-  } catch (_error) {
-    logger.error("Failed to fetch PR status", { error: _error });
+  const pullRequestResult = await githubService.getPullRequest(
+    session.repoFullName,
+    session.pullRequestNumber,
+  );
+  if (!pullRequestResult.ok) {
+    logger.error("Failed to fetch PR status", {
+      fields: { code: pullRequestResult.error.code, message: pullRequestResult.error.message },
+    });
     throw new SessionPullRequestServiceError(
       "Failed to fetch PR status",
       500,
       { error: "Failed to fetch PR status" },
     );
   }
+  const pullRequestStateValue = {
+    state: pullRequestResult.value.state,
+    merged: pullRequestResult.value.merged,
+  };
 
-  const state = pullRequestState.merged ? "merged" : pullRequestState.state;
+  const state = pullRequestStateValue.merged ? "merged" : pullRequestStateValue.state;
   if (state !== session.pullRequestState) {
     const updatePullRequestBody: UpdatePullRequestRequest = { state };
     try {
@@ -293,6 +291,6 @@ export async function getPullRequestStatusForSession(params: {
     url: session.pullRequestUrl,
     number: session.pullRequestNumber,
     state,
-    merged: pullRequestState.merged,
+    merged: pullRequestStateValue.merged,
   };
 }

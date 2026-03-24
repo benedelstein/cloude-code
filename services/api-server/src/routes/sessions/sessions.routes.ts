@@ -9,16 +9,14 @@ import {
 import type { Env } from "@/types";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import {
-  GitHubAppService,
-  GitHubAppError,
-} from "@/lib/github";
+import { GitHubAppService } from "@/lib/github";
 import { createLogger } from "@/lib/logger";
 import { SessionHistoryService } from "@/lib/session-history";
 import {
   assertSessionRepoAccess,
+  assertUserRepoAccess,
   REPO_ACCESS_REVOKED_CODE,
-} from "@/lib/session-repo-access";
+} from "@/lib/user-session/session-repo-access";
 import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
 import {
   createPullRequestForSession,
@@ -142,35 +140,20 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   const createSessionData = c.req.valid("json");
   const user = c.get("user");
 
-  // Verify that the GitHub App installation exists for this repo and is accessible to the user
-  // before creating the session
-  const github = new GitHubAppService(c.env, logger);
-  let installation: { id: number };
-  let repository: {
-    id: number;
-    fullName: string;
-    owner: string;
-    name: string;
-    defaultBranch?: string;
-  };
-  try {
-    // first find the installation for the repo
-    installation = await github.findInstallationForRepoId(
-      createSessionData.repoId,
-      user.githubAccessToken,
+  const repoAccessResult = await assertUserRepoAccess({
+    env: c.env,
+    userId: user.id,
+    repoId: createSessionData.repoId,
+    githubAccessToken: user.githubAccessToken,
+  });
+  if (!repoAccessResult.ok) {
+    return c.json(
+      {
+        error: repoAccessResult.error.message,
+        code: repoAccessResult.error.code,
+      },
+      repoAccessResult.error.status,
     );
-    repository = await github.getUserAccessibleInstallationRepoById(
-      user.id,
-      user.githubAccessToken,
-      installation.id,
-      createSessionData.repoId,
-    );
-  } catch (error) {
-    logger.error(`Failed to find installation for repo ${createSessionData.repoId}`, { error });
-    if (error instanceof GitHubAppError) {
-      return c.json({ error: error.message, code: error.code }, 422);
-    }
-    throw error;
   }
 
   const sessionId = crypto.randomUUID();
@@ -178,7 +161,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
     fields: {
       sessionId,
       userId: user.id,
-      repositoryFullName: repository.fullName,
+      repositoryFullName: repoAccessResult.value.repoFullName,
     },
   });
   const sessionHistory = new SessionHistoryService(c.env.DB);
@@ -189,9 +172,9 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   await sessionHistory.create({
     id: sessionId,
     userId: user.id,
-    repoId: repository.id,
-    installationId: installation.id,
-    repoFullName: repository.fullName,
+    repoId: repoAccessResult.value.repoId,
+    installationId: repoAccessResult.value.installationId,
+    repoFullName: repoAccessResult.value.repoFullName,
   });
   let attachmentsBound = false;
 
@@ -223,7 +206,7 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         body: JSON.stringify({
           sessionId,
           userId: user.id,
-          repoFullName: repository.fullName,
+          repoFullName: repoAccessResult.value.repoFullName,
         settings: createSessionData.settings,
         branch: createSessionData.branch,
         initialMessage: createSessionData.initialMessage,

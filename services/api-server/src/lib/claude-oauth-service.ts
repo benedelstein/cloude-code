@@ -1,5 +1,5 @@
 import type { Logger } from "@repo/shared";
-import { decrypt, encrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/utils/crypto";
 import { createLogger } from "@/lib/logger";
 import {
   ClaudeSessionRepository,

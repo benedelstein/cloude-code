@@ -1,4 +1,4 @@
-import { decrypt, encrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/utils/crypto";
 import { GitHubAppService } from "@/lib/github";
 import { createLogger } from "@/lib/logger";
 import type { Env } from "@/types";
