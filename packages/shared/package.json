@@ -15,15 +15,14 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test": "pnpm dlx vitest run",
+    "test:coverage": "pnpm dlx vitest run --coverage"
   },
   "dependencies": {
     "zod": "catalog:",
     "ai": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }
