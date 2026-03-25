@@ -5,12 +5,12 @@
   "main": "dist/vm-agent.bundle.js",
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "pnpm dlx vitest run",
+    "test": "vitest run",
     "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "test:coverage": "pnpm dlx vitest run --coverage",
+    "test:coverage": "vitest run --coverage",
     "test:live:agent": "bun run src/test-agent-aisdk.ts"
   },
   "dependencies": {
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

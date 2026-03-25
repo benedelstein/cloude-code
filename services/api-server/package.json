@@ -11,8 +11,8 @@
     "clean": "rm -rf dist .wrangler",
     "db:migrate": "wrangler d1 migrations apply cloude-code-db --local",
     "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote",
-    "test": "pnpm dlx vitest run",
-    "test:coverage": "pnpm dlx vitest run --coverage",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:live:sprite": "tsx scripts/test-sprite.ts"
   },
   "dependencies": {
@@ -33,6 +33,7 @@
     "dotenv": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "^4.60.0"
+    "wrangler": "^4.60.0",
+    "vitest": "catalog:"
   }
 }
