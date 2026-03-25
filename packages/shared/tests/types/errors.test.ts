@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failure, success } from "../errors";
+import { failure, success } from "../../src/types/errors";
 
 describe("result helpers", () => {
   it("creates success shape", () => {

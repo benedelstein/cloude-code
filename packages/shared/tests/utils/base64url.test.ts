@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeBase64Url, encodeBase64Url } from "../base64url";
+import { decodeBase64Url, encodeBase64Url } from "../../src/utils/base64url";
 
 describe("base64url", () => {
   it("roundtrips bytes", () => {

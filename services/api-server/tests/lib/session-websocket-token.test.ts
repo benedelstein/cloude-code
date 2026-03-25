@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   mintSessionWebSocketToken,
   verifySessionWebSocketToken,
-} from "../session-websocket-token";
+} from "../../src/lib/session-websocket-token";
 
 const SECRET = "top-secret";
 const SESSION_ID = "123e4567-e89b-12d3-a456-426614174000";

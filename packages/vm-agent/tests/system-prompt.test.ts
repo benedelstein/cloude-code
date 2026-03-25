@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPromptAppend } from "../system-prompt";
+import { buildSystemPromptAppend } from "../src/system-prompt";
 
 describe("buildSystemPromptAppend", () => {
   it("includes branch suffix, sprite context, and required tags", () => {

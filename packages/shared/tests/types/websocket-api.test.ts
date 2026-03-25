@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ClientMessage, ServerMessage } from "../websocket-api";
+import { ClientMessage, ServerMessage } from "../../src/types/websocket-api";
 
 describe("websocket api schemas", () => {
   it("parses valid client/server messages", () => {

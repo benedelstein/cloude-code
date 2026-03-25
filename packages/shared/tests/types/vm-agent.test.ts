@@ -6,7 +6,7 @@ import {
   decodeAgentOutput,
   encodeAgentInput,
   encodeAgentOutput,
-} from "../vm-agent";
+} from "../../src/types/vm-agent";
 
 describe("vm-agent schemas", () => {
   it("parses all input variants", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MessageAccumulator } from "../message-accumulator";
+import { MessageAccumulator } from "../../src/lib/message-accumulator";
 
 describe("MessageAccumulator", () => {
   it("accumulates text, reasoning, and tool output flows", () => {
