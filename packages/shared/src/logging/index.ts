@@ -20,8 +20,6 @@ export interface LogEntry {
 }
 
 export interface LogParams {
-  loggerName?: string;
-  timestamp?: string;
   fields?: LogFields;
   error?: unknown;
 }
@@ -58,12 +56,16 @@ function numericLogLevel(level: LogLevel): number {
 }
 
 export class ConsoleLogger implements Logger {
+  private readonly options: ConsoleLoggerOptions;
+  private readonly loggerName?: string;
   private readonly includeTimestamp: boolean;
   private readonly now: () => Date;
   private readonly format: "pretty" | "json";
   private readonly minimumLevel?: LogLevel;
 
-  public constructor(options?: ConsoleLoggerOptions) {
+  public constructor(options?: ConsoleLoggerOptions, loggerName?: string) {
+    this.options = options ?? {};
+    this.loggerName = loggerName;
     this.includeTimestamp = options?.includeTimestamp ?? true;
     this.now = options?.now ?? (() => new Date());
     this.format = options?.format ?? "pretty";
@@ -91,7 +93,7 @@ export class ConsoleLogger implements Logger {
   }
 
   public scope(loggerName: string): Logger {
-    return new ScopedLogger(this, loggerName);
+    return new ConsoleLogger(this.options, loggerName);
   }
 
   private write(level: LogLevel, message: string, params?: LogParams): void {
@@ -107,14 +109,11 @@ export class ConsoleLogger implements Logger {
     this.writeLine(level, line);
   }
 
-  private buildEntry(
-    level: LogLevel,
-    message: string,
-    params?: LogParams,
-  ): LogEntry {
+  private buildEntry(level: LogLevel, message: string, params?: LogParams): LogEntry {
     return {
       level,
       message,
+      loggerName: this.loggerName,
       ...params,
     };
   }
@@ -238,17 +237,17 @@ export class ComposedLogger implements Logger {
   }
 
   public scope(loggerName: string): Logger {
-    return new ScopedLogger(this, loggerName);
+    return new ComposedLogger(
+      this.loggers.map((logger) => logger.scope(loggerName)),
+      this.minimumLevel,
+    );
   }
 
-  private dispatch(
-    level: LogLevel,
-    message: string,
-    params?: LogParams,
-  ): void {
+  private dispatch(level: LogLevel, message: string, params?: LogParams): void {
     if (this.minimumLevel && numericLogLevel(level) < numericLogLevel(this.minimumLevel)) {
       return;
     }
+
     const loggingErrors: unknown[] = [];
 
     for (const logger of this.loggers) {
@@ -271,46 +270,5 @@ export class ComposedLogger implements Logger {
       loggingErrors,
       "ComposedLogger encountered multiple logger failures",
     );
-  }
-}
-
-export class ScopedLogger implements Logger {
-  private readonly parent: Logger;
-  private readonly loggerName: string;
-
-  public constructor(parent: Logger, loggerName: string) {
-    this.parent = parent;
-    this.loggerName = loggerName;
-  }
-
-  public log(message: string, params?: LogParams): void {
-    this.dispatch("info", message, params);
-  }
-
-  public debug(message: string, params?: LogParams): void {
-    this.dispatch("debug", message, params);
-  }
-
-  public info(message: string, params?: LogParams): void {
-    this.dispatch("info", message, params);
-  }
-
-  public warn(message: string, params?: LogParams): void {
-    this.dispatch("warn", message, params);
-  }
-
-  public error(message: string, params?: LogParams): void {
-    this.dispatch("error", message, params);
-  }
-
-  public scope(loggerName: string): Logger {
-    return new ScopedLogger(this.parent, loggerName);
-  }
-
-  private dispatch(level: LogLevel, message: string, params?: LogParams): void {
-    this.parent[level](message, {
-      ...params,
-      loggerName: this.loggerName,
-    });
   }
 }
