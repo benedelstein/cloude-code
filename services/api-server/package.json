@@ -9,9 +9,11 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wrangler",
-    "test-sprite": "tsx scripts/test-sprite.ts",
     "db:migrate": "wrangler d1 migrations apply cloude-code-db --local",
-    "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote"
+    "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:live:sprite": "tsx scripts/test-sprite.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
@@ -31,6 +33,7 @@
     "dotenv": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "^4.60.0"
+    "wrangler": "^4.60.0",
+    "vitest": "catalog:"
   }
 }

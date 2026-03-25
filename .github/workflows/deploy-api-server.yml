@@ -43,6 +43,9 @@ jobs:
       - name: Lint
         run: pnpm lint --filter "@repo/api-server"
 
+      - name: Test
+        run: pnpm test --filter "@repo/api-server"
+
       - name: Apply D1 migrations
         run: pnpm --filter @repo/api-server db:migrate:prod
         env:
