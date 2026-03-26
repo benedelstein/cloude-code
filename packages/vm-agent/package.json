@@ -21,6 +21,7 @@
     "ai-sdk-provider-codex-cli": "^1.0.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "catalog:",
     "@types/bun": "^1.2.0",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -28,6 +28,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "catalog:",
     "@cloudflare/workers-types": "^4.20260129.0",
     "@octokit/webhooks": "13.9.1",
     "dotenv": "catalog:",
