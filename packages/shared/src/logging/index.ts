@@ -113,8 +113,8 @@ export class ConsoleLogger implements Logger {
     return {
       level,
       message,
-      loggerName: this.loggerName,
       ...params,
+      loggerName: this.loggerName,
     };
   }
 

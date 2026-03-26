@@ -342,28 +342,44 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
                 headers: { "Content-Type": "application/json" },
               },
             );
-          default:
-            if (accessResult.error.status === 503) {
-              return new Response(
-                JSON.stringify({
-                  error: accessResult.error.message,
-                  code: accessResult.error.code,
-                }),
-                {
-                  status: 503,
-                  headers: { "Content-Type": "application/json" },
-                },
-              );
-            }
+          case "GITHUB_API_ERROR":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "SESSION_NOT_FOUND":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "INVALID_REPO":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          default: {
+            const exhaustiveCheck: never = accessResult.error;
+            throw new Error(`Unhandled session repo access error: ${JSON.stringify(exhaustiveCheck)}`);
+          }
         }
-
-        return new Response(
-          JSON.stringify({ error: accessResult.error.message }),
-          {
-            status: accessResult.error.status,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
       }
 
       const result = await handleGitProxy(
