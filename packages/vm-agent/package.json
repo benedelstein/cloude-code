@@ -5,11 +5,13 @@
   "main": "dist/vm-agent.bundle.js",
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "bun run src/test-agent-aisdk.ts",
+    "test": "vitest run",
     "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test:coverage": "vitest run --coverage",
+    "test:live:agent": "bun run src/test-agent-aisdk.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
