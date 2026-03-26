@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrayBufferToBase64 } from "../../src/lib/utils";
+import { arrayBufferToBase64 } from "../../src/lib/utils/utils";
 
 describe("arrayBufferToBase64", () => {
   it("converts buffer to base64", () => {

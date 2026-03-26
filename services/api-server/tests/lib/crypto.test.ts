@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt } from "../../src/lib/crypto";
+import { decrypt, encrypt } from "../../src/lib/utils/crypto";
 
 const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 const WRONG_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
