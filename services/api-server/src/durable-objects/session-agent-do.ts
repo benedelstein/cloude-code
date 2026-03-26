@@ -1224,7 +1224,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.sendMessage(
           {
             type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
+            code: "MESSAGE_HANDLER_ERROR",
             message: accessResult.error.message,
           },
           connection,
