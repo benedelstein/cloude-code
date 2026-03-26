@@ -90,7 +90,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   private editorToken: string | null = null;
   private messageAccumulator: MessageAccumulator = new MessageAccumulator();
-  private sessionAccessRevoked = false;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -286,6 +285,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
     this.messageAccumulator.reset();
+    this.updateServerState({ lastKnownAgentProcessId: null });
     this.updatePartialState({ isResponding: false });
     // TODO: RESTART THE AGENT?
   }
@@ -299,7 +299,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
-    // TODO: BETTER MIDDLEWARE
+    // TODO: BETTER MIDDLEWARE. OR REPLACE MOST OF THESE WITH DIRECT CALLS TO THE STUB.
     // Root path = session operations (the DO *is* the session)
     if (path === "/" || path === "") {
       switch (request.method) {
@@ -318,44 +318,43 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     if (path.startsWith("/git-proxy/")) {
       const accessResult = await this.assertSessionRepoAccess(); // ensure user still has access to the repo.
       if (!accessResult.ok) {
-        if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
-          await this.enforceSessionRevoked();
-          return new Response(
-            JSON.stringify({
-              error: accessResult.error.message,
-              code: accessResult.error.code,
-            }),
-            {
-              status: accessResult.error.status,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
-          return new Response(
-            JSON.stringify({
-              error: accessResult.error.message,
-              code: accessResult.error.code,
-            }),
-            {
-              status: 401,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        if (accessResult.error.status === 503) {
-          return new Response(
-            JSON.stringify({
-              error: accessResult.error.message,
-              code: accessResult.error.code,
-            }),
-            {
-              status: 503,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
+        switch (accessResult.error.code) {
+          case "REPO_ACCESS_BLOCKED":
+            await this.enforceSessionAccessBlocked();
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: accessResult.error.status,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "GITHUB_AUTH_REQUIRED":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          default:
+            if (accessResult.error.status === 503) {
+              return new Response(
+                JSON.stringify({
+                  error: accessResult.error.message,
+                  code: accessResult.error.code,
+                }),
+                {
+                  status: 503,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
         }
 
         return new Response(
@@ -397,11 +396,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       if (request.method === "PATCH") {
         return this.handleUpdatePullRequest(request);
       }
-    }
-
-    if (path === "/revoke" && request.method === "POST") {
-      await this.enforceSessionRevoked();
-      return new Response(null, { status: 204 });
     }
 
     // Notify the session that the user has completed Claude OAuth
@@ -989,7 +983,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleChatMessage(connection, message);
         break;
       case "sync.request":
-        this.handleSyncRequest(connection);
+        await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
         // TODO: If the process isnt running, reset `isResponding` back to false so we dont get stuck.
@@ -1005,32 +999,39 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     try {
       const accessResult = await this.assertSessionRepoAccess();
       if (!accessResult.ok) {
-        if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
-          await this.enforceSessionRevoked();
-          return;
+        switch (accessResult.error.code) {
+          case "REPO_ACCESS_BLOCKED":
+            await this.enforceSessionAccessBlocked(false);
+            this.sendMessage(
+              {
+                type: "operation.error",
+                code: "REPO_ACCESS_BLOCKED",
+                message: accessResult.error.message,
+              },
+              connection,
+            );
+            return;
+          case "GITHUB_AUTH_REQUIRED":
+            this.sendMessage(
+              {
+                type: "operation.error",
+                code: "GITHUB_AUTH_REQUIRED",
+                message: accessResult.error.message,
+              },
+              connection,
+            );
+            return;
+          default:
+            this.sendMessage(
+              {
+                type: "operation.error",
+                code: "CHAT_MESSAGE_FAILED",
+                message: accessResult.error.message,
+              },
+              connection,
+            );
+            return;
         }
-
-        if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
-          this.sendMessage(
-            {
-              type: "operation.error",
-              code: "GITHUB_AUTH_REQUIRED",
-              message: accessResult.error.message,
-            },
-            connection,
-          );
-          return;
-        }
-
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
-            message: accessResult.error.message,
-          },
-          connection,
-        );
-        return;
       }
 
       await this.ensureReady(); // await any startup steps synchronously.
@@ -1068,7 +1069,44 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
-  private handleSyncRequest(connection: Connection): void {
+  private async handleSyncRequest(connection: Connection): Promise<void> {
+    const accessResult = await this.assertSessionRepoAccess();
+    if (!accessResult.ok) {
+      switch (accessResult.error.code) {
+        case "REPO_ACCESS_BLOCKED":
+          await this.enforceSessionAccessBlocked(false);
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "REPO_ACCESS_BLOCKED",
+              message: accessResult.error.message,
+            },
+            connection,
+          );
+          return;
+        case "GITHUB_AUTH_REQUIRED":
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "GITHUB_AUTH_REQUIRED",
+              message: accessResult.error.message,
+            },
+            connection,
+          );
+          return;
+        default:
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "CHAT_MESSAGE_FAILED",
+              message: accessResult.error.message,
+            },
+            connection,
+          );
+          return;
+      }
+    }
+
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
       this.sendMessage({ type: "sync.response", messages: [] }, connection);
@@ -1200,18 +1238,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async assertSessionRepoAccess(): Promise<SessionRepoAccessResult> {
-    if (this.sessionAccessRevoked) {
-      return {
-        ok: false as const,
-        error: {
-          code: "REPO_ACCESS_REVOKED",
-          status: 403 as const,
-          message: "Repository access for this session has been revoked.",
-          justRevoked: false,
-        },
-      };
-    }
-
     const sessionId = this.serverState.sessionId;
     const userId = this.serverState.userId;
     if (!sessionId || !userId) {
@@ -1232,26 +1258,22 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
   }
 
-  private async enforceSessionRevoked(): Promise<void> {
-    if (this.sessionAccessRevoked) {
-      return;
-    }
-
-    this.sessionAccessRevoked = true;
+  async enforceSessionAccessBlocked(
+    notifyClients = true,
+  ): Promise<void> {
     this.updatePartialState({
       isResponding: false,
-      lastError: "REPO_ACCESS_REVOKED",
+      lastError: "Repository access for this session is currently blocked.",
     });
     this.agentProcessManager.cancel();
-
-    if (this.serverState.spriteName) {
-      try {
-        await this.spritesCoordinator.deleteSprite(this.serverState.spriteName);
-      } catch (error) {
-        this.logger.error("Failed to delete sprite for revoked session", { error });
-      }
+    await this.agentProcessManager.stopSessionManagedProcesses();
+    if (notifyClients) {
+      this.broadcastMessage({
+        type: "operation.error",
+        code: "REPO_ACCESS_BLOCKED",
+        message: "Repository access for this session is currently blocked.",
+      });
     }
-    // NOTE: DONT delete the do state here. just preserve it.
   }
 
   // ============================================

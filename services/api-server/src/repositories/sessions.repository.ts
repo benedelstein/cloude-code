@@ -1,4 +1,4 @@
-import type { SessionSummary } from "@repo/shared";
+import type { SessionAccessBlockReason, SessionSummary } from "@repo/shared";
 
 export interface CreateSessionParams {
   id: string;
@@ -16,8 +16,8 @@ interface SessionRow {
   repo_full_name: string;
   title: string | null;
   archived: number;
-  revoked_at: string | null;
-  revoked_reason: string | null;
+  access_blocked_at: string | null;
+  access_block_reason: SessionAccessBlockReason | null;
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
@@ -29,8 +29,8 @@ export interface SessionAccessRow {
   repoId: number;
   installationId: number | null;
   repoFullName: string;
-  revokedAt: string | null;
-  revokedReason: string | null;
+  accessBlockedAt: string | null;
+  accessBlockReason: SessionAccessBlockReason | null;
 }
 
 function rowToSummary(row: SessionRow): SessionSummary {
@@ -54,9 +54,10 @@ export class SessionsRepository {
   }
 
   async create(params: CreateSessionParams): Promise<void> {
-    await this.database.prepare(
-      `INSERT INTO sessions (id, user_id, repo_id, installation_id, repo_full_name) VALUES (?, ?, ?, ?, ?)`,
-    )
+    await this.database
+      .prepare(
+        `INSERT INTO sessions (id, user_id, repo_id, installation_id, repo_full_name) VALUES (?, ?, ?, ?, ?)`,
+      )
       .bind(
         params.id,
         params.userId,
@@ -68,31 +69,35 @@ export class SessionsRepository {
   }
 
   async updateTitle(sessionId: string, title: string): Promise<void> {
-    await this.database.prepare(
-      `UPDATE sessions SET title = ?, updated_at = datetime('now') WHERE id = ?`,
-    )
+    await this.database
+      .prepare(
+        `UPDATE sessions SET title = ?, updated_at = datetime('now') WHERE id = ?`,
+      )
       .bind(title, sessionId)
       .run();
   }
 
   async archive(sessionId: string): Promise<void> {
-    await this.database.prepare(
-      `UPDATE sessions SET archived = 1, updated_at = datetime('now') WHERE id = ?`,
-    )
+    await this.database
+      .prepare(
+        `UPDATE sessions SET archived = 1, updated_at = datetime('now') WHERE id = ?`,
+      )
       .bind(sessionId)
       .run();
   }
 
   async delete(sessionId: string): Promise<void> {
-    await this.database.prepare(`DELETE FROM sessions WHERE id = ?`)
+    await this.database
+      .prepare(`DELETE FROM sessions WHERE id = ?`)
       .bind(sessionId)
       .run();
   }
 
   async deleteAndQueueAttachmentGc(sessionId: string): Promise<void> {
     await this.database.batch([
-      this.database.prepare(
-        `INSERT INTO attachment_gc_queue (object_key, retry_count, created_at, updated_at)
+      this.database
+        .prepare(
+          `INSERT INTO attachment_gc_queue (object_key, retry_count, created_at, updated_at)
          SELECT object_key, 0, datetime('now'), datetime('now')
          FROM attachments
          WHERE session_id = ?
@@ -100,15 +105,19 @@ export class SessionsRepository {
            retry_count = 0,
            last_error = NULL,
            updated_at = datetime('now')`,
-      ).bind(sessionId),
-      this.database.prepare(`DELETE FROM sessions WHERE id = ?`).bind(sessionId),
+        )
+        .bind(sessionId),
+      this.database
+        .prepare(`DELETE FROM sessions WHERE id = ?`)
+        .bind(sessionId),
     ]);
   }
 
   async updateLastMessageAt(sessionId: string): Promise<void> {
-    await this.database.prepare(
-      `UPDATE sessions SET last_message_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
-    )
+    await this.database
+      .prepare(
+        `UPDATE sessions SET last_message_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+      )
       .bind(sessionId)
       .run();
   }
@@ -136,20 +145,24 @@ export class SessionsRepository {
       bindings.push(limit + 1);
     }
 
-    const result = await this.database.prepare(query)
+    const result = await this.database
+      .prepare(query)
       .bind(...bindings)
       .all<SessionRow>();
 
     const rows = result.results;
     const hasMore = rows.length > limit;
     const sessions = rows.slice(0, limit).map(rowToSummary);
-    const nextCursor = hasMore ? sessions[sessions.length - 1]?.updatedAt ?? null : null;
+    const nextCursor = hasMore
+      ? (sessions[sessions.length - 1]?.updatedAt ?? null)
+      : null;
 
     return { sessions, cursor: nextCursor };
   }
 
   async getById(sessionId: string): Promise<SessionSummary | null> {
-    const row = await this.database.prepare(`SELECT * FROM sessions WHERE id = ?`)
+    const row = await this.database
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
       .bind(sessionId)
       .first<SessionRow>();
 
@@ -160,11 +173,12 @@ export class SessionsRepository {
     sessionId: string,
     userId: string,
   ): Promise<SessionAccessRow | null> {
-    const row = await this.database.prepare(
-      `SELECT id, user_id, repo_id, installation_id, repo_full_name, revoked_at, revoked_reason
+    const row = await this.database
+      .prepare(
+        `SELECT id, user_id, repo_id, installation_id, repo_full_name, access_blocked_at, access_block_reason
        FROM sessions
        WHERE id = ? AND user_id = ?`,
-    )
+      )
       .bind(sessionId, userId)
       .first<SessionRow>();
 
@@ -178,38 +192,165 @@ export class SessionsRepository {
       repoId: row.repo_id,
       installationId: row.installation_id,
       repoFullName: row.repo_full_name,
-      revokedAt: row.revoked_at,
-      revokedReason: row.revoked_reason,
+      accessBlockedAt: row.access_blocked_at,
+      accessBlockReason: row.access_block_reason,
     };
   }
 
-  async updateInstallationId(sessionId: string, installationId: number): Promise<void> {
-    await this.database.prepare(
-      `UPDATE sessions SET installation_id = ?, updated_at = datetime('now') WHERE id = ?`,
-    )
-      .bind(installationId, sessionId)
+  async clearAccessBlockAndUpdateBinding(
+    sessionId: string,
+    params: {
+      installationId: number;
+      repoFullName: string;
+    },
+  ): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+       SET installation_id = ?,
+           repo_full_name = ?,
+           access_blocked_at = NULL,
+           access_block_reason = NULL,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+      )
+      .bind(params.installationId, params.repoFullName, sessionId)
       .run();
   }
 
-  async markRevoked(sessionId: string, reason: string): Promise<void> {
-    await this.database.prepare(
-      `UPDATE sessions
-       SET revoked_at = COALESCE(revoked_at, datetime('now')),
-           revoked_reason = COALESCE(revoked_reason, ?),
+  async blockSessionForAccessCheckDenied(
+    sessionId: string,
+    options: {
+      clearInstallationId: boolean;
+      preserveExistingBlockReason: boolean;
+    },
+  ): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+       SET installation_id = CASE WHEN ? = 1 THEN NULL ELSE installation_id END,
+           access_blocked_at = COALESCE(access_blocked_at, datetime('now')),
+           access_block_reason = CASE
+             WHEN ? = 1 THEN COALESCE(access_block_reason, ?)
+             ELSE ?
+           END,
            updated_at = datetime('now')
        WHERE id = ?`,
-    )
-      .bind(reason, sessionId)
+      )
+      .bind(
+        options.clearInstallationId ? 1 : 0,
+        options.preserveExistingBlockReason ? 1 : 0,
+        "ACCESS_CHECK_DENIED",
+        "ACCESS_CHECK_DENIED",
+        sessionId,
+      )
       .run();
+  }
+
+  async blockSessionsForDeletedInstallation(
+    installationId: number,
+  ): Promise<string[]> {
+    const sessionIds = await this.listSessionIdsForQuery(
+      `SELECT id FROM sessions WHERE installation_id = ?`,
+      [installationId],
+    );
+    if (sessionIds.length === 0) {
+      return sessionIds;
+    }
+
+    await this.database
+      .prepare(
+        `UPDATE sessions
+       SET installation_id = NULL,
+           access_blocked_at = COALESCE(access_blocked_at, datetime('now')),
+           access_block_reason = 'INSTALLATION_DELETED',
+           updated_at = datetime('now')
+       WHERE installation_id = ?`,
+      )
+      .bind(installationId)
+      .run();
+
+    return sessionIds;
+  }
+
+  async blockSessionsForSuspendedInstallation(
+    installationId: number,
+  ): Promise<string[]> {
+    const sessionIds = await this.listSessionIdsForQuery(
+      `SELECT id FROM sessions WHERE installation_id = ?`,
+      [installationId],
+    );
+    if (sessionIds.length === 0) {
+      return sessionIds;
+    }
+
+    await this.database
+      .prepare(
+        `UPDATE sessions
+       SET access_blocked_at = COALESCE(access_blocked_at, datetime('now')),
+           access_block_reason = 'INSTALLATION_SUSPENDED',
+           updated_at = datetime('now')
+       WHERE installation_id = ?`,
+      )
+      .bind(installationId)
+      .run();
+
+    return sessionIds;
+  }
+
+  async blockSessionsForRemovedRepos(
+    installationId: number,
+    repoIds: number[],
+  ): Promise<string[]> {
+    if (repoIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = repoIds.map(() => "?").join(", ");
+    const bindings: (string | number)[] = [installationId, ...repoIds];
+    const sessionIds = await this.listSessionIdsForQuery(
+      `SELECT id FROM sessions
+       WHERE installation_id = ?
+         AND repo_id IN (${placeholders})`,
+      bindings,
+    );
+    if (sessionIds.length === 0) {
+      return sessionIds;
+    }
+
+    await this.database
+      .prepare(
+        `UPDATE sessions
+       SET access_blocked_at = COALESCE(access_blocked_at, datetime('now')),
+           access_block_reason = 'REPO_REMOVED_FROM_INSTALLATION',
+           updated_at = datetime('now')
+       WHERE installation_id = ?
+         AND repo_id IN (${placeholders})`,
+      )
+      .bind(installationId, ...repoIds)
+      .run();
+
+    return sessionIds;
   }
 
   async isOwnedByUser(sessionId: string, userId: string): Promise<boolean> {
-    const row = await this.database.prepare(
-      `SELECT 1 as owned FROM sessions WHERE id = ? AND user_id = ?`,
-    )
+    const row = await this.database
+      .prepare(`SELECT 1 as owned FROM sessions WHERE id = ? AND user_id = ?`)
       .bind(sessionId, userId)
       .first<{ owned: number }>();
 
     return Boolean(row?.owned);
+  }
+
+  private async listSessionIdsForQuery(
+    query: string,
+    bindings: (string | number)[],
+  ): Promise<string[]> {
+    const result = await this.database
+      .prepare(query)
+      .bind(...bindings)
+      .all<{ id: string }>();
+
+    return result.results.map((row) => row.id);
   }
 }

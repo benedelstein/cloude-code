@@ -94,7 +94,7 @@ sessionsRoutes.openapi(getSessionRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -158,7 +158,7 @@ sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -190,7 +190,7 @@ sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -223,7 +223,7 @@ sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -265,7 +265,7 @@ sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -317,7 +317,7 @@ sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
     if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        code: result.error.code ?? "REPO_ACCESS_REVOKED",
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
       }, 403);
     }
     if (result.error.status === 503) {
@@ -351,7 +351,7 @@ sessionsRoutes.openapi(openEditorRoute, async (c) => {
   //   if (result.error.status === 403) {
   //     return c.json({
   //       error: result.error.message,
-  //       code: result.error.code ?? "REPO_ACCESS_REVOKED",
+  //       code: result.error.code ?? "REPO_ACCESS_BLOCKED",
   //     }, 403);
   //   }
   //   if (result.error.status === 400) {
@@ -388,7 +388,7 @@ sessionsRoutes.openapi(closeEditorRoute, async (c) => {
   //   if (result.error.status === 403) {
   //     return c.json({
   //       error: result.error.message,
-  //       code: result.error.code ?? "REPO_ACCESS_REVOKED",
+  //       code: result.error.code ?? "REPO_ACCESS_BLOCKED",
   //     }, 403);
   //   }
   //   if (result.error.status === 400) {

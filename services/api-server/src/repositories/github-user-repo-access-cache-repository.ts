@@ -146,4 +146,30 @@ export class GitHubUserRepoAccessCacheRepository {
 
     await this.database.batch(batch);
   }
+
+  async deleteByInstallationId(installationId: number): Promise<void> {
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache WHERE installation_id = ?`,
+    )
+      .bind(installationId)
+      .run();
+  }
+
+  async deleteByInstallationIdAndRepoIds(
+    installationId: number,
+    repoIds: number[],
+  ): Promise<void> {
+    if (repoIds.length === 0) {
+      return;
+    }
+
+    const placeholders = repoIds.map(() => "?").join(", ");
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache
+       WHERE installation_id = ?
+         AND repo_id IN (${placeholders})`,
+    )
+      .bind(installationId, ...repoIds)
+      .run();
+  }
 }

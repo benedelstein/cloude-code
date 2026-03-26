@@ -25,11 +25,6 @@ type UserRepoAccessError = {
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
 
-type NonRevokingSessionRepoAccessErrorCode = Exclude<
-  GitHubAppErrorCode,
-  "REPO_NOT_ACCESSIBLE"
->;
-
 export type SessionRepoAccessError =
   | {
       code: "SESSION_NOT_FOUND";
@@ -42,13 +37,14 @@ export type SessionRepoAccessError =
       message: string;
     }
   | {
-      code: "REPO_ACCESS_REVOKED";
+      code: "REPO_ACCESS_BLOCKED";
       status: 403;
       message: string;
-      justRevoked: boolean;
+      /** True if the access was blocked just now, false if it was already blocked */
+      justBlocked: boolean;
     }
   | {
-      code: NonRevokingSessionRepoAccessErrorCode;
+      code: "GITHUB_API_ERROR";
       status: 503;
       message: string;
     }
@@ -60,35 +56,28 @@ export type SessionRepoAccessError =
 
 export type SessionRepoAccessResult = Result<RepoAccessValue, SessionRepoAccessError>;
 
-async function getAccessibleRepo(params: {
+function blockedSessionAccessResult(justBlocked: boolean): SessionRepoAccessResult {
+  return failure({
+    code: "REPO_ACCESS_BLOCKED",
+    status: 403,
+    message: "You do not have access to this repository.",
+    justBlocked,
+  });
+}
+
+async function getUserAccessibleRepoForInstallation(params: {
   env: Env;
   userId: string;
   repoId: number;
   githubAccessToken: string;
-  installationId?: number;
+  installationId: number;
 }): Promise<UserRepoAccessResult> {
   const github = new GitHubAppService(params.env, logger);
-
-  let installationId = params.installationId;
-  if (!installationId) {
-    const installationResult = await github.findInstallationForRepoId(
-      params.repoId,
-      params.githubAccessToken,
-    );
-    if (!installationResult.ok) {
-      return failure({
-        code: installationResult.error.code,
-        status: 422,
-        message: installationResult.error.message,
-      });
-    }
-    installationId = installationResult.value.id;
-  }
 
   const repositoryResult = await github.getUserAccessibleInstallationRepoById(
     params.userId,
     params.githubAccessToken,
-    installationId,
+    params.installationId,
     params.repoId,
   );
   if (!repositoryResult.ok) {
@@ -102,8 +91,36 @@ async function getAccessibleRepo(params: {
   return success({
     userId: params.userId,
     repoId: repositoryResult.value.id,
-    installationId,
+    installationId: params.installationId,
     repoFullName: repositoryResult.value.fullName,
+  });
+}
+
+async function resolveAccessibleRepoForRecovery(params: {
+  env: Env;
+  userId: string;
+  repoId: number;
+  githubAccessToken: string;
+}): Promise<UserRepoAccessResult> {
+  const github = new GitHubAppService(params.env, logger);
+  const installationResult = await github.findInstallationForRepoId(
+    params.repoId,
+    params.githubAccessToken,
+  );
+  if (!installationResult.ok) {
+    return failure({
+      code: installationResult.error.code,
+      status: 422,
+      message: installationResult.error.message,
+    });
+  }
+
+  return getUserAccessibleRepoForInstallation({
+    env: params.env,
+    userId: params.userId,
+    repoId: params.repoId,
+    githubAccessToken: params.githubAccessToken,
+    installationId: installationResult.value.id,
   });
 }
 
@@ -121,7 +138,7 @@ export async function assertUserRepoAccess(params: {
   repoId: number;
   githubAccessToken: string;
 }): Promise<UserRepoAccessResult> {
-  return getAccessibleRepo(params);
+  return resolveAccessibleRepoForRecovery(params);
 }
 
 /**
@@ -150,15 +167,6 @@ export async function assertSessionRepoAccess(params: {
     });
   }
 
-  if (session.revokedAt) {
-    return failure({
-      code: "REPO_ACCESS_REVOKED",
-      status: 403,
-      message: "Repository access for this session has been revoked.",
-      justRevoked: false,
-    });
-  }
-
   let githubAccessToken = params.githubAccessToken;
   if (!githubAccessToken) {
     const userSessionService = new UserSessionService(env);
@@ -178,33 +186,50 @@ export async function assertSessionRepoAccess(params: {
     });
   }
 
-  const repoAccessResult = await getAccessibleRepo({
-    env,
-    userId,
-    repoId: session.repoId,
-    githubAccessToken,
-    installationId: session.installationId ?? undefined,
-  });
+  const shouldUseRecoveryPath =
+    session.accessBlockedAt !== null || session.installationId === null;
+
+  // TODO: Fall back from a stale non-null installation binding if webhook invalidation is missed.
+  const repoAccessResult = shouldUseRecoveryPath
+    ? await resolveAccessibleRepoForRecovery({
+        env,
+        userId,
+        repoId: session.repoId,
+        githubAccessToken,
+      })
+    : await getUserAccessibleRepoForInstallation({
+        env,
+        userId,
+        repoId: session.repoId,
+        githubAccessToken,
+        installationId: session.installationId as number,
+      });
 
   if (!repoAccessResult.ok) {
     switch (repoAccessResult.error.code) {
       case "REPO_NOT_ACCESSIBLE":
-        await sessionsRepository.markRevoked(sessionId, "REPO_ACCESS_REVOKED");
-        return failure({
-          code: "REPO_ACCESS_REVOKED",
-          status: 403,
-          message: "Repository access for this session has been revoked.",
-          justRevoked: true,
+        await sessionsRepository.blockSessionForAccessCheckDenied(sessionId, {
+          clearInstallationId: false,
+          preserveExistingBlockReason:
+            shouldUseRecoveryPath && session.accessBlockReason !== null,
         });
+        return blockedSessionAccessResult(!shouldUseRecoveryPath);
       case "INSTALLATION_NOT_FOUND":
+        await sessionsRepository.blockSessionForAccessCheckDenied(sessionId, {
+          clearInstallationId: true,
+          preserveExistingBlockReason:
+            shouldUseRecoveryPath && session.accessBlockReason !== null,
+        });
+        return blockedSessionAccessResult(!shouldUseRecoveryPath);
       case "GITHUB_API_ERROR":
-        logger.warn("GitHub session repo access check failed without an authoritative revoke result.", {
+        logger.warn("GitHub session repo access check failed without an authoritative block result.", {
           fields: {
             userId,
             sessionId,
             repoId: session.repoId,
             installationId: session.installationId,
             code: repoAccessResult.error.code,
+            recoveryPath: shouldUseRecoveryPath,
           },
         });
         return failure({
@@ -218,15 +243,23 @@ export async function assertSessionRepoAccess(params: {
           status: 400,
           message: "Invalid repository.",
         });
+      default: {
+        const _exhaustiveCheck: never = repoAccessResult.error.code;
+        throw new Error(`Unhandled GitHub app error code: ${String(_exhaustiveCheck)}`);
+      }
     }
   }
 
-  if (session.installationId !== repoAccessResult.value.installationId) {
-    logger.warn(`Session id ${sessionId} has a different installation id than the repo access result. Updating session record. ${session.installationId} -> ${repoAccessResult.value.installationId}`)
-    await sessionsRepository.updateInstallationId(
-      sessionId,
-      repoAccessResult.value.installationId,
-    );
+  if (
+    session.installationId !== repoAccessResult.value.installationId ||
+    session.repoFullName !== repoAccessResult.value.repoFullName ||
+    session.accessBlockedAt !== null ||
+    session.accessBlockReason !== null
+  ) {
+    await sessionsRepository.clearAccessBlockAndUpdateBinding(sessionId, {
+      installationId: repoAccessResult.value.installationId,
+      repoFullName: repoAccessResult.value.repoFullName,
+    });
   }
 
   return success(repoAccessResult.value);

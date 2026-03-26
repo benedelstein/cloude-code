@@ -170,6 +170,39 @@ export class AgentProcessManager {
     }
   }
 
+  async stopSessionManagedProcesses(): Promise<void> {
+    const serverState = this.getServerState();
+    const spriteName = serverState.spriteName;
+    if (!spriteName) {
+      return;
+    }
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    const commands: string[] = [];
+
+    if (serverState.lastKnownAgentProcessId !== null) {
+      commands.push(`kill ${serverState.lastKnownAgentProcessId} 2>/dev/null || true`);
+    }
+
+    // Best-effort cleanup for the agent process if the tracked pid is stale or missing.
+    commands.push(`pkill -f '/home/sprite/.cloude/agent.js' 2>/dev/null || true`);
+
+    try {
+      await sprite.execWs(commands.join("\n"), {
+        cwd: WORKSPACE_DIR,
+        idleTimeoutMs: 5_000,
+      });
+    } catch (error) {
+      this.logger.error("Failed to stop session-managed processes", { error });
+    } finally {
+      this.updateLastKnownAgentProcessId(null);
+    }
+  }
+
   async ensureAgentSessionStarted(): Promise<void> {
     if (this.isConnected()) {
       return;

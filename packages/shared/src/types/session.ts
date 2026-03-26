@@ -18,6 +18,15 @@ export type SessionStatus = z.infer<typeof SessionStatus>;
 export type PullRequestState = "open" | "merged" | "closed";
 export type ClaudeAuthState = "auth_required" | "reauth_required";
 
+export const SessionAccessBlockReason = z.enum([
+  "INSTALLATION_DELETED",
+  "INSTALLATION_SUSPENDED",
+  "REPO_REMOVED_FROM_INSTALLATION",
+  /** Access denied during runtime auth check - unknown reason (potentially user lost access or webhook out of date) */
+  "ACCESS_CHECK_DENIED",
+]);
+export type SessionAccessBlockReason = z.infer<typeof SessionAccessBlockReason>;
+
 export const SessionTodoStatus = z.enum(["pending", "in_progress", "completed"]);
 export type SessionTodoStatus = z.infer<typeof SessionTodoStatus>;
 

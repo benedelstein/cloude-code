@@ -104,7 +104,7 @@ export const getSessionRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     503: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
@@ -169,7 +169,7 @@ export const getSessionMessagesRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -199,7 +199,7 @@ export const getSessionPlanRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -233,7 +233,7 @@ export const createPullRequestRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     409: {
       content: { "application/json": { schema: ErrorWithUrlResponse } },
@@ -267,7 +267,7 @@ export const getPullRequestRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -315,7 +315,7 @@ export const deleteSessionRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -349,7 +349,7 @@ export const openEditorRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
@@ -383,7 +383,7 @@ export const closeEditorRoute = createRoute({
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
-      description: "Repository access revoked for this session",
+      description: "Repository access blocked for this session",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },

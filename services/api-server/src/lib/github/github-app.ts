@@ -12,6 +12,7 @@ import {
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 import type { Env } from "@/types";
 import { GitHubInstallationRepository } from "@/repositories/github-installation-repository";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import type {
   GitHubInstallationWithRepo,
   RepositorySelection,
@@ -19,6 +20,7 @@ import type {
 import { GitHubUserRepoAccessCacheRepository } from "@/repositories/github-user-repo-access-cache-repository";
 import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
+import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
@@ -100,7 +102,9 @@ export type GitHubAppResult<T> = Result<T, GitHubAppServiceError>;
 
 export class GitHubAppService {
   private readonly app: App;
+  private readonly env: Env;
   private readonly installationRepository: GitHubInstallationRepository;
+  private readonly sessionsRepository: SessionsRepository;
   private readonly userRepoAccessCacheRepository: GitHubUserRepoAccessCacheRepository;
   private readonly tokenCacheRepository: InstallationTokenCacheRepository;
   private readonly userSessionRepository: UserSessionRepository;
@@ -110,6 +114,7 @@ export class GitHubAppService {
   private readonly tokenEncryptionKey: string;
 
   constructor(env: Env, logger: Logger) {
+    this.env = env;
     this.app = new App({
       appId: env.GITHUB_APP_ID,
       privateKey: atob(env.GITHUB_APP_PRIVATE_KEY),
@@ -120,6 +125,7 @@ export class GitHubAppService {
       },
     });
     this.installationRepository = new GitHubInstallationRepository(env.DB);
+    this.sessionsRepository = new SessionsRepository(env.DB);
     this.userRepoAccessCacheRepository = new GitHubUserRepoAccessCacheRepository(env.DB);
     this.tokenCacheRepository = new InstallationTokenCacheRepository(env.DB);
     this.userSessionRepository = new UserSessionRepository(env.DB);
@@ -693,6 +699,19 @@ export class GitHubAppService {
       this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
       return this.findInstallationForRepo(owner, repo);
     } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        this.logger.warn(`Received 404 from github api for ${repoId}`);
+        return failure({
+          code: "REPO_NOT_ACCESSIBLE",
+          message: `Repository ${repoId} is not accessible to the authenticated user.`,
+        });
+      }
+
       return this.githubApiFailure(
         `Failed to resolve repository ${repoId} from GitHub.`,
         error,
@@ -869,22 +888,36 @@ export class GitHubAppService {
   private async handleInstallationDeleted(
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
-    this.logger.info(`github installation deleted: ${payload.installation.id}`);
-    await this.installationRepository.delete(payload.installation.id);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation deleted: ${installationId}`);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
+    await this.installationRepository.delete(installationId);
+    const sessionIds = await this.sessionsRepository.blockSessionsForDeletedInstallation(
+      installationId,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
   }
 
   private async handleInstallationSuspended(
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
-    this.logger.info(`github installation suspended: ${payload.installation.id}`);
-    await this.installationRepository.setSuspended(payload.installation.id, true);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation suspended: ${installationId}`);
+    await this.installationRepository.setSuspended(installationId, true);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
+    const sessionIds = await this.sessionsRepository.blockSessionsForSuspendedInstallation(
+      installationId,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
   }
 
   private async handleInstallationUnsuspended(
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
-    this.logger.info(`github installation unsuspended: ${payload.installation.id}`);
-    await this.installationRepository.setSuspended(payload.installation.id, false);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation unsuspended: ${installationId}`);
+    await this.installationRepository.setSuspended(installationId, false);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
   }
 
   private async handleReposAdded(
@@ -899,6 +932,12 @@ export class GitHubAppService {
     await this.installationRepository.addRepos(
       installationId,
       repos.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
+    );
+    // don't upsert to allowed, just delete the old records.
+    // we dont know for sure if the user has access even if the repo is added.
+    await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
+      installationId,
+      repos.map((repo) => repo.id),
     );
   }
 
@@ -917,10 +956,28 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_removed;
+    const repoIds = repos.map((repo) => repo.id);
 
     await this.installationRepository.removeRepos(
       installationId,
-      repos.map((repo) => repo.id),
+      repoIds,
+    );
+    await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
+      installationId,
+      repoIds,
+    );
+    const sessionIds = await this.sessionsRepository.blockSessionsForRemovedRepos(
+      installationId,
+      repoIds,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
+  }
+
+  private async requestAccessBlockedCleanup(sessionIds: string[]): Promise<void> {
+    await Promise.allSettled(
+      sessionIds.map((sessionId) =>
+        requestSessionAccessBlockedCleanup(this.env, sessionId),
+      ),
     );
   }
 }

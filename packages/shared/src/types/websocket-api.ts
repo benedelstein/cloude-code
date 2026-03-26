@@ -74,7 +74,8 @@ export const OperationErrorCode = z.enum([
   "INVALID_MESSAGE",
   "MESSAGE_HANDLER_ERROR",
   "CHAT_MESSAGE_FAILED",
-  "GITHUB_AUTH_REQUIRED"
+  "GITHUB_AUTH_REQUIRED",
+  "REPO_ACCESS_BLOCKED",
 ]);
 export type OperationErrorCode = z.infer<typeof OperationErrorCode>;
 

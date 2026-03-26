@@ -34,7 +34,7 @@ import {
   getPullRequestStatusForSession,
   SessionPullRequestServiceError,
 } from "@/lib/session-pull-request-service";
-import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
+import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
 import { mintSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
   assertSessionRepoAccess,
@@ -682,8 +682,8 @@ export class SessionsService {
       githubAccessToken: params.githubAccessToken,
     });
     if (!accessResult.ok) {
-      if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
-        await requestSessionRevocationCleanup(this.env, params.sessionId);
+      if (accessResult.error.code === "REPO_ACCESS_BLOCKED") {
+        await requestSessionAccessBlockedCleanup(this.env, params.sessionId);
         return failure(this.buildError({
           status: 403,
           message: accessResult.error.message,

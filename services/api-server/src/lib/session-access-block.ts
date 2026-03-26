@@ -3,9 +3,14 @@ import type { Env } from "@/types";
 import { createLogger } from "@/lib/logger";
 import { getAgentByName } from "agents";
 
-const logger = createLogger("session-revocation.ts");
+const logger = createLogger("session-access-block.ts");
 
-export async function requestSessionRevocationCleanup(
+/**
+ * Triggers access-block cleanup on a session's durable object.
+ * @param env - Worker environment.
+ * @param sessionId - Session id to trigger access-block cleanup for.
+ */
+export async function requestSessionAccessBlockedCleanup(
   env: Env,
   sessionId: string,
 ): Promise<void> {
@@ -14,13 +19,9 @@ export async function requestSessionRevocationCleanup(
       env.SESSION_AGENT,
       sessionId,
     );
-    await stub.fetch(
-      new Request("http://do/revoke", {
-        method: "POST",
-      }),
-    );
+    await stub.enforceSessionAccessBlocked(true);
   } catch (error) {
-    logger.error("Failed to trigger session revocation cleanup", {
+    logger.error("Failed to trigger session access-block cleanup", {
       error,
       fields: { sessionId },
     });

@@ -7,7 +7,7 @@ import { createLogger } from "@/lib/logger";
 import {
   assertSessionRepoAccess,
 } from "@/lib/user-session/session-repo-access";
-import { requestSessionRevocationCleanup } from "@/lib/session-revocation";
+import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();
 const logger = createLogger("agent.routes.ts");
@@ -37,8 +37,8 @@ agentRoutes.all("/session/:sessionId", async (c) => {
   });
 
   if (!accessResult.ok) {
-    if (accessResult.error.code === "REPO_ACCESS_REVOKED") {
-      await requestSessionRevocationCleanup(c.env, sessionId);
+    if (accessResult.error.code === "REPO_ACCESS_BLOCKED") {
+      await requestSessionAccessBlockedCleanup(c.env, sessionId);
       return c.json(
         {
           error: accessResult.error.message,
