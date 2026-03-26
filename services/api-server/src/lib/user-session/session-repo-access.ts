@@ -17,11 +17,27 @@ type RepoAccessValue = {
   repoFullName: string;
 };
 
-type UserRepoAccessError = {
-  code: GitHubAppErrorCode;
-  status: 422;
-  message: string;
-};
+type UserRepoAccessError =
+  | {
+      code: "INSTALLATION_NOT_FOUND";
+      status: 403;
+      message: string;
+    }
+  | {
+      code: "REPO_NOT_ACCESSIBLE";
+      status: 403;
+      message: string;
+    }
+  | {
+      code: "INVALID_REPO";
+      status: 400;
+      message: string;
+    }
+  | {
+      code: "GITHUB_API_ERROR";
+      status: 503;
+      message: string;
+    };
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
 
@@ -56,6 +72,37 @@ export type SessionRepoAccessError =
 
 export type SessionRepoAccessResult = Result<RepoAccessValue, SessionRepoAccessError>;
 
+function mapGitHubAppErrorToUserRepoAccessError(error: {
+  code: GitHubAppErrorCode;
+  message: string;
+}): UserRepoAccessError {
+  switch (error.code) {
+    case "INSTALLATION_NOT_FOUND":
+    case "REPO_NOT_ACCESSIBLE":
+      return {
+        code: error.code,
+        status: 403,
+        message: error.message,
+      };
+    case "INVALID_REPO":
+      return {
+        code: error.code,
+        status: 400,
+        message: error.message,
+      };
+    case "GITHUB_API_ERROR":
+      return {
+        code: error.code,
+        status: 503,
+        message: error.message,
+      };
+    default: {
+      const exhaustiveCheck: never = error.code;
+      throw new Error(`Unhandled GitHub app error code: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
 function blockedSessionAccessResult(justBlocked: boolean): SessionRepoAccessResult {
   return failure({
     code: "REPO_ACCESS_BLOCKED",
@@ -81,13 +128,7 @@ async function getUserAccessibleRepoForInstallation(params: {
     params.repoId,
   );
   if (!repositoryResult.ok) {
-    return failure({
-      code: repositoryResult.error.code,
-      // Internal validation-stage status only; assertSessionRepoAccess remaps
-      // these GitHub access-resolution errors to the final session HTTP status.
-      status: 422,
-      message: repositoryResult.error.message,
-    });
+    return failure(mapGitHubAppErrorToUserRepoAccessError(repositoryResult.error));
   }
 
   return success({
@@ -110,13 +151,7 @@ async function resolveAccessibleRepoForRecovery(params: {
     params.githubAccessToken,
   );
   if (!installationResult.ok) {
-    return failure({
-      code: installationResult.error.code,
-      // Internal validation-stage status only; assertSessionRepoAccess remaps
-      // these GitHub access-resolution errors to the final session HTTP status.
-      status: 422,
-      message: installationResult.error.message,
-    });
+    return failure(mapGitHubAppErrorToUserRepoAccessError(installationResult.error));
   }
   logger.info(`found installation for repo ${params.repoId} in ${installationResult.value.id}`);
 
@@ -248,10 +283,6 @@ export async function assertSessionRepoAccess(params: {
           status: 400,
           message: "Invalid repository.",
         });
-      default: {
-        const _exhaustiveCheck: never = repoAccessResult.error.code;
-        throw new Error(`Unhandled GitHub app error code: ${String(_exhaustiveCheck)}`);
-      }
     }
   }
 

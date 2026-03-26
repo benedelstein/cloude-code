@@ -997,41 +997,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     payload: ChatMessageEvent,
   ): Promise<void> {
     try {
-      const accessResult = await this.assertSessionRepoAccess();
-      if (!accessResult.ok) {
-        switch (accessResult.error.code) {
-          case "REPO_ACCESS_BLOCKED":
-            await this.enforceSessionAccessBlocked(false);
-            this.sendMessage(
-              {
-                type: "operation.error",
-                code: "REPO_ACCESS_BLOCKED",
-                message: accessResult.error.message,
-              },
-              connection,
-            );
-            return;
-          case "GITHUB_AUTH_REQUIRED":
-            this.sendMessage(
-              {
-                type: "operation.error",
-                code: "GITHUB_AUTH_REQUIRED",
-                message: accessResult.error.message,
-              },
-              connection,
-            );
-            return;
-          default:
-            this.sendMessage(
-              {
-                type: "operation.error",
-                code: "CHAT_MESSAGE_FAILED",
-                message: accessResult.error.message,
-              },
-              connection,
-            );
-            return;
-        }
+      if (!(await this.guardSessionRepoAccess(connection))) {
+        return;
       }
 
       await this.ensureReady(); // await any startup steps synchronously.
@@ -1070,41 +1037,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async handleSyncRequest(connection: Connection): Promise<void> {
-    const accessResult = await this.assertSessionRepoAccess();
-    if (!accessResult.ok) {
-      switch (accessResult.error.code) {
-        case "REPO_ACCESS_BLOCKED":
-          await this.enforceSessionAccessBlocked(false);
-          this.sendMessage(
-            {
-              type: "operation.error",
-              code: "REPO_ACCESS_BLOCKED",
-              message: accessResult.error.message,
-            },
-            connection,
-          );
-          return;
-        case "GITHUB_AUTH_REQUIRED":
-          this.sendMessage(
-            {
-              type: "operation.error",
-              code: "GITHUB_AUTH_REQUIRED",
-              message: accessResult.error.message,
-            },
-            connection,
-          );
-          return;
-        default:
-          this.sendMessage(
-            {
-              type: "operation.error",
-              code: "CHAT_MESSAGE_FAILED",
-              message: accessResult.error.message,
-            },
-            connection,
-          );
-          return;
-      }
+    if (!(await this.guardSessionRepoAccess(connection))) {
+      return;
     }
 
     const sessionId = this.serverState.sessionId;
@@ -1256,6 +1190,47 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       sessionId,
       userId,
     });
+  }
+
+  private async guardSessionRepoAccess(connection: Connection): Promise<boolean> {
+    const accessResult = await this.assertSessionRepoAccess();
+    if (accessResult.ok) {
+      return true;
+    }
+
+    switch (accessResult.error.code) {
+      case "REPO_ACCESS_BLOCKED":
+        await this.enforceSessionAccessBlocked(false);
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "REPO_ACCESS_BLOCKED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+      case "GITHUB_AUTH_REQUIRED":
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "GITHUB_AUTH_REQUIRED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+      default:
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "CHAT_MESSAGE_FAILED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+    }
   }
 
   async enforceSessionAccessBlocked(

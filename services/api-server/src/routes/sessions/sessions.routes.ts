@@ -62,12 +62,17 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
         ...(result.error.code ? { code: result.error.code } : {}),
       }, 401);
     }
-    if (result.error.status === 422) {
+    if (result.error.status === 403) {
       return c.json({
         error: result.error.message,
-        ...(result.error.details ? { details: result.error.details } : {}),
-        ...(result.error.code ? { code: result.error.code } : {}),
-      }, 422);
+        code: result.error.code ?? "REPO_NOT_ACCESSIBLE",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
 
     return c.json({

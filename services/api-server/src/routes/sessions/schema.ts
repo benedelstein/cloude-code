@@ -76,9 +76,13 @@ export const createSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Authentication required to create a session",
     },
-    422: {
-      content: { "application/json": { schema: ErrorWithOptionalDetailsResponse } },
-      description: "Repository access validation failed",
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access denied for the requested repository",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
