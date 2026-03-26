@@ -266,4 +266,34 @@ export class GitHubInstallationRepository {
     );
     await this.database.batch(batch);
   }
+
+  /**
+   * Delete tracked repos for an installation except a repo-id allowlist.
+   * @param installationId The GitHub installation id to reconcile.
+   * @param repoIds The repo ids that should remain tracked.
+   * @returns A promise that resolves when the cleanup completes.
+   */
+  async deleteByInstallationIdExceptRepoIds(
+    installationId: number,
+    repoIds: number[],
+  ): Promise<void> {
+    if (repoIds.length === 0) {
+      await this.database.prepare(
+        `DELETE FROM github_installation_repos
+         WHERE installation_id = ?`,
+      )
+        .bind(installationId)
+        .run();
+      return;
+    }
+
+    const placeholders = repoIds.map(() => "?").join(", ");
+    await this.database.prepare(
+      `DELETE FROM github_installation_repos
+       WHERE installation_id = ?
+         AND repo_id NOT IN (${placeholders})`,
+    )
+      .bind(installationId, ...repoIds)
+      .run();
+  }
 }
