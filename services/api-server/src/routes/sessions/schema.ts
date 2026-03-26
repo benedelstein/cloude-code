@@ -128,6 +128,14 @@ export const createSessionWebSocketTokenRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
   },
 });
 

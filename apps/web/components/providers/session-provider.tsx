@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   useCloudflareAgent,
   type UseCloudflareAgentReturn,
@@ -27,20 +27,26 @@ interface SessionProviderWithTokenProps extends SessionProviderProps {
   webSocketToken: SessionWebSocketTokenResponse;
 }
 
+interface SessionBootstrapError {
+  message: string;
+  code: string | null;
+}
+
 // fake session object for when we don't have a wss token yet
 function createPendingSession(
   sessionId: string,
   sessionStatus: SessionStatus | null,
-  sessionErrorMessage: string | null,
+  sessionError: SessionBootstrapError | null,
 ): UseCloudflareAgentReturn {
   return {
     sessionId,
     messages: [],
     streamingMessage: null,
     sessionStatus,
-    sessionErrorMessage,
+    sessionErrorMessage: sessionError?.message ?? null,
+    sessionErrorCode: sessionError?.code ?? null,
     operationError: null,
-    isHistoryLoading: sessionErrorMessage === null,
+    isHistoryLoading: sessionError === null,
     hasHydratedState: false,
     isReady: false,
     isStreaming: false,
@@ -87,25 +93,31 @@ function SessionProviderWithToken({
 // this would simplify the client flow at the expense of some latency.
 export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const [tokenSessionStatus, setTokenSessionStatus] = useState<SessionStatus | null>(null);
-  const [tokenErrorMessage, setTokenErrorMessage] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<SessionBootstrapError | null>(null);
+
+  useEffect(() => {
+    setTokenSessionStatus(null);
+    setTokenError(null);
+  }, [sessionId]);
 
   const webSocketToken = useSessionWebSocketToken({
     sessionId,
-    onAuthError: () => {
-      setTokenErrorMessage("Session authentication failed");
+    onAuthError: (error) => {
+      setTokenSessionStatus(null);
+      setTokenError(error);
     },
     onReconnectPending: () => {
-      setTokenErrorMessage((currentError) => currentError ?? "Reconnecting...");
+      setTokenError((currentError) => currentError ?? { message: "Reconnecting...", code: null });
     },
     onReconnectRecovered: () => {
       setTokenSessionStatus(null);
-      setTokenErrorMessage((currentError) => currentError === "Reconnecting..." ? null : currentError);
+      setTokenError((currentError) => currentError?.message === "Reconnecting..." ? null : currentError);
     },
   });
 
   const pendingSession = useMemo(() => {
-    return createPendingSession(sessionId, tokenSessionStatus, tokenErrorMessage);
-  }, [sessionId, tokenErrorMessage, tokenSessionStatus]);
+    return createPendingSession(sessionId, tokenSessionStatus, tokenError);
+  }, [sessionId, tokenError, tokenSessionStatus]);
 
   if (!webSocketToken) {
     return (

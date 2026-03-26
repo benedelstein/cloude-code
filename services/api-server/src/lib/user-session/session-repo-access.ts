@@ -83,6 +83,8 @@ async function getUserAccessibleRepoForInstallation(params: {
   if (!repositoryResult.ok) {
     return failure({
       code: repositoryResult.error.code,
+      // Internal validation-stage status only; assertSessionRepoAccess remaps
+      // these GitHub access-resolution errors to the final session HTTP status.
       status: 422,
       message: repositoryResult.error.message,
     });
@@ -110,10 +112,13 @@ async function resolveAccessibleRepoForRecovery(params: {
   if (!installationResult.ok) {
     return failure({
       code: installationResult.error.code,
+      // Internal validation-stage status only; assertSessionRepoAccess remaps
+      // these GitHub access-resolution errors to the final session HTTP status.
       status: 422,
       message: installationResult.error.message,
     });
   }
+  logger.info(`found installation for repo ${params.repoId} in ${installationResult.value.id}`);
 
   return getUserAccessibleRepoForInstallation({
     env: params.env,

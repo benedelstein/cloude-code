@@ -41,6 +41,12 @@ export const WS_API_URL =
 // All REST calls go through the Next.js API proxy (same-origin, cookie-based auth)
 const API_BASE = "/api";
 
+type ApiErrorResponse = {
+  error?: string;
+  details?: string;
+  code?: string;
+};
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -48,14 +54,26 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new ApiError("Unauthorized", 401);
+    let message = `Request failed: ${res.status}`;
+    let code: string | undefined;
+    let details: string | undefined;
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await res.json() as ApiErrorResponse;
+      message = body.error ?? body.details ?? message;
+      code = body.code;
+      details = body.details;
+    } else {
+      const text = await res.text();
+      message = text || message;
     }
-    const text = await res.text();
-    throw new ApiError(
-      text || `Request failed: ${res.status}`,
-      res.status,
-    );
+
+    if (res.status === 401 && message === `Request failed: ${res.status}`) {
+      message = "Unauthorized";
+    }
+
+    throw new ApiError(message, res.status, code, details);
   }
 
   if (res.status === 204) {
@@ -69,10 +87,14 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public code?: string,
+    public details?: string,
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 

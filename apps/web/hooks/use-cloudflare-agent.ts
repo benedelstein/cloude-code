@@ -45,6 +45,7 @@ export interface UseCloudflareAgentReturn {
   streamingMessage: UIMessage | null;
   sessionStatus: SessionStatus | null;
   sessionErrorMessage: string | null;
+  sessionErrorCode: string | null;
   operationError: OperationErrorEvent | null;
   isHistoryLoading: boolean;
   hasHydratedState: boolean;
@@ -325,6 +326,7 @@ export function useCloudflareAgent({
     streamingMessage,
     sessionStatus,
     sessionErrorMessage,
+    sessionErrorCode: null,
     operationError,
     isHistoryLoading,
     hasHydratedState,

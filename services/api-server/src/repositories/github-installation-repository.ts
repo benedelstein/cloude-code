@@ -26,6 +26,11 @@ export interface GitHubInstallationWithRepo {
   repositorySelection: RepositorySelection;
 }
 
+export interface GitHubInstallationRepoInput {
+  id: number;
+  fullName: string;
+}
+
 interface GitHubInstallationRepoRow {
   installation_id: number;
   repo_id: number;
@@ -56,6 +61,11 @@ export class GitHubInstallationRepository {
     this.database = database;
   }
 
+  /**
+   * Find an installation by account login for repository lookup decisions.
+   * @param login The GitHub owner login.
+   * @returns The installation id and repository selection, or null when absent.
+   */
   async findByAccountLogin(login: string): Promise<GitHubInstallationWithRepo | null> {
     const row = await this.database.prepare(
       `SELECT id, repository_selection FROM github_installations
@@ -72,6 +82,32 @@ export class GitHubInstallationRepository {
     };
   }
 
+  /**
+   * Find an installation by its numeric GitHub installation id.
+   * @param installationId The GitHub installation id.
+   * @returns The installation id and repository selection, or null when absent.
+   */
+  async findById(installationId: number): Promise<GitHubInstallationWithRepo | null> {
+    const row = await this.database.prepare(
+      `SELECT id, repository_selection FROM github_installations
+       WHERE id = ?`,
+    )
+      .bind(installationId)
+      .first<GitHubInstallationWithRepoRow>();
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      repositorySelection: row.repository_selection,
+    };
+  }
+
+  /**
+   * Find an installation by repository id when the repo is already tracked locally.
+   * @param repoId The numeric GitHub repository id.
+   * @returns The installation id and repository selection, or null when absent.
+   */
   async findByRepoId(repoId: number): Promise<GitHubInstallationWithRepo | null> {
     const row = await this.database.prepare(
       `SELECT installations.id, installations.repository_selection
@@ -175,7 +211,7 @@ export class GitHubInstallationRepository {
 
   async addRepos(
     installationId: number,
-    repos: Array<{ id: number; fullName: string }>,
+    repos: GitHubInstallationRepoInput[],
   ): Promise<void> {
     if (repos.length === 0) return;
 
@@ -186,6 +222,36 @@ export class GitHubInstallationRepository {
          VALUES (?, ?, ?)`,
       ).bind(installationId, repo.id, repo.fullName),
     );
+    await this.database.batch(batch);
+  }
+
+  /**
+   * Update repository selection and add tracked repos in one batched write.
+   * @param installationId The GitHub installation id to update.
+   * @param repositorySelection The new repository selection mode.
+   * @param repos The repositories to ensure are tracked for this installation.
+   * @returns A promise that resolves when the writes complete.
+   */
+  async setRepositorySelectionAndAddRepos(
+    installationId: number,
+    repositorySelection: RepositorySelection,
+    repos: GitHubInstallationRepoInput[],
+  ): Promise<void> {
+    const batch = [
+      this.database.prepare(
+        `UPDATE github_installations
+         SET repository_selection = ?, updated_at = datetime('now')
+         WHERE id = ?`,
+      ).bind(repositorySelection, installationId),
+      ...repos.map((repo) =>
+        this.database.prepare(
+          `INSERT OR IGNORE INTO github_installation_repos
+           (installation_id, repo_id, repo_name)
+           VALUES (?, ?, ?)`,
+        ).bind(installationId, repo.id, repo.fullName)
+      ),
+    ];
+
     await this.database.batch(batch);
   }
 

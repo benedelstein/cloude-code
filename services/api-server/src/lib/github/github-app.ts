@@ -705,7 +705,7 @@ export class GitHubAppService {
         "status" in error &&
         error.status === 404
       ) {
-        this.logger.warn(`Received 404 from github api for ${repoId}`);
+        this.logger.warn(`Received 404 from github api for repo ${repoId}`);
         return failure({
           code: "REPO_NOT_ACCESSIBLE",
           message: `Repository ${repoId} is not accessible to the authenticated user.`,
@@ -925,20 +925,39 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_added;
+    const repositorySelection = payload.installation.repository_selection as RepositorySelection; // should always be `selected`
+    const repoIds = repos.map((repo) => repo.id);
+    const reposToAdd = repos.map((repo) => ({ id: repo.id, fullName: repo.full_name }));
+    const existingInstallation = await this.installationRepository.findById(
+      installationId,
+    );
+    // if we're going from `all` to `selected`, github only sends an `installation_repositories.added` webhook 
+    // we need to update the installation repository selection
+    const isAllToSelectedTransition = existingInstallation?.repositorySelection === "all"
+      && repositorySelection === "selected";
+
     this.logger.info(
       `github installation repositories added: ${installationId} - ${repos.length} repos`,
     );
 
-    await this.installationRepository.addRepos(
+    await this.installationRepository.setRepositorySelectionAndAddRepos(
       installationId,
-      repos.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
+      repositorySelection,
+      reposToAdd,
     );
-    // don't upsert to allowed, just delete the old records.
-    // we dont know for sure if the user has access even if the repo is added.
-    await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
-      installationId,
-      repos.map((repo) => repo.id),
-    );
+    // Don't upsert to allowed, just delete the old records.
+    // We do not know for sure if the user has access even if the repo is added.
+    if (isAllToSelectedTransition) {
+      await this.userRepoAccessCacheRepository.deleteByInstallationIdExceptRepoIds(
+        installationId,
+        repoIds,
+      );
+    } else {
+      await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
+        installationId,
+        repoIds,
+      );
+    }
   }
 
   private async handleUserAuthorizationRevoked(

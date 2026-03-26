@@ -48,6 +48,7 @@ const sessionMessagesResponseSchema = z.array(UIMessageSchema);
 type SessionMessagesResponse = z.infer<typeof sessionMessagesResponseSchema>;
 
 interface SessionAgentFetcher {
+  // eslint-disable-next-line no-unused-vars
   fetch(_request: Request): Promise<Response>;
 }
 
@@ -270,18 +271,68 @@ export class SessionsService {
   }
 
   /**
-   * Mints a websocket token for a session owned by the caller.
+   * Mints a websocket token for a session after validating current repo access.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
+   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Websocket token payload on success.
    */
   async createSessionWebSocketToken(params: {
     sessionId: string;
     userId: string;
+    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionWebSocketTokenResponse>> {
-    const ownershipResult = await this.assertSessionOwnership(params.sessionId, params.userId);
-    if (!ownershipResult.ok) {
-      return ownershipResult;
+    const accessResult = await assertSessionRepoAccess({
+      env: this.env,
+      sessionId: params.sessionId,
+      userId: params.userId,
+      githubAccessToken: params.githubAccessToken,
+    });
+
+    if (!accessResult.ok) {
+      switch (accessResult.error.code) {
+        case "REPO_ACCESS_BLOCKED":
+          await requestSessionAccessBlockedCleanup(this.env, params.sessionId);
+          return failure(this.buildError({
+            status: 403,
+            message: accessResult.error.message,
+            code: accessResult.error.code,
+          }));
+
+        case "GITHUB_AUTH_REQUIRED":
+          logger.error("GitHub auth required unexpectedly for websocket token route", {
+            fields: { sessionId: params.sessionId, userId: params.userId },
+          });
+          throw new Error(
+            "GitHub auth required unexpectedly for websocket token route",
+          );
+
+        case "GITHUB_API_ERROR":
+          logger.warn("Temporary GitHub failure while minting session websocket token", {
+            fields: {
+              sessionId: params.sessionId,
+              userId: params.userId,
+              code: accessResult.error.code,
+            },
+          });
+          return failure(this.buildError({
+            status: 503,
+            message: accessResult.error.message,
+            code: accessResult.error.code,
+          }));
+
+        case "SESSION_NOT_FOUND":
+        case "INVALID_REPO":
+          return failure(this.buildError({
+            status: 404,
+            message: "Session not found",
+          }));
+
+        default: {
+          const exhaustiveCheck: never = accessResult.error;
+          throw new Error(`Unhandled session repo access error: ${exhaustiveCheck}`);
+        }
+      }
     }
 
     logger.log(`creating session websocket token for ${params.sessionId}`);

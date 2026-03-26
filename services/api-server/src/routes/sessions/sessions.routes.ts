@@ -116,9 +116,22 @@ sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
   const result = await sessionsService.createSessionWebSocketToken({
     sessionId: c.req.valid("param").sessionId,
     userId: user.id,
+    githubAccessToken: user.githubAccessToken,
   });
 
   if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
     return c.json({ error: result.error.message }, 404);
   }
 
