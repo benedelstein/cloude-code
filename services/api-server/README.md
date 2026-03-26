@@ -77,3 +77,38 @@ ws.onmessage = (event) => {
 // Send message
 ws.send(JSON.stringify({ type: "chat.message", content: "Hello" }));
 ```
+
+## Testing and running 
+
+Migrate the local d1 database 
+```bash
+pnpm db:migrate
+```
+
+```bash
+cd services/api-server
+pnpm dev
+```
+
+To view local db state, use `localflare`
+
+```bash
+npx localflare
+```
+then visit https://studio.localflare.dev 
+
+## Deployment
+
+The api server is deployed to Cloudflare Workers via `.github/workflows/deploy-api-server.yml`
+The deploy action
+1. builds and lints the app
+2. Applies any d1 migrations added
+3. Deploys the worker to Cloudflare Workers
+
+To add new secrets, run:
+```bash
+npx wrangler secret put <secret-name>
+# then enter the value when prompted
+```
+
+To add public environment variables, edit `wrangler.jsonc`

@@ -143,6 +143,7 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
       });
     }
 
+    // write the updated credentials to the sprite
     const sprite = new WorkersSpriteClient(
       params.spriteName,
       params.env.SPRITES_API_KEY,

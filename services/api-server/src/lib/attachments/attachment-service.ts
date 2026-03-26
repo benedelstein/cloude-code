@@ -39,13 +39,17 @@ export interface AttachmentGcTask {
 }
 
 export class AttachmentService {
-  constructor(private readonly database: D1Database) {}
+  private readonly database: D1Database;
+
+  constructor(database: D1Database) {
+    this.database = database;
+  }
 
   async create(params: CreateAttachmentParams): Promise<AttachmentRecord> {
     const now = new Date().toISOString();
     const sessionId = params.sessionId ?? null;
     const boundAt = sessionId ? now : null;
-
+    // TODO: separate this into a repository
     await this.database
       .prepare(
         `INSERT INTO attachments (

@@ -1,5 +1,5 @@
 import type { Logger } from "@repo/shared";
-import { SessionHistoryService } from "@/lib/session-history";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import type { MessageRepository } from "./repositories/message-repository";
 
@@ -22,8 +22,8 @@ export async function updateSessionHistoryData(params: {
   const logger = baseLogger.scope("session-agent-history.ts");
 
   try {
-    const sessionHistory = new SessionHistoryService(database);
-    await sessionHistory.updateLastMessageAt(sessionId);
+    const sessionsRepository = new SessionsRepository(database);
+    await sessionsRepository.updateLastMessageAt(sessionId);
 
     // Check if this is the first user message — if so, generate a title via LLM
     // TODO: more efficient query. store message sender in d1 as toplevel column.
@@ -33,7 +33,7 @@ export async function updateSessionHistoryData(params: {
     if (userMessages.length === 1) {
       const title = await generateSessionTitle(anthropicApiKey, messageContent);
       logger.info(`Generated session title: ${title} for session ${sessionId}`);
-      await sessionHistory.updateTitle(sessionId, title);
+      await sessionsRepository.updateTitle(sessionId, title);
     }
   } catch (error) {
     logger.error("Failed to sync message to D1 history", { error });

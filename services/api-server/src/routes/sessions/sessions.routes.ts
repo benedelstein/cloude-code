@@ -1,310 +1,146 @@
-import { OpenAPIHono, z } from "@hono/zod-openapi";
-import {
-  EditorCloseResponse,
-  EditorOpenResponse,
-  SessionInfoResponse,
-  SessionPlanResponse,
-  UIMessageSchema,
-} from "@repo/shared";
-import type { Env } from "@/types";
-import { getAgentByName } from "agents";
-import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import {
-  GitHubAppService,
-  GitHubAppError,
-} from "@/lib/github";
-import { createLogger } from "@/lib/logger";
-import { SessionHistoryService } from "@/lib/session-history";
-import {
-  createPullRequestForSession,
-  getPullRequestStatusForSession,
-  SessionPullRequestServiceError,
-} from "@/lib/session-pull-request-service";
-import { generateSessionTitle } from "@/lib/generate-session-title";
-import { AttachmentService } from "@/lib/attachments/attachment-service";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { SessionsService } from "@/lib/sessions/sessions.service";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
+import type { Env } from "@/types";
 import {
-  listSessionsRoute,
+  archiveSessionRoute,
+  closeEditorRoute,
+  createPullRequestRoute,
   createSessionRoute,
-  getSessionRoute,
   createSessionWebSocketTokenRoute,
-  updateSessionTitleRoute,
+  deleteSessionRoute,
+  getPullRequestRoute,
   getSessionMessagesRoute,
   getSessionPlanRoute,
-  createPullRequestRoute,
-  getPullRequestRoute,
-  archiveSessionRoute,
-  deleteSessionRoute,
+  getSessionRoute,
+  listSessionsRoute,
   openEditorRoute,
-  closeEditorRoute,
+  updateSessionTitleRoute,
 } from "./schema";
-import { mintSessionWebSocketToken } from "@/lib/session-websocket-token";
 
 export const sessionsRoutes = new OpenAPIHono<{
   Bindings: Env;
   Variables: { user: AuthUser };
 }>();
-const logger = createLogger("sessions.routes.ts");
 
 sessionsRoutes.use("*", authMiddleware);
-
-class SessionInitializationError extends Error {
-  readonly status: number;
-  readonly details: string;
-  readonly code?: string;
-
-  constructor(
-    status: number,
-    details: string,
-    code?: string,
-  ) {
-    super(details);
-    this.name = "SessionInitializationError";
-    this.status = status;
-    this.details = details;
-    this.code = code;
-  }
-}
-
-const getSessionAgent = async (id: string, env: Env) => {
-  return await getAgentByName<Env, SessionAgentDO>(env.SESSION_AGENT, id);
-};
-
-const getAuthorizedSessionAgent = async (
-  sessionId: string,
-  userId: string,
-  env: Env,
-): Promise<Awaited<ReturnType<typeof getSessionAgent>> | null> => {
-  const sessionHistory = new SessionHistoryService(env.DB);
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, userId);
-  if (!isOwnedByUser) {
-    return null;
-  }
-  return getSessionAgent(sessionId, env);
-};
-
-const sessionMessagesResponseSchema = z.array(UIMessageSchema);
 
 // List sessions for the current user
 sessionsRoutes.openapi(listSessionsRoute, async (c) => {
   const user = c.get("user");
   const { repoId, limit, cursor } = c.req.valid("query");
+  const sessionsService = new SessionsService(c.env);
 
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  const result = await sessionHistory.listByUser(user.id, {
+  const sessions = await sessionsService.listSessions({
+    userId: user.id,
     repoId,
     limit,
     cursor: cursor ?? undefined,
   });
 
-  return c.json(result, 200);
+  return c.json(sessions, 200);
 });
 
 // Create a new session
 sessionsRoutes.openapi(createSessionRoute, async (c) => {
-  const createSessionData = c.req.valid("json");
   const user = c.get("user");
-
-  // Verify that the GitHub App installation exists for this repo and is accessible to the user
-  // before creating the session
-  const github = new GitHubAppService(c.env, logger);
-  let repository: {
-    id: number;
-    fullName: string;
-    owner: string;
-    name: string;
-    defaultBranch?: string;
-  };
-  try {
-    // first find the installation for the repo
-    const installation = await github.findInstallationForRepoId(
-      createSessionData.repoId,
-      user.githubAccessToken,
-    );
-    repository = await github.getUserAccessibleInstallationRepoById(
-      user.id,
-      user.githubAccessToken,
-      installation.id,
-      createSessionData.repoId,
-    );
-  } catch (error) {
-    logger.error(`Failed to find installation for repo ${createSessionData.repoId}`, { error });
-    if (error instanceof GitHubAppError) {
-      return c.json({ error: error.message, code: error.code }, 422);
-    }
-    throw error;
-  }
-
-  const sessionId = crypto.randomUUID();
-  logger.info("Creating session agent", {
-    fields: {
-      sessionId,
-      userId: user.id,
-      repositoryFullName: repository.fullName,
-    },
-  });
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  const attachmentService = new AttachmentService(c.env.DB);
-  const attachmentIds = [...new Set(createSessionData.attachmentIds ?? [])];
-
-  // Record session in D1 for history listing. Attachments reference sessions via FK.
-  await sessionHistory.create({
-    id: sessionId,
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.createSession({
     userId: user.id,
-    repoId: repository.id,
-    repoFullName: repository.fullName,
+    githubAccessToken: user.githubAccessToken,
+    request: c.req.valid("json"),
   });
-  let attachmentsBound = false;
 
-  try {
-    if (attachmentIds.length > 0) {
-      const bound = await attachmentService.bindUnboundOwnedToSession(
-        attachmentIds,
-        user.id,
-        sessionId,
-      );
-      if (!bound) {
-        await sessionHistory.delete(sessionId);
-        return c.json(
-          {
-            error: "Failed to bind one or more attachments. Ensure they exist, are unbound, and are owned by you.",
-          },
-          400,
-        );
-      }
-      attachmentsBound = true;
+  if (!result.ok) {
+    if (result.error.status === 400) {
+      return c.json({ error: result.error.message }, 400);
+    }
+    if (result.error.status === 401) {
+      return c.json({
+        error: result.error.message,
+        details: result.error.details ?? result.error.message,
+        ...(result.error.code ? { code: result.error.code } : {}),
+      }, 401);
+    }
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_NOT_ACCESSIBLE",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
     }
 
-    const stub = await getSessionAgent(sessionId, c.env);
-    // Initialize the session in the DO (token fetched internally by the DO)
-    const initResponse = await stub.fetch(
-      new Request("http://do/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          userId: user.id,
-          repoFullName: repository.fullName,
-        settings: createSessionData.settings,
-        branch: createSessionData.branch,
-        initialMessage: createSessionData.initialMessage,
-        initialAttachmentIds: attachmentIds,
-      }),
-    }),
-  );
-
-    if (!initResponse.ok) {
-      const responseText = await initResponse.text();
-      let responseBody: { error?: string; code?: string } | null = null;
-      try {
-        responseBody = JSON.parse(responseText) as { error?: string; code?: string };
-      } catch {
-        responseBody = null;
-      }
-
-      throw new SessionInitializationError(
-        initResponse.status,
-        responseBody?.error ?? (responseText || "Failed to initialize session"),
-        responseBody?.code,
-      );
-    }
-  } catch (error) {
-    if (attachmentsBound && attachmentIds.length > 0) {
-      await attachmentService.unbindFromSession(attachmentIds, user.id, sessionId);
-    }
-    await sessionHistory.delete(sessionId);
-    const details = error instanceof SessionInitializationError
-      ? error.details
-      : error instanceof Error
-      ? error.message
-      : "Unknown error";
-    const status = error instanceof SessionInitializationError && error.status === 401
-      ? 401
-      : 500;
-    const code = error instanceof SessionInitializationError ? error.code : undefined;
-    const responseBody = {
-      error: "Failed to create session",
-      details,
-      ...(code ? { code } : {}),
-    };
-
-    if (status === 401) {
-      return c.json(responseBody, 401);
-    }
-
-    return c.json(responseBody, 500);
+    return c.json({
+      error: result.error.message,
+      details: result.error.details ?? result.error.message,
+      ...(result.error.code ? { code: result.error.code } : {}),
+    }, 500);
   }
 
-  // If an initial message was provided, generate a title immediately
-  let title: string | null = null;
-  if (createSessionData.initialMessage) {
-    try {
-      title = await generateSessionTitle(c.env.ANTHROPIC_API_KEY, createSessionData.initialMessage);
-      await sessionHistory.updateTitle(sessionId, title);
-    } catch (error) {
-      logger.error("Failed to generate title at creation", { error });
-    }
-  }
-
-  const webSocketToken = await mintSessionWebSocketToken(
-    c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
-    {
-      sessionId,
-      userId: user.id,
-    },
-  );
-
-  return c.json({
-    sessionId,
-    title,
-    websocketToken: webSocketToken.token,
-    websocketTokenExpiresAt: webSocketToken.expiresAt,
-  }, 201);
+  return c.json(result.value, 201);
 });
 
 // Get session info
 sessionsRoutes.openapi(getSessionRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const d1 = new Date();
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  logger.debug(`Fetched session agent in ${new Date().getTime() - d1.getTime()}ms`);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.getSession({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
 
-  const d2 = new Date();
-  const response = await stub.fetch(new Request("http://do/"));
-  logger.debug(`Fetched session info in ${new Date().getTime() - d2.getTime()}ms`);
-  if (!response.ok) {
-    return c.json({ error: "Session not found" }, 404);
-  }
-
-  const session = SessionInfoResponse.parse(await response.json());
-  return c.json(session, 200);
+  return c.json(result.value, 200);
 });
 
 sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
   const user = c.get("user");
-  const { sessionId } = c.req.valid("param");
-  logger.log(`creating session websocket token for ${sessionId}`);
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.createSessionWebSocketToken({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
 
-  if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404);
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    return c.json({ error: result.error.message }, 404);
   }
 
-  const webSocketToken = await mintSessionWebSocketToken(
-    c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
-    {
-      sessionId,
-      userId: user.id,
-    },
-  );
-  logger.log(`created session websocket token for ${sessionId}`);
-
-  return c.json(webSocketToken, 200);
+  return c.json(result.value, 200);
 });
 
 // Update session title
@@ -312,213 +148,282 @@ sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
   const user = c.get("user");
   const { sessionId } = c.req.valid("param");
   const { title } = c.req.valid("json");
-  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.updateSessionTitle({
+    sessionId,
+    userId: user.id,
+    title,
+  });
 
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
-  if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404);
+  if (!result.ok) {
+    return c.json({ error: result.error.message }, 404);
   }
 
-  await sessionHistory.updateTitle(sessionId, title);
-  return c.json({ title }, 200);
+  return c.json(result.value, 200);
 });
 
 // Get messages for a session
 sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.getSessionMessages({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    if (result.error.status === 500) {
+      return c.json({ error: result.error.message }, 500);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
 
-  const response = await stub.fetch(new Request("http://do/messages"));
-  if (!response.ok) {
-    return c.json({ error: "Failed to get messages" }, 500);
-  }
-
-  const messages = sessionMessagesResponseSchema.parse(await response.json());
-  return c.json(messages, 200);
+  return c.json(result.value, 200);
 });
 
 sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.getSessionPlan({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    if (result.error.status === 500) {
+      return c.json({ error: result.error.message }, 500);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
 
-  const response = await stub.fetch(new Request("http://do/plan"));
-  if (response.status === 404) {
-    return c.json({ error: "Plan not found" }, 404);
-  }
-  if (!response.ok) {
-    return c.json({ error: "Failed to get plan" }, 500);
-  }
-
-  const plan = SessionPlanResponse.parse(await response.json());
-  return c.json(plan, 200);
+  return c.json(result.value, 200);
 });
 
 // Create a pull request for a session's pushed branch
 sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
-  }
-  const github = new GitHubAppService(c.env, logger);
-  try {
-    const pullRequest = await createPullRequestForSession({
-      sessionStub: stub,
-      github,
-      anthropicApiKey: c.env.ANTHROPIC_API_KEY,
-    });
-    return c.json(pullRequest, 201);
-  } catch (error) {
-    if (error instanceof SessionPullRequestServiceError) {
-      if (error.status === 409 && error.responseBody.url) {
-        return c.json(
-          { error: error.responseBody.error, url: error.responseBody.url },
-          409,
-        );
-      }
-      if (error.status === 404) {
-        return c.json({ error: error.responseBody.error }, 404);
-      }
-      if (error.status === 400) {
-        return c.json(
-          {
-            error: error.responseBody.error,
-            details: error.responseBody.details,
-          },
-          400,
-        );
-      }
-      return c.json(
-        { error: "Failed to create pull request" },
-        400,
-      );
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.createPullRequest({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
     }
-    throw error;
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    if (result.error.status === 409) {
+      return c.json({
+        error: result.error.message,
+        url: result.error.url ?? "",
+      }, 409);
+    }
+    if (result.error.status === 400) {
+      return c.json({
+        error: result.error.message,
+        ...(result.error.details ? { details: result.error.details } : {}),
+      }, 400);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
+
+  return c.json(result.value, 201);
 });
 
 // Check pull request status
 sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
-  }
-  const github = new GitHubAppService(c.env, logger);
-  try {
-    const pullRequestStatus = await getPullRequestStatusForSession({
-      sessionStub: stub,
-      githubService: github,
-    });
-    return c.json(pullRequestStatus, 200);
-  } catch (error) {
-    if (error instanceof SessionPullRequestServiceError) {
-      if (error.status === 404) {
-        return c.json({ error: error.responseBody.error }, 404);
-      }
-      if (error.status === 400) {
-        return c.json({ error: error.responseBody.error }, 400);
-      }
-      return c.json({ error: error.responseBody.error }, 500);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.getPullRequest({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
     }
-    throw error;
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    if (result.error.status === 500) {
+      return c.json({ error: result.error.message }, 500);
+    }
+    if (result.error.status === 400) {
+      return c.json({ error: result.error.message }, 400);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
+
+  return c.json(result.value, 200);
 });
 
 // Archive a session (hide from list but preserve data)
 sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
   const user = c.get("user");
-  const { sessionId } = c.req.valid("param");
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
-  if (!isOwnedByUser) {
-    return c.json({ error: "Session not found" }, 404);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.archiveSession({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.error.message }, 404);
   }
-  await sessionHistory.archive(sessionId);
-  return c.json({ archived: true as const }, 200);
+
+  return c.json(result.value, 200);
 });
 
 // Delete a session
 sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
   const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
+  const sessionsService = new SessionsService(c.env);
+  const result = await sessionsService.deleteSession({
+    sessionId: c.req.valid("param").sessionId,
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+  });
+
+  if (!result.ok) {
+    if (result.error.status === 403) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+      }, 403);
+    }
+    if (result.error.status === 503) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "GITHUB_API_ERROR",
+      }, 503);
+    }
+    if (result.error.status === 500) {
+      return c.json({ error: result.error.message }, 500);
+    }
+
+    return c.json({ error: result.error.message }, 404);
   }
 
-  const response = await stub.fetch(
-    new Request("http://do/", { method: "DELETE" }),
-  );
-
-  if (!response.ok) {
-    return c.json({ error: "Failed to delete session" }, 500);
-  }
-
-  // Hard-delete from D1 so terminated sessions vanish entirely.
-  // Enqueue attachment object keys for async R2 cleanup as part of this bulk session deletion path.
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  await sessionHistory.deleteAndQueueAttachmentGc(sessionId);
-
-  return c.json({ deleted: true as const }, 200);
+  return c.json(result.value, 200);
 });
 
 // Open VS Code editor on the Sprite VM
 sessionsRoutes.openapi(openEditorRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
-  const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
-  }
+  // const user = c.get("user");
+  // const sessionsService = new SessionsService(c.env);
+  return c.json({ error: "Not implemented" }, 501);
+  // const result = await sessionsService.openEditor({
+  //   sessionId: c.req.valid("param").sessionId,
+  //   userId: user.id,
+  //   githubAccessToken: user.githubAccessToken,
+  // });
 
-  const response = await stub.fetch(
-    new Request("http://do/editor/open", { method: "POST" }),
-  );
+  // if (!result.ok) {
+  //   if (result.error.status === 403) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+  //     }, 403);
+  //   }
+  //   if (result.error.status === 400) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       details: result.error.details ?? result.error.message,
+  //     }, 400);
+  //   }
+  //   if (result.error.status === 500) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       details: result.error.details ?? result.error.message,
+  //     }, 500);
+  //   }
 
-  if (!response.ok) {
-    const error = await response.text();
-    if (response.status === 400) {
-      return c.json({ error: "Failed to open editor", details: error }, 400);
-    }
-    return c.json({ error: "Failed to open editor", details: error }, 500);
-  }
+  //   return c.json({ error: result.error.message }, 404);
+  // }
 
-  const body = EditorOpenResponse.parse(await response.json());
-  return c.json(body, 200);
+  // return c.json(result.value, 200);
 });
 
 // Close VS Code editor on the Sprite VM
 sessionsRoutes.openapi(closeEditorRoute, async (c) => {
-  const { sessionId } = c.req.valid("param");
-  const user = c.get("user");
-  const stub = await getAuthorizedSessionAgent(sessionId, user.id, c.env);
-  if (!stub) {
-    return c.json({ error: "Session not found" }, 404);
-  }
+  return c.json({ error: "Not implemented" }, 501);
+  // const user = c.get("user");
+  // const sessionsService = new SessionsService(c.env);
+  // const result = await sessionsService.closeEditor({
+  //   sessionId: c.req.valid("param").sessionId,
+  //   userId: user.id,
+  //   githubAccessToken: user.githubAccessToken,
+  // });
 
-  const response = await stub.fetch(
-    new Request("http://do/editor/close", { method: "POST" }),
-  );
+  // if (!result.ok) {
+  //   if (result.error.status === 403) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+  //     }, 403);
+  //   }
+  //   if (result.error.status === 400) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       details: result.error.details ?? result.error.message,
+  //     }, 400);
+  //   }
+  //   if (result.error.status === 500) {
+  //     return c.json({
+  //       error: result.error.message,
+  //       details: result.error.details ?? result.error.message,
+  //     }, 500);
+  //   }
 
-  if (!response.ok) {
-    const error = await response.text();
-    if (response.status === 400) {
-      return c.json({ error: "Failed to close editor", details: error }, 400);
-    }
-    return c.json({ error: "Failed to close editor", details: error }, 500);
-  }
+  //   return c.json({ error: result.error.message }, 404);
+  // }
 
-  const body = EditorCloseResponse.parse(await response.json());
-  return c.json(body, 200);
+  // return c.json(result.value, 200);
 });

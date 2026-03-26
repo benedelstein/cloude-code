@@ -3,10 +3,16 @@ import type {
   EmitterWebhookEvent,
   EmitterWebhookEventName,
 } from "@octokit/webhooks";
-import type { Logger } from "@repo/shared";
-import { decrypt, encrypt } from "@/lib/crypto";
+import {
+  failure,
+  success,
+  type Logger,
+  type Result,
+} from "@repo/shared";
+import { decrypt, encrypt } from "@/lib/utils/crypto";
 import type { Env } from "@/types";
 import { GitHubInstallationRepository } from "@/repositories/github-installation-repository";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import type {
   GitHubInstallationWithRepo,
   RepositorySelection,
@@ -14,6 +20,7 @@ import type {
 import { GitHubUserRepoAccessCacheRepository } from "@/repositories/github-user-repo-access-cache-repository";
 import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
+import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
 
 type WebhookPayload<T extends EmitterWebhookEventName> =
   EmitterWebhookEvent<T>["payload"];
@@ -83,21 +90,21 @@ export interface GitHubRepositoryData {
 export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
   | "REPO_NOT_ACCESSIBLE"
+  | "INVALID_REPO"
   | "GITHUB_API_ERROR";
 
-export class GitHubAppError extends Error {
-  constructor(
-    public code: GitHubAppErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "GitHubAppError";
-  }
-}
+export type GitHubAppServiceError = {
+  code: GitHubAppErrorCode;
+  message: string;
+};
+
+export type GitHubAppResult<T> = Result<T, GitHubAppServiceError>;
 
 export class GitHubAppService {
   private readonly app: App;
+  private readonly env: Env;
   private readonly installationRepository: GitHubInstallationRepository;
+  private readonly sessionsRepository: SessionsRepository;
   private readonly userRepoAccessCacheRepository: GitHubUserRepoAccessCacheRepository;
   private readonly tokenCacheRepository: InstallationTokenCacheRepository;
   private readonly userSessionRepository: UserSessionRepository;
@@ -107,6 +114,7 @@ export class GitHubAppService {
   private readonly tokenEncryptionKey: string;
 
   constructor(env: Env, logger: Logger) {
+    this.env = env;
     this.app = new App({
       appId: env.GITHUB_APP_ID,
       privateKey: atob(env.GITHUB_APP_PRIVATE_KEY),
@@ -117,6 +125,7 @@ export class GitHubAppService {
       },
     });
     this.installationRepository = new GitHubInstallationRepository(env.DB);
+    this.sessionsRepository = new SessionsRepository(env.DB);
     this.userRepoAccessCacheRepository = new GitHubUserRepoAccessCacheRepository(env.DB);
     this.tokenCacheRepository = new InstallationTokenCacheRepository(env.DB);
     this.userSessionRepository = new UserSessionRepository(env.DB);
@@ -186,34 +195,71 @@ export class GitHubAppService {
    * Resolve a repo (owner/name) to an installation access token.
    * Checks D1 for installation, verifies repo access, and returns a cached or fresh token.
    */
-  async getInstallationTokenForRepo(repoFullName: string): Promise<string> {
-    const [owner, repo] = repoFullName.split("/");
-    if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
+  async getInstallationTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>> {
+    const repoParts = this.parseRepoFullName(repoFullName);
+    if (!repoParts.ok) {
+      return repoParts;
     }
 
-    const installation = await this.findInstallationForRepo(owner, repo);
-    const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
-    return this.getInstallationToken(installation.id, { repoName: repo, repoId: numericRepoId });
+    const { owner, repo } = repoParts.value;
+    const installationResult = await this.findInstallationForRepo(owner, repo);
+    if (!installationResult.ok) {
+      return installationResult;
+    }
+
+    try {
+      const numericRepoId = await this.getNumericRepoId(
+        installationResult.value.id,
+        owner,
+        repo,
+      );
+      const token = await this.getInstallationToken(
+        installationResult.value.id,
+        { repoName: repo, repoId: numericRepoId },
+      );
+      return success(token);
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to resolve installation token for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   /**
    * Get a read-only token for a repo, scoped to contents:read only.
    * Used for initial clone where write access is not needed.
    */
-  async getReadOnlyTokenForRepo(repoFullName: string): Promise<string> {
-    const [owner, repo] = repoFullName.split("/");
-    if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
+  async getReadOnlyTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>> {
+    const repoParts = this.parseRepoFullName(repoFullName);
+    if (!repoParts.ok) {
+      return repoParts;
     }
 
-    const installation = await this.findInstallationForRepo(owner, repo);
-    const numericRepoId = await this.getNumericRepoId(installation.id, owner, repo);
-    return this.getInstallationToken(
-      installation.id,
-      { repoName: repo, repoId: numericRepoId },
-      { contents: "read", metadata: "read" },
-    );
+    const { owner, repo } = repoParts.value;
+    const installationResult = await this.findInstallationForRepo(owner, repo);
+    if (!installationResult.ok) {
+      return installationResult;
+    }
+
+    try {
+      const numericRepoId = await this.getNumericRepoId(
+        installationResult.value.id,
+        owner,
+        repo,
+      );
+      const token = await this.getInstallationToken(
+        installationResult.value.id,
+        { repoName: repo, repoId: numericRepoId },
+        { contents: "read", metadata: "read" },
+      );
+      return success(token);
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to resolve read-only installation token for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   /**
@@ -223,29 +269,42 @@ export class GitHubAppService {
     repoFullName: string,
     baseBranch: string,
     headBranch: string,
-  ): Promise<GitHubCompareData> {
-    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
-    const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-      owner,
-      repo,
-      basehead: `${baseBranch}...${headBranch}`,
-    });
+  ): Promise<GitHubAppResult<GitHubCompareData>> {
+    const repoOctokitResult = await this.getRepoOctokit(repoFullName);
+    if (!repoOctokitResult.ok) {
+      return repoOctokitResult;
+    }
 
-    return {
-      aheadBy: data.ahead_by,
-      totalCommits: data.total_commits,
-      files: (data.files ?? []).map((file) => ({
-        filename: file.filename,
-        status: file.status ?? "modified",
-        additions: file.additions ?? 0,
-        deletions: file.deletions ?? 0,
-      })),
-      commits: (data.commits ?? []).map((commit) => ({
-        sha: commit.sha,
-        message: commit.commit.message ?? "",
-        authorName: commit.commit.author?.name ?? null,
-      })),
-    };
+    const { owner, repo, octokit } = repoOctokitResult.value;
+
+    try {
+      const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+        owner,
+        repo,
+        basehead: `${baseBranch}...${headBranch}`,
+      });
+
+      return success({
+        aheadBy: data.ahead_by,
+        totalCommits: data.total_commits,
+        files: (data.files ?? []).map((file) => ({
+          filename: file.filename,
+          status: file.status ?? "modified",
+          additions: file.additions ?? 0,
+          deletions: file.deletions ?? 0,
+        })),
+        commits: (data.commits ?? []).map((commit) => ({
+          sha: commit.sha,
+          message: commit.commit.message ?? "",
+          authorName: commit.commit.author?.name ?? null,
+        })),
+      });
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to compare branches for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   /**
@@ -254,23 +313,36 @@ export class GitHubAppService {
   async createPullRequest(
     repoFullName: string,
     input: CreatePullRequestInput,
-  ): Promise<PullRequestData> {
-    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
-    const { data } = await octokit.rest.pulls.create({
-      owner,
-      repo,
-      title: input.title,
-      body: input.body,
-      head: input.head,
-      base: input.base,
-    });
+  ): Promise<GitHubAppResult<PullRequestData>> {
+    const repoOctokitResult = await this.getRepoOctokit(repoFullName);
+    if (!repoOctokitResult.ok) {
+      return repoOctokitResult;
+    }
 
-    return {
-      number: data.number,
-      url: data.html_url,
-      state: data.state as "open" | "closed",
-      merged: false,
-    };
+    const { owner, repo, octokit } = repoOctokitResult.value;
+
+    try {
+      const { data } = await octokit.rest.pulls.create({
+        owner,
+        repo,
+        title: input.title,
+        body: input.body,
+        head: input.head,
+        base: input.base,
+      });
+
+      return success({
+        number: data.number,
+        url: data.html_url,
+        state: data.state as "open" | "closed",
+        merged: false,
+      });
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to create pull request for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   /**
@@ -279,20 +351,33 @@ export class GitHubAppService {
   async getPullRequest(
     repoFullName: string,
     pullRequestNumber: number,
-  ): Promise<PullRequestData> {
-    const { owner, repo, octokit } = await this.getRepoOctokit(repoFullName);
-    const { data } = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: pullRequestNumber,
-    });
+  ): Promise<GitHubAppResult<PullRequestData>> {
+    const repoOctokitResult = await this.getRepoOctokit(repoFullName);
+    if (!repoOctokitResult.ok) {
+      return repoOctokitResult;
+    }
 
-    return {
-      number: data.number,
-      url: data.html_url,
-      state: data.state as "open" | "closed",
-      merged: data.merged,
-    };
+    const { owner, repo, octokit } = repoOctokitResult.value;
+
+    try {
+      const { data } = await octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: pullRequestNumber,
+      });
+
+      return success({
+        number: data.number,
+        url: data.html_url,
+        state: data.state as "open" | "closed",
+        merged: data.merged,
+      });
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to fetch pull request ${pullRequestNumber} for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   /**
@@ -330,24 +415,35 @@ export class GitHubAppService {
     return data.id;
   }
 
-  private async getRepoOctokit(repoFullName: string): Promise<{
+  private async getRepoOctokit(repoFullName: string): Promise<GitHubAppResult<{
     owner: string;
     repo: string;
     octokit: Octokit;
-  }> {
-    const [owner, repo] = repoFullName.split("/");
-    if (!owner || !repo) {
-      throw new GitHubAppError("REPO_NOT_ACCESSIBLE", `Invalid repoFullName: ${repoFullName}`);
+  }>> {
+    const repoParts = this.parseRepoFullName(repoFullName);
+    if (!repoParts.ok) {
+      return repoParts;
     }
 
-    const installation = await this.findInstallationForRepo(owner, repo);
-    const octokit = await this.app.getInstallationOctokit(installation.id);
+    const { owner, repo } = repoParts.value;
+    const installationResult = await this.findInstallationForRepo(owner, repo);
+    if (!installationResult.ok) {
+      return installationResult;
+    }
 
-    return {
-      owner,
-      repo,
-      octokit,
-    };
+    try {
+      const octokit = await this.app.getInstallationOctokit(installationResult.value.id);
+      return success({
+        owner,
+        repo,
+        octokit,
+      });
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to create installation client for ${repoFullName}.`,
+        error,
+      );
+    }
   }
 
   private async cacheUserAccessibleInstallationRepos(
@@ -424,7 +520,7 @@ export class GitHubAppService {
    * @param userId - The user id.
    * @param userAccessToken - The user's access token.
    * @param installationId - The installation id.
-   * @param repoId - The repo id.
+   * @param repoId - The repo id to look up.
    * @returns The repository data.
    * 
    * See https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app
@@ -434,7 +530,7 @@ export class GitHubAppService {
     userAccessToken: string,
     installationId: number,
     repoId: number,
-  ): Promise<GitHubRepositoryData> {
+  ): Promise<GitHubAppResult<GitHubRepositoryData>> {
     const cached = await this.userRepoAccessCacheRepository.get(
       userId,
       installationId,
@@ -442,30 +538,53 @@ export class GitHubAppService {
     );
     if (cached) {
       if (!cached.allowed) {
-        throw new GitHubAppError(
-          "REPO_NOT_ACCESSIBLE",
-          `Repository ${repoId} is not accessible to the authenticated user`,
-        );
+        return failure({
+          code: "REPO_NOT_ACCESSIBLE",
+          message: `Repository ${repoId} is not accessible to the authenticated user`,
+        });
       }
 
       if (cached.repoFullName) {
         const [owner, name] = cached.repoFullName.split("/");
         if (owner && name) {
-        return {
-          id: repoId,
-          fullName: cached.repoFullName,
-          owner,
-          name,
-        };
+          return success({
+            id: repoId,
+            fullName: cached.repoFullName,
+            owner,
+            name,
+          });
         }
       }
     }
 
-    const repositories = await this.listUserAccessibleInstallationRepos(
-      userId,
-      userAccessToken,
-      installationId,
-    );
+    // NOTE: this is slow, but its the only way to authoritatively know if a repo 
+    //is accessible for an installation by a user. stupid.
+    let repositories: GitHubRepositoryData[];
+    try {
+      repositories = await this.listUserAccessibleInstallationRepos(
+        userId,
+        userAccessToken,
+        installationId,
+      );
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        return failure({
+          code: "INSTALLATION_NOT_FOUND",
+          message: `No GitHub App installation found for installation ${installationId}.`,
+        });
+      }
+
+      return this.githubApiFailure(
+        `Failed to list accessible repositories for installation ${installationId}.`,
+        error,
+      );
+    }
+
     const matchingRepository = repositories.find((repo) => repo.id === repoId);
 
     if (!matchingRepository) {
@@ -475,13 +594,13 @@ export class GitHubAppService {
         repoId,
         this.buildUserRepoAccessCacheExpiry(),
       );
-      throw new GitHubAppError(
-        "REPO_NOT_ACCESSIBLE",
-        `Repository ${repoId} is not accessible to the authenticated user`,
-      );
+      return failure({
+        code: "REPO_NOT_ACCESSIBLE",
+        message: `Repository ${repoId} is not accessible to the authenticated user`,
+      });
     }
 
-    return matchingRepository;
+    return success(matchingRepository);
   }
 
   /**
@@ -489,10 +608,10 @@ export class GitHubAppService {
    * NOTE: Prefer to use findInstallationForRepoId instead. it is more efficient and canonical.
    * First checks D1, then falls back to the GitHub API.
    */
-  async findInstallationForRepo(
+  private async findInstallationForRepo(
     owner: string,
     repo: string,
-  ): Promise<GitHubInstallationWithRepo> {
+  ): Promise<GitHubAppResult<GitHubInstallationWithRepo>> {
     const d1 = new Date();
     // Check D1 first
     const installation = await this.installationRepository.findByAccountLogin(owner);
@@ -506,13 +625,13 @@ export class GitHubAppService {
       );
 
       if (!installationRepo) {
-        throw new GitHubAppError(
-          "REPO_NOT_ACCESSIBLE",
-          `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
-        );
+        return failure({
+          code: "REPO_NOT_ACCESSIBLE",
+          message: `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
+        });
       }
       this.logger.log(`found installation for ${owner}/${repo} in d1 in ${new Date().getTime() - d1.getTime()}ms`);
-      return installation;
+      return success(installation);
     }
 
     this.logger.log(`installation/repo not found in d1 or not scoped to this repo, trying api for ${owner}/${repo}`);
@@ -525,17 +644,30 @@ export class GitHubAppService {
       });
 
       this.logger.log(`found installation for ${owner}/${repo} in api in ${new Date().getTime() - d1.getTime()}ms`);
-      return {
+      return success({
         id: data.id,
         repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
-      };
-    } catch (_error) {
-      this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
-        error: _error,
       });
-      throw new GitHubAppError(
-        "INSTALLATION_NOT_FOUND",
-        `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
+    } catch (error) {
+      this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
+        error,
+      });
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        return failure({
+          code: "INSTALLATION_NOT_FOUND",
+          message: `No GitHub App installation found for ${owner}/${repo}. Is the app installed on this account?`,
+        });
+      }
+
+      return this.githubApiFailure(
+        `Failed to get repository installation for ${owner}/${repo}.`,
+        error,
       );
     }
   }
@@ -546,25 +678,71 @@ export class GitHubAppService {
   async findInstallationForRepoId(
     repoId: number,
     userAccessToken: string,
-  ): Promise<GitHubInstallationWithRepo> {
+  ): Promise<GitHubAppResult<GitHubInstallationWithRepo>> {
     // first check d1
     const installation = await this.installationRepository.findByRepoId(repoId);
 
     if (installation) {
-      return installation;
+      return success(installation);
     }
 
-    const userOctokit = new Octokit({ auth: userAccessToken });
-    const response = await userOctokit.request("GET /repositories/{repository_id}", {
-      repository_id: repoId,
-    });
-    const repoData = response.data;
-    const owner = repoData.owner.login;
-    const repo = repoData.name;
-    const repoFullName = repoData.full_name;
+    try {
+      const userOctokit = new Octokit({ auth: userAccessToken });
+      const response = await userOctokit.request("GET /repositories/{repository_id}", {
+        repository_id: repoId,
+      });
+      const repoData = response.data;
+      const owner = repoData.owner.login;
+      const repo = repoData.name;
+      const repoFullName = repoData.full_name;
 
-    this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
-    return this.findInstallationForRepo(owner, repo);
+      this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
+      return this.findInstallationForRepo(owner, repo);
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "status" in error &&
+        error.status === 404
+      ) {
+        this.logger.warn(`Received 404 from github api for repo ${repoId}`);
+        return failure({
+          code: "REPO_NOT_ACCESSIBLE",
+          message: `Repository ${repoId} is not accessible to the authenticated user.`,
+        });
+      }
+
+      return this.githubApiFailure(
+        `Failed to resolve repository ${repoId} from GitHub.`,
+        error,
+      );
+    }
+  }
+
+  private parseRepoFullName(repoFullName: string): GitHubAppResult<{
+    owner: string;
+    repo: string;
+  }> {
+    const [owner, repo] = repoFullName.split("/");
+    if (!owner || !repo) {
+      return failure({
+        code: "INVALID_REPO",
+        message: `Invalid repoFullName: ${repoFullName}`,
+      });
+    }
+
+    return success({ owner, repo });
+  }
+
+  private githubApiFailure<T>(
+    message: string,
+    error: unknown,
+  ): GitHubAppResult<T> {
+    this.logger.error(message, { error });
+    return failure({
+      code: "GITHUB_API_ERROR",
+      message,
+    });
   }
 
   /**
@@ -710,22 +888,36 @@ export class GitHubAppService {
   private async handleInstallationDeleted(
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
-    this.logger.info(`github installation deleted: ${payload.installation.id}`);
-    await this.installationRepository.delete(payload.installation.id);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation deleted: ${installationId}`);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
+    await this.installationRepository.delete(installationId);
+    const sessionIds = await this.sessionsRepository.blockSessionsForDeletedInstallation(
+      installationId,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
   }
 
   private async handleInstallationSuspended(
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
-    this.logger.info(`github installation suspended: ${payload.installation.id}`);
-    await this.installationRepository.setSuspended(payload.installation.id, true);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation suspended: ${installationId}`);
+    await this.installationRepository.setSuspended(installationId, true);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
+    const sessionIds = await this.sessionsRepository.blockSessionsForSuspendedInstallation(
+      installationId,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
   }
 
   private async handleInstallationUnsuspended(
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
-    this.logger.info(`github installation unsuspended: ${payload.installation.id}`);
-    await this.installationRepository.setSuspended(payload.installation.id, false);
+    const installationId = payload.installation.id;
+    this.logger.info(`github installation unsuspended: ${installationId}`);
+    await this.installationRepository.setSuspended(installationId, false);
+    await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
   }
 
   private async handleReposAdded(
@@ -733,14 +925,39 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_added;
+    const repositorySelection = payload.installation.repository_selection as RepositorySelection; // should always be `selected`
+    const repoIds = repos.map((repo) => repo.id);
+    const reposToAdd = repos.map((repo) => ({ id: repo.id, fullName: repo.full_name }));
+    const existingInstallation = await this.installationRepository.findById(
+      installationId,
+    );
+    // if we're going from `all` to `selected`, github only sends an `installation_repositories.added` webhook 
+    // we need to update the installation repository selection
+    const isAllToSelectedTransition = existingInstallation?.repositorySelection === "all"
+      && repositorySelection === "selected";
+
     this.logger.info(
       `github installation repositories added: ${installationId} - ${repos.length} repos`,
     );
 
-    await this.installationRepository.addRepos(
+    await this.installationRepository.setRepositorySelectionAndAddRepos(
       installationId,
-      repos.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
+      repositorySelection,
+      reposToAdd,
     );
+    // Don't upsert to allowed, just delete the old records.
+    // We do not know for sure if the user has access even if the repo is added.
+    if (isAllToSelectedTransition) {
+      await this.userRepoAccessCacheRepository.deleteByInstallationIdExceptRepoIds(
+        installationId,
+        repoIds,
+      );
+    } else {
+      await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
+        installationId,
+        repoIds,
+      );
+    }
   }
 
   private async handleUserAuthorizationRevoked(
@@ -758,10 +975,28 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     const repos = payload.repositories_removed;
+    const repoIds = repos.map((repo) => repo.id);
 
     await this.installationRepository.removeRepos(
       installationId,
-      repos.map((repo) => repo.id),
+      repoIds,
+    );
+    await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
+      installationId,
+      repoIds,
+    );
+    const sessionIds = await this.sessionsRepository.blockSessionsForRemovedRepos(
+      installationId,
+      repoIds,
+    );
+    await this.requestAccessBlockedCleanup(sessionIds);
+  }
+
+  private async requestAccessBlockedCleanup(sessionIds: string[]): Promise<void> {
+    await Promise.allSettled(
+      sessionIds.map((sessionId) =>
+        requestSessionAccessBlockedCleanup(this.env, sessionId),
+      ),
     );
   }
 }

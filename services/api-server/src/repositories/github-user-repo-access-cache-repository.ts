@@ -146,4 +146,55 @@ export class GitHubUserRepoAccessCacheRepository {
 
     await this.database.batch(batch);
   }
+
+  async deleteByInstallationId(installationId: number): Promise<void> {
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache WHERE installation_id = ?`,
+    )
+      .bind(installationId)
+      .run();
+  }
+
+  async deleteByInstallationIdAndRepoIds(
+    installationId: number,
+    repoIds: number[],
+  ): Promise<void> {
+    if (repoIds.length === 0) {
+      return;
+    }
+
+    const placeholders = repoIds.map(() => "?").join(", ");
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache
+       WHERE installation_id = ?
+         AND repo_id IN (${placeholders})`,
+    )
+      .bind(installationId, ...repoIds)
+      .run();
+  }
+
+  /**
+   * Delete cached repo-access rows for an installation except a repo-id allowlist.
+   * @param installationId The GitHub installation id to clean up.
+   * @param repoIds The repo ids whose cache rows should be preserved.
+   * @returns A promise that resolves when the cleanup completes.
+   */
+  async deleteByInstallationIdExceptRepoIds(
+    installationId: number,
+    repoIds: number[],
+  ): Promise<void> {
+    if (repoIds.length === 0) {
+      await this.deleteByInstallationId(installationId);
+      return;
+    }
+
+    const placeholders = repoIds.map(() => "?").join(", ");
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache
+       WHERE installation_id = ?
+         AND repo_id NOT IN (${placeholders})`,
+    )
+      .bind(installationId, ...repoIds)
+      .run();
+  }
 }

@@ -27,9 +27,4 @@ export interface Env {
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
   ALLOWED_GITHUB_LOGINS: string;
   PORT: string;
-
-  // Codex CLI provider (optional)
-  OPENAI_API_KEY?: string;
-  /** JSON string of codex OAuth tokens (contents of ~/.codex/auth.json) */
-  CODEX_AUTH_JSON?: string;
 }

@@ -93,8 +93,15 @@ Before initiating a websocket connection, the client fetches a token from the se
 - You can only view a session if you created it (for now).
 - You can only install the github app on a repo if you have admin access to it (this is a limitation of the github api).
 
+Even after you create a session on a repo you have access to, you may lose access to it if the installation is deleted, you lose access to the repo, or the repo is removed from the installation. We handle this like so:
 
-edge case: if a user has access to a repo and creates a session, then their admin removes them later. 
-We need to disallow them from accessing that repo later. 
-This is tricky because the installation token still allows access for the app, but the user should be blocked
-from it.
+- Routes to get a session, post messages, get a websocket token, etc. all check for access to the repo using `repo-session-accesss.ts`
+  a. If we don't know the repo's installation_id, we have to look it up using `github-app.ts#findInstallationForRepoId`. This first checks D1 `installation_repos` table, then falls back to the github api.
+  b. Check the `github_user_repo_access_cache` for this (user_id, repo_id, installation_id) (5 minute TTL)
+  c. If no cache value, look up the repo using github the github api (the same route we use to fetch user-accessible repos). This path is slow, since we have to enumerate a user's repos, which is also why we cache it.
+
+We use a D1 table `github_user_repo_access_cache` to cache user access to a repo within an installation. The cache TTL is 5 minutes.
+Values are put to the cache when a user creates a session, or calls get /repos to list the repos they have access to.
+
+If a fresh value is found in the cache, we return true in the access check.
+If an installation is deleted, or repo is removed from the installation, we clear the relevant values from the cache.

@@ -2,9 +2,12 @@ import { Hono } from "hono";
 import { getAgentByName } from "agents";
 import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { SessionHistoryService } from "@/lib/session-history";
 import { verifySessionWebSocketToken } from "@/lib/session-websocket-token";
 import { createLogger } from "@/lib/logger";
+import {
+  assertSessionRepoAccess,
+} from "@/lib/user-session/session-repo-access";
+import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();
 const logger = createLogger("agent.routes.ts");
@@ -27,14 +30,46 @@ agentRoutes.all("/session/:sessionId", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const sessionHistory = new SessionHistoryService(c.env.DB);
-  const isOwnedByUser = await sessionHistory.isOwnedByUser(
+  const accessResult = await assertSessionRepoAccess({
+    env: c.env,
     sessionId,
-    tokenPayload.userId,
-  );
-  logger.log(`${sessionId} isOwnedByUser?: ${isOwnedByUser}`);
+    userId: tokenPayload.userId,
+  });
 
-  if (!isOwnedByUser) {
+  if (!accessResult.ok) {
+    if (accessResult.error.code === "REPO_ACCESS_BLOCKED") {
+      await requestSessionAccessBlockedCleanup(c.env, sessionId);
+      return c.json(
+        {
+          error: accessResult.error.message,
+          code: accessResult.error.code,
+        },
+        accessResult.error.status,
+      );
+    }
+
+    if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
+      return c.json(
+        {
+          error: accessResult.error.message,
+          code: accessResult.error.code,
+        },
+        401,
+      );
+    }
+
+    if (accessResult.error.status === 503) {
+      logger.warn(`${sessionId} session access check temporarily unavailable: ${accessResult.error.code}`);
+      return c.json(
+        {
+          error: accessResult.error.message,
+          code: accessResult.error.code,
+        },
+        503,
+      );
+    }
+
+    logger.log(`${sessionId} session access denied: ${accessResult.error.code}`);
     return c.json({ error: "Session not found" }, 404);
   }
 

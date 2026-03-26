@@ -2,7 +2,7 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "@/lib/attachments/attachment-service";
-import { SessionHistoryService } from "@/lib/session-history";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import {
   uploadAttachmentRoute,
   getAttachmentContentRoute,
@@ -33,8 +33,8 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
 
   const sessionId = parsedSessionId.data;
   if (sessionId) {
-    const sessionHistory = new SessionHistoryService(c.env.DB);
-    const canAccessSession = await sessionHistory.isOwnedByUser(sessionId, user.id);
+    const sessionsRepository = new SessionsRepository(c.env.DB);
+    const canAccessSession = await sessionsRepository.isOwnedByUser(sessionId, user.id);
     if (!canAccessSession) {
       return c.json({ error: "Session not found" }, 404);
     }
@@ -115,7 +115,7 @@ attachmentsRoutes.openapi(getAttachmentContentRoute, async (c) => {
   const user = c.get("user");
   const { attachmentId } = c.req.valid("param");
   const attachmentService = new AttachmentService(c.env.DB);
-  const sessionHistory = new SessionHistoryService(c.env.DB);
+  const sessionsRepository = new SessionsRepository(c.env.DB);
 
   const record = await attachmentService.getById(attachmentId);
   if (!record) {
@@ -124,7 +124,7 @@ attachmentsRoutes.openapi(getAttachmentContentRoute, async (c) => {
 
   const uploaderCanView = record.uploaderUserId === user.id;
   const sessionMemberCanView = record.sessionId
-    ? await sessionHistory.isOwnedByUser(record.sessionId, user.id)
+    ? await sessionsRepository.isOwnedByUser(record.sessionId, user.id)
     : false;
   if (!uploaderCanView && !sessionMemberCanView) {
     return c.json({ error: "Forbidden" }, 403);

@@ -20,15 +20,27 @@ export function initializeLogger(options?: { level?: LogLevel; format?: "pretty"
 
 /**
  * Returns a named logger that lazily delegates to the current rootLogger,
- * so it picks up any reconfiguration from initializeLogger().
+ * so it picks up any reconfiguration from initializeLogger(). The scoped
+ * logger is cached and only re-created when the root changes.
  */
 export function createLogger(loggerName: string): Logger {
+  let cachedRootRef: Logger = rootLogger;
+  let scopedLogger: Logger = rootLogger.scope(loggerName);
+
+  const get = (): Logger => {
+    if (rootLogger !== cachedRootRef) {
+      cachedRootRef = rootLogger;
+      scopedLogger = rootLogger.scope(loggerName);
+    }
+    return scopedLogger;
+  };
+
   return {
-    log: (message: string, params?: LogParams) => rootLogger.log(message, { ...params, loggerName }),
-    debug: (message: string, params?: LogParams) => rootLogger.debug(message, { ...params, loggerName }),
-    info: (message: string, params?: LogParams) => rootLogger.info(message, { ...params, loggerName }),
-    warn: (message: string, params?: LogParams) => rootLogger.warn(message, { ...params, loggerName }),
-    error: (message: string, params?: LogParams) => rootLogger.error(message, { ...params, loggerName }),
+    log: (message: string, params?: LogParams) => get().log(message, params),
+    debug: (message: string, params?: LogParams) => get().debug(message, params),
+    info: (message: string, params?: LogParams) => get().info(message, params),
+    warn: (message: string, params?: LogParams) => get().warn(message, params),
+    error: (message: string, params?: LogParams) => get().error(message, params),
     scope: (name: string) => createLogger(name),
   };
 }

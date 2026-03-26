@@ -26,6 +26,18 @@ interface RefreshTokenRow {
   encrypted_token: string;
 }
 
+export interface AuthSessionTokenRecord {
+  sessionToken: string;
+  githubAccessToken: string;
+  tokenExpiresAt: string | null;
+}
+
+interface AuthSessionTokenRow {
+  session_token: string;
+  github_access_token: string;
+  token_expires_at: string | null;
+}
+
 export class UserSessionRepository {
   private readonly database: D1Database;
 
@@ -79,6 +91,30 @@ export class UserSessionRepository {
     return row?.encrypted_token ?? null;
   }
 
+  async getLatestActiveAuthSessionByUserId(
+    userId: string,
+  ): Promise<AuthSessionTokenRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT token as session_token, github_access_token, token_expires_at
+       FROM auth_sessions
+       WHERE user_id = ? AND datetime(expires_at) > datetime('now')
+       ORDER BY datetime(expires_at) DESC
+       LIMIT 1`,
+    )
+      .bind(userId)
+      .first<AuthSessionTokenRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      sessionToken: row.session_token,
+      githubAccessToken: row.github_access_token,
+      tokenExpiresAt: row.token_expires_at,
+    };
+  }
+
   async createAuthSession(
     sessionToken: string,
     userId: string,
@@ -122,6 +158,44 @@ export class UserSessionRepository {
     )
       .bind(githubAccessToken, tokenExpiresAt, sessionToken)
       .run();
+  }
+
+  /**
+   * Update the session access token and the user's refresh token together.
+   * @param params.sessionToken The auth session to update.
+   * @param params.githubAccessToken The newly encrypted GitHub access token.
+   * @param params.tokenExpiresAt When the new access token expires.
+   * @param params.userId The user whose refresh token should be updated.
+   * @param params.encryptedRefreshToken The newly encrypted GitHub refresh token.
+   * @param params.refreshTokenExpiresAt When the new refresh token expires.
+   * @returns A promise that resolves when both writes complete.
+   */
+  async updateSessionAndRefreshToken(params: {
+    sessionToken: string;
+    githubAccessToken: string;
+    tokenExpiresAt: string | null;
+    userId: string;
+    encryptedRefreshToken: string;
+    refreshTokenExpiresAt: string | null;
+  }): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `UPDATE auth_sessions SET github_access_token = ?, token_expires_at = ?
+         WHERE token = ?`,
+      ).bind(
+        params.githubAccessToken,
+        params.tokenExpiresAt,
+        params.sessionToken,
+      ),
+      this.database.prepare(
+        `UPDATE user_refresh_tokens SET encrypted_token = ?, expires_at = ?,
+         updated_at = datetime('now') WHERE user_id = ?`,
+      ).bind(
+        params.encryptedRefreshToken,
+        params.refreshTokenExpiresAt,
+        params.userId,
+      ),
+    ]);
   }
 
   async updateRefreshToken(

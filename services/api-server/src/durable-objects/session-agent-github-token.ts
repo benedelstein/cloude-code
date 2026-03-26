@@ -21,7 +21,11 @@ export async function ensureValidInstallationToken(context: GitHubTokenContext):
 
   // GitHubAppService handles caching with a 5-minute buffer before expiry
   const github = new GitHubAppService(context.env, logger);
-  const token = await github.getInstallationTokenForRepo(context.repoFullName);
+  const tokenResult = await github.getInstallationTokenForRepo(context.repoFullName);
+  if (!tokenResult.ok) {
+    throw new Error(tokenResult.error.message);
+  }
+  const token = tokenResult.value;
   context.secretRepository.set("github_token", token);
   return token;
 }

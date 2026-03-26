@@ -7,7 +7,7 @@ import {
   ClaudeOAuthService,
 } from "@/lib/claude-oauth-service";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { SessionHistoryService } from "@/lib/session-history";
+import { SessionsRepository } from "@/repositories/sessions.repository";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   getClaudeAuthRoute,
@@ -45,8 +45,8 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
     });
 
     if (sessionId) {
-      const sessionHistory = new SessionHistoryService(c.env.DB);
-      const isOwnedByUser = await sessionHistory.isOwnedByUser(sessionId, user.id);
+      const sessionsRepository = new SessionsRepository(c.env.DB);
+      const isOwnedByUser = await sessionsRepository.isOwnedByUser(sessionId, user.id);
       if (isOwnedByUser) {
         const sessionAgent = await getAgentByName<Env, SessionAgentDO>(
           c.env.SESSION_AGENT,

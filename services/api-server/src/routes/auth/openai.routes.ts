@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import { encrypt } from "@/lib/crypto";
+import { encrypt } from "@/lib/utils/crypto";
 import { createLogger } from "@/lib/logger";
 import {
   authMiddleware,

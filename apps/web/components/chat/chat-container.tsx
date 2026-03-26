@@ -36,6 +36,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     streamingMessage,
     sessionStatus,
     sessionErrorMessage,
+    sessionErrorCode,
     operationError,
     isHistoryLoading,
     isReady,
@@ -190,6 +191,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           messages={messages}
           streamingMessage={streamingMessage}
           isHistoryLoading={isHistoryLoading}
+          sessionErrorMessage={sessionErrorMessage}
+          sessionErrorCode={sessionErrorCode}
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
@@ -247,6 +250,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
                 operationErrorMessage={operationError?.message ?? null}
+                disabledPlaceholder={sessionErrorMessage ?? undefined}
               />
             </InputFrame>
             <p className="mt-2 text-center text-xs text-foreground-muted/60">

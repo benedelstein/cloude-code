@@ -28,7 +28,7 @@ function requestSessionWebSocketToken(
 
 interface UseSessionWebSocketTokenOptions {
   sessionId: string;
-  onAuthError?: () => void;
+  onAuthError?: (error: { message: string; code: string | null }) => void;
   onReconnectPending?: () => void;
   onReconnectRecovered?: () => void;
 }
@@ -72,10 +72,17 @@ export function useSessionWebSocketToken({
       onReconnectRecovered?.();
       return nextToken;
     } catch (error) {
-      if (error instanceof ApiError && (error.status === 401 || error.status === 404)) {
+      if (
+        error instanceof ApiError
+        && (error.status === 401 || error.status === 403 || error.status === 404)
+      ) {
         clearWebSocketTokenRetryTimeout();
         setHasTerminalAuthError(true);
-        onAuthError?.();
+        setWebSocketToken(null);
+        onAuthError?.({
+          message: error.message,
+          code: error.code ?? null,
+        });
         return null;
       }
 

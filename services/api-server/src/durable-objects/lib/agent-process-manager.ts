@@ -32,7 +32,7 @@ import {
 } from "../session-agent-claude-auth";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
 import { AttachmentRecord } from "@/types/attachments";
-import { decrypt } from "@/lib/crypto";
+import { decrypt } from "@/lib/utils/crypto";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,
@@ -54,7 +54,7 @@ export type AgentProcessError =
       { claudeAuthRequired: ClaudeAuthState }
     >
   | DomainError<typeof AGENT_PROCESS_DOMAIN, "CLAUDE_CREDENTIALS_SYNC_FAILED", { claudeAuthRequired: null }>
-  | DomainError<typeof AGENT_PROCESS_DOMAIN, "CODEX_AUTH_REQUIRED", { provider: "codex-cli" }>
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "OPENAI_AUTH_REQUIRED", { provider: "codex-cli" }>
   | DomainError<
       typeof AGENT_PROCESS_DOMAIN,
       "INVALID_MODEL",
@@ -167,6 +167,39 @@ export class AgentProcessManager {
   cancel(): void {
     if (this.agentWebsocketSession) {
       this.agentWebsocketSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
+    }
+  }
+
+  async stopSessionManagedProcesses(): Promise<void> {
+    const serverState = this.getServerState();
+    const spriteName = serverState.spriteName;
+    if (!spriteName) {
+      return;
+    }
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    const commands: string[] = [];
+
+    if (serverState.lastKnownAgentProcessId !== null) {
+      commands.push(`kill ${serverState.lastKnownAgentProcessId} 2>/dev/null || true`);
+    }
+
+    // Best-effort cleanup for the agent process if the tracked pid is stale or missing.
+    commands.push(`pkill -f '/home/sprite/.cloude/agent.js' 2>/dev/null || true`);
+
+    try {
+      await sprite.execWs(commands.join("\n"), {
+        cwd: WORKSPACE_DIR,
+        idleTimeoutMs: 5_000,
+      });
+    } catch (error) {
+      this.logger.error("Failed to stop session-managed processes", { error });
+    } finally {
+      this.updateLastKnownAgentProcessId(null);
     }
   }
 
@@ -425,14 +458,7 @@ export class AgentProcessManager {
     switch (provider) {
       case "codex-cli": {
         const codexAuthJson = await this.buildCodexAuthJson();
-        if (codexAuthJson) {
-          envVars.CODEX_AUTH_JSON = codexAuthJson;
-        } else if (this.env.CODEX_AUTH_JSON) {
-          envVars.CODEX_AUTH_JSON = this.env.CODEX_AUTH_JSON;
-        }
-        if (this.env.OPENAI_API_KEY) {
-          envVars.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
-        }
+        envVars.CODEX_AUTH_JSON = codexAuthJson;
         break;
       }
       case "claude-code": {
@@ -485,11 +511,13 @@ export class AgentProcessManager {
 
    /**
    * Build Codex auth.json content from per-user OpenAI OAuth tokens stored in D1.
-   * Returns null if no per-user tokens are found.
+   * Throws when no per-user OpenAI OAuth tokens are available.
    */
-  private async buildCodexAuthJson(): Promise<string | null> {
+  private async buildCodexAuthJson(): Promise<string> {
     const userId = this.getServerState().userId;
-    if (!userId) return null;
+    if (!userId) {
+      throw new Error("OPENAI_AUTH_REQUIRED");
+    }
 
     const row = await this.env.DB.prepare(
       `SELECT encrypted_access_token, encrypted_refresh_token, encrypted_id_token, token_expires_at
@@ -503,7 +531,9 @@ export class AgentProcessManager {
         token_expires_at: string | null;
       }>();
 
-    if (!row) return null;
+    if (!row) {
+      throw new Error("OPENAI_AUTH_REQUIRED");
+    }
 
     const accessToken = await decrypt(row.encrypted_access_token, this.env.TOKEN_ENCRYPTION_KEY);
     const refreshToken = row.encrypted_refresh_token
@@ -609,9 +639,14 @@ export class AgentProcessManager {
     if (this.getClientState().agentSettings.provider !== "codex-cli") {
       return success(undefined);
     }
-    // TODO: implement
-    return failure(agentProcessError("CODEX_AUTH_REQUIRED", "Codex credentials not ready.", {
-      provider: "codex-cli",
-    }));
+    try {
+      // TODO: INJECT THE CREDENTIALS IF THEY CHANGED.
+      await this.buildCodexAuthJson();
+      return success(undefined);
+    } catch {
+      return failure(agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
+        provider: "codex-cli",
+      }));
+    }
   }
 }

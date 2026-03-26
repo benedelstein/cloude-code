@@ -95,6 +95,14 @@ Required secrets for `api-server` (set via `wrangler secret put`):
 
 NOTE: if adding new dependencies in multiple packages in the repo, prefer to use the pnpm catalog in `pnpm-workspace.yaml` for shared versioning.
 
+
+## Error handling
+
+- Use `Result<T, E>` for expected business logic and operational failures.
+- Define `E` as a small tagged plain-object union with a stable `code` string; do not use `Error` subclasses for normal control flow.
+- Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
+- Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
+
 ## Best Practices
 
 - Always build, lint, and typecheck after completing a task to test it.
@@ -103,12 +111,17 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 - Write instructive and clarifying comments where needed, but do not be too verbose. 
 - Always prefer to use async/await over callbacks and .then()/.catch()
 - For public methods, add doc comments describing the method, its parameters and return value.
-
-## Error handling
-
-- Use `Result<T, E>` for expected business logic and operational failures.
-- Define `E` as a small tagged plain-object union with a stable `code` string; do not use `Error` subclasses for normal control flow.
-- Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
-- Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
+- When switching over entire cases, make switch statements exhaustive for maintainability - if we ever add a new case, it should be handled. Prefer switch to multiple if/else chains
+```typescript
+switch (expression) {
+    case "value1":
+        break;
+    case "value2":
+        break;
+    default:
+        const _exhaustiveCheck: never = expression;
+        throw new Error(`Unhandled value: ${_exhaustiveCheck}`);
+}
+```
 
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.

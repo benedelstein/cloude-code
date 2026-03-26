@@ -51,6 +51,10 @@ import { MessageAccumulator } from "@/lib/message-accumulator";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
+import {
+  assertSessionRepoAccess,
+  type SessionRepoAccessResult,
+} from "@/lib/user-session/session-repo-access";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -281,6 +285,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
     this.messageAccumulator.reset();
+    this.updateServerState({ lastKnownAgentProcessId: null });
     this.updatePartialState({ isResponding: false });
     // TODO: RESTART THE AGENT?
   }
@@ -294,7 +299,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
-    // TODO: BETTER MIDDLEWARE
+    // TODO: BETTER MIDDLEWARE. OR REPLACE MOST OF THESE WITH DIRECT CALLS TO THE STUB.
     // Root path = session operations (the DO *is* the session)
     if (path === "/" || path === "") {
       switch (request.method) {
@@ -311,6 +316,72 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
+      const accessResult = await this.assertSessionRepoAccess(); // ensure user still has access to the repo.
+      if (!accessResult.ok) {
+        switch (accessResult.error.code) {
+          case "REPO_ACCESS_BLOCKED":
+            await this.enforceSessionAccessBlocked();
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: accessResult.error.status,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "GITHUB_AUTH_REQUIRED":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "GITHUB_API_ERROR":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "SESSION_NOT_FOUND":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "INVALID_REPO":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          default: {
+            const exhaustiveCheck: never = accessResult.error;
+            throw new Error(`Unhandled session repo access error: ${JSON.stringify(exhaustiveCheck)}`);
+          }
+        }
+      }
+
       const result = await handleGitProxy(
         request,
         path,
@@ -656,7 +727,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
       // Fetch a read-only token scoped to contents:read for the initial clone
       const github = new GitHubAppService(this.env, this.logger);
-      const cloneToken = await github.getReadOnlyTokenForRepo(repoFullName);
+      const cloneTokenResult = await github.getReadOnlyTokenForRepo(repoFullName);
+      if (!cloneTokenResult.ok) {
+        throw new Error(cloneTokenResult.error.message);
+      }
+      const cloneToken = cloneTokenResult.value;
       const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
       // Also refresh the write token for the proxy (used after clone)
@@ -892,7 +967,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async handleDeleteSession(): Promise<Response> {
-    // Editor close skipped — editor feature is disabled
+    // TODO: CLOSE EDITOR
 
     // Clean up sprite
     if (this.serverState.spriteName) {
@@ -904,7 +979,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
 
     // Clear all storage on the DO (DO will cease to exist after this)
-    this.ctx.storage.deleteAll();
+    await this.ctx.storage.deleteAll();
 
     return new Response(JSON.stringify({ deleted: true }), {
       headers: { "Content-Type": "application/json" },
@@ -924,7 +999,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleChatMessage(connection, message);
         break;
       case "sync.request":
-        this.handleSyncRequest(connection);
+        await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
         // TODO: If the process isnt running, reset `isResponding` back to false so we dont get stuck.
@@ -938,6 +1013,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     payload: ChatMessageEvent,
   ): Promise<void> {
     try {
+      if (!(await this.guardSessionRepoAccess(connection))) {
+        return;
+      }
+
       await this.ensureReady(); // await any startup steps synchronously.
       const result = await this.agentProcessManager.handleChatMessage(payload);
       if (!result.ok) {
@@ -973,7 +1052,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
-  private handleSyncRequest(connection: Connection): void {
+  private async handleSyncRequest(connection: Connection): Promise<void> {
+    if (!(await this.guardSessionRepoAccess(connection))) {
+      return;
+    }
+
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
       this.sendMessage({ type: "sync.response", messages: [] }, connection);
@@ -1101,6 +1184,86 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     const token = await ensureValidInstallationToken(this.gitProxyContext());
     if (token) {
       this.githubToken = token;
+    }
+  }
+
+  private async assertSessionRepoAccess(): Promise<SessionRepoAccessResult> {
+    const sessionId = this.serverState.sessionId;
+    const userId = this.serverState.userId;
+    if (!sessionId || !userId) {
+      return {
+        ok: false as const,
+        error: {
+          code: "SESSION_NOT_FOUND" as const,
+          status: 404 as const,
+          message: "Session not found",
+        },
+      };
+    }
+
+    return assertSessionRepoAccess({
+      env: this.env,
+      sessionId,
+      userId,
+    });
+  }
+
+  private async guardSessionRepoAccess(connection: Connection): Promise<boolean> {
+    const accessResult = await this.assertSessionRepoAccess();
+    if (accessResult.ok) {
+      return true;
+    }
+
+    switch (accessResult.error.code) {
+      case "REPO_ACCESS_BLOCKED":
+        await this.enforceSessionAccessBlocked(false);
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "REPO_ACCESS_BLOCKED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+      case "GITHUB_AUTH_REQUIRED":
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "GITHUB_AUTH_REQUIRED",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+      default:
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "MESSAGE_HANDLER_ERROR",
+            message: accessResult.error.message,
+          },
+          connection,
+        );
+        return false;
+    }
+  }
+
+  async enforceSessionAccessBlocked(
+    notifyClients = true,
+  ): Promise<void> {
+    this.updatePartialState({
+      isResponding: false,
+      lastError: "Repository access for this session is currently blocked.",
+    });
+    this.agentProcessManager.cancel();
+    await this.agentProcessManager.stopSessionManagedProcesses();
+    if (notifyClients) {
+      this.broadcastMessage({
+        type: "operation.error",
+        code: "REPO_ACCESS_BLOCKED",
+        message: "Repository access for this session is currently blocked.",
+      });
     }
   }
 

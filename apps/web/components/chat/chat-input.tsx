@@ -39,6 +39,7 @@ interface ChatInputProps {
   claude: ClaudeAuth;
   claudeAuthRequired: ClaudeAuthState | null;
   operationErrorMessage?: string | null;
+  disabledPlaceholder?: string;
 }
 
 export function ChatInput({
@@ -53,6 +54,7 @@ export function ChatInput({
   claude,
   claudeAuthRequired: claudeAuthState,
   operationErrorMessage,
+  disabledPlaceholder = "Waiting for agent to be ready...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -192,7 +194,7 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={
             disabled || isClaudePromptBlocking
-              ? "Waiting for agent to be ready..."
+              ? disabledPlaceholder
               : "Send a message..."
           }
           disabled={disabled || isClaudePromptBlocking}

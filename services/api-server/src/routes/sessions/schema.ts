@@ -18,6 +18,10 @@ import {
 } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
+const ErrorWithCodeResponse = z.object({
+  error: z.string(),
+  code: z.string(),
+});
 const ErrorWithDetailsResponse = z.object({
   error: z.string(),
   details: z.string(),
@@ -72,9 +76,13 @@ export const createSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Authentication required to create a session",
     },
-    422: {
-      content: { "application/json": { schema: ErrorWithOptionalDetailsResponse } },
-      description: "Repository access validation failed",
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access denied for the requested repository",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
@@ -98,6 +106,14 @@ export const getSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
   },
 });
 
@@ -115,6 +131,14 @@ export const createSessionWebSocketTokenRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -155,9 +179,17 @@ export const getSessionMessagesRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get messages",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -177,9 +209,17 @@ export const getSessionPlanRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Plan not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get plan",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -203,9 +243,17 @@ export const createPullRequestRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     409: {
       content: { "application/json": { schema: ErrorWithUrlResponse } },
       description: "Pull request already exists",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -229,9 +277,17 @@ export const getPullRequestRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session or PR not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to fetch PR status",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -269,9 +325,17 @@ export const deleteSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to delete session",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
     },
   },
 });
@@ -295,9 +359,17 @@ export const openEditorRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to open editor",
+    },
+    501: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Editor feature not implemented",
     },
   },
 });
@@ -321,9 +393,17 @@ export const closeEditorRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
     500: {
       content: { "application/json": { schema: ErrorWithDetailsResponse } },
       description: "Failed to close editor",
     },
+    501: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Editor feature not implemented",
+    },  
   },
 });
