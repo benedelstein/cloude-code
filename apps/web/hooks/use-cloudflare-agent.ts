@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
+import { buildOptimisticUserMessage } from "@/lib/session-pending-user-message";
 import { normalizeHost } from "@/lib/utils";
 import type {
   ClientState,
@@ -35,6 +36,7 @@ const DEFAULT_API_HOST = resolveDefaultApiHost();
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
+  initialPendingUserMessage?: UIMessage | null;
   // eslint-disable-next-line no-unused-vars
   onError?: (error: Error) => void;
 }
@@ -76,10 +78,13 @@ export interface UseCloudflareAgentReturn {
 export function useCloudflareAgent({
   sessionId,
   webSocketToken,
+  initialPendingUserMessage = null,
   onError,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
   const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(
+    initialPendingUserMessage,
+  );
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [sessionErrorMessage, setSessionErrorMessage] = useState<string | null>(null);
@@ -145,6 +150,9 @@ export function useCloudflareAgent({
       case "sync.response": {
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
+        if (synced.length > 0) {
+          setPendingUserMessage(null);
+        }
         setIsHistoryLoading(false);
 
         // Replay buffered chunks for in-progress message (reconnect scenario)
@@ -195,6 +203,7 @@ export function useCloudflareAgent({
 
       case "user.message":
         setOperationError(null);
+        setPendingUserMessage(null);
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         break;
 
@@ -272,27 +281,14 @@ export function useCloudflareAgent({
       return;
     }
     setOperationError(null);
-
-    // Create optimistic user message
-    const parts: UIMessage["parts"] = [];
-    if (content) {
-      parts.push({ type: "text", text: content });
-    }
     const optimisticAttachments = message.optimisticAttachments ?? [];
-    for (const attachment of optimisticAttachments) {
-      parts.push({
-        type: "file",
-        mediaType: attachment.mediaType,
-        filename: attachment.filename,
-        url: attachment.contentUrl,
-      } as UIMessage["parts"][number]);
+    const userMessage = buildOptimisticUserMessage({
+      content,
+      attachments: optimisticAttachments,
+    });
+    if (userMessage) {
+      setMessages((prev) => [...prev, userMessage]);
     }
-    const userMessage: UIMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      parts,
-    };
-    setMessages((prev) => [...prev, userMessage]);
     setIsResponding(true);
 
     // Create a new stream for this response

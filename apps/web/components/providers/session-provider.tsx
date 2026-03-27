@@ -1,10 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { UIMessage } from "ai";
 import {
   useCloudflareAgent,
   type UseCloudflareAgentReturn,
 } from "@/hooks/use-cloudflare-agent";
+import { consumeInitialPendingUserMessage } from "@/lib/session-pending-user-message";
 import { useSessionWebSocketToken } from "@/hooks/use-session-websocket-token";
 import type { SessionStatus, SessionWebSocketTokenResponse } from "@repo/shared";
 
@@ -25,6 +27,7 @@ interface SessionProviderProps {
 
 interface SessionProviderWithTokenProps extends SessionProviderProps {
   webSocketToken: SessionWebSocketTokenResponse;
+  initialPendingUserMessage: UIMessage | null;
 }
 
 interface SessionBootstrapError {
@@ -37,6 +40,7 @@ function createPendingSession(
   sessionId: string,
   sessionStatus: SessionStatus | null,
   sessionError: SessionBootstrapError | null,
+  pendingUserMessage: UIMessage | null,
 ): UseCloudflareAgentReturn {
   return {
     sessionId,
@@ -51,7 +55,7 @@ function createPendingSession(
     isReady: false,
     isStreaming: false,
     isResponding: false,
-    pendingUserMessage: null,
+    pendingUserMessage,
     repoFullName: null,
     pushedBranch: null,
     pullRequestState: null,
@@ -70,11 +74,13 @@ function createPendingSession(
 function SessionProviderWithToken({
   sessionId,
   webSocketToken,
+  initialPendingUserMessage,
   children,
 }: SessionProviderWithTokenProps) {
   const session = useCloudflareAgent({
     sessionId,
     webSocketToken,
+    initialPendingUserMessage,
     onError: (error) => {
       console.error("Session error:", error);
     },
@@ -94,10 +100,20 @@ function SessionProviderWithToken({
 export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const [tokenSessionStatus, setTokenSessionStatus] = useState<SessionStatus | null>(null);
   const [tokenError, setTokenError] = useState<SessionBootstrapError | null>(null);
+  const [initialPendingUserMessage, setInitialPendingUserMessage] = useState<UIMessage | null>(
+    () => consumeInitialPendingUserMessage(sessionId),
+  );
+  const previousSessionIdRef = useRef(sessionId);
 
   useEffect(() => {
+    if (previousSessionIdRef.current === sessionId) {
+      return;
+    }
+
+    previousSessionIdRef.current = sessionId;
     setTokenSessionStatus(null);
     setTokenError(null);
+    setInitialPendingUserMessage(consumeInitialPendingUserMessage(sessionId));
   }, [sessionId]);
 
   const webSocketToken = useSessionWebSocketToken({
@@ -116,8 +132,13 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   });
 
   const pendingSession = useMemo(() => {
-    return createPendingSession(sessionId, tokenSessionStatus, tokenError);
-  }, [sessionId, tokenError, tokenSessionStatus]);
+    return createPendingSession(
+      sessionId,
+      tokenSessionStatus,
+      tokenError,
+      initialPendingUserMessage,
+    );
+  }, [initialPendingUserMessage, sessionId, tokenError, tokenSessionStatus]);
 
   if (!webSocketToken) {
     return (
@@ -128,7 +149,11 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   }
 
   return (
-    <SessionProviderWithToken sessionId={sessionId} webSocketToken={webSocketToken}>
+    <SessionProviderWithToken
+      sessionId={sessionId}
+      webSocketToken={webSocketToken}
+      initialPendingUserMessage={initialPendingUserMessage}
+    >
       {children}
     </SessionProviderWithToken>
   );

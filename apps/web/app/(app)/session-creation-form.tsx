@@ -11,6 +11,10 @@ import { ClaudeSigninPanel } from "./claude-signin-panel";
 import type { Branch, ListReposResponse, ListBranchesResponse } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
+import {
+  buildOptimisticUserMessage,
+  storeInitialPendingUserMessage,
+} from "@/lib/session-pending-user-message";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import {
@@ -445,6 +449,13 @@ export function SessionCreationForm() {
         token: session.websocketToken,
         expiresAt: session.websocketTokenExpiresAt,
       });
+      const initialPendingUserMessage = buildOptimisticUserMessage({
+        content: trimmedMessage || undefined,
+        attachments: uploadedDescriptors,
+      });
+      if (initialPendingUserMessage) {
+        storeInitialPendingUserMessage(session.sessionId, initialPendingUserMessage);
+      }
 
       clearAttachments();
       router.push(`/session/${session.sessionId}`);
