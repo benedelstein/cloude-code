@@ -242,24 +242,21 @@ export class SessionsService {
   }
 
   /**
-   * Fetches session info after verifying that the caller still has access to
-   * the session repository.
+   * Fetches session info after verifying that the caller owns the session.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session info on success.
    */
   async getSession(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionInfoResponseType>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const ownedSessionAgent = await this.getOwnedSessionAgent(params.sessionId, params.userId);
+    if (!ownedSessionAgent.ok) {
+      return ownedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(new Request("http://do/"));
+    const response = await ownedSessionAgent.value.fetch(new Request("http://do/"));
     if (!response.ok) {
       return failure(this.buildError({
         status: 404,
@@ -370,23 +367,21 @@ export class SessionsService {
   }
 
   /**
-   * Fetches persisted UI messages for a session after repo access validation.
+   * Fetches persisted UI messages for a session after verifying ownership.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session messages on success.
    */
   async getSessionMessages(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionMessagesResponse>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const ownedSessionAgent = await this.getOwnedSessionAgent(params.sessionId, params.userId);
+    if (!ownedSessionAgent.ok) {
+      return ownedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
+    const response = await ownedSessionAgent.value.fetch(
       new Request("http://do/messages"),
     );
     if (!response.ok) {
@@ -400,23 +395,21 @@ export class SessionsService {
   }
 
   /**
-   * Fetches the latest stored session plan after repo access validation.
+   * Fetches the latest stored session plan after verifying ownership.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session plan on success.
    */
   async getSessionPlan(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionPlanResponseType>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const ownedSessionAgent = await this.getOwnedSessionAgent(params.sessionId, params.userId);
+    if (!ownedSessionAgent.ok) {
+      return ownedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
+    const response = await ownedSessionAgent.value.fetch(
       new Request("http://do/plan"),
     );
     if (response.status === 404) {
@@ -493,26 +486,24 @@ export class SessionsService {
   }
 
   /**
-   * Fetches pull request status for the session after repo access validation.
+   * Fetches pull request status for the session after verifying ownership.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Pull request status on success.
    */
   async getPullRequest(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<PullRequestStatusResponse>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const ownedSessionAgent = await this.getOwnedSessionAgent(params.sessionId, params.userId);
+    if (!ownedSessionAgent.ok) {
+      return ownedSessionAgent;
     }
 
     const github = new GitHubAppService(this.env, logger);
     try {
       const pullRequestStatus = await getPullRequestStatusForSession({
-        sessionStub: authorizedSessionAgent.value,
+        sessionStub: ownedSessionAgent.value,
         githubService: github,
       });
       return success(pullRequestStatus);
@@ -719,6 +710,22 @@ export class SessionsService {
 
   private async getSessionAgent(sessionId: string): Promise<SessionAgentFetcher> {
     return getAgentByName<Env, SessionAgentDO>(this.env.SESSION_AGENT, sessionId);
+  }
+
+  /**
+   * Returns the session agent stub after verifying the caller owns the session.
+   * Used for read-only routes where full repo access verification is unnecessary.
+   */
+  private async getOwnedSessionAgent(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionsServiceResult<SessionAgentFetcher>> {
+    const ownershipResult = await this.assertSessionOwnership(sessionId, userId);
+    if (!ownershipResult.ok) {
+      return ownershipResult;
+    }
+
+    return success(await this.getSessionAgent(sessionId));
   }
 
   private async getAuthorizedSessionAgent(params: {
