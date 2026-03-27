@@ -51,6 +51,10 @@ import { MessageAccumulator } from "@/lib/message-accumulator";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
+import {
+  assertSessionRepoAccess,
+  type SessionRepoAccessResult,
+} from "@/lib/user-session/session-repo-access";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -310,11 +314,74 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
     }
 
-    // Git proxy: forward git operations to GitHub with auth.
-    // Repo access is verified at session creation and WS token mint time.
-    // The git-proxy itself enforces repo-scoping, branch restrictions, and
-    // a shared secret — no additional GitHub access check is needed here.
+    // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
+      const accessResult = await this.assertSessionRepoAccess();
+      if (!accessResult.ok) {
+        switch (accessResult.error.code) {
+          case "REPO_ACCESS_BLOCKED":
+            await this.enforceSessionAccessBlocked();
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: accessResult.error.status,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "GITHUB_AUTH_REQUIRED":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "GITHUB_API_ERROR":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "SESSION_NOT_FOUND":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          case "INVALID_REPO":
+            return new Response(
+              JSON.stringify({
+                error: accessResult.error.message,
+                code: accessResult.error.code,
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          default: {
+            const exhaustiveCheck: never = accessResult.error;
+            throw new Error(`Unhandled session repo access error: ${JSON.stringify(exhaustiveCheck)}`);
+          }
+        }
+      }
+
       const result = await handleGitProxy(
         request,
         path,
@@ -1112,6 +1179,26 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
+  private async assertSessionRepoAccess(): Promise<SessionRepoAccessResult> {
+    const sessionId = this.serverState.sessionId;
+    const userId = this.serverState.userId;
+    if (!sessionId || !userId) {
+      return {
+        ok: false as const,
+        error: {
+          code: "SESSION_NOT_FOUND" as const,
+          status: 404 as const,
+          message: "Session not found",
+        },
+      };
+    }
+
+    return assertSessionRepoAccess({
+      env: this.env,
+      sessionId,
+      userId,
+    });
+  }
 
   async enforceSessionAccessBlocked(
     notifyClients = true,
