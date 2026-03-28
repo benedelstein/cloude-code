@@ -95,7 +95,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     repoFullName: null,
     status: "initializing",
     agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
-    planMode: false,
+    agentMode: "edit",
     pushedBranch: null,
     pullRequest: null,
     todos: null,
@@ -171,8 +171,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.updatePartialState({ claudeAuthRequired }),
       updateAgentSettings: (settings) =>
         this.updatePartialState({ agentSettings: settings }),
-      updatePlanMode: (planMode) =>
-        this.updatePartialState({ planMode }),
+      updateAgentMode: (agentMode) =>
+        this.updatePartialState({ agentMode }),
       updateIsResponding: (isResponding) =>
         this.updatePartialState({ isResponding }),
     });
@@ -852,7 +852,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       repoFullName: data.repoFullName,
       agentSettings: settings,
-      planMode: data.agentSettings?.planMode ?? false,
+      agentMode: data.agentSettings?.agentMode ?? "edit",
       pendingUserMessage: pendingUserUiMessage
         ? {
             message: pendingUserUiMessage,

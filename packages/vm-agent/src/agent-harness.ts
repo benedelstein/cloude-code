@@ -36,12 +36,12 @@ export type StreamTextExtras = {
 };
 
 export type GetModelOptions = {
-  planMode?: boolean;
+  agentMode?: "edit" | "plan";
 };
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
-  planMode: boolean;
+  agentMode: "edit" | "plan";
   // eslint-disable-next-line no-unused-vars
   getModel: (_modelId: ModelId, _options?: GetModelOptions) => LanguageModel;
   getStreamTextExtras?: () => StreamTextExtras;
@@ -122,8 +122,8 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
 
     try {
       const extras = setupResult.getStreamTextExtras?.() ?? {};
-      const model = setupResult.getModel(setupResult.modelId, { planMode: setupResult.planMode });
-      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, planMode: ${setupResult.planMode}` });
+      const model = setupResult.getModel(setupResult.modelId, { agentMode: setupResult.agentMode });
+      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, agentMode: ${setupResult.agentMode}` });
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],
@@ -211,10 +211,10 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
           setupResult.modelId = input.model as S["model"];
           emit({ type: "debug", message: `Model updated to: ${input.model}` });
         }
-        // Apply plan mode switch if provided
-        if (input.planMode !== undefined && setupResult) {
-          setupResult.planMode = input.planMode;
-          emit({ type: "debug", message: `Plan mode updated to: ${input.planMode}` });
+        // Apply agent mode switch if provided
+        if (input.agentMode && setupResult) {
+          setupResult.agentMode = input.agentMode;
+          emit({ type: "debug", message: `Agent mode updated to: ${input.agentMode}` });
         }
         queueMessage(input.message);
         break;

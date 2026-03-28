@@ -32,8 +32,8 @@ export const AgentChatInput = z.object({
   message: AgentInputMessage,
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
-  /** If provided, switch plan mode (read-only) before processing the message. */
-  planMode: z.boolean().optional(),
+  /** If provided, switch agent mode before processing the message. */
+  agentMode: z.enum(["edit", "plan"]).optional(),
 });
 
 export const AgentCancelInput = z.object({

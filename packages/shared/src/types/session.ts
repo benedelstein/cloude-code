@@ -77,14 +77,17 @@ export type ClientState = {
   editorUrl: string | null;
   /** Claude auth issue blocking the current session — reset on restart */
   claudeAuthRequired: ClaudeAuthState | null;
-  /** Whether the session is in plan mode (read-only exploration, no edits) */
-  planMode: boolean;
+  /** Agent operational mode: "edit" (default, full access) or "plan" (read-only exploration) */
+  agentMode: AgentMode;
   /** Whether the agent is currently responding to a message — reset on restart */
   isResponding: boolean;
   /** Last error message from provisioning or agent start — reset on restart. Used moreso for persistent errors - use a stream event for a transient error */
   lastError: string | null;
   createdAt: Date;
 };
+
+export const AgentMode = z.enum(["edit", "plan"]);
+export type AgentMode = z.infer<typeof AgentMode>;
 
 /** Supported agent providers */
 export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
@@ -133,7 +136,7 @@ export const AgentSettingsInput = z.object({
   provider: AgentProvider.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
-  planMode: z.boolean().optional(),
+  agentMode: AgentMode.optional(),
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 

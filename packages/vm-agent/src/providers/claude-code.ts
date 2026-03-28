@@ -97,9 +97,9 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     return {
       modelId,
-      planMode: false,
+      agentMode: "edit",
       getModel: (id, options?: GetModelOptions) => {
-        const allowedTools = options?.planMode ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
+        const allowedTools = options?.agentMode === "plan" ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
         return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });
       },
       getStreamTextExtras: (): StreamTextExtras => ({

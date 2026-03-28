@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import type { UIMessage, UIMessagePart } from "ai";
-import { SessionStatus } from "./session";
+import { AgentMode, SessionStatus } from "./session";
 import { MessageAttachmentRef } from "./attachments";
 
 // Re-export AI SDK types for convenience
@@ -16,8 +16,8 @@ export const ChatMessageEvent = z.object({
   messageId: z.uuid().optional(),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
-  /** If provided, switch plan mode before processing the message. */
-  planMode: z.boolean().optional(),
+  /** If provided, switch agent mode before processing the message. */
+  agentMode: AgentMode.optional(),
 }).refine(
   (value) => Boolean(value.content) || (value.attachments?.length ?? 0) > 0,
   "chat.message must include content or attachments",
