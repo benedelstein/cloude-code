@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, Square, ListChecks } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
@@ -36,6 +36,9 @@ interface ChatInputProps {
   model?: ClaudeModel;
   // eslint-disable-next-line no-unused-vars
   onModelChange?: (model: ClaudeModel) => void;
+  planMode?: boolean;
+  // eslint-disable-next-line no-unused-vars
+  onPlanModeChange?: (planMode: boolean) => void;
   claude: ClaudeAuth;
   claudeAuthRequired: ClaudeAuthState | null;
   operationErrorMessage?: string | null;
@@ -51,6 +54,8 @@ export function ChatInput({
   isStreaming = false,
   model,
   onModelChange,
+  planMode = false,
+  onPlanModeChange,
   claude,
   claudeAuthRequired: claudeAuthState,
   operationErrorMessage,
@@ -210,6 +215,28 @@ export function ChatInput({
           />
         </div>
         <div className="flex items-center gap-1">
+          {onPlanModeChange && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onPlanModeChange(!planMode)}
+                  disabled={disabled || isClaudePromptBlocking}
+                  className={`flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer ${
+                    planMode
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <ListChecks className="h-3.5 w-3.5" />
+                  <span>Plan</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {planMode ? "Plan mode: read-only, no code changes" : "Switch to plan mode"}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {model && onModelChange && (
             <ModelSelector
               selectedModel={model}

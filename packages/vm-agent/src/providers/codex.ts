@@ -8,7 +8,7 @@ import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "../system-prompt";
 import type { AgentSettings } from "@repo/shared";
-import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
+import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "codex-cli" }>;
 
@@ -61,10 +61,16 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     emit({ type: "debug", message: `Codex app-server provider initialized (model: ${modelId})` });
 
     // NOTE: codex-app-server in persistent mode automatically resumes thread state
-    // even when the model is changed. No need to pass in a thread id. 
+    // even when the model is changed. No need to pass in a thread id.
     return {
       modelId,
-      getModel: (id) => provider(id), 
+      planMode: settings.planMode,
+      getModel: (id, options?: GetModelOptions) => {
+        if (options?.planMode) {
+          return provider(id, { sandboxPolicy: "read-only", autoApprove: false });
+        }
+        return provider(id);
+      },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
           const stepSessionId = (step.providerMetadata?.["codex-app-server"] as { threadId?: string })?.threadId;

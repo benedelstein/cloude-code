@@ -112,12 +112,14 @@ export const AgentSettingsCodex = z.object({
   provider: z.literal("codex-cli"),
   model: CodexModel.default("gpt-5.3-codex"),
   maxTokens: z.number().default(8192),
+  planMode: z.boolean().default(false),
 });
 
 export const AgentSettingsClaude = z.object({
   provider: z.literal("claude-code"),
   model: ClaudeModel.default("opus"),
   maxTokens: z.number().default(8192),
+  planMode: z.boolean().default(false),
 });
 
 export const AgentSettings = z.discriminatedUnion("provider", [
@@ -131,6 +133,7 @@ export const AgentSettingsInput = z.object({
   provider: AgentProvider.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
+  planMode: z.boolean().optional(),
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 

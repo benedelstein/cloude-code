@@ -64,6 +64,8 @@ function createPendingSession(
     agentSettings: null,
     selectedModel: null,
     setSelectedModel: () => {},
+    planMode: false,
+    setPlanMode: () => {},
     editorUrl: null,
     claudeAuthRequired: null,
     sendMessage: () => {},

@@ -94,7 +94,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   initialState: ClientState = {
     repoFullName: null,
     status: "initializing",
-    agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
+    agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192, planMode: false },
     pushedBranch: null,
     pullRequest: null,
     todos: null,
@@ -810,6 +810,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       provider,
       model: data.agentSettings?.model,
       maxTokens,
+      planMode: data.agentSettings?.planMode ?? false,
     });
     if (parsed.success) {
       settings = parsed.data;

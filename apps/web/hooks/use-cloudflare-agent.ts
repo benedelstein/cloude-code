@@ -64,6 +64,9 @@ export interface UseCloudflareAgentReturn {
   selectedModel: ClaudeModel | null;
   // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: ClaudeModel) => void;
+  planMode: boolean;
+  // eslint-disable-next-line no-unused-vars
+  setPlanMode: (planMode: boolean) => void;
   editorUrl: string | null;
   claudeAuthRequired: ClaudeAuthState | null;
   // eslint-disable-next-line no-unused-vars
@@ -104,6 +107,7 @@ export function useCloudflareAgent({
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
+  const [planMode, setPlanMode] = useState(false);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -255,6 +259,7 @@ export function useCloudflareAgent({
         // Initialize selected model from server settings (only if not yet set locally)
         setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
       }
+      setPlanMode(state.agentSettings.planMode);
       setIsResponding(state.isResponding);
       setSessionStatus(state.status);
       setSessionErrorMessage(state.lastError);
@@ -301,15 +306,17 @@ export function useCloudflareAgent({
     // Start consuming the stream
     consumeStream(stream);
 
-    // Send via useAgent's connection, include model if it differs from server settings
+    // Send via useAgent's connection, include model/planMode if they differ from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
+    const planModeToSend = planMode !== agentSettings?.planMode ? planMode : undefined;
     sendToAgent({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
+      planMode: planModeToSend,
     });
-  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model]);
+  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model, planMode, agentSettings?.planMode]);
 
   const stop = useCallback(() => {
     sendToAgent({ type: "operation.cancel" });
@@ -337,6 +344,8 @@ export function useCloudflareAgent({
     agentSettings,
     selectedModel,
     setSelectedModel,
+    planMode,
+    setPlanMode,
     editorUrl,
     claudeAuthRequired,
     sendMessage,

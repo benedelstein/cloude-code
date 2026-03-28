@@ -277,6 +277,7 @@ export class AgentProcessManager {
     content: string | undefined,
     attachments: AgentInputAttachment[],
     model?: string,
+    planMode?: boolean,
   ): Promise<void> {
     if (!this.agentWebsocketSession || !this.agentWebsocketSession.isConnected) {
       throw new Error("Agent session not connected");
@@ -290,6 +291,7 @@ export class AgentProcessManager {
           attachments: attachments.length > 0 ? attachments : undefined,
         },
         model,
+        planMode,
       }) + "\n",
     );
   }
@@ -371,7 +373,14 @@ export class AgentProcessManager {
       modelForAgent = modelResult.value;
     }
 
-    await this._sendMessageToAgent(content, agentAttachments, modelForAgent);
+    // Apply plan mode switch (if requested and different from current)
+    let planModeForAgent: boolean | undefined;
+    if (payload.planMode !== undefined && payload.planMode !== this.getClientState().agentSettings.planMode) {
+      this.applyPlanModeSwitch(payload.planMode);
+      planModeForAgent = payload.planMode;
+    }
+
+    await this._sendMessageToAgent(content, agentAttachments, modelForAgent, planModeForAgent);
 
     return success({
       attachments: attachmentRecords,
@@ -596,6 +605,13 @@ export class AgentProcessManager {
       fields: { provider: currentProvider, model: validatedModel },
     });
     return success(validatedModel);
+  }
+
+  /** Updates plan mode in DO state, which auto-syncs to all connected clients. */
+  private applyPlanModeSwitch(planMode: boolean): void {
+    const newSettings = { ...this.getClientState().agentSettings, planMode } as AgentSettings;
+    this.updateAgentSettings(newSettings);
+    this.logger.info("Plan mode updated", { fields: { planMode } });
   }
 
   private mapClaudeCredentialError(

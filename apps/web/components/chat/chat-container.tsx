@@ -48,6 +48,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     agentSettings: settings,
     selectedModel,
     setSelectedModel,
+    planMode,
+    setPlanMode,
     claudeAuthRequired: claudeAuthState,
     sendMessage,
     stop,
@@ -247,6 +249,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 isStreaming={isResponding}
                 model={settings?.provider === "claude-code" ? selectedModel ?? undefined : undefined}
                 onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
+                planMode={planMode}
+                onPlanModeChange={setPlanMode}
                 claude={claude}
                 claudeAuthRequired={claudeAuthState}
                 operationErrorMessage={operationError?.message ?? null}
