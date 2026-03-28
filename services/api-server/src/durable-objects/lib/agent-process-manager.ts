@@ -248,11 +248,14 @@ export class AgentProcessManager {
       `Starting agent on sprite ${spriteName} with settings ${JSON.stringify(settings)} and agentSessionId ${agentSessionId}`,
     );
 
+    const agentMode = clientState.agentMode;
+
     const commands = [
       "bun",
       "run",
       `${HOME_DIR}/.cloude/agent.js`,
       `--provider=${JSON.stringify(settings)}`,
+      `--agentMode=${agentMode}`,
       ...(agentSessionId ? [`--sessionId=${agentSessionId}`] : []),
     ];
 

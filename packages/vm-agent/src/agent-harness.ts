@@ -57,10 +57,12 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
   const { values: parsedValues } = parseArgs({
     options: {
       sessionId: { type: "string", short: "s" },
+      agentMode: { type: "string" },
     },
     strict: false,
   });
   const args = { sessionId: typeof parsedValues.sessionId === "string" ? parsedValues.sessionId : undefined };
+  const initialAgentMode: "edit" | "plan" = parsedValues.agentMode === "plan" ? "plan" : "edit";
 
   const sessionId = process.env.SESSION_ID ?? "";
   const sessionSuffix = sessionId.slice(0, 4);
@@ -103,11 +105,6 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
-
-  // Buffer agentMode from the first message so it can be applied after
-  // provider setup completes (setupResult is null until then). Model doesn't
-  // need this because it's already baked into settings via --provider arg.
-  let pendingAgentMode: ("edit" | "plan") | null = null;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
@@ -170,12 +167,8 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
       return;
     }
 
-    // Apply agentMode buffered from the first message
-    if (pendingAgentMode) {
-      setupResult.agentMode = pendingAgentMode;
-      emit({ type: "debug", message: `Applied pending agent mode: ${pendingAgentMode}` });
-      pendingAgentMode = null;
-    }
+    // Apply initial agent mode from CLI flag
+    setupResult.agentMode = initialAgentMode;
 
     emit({ type: "ready" });
 
@@ -224,13 +217,9 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
           emit({ type: "debug", message: `Model updated to: ${input.model}` });
         }
         // Apply agent mode switch if provided
-        if (input.agentMode) {
-          if (setupResult) {
-            setupResult.agentMode = input.agentMode;
-            emit({ type: "debug", message: `Agent mode updated to: ${input.agentMode}` });
-          } else {
-            pendingAgentMode = input.agentMode;
-          }
+        if (input.agentMode && setupResult) {
+          setupResult.agentMode = input.agentMode;
+          emit({ type: "debug", message: `Agent mode updated to: ${input.agentMode}` });
         }
         queueMessage(input.message);
         break;
