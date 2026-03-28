@@ -8,7 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend } from "../system-prompt";
 import type { AgentSettings } from "@repo/shared";
-import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
+import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
 
@@ -70,10 +70,12 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     // Track session ID from Claude - updated after first message
     let agentSessionId: string | undefined = args.sessionId;
 
+    const EDIT_MODE_TOOLS = ["Read", "Edit", "Write", "Bash", "Glob", "Grep"];
+    const PLAN_MODE_TOOLS = ["Read", "Glob", "Grep"];
+
     const claudeCode = createClaudeCode({
       defaultSettings: {
         pathToClaudeCodeExecutable: claudeExecutablePath,
-        allowedTools: ["Read", "Edit", "Write", "Bash", "Glob", "Grep"],
         cwd: process.cwd(),
         resume: agentSessionId,
         permissionMode: "acceptEdits",
@@ -95,7 +97,11 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     return {
       modelId,
-      getModel: (id) => claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId }), // need to pass in sesion id here, not just in the claude code provider creation.
+      planMode: false,
+      getModel: (id, options?: GetModelOptions) => {
+        const allowedTools = options?.planMode ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
+        return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });
+      },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
           const stepSessionId = (step.providerMetadata?.["claude-code"] as { sessionId?: string })?.sessionId;

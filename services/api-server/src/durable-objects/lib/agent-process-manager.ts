@@ -115,6 +115,7 @@ export interface AgentProcessManagerOptions {
   updateLastKnownAgentProcessId: (processId: number | null) => void;
   updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
+  updatePlanMode: (planMode: boolean) => void;
   updateIsResponding: (isResponding: boolean) => void;
   /* eslint-enable no-unused-vars */
 }
@@ -136,6 +137,7 @@ export class AgentProcessManager {
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
   private readonly updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
+  private readonly updatePlanMode: (planMode: boolean) => void;
   private readonly updateIsResponding: (isResponding: boolean) => void;
   private agentWebsocketSession: SpriteWebsocketSession | null = null;
   /** Shares a single in-flight session start across concurrent callers. */
@@ -157,6 +159,7 @@ export class AgentProcessManager {
     this.getServerState = options.getServerState;
     this.updateClaudeAuthRequired = options.updateClaudeAuthRequired;
     this.updateAgentSettings = options.updateAgentSettings;
+    this.updatePlanMode = options.updatePlanMode;
     this.updateIsResponding = options.updateIsResponding;
   }
 
@@ -277,6 +280,7 @@ export class AgentProcessManager {
     content: string | undefined,
     attachments: AgentInputAttachment[],
     model?: string,
+    planMode?: boolean,
   ): Promise<void> {
     if (!this.agentWebsocketSession || !this.agentWebsocketSession.isConnected) {
       throw new Error("Agent session not connected");
@@ -290,6 +294,7 @@ export class AgentProcessManager {
           attachments: attachments.length > 0 ? attachments : undefined,
         },
         model,
+        planMode,
       }) + "\n",
     );
   }
@@ -371,7 +376,15 @@ export class AgentProcessManager {
       modelForAgent = modelResult.value;
     }
 
-    await this._sendMessageToAgent(content, agentAttachments, modelForAgent);
+    // Apply plan mode toggle (if requested and different from current)
+    let planModeForAgent: boolean | undefined;
+    if (payload.planMode !== undefined && payload.planMode !== this.getClientState().planMode) {
+      this.updatePlanMode(payload.planMode);
+      planModeForAgent = payload.planMode;
+      this.logger.info("Plan mode updated", { fields: { planMode: payload.planMode } });
+    }
+
+    await this._sendMessageToAgent(content, agentAttachments, modelForAgent, planModeForAgent);
 
     return success({
       attachments: attachmentRecords,
