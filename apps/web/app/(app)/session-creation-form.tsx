@@ -72,7 +72,7 @@ function RepoSelector({
               <button
                 type="button"
                 disabled={loading || disabled}
-                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer w-[200px] sm:w-[240px]"
+                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer min-w-0 max-w-[240px]"
               >
                 <svg
                   className="h-3.5 w-3.5 shrink-0"
@@ -170,7 +170,7 @@ function BranchSelector({
               <button
                 type="button"
                 disabled={loading || disabled}
-                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer max-w-[180px]"
+                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer min-w-0 max-w-[180px]"
               >
                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">
@@ -502,7 +502,7 @@ export function SessionCreationForm() {
     >
       <InputFrame
         footer={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <RepoSelector
               repos={repos}
               selectedRepo={selectedRepo}
