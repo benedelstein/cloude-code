@@ -8,7 +8,7 @@ import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "../system-prompt";
 import type { AgentSettings } from "@repo/shared";
-import type { AgentProviderConfig, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
+import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "codex-cli" }>;
 
@@ -64,7 +64,10 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     // even when the model is changed. No need to pass in a thread id. 
     return {
       modelId,
-      getModel: (id) => provider(id), 
+      getModel: (id, options?: GetModelOptions) =>
+        provider(id, {
+          sandboxPolicy: options?.agentMode === "plan" ? "read-only" : "workspace-write",
+        }),
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
           const stepSessionId = (step.providerMetadata?.["codex-app-server"] as { threadId?: string })?.threadId;

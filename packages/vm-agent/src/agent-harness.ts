@@ -35,10 +35,14 @@ export type StreamTextExtras = {
   onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>;
 };
 
+export type GetModelOptions = {
+  agentMode?: "edit" | "plan";
+};
+
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
   // eslint-disable-next-line no-unused-vars
-  getModel: (_modelId: ModelId) => LanguageModel;
+  getModel: (_modelId: ModelId, _options?: GetModelOptions) => LanguageModel;
   getStreamTextExtras?: () => StreamTextExtras;
   cleanup?: () => Promise<void>;
 }
@@ -52,10 +56,12 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
   const { values: parsedValues } = parseArgs({
     options: {
       sessionId: { type: "string", short: "s" },
+      agentMode: { type: "string" },
     },
     strict: false,
   });
   const args = { sessionId: typeof parsedValues.sessionId === "string" ? parsedValues.sessionId : undefined };
+  const initialAgentMode: "edit" | "plan" = parsedValues.agentMode === "plan" ? "plan" : "edit";
 
   const sessionId = process.env.SESSION_ID ?? "";
   const sessionSuffix = sessionId.slice(0, 4);
@@ -98,6 +104,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
+  let agentMode: "edit" | "plan" = initialAgentMode;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
@@ -117,8 +124,8 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
 
     try {
       const extras = setupResult.getStreamTextExtras?.() ?? {};
-      const model = setupResult.getModel(setupResult.modelId);
-      emit({ type: "debug", message: `Using model: ${setupResult.modelId}` });
+      const model = setupResult.getModel(setupResult.modelId, { agentMode });
+      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, agentMode: ${agentMode}` });
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],
@@ -205,6 +212,11 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
         if (input.model && setupResult) {
           setupResult.modelId = input.model as S["model"];
           emit({ type: "debug", message: `Model updated to: ${input.model}` });
+        }
+        // Apply agent mode switch if provided
+        if (input.agentMode) {
+          agentMode = input.agentMode;
+          emit({ type: "debug", message: `Agent mode updated to: ${input.agentMode}` });
         }
         queueMessage(input.message);
         break;

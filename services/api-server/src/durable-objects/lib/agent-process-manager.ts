@@ -1,4 +1,5 @@
 import {
+  type AgentMode,
   type AgentOutput,
   type AgentInputAttachment,
   type ClientState,
@@ -115,6 +116,7 @@ export interface AgentProcessManagerOptions {
   updateLastKnownAgentProcessId: (processId: number | null) => void;
   updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
+  updateAgentMode: (agentMode: AgentMode) => void;
   updateIsResponding: (isResponding: boolean) => void;
   /* eslint-enable no-unused-vars */
 }
@@ -136,6 +138,7 @@ export class AgentProcessManager {
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
   private readonly updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
+  private readonly updateAgentMode: (agentMode: AgentMode) => void;
   private readonly updateIsResponding: (isResponding: boolean) => void;
   private agentWebsocketSession: SpriteWebsocketSession | null = null;
   /** Shares a single in-flight session start across concurrent callers. */
@@ -157,6 +160,7 @@ export class AgentProcessManager {
     this.getServerState = options.getServerState;
     this.updateClaudeAuthRequired = options.updateClaudeAuthRequired;
     this.updateAgentSettings = options.updateAgentSettings;
+    this.updateAgentMode = options.updateAgentMode;
     this.updateIsResponding = options.updateIsResponding;
   }
 
@@ -244,11 +248,14 @@ export class AgentProcessManager {
       `Starting agent on sprite ${spriteName} with settings ${JSON.stringify(settings)} and agentSessionId ${agentSessionId}`,
     );
 
+    const agentMode = clientState.agentMode;
+
     const commands = [
       "bun",
       "run",
       `${HOME_DIR}/.cloude/agent.js`,
       `--provider=${JSON.stringify(settings)}`,
+      `--agentMode=${agentMode}`,
       ...(agentSessionId ? [`--sessionId=${agentSessionId}`] : []),
     ];
 
@@ -277,6 +284,7 @@ export class AgentProcessManager {
     content: string | undefined,
     attachments: AgentInputAttachment[],
     model?: string,
+    agentMode?: AgentMode,
   ): Promise<void> {
     if (!this.agentWebsocketSession || !this.agentWebsocketSession.isConnected) {
       throw new Error("Agent session not connected");
@@ -290,6 +298,7 @@ export class AgentProcessManager {
           attachments: attachments.length > 0 ? attachments : undefined,
         },
         model,
+        agentMode,
       }) + "\n",
     );
   }
@@ -371,7 +380,15 @@ export class AgentProcessManager {
       modelForAgent = modelResult.value;
     }
 
-    await this._sendMessageToAgent(content, agentAttachments, modelForAgent);
+    // Apply agent mode toggle (if requested and different from current)
+    let agentModeForAgent: AgentMode | undefined;
+    if (payload.agentMode && payload.agentMode !== this.getClientState().agentMode) {
+      this.updateAgentMode(payload.agentMode);
+      agentModeForAgent = payload.agentMode;
+      this.logger.info("Agent mode updated", { fields: { agentMode: payload.agentMode } });
+    }
+
+    await this._sendMessageToAgent(content, agentAttachments, modelForAgent, agentModeForAgent);
 
     return success({
       attachments: attachmentRecords,
