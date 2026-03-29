@@ -97,7 +97,6 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     return {
       modelId,
-      agentMode: "edit",
       getModel: (id, options?: GetModelOptions) => {
         const allowedTools = options?.agentMode === "plan" ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
         return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });

@@ -41,7 +41,6 @@ export type GetModelOptions = {
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
-  agentMode: "edit" | "plan";
   // eslint-disable-next-line no-unused-vars
   getModel: (_modelId: ModelId, _options?: GetModelOptions) => LanguageModel;
   getStreamTextExtras?: () => StreamTextExtras;
@@ -105,6 +104,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
+  let agentMode: "edit" | "plan" = initialAgentMode;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
@@ -124,8 +124,8 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
 
     try {
       const extras = setupResult.getStreamTextExtras?.() ?? {};
-      const model = setupResult.getModel(setupResult.modelId, { agentMode: setupResult.agentMode });
-      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, agentMode: ${setupResult.agentMode}` });
+      const model = setupResult.getModel(setupResult.modelId, { agentMode });
+      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, agentMode: ${agentMode}` });
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],
@@ -166,9 +166,6 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
       isRunning = false;
       return;
     }
-
-    // Apply initial agent mode from CLI flag
-    setupResult.agentMode = initialAgentMode;
 
     emit({ type: "ready" });
 
@@ -217,8 +214,8 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
           emit({ type: "debug", message: `Model updated to: ${input.model}` });
         }
         // Apply agent mode switch if provided
-        if (input.agentMode && setupResult) {
-          setupResult.agentMode = input.agentMode;
+        if (input.agentMode) {
+          agentMode = input.agentMode;
           emit({ type: "debug", message: `Agent mode updated to: ${input.agentMode}` });
         }
         queueMessage(input.message);

@@ -64,7 +64,6 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     // even when the model is changed. No need to pass in a thread id. 
     return {
       modelId,
-      agentMode: "edit",
       getModel: (id, options?: GetModelOptions) =>
         provider(id, {
           sandboxPolicy: options?.agentMode === "plan" ? "read-only" : "workspace-write",
