@@ -1,6 +1,6 @@
 "use client";
 
-import { Code, ScrollText } from "lucide-react";
+import { CodeXml, ScrollText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgentMode } from "@repo/shared";
 
@@ -25,12 +25,12 @@ export function AgentModeToggle({ agentMode, onToggle, disabled }: AgentModeTogg
           {isPlan ? (
             <>
               <ScrollText className="h-4 w-4" />
-              <span className="text-xs font-medium">plan</span>
+              <span className="text-xs font-medium">Plan</span>
             </>
           ) : (
             <>
-              <Code className="h-4 w-4" />
-              <span className="text-xs font-medium">edit</span>
+              <CodeXml className="h-4 w-4" />
+              <span className="text-xs font-medium">Edit</span>
             </>
           )}
         </button>
