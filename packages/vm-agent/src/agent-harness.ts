@@ -35,8 +35,10 @@ export type StreamTextExtras = {
   onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>;
 };
 
+export type AgentMode = "edit" | "plan";
+
 export type GetModelOptions = {
-  agentMode?: "edit" | "plan";
+  agentMode?: AgentMode;
 };
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
@@ -61,7 +63,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
     strict: false,
   });
   const args = { sessionId: typeof parsedValues.sessionId === "string" ? parsedValues.sessionId : undefined };
-  const initialAgentMode: "edit" | "plan" = parsedValues.agentMode === "plan" ? "plan" : "edit";
+  const initialAgentMode: AgentMode = parsedValues.agentMode === "plan" ? "plan" : "edit";
 
   const sessionId = process.env.SESSION_ID ?? "";
   const sessionSuffix = sessionId.slice(0, 4);
@@ -104,7 +106,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
-  let agentMode: "edit" | "plan" = initialAgentMode;
+  let agentMode: AgentMode = initialAgentMode;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
