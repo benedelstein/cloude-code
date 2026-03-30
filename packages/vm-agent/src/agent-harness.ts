@@ -21,6 +21,8 @@ import {
   encodeAgentOutput,
 } from "@repo/shared";
 
+export type AgentMode = "edit" | "plan";
+
 export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   // eslint-disable-next-line no-unused-vars
   emit: (_output: AgentOutput) => void;
@@ -28,6 +30,7 @@ export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   sessionSuffix: string;
   args: { sessionId?: string };
   spriteContext: string;
+  initialAgentMode: AgentMode;
 }
 
 export type StreamTextExtras = {
@@ -104,13 +107,26 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
-  let agentMode: "edit" | "plan" = initialAgentMode;
+  let agentMode: AgentMode = initialAgentMode;
+  /** Tracks the mode that was active on the previous message, to detect mid-session switches. */
+  let lastMessageAgentMode: AgentMode = initialAgentMode;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
     currentAbortController = new AbortController();
 
     const userContentParts: UserContent = [];
+
+    // When the mode changed since the last message, inject an instruction so
+    // the already-running Claude Code process respects the new mode.
+    if (agentMode !== lastMessageAgentMode) {
+      const modeInstruction = agentMode === "plan"
+        ? "[MODE SWITCH: You are now in PLAN mode (read-only). Do NOT use Edit, Write, or Bash tools. Only use Read, Glob, and Grep. Do NOT create branches, commit, or push.]"
+        : "[MODE SWITCH: You are now in EDIT mode (full access). You can use all tools including Edit, Write, and Bash.]";
+      userContentParts.push({ type: "text", text: modeInstruction });
+      lastMessageAgentMode = agentMode;
+    }
+
     if (message.content) {
       userContentParts.push({ type: "text", text: message.content });
     }
@@ -160,7 +176,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
     }
 
     try {
-      setupResult = await config.setup({ emit, settings, sessionSuffix, args, spriteContext });
+      setupResult = await config.setup({ emit, settings, sessionSuffix, args, spriteContext, initialAgentMode: agentMode });
     } catch (error) {
       emit({ type: "error", error: String(error) });
       isRunning = false;
