@@ -41,7 +41,8 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { ModelSelector } from "@/components/model-selector";
 import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
-import type { ClaudeModel } from "@repo/shared";
+import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
+import type { AgentMode, ClaudeModel } from "@repo/shared";
 import Link from "next/link";
 
 function RepoSelector({
@@ -241,6 +242,7 @@ export function SessionCreationForm() {
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel>("opus");
+  const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
   const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -430,7 +432,7 @@ export function SessionCreationForm() {
         selectedRepo.id,
         trimmedMessage || undefined,
         branchToUse,
-        { provider: "claude-code", model: selectedModel },
+        { provider: "claude-code", model: selectedModel, agentMode: selectedAgentMode },
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
       );
 
@@ -556,10 +558,17 @@ export function SessionCreationForm() {
         />
 
           <div className="flex items-center justify-between px-3 pb-3">
-            <ImageAttachButton
-              onFiles={addFiles}
-              disabled={isFormInteractionDisabled}
-            />
+            <div className="flex items-center gap-1">
+              <ImageAttachButton
+                onFiles={addFiles}
+                disabled={isFormInteractionDisabled}
+              />
+              <AgentModeToggle
+                agentMode={selectedAgentMode}
+                onToggle={() => setSelectedAgentMode(selectedAgentMode === "plan" ? "edit" : "plan")}
+                disabled={isFormInteractionDisabled}
+              />
+            </div>
 
             <div className="flex items-center gap-3">
               {claude.connected && (
