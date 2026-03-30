@@ -77,8 +77,6 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     // Track session ID from Claude - updated after first message
     let agentSessionId: string | undefined = args.sessionId;
 
-    const allowedTools = toolsForMode(initialAgentMode);
-
     const claudeCode = createClaudeCode({
       defaultSettings: {
         pathToClaudeCodeExecutable: claudeExecutablePath,
@@ -88,7 +86,6 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         includePartialMessages: false,
         streamingInput: "always",
         persistSession: true,
-        allowedTools,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -104,8 +101,9 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     return {
       modelId,
-      getModel: (id, _options?: GetModelOptions) => {
-        return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId });
+      getModel: (id, options?: GetModelOptions) => {
+        const allowedTools = toolsForMode(options?.agentMode ?? initialAgentMode);
+        return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });
       },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
