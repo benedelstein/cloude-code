@@ -62,7 +62,7 @@ function createPendingSession(
     todos: null,
     plan: null,
     agentSettings: null,
-    agentMode: null,
+    agentMode: "edit",
     setAgentMode: () => {},
     selectedModel: null,
     setSelectedModel: () => {},

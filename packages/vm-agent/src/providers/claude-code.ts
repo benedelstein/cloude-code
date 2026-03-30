@@ -12,6 +12,9 @@ import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupR
 
 type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
 
+const EDIT_MODE_TOOLS = ["Read", "Edit", "Write", "Bash", "Glob", "Grep"];
+const PLAN_MODE_TOOLS = ["Read", "Glob", "Grep"];
+
 type ClaudeCredentials = {
   claudeAiOauth: {
     accessToken: string;
@@ -69,9 +72,6 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     // Track session ID from Claude - updated after first message
     let agentSessionId: string | undefined = args.sessionId;
-
-    const EDIT_MODE_TOOLS = ["Read", "Edit", "Write", "Bash", "Glob", "Grep"];
-    const PLAN_MODE_TOOLS = ["Read", "Glob", "Grep"];
 
     const claudeCode = createClaudeCode({
       defaultSettings: {
