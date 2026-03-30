@@ -8,16 +8,12 @@ import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend } from "../system-prompt";
 import type { AgentSettings } from "@repo/shared";
-import type { AgentMode, AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
+import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
 
 const EDIT_MODE_TOOLS = ["Read", "Edit", "Write", "Bash", "Glob", "Grep"];
 const PLAN_MODE_TOOLS = ["Read", "Glob", "Grep"];
-
-function toolsForMode(mode: AgentMode): string[] {
-  return mode === "plan" ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
-}
 
 type ClaudeCredentials = {
   claudeAiOauth: {
@@ -62,7 +58,7 @@ function setupClaudeCredentials(emit: ProviderSetupContext["emit"]): void {
 
 export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
   async setup(context: ProviderSetupContext<ClaudeSettings>): Promise<SetupResult<ClaudeSettings["model"]>> {
-    const { emit, settings, sessionSuffix, args, spriteContext, initialAgentMode } = context;
+    const { emit, settings, sessionSuffix, args, spriteContext } = context;
 
     setupClaudeCredentials(emit);
 
@@ -89,7 +85,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: buildSystemPromptAppend(sessionSuffix, spriteContext, initialAgentMode),
+          append: buildSystemPromptAppend(sessionSuffix, spriteContext),
         },
         stderr: (data) => {
           emit({ type: "debug", message: `claude-cli stderr: ${data}` });
@@ -102,7 +98,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     return {
       modelId,
       getModel: (id, options?: GetModelOptions) => {
-        const allowedTools = toolsForMode(options?.agentMode ?? initialAgentMode);
+        const allowedTools = options?.agentMode === "plan" ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
         return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });
       },
       getStreamTextExtras: (): StreamTextExtras => ({

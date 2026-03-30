@@ -21,8 +21,6 @@ import {
   encodeAgentOutput,
 } from "@repo/shared";
 
-export type AgentMode = "edit" | "plan";
-
 export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   // eslint-disable-next-line no-unused-vars
   emit: (_output: AgentOutput) => void;
@@ -30,7 +28,6 @@ export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   sessionSuffix: string;
   args: { sessionId?: string };
   spriteContext: string;
-  initialAgentMode: AgentMode;
 }
 
 export type StreamTextExtras = {
@@ -107,7 +104,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
    * Stores provider settings for the session.
    */
   let setupResult: SetupResult<S["model"]> | null = null;
-  let agentMode: AgentMode = initialAgentMode;
+  let agentMode: "edit" | "plan" = initialAgentMode;
 
   async function processMessage(message: AgentInputMessage): Promise<void> {
     if (!setupResult) return;
@@ -163,7 +160,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
     }
 
     try {
-      setupResult = await config.setup({ emit, settings, sessionSuffix, args, spriteContext, initialAgentMode: agentMode });
+      setupResult = await config.setup({ emit, settings, sessionSuffix, args, spriteContext });
     } catch (error) {
       emit({ type: "error", error: String(error) });
       isRunning = false;
