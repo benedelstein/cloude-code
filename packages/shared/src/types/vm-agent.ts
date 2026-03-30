@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { UIMessage, UIMessageChunk } from "ai";
+import { AgentMode } from "./session";
 
 // Re-export AI SDK types
 export type { UIMessage, UIMessageChunk };
@@ -33,7 +34,7 @@ export const AgentChatInput = z.object({
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch agent mode before processing the message. */
-  agentMode: z.enum(["edit", "plan"]).optional(),
+  agentMode: AgentMode.optional(),
 });
 
 export const AgentCancelInput = z.object({

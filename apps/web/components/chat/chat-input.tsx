@@ -8,6 +8,7 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import type { useClaudeAuth } from "@/hooks/use-claude-auth";
 import { ClaudeSigninPanel } from "@/app/(app)/claude-signin-panel";
 import type {
+  AgentMode,
   ClaudeModel,
   MessageAttachmentRef,
   AttachmentDescriptor,
@@ -15,6 +16,7 @@ import type {
 } from "@repo/shared";
 import { ModelSelector } from "@/components/model-selector";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
+import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import { toast } from "sonner";
 
 type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
@@ -33,6 +35,9 @@ interface ChatInputProps {
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  agentMode?: AgentMode;
+  // eslint-disable-next-line no-unused-vars
+  onAgentModeChange?: (mode: AgentMode) => void;
   model?: ClaudeModel;
   // eslint-disable-next-line no-unused-vars
   onModelChange?: (model: ClaudeModel) => void;
@@ -49,6 +54,8 @@ export function ChatInput({
   onStop,
   disabled = false,
   isStreaming = false,
+  agentMode,
+  onAgentModeChange,
   model,
   onModelChange,
   claude,
@@ -208,6 +215,13 @@ export function ChatInput({
             onFiles={addFiles}
             disabled={disabled || isClaudePromptBlocking}
           />
+          {agentMode && onAgentModeChange && (
+            <AgentModeToggle
+              agentMode={agentMode}
+              onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
+              disabled={disabled || isClaudePromptBlocking}
+            />
+          )}
         </div>
         <div className="flex items-center gap-1">
           {model && onModelChange && (
