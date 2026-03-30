@@ -35,9 +35,9 @@ interface ChatInputProps {
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
-  agentMode: AgentMode;
+  agentMode?: AgentMode;
   // eslint-disable-next-line no-unused-vars
-  onAgentModeChange: (mode: AgentMode) => void;
+  onAgentModeChange?: (mode: AgentMode) => void;
   model?: ClaudeModel;
   // eslint-disable-next-line no-unused-vars
   onModelChange?: (model: ClaudeModel) => void;
@@ -215,11 +215,13 @@ export function ChatInput({
             onFiles={addFiles}
             disabled={disabled || isClaudePromptBlocking}
           />
-          <AgentModeToggle
-            agentMode={agentMode}
-            onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-            disabled={disabled || isClaudePromptBlocking}
-          />
+          {agentMode && onAgentModeChange && (
+            <AgentModeToggle
+              agentMode={agentMode}
+              onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
+              disabled={disabled || isClaudePromptBlocking}
+            />
+          )}
         </div>
         <div className="flex items-center gap-1">
           {model && onModelChange && (

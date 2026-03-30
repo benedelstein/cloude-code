@@ -62,7 +62,7 @@ export interface UseCloudflareAgentReturn {
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
   agentSettings: AgentSettings | null;
-  agentMode: AgentMode;
+  agentMode: AgentMode | null;
   // eslint-disable-next-line no-unused-vars
   setAgentMode: (mode: AgentMode) => void;
   selectedModel: ClaudeModel | null;
@@ -107,11 +107,12 @@ export function useCloudflareAgent({
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
-  const [agentMode, setAgentMode] = useState<AgentMode>("edit");
+  const [agentMode, setAgentMode] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
+  const serverAgentModeRef = useRef<AgentMode | null>(null);
 
   const resetPendingResponse = useCallback(() => {
     setIsResponding(false);
@@ -255,7 +256,10 @@ export function useCloudflareAgent({
       setEditorUrl(state.editorUrl);
       setClaudeAuthRequired(state.claudeAuthRequired);
       setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
-      setAgentMode(state.agentMode);
+      // Track the server-known agent mode for diff-based sending
+      serverAgentModeRef.current = state.agentMode;
+      // Initialize agent mode from server state (only if not yet set locally)
+      setAgentMode((prev) => prev ?? state.agentMode);
       // TODO: ACCOMMODATE OTHER PROVIDERS
       if (state.agentSettings.provider === "claude-code") {
         // Initialize selected model from server settings (only if not yet set locally)
@@ -307,14 +311,15 @@ export function useCloudflareAgent({
     // Start consuming the stream
     consumeStream(stream);
 
-    // Send via useAgent's connection, include model/agentMode if they differ from server settings
+    // Send via useAgent's connection, include model/agentMode only if they differ from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
+    const agentModeToSend = agentMode && agentMode !== serverAgentModeRef.current ? agentMode : undefined;
     sendToAgent({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
-      agentMode,
+      agentMode: agentModeToSend,
     });
   }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model, agentMode]);
 

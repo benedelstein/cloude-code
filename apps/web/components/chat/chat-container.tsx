@@ -247,8 +247,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onStop={stop}
                 disabled={!isReady}
                 isStreaming={isResponding}
-                agentMode={agentMode}
-                onAgentModeChange={setAgentMode}
+                agentMode={agentMode ?? undefined}
+                onAgentModeChange={agentMode ? setAgentMode : undefined}
                 model={settings?.provider === "claude-code" ? selectedModel ?? undefined : undefined}
                 onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
                 claude={claude}
