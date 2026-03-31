@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Check, Copy } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -35,7 +36,40 @@ export function SessionPlanSection({
   errorMessage,
 }: SessionPlanSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPlanCopied, setIsPlanCopied] = useState(false);
+  const [isDialogPinnedToTop, setIsDialogPinnedToTop] = useState(false);
   const minHeight = "min-h-[200px]";
+
+  const copyPlan = useCallback(async () => {
+    if (!plan?.plan || !navigator.clipboard) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(plan.plan);
+      setIsPlanCopied(true);
+      window.setTimeout(() => setIsPlanCopied(false), 1500);
+    } catch {
+      setIsPlanCopied(false);
+    }
+  }, [plan]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    const updateDialogPosition = () => {
+      setIsDialogPinnedToTop(window.innerHeight < 980);
+    };
+
+    updateDialogPosition();
+    window.addEventListener("resize", updateDialogPosition);
+
+    return () => {
+      window.removeEventListener("resize", updateDialogPosition);
+    };
+  }, [isDialogOpen]);
 
   if (!isHydrated) {
     return (
@@ -108,11 +142,27 @@ export function SessionPlanSection({
 
       {plan ? (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="h-[90vh] max-h-[900px] w-[90vw] max-w-[1100px] gap-0 overflow-hidden p-0">
-            <DialogHeader className="border-b border-border px-6 py-4 text-left">
+          <DialogContent
+            className={cn(
+              "flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1100px] flex-col gap-0 overflow-hidden p-0",
+              isDialogPinnedToTop
+                ? "top-4 translate-y-0"
+                : "top-[50%] translate-y-[-50%]",
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => void copyPlan()}
+              className="absolute right-16 top-6 -translate-y-1/2 rounded-md p-2 text-foreground-muted opacity-70 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus:outline-none focus-visible:bg-muted focus-visible:text-foreground"
+              title={isPlanCopied ? "Copied!" : "Copy plan"}
+            >
+              {isPlanCopied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
+              <span className="sr-only">{isPlanCopied ? "Plan copied" : "Copy plan"}</span>
+            </button>
+            <DialogHeader className="border-b border-border px-6 py-4 pr-24 text-left">
               <DialogTitle>Plan</DialogTitle>
             </DialogHeader>
-            <div className="overflow-y-auto px-6 py-5">
+            <div className="min-h-0 overflow-y-auto px-6 py-5">
               <PlanMarkdown plan={plan.plan} variant="dialog" />
             </div>
           </DialogContent>

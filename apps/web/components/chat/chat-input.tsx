@@ -210,7 +210,7 @@ export function ChatInput({
         />
       </div>
       <div className="flex items-center justify-end px-3 pb-2">
-        <div className="mr-auto flex items-center gap-1">
+        <div className="mr-auto flex items-center gap-2">
           <ImageAttachButton
             onFiles={addFiles}
             disabled={disabled || isClaudePromptBlocking}

@@ -21,6 +21,12 @@
   --warning: #f59e0b;
   --success: #22c55e;
   --muted: #f1f5f9;
+  --plan: #8b5cf6;
+  --plan-subtle: rgba(139, 92, 246, 0.12);
+  --plan-subtle-strong: rgba(139, 92, 246, 0.18);
+  --edit: #16a34a;
+  --edit-subtle: rgba(22, 163, 74, 0.12);
+  --edit-subtle-strong: rgba(22, 163, 74, 0.18);
 
   /* shadcn aliases */
   --popover: var(--background);
@@ -128,6 +134,12 @@ a {
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
+  --color-plan: var(--plan);
+  --color-plan-subtle: var(--plan-subtle);
+  --color-plan-subtle-strong: var(--plan-subtle-strong);
+  --color-edit: var(--edit);
+  --color-edit-subtle: var(--edit-subtle);
+  --color-edit-subtle-strong: var(--edit-subtle-strong);
 
   /* Standard shadcn colors */
   --color-popover: var(--popover);

@@ -157,12 +157,12 @@ describe("runAgentHarness", () => {
     );
 
     expect(outputs).toContainEqual({ type: "ready" });
-    expect(outputs).toContainEqual({ type: "debug", message: "Using model: gpt-5.3-codex" });
+    expect(outputs).toContainEqual({ type: "debug", message: "Using model: gpt-5.3-codex, agentMode: edit" });
     expect(outputs).toContainEqual({ type: "stream", chunk: { type: "text-delta", textDelta: "hi" } });
     expect(outputs).toContainEqual({ type: "stream", chunk: { type: "finish", finishReason: "stop" } });
 
     expect(setup).toHaveBeenCalledTimes(1);
-    expect(getModel).toHaveBeenCalledWith("gpt-5.3-codex");
+    expect(getModel).toHaveBeenCalledWith("gpt-5.3-codex", { agentMode: "edit" });
     expect(mockState.streamText).toHaveBeenCalledTimes(1);
   });
 

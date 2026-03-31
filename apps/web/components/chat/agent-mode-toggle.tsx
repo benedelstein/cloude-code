@@ -20,7 +20,11 @@ export function AgentModeToggle({ agentMode, onToggle, disabled }: AgentModeTogg
           type="button"
           disabled={disabled}
           onClick={onToggle}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+            isPlan
+              ? "bg-[var(--plan-subtle)] text-[var(--plan)] hover:bg-[var(--plan-subtle-strong)] focus-visible:bg-[var(--plan-subtle-strong)]"
+              : "bg-[var(--edit-subtle)] text-[var(--edit)] hover:bg-[var(--edit-subtle-strong)] focus-visible:bg-[var(--edit-subtle-strong)]"
+          }`}
         >
           {isPlan ? (
             <>

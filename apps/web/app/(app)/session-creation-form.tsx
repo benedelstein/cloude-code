@@ -558,7 +558,7 @@ export function SessionCreationForm() {
         />
 
           <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <ImageAttachButton
                 onFiles={addFiles}
                 disabled={isFormInteractionDisabled}
