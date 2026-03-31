@@ -216,7 +216,7 @@ export class AgentProcessManager {
       return this.ensureAgentSessionStartedPromise;
     }
 
-    this.logger.info("Agent not connected — ensuring agent session is started");
+    this.logger.info("Agent not connected — starting agent session");
     this.ensureAgentSessionStartedPromise = this.startAgentSession().finally(() => {
       this.ensureAgentSessionStartedPromise = null;
     });

@@ -195,6 +195,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       claudeAuthRequired: null,
       isResponding: false,
     });
+
+    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
   }
 
   // ============================================
@@ -286,6 +288,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       case "sessionId": {
         // Persist the agent provider's session ID so it can be resumed on reconnect
         this.logger.info(`Storing agent session ID: ${output.sessionId}`);
+        if (this.serverState.agentSessionId && this.serverState.agentSessionId !== output.sessionId) {
+          this.logger.warn(`Agent session ID mismatch: ${this.serverState.agentSessionId} !== ${output.sessionId}`);
+        }
         this.updateServerState({ agentSessionId: output.sessionId });
         break;
       }
