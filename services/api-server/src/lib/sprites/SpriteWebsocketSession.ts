@@ -388,9 +388,6 @@ export class SpriteWebsocketSession {
         const streamId = binaryPayload[0]!;
         const payload = binaryPayload.subarray(1);
         const text = this.textDecoder.decode(payload);
-        logger.debug(
-          `Received non-TTY frame stream=${this.getStreamName(streamId)} bytes=${payload.length} preview=${JSON.stringify(this.getPayloadPreview(text))}`,
-        );
 
         switch (streamId) {
           case StreamID.Stdout: // stdout

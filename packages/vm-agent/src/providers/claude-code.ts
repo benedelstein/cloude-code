@@ -7,13 +7,11 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend } from "../system-prompt";
-import type { AgentSettings } from "@repo/shared";
+import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
+import { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 
 type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
-
-const EDIT_MODE_TOOLS = ["Read", "Edit", "Write", "Bash", "Glob", "Grep"];
-const PLAN_MODE_TOOLS = ["Read", "Glob", "Grep"];
 
 type ClaudeCredentials = {
   claudeAiOauth: {
@@ -58,7 +56,7 @@ function setupClaudeCredentials(emit: ProviderSetupContext["emit"]): void {
 
 export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
   async setup(context: ProviderSetupContext<ClaudeSettings>): Promise<SetupResult<ClaudeSettings["model"]>> {
-    const { emit, settings, sessionSuffix, args, spriteContext } = context;
+    const { emit, settings, sessionSuffix, args, spriteContext, agentMode: initialAgentMode } = context;
 
     setupClaudeCredentials(emit);
 
@@ -78,7 +76,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         pathToClaudeCodeExecutable: claudeExecutablePath,
         cwd: process.cwd(),
         resume: agentSessionId,
-        permissionMode: "acceptEdits",
+        permissionMode: getPermissionMode(initialAgentMode),
         includePartialMessages: false,
         streamingInput: "always",
         persistSession: true,
@@ -97,23 +95,38 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     return {
       modelId,
-      getModel: (id, options?: GetModelOptions) => {
-        const allowedTools = options?.agentMode === "plan" ? PLAN_MODE_TOOLS : EDIT_MODE_TOOLS;
-        return claudeCode(id, { settingSources: ["local", "project", "user"], resume: agentSessionId, allowedTools });
+      getModel: (id, options: GetModelOptions) => {
+        return claudeCode(id, {
+          settingSources: ["local", "project", "user"],
+          resume: agentSessionId,
+          permissionMode: getPermissionMode(options.agentMode),
+        });
       },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
-          const stepSessionId = (step.providerMetadata?.["claude-code"] as { sessionId?: string })?.sessionId;
+          const stepSessionId = (
+            step.providerMetadata?.["claude-code"] as { sessionId?: string }
+          )?.sessionId;
           if (stepSessionId && stepSessionId !== agentSessionId) {
             agentSessionId = stepSessionId;
-            emit({ type: "debug", message: `Claude session ID: ${agentSessionId}` });
+            emit({
+              type: "debug",
+              message: `Claude session ID: ${agentSessionId}`,
+            });
             emit({ type: "sessionId", sessionId: agentSessionId });
             if (args.sessionId && agentSessionId !== args.sessionId) {
-              emit({ type: "debug", message: `Claude session ID mismatch: ${agentSessionId} !== ${args.sessionId}` });
+              emit({
+                type: "debug",
+                message: `Claude session ID mismatch: ${agentSessionId} !== ${args.sessionId}`,
+              });
             }
           }
         },
       }),
     };
   },
+};
+
+const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
+  return agentMode === "plan" ? "plan" : "bypassPermissions";
 };

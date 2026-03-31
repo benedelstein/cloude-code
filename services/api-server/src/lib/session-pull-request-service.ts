@@ -1,6 +1,11 @@
-import type { SessionInfoResponse } from "@repo/shared";
 import type { UIMessage } from "ai";
-import type { SetPullRequestRequest, UpdatePullRequestRequest } from "@/types/session-agent";
+import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
+import type {
+  HandleGetMessagesResult,
+  HandleGetSessionResult,
+  SetPullRequestRequest,
+  UpdatePullRequestRequest,
+} from "@/types/session-agent";
 import {
   fallbackPullRequestTitle,
   generatePullRequestText,
@@ -13,10 +18,7 @@ const logger = createLogger("session-pull-request-service.ts");
 const MAX_CONTEXT_MESSAGES = 12;
 const MAX_CONTEXT_CHARS = 280;
 
-interface SessionAgentFetcher {
-  // eslint-disable-next-line no-unused-vars
-  fetch(_request: Request): Promise<Response>;
-}
+type SessionAgentStub = DurableObjectStub<SessionAgentDO>;
 
 export class SessionPullRequestServiceError extends Error {
   status: number;
@@ -72,35 +74,25 @@ function buildPullRequestContextMessages(messages: UIMessage[]): string[] {
     .filter((message): message is string => Boolean(message));
 }
 
-async function getSessionInfo(sessionStub: SessionAgentFetcher): Promise<SessionInfoResponse> {
-  let sessionResponse: Response;
-  try {
-    sessionResponse = await sessionStub.fetch(new Request("http://do/"));
-  } catch (error) {
-    logger.error("Failed to fetch session info", { error });
-    throw new SessionPullRequestServiceError(
-      "Failed to reach session",
-      500,
-      { error: "Failed to reach session" },
-    );
-  }
-  if (!sessionResponse.ok) {
+async function getSessionInfo(sessionStub: SessionAgentStub): Promise<import("@repo/shared").SessionInfoResponse> {
+  const result = (await sessionStub.handleGetSession()) as HandleGetSessionResult;
+  if (!result.ok) {
     throw new SessionPullRequestServiceError(
       "Session not found",
       404,
       { error: "Session not found" },
     );
   }
-  return (await sessionResponse.json()) as SessionInfoResponse;
+  return result.value;
 }
 
-async function getSessionMessages(sessionStub: SessionAgentFetcher): Promise<UIMessage[]> {
+async function getSessionMessages(sessionStub: SessionAgentStub): Promise<UIMessage[]> {
   try {
-    const messagesResponse = await sessionStub.fetch(new Request("http://do/messages"));
-    if (!messagesResponse.ok) {
+    const result = (await sessionStub.handleGetMessages()) as HandleGetMessagesResult;
+    if (!result.ok) {
       return [];
     }
-    return (await messagesResponse.json()) as UIMessage[];
+    return result.value;
   } catch (error) {
     logger.error("Failed to fetch session messages for PR text generation:", { error });
     return [];
@@ -108,7 +100,7 @@ async function getSessionMessages(sessionStub: SessionAgentFetcher): Promise<UIM
 }
 
 export async function createPullRequestForSession(params: {
-  sessionStub: SessionAgentFetcher;
+  sessionStub: SessionAgentStub;
   github: GitHubAppService;
   anthropicApiKey: string;
 }): Promise<{
@@ -212,13 +204,7 @@ export async function createPullRequestForSession(params: {
     state: "open",
   };
   try {
-    await sessionStub.fetch(
-      new Request("http://do/pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(setPullRequestBody),
-      }),
-    );
+    await sessionStub.setPullRequest(setPullRequestBody);
   } catch (error) {
     // PR was created on GitHub but state failed to persist in the DO.
     // Log the error but still return success — the PR exists on GitHub.
@@ -233,7 +219,7 @@ export async function createPullRequestForSession(params: {
 }
 
 export async function getPullRequestStatusForSession(params: {
-  sessionStub: SessionAgentFetcher;
+  sessionStub: SessionAgentStub;
   githubService: GitHubAppService;
 }): Promise<{
   url: string;
@@ -275,13 +261,7 @@ export async function getPullRequestStatusForSession(params: {
   if (state !== session.pullRequestState) {
     const updatePullRequestBody: UpdatePullRequestRequest = { state };
     try {
-      await sessionStub.fetch(
-        new Request("http://do/pr", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatePullRequestBody),
-        }),
-      );
+      await sessionStub.updatePullRequest(updatePullRequestBody);
     } catch (error) {
       // Non-fatal: state sync failure shouldn't prevent returning PR status
       logger.error("Failed to update PR state in session:", { error });

@@ -52,15 +52,7 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
           c.env.SESSION_AGENT,
           sessionId,
         );
-        const refreshResponse = await sessionAgent.fetch(
-          new Request("http://do/claude-auth/refresh", { method: "POST" }),
-        );
-
-        if (!refreshResponse.ok) {
-          logger.error("Failed to refresh Claude auth state for session", {
-            fields: { sessionId, userId: user.id, status: refreshResponse.status },
-          });
-        }
+        await sessionAgent.refreshClaudeAuth();
       } else {
         logger.warn("Skipping Claude auth refresh for unauthorized session", {
           fields: { sessionId, userId: user.id },

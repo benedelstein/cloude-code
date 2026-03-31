@@ -1,13 +1,13 @@
 /**
  * Codex CLI provider for the agent harness.
  */
-import { createCodexAppServer } from "ai-sdk-provider-codex-cli";
+import { CodexAppServerSettings, createCodexAppServer } from "ai-sdk-provider-codex-cli";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend } from "../system-prompt";
-import type { AgentSettings } from "@repo/shared";
+import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "codex-cli" }>;
@@ -28,7 +28,7 @@ function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
 
 export const codexProvider: AgentProviderConfig<CodexSettings> = {
   async setup(context: ProviderSetupContext<CodexSettings>): Promise<SetupResult<CodexSettings["model"]>> {
-    const { emit, settings, sessionSuffix, args, spriteContext } = context;
+    const { emit, settings, sessionSuffix, args, spriteContext, agentMode: initialAgentMode } = context;
 
     setupCodexAuth(emit);
 
@@ -49,7 +49,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       defaultSettings: {
         minCodexVersion: "0.104.0",
         autoApprove: true,
-        sandboxPolicy: "workspace-write",
+        sandboxPolicy: getSandboxPolicy(initialAgentMode),
         personality: "pragmatic",
         baseInstructions: systemPromptAppend,
         codexPath,
@@ -64,9 +64,9 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     // even when the model is changed. No need to pass in a thread id. 
     return {
       modelId,
-      getModel: (id, options?: GetModelOptions) =>
+      getModel: (id, options: GetModelOptions) =>
         provider(id, {
-          sandboxPolicy: options?.agentMode === "plan" ? "read-only" : "workspace-write",
+          sandboxPolicy: getSandboxPolicy(options.agentMode),
         }),
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
@@ -86,4 +86,8 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       },
     };
   },
+};
+
+const getSandboxPolicy = (agentMode: AgentMode): CodexAppServerSettings["sandboxPolicy"] => {
+  return agentMode === "plan" ? "read-only" : "danger-full-access";
 };

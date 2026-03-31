@@ -1,29 +1,34 @@
-import { z } from "zod";
 import {
   type ArchiveSessionResponse,
   type CreateSessionRequest,
   type CreateSessionResponse,
-  EditorCloseResponse,
   type EditorCloseResponse as EditorCloseResponseType,
-  EditorOpenResponse,
   type EditorOpenResponse as EditorOpenResponseType,
   failure,
   type ListSessionsResponse,
   type PullRequestResponse,
   type PullRequestStatusResponse,
-  SessionInfoResponse,
   type SessionInfoResponse as SessionInfoResponseType,
-  SessionPlanResponse,
   type SessionPlanResponse as SessionPlanResponseType,
   type SessionWebSocketTokenResponse,
   success,
   type UpdateSessionTitleResponse,
-  UIMessageSchema,
   type DeleteSessionResponse,
   type Result,
 } from "@repo/shared";
+import type { UIMessage } from "ai";
 import { getAgentByName } from "agents";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
+import type {
+  HandleCloseEditorResult,
+  HandleDeleteSessionResult,
+  HandleGetMessagesResult,
+  HandleGetPlanResult,
+  HandleGetSessionResult,
+  HandleInitResult,
+  HandleOpenEditorResult,
+  SessionAgentRpcError,
+} from "@/types/session-agent";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { generateSessionTitle } from "@/lib/generate-session-title";
 import { GitHubAppService } from "@/lib/github";
@@ -43,14 +48,8 @@ import {
 import type { Env } from "@/types";
 
 const logger = createLogger("sessions.service.ts");
-const sessionMessagesResponseSchema = z.array(UIMessageSchema);
 
-type SessionMessagesResponse = z.infer<typeof sessionMessagesResponseSchema>;
-
-interface SessionAgentFetcher {
-  // eslint-disable-next-line no-unused-vars
-  fetch(_request: Request): Promise<Response>;
-}
+type SessionMessagesResponse = UIMessage[];
 
 type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503;
 
@@ -259,15 +258,12 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(new Request("http://do/"));
-    if (!response.ok) {
-      return failure(this.buildError({
-        status: 404,
-        message: "Session not found",
-      }));
+    const result = await authorizedSessionAgent.value.handleGetSession() as HandleGetSessionResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
-    return success(SessionInfoResponse.parse(await response.json()));
+    return success(result.value);
   }
 
   /**
@@ -386,17 +382,12 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
-      new Request("http://do/messages"),
-    );
-    if (!response.ok) {
-      return failure(this.buildError({
-        status: 500,
-        message: "Failed to get messages",
-      }));
+    const result = await authorizedSessionAgent.value.handleGetMessages() as HandleGetMessagesResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
-    return success(sessionMessagesResponseSchema.parse(await response.json()));
+    return success(result.value);
   }
 
   /**
@@ -416,23 +407,12 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
-      new Request("http://do/plan"),
-    );
-    if (response.status === 404) {
-      return failure(this.buildError({
-        status: 404,
-        message: "Plan not found",
-      }));
-    }
-    if (!response.ok) {
-      return failure(this.buildError({
-        status: 500,
-        message: "Failed to get plan",
-      }));
+    const result = await authorizedSessionAgent.value.handleGetPlan() as HandleGetPlanResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
-    return success(SessionPlanResponse.parse(await response.json()));
+    return success(result.value);
   }
 
   /**
@@ -577,14 +557,9 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
-      new Request("http://do/", { method: "DELETE" }),
-    );
-    if (!response.ok) {
-      return failure(this.buildError({
-        status: 500,
-        message: "Failed to delete session",
-      }));
+    const result = await authorizedSessionAgent.value.handleDeleteSession() as HandleDeleteSessionResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
     await this.sessionsRepository.deleteAndQueueAttachmentGc(params.sessionId);
@@ -609,19 +584,12 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
-      new Request("http://do/editor/open", { method: "POST" }),
-    );
-    if (!response.ok) {
-      const details = await response.text();
-      return failure(this.buildError({
-        status: response.status === 400 ? 400 : 500,
-        message: "Failed to open editor",
-        details,
-      }));
+    const result = await authorizedSessionAgent.value.openEditor() as HandleOpenEditorResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
-    return success(EditorOpenResponse.parse(await response.json()));
+    return success(result.value);
   }
 
   /**
@@ -642,19 +610,31 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const response = await authorizedSessionAgent.value.fetch(
-      new Request("http://do/editor/close", { method: "POST" }),
-    );
-    if (!response.ok) {
-      const details = await response.text();
-      return failure(this.buildError({
-        status: response.status === 400 ? 400 : 500,
-        message: "Failed to close editor",
-        details,
-      }));
+    const result = await authorizedSessionAgent.value.closeEditor() as HandleCloseEditorResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
 
-    return success(EditorCloseResponse.parse(await response.json()));
+    return success(result.value);
+  }
+
+  private mapAgentError(error: SessionAgentRpcError): SessionsServiceError {
+    switch (error.code) {
+      case "SESSION_NOT_INITIALIZED":
+        return this.buildError({ status: 404, message: "Session not found" });
+      case "PLAN_NOT_FOUND":
+        return this.buildError({ status: 404, message: "Plan not found" });
+      case "PULL_REQUEST_NOT_FOUND":
+        return this.buildError({ status: 404, message: "Pull request not found" });
+      case "ALREADY_INITIALIZED":
+        return this.buildError({ status: 500, message: "Session already initialized" });
+      case "EDITOR_DISABLED":
+        return this.buildError({ status: 503, message: error.message });
+      default: {
+        const _exhaustiveCheck: never = error;
+        throw new Error(`Unhandled DO RPC error: ${JSON.stringify(_exhaustiveCheck)}`);
+      }
+    }
   }
 
   private buildError(params: {
@@ -684,40 +664,28 @@ export class SessionsService {
     initialAttachmentIds: string[];
   }): Promise<void> {
     const sessionAgent = await this.getSessionAgent(params.sessionId);
-    const initResponse = await sessionAgent.fetch(
-      new Request("http://do/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: params.sessionId,
-          userId: params.userId,
-          repoFullName: params.repoFullName,
-          settings: params.settings,
-          branch: params.branch,
-          initialMessage: params.initialMessage,
-          initialAttachmentIds: params.initialAttachmentIds,
-        }),
-      }),
-    );
+    const initResult = await sessionAgent.handleInit(
+      {
+        sessionId: params.sessionId,
+        userId: params.userId,
+        repoFullName: params.repoFullName,
+        agentSettings: params.settings,
+        branch: params.branch,
+        initialMessage: params.initialMessage,
+        initialAttachmentIds: params.initialAttachmentIds,
+      },
+    ) as HandleInitResult;
 
-    if (!initResponse.ok) {
-      const responseText = await initResponse.text();
-      let responseBody: { error?: string; code?: string } | null;
-      try {
-        responseBody = JSON.parse(responseText) as { error?: string; code?: string };
-      } catch {
-        responseBody = null;
-      }
-
+    if (!initResult.ok) {
       throw new SessionInitializationError(
-        initResponse.status,
-        responseBody?.error ?? (responseText || "Failed to initialize session"),
-        responseBody?.code,
+        initResult.error.status,
+        initResult.error.message,
+        initResult.error.code,
       );
     }
   }
 
-  private async getSessionAgent(sessionId: string): Promise<SessionAgentFetcher> {
+  private async getSessionAgent(sessionId: string): Promise<DurableObjectStub<SessionAgentDO>> {
     return getAgentByName<Env, SessionAgentDO>(this.env.SESSION_AGENT, sessionId);
   }
 
@@ -725,7 +693,7 @@ export class SessionsService {
     sessionId: string;
     userId: string;
     githubAccessToken: string;
-  }): Promise<SessionsServiceResult<SessionAgentFetcher>> {
+  }): Promise<SessionsServiceResult<DurableObjectStub<SessionAgentDO>>> {
     const accessResult = await assertSessionRepoAccess({
       env: this.env,
       sessionId: params.sessionId,

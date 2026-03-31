@@ -13,6 +13,8 @@ import {
   ChatMessageEvent,
   AgentOutput,
   AgentSettings,
+  failure,
+  success,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
@@ -39,6 +41,14 @@ import type { UIMessage, UIMessageChunk } from "ai";
 // } from "./session-agent-editor";
 import { updateSessionHistoryData } from "./session-agent-history";
 import type {
+  HandleCloseEditorResult,
+  HandleDeleteSessionResult,
+  HandleGetMessagesResult,
+  HandleGetPlanResult,
+  HandleGetSessionResult,
+  HandleInitResult,
+  HandleOpenEditorResult,
+  HandleUpdatePullRequestResult,
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
@@ -302,21 +312,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
     const path = url.pathname;
 
-    // TODO: BETTER MIDDLEWARE. OR REPLACE MOST OF THESE WITH DIRECT CALLS TO THE STUB.
-    // Root path = session operations (the DO *is* the session)
-    if (path === "/" || path === "") {
-      switch (request.method) {
-        case "POST":
-          return this.handleInit(request);
-        case "GET":
-          return this.handleGetSession();
-        case "DELETE":
-          return this.handleDeleteSession();
-        default:
-          return new Response("Method not allowed", { status: 405 });
-      }
-    }
-
     // Git proxy: forward git operations to GitHub with auth
     if (path.startsWith("/git-proxy/")) {
       const accessResult = await this.assertSessionRepoAccess(); // ensure user still has access to the repo.
@@ -405,40 +400,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         }
       }
       return result.response;
-    }
-
-    // Pull request state
-    if (path === "/pr") {
-      if (request.method === "POST") {
-        return this.handleSetPullRequest(request);
-      }
-      if (request.method === "PATCH") {
-        return this.handleUpdatePullRequest(request);
-      }
-    }
-
-    // Notify the session that the user has completed Claude OAuth
-    if (path === "/claude-auth/refresh" && request.method === "POST") {
-      await this.agentProcessManager.refreshClaudeAuth();
-      return new Response(null, { status: 204 });
-    }
-
-    // Sub-resources
-    if (path === "/messages" && request.method === "GET") {
-      return this.handleGetMessages();
-    }
-    if (path === "/plan" && request.method === "GET") {
-      return this.handleGetPlan();
-    }
-
-    // Editor (VS Code) lifecycle — DISABLED: security issue (sprite URL set to public)
-    if (
-      (path === "/editor/open" || path === "/editor/close") &&
-      request.method === "POST"
-    ) {
-      return new Response("editor feature temporarily disabled", {
-        status: 503,
-      });
     }
 
     // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
@@ -788,7 +749,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // Init handler
   // ============================================
 
-  private async handleInit(request: Request): Promise<Response> {
+  async handleInit(request: InitRequest): Promise<HandleInitResult> {
     // Prevent re-initialization
     if (this.serverState.initialized) {
       this.logger.error(
@@ -797,13 +758,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           fields: { sessionId: this.serverState.sessionId },
         },
       );
-      return new Response(
-        JSON.stringify({ error: "Session already initialized" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return failure({ code: "ALREADY_INITIALIZED", message: "Session already initialized", status: 400 });
     }
 
-    const data = (await request.json()) as InitRequest;
+    const data = request;
 
     const provider = data.agentSettings?.provider ?? "claude-code";
     const maxTokens = data.agentSettings?.maxTokens ?? 8192;
@@ -868,80 +826,76 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // Provision sprite asynchronously
     this.queueEnsureReady();
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return success(undefined);
   }
 
   // ============================================
   // Session info / management handlers
   // ============================================
 
-  private handleGetSession(): Response {
+  handleGetSession(): HandleGetSessionResult {
     const sessionId = this.serverState.sessionId;
     if (!sessionId || !this.state.repoFullName) {
-      return new Response("Session not found", { status: 404 });
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
     }
 
-    return new Response(
-      JSON.stringify({
-        sessionId,
-        status: this.state.status,
-        repoFullName: this.state.repoFullName,
-        baseBranch: this.state.baseBranch ?? undefined,
-        pushedBranch: this.state.pushedBranch ?? undefined,
-        pullRequestUrl: this.state.pullRequest?.url ?? undefined,
-        pullRequestNumber: this.state.pullRequest?.number ?? undefined,
-        pullRequestState: this.state.pullRequest?.state ?? undefined,
-        editorUrl: this.state.editorUrl ?? undefined,
-      } satisfies SessionInfoResponse),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return success({
+      sessionId,
+      status: this.state.status,
+      repoFullName: this.state.repoFullName,
+      baseBranch: this.state.baseBranch ?? undefined,
+      pushedBranch: this.state.pushedBranch ?? undefined,
+      pullRequestUrl: this.state.pullRequest?.url ?? undefined,
+      pullRequestNumber: this.state.pullRequest?.number ?? undefined,
+      pullRequestState: this.state.pullRequest?.state ?? undefined,
+      editorUrl: this.state.editorUrl ?? undefined,
+    } satisfies SessionInfoResponse);
   }
 
-  private handleGetMessages(): Response {
+  handleGetMessages(): HandleGetMessagesResult {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
-      return new Response(JSON.stringify([]), {
-        headers: { "Content-Type": "application/json" },
-      });
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
     }
 
     const storedMessages = this.messageRepository.getAllBySession(sessionId);
-    return new Response(JSON.stringify(storedMessages.map((m) => m.message)), {
-      headers: { "Content-Type": "application/json" },
-    });
+    // todo: return pending too?
+    return success(storedMessages.map((m) => m.message));
   }
 
-  private handleGetPlan(): Response {
+  handleGetPlan(): HandleGetPlanResult {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
-      return new Response(JSON.stringify({ error: "Session not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
     }
 
     const latestPlan = this.latestPlanRepository.getBySession(sessionId);
     if (!latestPlan) {
-      return new Response(JSON.stringify({ error: "Plan not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return failure({ code: "PLAN_NOT_FOUND", message: "Plan not found" });
     }
 
-    return new Response(
-      JSON.stringify({
-        plan: latestPlan.plan,
-        updatedAt: latestPlan.updatedAt,
-        sourceMessageId: latestPlan.sourceMessageId,
-      } satisfies SessionPlanResponse),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return success({
+      plan: latestPlan.plan,
+      updatedAt: latestPlan.updatedAt,
+      sourceMessageId: latestPlan.sourceMessageId,
+    } satisfies SessionPlanResponse);
   }
 
-  private async handleSetPullRequest(request: Request): Promise<Response> {
-    const data: SetPullRequestRequest = await request.json();
+  // DISABLED: security issue (sprite URL set to public)
+  openEditor(): HandleOpenEditorResult {
+    return failure({ code: "EDITOR_DISABLED", message: "Editor feature is temporarily disabled" });
+  }
+
+  // DISABLED: security issue (sprite URL set to public)
+  closeEditor(): HandleCloseEditorResult {
+    return failure({ code: "EDITOR_DISABLED", message: "Editor feature is temporarily disabled" });
+  }
+
+  async refreshClaudeAuth(): Promise<void> {
+    await this.agentProcessManager.refreshClaudeAuth();
+  }
+
+  setPullRequest(data: SetPullRequestRequest): void {
     this.updatePartialState({
       pullRequest: {
         url: data.url,
@@ -949,28 +903,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         state: data.state,
       },
     });
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
   }
 
-  private async handleUpdatePullRequest(request: Request): Promise<Response> {
-    const data: UpdatePullRequestRequest = await request.json();
+  updatePullRequest(data: UpdatePullRequestRequest): HandleUpdatePullRequestResult {
     const pullRequest = this.state.pullRequest;
     if (!pullRequest) {
-      return new Response(JSON.stringify({ error: "Pull request not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
-    const newState = { ...pullRequest, state: data.state };
-    this.updatePartialState({ pullRequest: newState });
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    this.updatePartialState({ pullRequest: { ...pullRequest, state: data.state } });
+    return success(undefined);
   }
 
-  private async handleDeleteSession(): Promise<Response> {
+  async handleDeleteSession(): Promise<HandleDeleteSessionResult> {
     // TODO: CLOSE EDITOR
 
     // Clean up sprite
@@ -985,9 +929,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // Clear all storage on the DO (DO will cease to exist after this)
     await this.ctx.storage.deleteAll();
 
-    return new Response(JSON.stringify({ deleted: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return success(undefined);
   }
 
   // ============================================

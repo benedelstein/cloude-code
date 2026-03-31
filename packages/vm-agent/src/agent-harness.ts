@@ -13,6 +13,7 @@ import { createInterface } from "readline";
 import { parseArgs } from "util";
 import { readFileSync } from "fs";
 import {
+  type AgentMode,
   type AgentInput,
   type AgentInputMessage,
   type AgentOutput,
@@ -25,6 +26,7 @@ export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   // eslint-disable-next-line no-unused-vars
   emit: (_output: AgentOutput) => void;
   settings: S;
+  agentMode: AgentMode;
   sessionSuffix: string;
   args: { sessionId?: string };
   spriteContext: string;
@@ -35,16 +37,14 @@ export type StreamTextExtras = {
   onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>;
 };
 
-export type AgentMode = "edit" | "plan";
-
 export type GetModelOptions = {
-  agentMode?: AgentMode;
+  agentMode: AgentMode;
 };
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
   // eslint-disable-next-line no-unused-vars
-  getModel: (_modelId: ModelId, _options?: GetModelOptions) => LanguageModel;
+  getModel: (_modelId: ModelId, _options: GetModelOptions) => LanguageModel;
   getStreamTextExtras?: () => StreamTextExtras;
   cleanup?: () => Promise<void>;
 }
@@ -162,7 +162,14 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
     }
 
     try {
-      setupResult = await config.setup({ emit, settings, sessionSuffix, args, spriteContext });
+      setupResult = await config.setup({
+        emit,
+        settings,
+        agentMode,
+        sessionSuffix,
+        args,
+        spriteContext,
+      });
     } catch (error) {
       emit({ type: "error", error: String(error) });
       isRunning = false;

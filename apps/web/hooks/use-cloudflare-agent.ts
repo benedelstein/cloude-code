@@ -107,12 +107,17 @@ export function useCloudflareAgent({
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
-  const [agentMode, setAgentMode] = useState<AgentMode>("edit");
+  const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
   const serverAgentModeRef = useRef<AgentMode>("edit");
+  const resolvedAgentMode = agentMode ?? "edit";
+
+  const setAgentMode = useCallback((mode: AgentMode) => {
+    setAgentModeState(mode);
+  }, []);
 
   const resetPendingResponse = useCallback(() => {
     setIsResponding(false);
@@ -259,7 +264,7 @@ export function useCloudflareAgent({
       // Track the server-known agent mode for diff-based sending
       serverAgentModeRef.current = state.agentMode ?? "edit";
       // Initialize agent mode from server state (only if not yet set locally)
-      setAgentMode((prev) => prev ?? state.agentMode ?? "edit");
+      setAgentModeState((prev) => prev ?? state.agentMode ?? "edit");
       // TODO: ACCOMMODATE OTHER PROVIDERS
       if (state.agentSettings.provider === "claude-code") {
         // Initialize selected model from server settings (only if not yet set locally)
@@ -313,7 +318,7 @@ export function useCloudflareAgent({
 
     // Send via useAgent's connection, include model/agentMode only if they differ from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
-    const agentModeToSend = agentMode && agentMode !== serverAgentModeRef.current ? agentMode : undefined;
+    const agentModeToSend = resolvedAgentMode !== serverAgentModeRef.current ? resolvedAgentMode : undefined;
     sendToAgent({
       type: "chat.message",
       content,
@@ -321,7 +326,7 @@ export function useCloudflareAgent({
       model: modelToSend,
       agentMode: agentModeToSend,
     });
-  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model, agentMode]);
+  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model, resolvedAgentMode]);
 
   const stop = useCallback(() => {
     sendToAgent({ type: "operation.cancel" });
@@ -347,7 +352,7 @@ export function useCloudflareAgent({
     todos,
     plan,
     agentSettings,
-    agentMode,
+    agentMode: resolvedAgentMode,
     setAgentMode,
     selectedModel,
     setSelectedModel,
