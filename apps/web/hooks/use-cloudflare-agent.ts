@@ -162,6 +162,7 @@ export function useCloudflareAgent({
       case "sync.response": {
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
+        console.log("synced messages", synced);
         if (synced.length > 0) {
           setPendingUserMessage(null);
         }

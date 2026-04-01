@@ -19,6 +19,7 @@ import {
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
 import { MessageRepository } from "./repositories/message-repository";
+import { PendingChunkRepository } from "./repositories/pending-chunk-repository";
 import { SecretRepository } from "./repositories/secret-repository";
 import { LatestPlanRepository } from "./repositories/latest-plan-repository";
 import {
@@ -86,6 +87,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly secretRepository: SecretRepository;
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly serverStateRepository: ServerStateRepository;
+  private readonly pendingChunkRepository: PendingChunkRepository;
   private readonly agentProcessManager: AgentProcessManager;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
@@ -148,6 +150,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.secretRepository = new SecretRepository(sql);
     this.latestPlanRepository = new LatestPlanRepository(sql);
     this.serverStateRepository = new ServerStateRepository(sql);
+    this.pendingChunkRepository = new PendingChunkRepository(sql);
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
@@ -157,6 +160,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.secretRepository,
       this.latestPlanRepository,
       this.serverStateRepository,
+      this.pendingChunkRepository,
     ]);
 
     // Load secrets from SQLite into memory
@@ -166,6 +170,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Load server state from SQLite
     this.serverState = this.serverStateRepository.get();
+
+    this.recoverInterruptedMessage();
 
     this.agentProcessManager = new AgentProcessManager({
       logger: this.logger,
@@ -238,6 +244,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       case "error": {
         this.logger.error(`vm-agent error: ${output.error}`);
         this.messageAccumulator.reset();
+        this.pendingChunkRepository.clear();
         this.updatePartialState({
           isResponding: false,
           lastError: output.error,
@@ -254,6 +261,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           type: "agent.chunk",
           chunk: output.chunk,
         });
+
+        // Write chunk to SQLite WAL before processing — survives DO eviction or process kill
+        this.pendingChunkRepository.append(output.chunk as UIMessageChunk);
 
         // Accumulate chunks into UIMessage and extract derived state (todos, plan)
         const { finishedMessage, completedParts } =
@@ -274,6 +284,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
             sessionId,
             finishedMessage,
           );
+          // Flush WAL — message is now durably saved
+          this.pendingChunkRepository.clear();
           this.broadcastMessage({
             type: "agent.finish",
             message: stored.message,
@@ -300,12 +312,50 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.logger.error("Agent error", { error });
   }
 
+  /**
+   * Replays any pending chunks left in SQLite from a previous DO instance and saves
+   * the result as an aborted message. Called on init to handle forced eviction
+   * or process kills that occurred before a clean finish could be written.
+   */
+  private recoverInterruptedMessage(): void {
+    const sessionId = this.serverState.sessionId;
+    if (!sessionId) return;
+
+    const orphanedChunks = this.pendingChunkRepository.getAll();
+    if (orphanedChunks.length === 0) return;
+
+    this.logger.info("Recovering interrupted message from pending chunks on DO restart");
+    const recoveryAccumulator = new MessageAccumulator();
+    for (const chunk of orphanedChunks) {
+      recoveryAccumulator.process(chunk);
+    }
+
+    const interruptedMessage = recoveryAccumulator.forceAbort();
+    if (!interruptedMessage) {
+      this.logger.warn("No interrupted message created from pending chunks");
+      return;
+    }
+    
+    this.messageRepository.create(sessionId, interruptedMessage);
+    this.pendingChunkRepository.clear();
+  }
+
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
-    this.messageAccumulator.reset(); // TODO: persist partial state
+
+    const sessionId = this.serverState.sessionId!;
+    // If a message was in-flight when the process died, finalize and save it
+    const interruptedMessage = this.messageAccumulator.forceAbort();
+    if (interruptedMessage) {
+      this.messageRepository.create(sessionId, interruptedMessage);
+      this.logger.info("Saved interrupted message to SQLite on agent exit");
+    }
+    this.pendingChunkRepository.clear();
+
+
+    this.messageAccumulator.reset();
     this.updateServerState({ lastKnownAgentProcessId: null });
     this.updatePartialState({ isResponding: false });
-    // TODO: RESTART THE AGENT?
   }
 
   // ============================================

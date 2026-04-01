@@ -1,4 +1,6 @@
 import type { UIMessage, UIMessageChunk } from "ai";
+import type { Logger } from "@repo/shared";
+import { createLogger } from "./logger";
 
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
@@ -19,6 +21,7 @@ export interface ProcessChunkResult {
  * Used by the DO to build the final message for storage while streaming parts to clients.
  */
 export class MessageAccumulator {
+  private readonly logger: Logger = createLogger("MessageAccumulator");
   private messageId: string | undefined = undefined;
   private parts: MessageParts = [];
   private metadata: unknown = undefined;
@@ -58,6 +61,7 @@ export class MessageAccumulator {
     switch (chunk.type) {
       case "start":
         this.messageId = chunk.messageId;
+        this.logger.debug(`start chunk, messageId=${chunk.messageId}`);
         break;
 
       case "text-start":
@@ -238,6 +242,7 @@ export class MessageAccumulator {
 
       case "finish-step":
         break;
+        
 
       case "abort":
         completedParts.push(...this.finalizePendingParts());
@@ -327,6 +332,26 @@ export class MessageAccumulator {
     return this.pendingChunks.length > 0
       ? [...this.pendingChunks]
       : undefined;
+  }
+
+  /**
+   * Finalizes the in-progress message as aborted without requiring a finish chunk.
+   * Used when the agent process dies unexpectedly mid-stream.
+   * @returns the partial message, or null if no message was started.
+   */
+  forceAbort(): UIMessage | null {
+    // If no content was accumulated there is nothing worth saving
+    if (this.parts.length === 0 && !this.currentText && !this.currentReasoning && this.toolCalls.size === 0) {
+      return null;
+    }
+    // messageId is optional on the "start" chunk — fall back to a generated id
+    if (!this.messageId) {
+      this.messageId = crypto.randomUUID();
+    }
+    this.finalizePendingParts();
+    this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
+    this.finished = true;
+    return this.getMessage();
   }
 
   reset(): void {
