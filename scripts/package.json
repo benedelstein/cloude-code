@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint *.ts"
+    "lint": "eslint *.ts",
+    "dev": "cloudflared tunnel run --url http://localhost:8787 cloude-code-tunnel"
   },
   "dependencies": {
     "dotenv": "catalog:",

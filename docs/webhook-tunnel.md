@@ -27,10 +27,18 @@ Then set your GitHub App webhook URL to:
 https://<subdomain.yourdomain.com>/webhooks/github
 ```
 
-## Starting the Tunnel
+## Starting the Local Stack
+
+Use the unified local launcher to run web, API server, and tunnel together in Turbo TUI:
 
 ```bash
-cloudflared tunnel run --url http://localhost:8787 cloude-code-tunnel
+pnpm dev:local
 ```
 
-Run this alongside `pnpm dev:api` to receive webhooks locally.
+This starts:
+
+- `@repo/web#dev`
+- `@repo/api-server#dev`
+- `@repo/scripts#dev` (Cloudflare tunnel to `http://localhost:8787`)
+
+You can still run `pnpm dev:web` and `pnpm dev:api` independently when needed.
