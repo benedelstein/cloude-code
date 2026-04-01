@@ -123,7 +123,7 @@ export interface AgentProcessManagerOptions {
 
 /**
  * Manages the lifecycle of the agent process WebSocket session running on a Sprite VM.
- * Handles all agent I/O: stdout/stderr parsing, chunk streaming, and message accumulation.
+ * Handles all agent I/O: stdout/stderr parsing, chunk streaming
  */
 export class AgentProcessManager {
   /* eslint-disable no-unused-vars */
@@ -168,6 +168,10 @@ export class AgentProcessManager {
     return this.agentWebsocketSession?.isConnected ?? false;
   }
 
+  isConnecting(): boolean {
+    return this.ensureAgentSessionStartedPromise !== null;
+  }
+
   cancel(): void {
     if (this.agentWebsocketSession) {
       this.agentWebsocketSession.write(encodeAgentInput({ type: "cancel" }) + "\n");
@@ -193,7 +197,7 @@ export class AgentProcessManager {
     }
 
     // Best-effort cleanup for the agent process if the tracked pid is stale or missing.
-    commands.push(`pkill -f '/home/sprite/.cloude/agent.js' 2>/dev/null || true`);
+    commands.push(`pkill -f '${HOME_DIR}/.cloude/agent.js' 2>/dev/null || true`);
 
     try {
       await sprite.execWs(commands.join("\n"), {

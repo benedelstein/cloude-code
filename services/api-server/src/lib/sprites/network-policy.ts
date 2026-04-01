@@ -92,8 +92,10 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
   allow("npmjs.org"),
   allow("yarnpkg.com"),
   allow("registry.yarnpkg.com"),
-
+  
   // --- Package Managers: Python ---
+  allow("astral.sh"),
+  allow("www.astral.sh"),
   allow("pypi.org"),
   allow("www.pypi.org"),
   allow("files.pythonhosted.org"),

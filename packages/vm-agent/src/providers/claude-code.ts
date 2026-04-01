@@ -63,14 +63,12 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     let claudeExecutablePath: string;
     try {
       claudeExecutablePath = execSync("which claude", { encoding: "utf-8" }).trim();
-      emit({ type: "debug", message: `claude executable path: ${claudeExecutablePath}` });
     } catch (e) {
       throw new Error(`Failed to find claude executable: ${e}`, { cause: e });
     }
 
     // Track session ID from Claude - updated after first message
     let agentSessionId: string | undefined = args.sessionId;
-
     const claudeCode = createClaudeCode({
       defaultSettings: {
         pathToClaudeCodeExecutable: claudeExecutablePath,

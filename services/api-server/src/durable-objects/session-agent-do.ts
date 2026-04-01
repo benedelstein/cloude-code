@@ -221,7 +221,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     if (!this.serverState.initialized) return "initializing";
     if (!this.serverState.spriteName) return "provisioning";
     if (!this.serverState.repoCloned) return "cloning";
-    if (!this.agentProcessManager.isConnected()) return "attaching";
+    if (this.agentProcessManager.isConnecting()) return "attaching";
     return "ready";
   }
 
@@ -302,7 +302,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
-    this.messageAccumulator.reset();
+    this.messageAccumulator.reset(); // TODO: persist partial state
     this.updateServerState({ lastKnownAgentProcessId: null });
     this.updatePartialState({ isResponding: false });
     // TODO: RESTART THE AGENT?
