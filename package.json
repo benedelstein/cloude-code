@@ -15,7 +15,8 @@
     "test": "turbo test",
     "test:coverage": "turbo test:coverage",
     "test:live:session": "npx tsx scripts/test-session.ts",
-    "test:live:create-session": "npx tsx scripts/test-create-session.ts"
+    "test:live:create-session": "npx tsx scripts/test-create-session.ts",
+    "dev:local": "turbo run dev --parallel --ui=tui --filter=@repo/web --filter=@repo/api-server --filter=@repo/scripts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
