@@ -143,7 +143,6 @@ export function useCloudflareAgent({
 
       for await (const message of messageStream) {
         // updates the message as new chunks come in. 
-        console.log("streaming message", message);
         setStreamingMessage(message);
       }
     } catch (err) {

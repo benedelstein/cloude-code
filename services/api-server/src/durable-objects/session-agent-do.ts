@@ -313,13 +313,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   /**
+   * Aborts the given accumulator, persists the result, flushes the WAL, and
+   * broadcasts agent.finish to any connected clients.
+   * @returns true if a message was saved, false if the accumulator had no content.
+   */
+  private commitAbortedMessage(accumulator: MessageAccumulator): boolean {
+    const message = accumulator.forceAbort();
+    this.pendingChunkRepository.clear();
+    if (!message) return false;
+    const sessionId = this.serverState.sessionId!;
+    const stored = this.messageRepository.create(sessionId, message);
+    this.broadcastMessage({ type: "agent.finish", message: stored.message });
+    return true;
+  }
+
+  /**
    * Replays any pending chunks left in SQLite from a previous DO instance and saves
-   * the result as an aborted message. Called on init to handle forced eviction
+   * the result as an aborted message. Called on construction to handle forced eviction
    * or process kills that occurred before a clean finish could be written.
    */
   private recoverInterruptedMessage(): void {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) return;
+    if (!this.serverState.sessionId) return;
 
     const orphanedChunks = this.pendingChunkRepository.getAll();
     if (orphanedChunks.length === 0) return;
@@ -330,28 +344,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       recoveryAccumulator.process(chunk);
     }
 
-    const interruptedMessage = recoveryAccumulator.forceAbort();
-    if (!interruptedMessage) {
+    if (!this.commitAbortedMessage(recoveryAccumulator)) {
       this.logger.warn("No interrupted message created from pending chunks");
-      return;
     }
-    
-    this.messageRepository.create(sessionId, interruptedMessage);
-    this.pendingChunkRepository.clear();
   }
 
   private handleAgentExit(code: number): void {
     this.logger.info(`Agent exited with code ${code}`);
 
-    const sessionId = this.serverState.sessionId!;
-    // If a message was in-flight when the process died, finalize and save it
-    const interruptedMessage = this.messageAccumulator.forceAbort();
-    if (interruptedMessage) {
-      this.messageRepository.create(sessionId, interruptedMessage);
+    const saved = this.commitAbortedMessage(this.messageAccumulator);
+    if (saved) {
       this.logger.info("Saved interrupted message to SQLite on agent exit");
     }
-    this.pendingChunkRepository.clear();
-
 
     this.messageAccumulator.reset();
     this.updateServerState({ lastKnownAgentProcessId: null });
