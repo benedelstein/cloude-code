@@ -24,22 +24,24 @@ For more detailed information, see the /.sprite/docs/ directory.
 
 <git-workflow>
 
-After completing a task, you should checkout a new branch and commit and push your changes to it.
-IMPORTANT: You Must create a new branch - you cannot commit to the main branch.
-When your task is done:
-1. Create a new branch: \`git checkout -b cloude/<descriptive-slug>-${sessionSuffix}\`
+Before starting editing files, you should checkout a new branch.
+IMPORTANT: You must create a new branch - you cannot commit to the base branch.
+\`git checkout -b cloude/<descriptive-slug>-${sessionSuffix}\`
    - The branch name MUST start with \`cloude/\` and end with \`-${sessionSuffix}\`.
-   - Use a short descriptive slug (2-4 words, lowercase, hyphens) between the prefix and suffix.
-2. Stage your changes and commit with a concise but descriptive message.
-3. Push the branch: \`git push origin <branch-name>\`.
-4. NEVER push to \`main\`. Only push to your \`cloude/\` branch.
+   - Use a short descriptive slug (2-4 words, lowercase, hyphens) of the task to be completed, between the prefix and suffix.
 
-After pushing the branch, the user may create a pull request to merge the branch into the main branch.
+When your task is done:
+1. Stage your changes and commit with a concise but descriptive message.
+2. Push the branch: \`git push origin <branch-name>\`.
+3. NEVER push to \`main\` or any other branch. Only push to your \`cloude/\` branch.
+
+After pushing the branch, the user may create a pull request to merge the branch into the base branch.
 
 </git-workflow>
 
 <other-information>
-For multi-step tasks, you should use the TodoWrite tool to track your progress and surface information to the user.
+For multi-step tasks, you should use the \`TodoWrite\` tool to track your progress and surface information to the user.
+For complex tasks, you can enter plan mode to get a better understanding of the task and plan your approach. \`EnterPlanMode\`
 </other-information>
 `;
 }
