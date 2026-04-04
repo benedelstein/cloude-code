@@ -5,13 +5,16 @@ import { ArrowUp, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { ProviderSigninPanel } from "@/components/provider-signin-panel";
+import { ProviderModelSelector } from "@/components/provider-model-selector";
 import type {
   AgentMode,
-  ClaudeModel,
   MessageAttachmentRef,
   AttachmentDescriptor,
+  ProviderAuthRequired,
+  ProviderId,
 } from "@repo/shared";
-import { ModelSelector } from "@/components/model-selector";
+import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import { toast } from "sonner";
@@ -33,9 +36,12 @@ interface ChatInputProps {
   agentMode?: AgentMode;
   // eslint-disable-next-line no-unused-vars
   onAgentModeChange?: (mode: AgentMode) => void;
-  model?: ClaudeModel;
+  selectedProvider: ProviderId | null;
+  selectedModel: string | null;
   // eslint-disable-next-line no-unused-vars
-  onModelChange?: (model: ClaudeModel) => void;
+  onProviderModelChange?: (providerId: ProviderId, modelId: string) => void;
+  providerAuthHandles: ProviderAuthHandleUnion[];
+  providerAuthRequired: ProviderAuthRequired;
   operationErrorMessage?: string | null;
   disabledPlaceholder?: string;
 }
@@ -49,13 +55,17 @@ export function ChatInput({
   isStreaming = false,
   agentMode,
   onAgentModeChange,
-  model,
-  onModelChange,
+  selectedProvider,
+  selectedModel,
+  onProviderModelChange,
+  providerAuthHandles,
+  providerAuthRequired,
   operationErrorMessage,
   disabledPlaceholder = "Waiting for agent to be ready...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [showSigninPanel, setShowSigninPanel] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     attachments,
@@ -86,9 +96,38 @@ export function ChatInput({
     }
   }, [input]);
 
+  const signinProviderId = providerAuthRequired?.providerId ?? selectedProvider;
+  const signinHandle = signinProviderId
+    ? providerAuthHandles.find((handle) => handle.providerId === signinProviderId)
+    : undefined;
+  const isAuthBlocking = showSigninPanel && Boolean(signinProviderId && signinHandle);
+
+  // Show the auth panel automatically when the session provider requires auth.
+  useEffect(() => {
+    if (!providerAuthRequired) {
+      return;
+    }
+    setShowSigninPanel(true);
+  }, [providerAuthRequired]);
+
+  useEffect(() => {
+    if (!signinHandle) {
+      setShowSigninPanel(false);
+      return;
+    }
+
+    if (signinHandle.connected && !signinHandle.requiresReauth) {
+      setShowSigninPanel(false);
+    }
+  }, [
+    signinHandle?.connected,
+    signinHandle?.providerId,
+    signinHandle?.requiresReauth,
+  ]);
+
   const handleSubmit = async (event: React.SyntheticEvent) => {
     event.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || disabled || isStreaming)
+    if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
       return;
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
@@ -129,7 +168,7 @@ export function ChatInput({
       onSubmit={(event) => void handleSubmit(event)}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!disabled) {
+        if (!disabled && !isAuthBlocking) {
           setIsDragging(true);
         }
       }}
@@ -142,7 +181,7 @@ export function ChatInput({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        if (disabled) {
+        if (disabled || isAuthBlocking) {
           return;
         }
         addFiles(Array.from(event.dataTransfer.files));
@@ -152,6 +191,13 @@ export function ChatInput({
         <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
           <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
         </div>
+      )}
+      {showSigninPanel && signinProviderId && signinHandle && (
+        <ProviderSigninPanel
+          providerId={signinProviderId}
+          handle={signinHandle}
+          isExiting={false}
+        />
       )}
       <ChatAttachmentPreviews
         attachments={attachments}
@@ -172,8 +218,12 @@ export function ChatInput({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? disabledPlaceholder : "Send a message..."}
-          disabled={disabled}
+          placeholder={
+            disabled || isAuthBlocking
+              ? disabledPlaceholder
+              : "Send a message..."
+          }
+          disabled={disabled || isAuthBlocking}
           rows={1}
           className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -182,22 +232,26 @@ export function ChatInput({
         <div className="mr-auto flex items-center gap-2">
           <ImageAttachButton
             onFiles={addFiles}
-            disabled={disabled}
+            disabled={disabled || isAuthBlocking}
           />
           {agentMode && onAgentModeChange && (
             <AgentModeToggle
               agentMode={agentMode}
               onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-              disabled={disabled}
+              disabled={disabled || isAuthBlocking}
             />
           )}
         </div>
         <div className="flex items-center gap-1">
-          {model && onModelChange && (
-            <ModelSelector
-              selectedModel={model}
-              onSelect={onModelChange}
-              disabled={disabled}
+          {selectedProvider && selectedModel && onProviderModelChange && (
+            <ProviderModelSelector
+              selectedProvider={selectedProvider}
+              selectedModel={selectedModel}
+              providerAuthHandles={providerAuthHandles}
+              onSelect={onProviderModelChange}
+              onConnect={() => setShowSigninPanel(true)}
+              allowedProviderIds={[selectedProvider]}
+              disabled={disabled || isAuthBlocking}
             />
           )}
         {isStreaming ? (
@@ -218,7 +272,7 @@ export function ChatInput({
             <TooltipTrigger asChild>
               <button
                 type="submit"
-                disabled={disabled || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
+                disabled={disabled || isAuthBlocking || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ArrowUp className="h-3.5 w-3.5" />

@@ -10,6 +10,7 @@ import {
 } from "@/components/layout/app-right-sidebar-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
+import { useProviderAuth } from "@/hooks/use-provider-auth";
 import {
   updateSessionTitle as updateSessionTitleRequest,
   uploadAttachments,
@@ -24,6 +25,7 @@ import { BranchBar } from "./branch-bar";
 import { SessionActionsButton } from "./editor-button";
 import { InputFrame } from "./input-frame";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { ProviderId } from "@repo/shared";
 
 interface ChatContainerProps {
   sessionId: string;
@@ -44,11 +46,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pendingUserMessage,
     pushedBranch,
     pullRequestState,
-    agentSettings: settings,
     selectedModel,
     setSelectedModel,
+    selectedProvider,
+    setSelectedProvider,
     agentMode,
     setAgentMode,
+    providerAuthRequired,
     sendMessage,
     stop,
   } = useSession();
@@ -56,6 +60,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const isMobile = useIsMobile();
 
   const { user } = useAuth();
+  const providerAuth = useProviderAuth({ sessionId });
   const { updateTitle } = useSessionList();
   const sessionTitle = useSessionTitle(sessionId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -121,6 +126,14 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     } finally {
       setIsSavingTitle(false);
     }
+  };
+
+  const handleProviderModelChange = (providerId: ProviderId, modelId: string) => {
+    if (selectedProvider !== providerId) {
+      return;
+    }
+    setSelectedProvider(providerId);
+    setSelectedModel(modelId);
   };
 
   return (
@@ -246,8 +259,11 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 isStreaming={isResponding}
                 agentMode={agentMode}
                 onAgentModeChange={setAgentMode}
-                model={settings?.provider === "claude-code" ? selectedModel ?? undefined : undefined}
-                onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
+                selectedProvider={selectedProvider}
+                selectedModel={selectedModel}
+                onProviderModelChange={handleProviderModelChange}
+                providerAuthHandles={providerAuth.handles}
+                providerAuthRequired={providerAuthRequired}
                 operationErrorMessage={operationError?.message ?? null}
                 disabledPlaceholder={sessionErrorMessage ?? undefined}
               />

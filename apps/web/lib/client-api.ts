@@ -31,6 +31,7 @@ import type {
   AgentSettingsInput,
   AgentMode,
   UploadAttachmentResponse,
+  ModelsResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -247,6 +248,11 @@ export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {
 
 export async function disconnectOpenAI(): Promise<OpenAIDisconnectResponse> {
   return apiFetch("/auth/openai/disconnect", { method: "POST" });
+}
+
+// Models
+export async function getModels(): Promise<ModelsResponse> {
+  return apiFetch("/models");
 }
 
 // Claude OAuth

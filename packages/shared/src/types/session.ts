@@ -21,6 +21,12 @@ export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export type PullRequestState = "open" | "merged" | "closed";
 
+/** Generic provider auth state for the frontend. */
+export type ProviderAuthRequired = {
+  providerId: ProviderId;
+  state: "auth_required" | "reauth_required";
+} | null;
+
 export const SessionAccessBlockReason = z.enum([
   "INSTALLATION_DELETED",
   "INSTALLATION_SUSPENDED",

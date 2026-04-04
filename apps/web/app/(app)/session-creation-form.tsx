@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
-import { useClaudeAuth } from "@/hooks/use-claude-auth";
+import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import { ClaudeSigninPanel } from "./claude-signin-panel";
-import type { Branch, ListReposResponse, ListBranchesResponse } from "@repo/shared";
+import { ProviderSigninPanel } from "@/components/provider-signin-panel";
+import { ProviderModelSelector } from "@/components/provider-model-selector";
+import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
+import { PROVIDERS } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
@@ -38,11 +40,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
-import { ModelSelector } from "@/components/model-selector";
 import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
-import type { AgentMode, ClaudeModel } from "@repo/shared";
+import type { AgentMode } from "@repo/shared";
 import Link from "next/link";
 
 function RepoSelector({
@@ -241,13 +242,22 @@ export function SessionCreationForm() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<ClaudeModel>("opus");
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId>("claude-code");
+  const [selectedModel, setSelectedModel] = useState<string>(
+    PROVIDERS["claude-code"].defaultModel,
+  );
   const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
-  const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
-  const [isClaudeSigninPanelExiting, setIsClaudeSigninPanelExiting] = useState(false);
+  const [showSigninPanel, setShowSigninPanel] = useState(false);
+  const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
+  const [isSigninPanelExiting, setIsSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const claude = useClaudeAuth();
+
+  const providerAuth = useProviderAuth();
+  const activeHandle = providerAuth.getHandle(selectedProvider);
+  const isProviderConnected = activeHandle.connected;
+  const isProviderLoading = activeHandle.loading;
+
   const {
     attachments,
     addFiles,
@@ -269,7 +279,7 @@ export function SessionCreationForm() {
   });
   const isFormInteractionDisabled = submitting;
   const isSubmitDisabled = (
-    !claude.connected ||
+    !isProviderConnected ||
     !selectedRepo ||
     hasPendingOrFailedUploads ||
     (!message.trim() && attachments.length === 0) ||
@@ -284,7 +294,7 @@ export function SessionCreationForm() {
 
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 280)}px`;
-  }, [message, claude.connected, claude.loading]);
+  }, [message, isProviderConnected, isProviderLoading]);
 
   // Fetch branches when selected repo changes
   useEffect(() => {
@@ -393,30 +403,43 @@ export function SessionCreationForm() {
     })();
   }, []);
 
+  // Show/hide signin panel based on selected provider connection state
   useEffect(() => {
-    if (claude.loading) return;
+    if (isProviderLoading) return;
 
-    if (!claude.connected) {
-      setShowClaudeSigninPanel(true);
-      setIsClaudeSigninPanelExiting(false);
+    if (!isProviderConnected) {
+      setSigninPanelProvider(selectedProvider);
+      setShowSigninPanel(true);
+      setIsSigninPanelExiting(false);
       return;
     }
 
-    if (!showClaudeSigninPanel) return;
+    if (!showSigninPanel) return;
 
-    setIsClaudeSigninPanelExiting(true);
+    setIsSigninPanelExiting(true);
     const timeout = window.setTimeout(() => {
-      setShowClaudeSigninPanel(false);
-      setIsClaudeSigninPanelExiting(false);
+      setShowSigninPanel(false);
+      setIsSigninPanelExiting(false);
     }, 220);
 
     return () => window.clearTimeout(timeout);
-  }, [claude.connected, claude.loading, showClaudeSigninPanel]);
+  }, [isProviderConnected, isProviderLoading, showSigninPanel, selectedProvider]);
+
+  const handleProviderModelSelect = (providerId: ProviderId, modelId: string) => {
+    setSelectedProvider(providerId);
+    setSelectedModel(modelId);
+  };
+
+  const handleProviderConnect = (providerId: ProviderId) => {
+    setSigninPanelProvider(providerId);
+    setShowSigninPanel(true);
+    setIsSigninPanelExiting(false);
+  };
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const trimmedMessage = message.trim();
-    if (!claude.connected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
+    if (!isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
@@ -432,7 +455,7 @@ export function SessionCreationForm() {
         selectedRepo.id,
         trimmedMessage || undefined,
         branchToUse,
-        { provider: "claude-code", model: selectedModel },
+        { provider: selectedProvider, model: selectedModel },
         selectedAgentMode,
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
       );
@@ -535,10 +558,11 @@ export function SessionCreationForm() {
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
             </div>
           )}
-          {showClaudeSigninPanel && !claude.loading && (
-            <ClaudeSigninPanel
-              claude={claude}
-              isExiting={isClaudeSigninPanelExiting}
+          {showSigninPanel && !isProviderLoading && (
+            <ProviderSigninPanel
+              providerId={signinPanelProvider}
+              handle={providerAuth.getHandle(signinPanelProvider)}
+              isExiting={isSigninPanelExiting}
             />
           )}
           <ChatAttachmentPreviews
@@ -551,10 +575,10 @@ export function SessionCreationForm() {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Describe what you want to do..."
-            rows={claude.connected || claude.loading ? 4 : 2}
+            rows={isProviderConnected || isProviderLoading ? 4 : 2}
             disabled={isFormInteractionDisabled}
           className={`w-full overflow-y-auto px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
-            claude.connected || claude.loading ? "pt-4" : "pt-2"
+            isProviderConnected || isProviderLoading ? "pt-4" : "pt-2"
           }`}
         />
 
@@ -572,13 +596,14 @@ export function SessionCreationForm() {
             </div>
 
             <div className="flex items-center gap-3">
-              {claude.connected && (
-                <ModelSelector
-                  selectedModel={selectedModel}
-                  onSelect={setSelectedModel}
-                  disabled={isFormInteractionDisabled}
-                />
-              )}
+              <ProviderModelSelector
+                selectedProvider={selectedProvider}
+                selectedModel={selectedModel}
+                providerAuthHandles={providerAuth.handles}
+                onSelect={handleProviderModelSelect}
+                onConnect={handleProviderConnect}
+                disabled={isFormInteractionDisabled}
+              />
               <button
                 type="submit"
                 disabled={isSubmitDisabled}
@@ -601,14 +626,14 @@ export function SessionCreationForm() {
       </InputFrame>
 
       <div className="relative flex items-center justify-center mt-3">
-        {isDevelopment && claude.connected && (
+        {isDevelopment && isProviderConnected && (
           <div className="absolute left-0">
             <button
               type="button"
-              onClick={claude.disconnect}
+              onClick={activeHandle.disconnect}
               className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
-              Debug: Disconnect Claude
+              Debug: Disconnect {PROVIDERS[selectedProvider].displayName}
             </button>
           </div>
         )}
