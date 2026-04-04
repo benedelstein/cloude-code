@@ -20,9 +20,10 @@ import type {
   EditorCloseResponse,
   GitHubAuthUrlResponse,
   LogoutResponse,
-  OpenAIAuthUrlResponse,
   OpenAIStatusResponse,
   OpenAIDisconnectResponse,
+  OpenAIDeviceStartResponse,
+  OpenAIDeviceAttemptResponse,
   ClaudeAuthUrlResponse,
   ClaudeTokenResponse,
   ClaudeStatusResponse,
@@ -224,9 +225,15 @@ export async function logoutUser(): Promise<LogoutResponse> {
   return apiFetch("/auth/logout", { method: "POST" });
 }
 
-// OpenAI OAuth
-export async function getOpenAIAuthUrl(): Promise<OpenAIAuthUrlResponse> {
-  return apiFetch("/auth/openai");
+// OpenAI Codex device auth
+export async function startOpenAIDeviceAuthorization(): Promise<OpenAIDeviceStartResponse> {
+  return apiFetch("/auth/openai/device/start", { method: "POST" });
+}
+
+export async function pollOpenAIDeviceAuthorization(
+  attemptId: string,
+): Promise<OpenAIDeviceAttemptResponse> {
+  return apiFetch(`/auth/openai/device/attempts/${attemptId}`);
 }
 
 export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {

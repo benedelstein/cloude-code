@@ -24,7 +24,7 @@ switch (settings.provider) {
   case "claude-code":
     runAgentHarness(claudeCodeProvider, settings);
     break;
-  case "codex-cli":
+  case "openai-codex":
     runAgentHarness(codexProvider, settings);
     break;
 }

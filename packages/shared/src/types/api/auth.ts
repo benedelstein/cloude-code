@@ -53,6 +53,7 @@ export type OpenAITokenResponse = z.infer<typeof OpenAITokenResponse>;
 
 export const OpenAIStatusResponse = z.object({
   connected: z.boolean(),
+  requiresReauth: z.boolean(),
 });
 export type OpenAIStatusResponse = z.infer<typeof OpenAIStatusResponse>;
 
@@ -60,6 +61,20 @@ export const OpenAIDisconnectResponse = z.object({
   ok: z.literal(true),
 });
 export type OpenAIDisconnectResponse = z.infer<typeof OpenAIDisconnectResponse>;
+
+export const OpenAIDeviceStartResponse = z.object({
+  attemptId: z.string(),
+  verificationUrl: z.string(),
+  userCode: z.string(),
+  intervalSeconds: z.number(),
+  expiresAt: z.string(),
+});
+export type OpenAIDeviceStartResponse = z.infer<typeof OpenAIDeviceStartResponse>;
+
+export const OpenAIDeviceAttemptResponse = z.object({
+  status: z.enum(["pending", "completed", "expired"]),
+});
+export type OpenAIDeviceAttemptResponse = z.infer<typeof OpenAIDeviceAttemptResponse>;
 
 // Claude OAuth types
 export const ClaudeAuthUrlResponse = z.object({

@@ -56,7 +56,7 @@ let outputChunksForPolling: string[] = [];
 
 describe("runAgentHarness", () => {
   const settings: AgentSettings = {
-    provider: "codex-cli",
+    provider: "openai-codex",
     model: "gpt-5.3-codex",
     maxTokens: 8192,
   };

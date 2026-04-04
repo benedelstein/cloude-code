@@ -14,14 +14,14 @@ const { values } = parseArgs({
 });
 
 const provider = String(values.provider ?? "claude-code");
-const defaultModel = provider === "codex-cli" ? "gpt-5.3-codex" : "opus";
+const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : "opus";
 const model = String(values.model ?? defaultModel);
 const sessionId = values.sessionId ? String(values.sessionId) : undefined;
 const rotateModels = values.rotateModels === true;
 
 const MODEL_ROTATION: Record<string, string[]> = {
   "claude-code": ["opus", "sonnet", "haiku"],
-  "codex-cli": ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.2"],
+  "openai-codex": ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.2"],
 };
 let rotationIndex = 0;
 const settings = JSON.stringify({ provider, model });

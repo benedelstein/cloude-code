@@ -10,10 +10,9 @@ import {
   decodeAgentOutput,
   encodeAgentInput,
   ClaudeAuthState,
-  ClaudeModel,
-  CodexModel,
   ChatMessageEvent,
   failure,
+  getProviderModelDefinition,
   success,
 } from "@repo/shared";
 import {
@@ -25,15 +24,16 @@ import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import type { ServerState } from "@/durable-objects/repositories/server-state-repository";
 import {
-  ensureClaudeCredentialsReadyForSend,
   getClaudeAuthRequiredFromClaudeError,
-  getClaudeCredentialsSnapshot,
   refreshClaudeAuthRequired,
-  type ClaudeCredentialsSyncError,
 } from "../session-agent-claude-auth";
 import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
+import { OpenAICodexAuthError } from "@/lib/openai-codex-auth-service";
 import { AttachmentRecord } from "@/types/attachments";
-import { decrypt } from "@/lib/utils/crypto";
+import {
+  getProviderCredentialAdapter,
+  type AuthCredentialSnapshot,
+} from "@/lib/providers/runtime-registry";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,
@@ -47,6 +47,11 @@ type AgentProcessMessageResult = {
   attachments: AttachmentRecord[];
 };
 
+type SyncedCredentialState = {
+  providerId: AgentSettings["provider"];
+  syncToken: string;
+};
+
 export type AgentProcessError =
   | DomainError<typeof AGENT_PROCESS_DOMAIN, "AGENT_SESSION_UNAVAILABLE", { retryable: true }>
   | DomainError<
@@ -55,7 +60,7 @@ export type AgentProcessError =
       { claudeAuthRequired: ClaudeAuthState }
     >
   | DomainError<typeof AGENT_PROCESS_DOMAIN, "CLAUDE_CREDENTIALS_SYNC_FAILED", { claudeAuthRequired: null }>
-  | DomainError<typeof AGENT_PROCESS_DOMAIN, "OPENAI_AUTH_REQUIRED", { provider: "codex-cli" }>
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "OPENAI_AUTH_REQUIRED", { provider: "openai-codex" }>
   | DomainError<
       typeof AGENT_PROCESS_DOMAIN,
       "INVALID_MODEL",
@@ -144,8 +149,7 @@ export class AgentProcessManager {
   /** Shares a single in-flight session start across concurrent callers. */
   private ensureAgentSessionStartedPromise: Promise<void> | null = null;
   private agentStdoutBuffer = "";
-  /** Last Claude credential fingerprint pushed to the sprite VM instance */
-  private lastClaudeCredentialFingerprint: string | null = null;
+  private lastSyncedCredentialState: SyncedCredentialState | null = null;
   /* eslint-enable no-unused-vars */
 
   constructor(options: AgentProcessManagerOptions) {
@@ -344,21 +348,9 @@ export class AgentProcessManager {
       return failure(agentProcessError("AGENT_SESSION_UNAVAILABLE", "Agent session not available.", { retryable: true }));
     }
 
-    switch (this.getClientState().agentSettings.provider) {
-      case "claude-code": {
-        const credentialsResult = await this.ensureClaudeCredentialsReadyForSend();
-        if (!credentialsResult.ok) {
-          return failure(credentialsResult.error);
-        }
-        break;
-      }
-      case "codex-cli": {
-        const credentialsResult = await this.ensureCodexCredentialsReadyForSend();
-        if (!credentialsResult.ok) {
-          return failure(credentialsResult.error);
-        }
-        break;
-      }
+    const credentialsResult = await this.ensureProviderCredentialsReadyForSend();
+    if (!credentialsResult.ok) {
+      return failure(credentialsResult.error);
     }
 
     const sessionId = this.getServerState().sessionId;
@@ -473,46 +465,24 @@ export class AgentProcessManager {
    * Fetches and validates credentials for the configured provider.
    */
   private async buildAgentEnvVars(): Promise<Record<string, string>> {
-    const provider = this.getClientState().agentSettings.provider;
-    const envVars: Record<string, string> = {};
-
-    switch (provider) {
-      case "codex-cli": {
-        const codexAuthJson = await this.buildCodexAuthJson();
-        envVars.CODEX_AUTH_JSON = codexAuthJson;
-        break;
-      }
-      case "claude-code": {
-        try {
-          const claudeCredentials = await getClaudeCredentialsSnapshot({
-            env: this.env,
-            logger: this.logger,
-            userId: this.getServerState().userId ?? "",
-          });
-          if (!claudeCredentials) {
-            throw new Error(
-              "Claude authentication required. Connect Claude before creating a session.",
-            );
-          }
-          this.setClaudeAuthRequired(null);
-          envVars.CLAUDE_CREDENTIALS_JSON = claudeCredentials.credentialsJson;
-          this.lastClaudeCredentialFingerprint = claudeCredentials.fingerprint;
-        } catch (error) {
-          if (error instanceof ClaudeOAuthError) {
-            this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
-          }
-          throw error;
-        }
-        break;
-      }
+    const providerId = this.getClientState().agentSettings.provider;
+    const userId = this.getServerState().userId;
+    if (!userId) {
+      throw new Error("Missing user id");
     }
 
-    return envVars;
+    const snapshot = await this.getCredentialSnapshotForProvider(providerId, userId);
+    if (!snapshot.connectionStatus.connected) {
+      throw new Error("Provider authentication required");
+    }
+
+    await this.syncAuthCredentialsToSprite(providerId, snapshot);
+    return snapshot.envVars;
   }
 
   private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
     if (claudeAuthRequired) {
-      this.lastClaudeCredentialFingerprint = null;
+      this.lastSyncedCredentialState = null;
     }
     this.updateClaudeAuthRequired(claudeAuthRequired);
   }
@@ -530,144 +500,147 @@ export class AgentProcessManager {
     this.setClaudeAuthRequired(result.claudeAuthRequired);
   }
 
-   /**
-   * Build Codex auth.json content from per-user OpenAI OAuth tokens stored in D1.
-   * Throws when no per-user OpenAI OAuth tokens are available.
-   */
-  private async buildCodexAuthJson(): Promise<string> {
-    const userId = this.getServerState().userId;
-    if (!userId) {
-      throw new Error("OPENAI_AUTH_REQUIRED");
-    }
-
-    const row = await this.env.DB.prepare(
-      `SELECT encrypted_access_token, encrypted_refresh_token, encrypted_id_token, token_expires_at
-       FROM openai_tokens WHERE user_id = ?`,
-    )
-      .bind(userId)
-      .first<{
-        encrypted_access_token: string;
-        encrypted_refresh_token: string | null;
-        encrypted_id_token: string | null;
-        token_expires_at: string | null;
-      }>();
-
-    if (!row) {
-      throw new Error("OPENAI_AUTH_REQUIRED");
-    }
-
-    const accessToken = await decrypt(row.encrypted_access_token, this.env.TOKEN_ENCRYPTION_KEY);
-    const refreshToken = row.encrypted_refresh_token
-      ? await decrypt(row.encrypted_refresh_token, this.env.TOKEN_ENCRYPTION_KEY)
-      : undefined;
-    const idToken = row.encrypted_id_token
-      ? await decrypt(row.encrypted_id_token, this.env.TOKEN_ENCRYPTION_KEY)
-      : undefined;
-
-    const authJson: Record<string, unknown> = {
-      auth_mode: "chatgpt",
-      tokens: {
-        access_token: accessToken,
-        ...(refreshToken && { refresh_token: refreshToken }),
-        ...(idToken && { id_token: idToken }),
-        ...(row.token_expires_at && { expires_at: row.token_expires_at }),
-      },
-    };
-
-    return JSON.stringify(authJson);
-  }
-
   /** Validates the model against the current provider and updates DO state. 
    * Returns the validated model, or throws an error if invalid.
    * */
   private validateAndApplyModelSwitch(model: string): Result<string | undefined, AgentProcessError> {
     const currentProvider = this.getClientState().agentSettings.provider;
 
-    let validatedModel: string;
-    if (currentProvider === "claude-code") {
-      const result = ClaudeModel.safeParse(model);
-      if (!result.success) {
-        this.logger.warn("Invalid Claude model in model switch", { fields: { model } });
-        return failure(agentProcessError("INVALID_MODEL", "Invalid Claude model in model switch.", {
-          provider: currentProvider,
-          model,
-        }));
-      }
-      validatedModel = result.data;
-    } else if (currentProvider === "codex-cli") {
-      const result = CodexModel.safeParse(model);
-      if (!result.success) {
-        this.logger.warn("Invalid Codex model in model switch", { fields: { model } });
-        return failure(agentProcessError("INVALID_MODEL", "Invalid Codex model in model switch.", {
-          provider: currentProvider,
-          model,
-        }));
-      }
-      validatedModel = result.data;
-    } else {
-      this.logger.warn("Unknown provider in model switch", { fields: { provider: currentProvider } });
-      throw new Error("Unknown provider in model switch");
+    const validatedModel = getProviderModelDefinition(currentProvider, model);
+    if (!validatedModel) {
+      this.logger.warn("Invalid provider model in model switch", {
+        fields: { provider: currentProvider, model },
+      });
+      return failure(agentProcessError("INVALID_MODEL", "Invalid model in model switch.", {
+        provider: currentProvider,
+        model,
+      }));
     }
 
     // Update state (auto-syncs to clients via Agents SDK)
-    const newSettings = { ...this.getClientState().agentSettings, model: validatedModel } as AgentSettings;
+    const newSettings = {
+      ...this.getClientState().agentSettings,
+      model: validatedModel.id,
+    } as AgentSettings;
     this.updateAgentSettings(newSettings);
 
     this.logger.info("Model updated", {
-      fields: { provider: currentProvider, model: validatedModel },
+      fields: { provider: currentProvider, model: validatedModel.id },
     });
-    return success(validatedModel);
+    return success(validatedModel.id);
   }
 
-  private mapClaudeCredentialError(
-    error: ClaudeCredentialsSyncError,
+  private async ensureProviderCredentialsReadyForSend(): Promise<Result<void, AgentProcessError>> {
+    const providerId = this.getClientState().agentSettings.provider;
+    const userId = this.getServerState().userId;
+    if (!userId) {
+      return providerId === "claude-code"
+        ? failure(agentProcessError("CLAUDE_AUTH_REQUIRED", "Claude authentication required.", {
+            claudeAuthRequired: "auth_required",
+          }))
+        : failure(agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
+            provider: "openai-codex",
+          }));
+    }
+
+    try {
+      const snapshot = await this.getCredentialSnapshotForProvider(providerId, userId);
+      await this.syncAuthCredentialsToSprite(providerId, snapshot);
+      return success(undefined);
+    } catch (error) {
+      return failure(this.mapProviderCredentialError(providerId, error));
+    }
+  }
+
+  private async getCredentialSnapshotForProvider(
+    providerId: AgentSettings["provider"],
+    userId: string,
+  ): Promise<AuthCredentialSnapshot> {
+    try {
+      const providerCredentialAdapter = getProviderCredentialAdapter(providerId, this.env, this.logger);
+      const snapshot = await providerCredentialAdapter.getCredentialSnapshot(userId);
+      if (providerId === "claude-code") {
+        this.setClaudeAuthRequired(null);
+      }
+      return snapshot;
+    } catch (error) {
+      if (providerId === "claude-code" && error instanceof ClaudeOAuthError) {
+        this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
+      }
+      throw error;
+    }
+  }
+
+  private async syncAuthCredentialsToSprite(
+    providerId: AgentSettings["provider"],
+    snapshot: AuthCredentialSnapshot,
+  ): Promise<void> {
+    const spriteName = this.getServerState().spriteName;
+    if (!spriteName) {
+      throw new Error("Sprite not available");
+    }
+
+    const snapshotMatches =
+      this.lastSyncedCredentialState?.providerId === providerId &&
+      this.lastSyncedCredentialState?.syncToken === snapshot.syncToken;
+
+    if (snapshotMatches) {
+      return;
+    }
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    for (const file of snapshot.files) {
+      await sprite.writeFile(
+        file.path,
+        file.contents,
+        file.mode ? { mode: file.mode } : undefined,
+      );
+    }
+
+    this.lastSyncedCredentialState = {
+      providerId,
+      syncToken: snapshot.syncToken,
+    };
+  }
+
+  private mapProviderCredentialError(
+    providerId: AgentSettings["provider"],
+    error: unknown,
   ): AgentProcessError {
-    if (error.code === "CLAUDE_AUTH_REQUIRED" || error.code === "CLAUDE_REAUTH_REQUIRED") {
-      return agentProcessError(error.code, error.message, {
-        claudeAuthRequired: error.claudeAuthRequired,
+    if (providerId === "claude-code") {
+      if (error instanceof ClaudeOAuthError) {
+        const claudeAuthRequired = getClaudeAuthRequiredFromClaudeError(error);
+        if (error.code === "CLAUDE_AUTH_REQUIRED" || error.code === "CLAUDE_REAUTH_REQUIRED") {
+          return agentProcessError(error.code, error.message, {
+            claudeAuthRequired: claudeAuthRequired ?? "auth_required",
+          });
+        }
+
+        return agentProcessError("CLAUDE_CREDENTIALS_SYNC_FAILED", error.message, {
+          claudeAuthRequired: null,
+        });
+      }
+
+      return agentProcessError(
+        "CLAUDE_CREDENTIALS_SYNC_FAILED",
+        "Failed to sync Claude credentials for this session.",
+        { claudeAuthRequired: null },
+      );
+    }
+
+    if (error instanceof OpenAICodexAuthError) {
+      return agentProcessError("OPENAI_AUTH_REQUIRED", error.message, {
+        provider: "openai-codex",
       });
     }
 
-    return agentProcessError("CLAUDE_CREDENTIALS_SYNC_FAILED", error.message, {
-      claudeAuthRequired: null,
+    return agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
+      provider: "openai-codex",
     });
-  }
-
-  private async ensureClaudeCredentialsReadyForSend(): Promise<Result<void, AgentProcessError>> {
-    if (this.getClientState().agentSettings.provider !== "claude-code") {
-      return success(undefined);
-    }
-    const serverState = this.getServerState();
-    const result = await ensureClaudeCredentialsReadyForSend({
-      env: this.env,
-      logger: this.logger,
-      userId: serverState.userId,
-      spriteName: serverState.spriteName,
-      lastFingerprint: this.lastClaudeCredentialFingerprint,
-    });
-
-    if (!result.ok) {
-      this.setClaudeAuthRequired(result.error.claudeAuthRequired);
-      return failure(this.mapClaudeCredentialError(result.error));
-    }
-
-    this.setClaudeAuthRequired(result.value.claudeAuthRequired);
-    this.lastClaudeCredentialFingerprint = result.value.nextFingerprint;
-    return success(undefined);
-  }
-
-  private async ensureCodexCredentialsReadyForSend(): Promise<Result<void, AgentProcessError>> {
-    if (this.getClientState().agentSettings.provider !== "codex-cli") {
-      return success(undefined);
-    }
-    try {
-      // TODO: INJECT THE CREDENTIALS IF THEY CHANGED.
-      await this.buildCodexAuthJson();
-      return success(undefined);
-    } catch {
-      return failure(agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
-        provider: "codex-cli",
-      }));
-    }
   }
 }

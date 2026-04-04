@@ -1,5 +1,9 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import {
+  ProviderId,
+  AgentSettings,
+} from "./providers/index";
 
 export const SessionStatus = z.enum([
   /** DO initialized but handleInit not yet called */
@@ -90,46 +94,10 @@ export const AgentMode = z.enum(["edit", "plan"]);
 export type AgentMode = z.infer<typeof AgentMode>;
 
 /** Supported agent providers */
-export const AgentProvider = z.enum(["claude-code", "codex-cli"]);
+export const AgentProvider = ProviderId;
 export type AgentProvider = z.infer<typeof AgentProvider>;
-export const CodexModel = z.enum([
-  "gpt-5.3-codex",
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-max",
-  "gpt-5.2",
-]);
-export type CodexModel = z.infer<typeof CodexModel>;
 
-export const ClaudeModel = z.enum([
-  "opus",
-  "sonnet",
-  "haiku",
-]);
-export type ClaudeModel = z.infer<typeof ClaudeModel>;
-
-export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
-  opus: "Claude Opus 4.6",
-  sonnet: "Claude Sonnet 4.6",
-  haiku: "Claude Haiku 4.5",
-};
-
-export const AgentSettingsCodex = z.object({
-  provider: z.literal("codex-cli"),
-  model: CodexModel.default("gpt-5.3-codex"),
-  maxTokens: z.number().default(8192),
-});
-
-export const AgentSettingsClaude = z.object({
-  provider: z.literal("claude-code"),
-  model: ClaudeModel.default("opus"),
-  maxTokens: z.number().default(8192),
-});
-
-export const AgentSettings = z.discriminatedUnion("provider", [
-  AgentSettingsCodex,
-  AgentSettingsClaude,
-]);
-export type AgentSettings = z.infer<typeof AgentSettings>;
+export { AgentSettings };
 
 /** Partial settings for create/init requests; validated and merged in the DO */
 export const AgentSettingsInput = z.object({
@@ -140,6 +108,7 @@ export const AgentSettingsInput = z.object({
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 
+/** A chat message */
 export const Message = z.object({
   id: z.uuid(),
   sessionId: z.uuid(),
@@ -150,17 +119,6 @@ export const Message = z.object({
   createdAt: z.iso.datetime(),
 });
 export type Message = z.infer<typeof Message>;
-
-export const ToolCall = z.object({
-  id: z.uuid(),
-  messageId: z.uuid(),
-  toolName: z.string(),
-  input: z.record(z.string(), z.unknown()),
-  output: z.string().nullable(),
-  status: z.enum(["pending", "running", "completed", "failed"]),
-  createdAt: z.iso.datetime(),
-});
-export type ToolCall = z.infer<typeof ToolCall>;
 
 /** Summary of a session for the session list */
 export const SessionSummary = z.object({
@@ -174,12 +132,3 @@ export const SessionSummary = z.object({
   lastMessageAt: z.string().nullable(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
-
-export const SpriteCheckpoint = z.object({
-  id: z.string(),
-  sessionId: z.uuid(),
-  version: z.number(),
-  gitCommitSha: z.string().nullable(),
-  createdAt: z.iso.datetime(),
-});
-export type SpriteCheckpoint = z.infer<typeof SpriteCheckpoint>;

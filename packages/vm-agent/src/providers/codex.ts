@@ -10,7 +10,7 @@ import { buildSystemPromptAppend } from "../system-prompt";
 import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
-type CodexSettings = Extract<AgentSettings, { provider: "codex-cli" }>;
+type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
   const authJson = process.env.CODEX_AUTH_JSON;
