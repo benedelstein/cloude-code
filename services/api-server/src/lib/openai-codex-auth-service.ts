@@ -1,6 +1,7 @@
 import type { AuthMethod, Logger } from "@repo/shared";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 import { createLogger } from "@/lib/logger";
+import { readStoredCredentialJson } from "@/lib/crypto";
 import { ProviderAuthAttemptRepository } from "@/repositories/provider-auth-attempt-repository";
 import { UserProviderCredentialRepository } from "@/repositories/user-provider-credential-repository";
 import type { Env } from "@/types";
@@ -132,17 +133,6 @@ function needsRefresh(expiresAt: string | null): boolean {
   }
 
   return (expiresAtMs - Date.now()) <= OPENAI_REFRESH_BUFFER_MS;
-}
-
-async function readStoredCredentialJson(
-  rawStoredValue: string,
-  encryptionKey: string,
-): Promise<string> {
-  try {
-    return await decrypt(rawStoredValue, encryptionKey);
-  } catch {
-    return rawStoredValue;
-  }
 }
 
 function parseStoredCredentials(decryptedJson: string): OpenAICodexCredentialPayload {

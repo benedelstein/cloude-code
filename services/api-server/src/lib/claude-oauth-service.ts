@@ -1,6 +1,7 @@
 import type { Logger } from "@repo/shared";
-import { decrypt, encrypt } from "@/lib/utils/crypto";
+import { encrypt } from "@/lib/utils/crypto";
 import { createLogger } from "@/lib/logger";
+import { readStoredCredentialJson } from "@/lib/crypto";
 import {
   UserProviderCredentialRepository,
   type UserProviderCredentialRecord,
@@ -173,17 +174,6 @@ function parseTokenPayload(
 
 function needsRefresh(expiresAt: number): boolean {
   return !Number.isFinite(expiresAt) || (expiresAt - Date.now()) <= CLAUDE_REFRESH_BUFFER_MS;
-}
-
-async function readStoredCredentialJson(
-  rawStoredValue: string,
-  encryptionKey: string,
-): Promise<string> {
-  try {
-    return await decrypt(rawStoredValue, encryptionKey);
-  } catch {
-    return rawStoredValue;
-  }
 }
 
 export class ClaudeOAuthService {

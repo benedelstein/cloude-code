@@ -47,40 +47,58 @@ export function useOpenAIAuth() {
   const connect = useCallback(async () => {
     clearPollTimeout();
     setError(null);
+    setAttemptId(null);
+    setVerificationUrl(null);
+    setUserCode(null);
 
-    const result = await startOpenAIDeviceAuthorization();
-    setAttemptId(result.attemptId);
-    setVerificationUrl(result.verificationUrl);
-    setUserCode(result.userCode);
+    try {
+      const result = await startOpenAIDeviceAuthorization();
+      setAttemptId(result.attemptId);
+      setVerificationUrl(result.verificationUrl);
+      setUserCode(result.userCode);
 
-    window.open(result.verificationUrl, "_blank", "noopener,noreferrer");
+      window.open(result.verificationUrl, "_blank", "noopener,noreferrer");
 
-    const poll = async () => {
-      try {
-        const status = await pollOpenAIDeviceAuthorization(result.attemptId);
-        if (status.status === "completed") {
-          setConnected(true);
-          setRequiresReauth(false);
+      const poll = async () => {
+        try {
+          const status = await pollOpenAIDeviceAuthorization(result.attemptId);
+          if (status.status === "completed") {
+            setConnected(true);
+            setRequiresReauth(false);
+            setAttemptId(null);
+            setVerificationUrl(null);
+            setUserCode(null);
+            return;
+          }
+          if (status.status === "expired") {
+            setAttemptId(null);
+            setVerificationUrl(null);
+            setUserCode(null);
+            setError("OpenAI device authorization expired.");
+            return;
+          }
+          pollTimeoutRef.current = window.setTimeout(poll, result.intervalSeconds * 1000);
+        } catch (pollError) {
           setAttemptId(null);
-          return;
+          setError(
+            pollError instanceof Error
+              ? pollError.message
+              : "Failed to poll OpenAI device authorization.",
+          );
         }
-        if (status.status === "expired") {
-          setAttemptId(null);
-          setError("OpenAI device authorization expired.");
-          return;
-        }
-        pollTimeoutRef.current = window.setTimeout(poll, result.intervalSeconds * 1000);
-      } catch (pollError) {
-        setAttemptId(null);
-        setError(
-          pollError instanceof Error
-            ? pollError.message
-            : "Failed to poll OpenAI device authorization.",
-        );
-      }
-    };
+      };
 
-    pollTimeoutRef.current = window.setTimeout(poll, result.intervalSeconds * 1000);
+      pollTimeoutRef.current = window.setTimeout(poll, result.intervalSeconds * 1000);
+    } catch (connectError) {
+      setAttemptId(null);
+      setVerificationUrl(null);
+      setUserCode(null);
+      setError(
+        connectError instanceof Error
+          ? connectError.message
+          : "Failed to start OpenAI device authorization.",
+      );
+    }
   }, [clearPollTimeout]);
 
   const disconnect = useCallback(async () => {
