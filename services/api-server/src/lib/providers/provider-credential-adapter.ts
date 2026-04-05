@@ -5,13 +5,10 @@ import { OpenAICodexAuthService } from "./openai-codex-auth-service";
 import { Env } from "@/types";
 import { ProviderConnectionStatus } from "./connection-status";
 
-/** Normalized auth state returned by any provider on credential failure. */
-export type ProviderAuthState = "auth_required" | "reauth_required";
-
 const PROVIDER_CREDENTIAL_DOMAIN = "provider_credential";
 
 export type ProviderCredentialError =
-  | DomainError<typeof PROVIDER_CREDENTIAL_DOMAIN, "AUTH_REQUIRED" | "REAUTH_REQUIRED", { provider: ProviderId; authState: ProviderAuthState }>
+  | DomainError<typeof PROVIDER_CREDENTIAL_DOMAIN, "AUTH_REQUIRED" | "REAUTH_REQUIRED", { provider: ProviderId }>
   | DomainError<typeof PROVIDER_CREDENTIAL_DOMAIN, "SYNC_FAILED", { provider: ProviderId }>;
 
 function providerCredentialError<Code extends ProviderCredentialError["code"]>(
@@ -51,9 +48,9 @@ class ClaudeProviderCredentialAdapter implements ProviderCredentialAdapter {
     if (!result.ok) {
       switch (result.error.code) {
         case "CLAUDE_AUTH_REQUIRED":
-          return failure(providerCredentialError("AUTH_REQUIRED", "claude-code", result.error.message, { authState: "auth_required" }));
+          return failure(providerCredentialError("AUTH_REQUIRED", "claude-code", result.error.message));
         case "CLAUDE_REAUTH_REQUIRED":
-          return failure(providerCredentialError("REAUTH_REQUIRED", "claude-code", result.error.message, { authState: "reauth_required" }));
+          return failure(providerCredentialError("REAUTH_REQUIRED", "claude-code", result.error.message));
         default:
           return failure(providerCredentialError("SYNC_FAILED", "claude-code", result.error.message));
       }
@@ -80,9 +77,9 @@ class OpenAICodexProviderCredentialAdapter implements ProviderCredentialAdapter 
     if (!result.ok) {
       switch (result.error.code) {
         case "OPENAI_CODEX_AUTH_REQUIRED":
-          return failure(providerCredentialError("AUTH_REQUIRED", "openai-codex", result.error.message, { authState: "auth_required" }));
+          return failure(providerCredentialError("AUTH_REQUIRED", "openai-codex", result.error.message));
         case "OPENAI_CODEX_REAUTH_REQUIRED":
-          return failure(providerCredentialError("REAUTH_REQUIRED", "openai-codex", result.error.message, { authState: "reauth_required" }));
+          return failure(providerCredentialError("REAUTH_REQUIRED", "openai-codex", result.error.message));
         default:
           return failure(providerCredentialError("SYNC_FAILED", "openai-codex", result.error.message));
       }

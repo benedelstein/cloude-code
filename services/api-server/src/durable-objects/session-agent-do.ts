@@ -116,7 +116,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     plan: null,
     pendingUserMessage: null,
     editorUrl: null,
-    claudeAuthRequired: null,
     isResponding: false,
     lastError: null,
     baseBranch: null,
@@ -185,11 +184,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       onAgentExit: (code) => this.handleAgentExit(code),
       updateLastKnownAgentProcessId: (processId) =>
         this.updateServerState({ lastKnownAgentProcessId: processId }),
-      onProviderAuthStateChanged: (provider, authState) => {
-        if (provider === "claude-code") {
-          this.updatePartialState({ claudeAuthRequired: authState });
-        }
-      },
       updateAgentSettings: (settings) =>
         this.updatePartialState({ agentSettings: settings }),
       updateAgentMode: (agentMode) =>
@@ -203,7 +197,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
-      claudeAuthRequired: null,
       isResponding: false,
     });
 
@@ -881,7 +874,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
             attachmentIds: pendingAttachmentIds,
           }
         : null,
-      claudeAuthRequired: null,
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
       status: this.synthesizeStatus(),
@@ -953,10 +945,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // DISABLED: security issue (sprite URL set to public)
   closeEditor(): HandleCloseEditorResult {
     return failure({ code: "EDITOR_DISABLED", message: "Editor feature is temporarily disabled" });
-  }
-
-  async refreshClaudeAuth(): Promise<void> {
-    await this.agentProcessManager.refreshClaudeAuth();
   }
 
   setPullRequest(data: SetPullRequestRequest): void {

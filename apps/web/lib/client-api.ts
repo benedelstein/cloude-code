@@ -255,12 +255,11 @@ export async function getClaudeAuthUrl(): Promise<ClaudeAuthUrlResponse> {
 export async function exchangeClaudeCode(
   code: string,
   state: string,
-  sessionId?: string,
 ): Promise<ClaudeTokenResponse> {
   return apiFetch("/auth/claude/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, state, sessionId }),
+    body: JSON.stringify({ code, state }),
   });
 }
 

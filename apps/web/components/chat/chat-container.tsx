@@ -10,7 +10,6 @@ import {
 } from "@/components/layout/app-right-sidebar-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
-import { useClaudeAuth } from "@/hooks/use-claude-auth";
 import {
   updateSessionTitle as updateSessionTitleRequest,
   uploadAttachments,
@@ -50,7 +49,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     setSelectedModel,
     agentMode,
     setAgentMode,
-    claudeAuthRequired: claudeAuthState,
     sendMessage,
     stop,
   } = useSession();
@@ -58,7 +56,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const isMobile = useIsMobile();
 
   const { user } = useAuth();
-  const claude = useClaudeAuth({ sessionId });
   const { updateTitle } = useSessionList();
   const sessionTitle = useSessionTitle(sessionId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -251,8 +248,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onAgentModeChange={setAgentMode}
                 model={settings?.provider === "claude-code" ? selectedModel ?? undefined : undefined}
                 onModelChange={settings?.provider === "claude-code" ? setSelectedModel : undefined}
-                claude={claude}
-                claudeAuthRequired={claudeAuthState}
                 operationErrorMessage={operationError?.message ?? null}
                 disabledPlaceholder={sessionErrorMessage ?? undefined}
               />

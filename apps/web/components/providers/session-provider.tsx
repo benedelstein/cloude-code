@@ -67,7 +67,6 @@ function createPendingSession(
     selectedModel: null,
     setSelectedModel: () => {},
     editorUrl: null,
-    claudeAuthRequired: null,
     sendMessage: () => {},
     stop: () => {},
   };

@@ -20,7 +20,6 @@ export const SessionStatus = z.enum([
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export type PullRequestState = "open" | "merged" | "closed";
-export type ClaudeAuthState = "auth_required" | "reauth_required";
 
 export const SessionAccessBlockReason = z.enum([
   "INSTALLATION_DELETED",
@@ -79,8 +78,6 @@ export type ClientState = {
   } | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
-  /** Claude auth issue blocking the current session — reset on restart */
-  claudeAuthRequired: ClaudeAuthState | null;
   /** Agent operational mode: "edit" (default, full access) or "plan" (read-only exploration) */
   agentMode: AgentMode;
   /** Whether the agent is currently responding to a message — reset on restart */

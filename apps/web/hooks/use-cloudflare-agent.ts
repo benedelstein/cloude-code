@@ -10,7 +10,6 @@ import type {
   AgentMode,
   ClientState,
   ClaudeModel,
-  ClaudeAuthState,
   MessageAttachmentRef,
   AttachmentDescriptor,
   OperationErrorEvent,
@@ -69,7 +68,6 @@ export interface UseCloudflareAgentReturn {
   // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: ClaudeModel) => void;
   editorUrl: string | null;
-  claudeAuthRequired: ClaudeAuthState | null;
   // eslint-disable-next-line no-unused-vars
   sendMessage: (message: {
     content?: string;
@@ -105,7 +103,6 @@ export function useCloudflareAgent({
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
-  const [claudeAuthRequired, setClaudeAuthRequired] = useState<ClaudeAuthState | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
   const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
@@ -260,7 +257,6 @@ export function useCloudflareAgent({
       setPlan(prev => JSON.stringify(prev) === JSON.stringify(state.plan) ? prev : state.plan);
       setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
       setEditorUrl(state.editorUrl);
-      setClaudeAuthRequired(state.claudeAuthRequired);
       setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
       // Track the server-known agent mode for diff-based sending
       serverAgentModeRef.current = state.agentMode ?? "edit";
@@ -358,7 +354,6 @@ export function useCloudflareAgent({
     selectedModel,
     setSelectedModel,
     editorUrl,
-    claudeAuthRequired,
     sendMessage,
     stop,
   };

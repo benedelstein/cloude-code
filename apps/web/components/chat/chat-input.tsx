@@ -5,21 +5,16 @@ import { ArrowUp, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import type { useClaudeAuth } from "@/hooks/use-claude-auth";
-import { ClaudeSigninPanel } from "@/app/(app)/claude-signin-panel";
 import type {
   AgentMode,
   ClaudeModel,
   MessageAttachmentRef,
   AttachmentDescriptor,
-  ClaudeAuthState,
 } from "@repo/shared";
 import { ModelSelector } from "@/components/model-selector";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import { toast } from "sonner";
-
-type ClaudeAuth = ReturnType<typeof useClaudeAuth>;
 
 interface ChatInputProps {
   // eslint-disable-next-line no-unused-vars
@@ -41,8 +36,6 @@ interface ChatInputProps {
   model?: ClaudeModel;
   // eslint-disable-next-line no-unused-vars
   onModelChange?: (model: ClaudeModel) => void;
-  claude: ClaudeAuth;
-  claudeAuthRequired: ClaudeAuthState | null;
   operationErrorMessage?: string | null;
   disabledPlaceholder?: string;
 }
@@ -58,14 +51,11 @@ export function ChatInput({
   onAgentModeChange,
   model,
   onModelChange,
-  claude,
-  claudeAuthRequired: claudeAuthState,
   operationErrorMessage,
   disabledPlaceholder = "Waiting for agent to be ready...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [showClaudeSigninPanel, setShowClaudeSigninPanel] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     attachments,
@@ -86,8 +76,6 @@ export function ChatInput({
     },
     deleteAttachment: onDeleteAttachment,
   });
-  const isClaudeLoading = claude.loading;
-  const isClaudePromptBlocking = showClaudeSigninPanel;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -98,18 +86,9 @@ export function ChatInput({
     }
   }, [input]);
 
-  useEffect(() => {
-    if (!claudeAuthState) {
-      setShowClaudeSigninPanel(false);
-      return;
-    }
-
-    setShowClaudeSigninPanel(true);
-  }, [claudeAuthState]);
-
   const handleSubmit = async (event: React.SyntheticEvent) => {
     event.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || disabled || isClaudePromptBlocking || isStreaming)
+    if ((!input.trim() && attachments.length === 0) || disabled || isStreaming)
       return;
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
@@ -150,7 +129,7 @@ export function ChatInput({
       onSubmit={(event) => void handleSubmit(event)}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!disabled && !isClaudePromptBlocking) {
+        if (!disabled) {
           setIsDragging(true);
         }
       }}
@@ -163,7 +142,7 @@ export function ChatInput({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        if (disabled || isClaudePromptBlocking) {
+        if (disabled) {
           return;
         }
         addFiles(Array.from(event.dataTransfer.files));
@@ -173,12 +152,6 @@ export function ChatInput({
         <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
           <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
         </div>
-      )}
-      {showClaudeSigninPanel && !isClaudeLoading && (
-        <ClaudeSigninPanel
-          claude={claude}
-          isExiting={false}
-        />
       )}
       <ChatAttachmentPreviews
         attachments={attachments}
@@ -199,12 +172,8 @@ export function ChatInput({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            disabled || isClaudePromptBlocking
-              ? disabledPlaceholder
-              : "Send a message..."
-          }
-          disabled={disabled || isClaudePromptBlocking}
+          placeholder={disabled ? disabledPlaceholder : "Send a message..."}
+          disabled={disabled}
           rows={1}
           className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -213,13 +182,13 @@ export function ChatInput({
         <div className="mr-auto flex items-center gap-2">
           <ImageAttachButton
             onFiles={addFiles}
-            disabled={disabled || isClaudePromptBlocking}
+            disabled={disabled}
           />
           {agentMode && onAgentModeChange && (
             <AgentModeToggle
               agentMode={agentMode}
               onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-              disabled={disabled || isClaudePromptBlocking}
+              disabled={disabled}
             />
           )}
         </div>
@@ -228,7 +197,7 @@ export function ChatInput({
             <ModelSelector
               selectedModel={model}
               onSelect={onModelChange}
-              disabled={disabled || isClaudePromptBlocking}
+              disabled={disabled}
             />
           )}
         {isStreaming ? (
@@ -249,7 +218,7 @@ export function ChatInput({
             <TooltipTrigger asChild>
               <button
                 type="submit"
-                disabled={disabled || isClaudePromptBlocking || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
+                disabled={disabled || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ArrowUp className="h-3.5 w-3.5" />

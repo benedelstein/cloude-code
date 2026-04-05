@@ -22,12 +22,10 @@ import {
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import type { ServerState } from "@/durable-objects/repositories/server-state-repository";
-import { refreshClaudeAuthRequired } from "../session-agent-claude-auth";
 import { AttachmentRecord } from "@/types/attachments";
 import {
   getProviderCredentialAdapter,
   type AuthCredentialSnapshot,
-  type ProviderAuthState,
   type ProviderCredentialError,
 } from "@/lib/providers/provider-credential-adapter";
 import {
@@ -110,8 +108,6 @@ export interface AgentProcessManagerOptions {
   getClientState: () => ClientState;
   getServerState: () => ServerState;
   updateLastKnownAgentProcessId: (processId: number | null) => void;
-  /* eslint-disable-next-line no-unused-vars */
-  onProviderAuthStateChanged: (provider: AgentSettings["provider"], authState: ProviderAuthState | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
   updateAgentMode: (agentMode: AgentMode) => void;
   updateIsResponding: (isResponding: boolean) => void;
@@ -133,7 +129,6 @@ export class AgentProcessManager {
   private readonly getClientState: () => ClientState;
   private readonly getServerState: () => ServerState;
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
-  private readonly onProviderAuthStateChanged: (provider: AgentSettings["provider"], authState: ProviderAuthState | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
   private readonly updateAgentMode: (agentMode: AgentMode) => void;
   private readonly updateIsResponding: (isResponding: boolean) => void;
@@ -154,7 +149,6 @@ export class AgentProcessManager {
     this.onAgentExit = options.onAgentExit;
     this.getClientState = options.getClientState;
     this.getServerState = options.getServerState;
-    this.onProviderAuthStateChanged = options.onProviderAuthStateChanged;
     this.updateAgentSettings = options.updateAgentSettings;
     this.updateAgentMode = options.updateAgentMode;
     this.updateIsResponding = options.updateIsResponding;
@@ -472,26 +466,6 @@ export class AgentProcessManager {
     return snapshotResult.value.envVars;
   }
 
-  private setProviderAuthState(provider: AgentSettings["provider"], authState: ProviderAuthState | null): void {
-    if (authState) {
-      this.lastSyncedCredentialState = null;
-    }
-    this.onProviderAuthStateChanged(provider, authState);
-  }
-
-  /**
-   * Re-checks Claude OAuth status and clears claudeAuthRequired if the user has since connected.
-   * Called when the user completes Claude OAuth while a session is active.
-   */
-  async refreshClaudeAuth(): Promise<void> {
-    const result = await refreshClaudeAuthRequired({
-      env: this.env,
-      logger: this.logger,
-      userId: this.getServerState().userId,
-    });
-    this.setProviderAuthState("claude-code", result.claudeAuthRequired);
-  }
-
   /** Validates the model against the current provider and updates DO state. 
    * Returns the validated model, or throws an error if invalid.
    * */
@@ -542,10 +516,7 @@ export class AgentProcessManager {
     userId: string,
   ): Promise<Result<AuthCredentialSnapshot, ProviderCredentialError>> {
     const adapter = getProviderCredentialAdapter(providerId, this.env, this.logger);
-    const result = await adapter.getCredentialSnapshot(userId);
-    const authState = !result.ok && result.error.code !== "SYNC_FAILED" ? result.error.authState : null;
-    this.setProviderAuthState(providerId, authState);
-    return result;
+    return adapter.getCredentialSnapshot(userId);
   }
 
   private async syncAuthCredentialsToSprite(
