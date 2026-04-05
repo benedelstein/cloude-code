@@ -29,6 +29,7 @@ import type {
   ClaudeStatusResponse,
   ClaudeDisconnectResponse,
   AgentSettingsInput,
+  AgentMode,
   UploadAttachmentResponse,
 } from "@repo/shared";
 
@@ -116,6 +117,7 @@ export async function createSession(
   initialMessage?: string,
   branch?: string,
   settings?: AgentSettingsInput,
+  agentMode?: AgentMode,
   attachmentIds?: string[],
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
@@ -126,6 +128,7 @@ export async function createSession(
       initialMessage,
       branch,
       settings,
+      agentMode,
       attachmentIds,
     }),
   });

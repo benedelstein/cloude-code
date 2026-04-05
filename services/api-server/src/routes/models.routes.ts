@@ -4,7 +4,7 @@ import {
   authMiddleware,
 } from "@/middleware/auth.middleware";
 import { createLogger } from "@/lib/logger";
-import { getProviderAuthService } from "@/lib/providers/runtime-registry";
+import { getProviderAuthService } from "@/lib/providers/provider-auth-service";
 import type { Env } from "@/types";
 import {
   ModelsResponse,

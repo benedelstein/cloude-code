@@ -9,7 +9,6 @@ import {
   type Result,
   decodeAgentOutput,
   encodeAgentInput,
-  ClaudeAuthState,
   ChatMessageEvent,
   failure,
   getProviderModelDefinition,
@@ -23,17 +22,14 @@ import {
 import type { Env } from "@/types";
 import VM_AGENT_SCRIPT from "@repo/vm-agent/dist/vm-agent.bundle.js";
 import type { ServerState } from "@/durable-objects/repositories/server-state-repository";
-import {
-  getClaudeAuthRequiredFromClaudeError,
-  refreshClaudeAuthRequired,
-} from "../session-agent-claude-auth";
-import { ClaudeOAuthError } from "@/lib/claude-oauth-service";
-import { OpenAICodexAuthError } from "@/lib/openai-codex-auth-service";
+import { refreshClaudeAuthRequired } from "../session-agent-claude-auth";
 import { AttachmentRecord } from "@/types/attachments";
 import {
   getProviderCredentialAdapter,
   type AuthCredentialSnapshot,
-} from "@/lib/providers/runtime-registry";
+  type ProviderAuthState,
+  type ProviderCredentialError,
+} from "@/lib/providers/provider-credential-adapter";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,
@@ -54,13 +50,8 @@ type SyncedCredentialState = {
 
 export type AgentProcessError =
   | DomainError<typeof AGENT_PROCESS_DOMAIN, "AGENT_SESSION_UNAVAILABLE", { retryable: true }>
-  | DomainError<
-      typeof AGENT_PROCESS_DOMAIN,
-      "CLAUDE_AUTH_REQUIRED" | "CLAUDE_REAUTH_REQUIRED",
-      { claudeAuthRequired: ClaudeAuthState }
-    >
-  | DomainError<typeof AGENT_PROCESS_DOMAIN, "CLAUDE_CREDENTIALS_SYNC_FAILED", { claudeAuthRequired: null }>
-  | DomainError<typeof AGENT_PROCESS_DOMAIN, "OPENAI_AUTH_REQUIRED", { provider: "openai-codex" }>
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "PROVIDER_AUTH_REQUIRED", { provider: AgentSettings["provider"] }>
+  | DomainError<typeof AGENT_PROCESS_DOMAIN, "PROVIDER_CREDENTIALS_SYNC_FAILED", { provider: AgentSettings["provider"] }>
   | DomainError<
       typeof AGENT_PROCESS_DOMAIN,
       "INVALID_MODEL",
@@ -119,7 +110,8 @@ export interface AgentProcessManagerOptions {
   getClientState: () => ClientState;
   getServerState: () => ServerState;
   updateLastKnownAgentProcessId: (processId: number | null) => void;
-  updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
+  /* eslint-disable-next-line no-unused-vars */
+  onProviderAuthStateChanged: (provider: AgentSettings["provider"], authState: ProviderAuthState | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
   updateAgentMode: (agentMode: AgentMode) => void;
   updateIsResponding: (isResponding: boolean) => void;
@@ -141,7 +133,7 @@ export class AgentProcessManager {
   private readonly getClientState: () => ClientState;
   private readonly getServerState: () => ServerState;
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
-  private readonly updateClaudeAuthRequired: (claudeAuthRequired: ClaudeAuthState | null) => void;
+  private readonly onProviderAuthStateChanged: (provider: AgentSettings["provider"], authState: ProviderAuthState | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
   private readonly updateAgentMode: (agentMode: AgentMode) => void;
   private readonly updateIsResponding: (isResponding: boolean) => void;
@@ -162,7 +154,7 @@ export class AgentProcessManager {
     this.onAgentExit = options.onAgentExit;
     this.getClientState = options.getClientState;
     this.getServerState = options.getServerState;
-    this.updateClaudeAuthRequired = options.updateClaudeAuthRequired;
+    this.onProviderAuthStateChanged = options.onProviderAuthStateChanged;
     this.updateAgentSettings = options.updateAgentSettings;
     this.updateAgentMode = options.updateAgentMode;
     this.updateIsResponding = options.updateIsResponding;
@@ -471,20 +463,20 @@ export class AgentProcessManager {
       throw new Error("Missing user id");
     }
 
-    const snapshot = await this.getCredentialSnapshotForProvider(providerId, userId);
-    if (!snapshot.connectionStatus.connected) {
-      throw new Error("Provider authentication required");
+    const snapshotResult = await this.getCredentialSnapshotForProvider(providerId, userId);
+    if (!snapshotResult.ok) {
+      throw new Error(snapshotResult.error.message);
     }
 
-    await this.syncAuthCredentialsToSprite(providerId, snapshot);
-    return snapshot.envVars;
+    await this.syncAuthCredentialsToSprite(providerId, snapshotResult.value);
+    return snapshotResult.value.envVars;
   }
 
-  private setClaudeAuthRequired(claudeAuthRequired: ClaudeAuthState | null): void {
-    if (claudeAuthRequired) {
+  private setProviderAuthState(provider: AgentSettings["provider"], authState: ProviderAuthState | null): void {
+    if (authState) {
       this.lastSyncedCredentialState = null;
     }
-    this.updateClaudeAuthRequired(claudeAuthRequired);
+    this.onProviderAuthStateChanged(provider, authState);
   }
 
   /**
@@ -497,7 +489,7 @@ export class AgentProcessManager {
       logger: this.logger,
       userId: this.getServerState().userId,
     });
-    this.setClaudeAuthRequired(result.claudeAuthRequired);
+    this.setProviderAuthState("claude-code", result.claudeAuthRequired);
   }
 
   /** Validates the model against the current provider and updates DO state. 
@@ -534,41 +526,26 @@ export class AgentProcessManager {
     const providerId = this.getClientState().agentSettings.provider;
     const userId = this.getServerState().userId;
     if (!userId) {
-      return providerId === "claude-code"
-        ? failure(agentProcessError("CLAUDE_AUTH_REQUIRED", "Claude authentication required.", {
-            claudeAuthRequired: "auth_required",
-          }))
-        : failure(agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
-            provider: "openai-codex",
-          }));
+      return failure(agentProcessError("PROVIDER_AUTH_REQUIRED", "Authentication required.", { provider: providerId }));
     }
 
-    try {
-      const snapshot = await this.getCredentialSnapshotForProvider(providerId, userId);
-      await this.syncAuthCredentialsToSprite(providerId, snapshot);
-      return success(undefined);
-    } catch (error) {
-      return failure(this.mapProviderCredentialError(providerId, error));
+    const snapshotResult = await this.getCredentialSnapshotForProvider(providerId, userId);
+    if (!snapshotResult.ok) {
+      return failure(this.mapProviderCredentialError(snapshotResult.error));
     }
+    await this.syncAuthCredentialsToSprite(providerId, snapshotResult.value);
+    return success(undefined);
   }
 
   private async getCredentialSnapshotForProvider(
     providerId: AgentSettings["provider"],
     userId: string,
-  ): Promise<AuthCredentialSnapshot> {
-    try {
-      const providerCredentialAdapter = getProviderCredentialAdapter(providerId, this.env, this.logger);
-      const snapshot = await providerCredentialAdapter.getCredentialSnapshot(userId);
-      if (providerId === "claude-code") {
-        this.setClaudeAuthRequired(null);
-      }
-      return snapshot;
-    } catch (error) {
-      if (providerId === "claude-code" && error instanceof ClaudeOAuthError) {
-        this.setClaudeAuthRequired(getClaudeAuthRequiredFromClaudeError(error));
-      }
-      throw error;
-    }
+  ): Promise<Result<AuthCredentialSnapshot, ProviderCredentialError>> {
+    const adapter = getProviderCredentialAdapter(providerId, this.env, this.logger);
+    const result = await adapter.getCredentialSnapshot(userId);
+    const authState = !result.ok && result.error.code !== "SYNC_FAILED" ? result.error.authState : null;
+    this.setProviderAuthState(providerId, authState);
+    return result;
   }
 
   private async syncAuthCredentialsToSprite(
@@ -608,39 +585,10 @@ export class AgentProcessManager {
     };
   }
 
-  private mapProviderCredentialError(
-    providerId: AgentSettings["provider"],
-    error: unknown,
-  ): AgentProcessError {
-    if (providerId === "claude-code") {
-      if (error instanceof ClaudeOAuthError) {
-        const claudeAuthRequired = getClaudeAuthRequiredFromClaudeError(error);
-        if (error.code === "CLAUDE_AUTH_REQUIRED" || error.code === "CLAUDE_REAUTH_REQUIRED") {
-          return agentProcessError(error.code, error.message, {
-            claudeAuthRequired: claudeAuthRequired ?? "auth_required",
-          });
-        }
-
-        return agentProcessError("CLAUDE_CREDENTIALS_SYNC_FAILED", error.message, {
-          claudeAuthRequired: null,
-        });
-      }
-
-      return agentProcessError(
-        "CLAUDE_CREDENTIALS_SYNC_FAILED",
-        "Failed to sync Claude credentials for this session.",
-        { claudeAuthRequired: null },
-      );
+  private mapProviderCredentialError(error: ProviderCredentialError): AgentProcessError {
+    if (error.code === "AUTH_REQUIRED" || error.code === "REAUTH_REQUIRED") {
+      return agentProcessError("PROVIDER_AUTH_REQUIRED", error.message, { provider: error.provider });
     }
-
-    if (error instanceof OpenAICodexAuthError) {
-      return agentProcessError("OPENAI_AUTH_REQUIRED", error.message, {
-        provider: "openai-codex",
-      });
-    }
-
-    return agentProcessError("OPENAI_AUTH_REQUIRED", "OPENAI_AUTH_REQUIRED", {
-      provider: "openai-codex",
-    });
+    return agentProcessError("PROVIDER_CREDENTIALS_SYNC_FAILED", error.message, { provider: error.provider });
   }
 }

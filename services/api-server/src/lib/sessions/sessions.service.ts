@@ -179,6 +179,7 @@ export class SessionsService {
         userId: params.userId,
         repoFullName: repoAccessResult.value.repoFullName,
         settings: params.request.settings,
+        agentMode: params.request.agentMode,
         branch: params.request.branch,
         initialMessage: params.request.initialMessage,
         initialAttachmentIds: attachmentIds,
@@ -659,6 +660,7 @@ export class SessionsService {
     userId: string;
     repoFullName: string;
     settings: CreateSessionRequest["settings"];
+    agentMode: CreateSessionRequest["agentMode"];
     branch: CreateSessionRequest["branch"];
     initialMessage: CreateSessionRequest["initialMessage"];
     initialAttachmentIds: string[];
@@ -670,6 +672,7 @@ export class SessionsService {
         userId: params.userId,
         repoFullName: params.repoFullName,
         agentSettings: params.settings,
+        agentMode: params.agentMode,
         branch: params.branch,
         initialMessage: params.initialMessage,
         initialAttachmentIds: params.initialAttachmentIds,

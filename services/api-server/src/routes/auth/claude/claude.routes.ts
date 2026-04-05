@@ -5,7 +5,7 @@ import { createLogger } from "@/lib/logger";
 import {
   ClaudeOAuthError,
   ClaudeOAuthService,
-} from "@/lib/claude-oauth-service";
+} from "@/lib/providers/claude-oauth-service";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { SessionsRepository } from "@/repositories/sessions.repository";
 import type { AuthUser } from "@/middleware/auth.middleware";

@@ -52,3 +52,24 @@ export async function decrypt(
 
   return new TextDecoder().decode(decrypted);
 }
+
+/** SHA-256 hash of a string, returned as a lowercase hex string. */
+export async function sha256(value: string): Promise<string> {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Decrypt a stored credential value, falling back to the raw value if decryption fails. */
+export async function readStoredCredentialJson(
+  rawStoredValue: string,
+  encryptionKey: string,
+): Promise<string> {
+  try {
+    return await decrypt(rawStoredValue, encryptionKey);
+  } catch {
+    return rawStoredValue;
+  }
+}

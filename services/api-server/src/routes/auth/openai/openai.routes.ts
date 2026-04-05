@@ -4,7 +4,7 @@ import { createLogger } from "@/lib/logger";
 import {
   type AuthUser,
 } from "@/middleware/auth.middleware";
-import { OpenAICodexAuthError, OpenAICodexAuthService } from "@/lib/openai-codex-auth-service";
+import { OpenAICodexAuthService } from "@/lib/providers/openai-codex-auth-service";
 import {
   postOpenAIDeviceStartRoute,
   getOpenAIDeviceAttemptRoute,
@@ -25,16 +25,12 @@ openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
   const user = c.get("user");
   const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
 
-  try {
-    const result = await openAICodexAuthService.startDeviceAuthorization(user.id);
-    return c.json(result, 200);
-  } catch (error) {
-    logger.error("OpenAI Codex device auth start error", { error });
-    if (error instanceof OpenAICodexAuthError) {
-      return c.json({ error: error.message }, 400);
-    }
-    return c.json({ error: "Failed to start device authorization" }, 400);
+  const result = await openAICodexAuthService.startDeviceAuthorization(user.id);
+  if (!result.ok) {
+    logger.error("OpenAI Codex device auth start error", { error: result.error });
+    return c.json({ error: result.error.message }, 400);
   }
+  return c.json(result.value, 200);
 });
 
 /**

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionStatus, AgentSettingsInput, SessionSummary } from "../session";
+import { SessionStatus, AgentMode, AgentSettingsInput, SessionSummary } from "../session";
 
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({
@@ -26,6 +26,7 @@ export const CreateSessionRequest = z.object({
   /** Numeric GitHub repo ID */
   repoId: z.number().describe("Numeric GitHub repo ID"),
   settings: AgentSettingsInput.optional().describe("Agent provider settings"),
+  agentMode: AgentMode.optional().describe("Agent operational mode"),
   branch: z.string().min(1).optional().describe("Optional branch to base the session on (defaults to repo's default branch)"),
   initialMessage: z.string().min(1).optional().describe("Optional first message to send immediately after session creation"),
   attachmentIds: z.array(z.uuid()).max(20).optional().describe("Optional uploaded attachment IDs to bind to this session on create"),

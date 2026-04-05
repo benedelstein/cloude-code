@@ -13,7 +13,7 @@ import {
   type ClaudeConnectionStatus,
   getClaudeCredentialFingerprint,
   stringifyClaudeCredentials,
-} from "@/lib/claude-oauth-service";
+} from "@/lib/providers/claude-oauth-service";
 import type { Env } from "@/types";
 
 const HOME_DIR = "/home/sprite";
@@ -95,11 +95,14 @@ export async function getClaudeCredentialsSnapshot(params: {
   }
 
   const claudeOAuthService = new ClaudeOAuthService(params.env, params.logger);
-  const credentials = await claudeOAuthService.getValidCredentials(params.userId);
+  const result = await claudeOAuthService.getValidCredentials(params.userId);
+  if (!result.ok) {
+    return null;
+  }
 
   return {
-    credentialsJson: stringifyClaudeCredentials(credentials),
-    fingerprint: getClaudeCredentialFingerprint(credentials),
+    credentialsJson: stringifyClaudeCredentials(result.value),
+    fingerprint: getClaudeCredentialFingerprint(result.value),
   };
 }
 
@@ -119,30 +122,30 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
     });
   }
 
-  try {
-    const credentials = await getClaudeCredentialsSnapshot({
-      env: params.env,
-      logger: params.logger,
-      userId: params.userId,
+  const credentials = await getClaudeCredentialsSnapshot({
+    env: params.env,
+    logger: params.logger,
+    userId: params.userId,
+  });
+
+  if (!credentials) {
+    return failure({
+      domain: "claude_credentials",
+      code: "CLAUDE_AUTH_REQUIRED",
+      message: "Claude authentication required for this session.",
+      claudeAuthRequired: "auth_required",
     });
+  }
 
-    if (!credentials) {
-      return failure({
-        domain: "claude_credentials",
-        code: "CLAUDE_AUTH_REQUIRED",
-        message: "Claude authentication required for this session.",
-        claudeAuthRequired: "auth_required",
-      });
-    }
+  if (credentials.fingerprint === params.lastFingerprint) {
+    return success({
+      claudeAuthRequired: null,
+      nextFingerprint: credentials.fingerprint,
+      credentialsChanged: false,
+    });
+  }
 
-    if (credentials.fingerprint === params.lastFingerprint) {
-      return success({
-        claudeAuthRequired: null,
-        nextFingerprint: credentials.fingerprint,
-        credentialsChanged: false,
-      });
-    }
-
+  try {
     // write the updated credentials to the sprite
     const sprite = new WorkersSpriteClient(
       params.spriteName,
@@ -154,38 +157,7 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
       credentials.credentialsJson,
       { mode: "0600" },
     );
-
-    return success({
-      claudeAuthRequired: null,
-      nextFingerprint: credentials.fingerprint,
-      credentialsChanged: true,
-    });
-  } catch (error) {
-    if (error instanceof ClaudeOAuthError) {
-      switch (error.code) {
-        case "CLAUDE_AUTH_REQUIRED":
-        case "CLAUDE_REAUTH_REQUIRED":
-          return failure({
-            domain: "claude_credentials",
-            code: error.code,
-            message: error.message,
-            claudeAuthRequired: error.code === "CLAUDE_AUTH_REQUIRED"
-              ? "auth_required"
-              : "reauth_required",
-          });
-        case "CLAUDE_INVALID_STATE":
-        case "CLAUDE_INVALID_CODE":
-        case "CLAUDE_TOKEN_EXCHANGE_FAILED":
-        case "CLAUDE_TOKEN_REFRESH_FAILED":
-          return failure({
-            domain: "claude_credentials",
-            code: error.code,
-            message: error.message,
-            claudeAuthRequired: getClaudeAuthRequiredFromClaudeError(error),
-          });
-      }
-    }
-
+  } catch {
     return failure({
       domain: "claude_credentials",
       code: "CLAUDE_CREDENTIALS_SYNC_FAILED",
@@ -193,6 +165,12 @@ export async function ensureClaudeCredentialsReadyForSend(params: {
       claudeAuthRequired: null,
     });
   }
+
+  return success({
+    claudeAuthRequired: null,
+    nextFingerprint: credentials.fingerprint,
+    credentialsChanged: true,
+  });
 }
 
 function getClaudeAuthRequiredFromConnectionStatus(

@@ -104,7 +104,6 @@ export const AgentSettingsInput = z.object({
   provider: AgentProvider.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
-  agentMode: AgentMode.optional(),
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 

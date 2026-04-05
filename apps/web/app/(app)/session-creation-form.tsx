@@ -432,7 +432,8 @@ export function SessionCreationForm() {
         selectedRepo.id,
         trimmedMessage || undefined,
         branchToUse,
-        { provider: "claude-code", model: selectedModel, agentMode: selectedAgentMode },
+        { provider: "claude-code", model: selectedModel },
+        selectedAgentMode,
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
       );
 

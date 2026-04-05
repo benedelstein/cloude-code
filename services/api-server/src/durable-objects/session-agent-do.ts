@@ -1,6 +1,7 @@
 import { SpritesCoordinator, WorkersSpriteClient } from "@/lib/sprites";
 import {
   type ClientState,
+  type AgentMode,
   type AgentSettingsInput,
   type Logger,
   ClientMessage as ClientMessageSchema,
@@ -74,6 +75,7 @@ interface InitRequest {
   userId: string;
   repoFullName: string;
   agentSettings?: AgentSettingsInput;
+  agentMode?: AgentMode;
   /** Base branch */
   branch?: string;
   initialMessage?: string;
@@ -183,8 +185,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       onAgentExit: (code) => this.handleAgentExit(code),
       updateLastKnownAgentProcessId: (processId) =>
         this.updateServerState({ lastKnownAgentProcessId: processId }),
-      updateClaudeAuthRequired: (claudeAuthRequired) =>
-        this.updatePartialState({ claudeAuthRequired }),
+      onProviderAuthStateChanged: (provider, authState) => {
+        if (provider === "claude-code") {
+          this.updatePartialState({ claudeAuthRequired: authState });
+        }
+      },
       updateAgentSettings: (settings) =>
         this.updatePartialState({ agentSettings: settings }),
       updateAgentMode: (agentMode) =>
@@ -869,7 +874,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       repoFullName: data.repoFullName,
       agentSettings: settings,
-      agentMode: data.agentSettings?.agentMode ?? "edit",
+      agentMode: data.agentMode ?? "edit",
       pendingUserMessage: pendingUserUiMessage
         ? {
             message: pendingUserUiMessage,
