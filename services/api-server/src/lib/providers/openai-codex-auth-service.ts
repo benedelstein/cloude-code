@@ -181,6 +181,7 @@ export class OpenAICodexAuthService {
       typeof payload.verification_uri !== "string" ||
       typeof payload.expires_in !== "number"
     ) {
+      console.log(payload, response.status);
       return failure(openAICodexAuthError(
         "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
         payload.error_description ?? "Failed to start OpenAI Codex device authorization.",
@@ -476,6 +477,7 @@ export class OpenAICodexAuthService {
         502,
       ));
     }
+    console.log("here2");
 
     const rawText = await response.text();
     let tokenData: OpenAICodexTokenResponse;
@@ -489,8 +491,10 @@ export class OpenAICodexAuthService {
       return success(tokenData);
     }
 
+    console.log("here");
     const errorDescription = tokenData.error_description ?? "OpenAI Codex token request failed.";
     const authErrorCode = tokenData.error;
+    this.logger.error("OpenAI Codex token request failed", { error: tokenData });
     if (authErrorCode === "authorization_pending" || authErrorCode === "slow_down") {
       return failure(openAICodexAuthError("OPENAI_CODEX_TOKEN_EXCHANGE_FAILED", authErrorCode, 400));
     }

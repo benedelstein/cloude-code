@@ -1,8 +1,8 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import {
-  ProviderId,
   AgentSettings,
+  ProviderId,
 } from "./providers/index";
 
 export const SessionStatus = z.enum([
@@ -112,7 +112,7 @@ export { AgentSettings };
 
 /** Partial settings for create/init requests; validated and merged in the DO */
 export const AgentSettingsInput = z.object({
-  provider: AgentProvider.optional(),
+  provider: ProviderId.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
 });

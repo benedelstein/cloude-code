@@ -6,7 +6,7 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/provider-signin-panel";
-import { ProviderModelSelector } from "@/components/provider-model-selector";
+import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type {
   AgentMode,
   MessageAttachmentRef,
@@ -196,7 +196,8 @@ export function ChatInput({
         <ProviderSigninPanel
           providerId={signinProviderId}
           handle={signinHandle}
-          isExiting={false}
+          open={showSigninPanel}
+          onOpenChange={setShowSigninPanel}
         />
       )}
       <ChatAttachmentPreviews

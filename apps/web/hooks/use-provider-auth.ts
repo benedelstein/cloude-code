@@ -63,7 +63,20 @@ export function useProviderAuth({ sessionId }: UseProviderAuthOptions = {}) {
     submittingCode: claude.submittingCode,
     submitCode: claude.submitCode,
     cancelCodeEntry: claude.cancelCodeEntry,
-  }), [claude]);
+  }), [
+    claude.awaitingCode,
+    claude.cancelCodeEntry,
+    claude.code,
+    claude.connect,
+    claude.connected,
+    claude.disconnect,
+    claude.error,
+    claude.loading,
+    claude.requiresReauth,
+    claude.setCode,
+    claude.submitCode,
+    claude.submittingCode,
+  ]);
 
   const openaiHandle: OpenAIAuthHandle = useMemo(() => ({
     providerId: "openai-codex" as const,
@@ -76,7 +89,17 @@ export function useProviderAuth({ sessionId }: UseProviderAuthOptions = {}) {
     attemptId: openai.attemptId,
     verificationUrl: openai.verificationUrl,
     userCode: openai.userCode,
-  }), [openai]);
+  }), [
+    openai.attemptId,
+    openai.connect,
+    openai.connected,
+    openai.disconnect,
+    openai.error,
+    openai.loading,
+    openai.requiresReauth,
+    openai.userCode,
+    openai.verificationUrl,
+  ]);
 
   const handles: ProviderAuthHandleUnion[] = useMemo(
     () => [claudeHandle, openaiHandle],

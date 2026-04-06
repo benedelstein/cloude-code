@@ -8,7 +8,7 @@ import { listRepos, listBranches, createSession, uploadAttachments, deleteAttach
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/provider-signin-panel";
-import { ProviderModelSelector } from "@/components/provider-model-selector";
+import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
 import { PROVIDERS } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
@@ -242,21 +242,21 @@ export function SessionCreationForm() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId>("claude-code");
-  const [selectedModel, setSelectedModel] = useState<string>(
-    PROVIDERS["claude-code"].defaultModel,
-  );
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
   const [showSigninPanel, setShowSigninPanel] = useState(false);
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
-  const [isSigninPanelExiting, setIsSigninPanelExiting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const providerAuth = useProviderAuth();
-  const activeHandle = providerAuth.getHandle(selectedProvider);
-  const isProviderConnected = activeHandle.connected;
-  const isProviderLoading = activeHandle.loading;
+  const activeHandle = selectedProvider
+    ? providerAuth.getHandle(selectedProvider)
+    : null;
+  const signinPanelHandle = providerAuth.getHandle(signinPanelProvider);
+  const isProviderConnected = activeHandle?.connected ?? false;
+  const isProviderLoading = activeHandle?.loading ?? false;
 
   const {
     attachments,
@@ -279,6 +279,8 @@ export function SessionCreationForm() {
   });
   const isFormInteractionDisabled = submitting;
   const isSubmitDisabled = (
+    !selectedProvider ||
+    !selectedModel ||
     !isProviderConnected ||
     !selectedRepo ||
     hasPendingOrFailedUploads ||
@@ -403,27 +405,26 @@ export function SessionCreationForm() {
     })();
   }, []);
 
-  // Show/hide signin panel based on selected provider connection state
   useEffect(() => {
-    if (isProviderLoading) return;
-
-    if (!isProviderConnected) {
-      setSigninPanelProvider(selectedProvider);
-      setShowSigninPanel(true);
-      setIsSigninPanelExiting(false);
+    if (!showSigninPanel) {
       return;
     }
 
-    if (!showSigninPanel) return;
+    if (
+      signinPanelHandle.loading ||
+      !signinPanelHandle.connected ||
+      signinPanelHandle.requiresReauth
+    ) {
+      return;
+    }
 
-    setIsSigninPanelExiting(true);
-    const timeout = window.setTimeout(() => {
-      setShowSigninPanel(false);
-      setIsSigninPanelExiting(false);
-    }, 220);
-
-    return () => window.clearTimeout(timeout);
-  }, [isProviderConnected, isProviderLoading, showSigninPanel, selectedProvider]);
+    setShowSigninPanel(false);
+  }, [
+    showSigninPanel,
+    signinPanelHandle.connected,
+    signinPanelHandle.loading,
+    signinPanelHandle.requiresReauth,
+  ]);
 
   const handleProviderModelSelect = (providerId: ProviderId, modelId: string) => {
     setSelectedProvider(providerId);
@@ -433,13 +434,12 @@ export function SessionCreationForm() {
   const handleProviderConnect = (providerId: ProviderId) => {
     setSigninPanelProvider(providerId);
     setShowSigninPanel(true);
-    setIsSigninPanelExiting(false);
   };
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const trimmedMessage = message.trim();
-    if (!isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
+    if (!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
@@ -558,11 +558,12 @@ export function SessionCreationForm() {
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>
             </div>
           )}
-          {showSigninPanel && !isProviderLoading && (
+          {!signinPanelHandle.loading && (
             <ProviderSigninPanel
               providerId={signinPanelProvider}
-              handle={providerAuth.getHandle(signinPanelProvider)}
-              isExiting={isSigninPanelExiting}
+              handle={signinPanelHandle}
+              open={showSigninPanel}
+              onOpenChange={setShowSigninPanel}
             />
           )}
           <ChatAttachmentPreviews
@@ -630,10 +631,10 @@ export function SessionCreationForm() {
           <div className="absolute left-0">
             <button
               type="button"
-              onClick={activeHandle.disconnect}
+              onClick={() => void activeHandle?.disconnect()}
               className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
-              Debug: Disconnect {PROVIDERS[selectedProvider].displayName}
+              Debug: Disconnect {selectedProvider ? PROVIDERS[selectedProvider].displayName : "provider"}
             </button>
           </div>
         )}

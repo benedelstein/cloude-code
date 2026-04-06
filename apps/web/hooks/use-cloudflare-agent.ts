@@ -71,8 +71,6 @@ export interface UseCloudflareAgentReturn {
   // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: string) => void;
   selectedProvider: ProviderId | null;
-  // eslint-disable-next-line no-unused-vars
-  setSelectedProvider: (provider: ProviderId) => void;
   editorUrl: string | null;
   providerAuthRequired: ProviderAuthRequired;
   // eslint-disable-next-line no-unused-vars
@@ -115,7 +113,6 @@ export function useCloudflareAgent({
   const [providerConnection, setProviderConnection] = useState<ProviderConnectionState | null>(null);
   const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -280,8 +277,7 @@ export function useCloudflareAgent({
       serverAgentModeRef.current = state.agentMode ?? "edit";
       // Initialize agent mode from server state (only if not yet set locally)
       setAgentModeState((prev) => prev ?? state.agentMode ?? "edit");
-      // Initialize selected provider and model from server settings (only if not yet set locally)
-      setSelectedProvider((prev) => prev ?? state.agentSettings.provider);
+      // Initialize selected model from server settings (only if not yet set locally)
       setSelectedModel((prev) => prev ?? state.agentSettings.model);
       setIsResponding(state.isResponding);
       setSessionStatus(state.status);
@@ -345,6 +341,8 @@ export function useCloudflareAgent({
     sendToAgent({ type: "operation.cancel" });
   }, [sendToAgent]);
 
+  const selectedProvider = agentSettings?.provider ?? null;
+
   return {
     sessionId,
     repoFullName,
@@ -371,7 +369,6 @@ export function useCloudflareAgent({
     selectedModel,
     setSelectedModel,
     selectedProvider,
-    setSelectedProvider,
     editorUrl,
     providerAuthRequired,
     sendMessage,

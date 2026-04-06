@@ -49,7 +49,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     selectedModel,
     setSelectedModel,
     selectedProvider,
-    setSelectedProvider,
     agentMode,
     setAgentMode,
     providerAuthRequired,
@@ -132,7 +131,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     if (selectedProvider !== providerId) {
       return;
     }
-    setSelectedProvider(providerId);
     setSelectedModel(modelId);
   };
 

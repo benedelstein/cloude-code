@@ -24,8 +24,8 @@ import { cn } from "@/lib/utils";
 import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 
 interface ProviderModelSelectorProps {
-  selectedProvider: ProviderId;
-  selectedModel: string;
+  selectedProvider: ProviderId | null;
+  selectedModel: string | null;
   providerAuthHandles: ProviderAuthHandleUnion[];
   allowedProviderIds?: ProviderId[];
   // eslint-disable-next-line no-unused-vars
@@ -57,7 +57,10 @@ export function ProviderModelSelector({
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
 
-  const displayLabel = getDisplayLabel(selectedProvider, selectedModel);
+  const hasSelection = selectedProvider !== null && selectedModel !== null;
+  const displayLabel = hasSelection
+    ? getDisplayLabel(selectedProvider, selectedModel)
+    : "Select a model";
   const providers = allowedProviderIds
     ? PROVIDER_LIST.filter((provider) => allowedProviderIds.includes(provider.id))
     : PROVIDER_LIST;
@@ -70,14 +73,18 @@ export function ProviderModelSelector({
           disabled={disabled}
           className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer"
         >
-          <Image
-            src={PROVIDER_ICONS[selectedProvider].src}
-            alt={PROVIDER_ICONS[selectedProvider].alt}
-            width={12}
-            height={12}
-            className="h-3 w-3 shrink-0"
-          />
-          <span className="truncate">{displayLabel}</span>
+          {hasSelection && (
+            <Image
+              src={PROVIDER_ICONS[selectedProvider].src}
+              alt={PROVIDER_ICONS[selectedProvider].alt}
+              width={12}
+              height={12}
+              className="h-3 w-3 shrink-0"
+            />
+          )}
+          <span className={cn("truncate", !hasSelection && "text-foreground-muted text-bold")}>
+            {displayLabel}
+          </span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
@@ -96,7 +103,7 @@ export function ProviderModelSelector({
                   <CommandGroup
                     heading={
                       <span className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex items-center gap-1.5 font-semibold">
                           <Image
                             src={PROVIDER_ICONS[provider.id].src}
                             alt={PROVIDER_ICONS[provider.id].alt}
