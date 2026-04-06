@@ -25,7 +25,7 @@ export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
 export const CreateSessionRequest = z.object({
   /** Numeric GitHub repo ID */
   repoId: z.number().describe("Numeric GitHub repo ID"),
-  settings: AgentSettingsInput.optional().describe("Agent provider settings"),
+  settings: AgentSettingsInput.optional().describe("Agent settings"),
   agentMode: AgentMode.optional().describe("Agent operational mode"),
   branch: z.string().min(1).optional().describe("Optional branch to base the session on (defaults to repo's default branch)"),
   initialMessage: z.string().min(1).optional().describe("Optional first message to send immediately after session creation"),

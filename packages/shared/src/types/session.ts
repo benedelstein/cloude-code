@@ -1,8 +1,8 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import {
-  ProviderId,
   AgentSettings,
+  ProviderId,
 } from "./providers/index";
 
 export const SessionStatus = z.enum([
@@ -20,6 +20,12 @@ export const SessionStatus = z.enum([
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export type PullRequestState = "open" | "merged" | "closed";
+
+/** Generic provider auth state for the frontend. */
+export type ProviderAuthRequired = {
+  providerId: ProviderId;
+  state: "auth_required" | "reauth_required";
+} | null;
 
 export const SessionAccessBlockReason = z.enum([
   "INSTALLATION_DELETED",
@@ -106,7 +112,7 @@ export { AgentSettings };
 
 /** Partial settings for create/init requests; validated and merged in the DO */
 export const AgentSettingsInput = z.object({
-  provider: AgentProvider.optional(),
+  provider: ProviderId.optional(),
   model: z.string().optional(),
   maxTokens: z.number().optional(),
 });

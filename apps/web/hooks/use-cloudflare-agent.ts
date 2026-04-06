@@ -9,7 +9,6 @@ import { normalizeHost } from "@/lib/utils";
 import type {
   AgentMode,
   ClientState,
-  ClaudeModel,
   MessageAttachmentRef,
   AttachmentDescriptor,
   OperationErrorEvent,
@@ -21,6 +20,8 @@ import type {
   SessionStatus,
   SessionWebSocketTokenResponse,
   ClientMessage,
+  ProviderAuthRequired,
+  ProviderId,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -66,10 +67,12 @@ export interface UseCloudflareAgentReturn {
   agentMode: AgentMode;
   // eslint-disable-next-line no-unused-vars
   setAgentMode: (mode: AgentMode) => void;
-  selectedModel: ClaudeModel | null;
+  selectedModel: string | null;
   // eslint-disable-next-line no-unused-vars
-  setSelectedModel: (model: ClaudeModel) => void;
+  setSelectedModel: (model: string) => void;
+  selectedProvider: ProviderId | null;
   editorUrl: string | null;
+  providerAuthRequired: ProviderAuthRequired;
   // eslint-disable-next-line no-unused-vars
   sendMessage: (message: {
     content?: string;
@@ -105,10 +108,11 @@ export function useCloudflareAgent({
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
+  const [providerAuthRequired, setProviderAuthRequired] = useState<ProviderAuthRequired>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
   const [providerConnection, setProviderConnection] = useState<ProviderConnectionState | null>(null);
   const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -262,15 +266,19 @@ export function useCloudflareAgent({
       setEditorUrl(state.editorUrl);
       setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
       setProviderConnection(prev => JSON.stringify(prev) === JSON.stringify(state.providerConnection) ? prev : state.providerConnection);
+      const nextProviderAuthRequired: ProviderAuthRequired = state.providerConnection && !state.providerConnection.connected
+        ? {
+            providerId: state.providerConnection.provider,
+            state: state.providerConnection.requiresReauth ? "reauth_required" : "auth_required",
+          }
+        : null;
+      setProviderAuthRequired(prev => JSON.stringify(prev) === JSON.stringify(nextProviderAuthRequired) ? prev : nextProviderAuthRequired);
       // Track the server-known agent mode for diff-based sending
       serverAgentModeRef.current = state.agentMode ?? "edit";
       // Initialize agent mode from server state (only if not yet set locally)
       setAgentModeState((prev) => prev ?? state.agentMode ?? "edit");
-      // TODO: ACCOMMODATE OTHER PROVIDERS
-      if (state.agentSettings.provider === "claude-code") {
-        // Initialize selected model from server settings (only if not yet set locally)
-        setSelectedModel((prev) => prev ?? state.agentSettings.model as ClaudeModel);
-      }
+      // Initialize selected model from server settings (only if not yet set locally)
+      setSelectedModel((prev) => prev ?? state.agentSettings.model);
       setIsResponding(state.isResponding);
       setSessionStatus(state.status);
       setSessionErrorMessage(state.lastError);
@@ -333,6 +341,8 @@ export function useCloudflareAgent({
     sendToAgent({ type: "operation.cancel" });
   }, [sendToAgent]);
 
+  const selectedProvider = agentSettings?.provider ?? null;
+
   return {
     sessionId,
     repoFullName,
@@ -358,7 +368,9 @@ export function useCloudflareAgent({
     setAgentMode,
     selectedModel,
     setSelectedModel,
+    selectedProvider,
     editorUrl,
+    providerAuthRequired,
     sendMessage,
     stop,
   };
