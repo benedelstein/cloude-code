@@ -18,6 +18,9 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
   allow("code.claude.com"),
   allow("claude.ai"),
   allow("openai.com"),
+  allow("auth.openai.com"),
+  allow("chatgpt.com"),
+  allow("chat.com"),
   allow("ai-sdk.dev"),
 
   // --- Version Control ---

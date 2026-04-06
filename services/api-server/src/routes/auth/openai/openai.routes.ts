@@ -29,7 +29,15 @@ openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
   const result = await openAICodexAuthService.startDeviceAuthorization(user.id);
   if (!result.ok) {
     logger.error("OpenAI Codex device auth start error", { error: result.error });
-    return c.json({ error: result.error.message }, 400);
+    switch (result.error.status) {
+      case 400:
+      case 403:
+      case 404:
+      case 502:
+        return c.json({ error: result.error.message }, result.error.status);
+      default:
+        return c.json({ error: result.error.message }, 502);
+    }
   }
   return c.json(result.value, 200);
 });

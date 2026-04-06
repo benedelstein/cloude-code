@@ -6,6 +6,7 @@ import { Env } from "@/types";
 import { ProviderConnectionStatus } from "./connection-status";
 
 const PROVIDER_CREDENTIAL_DOMAIN = "provider_credential";
+const OPENAI_AUTH_CLAIM_KEY = "https://api.openai.com/auth";
 
 export type ProviderCredentialError =
   | DomainError<typeof PROVIDER_CREDENTIAL_DOMAIN, "AUTH_REQUIRED" | "REAUTH_REQUIRED", { provider: ProviderId }>
@@ -34,6 +35,41 @@ export interface AuthCredentialSnapshot {
 export interface ProviderCredentialAdapter {
   /* eslint-disable-next-line no-unused-vars */
   getCredentialSnapshot(_userId: string): Promise<Result<AuthCredentialSnapshot, ProviderCredentialError>>;
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  try {
+    const payload = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getOpenAIAccountIdFromToken(token: string | null): string | null {
+  if (!token) {
+    return null;
+  }
+
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
+    return null;
+  }
+
+  const authClaim = payload[OPENAI_AUTH_CLAIM_KEY];
+  if (typeof authClaim !== "object" || authClaim === null) {
+    return null;
+  }
+
+  const chatgptAccountId = (authClaim as Record<string, unknown>).chatgpt_account_id;
+  return typeof chatgptAccountId === "string" && chatgptAccountId.length > 0
+    ? chatgptAccountId
+    : null;
 }
 
 class ClaudeProviderCredentialAdapter implements ProviderCredentialAdapter {
@@ -85,14 +121,17 @@ class OpenAICodexProviderCredentialAdapter implements ProviderCredentialAdapter 
       }
     }
     const credentials = result.value;
+    const accountId = getOpenAIAccountIdFromToken(credentials.idToken);
     const authJson = JSON.stringify({
       auth_mode: "chatgpt",
+      OPENAI_API_KEY: null,
       tokens: {
+        ...(credentials.idToken ? { id_token: credentials.idToken } : {}),
         access_token: credentials.accessToken,
         ...(credentials.refreshToken ? { refresh_token: credentials.refreshToken } : {}),
-        ...(credentials.idToken ? { id_token: credentials.idToken } : {}),
-        ...(credentials.expiresAt ? { expires_at: credentials.expiresAt } : {}),
+        ...(accountId ? { account_id: accountId } : {}),
       },
+      last_refresh: new Date().toISOString(),
     });
     return success({
       connectionStatus: { connected: true, requiresReauth: false },

@@ -10,7 +10,7 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
-import { PROVIDERS } from "@repo/shared";
+import { PROVIDERS, isProviderModel } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
@@ -45,6 +45,13 @@ import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import type { AgentMode } from "@repo/shared";
 import Link from "next/link";
+
+const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
+
+type StoredProviderModelSelection = {
+  providerId: ProviderId;
+  modelId: string;
+};
 
 function RepoSelector({
   repos,
@@ -298,6 +305,49 @@ export function SessionCreationForm() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 280)}px`;
   }, [message, isProviderConnected, isProviderLoading]);
 
+  useEffect(() => {
+    if (selectedProvider || selectedModel || providerAuth.isAnyLoading) {
+      return;
+    }
+
+    const rawSelection = localStorage.getItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
+    if (rawSelection) {
+      try {
+        const parsed = JSON.parse(rawSelection) as {
+          providerId?: string;
+          modelId?: string;
+        };
+        if (
+          parsed.providerId &&
+          parsed.modelId &&
+          (parsed.providerId === "claude-code" || parsed.providerId === "openai-codex") &&
+          isProviderModel(parsed.providerId, parsed.modelId)
+        ) {
+          setSelectedProvider(parsed.providerId);
+          setSelectedModel(parsed.modelId);
+          return;
+        }
+      } catch {
+        localStorage.removeItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
+      }
+    }
+
+    const firstConnectedHandle = providerAuth.handles.find((handle) => handle.connected);
+    if (firstConnectedHandle) {
+      setSelectedProvider(firstConnectedHandle.providerId);
+      setSelectedModel(PROVIDERS[firstConnectedHandle.providerId].defaultModel);
+      return;
+    }
+
+    setSelectedProvider("claude-code");
+    setSelectedModel(PROVIDERS["claude-code"].defaultModel);
+  }, [
+    providerAuth.handles,
+    providerAuth.isAnyLoading,
+    selectedModel,
+    selectedProvider,
+  ]);
+
   // Fetch branches when selected repo changes
   useEffect(() => {
     if (!selectedRepo) {
@@ -429,6 +479,8 @@ export function SessionCreationForm() {
   const handleProviderModelSelect = (providerId: ProviderId, modelId: string) => {
     setSelectedProvider(providerId);
     setSelectedModel(modelId);
+    const selection: StoredProviderModelSelection = { providerId, modelId };
+    localStorage.setItem(LAST_PROVIDER_MODEL_SELECTION_KEY, JSON.stringify(selection));
   };
 
   const handleProviderConnect = (providerId: ProviderId) => {

@@ -24,6 +24,18 @@ export const postOpenAIDeviceStartRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Bad request",
     },
+    403: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Device authorization unavailable",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Device authorization endpoint unavailable",
+    },
+    502: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Upstream provider error",
+    },
   },
 });
 

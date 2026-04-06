@@ -6,7 +6,7 @@ import type { ProviderId } from "@repo/shared";
 import type {
   ProviderAuthHandleUnion,
 } from "@/hooks/use-provider-auth";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ProviderSigninPanelClaudeFlow } from "@/components/model-providers/provider-signin-panel-claude-flow";
 import { ProviderSigninPanelOpenAIFlow } from "@/components/model-providers/provider-signin-panel-openai-flow";
 
@@ -92,9 +92,9 @@ export function ProviderSigninPanel({
               height={16}
               className="h-4 w-4"
             />
-            <h2 className="text-sm font-semibold text-foreground">
+            <DialogTitle className="text-sm font-semibold leading-none tracking-normal text-foreground">
               {handle.requiresReauth ? `Reconnect ${meta.name}` : `Connect ${meta.name}`}
-            </h2>
+            </DialogTitle>
           </div>
 
           <FlowComponent handle={handle} accentColor={meta.accentColor} />

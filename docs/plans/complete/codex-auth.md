@@ -672,6 +672,10 @@ Implementation notes:
 - stop treating `/auth/callback` as the primary product flow for Codex auth
 - keep Codex auth flow logic in `OpenAICodexAuthService`
 - persist device-auth attempt state in `provider_auth_attempts`
+- use the Codex-specific device-auth endpoints rather than generic OAuth device-code endpoints:
+  `POST /api/accounts/deviceauth/usercode` to start, `POST /api/accounts/deviceauth/token`
+  to poll, then `POST /oauth/token` with the returned `authorization_code` and
+  `code_verifier`
 - once complete, encrypt and store the resulting credentials in `user_provider_credentials`
 - before session start and before message send, refresh access tokens if needed
 - write the refreshed credentials into `~/.codex/auth.json` on the Sprite

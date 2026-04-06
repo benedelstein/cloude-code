@@ -9,9 +9,11 @@ import type { Env } from "@/types";
 const OPENAI_CODEX_PROVIDER_ID = "openai-codex";
 const OPENAI_CODEX_AUTH_METHOD: AuthMethod = "oauth";
 const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-const OPENAI_DEVICE_AUTH_URL = "https://auth.openai.com/oauth/device/code";
+const OPENAI_DEVICE_AUTH_USER_CODE_URL = "https://auth.openai.com/api/accounts/deviceauth/usercode";
+const OPENAI_DEVICE_AUTH_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token";
 const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
-const OPENAI_SCOPES = "openid profile email offline_access";
+const OPENAI_DEVICE_AUTH_VERIFICATION_URL = "https://auth.openai.com/codex/device";
+const OPENAI_DEVICE_AUTH_REDIRECT_URI = "https://auth.openai.com/deviceauth/callback";
 const OPENAI_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 export type OpenAICodexErrorCode =
@@ -72,22 +74,44 @@ type OpenAICodexTokenResponse = {
 };
 
 type OpenAICodexDeviceAuthorizationResponse = {
-  device_code?: string;
+  device_auth_id?: string;
   user_code?: string;
-  verification_uri?: string;
-  verification_uri_complete?: string;
-  expires_in?: number;
-  interval?: number;
-  error?: string;
-  error_description?: string;
+  usercode?: string;
+  interval?: string | number;
+  error?: string | { message?: string };
+  message?: string;
 };
 
 type OpenAICodexDeviceAttemptContext = {
-  deviceCode: string;
+  deviceAuthId: string;
   intervalSeconds: number;
   verificationUrl: string;
   userCode: string;
 };
+
+type OpenAICodexDevicePollResponse = {
+  authorization_code?: string;
+  code_challenge?: string;
+  code_verifier?: string;
+  error?: string | { message?: string };
+  message?: string;
+};
+
+function getDeviceAuthErrorMessage(payload: {
+  error?: string | { message?: string };
+  message?: string;
+}): string | null {
+  if (typeof payload.error === "string" && payload.error.length > 0) {
+    return payload.error;
+  }
+  if (typeof payload.error === "object" && payload.error !== null && typeof payload.error.message === "string") {
+    return payload.error.message;
+  }
+  if (typeof payload.message === "string" && payload.message.length > 0) {
+    return payload.message;
+  }
+  return null;
+}
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split(".");
@@ -157,14 +181,26 @@ export class OpenAICodexAuthService {
   async startDeviceAuthorization(
     userId: string,
   ): Promise<Result<OpenAICodexDeviceAuthorizationResult, OpenAICodexAuthError>> {
-    const response = await fetch(OPENAI_DEVICE_AUTH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: OPENAI_CLIENT_ID,
-        scope: OPENAI_SCOPES,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(OPENAI_DEVICE_AUTH_USER_CODE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          client_id: OPENAI_CLIENT_ID,
+        }),
+      });
+    } catch (error) {
+      this.logger.error("OpenAI Codex device auth start request failed", { error });
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        "Failed to contact OpenAI Codex device authorization endpoint.",
+        502,
+      ));
+    }
 
     const rawText = await response.text();
     let payload: OpenAICodexDeviceAuthorizationResponse;
@@ -173,32 +209,37 @@ export class OpenAICodexAuthService {
     } catch {
       payload = {};
     }
+    const userCode = payload.user_code ?? payload.usercode;
 
     if (
       !response.ok ||
-      typeof payload.device_code !== "string" ||
-      typeof payload.user_code !== "string" ||
-      typeof payload.verification_uri !== "string" ||
-      typeof payload.expires_in !== "number"
+      typeof payload.device_auth_id !== "string" ||
+      typeof userCode !== "string"
     ) {
-      console.log(payload, response.status);
+      const errorMessage = getDeviceAuthErrorMessage(payload);
       return failure(openAICodexAuthError(
         "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
-        payload.error_description ?? "Failed to start OpenAI Codex device authorization.",
+        errorMessage
+          ?? (response.status === 403 || response.status === 404
+            ? "OpenAI Codex device authorization is not enabled for this server."
+            : "Failed to start OpenAI Codex device authorization."),
         response.status >= 400 && response.status < 600 ? response.status : 502,
       ));
     }
 
     const attemptId = crypto.randomUUID();
-    const intervalSeconds = typeof payload.interval === "number" && payload.interval > 0
-      ? payload.interval
+    const parsedInterval = typeof payload.interval === "string"
+      ? Number.parseInt(payload.interval, 10)
+      : payload.interval;
+    const intervalSeconds = typeof parsedInterval === "number" && Number.isFinite(parsedInterval) && parsedInterval > 0
+      ? parsedInterval
       : 5;
-    const expiresAt = new Date(Date.now() + payload.expires_in * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const context: OpenAICodexDeviceAttemptContext = {
-      deviceCode: payload.device_code,
+      deviceAuthId: payload.device_auth_id,
       intervalSeconds,
-      verificationUrl: payload.verification_uri_complete ?? payload.verification_uri,
-      userCode: payload.user_code,
+      verificationUrl: OPENAI_DEVICE_AUTH_VERIFICATION_URL,
+      userCode,
     };
 
     await this.providerAuthAttemptRepository.upsert({
@@ -250,30 +291,41 @@ export class OpenAICodexAuthService {
       await decrypt(attempt.encryptedContextJson, this.env.TOKEN_ENCRYPTION_KEY),
     ) as OpenAICodexDeviceAttemptContext;
 
-    const tokenResult = await this.postTokenRequest(
-      new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        device_code: context.deviceCode,
-        client_id: OPENAI_CLIENT_ID,
-      }),
-      "device_code",
-    );
-    if (!tokenResult.ok) {
-      const { code, message } = tokenResult.error;
-      if (message.includes("authorization_pending") || message.includes("slow_down")) {
+    const deviceAuthResult = await this.pollDeviceAuthCode(context);
+    if (!deviceAuthResult.ok) {
+      if (deviceAuthResult.error.status === 403 || deviceAuthResult.error.status === 404) {
         return { status: "pending" };
       }
-      if (message.includes("expired_token") || message.includes("access_denied") || code === "OPENAI_CODEX_REAUTH_REQUIRED") {
+      if (deviceAuthResult.error.status === 401) {
         await this.providerAuthAttemptRepository.deleteById(attemptId);
         return { status: "expired" };
       }
-      this.logger.error("Unexpected error polling device authorization", { error: tokenResult.error });
+      this.logger.error("Unexpected error polling device authorization", { error: deviceAuthResult.error });
+      return { status: "expired" };
+    }
+
+    const tokenResult = await this.postTokenRequest(
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: OPENAI_CLIENT_ID,
+        code: deviceAuthResult.value.authorizationCode,
+        code_verifier: deviceAuthResult.value.codeVerifier,
+        redirect_uri: OPENAI_DEVICE_AUTH_REDIRECT_URI,
+      }),
+      "authorization_code",
+    );
+    if (!tokenResult.ok) {
+      this.logger.error("OpenAI Codex token exchange failed after device authorization", {
+        error: tokenResult.error,
+      });
+      await this.providerAuthAttemptRepository.deleteById(attemptId);
       return { status: "expired" };
     }
 
     const credentialsResult = this.parseTokenResponse(tokenResult.value, null);
     if (!credentialsResult.ok) {
       this.logger.error("Failed to parse device auth token response", { error: credentialsResult.error });
+      await this.providerAuthAttemptRepository.deleteById(attemptId);
       return { status: "expired" };
     }
     await this.persistCredentials(userId, credentialsResult.value);
@@ -455,10 +507,76 @@ export class OpenAICodexAuthService {
     });
   }
 
+  private async pollDeviceAuthCode(
+    context: OpenAICodexDeviceAttemptContext,
+  ): Promise<Result<{ authorizationCode: string; codeVerifier: string }, OpenAICodexAuthError>> {
+    let response: Response;
+    try {
+      response = await fetch(OPENAI_DEVICE_AUTH_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          device_auth_id: context.deviceAuthId,
+          user_code: context.userCode,
+        }),
+      });
+    } catch (error) {
+      this.logger.error("OpenAI Codex device auth poll request failed", { error });
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        "Failed to contact OpenAI Codex device authorization endpoint.",
+        502,
+      ));
+    }
+
+    const rawText = await response.text();
+    let payload: OpenAICodexDevicePollResponse;
+    try {
+      payload = JSON.parse(rawText) as OpenAICodexDevicePollResponse;
+    } catch {
+      payload = {};
+    }
+
+    if (response.status === 403 || response.status === 404) {
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        getDeviceAuthErrorMessage(payload) ?? "OpenAI Codex device authorization is pending.",
+        response.status,
+      ));
+    }
+
+    if (!response.ok) {
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        getDeviceAuthErrorMessage(payload) ?? "OpenAI Codex device authorization failed.",
+        response.status >= 400 && response.status < 600 ? response.status : 502,
+      ));
+    }
+
+    if (
+      typeof payload.authorization_code !== "string" ||
+      typeof payload.code_verifier !== "string"
+    ) {
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        "OpenAI Codex device authorization response was missing the authorization code.",
+        502,
+      ));
+    }
+
+    return success({
+      authorizationCode: payload.authorization_code,
+      codeVerifier: payload.code_verifier,
+    });
+  }
+
 
   private async postTokenRequest(
     body: URLSearchParams,
-    grantType: "authorization_code" | "refresh_token" | "device_code",
+    grantType: "authorization_code" | "refresh_token",
   ): Promise<Result<OpenAICodexTokenResponse, OpenAICodexAuthError>> {
     let response: Response;
     try {
@@ -477,8 +595,6 @@ export class OpenAICodexAuthService {
         502,
       ));
     }
-    console.log("here2");
-
     const rawText = await response.text();
     let tokenData: OpenAICodexTokenResponse;
     try {
@@ -491,7 +607,6 @@ export class OpenAICodexAuthService {
       return success(tokenData);
     }
 
-    console.log("here");
     const errorDescription = tokenData.error_description ?? "OpenAI Codex token request failed.";
     const authErrorCode = tokenData.error;
     this.logger.error("OpenAI Codex token request failed", { error: tokenData });
