@@ -57,8 +57,8 @@ export type OpenAICodexConnectionStatus = {
 
 export type OpenAICodexCredentials = {
   accessToken: string;
-  refreshToken: string | null;
-  idToken: string | null;
+  refreshToken: string;
+  idToken: string;
   expiresAt: string | null;
 };
 
@@ -422,10 +422,6 @@ export class OpenAICodexAuthService {
     );
     const credentials = parseStoredCredentials(decryptedJson);
 
-    if (!needsRefresh(credentials.expiresAt)) {
-      return success(credentials);
-    }
-
     if (!credentials.refreshToken) {
       await this.userProviderCredentialRepository.markRequiresReauth(
         userId,
@@ -433,6 +429,19 @@ export class OpenAICodexAuthService {
         OPENAI_CODEX_AUTH_METHOD,
       );
       return failure(openAICodexAuthError("OPENAI_CODEX_REAUTH_REQUIRED", "OpenAI Codex refresh token is unavailable. Reconnect OpenAI Codex.", 401));
+    }
+
+    if (!credentials.idToken) {
+      await this.userProviderCredentialRepository.markRequiresReauth(
+        userId,
+        OPENAI_CODEX_PROVIDER_ID,
+        OPENAI_CODEX_AUTH_METHOD,
+      );
+      return failure(openAICodexAuthError("OPENAI_CODEX_REAUTH_REQUIRED", "OpenAI Codex ID token is unavailable. Reconnect OpenAI Codex.", 401));
+    }
+
+    if (!needsRefresh(credentials.expiresAt)) {
+      return success(credentials);
     }
 
     const tokenResult = await this.postTokenRequest(
@@ -475,14 +484,32 @@ export class OpenAICodexAuthService {
       ));
     }
 
+    const refreshToken = typeof tokenData.refresh_token === "string"
+      ? tokenData.refresh_token
+      : (fallback?.refreshToken ?? null);
+    if (!refreshToken) {
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        "OpenAI Codex token response did not include a usable refresh token.",
+        400,
+      ));
+    }
+
+    const idToken = typeof tokenData.id_token === "string"
+      ? tokenData.id_token
+      : (fallback?.idToken ?? null);
+    if (!idToken) {
+      return failure(openAICodexAuthError(
+        "OPENAI_CODEX_TOKEN_EXCHANGE_FAILED",
+        "OpenAI Codex token response did not include a usable ID token.",
+        400,
+      ));
+    }
+
     return success({
       accessToken: tokenData.access_token,
-      refreshToken: typeof tokenData.refresh_token === "string"
-        ? tokenData.refresh_token
-        : (fallback?.refreshToken ?? null),
-      idToken: typeof tokenData.id_token === "string"
-        ? tokenData.id_token
-        : (fallback?.idToken ?? null),
+      refreshToken,
+      idToken,
       expiresAt: deriveExpiryIsoString(tokenData.access_token, tokenData.expires_in)
         ?? fallback?.expiresAt
         ?? null,

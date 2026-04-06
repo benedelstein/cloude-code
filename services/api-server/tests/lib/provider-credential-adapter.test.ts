@@ -73,10 +73,10 @@ describe("OpenAICodexProviderCredentialAdapter", () => {
       auth_mode: string;
       OPENAI_API_KEY: null;
       tokens: {
-        id_token?: string;
+        id_token: string;
         access_token: string;
-        refresh_token?: string;
-        account_id?: string;
+        refresh_token: string;
+        account_id: string;
         expires_at?: string;
       };
       last_refresh: string;
@@ -95,7 +95,7 @@ describe("OpenAICodexProviderCredentialAdapter", () => {
     expect(result.value.envVars.CODEX_AUTH_JSON).toBe(result.value.files[0]!.contents);
   });
 
-  it("omits account_id when the id token does not carry the canonical claim", async () => {
+  it("fails when the id token does not carry the canonical account claim", async () => {
     vi.spyOn(OpenAICodexAuthService.prototype, "refreshCredentialsIfNeeded")
       .mockResolvedValue(success({
         accessToken: createJwt({
@@ -111,17 +111,11 @@ describe("OpenAICodexProviderCredentialAdapter", () => {
     const adapter = getProviderCredentialAdapter("openai-codex", createEnv(), createLogger());
     const result = await adapter.getCredentialSnapshot("user-1");
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
+    expect(result.ok).toBe(false);
+    if (result.ok) {
       return;
     }
-
-    const authJson = JSON.parse(result.value.files[0]!.contents) as {
-      tokens: {
-        account_id?: string;
-      };
-    };
-
-    expect(authJson.tokens.account_id).toBeUndefined();
+    expect(result.error.code).toBe("SYNC_FAILED");
+    expect(result.error.message).toBe("OpenAI Codex ID token did not include chatgpt_account_id.");
   });
 });

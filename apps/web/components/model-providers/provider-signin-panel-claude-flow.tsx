@@ -4,12 +4,10 @@ import type { ClaudeAuthHandle } from "@/hooks/use-provider-auth";
 
 type ProviderSigninPanelClaudeFlowProps = {
   handle: ClaudeAuthHandle;
-  accentColor: string;
 };
 
 export function ProviderSigninPanelClaudeFlow({
   handle,
-  accentColor,
 }: ProviderSigninPanelClaudeFlowProps) {
   const description = handle.requiresReauth
     ? "Your Claude session expired. Reconnect your account to continue."
@@ -29,8 +27,7 @@ export function ProviderSigninPanelClaudeFlow({
           <button
             type="button"
             onClick={handle.connect}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm text-white hover:opacity-90 transition-colors cursor-pointer"
-            style={{ backgroundColor: accentColor }}
+            className="inline-flex items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
           >
             {actionLabel}
           </button>
@@ -59,8 +56,7 @@ export function ProviderSigninPanelClaudeFlow({
               type="button"
               onClick={handle.submitCode}
               disabled={!handle.code.trim() || handle.submittingCode}
-              className="px-3 py-1.5 text-xs font-semibold rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-50"
-              style={{ backgroundColor: accentColor }}
+              className="rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors hover:opacity-90 disabled:opacity-50"
             >
               {submitLabel}
             </button>

@@ -230,7 +230,7 @@ describe("OpenAICodexAuthService", () => {
       encryptedCredentials: await encrypt(JSON.stringify({
         accessToken: "expired-access-token",
         refreshToken: "refresh-token-123",
-        idToken: null,
+        idToken: "existing-id-token",
         expiresAt: "2000-01-01T00:00:00.000Z",
       }), env.TOKEN_ENCRYPTION_KEY),
       requiresReauth: false,
@@ -255,6 +255,59 @@ describe("OpenAICodexAuthService", () => {
     }
     expect(result.value.accessToken).toBe("fresh-access-token");
     expect(result.value.refreshToken).toBe("fresh-refresh-token");
+    expect(result.value.idToken).toBe("existing-id-token");
     expect(upsertSpy).toHaveBeenCalledOnce();
+  });
+
+  it("requires reauth when stored credentials are missing a refresh token even before expiry", async () => {
+    const { env, service } = createService();
+    const credentialRepository = getCredentialRepository(service);
+    vi.spyOn(credentialRepository, "getByUserProviderAndMethod").mockResolvedValue({
+      encryptedCredentials: await encrypt(JSON.stringify({
+        accessToken: "current-access-token",
+        refreshToken: null,
+        idToken: "id-token-123",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      }), env.TOKEN_ENCRYPTION_KEY),
+      requiresReauth: false,
+    });
+    const markRequiresReauthSpy = vi.spyOn(credentialRepository, "markRequiresReauth").mockResolvedValue();
+
+    const result = await service.refreshCredentialsIfNeeded("user-1");
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error.code).toBe("OPENAI_CODEX_REAUTH_REQUIRED");
+    expect(result.error.message).toBe("OpenAI Codex refresh token is unavailable. Reconnect OpenAI Codex.");
+    expect(markRequiresReauthSpy).toHaveBeenCalledWith("user-1", "openai-codex", "oauth");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("requires reauth when stored credentials are missing an id token even before expiry", async () => {
+    const { env, service } = createService();
+    const credentialRepository = getCredentialRepository(service);
+    vi.spyOn(credentialRepository, "getByUserProviderAndMethod").mockResolvedValue({
+      encryptedCredentials: await encrypt(JSON.stringify({
+        accessToken: "current-access-token",
+        refreshToken: "refresh-token-123",
+        idToken: null,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      }), env.TOKEN_ENCRYPTION_KEY),
+      requiresReauth: false,
+    });
+    const markRequiresReauthSpy = vi.spyOn(credentialRepository, "markRequiresReauth").mockResolvedValue();
+
+    const result = await service.refreshCredentialsIfNeeded("user-1");
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error.code).toBe("OPENAI_CODEX_REAUTH_REQUIRED");
+    expect(result.error.message).toBe("OpenAI Codex ID token is unavailable. Reconnect OpenAI Codex.");
+    expect(markRequiresReauthSpy).toHaveBeenCalledWith("user-1", "openai-codex", "oauth");
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

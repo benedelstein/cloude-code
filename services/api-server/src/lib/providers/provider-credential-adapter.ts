@@ -51,11 +51,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function getOpenAIAccountIdFromToken(token: string | null): string | null {
-  if (!token) {
-    return null;
-  }
-
+function getOpenAIAccountIdFromToken(token: string): string | null {
   const payload = decodeJwtPayload(token);
   if (!payload) {
     return null;
@@ -122,14 +118,21 @@ class OpenAICodexProviderCredentialAdapter implements ProviderCredentialAdapter 
     }
     const credentials = result.value;
     const accountId = getOpenAIAccountIdFromToken(credentials.idToken);
+    if (!accountId) {
+      return failure(providerCredentialError(
+        "SYNC_FAILED",
+        "openai-codex",
+        "OpenAI Codex ID token did not include chatgpt_account_id.",
+      ));
+    }
     const authJson = JSON.stringify({
       auth_mode: "chatgpt",
       OPENAI_API_KEY: null,
       tokens: {
-        ...(credentials.idToken ? { id_token: credentials.idToken } : {}),
+        id_token: credentials.idToken,
         access_token: credentials.accessToken,
-        ...(credentials.refreshToken ? { refresh_token: credentials.refreshToken } : {}),
-        ...(accountId ? { account_id: accountId } : {}),
+        refresh_token: credentials.refreshToken,
+        account_id: accountId,
       },
       last_refresh: new Date().toISOString(),
     });

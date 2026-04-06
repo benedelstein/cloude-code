@@ -6,12 +6,10 @@ import type { OpenAIAuthHandle } from "@/hooks/use-provider-auth";
 
 type ProviderSigninPanelOpenAIFlowProps = {
   handle: OpenAIAuthHandle;
-  accentColor: string;
 };
 
 export function ProviderSigninPanelOpenAIFlow({
   handle,
-  accentColor,
 }: ProviderSigninPanelOpenAIFlowProps) {
   const [copied, setCopied] = useState(false);
 
@@ -34,8 +32,7 @@ export function ProviderSigninPanelOpenAIFlow({
           <button
             type="button"
             onClick={handle.connect}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm bg-foreground text-background hover:opacity-90 transition-colors cursor-pointer"
-            style={accentColor !== "var(--foreground)" ? { backgroundColor: accentColor, color: "white" } : undefined}
+            className="inline-flex items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
           >
             {handle.requiresReauth ? "Reconnect OpenAI" : "Connect OpenAI"}
           </button>

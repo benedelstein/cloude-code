@@ -20,15 +20,12 @@ type ProviderSigninPanelProps = {
 type ProviderSigninMeta = {
   name: string;
   icon: string;
-  accentColor: string;
-  accentBg: string;
 };
 
 type ProviderSigninRenderer = {
   meta: ProviderSigninMeta;
   FlowComponent: ComponentType<{
     handle: ProviderAuthHandleUnion;
-    accentColor: string;
   }>;
 };
 
@@ -37,24 +34,18 @@ const PROVIDER_SIGNIN_RENDERERS: Record<ProviderId, ProviderSigninRenderer> = {
     meta: {
       name: "Claude",
       icon: "/claude_logo.svg",
-      accentColor: "#d97757",
-      accentBg: "rgba(217, 119, 87, 0.1)",
     },
     FlowComponent: ProviderSigninPanelClaudeFlow as ComponentType<{
       handle: ProviderAuthHandleUnion;
-      accentColor: string;
     }>,
   },
   "openai-codex": {
     meta: {
       name: "OpenAI Codex",
       icon: "/openai_logo.svg",
-      accentColor: "var(--foreground)",
-      accentBg: "var(--muted)",
     },
     FlowComponent: ProviderSigninPanelOpenAIFlow as ComponentType<{
       handle: ProviderAuthHandleUnion;
-      accentColor: string;
     }>,
   },
 };
@@ -77,13 +68,7 @@ export function ProviderSigninPanel({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-0">
-        <div
-          className="rounded-lg border p-5"
-          style={{
-            borderColor: meta.accentColor,
-            backgroundColor: meta.accentBg,
-          }}
-        >
+        <div className="rounded-lg border border-border bg-background p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <Image
               src={meta.icon}
@@ -97,7 +82,7 @@ export function ProviderSigninPanel({
             </DialogTitle>
           </div>
 
-          <FlowComponent handle={handle} accentColor={meta.accentColor} />
+          <FlowComponent handle={handle} />
         </div>
       </DialogContent>
     </Dialog>
