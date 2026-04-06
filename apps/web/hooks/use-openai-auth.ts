@@ -8,7 +8,12 @@ import {
   disconnectOpenAI,
 } from "@/lib/client-api";
 
-export function useOpenAIAuth() {
+interface UseOpenAIAuthOptions {
+  sessionId?: string;
+}
+
+export function useOpenAIAuth(options: UseOpenAIAuthOptions = {}) {
+  const { sessionId } = options;
   const [connected, setConnected] = useState(false);
   const [requiresReauth, setRequiresReauth] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -61,7 +66,7 @@ export function useOpenAIAuth() {
 
       const poll = async () => {
         try {
-          const status = await pollOpenAIDeviceAuthorization(result.attemptId);
+          const status = await pollOpenAIDeviceAuthorization(result.attemptId, sessionId);
           if (status.status === "completed") {
             setConnected(true);
             setRequiresReauth(false);
@@ -99,7 +104,7 @@ export function useOpenAIAuth() {
           : "Failed to start OpenAI device authorization.",
       );
     }
-  }, [clearPollTimeout]);
+  }, [clearPollTimeout, sessionId]);
 
   const disconnect = useCallback(async () => {
     clearPollTimeout();

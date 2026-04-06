@@ -11,6 +11,7 @@ import {
   getOpenAIStatusRoute,
   postOpenAIDisconnectRoute,
 } from "./schemas";
+import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
 
 export const openaiAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -39,8 +40,12 @@ openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
 openaiAuthRoutes.openapi(getOpenAIDeviceAttemptRoute, async (c) => {
   const user = c.get("user");
   const { attemptId } = c.req.valid("param");
+  const { sessionId } = c.req.valid("query");
   const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
   const result = await openAICodexAuthService.pollDeviceAuthorization(user.id, attemptId);
+  if (result.status === "completed" && sessionId) {
+    await requestSessionProviderConnectionRefresh(c.env, sessionId, logger);
+  }
   return c.json(result, 200);
 });
 

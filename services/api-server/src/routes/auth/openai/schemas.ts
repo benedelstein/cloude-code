@@ -35,6 +35,9 @@ export const getOpenAIDeviceAttemptRoute = createRoute({
     params: z.object({
       attemptId: z.string(),
     }),
+    query: z.object({
+      sessionId: z.string().optional(),
+    }),
   },
   responses: {
     200: {

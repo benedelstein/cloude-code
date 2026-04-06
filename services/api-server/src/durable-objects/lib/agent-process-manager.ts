@@ -3,6 +3,7 @@ import {
   type AgentOutput,
   type AgentInputAttachment,
   type ClientState,
+  type ProviderConnectionState,
   type DomainError,
   type Logger,
   type AgentSettings,
@@ -111,6 +112,7 @@ export interface AgentProcessManagerOptions {
   updateAgentSettings: (settings: AgentSettings) => void;
   updateAgentMode: (agentMode: AgentMode) => void;
   updateIsResponding: (isResponding: boolean) => void;
+  updateProviderConnection: (providerConnection: ProviderConnectionState) => void;
   /* eslint-enable no-unused-vars */
 }
 
@@ -132,6 +134,7 @@ export class AgentProcessManager {
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
   private readonly updateAgentMode: (agentMode: AgentMode) => void;
   private readonly updateIsResponding: (isResponding: boolean) => void;
+  private readonly updateProviderConnection: (providerConnection: ProviderConnectionState) => void;
   private agentWebsocketSession: SpriteWebsocketSession | null = null;
   /** Shares a single in-flight session start across concurrent callers. */
   private ensureAgentSessionStartedPromise: Promise<void> | null = null;
@@ -152,6 +155,7 @@ export class AgentProcessManager {
     this.updateAgentSettings = options.updateAgentSettings;
     this.updateAgentMode = options.updateAgentMode;
     this.updateIsResponding = options.updateIsResponding;
+    this.updateProviderConnection = options.updateProviderConnection;
   }
 
   isConnected(): boolean {
@@ -454,14 +458,25 @@ export class AgentProcessManager {
     const providerId = this.getClientState().agentSettings.provider;
     const userId = this.getServerState().userId;
     if (!userId) {
+      this.updateProviderConnection({
+        provider: providerId,
+        connected: false,
+        requiresReauth: false,
+      });
       throw new Error("Missing user id");
     }
 
     const snapshotResult = await this.getCredentialSnapshotForProvider(providerId, userId);
     if (!snapshotResult.ok) {
+      this.applyProviderConnectionResult(providerId, snapshotResult.error);
       throw new Error(snapshotResult.error.message);
     }
 
+    this.updateProviderConnection({
+      provider: providerId,
+      connected: snapshotResult.value.connectionStatus.connected,
+      requiresReauth: snapshotResult.value.connectionStatus.requiresReauth,
+    });
     await this.syncAuthCredentialsToSprite(providerId, snapshotResult.value);
     return snapshotResult.value.envVars;
   }
@@ -500,15 +515,54 @@ export class AgentProcessManager {
     const providerId = this.getClientState().agentSettings.provider;
     const userId = this.getServerState().userId;
     if (!userId) {
+      this.updateProviderConnection({
+        provider: providerId,
+        connected: false,
+        requiresReauth: false,
+      });
       return failure(agentProcessError("PROVIDER_AUTH_REQUIRED", "Authentication required.", { provider: providerId }));
     }
 
     const snapshotResult = await this.getCredentialSnapshotForProvider(providerId, userId);
     if (!snapshotResult.ok) {
+      this.applyProviderConnectionResult(providerId, snapshotResult.error);
       return failure(this.mapProviderCredentialError(snapshotResult.error));
     }
+    this.updateProviderConnection({
+      provider: providerId,
+      connected: snapshotResult.value.connectionStatus.connected,
+      requiresReauth: snapshotResult.value.connectionStatus.requiresReauth,
+    });
     await this.syncAuthCredentialsToSprite(providerId, snapshotResult.value);
     return success(undefined);
+  }
+
+  private applyProviderConnectionResult(
+    providerId: AgentSettings["provider"],
+    error: ProviderCredentialError,
+  ): void {
+    switch (error.code) {
+      case "AUTH_REQUIRED":
+        this.updateProviderConnection({
+          provider: providerId,
+          connected: false,
+          requiresReauth: false,
+        });
+        break;
+      case "REAUTH_REQUIRED":
+        this.updateProviderConnection({
+          provider: providerId,
+          connected: false,
+          requiresReauth: true,
+        });
+        break;
+      case "SYNC_FAILED":
+        break;
+      default: {
+        const exhaustiveCheck: never = error;
+        throw new Error(`Unhandled provider credential error: ${JSON.stringify(exhaustiveCheck)}`);
+      }
+    }
   }
 
   private async getCredentialSnapshotForProvider(

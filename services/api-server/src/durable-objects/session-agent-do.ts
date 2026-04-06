@@ -67,6 +67,7 @@ import {
   assertSessionRepoAccess,
   type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
+import { getProviderAuthService } from "@/lib/providers/provider-auth-service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -116,6 +117,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     plan: null,
     pendingUserMessage: null,
     editorUrl: null,
+    providerConnection: null,
     isResponding: false,
     lastError: null,
     baseBranch: null,
@@ -190,6 +192,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.updatePartialState({ agentMode }),
       updateIsResponding: (isResponding) =>
         this.updatePartialState({ isResponding }),
+      updateProviderConnection: (providerConnection) =>
+        this.updatePartialState({ providerConnection }),
     });
 
     // Reset transient ClientState fields on every restart so they never get
@@ -227,6 +231,57 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     if (!this.serverState.repoCloned) return "cloning";
     if (this.agentProcessManager.isConnecting()) return "attaching";
     return "ready";
+  }
+
+  private async resolveProviderConnectionState(
+    providerId: ClientState["agentSettings"]["provider"],
+    userId: string | null,
+  ): Promise<ClientState["providerConnection"]> {
+    if (!userId) {
+      return {
+        provider: providerId,
+        connected: false,
+        requiresReauth: false,
+      };
+    }
+
+    try {
+      const service = getProviderAuthService(providerId, this.env, this.logger);
+      const status = await service.getConnectionStatus(userId);
+      return {
+        provider: providerId,
+        connected: status.connected,
+        requiresReauth: status.requiresReauth,
+      };
+    } catch (error) {
+      this.logger.error("Failed to resolve provider connection state", {
+        error,
+        fields: { provider: providerId, userId },
+      });
+      return null;
+    }
+  }
+
+  private queueRefreshProviderConnection(): void {
+    this.ctx.waitUntil(
+      this.refreshProviderConnection().catch((error) => {
+        this.logger.error("Failed to refresh provider connection state", { error });
+      }),
+    );
+  }
+
+  /**
+   * Refreshes the active session provider connection state from the provider auth service.
+   * @returns Resolves when the cached provider connection state has been updated, if available.
+   */
+  async refreshProviderConnection(): Promise<void> {
+    const providerConnection = await this.resolveProviderConnectionState(
+      this.state.agentSettings.provider,
+      this.serverState.userId,
+    );
+    if (providerConnection) {
+      this.updatePartialState({ providerConnection });
+    }
   }
 
   // ============================================
@@ -496,6 +551,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
     this.queueEnsureReady();
+    this.queueRefreshProviderConnection();
   }
 
   async onMessage(
@@ -835,6 +891,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       // Invalid model — fall back to the provider's default by omitting model
       settings = AgentSettings.parse({ provider, maxTokens });
     }
+    const providerConnection = await this.resolveProviderConnectionState(
+      settings.provider,
+      data.userId,
+    );
 
     // Generate git proxy secret and persist
     if (!this.gitProxySecret) {
@@ -867,6 +927,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       repoFullName: data.repoFullName,
       agentSettings: settings,
+      providerConnection,
       agentMode: data.agentMode ?? "edit",
       pendingUserMessage: pendingUserUiMessage
         ? {

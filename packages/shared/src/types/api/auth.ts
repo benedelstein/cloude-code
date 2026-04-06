@@ -86,6 +86,7 @@ export type ClaudeAuthUrlResponse = z.infer<typeof ClaudeAuthUrlResponse>;
 export const ClaudeTokenRequest = z.object({
   code: z.string(),
   state: z.string(),
+  sessionId: z.string().optional(),
 });
 export type ClaudeTokenRequest = z.infer<typeof ClaudeTokenRequest>;
 

@@ -17,6 +17,7 @@ import type {
   SessionTodo,
   SessionPlanMetadata,
   AgentSettings,
+  ProviderConnectionState,
   SessionStatus,
   SessionWebSocketTokenResponse,
   ClientMessage,
@@ -61,6 +62,7 @@ export interface UseCloudflareAgentReturn {
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
   agentSettings: AgentSettings | null;
+  providerConnection: ProviderConnectionState | null;
   agentMode: AgentMode;
   // eslint-disable-next-line no-unused-vars
   setAgentMode: (mode: AgentMode) => void;
@@ -104,6 +106,7 @@ export function useCloudflareAgent({
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
+  const [providerConnection, setProviderConnection] = useState<ProviderConnectionState | null>(null);
   const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<ClaudeModel | null>(null);
 
@@ -258,6 +261,7 @@ export function useCloudflareAgent({
       setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
       setEditorUrl(state.editorUrl);
       setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
+      setProviderConnection(prev => JSON.stringify(prev) === JSON.stringify(state.providerConnection) ? prev : state.providerConnection);
       // Track the server-known agent mode for diff-based sending
       serverAgentModeRef.current = state.agentMode ?? "edit";
       // Initialize agent mode from server state (only if not yet set locally)
@@ -349,6 +353,7 @@ export function useCloudflareAgent({
     todos,
     plan,
     agentSettings,
+    providerConnection,
     agentMode: resolvedAgentMode,
     setAgentMode,
     selectedModel,

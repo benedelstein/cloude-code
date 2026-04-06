@@ -45,6 +45,12 @@ export const SessionPlanMetadata = z.object({
 });
 export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
 
+export type ProviderConnectionState = {
+  provider: ProviderId;
+  connected: boolean;
+  requiresReauth: boolean;
+};
+
 /**
  * Durable state synced to clients via Cloudflare Agents SDK.
  * IMPORTANT: ClientState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
@@ -78,6 +84,8 @@ export type ClientState = {
   } | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
+  /** Auth connection state for the session's fixed provider */
+  providerConnection: ProviderConnectionState | null;
   /** Agent operational mode: "edit" (default, full access) or "plan" (read-only exploration) */
   agentMode: AgentMode;
   /** Whether the agent is currently responding to a message — reset on restart */

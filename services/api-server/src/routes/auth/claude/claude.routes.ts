@@ -12,6 +12,7 @@ import {
   getClaudeStatusRoute,
   postClaudeDisconnectRoute,
 } from "./schemas";
+import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
 
 export const claudeAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -26,7 +27,7 @@ claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
 });
 
 claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
-  const { code, state } = c.req.valid("json");
+  const { code, state, sessionId } = c.req.valid("json");
   const user = c.get("user");
   const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
 
@@ -40,6 +41,9 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
       code,
       state,
     });
+    if (sessionId) {
+      await requestSessionProviderConnectionRefresh(c.env, sessionId, logger);
+    }
   } catch (error) {
     logger.error("Claude token exchange error", { error });
     if (error instanceof ClaudeOAuthError) {
