@@ -108,24 +108,24 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   }
 
   // Check allowlist
-  const allowedRaw = c.env.ALLOWED_GITHUB_LOGINS ?? "";
-  const allowedLogins = allowedRaw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
+  // const allowedRaw = c.env.ALLOWED_GITHUB_LOGINS ?? "";
+  // const allowedLogins = allowedRaw
+  //   .split(",")
+  //   .map((s) => s.trim().toLowerCase())
+  //   .filter(Boolean);
 
-  if (
-    allowedLogins.length === 0 ||
-    !allowedLogins.includes(result.user.login.toLowerCase())
-  ) {
-    logger.error("GitHub OAuth callback rejected: user not allowlisted", {
-      fields: {
-        githubLogin: result.user.login,
-        requestId: c.req.header("cf-ray") ?? null,
-      },
-    });
-    return c.json({ error: "User not allowed" }, 403);
-  }
+  // if (
+  //   allowedLogins.length === 0 ||
+  //   !allowedLogins.includes(result.user.login.toLowerCase())
+  // ) {
+  //   logger.error("GitHub OAuth callback rejected: user not allowlisted", {
+  //     fields: {
+  //       githubLogin: result.user.login,
+  //       requestId: c.req.header("cf-ray") ?? null,
+  //     },
+  //   });
+  //   return c.json({ error: "User not allowed" }, 403);
+  // }
 
   // Encrypt tokens before storing
   const encryptedAccess = await encrypt(
