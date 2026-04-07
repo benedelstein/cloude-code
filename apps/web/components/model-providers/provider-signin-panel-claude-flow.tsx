@@ -1,6 +1,7 @@
 "use client";
 
 import type { ClaudeAuthHandle } from "@/hooks/use-provider-auth";
+import { providerSigninPrimaryButtonClassName } from "@/components/model-providers/provider-signin-panel-button-styles";
 
 type ProviderSigninPanelClaudeFlowProps = {
   handle: ClaudeAuthHandle;
@@ -27,7 +28,7 @@ export function ProviderSigninPanelClaudeFlow({
           <button
             type="button"
             onClick={handle.connect}
-            className="inline-flex  mt-4 items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-sm font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
+            className={providerSigninPrimaryButtonClassName}
           >
             {actionLabel}
           </button>
@@ -56,7 +57,7 @@ export function ProviderSigninPanelClaudeFlow({
               type="button"
               onClick={handle.submitCode}
               disabled={!handle.code.trim() || handle.submittingCode}
-              className="rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors hover:opacity-90 disabled:opacity-50"
+              className={providerSigninPrimaryButtonClassName}
             >
               {submitLabel}
             </button>

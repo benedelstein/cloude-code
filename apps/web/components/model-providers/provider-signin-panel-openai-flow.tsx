@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Copy, Check, TriangleAlert } from "lucide-react";
 import type { OpenAIAuthHandle } from "@/hooks/use-provider-auth";
+import { providerSigninPrimaryButtonClassName } from "@/components/model-providers/provider-signin-panel-button-styles";
 
 type ProviderSigninPanelOpenAIFlowProps = {
   handle: OpenAIAuthHandle;
@@ -55,7 +56,7 @@ export function ProviderSigninPanelOpenAIFlow({
           <button
             type="button"
             onClick={handle.connect}
-            className="inline-flex mt-4 items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-sm font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
+            className={providerSigninPrimaryButtonClassName}
           >
             {handle.requiresReauth ? "Reconnect OpenAI" : "Sign in with ChatGPT"}
           </button>
