@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { parseArgs } from "util";
-import { encodeAgentInput } from "@repo/shared";
+import { AgentOutput, encodeAgentInput, UIMessageChunk } from "@repo/shared";
 
 const { values } = parseArgs({
   options: {
@@ -42,8 +42,9 @@ const agent = spawn("bun", spawnArgs, {
 const agentOutput = createInterface({ input: agent.stdout! });
 agentOutput.on("line", (line) => {
   try {
-    const output = JSON.parse(line);
+    const rawOutput = JSON.parse(line);
     // Format based on AI SDK part types
+    const output = AgentOutput.parse(rawOutput);
     switch (output.type) {
       case "ready":
         console.log(`\nAgent ready`);
@@ -51,15 +52,17 @@ agentOutput.on("line", (line) => {
       case "debug":
         console.log(`[debug] ${output.message}`);
         break;
-      case "stream":
-        if (output.chunk?.type === "text-delta") {
-          process.stdout.write(output.chunk.textDelta);
-        } else if (output.chunk?.type === "finish") {
-          console.log(`\nFinished (${output.chunk.finishReason})`);
+      case "stream": {
+        const chunk = output.chunk as UIMessageChunk | undefined;
+        if (chunk?.type === "text-delta") {
+          process.stdout.write(chunk.delta);
+        } else if (chunk?.type === "finish") {
+          console.log(`\nFinished (${chunk.finishReason})`);
         } else {
           console.log("chunk:", JSON.stringify(output.chunk));
         }
         break;
+      }
       case "error":
         console.log(`\nError: ${output.error}`);
         break;

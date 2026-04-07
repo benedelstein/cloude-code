@@ -221,8 +221,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3(zod@4.3.6)
       ai-sdk-provider-codex-cli:
-        specifier: ^1.0.0
-        version: 1.1.0(zod@4.3.6)
+        specifier: github:benedelstein/ai-sdk-provider-codex-cli
+        version: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/7f4709a4a21fe6bee7467468d5866d06e71fa4ba(zod@4.3.6)
     devDependencies:
       '@types/bun':
         specifier: ^1.2.0
@@ -2205,8 +2205,9 @@ packages:
     peerDependencies:
       zod: ^4.0.0
 
-  ai-sdk-provider-codex-cli@1.1.0:
-    resolution: {integrity: sha512-l1ap+RAwCpdwEaLmB2cpQ4br+h2ut2IR0IvI88QvUMAAk5c3h2dSnx+vYZhwsOt1th3CS7FUQmvCTcnxqYshWg==}
+  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/7f4709a4a21fe6bee7467468d5866d06e71fa4ba:
+    resolution: {tarball: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/7f4709a4a21fe6bee7467468d5866d06e71fa4ba}
+    version: 1.1.0
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.0.0 || ^4.0.0
@@ -5693,7 +5694,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk': 0.2.19(zod@4.3.6)
       zod: 4.3.6
 
-  ai-sdk-provider-codex-cli@1.1.0(zod@4.3.6):
+  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/7f4709a4a21fe6bee7467468d5866d06e71fa4ba(zod@4.3.6):
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.15(zod@4.3.6)

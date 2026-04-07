@@ -18,7 +18,6 @@
     "WORKER_URL": "https://api.cloudecode.dev",
     "GITHUB_APP_SLUG": "cloude-code",
     "GITHUB_APP_ID": "2799576",
-    "ALLOWED_GITHUB_LOGINS": "benedelstein,evancarter,sidkasbekar,sidgilly,161siegels",
     "GITHUB_APP_CLIENT_ID": "Iv23lirr1sj5RthzlsAs",
     "LOG_LEVEL": "info",
   },
