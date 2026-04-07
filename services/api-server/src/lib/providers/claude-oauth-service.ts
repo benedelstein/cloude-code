@@ -1,15 +1,18 @@
 import type { Logger } from "@repo/shared";
-import { decrypt, encrypt } from "@/lib/utils/crypto";
+import { type Result, success, failure } from "@repo/shared";
+import { encrypt, readStoredCredentialJson } from "@/lib/utils/crypto";
 import { createLogger } from "@/lib/logger";
 import {
-  ClaudeSessionRepository,
-  type ClaudeSessionRecord,
-} from "@/repositories/claude-session-repository";
+  UserProviderCredentialRepository,
+  type UserProviderCredentialRecord,
+} from "@/repositories/user-provider-credential-repository";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import type { Env } from "@/types";
 import { computeCodeChallenge, generateCodeVerifier } from "@/lib/pkce";
 
 const CLAUDE_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const CLAUDE_PROVIDER_ID = "claude-code";
+const CLAUDE_AUTH_METHOD = "oauth";
 
 export const DEFAULT_CLAUDE_SCOPES = [
   "org:create_api_key",
@@ -128,16 +131,6 @@ function parseScopes(value: unknown): string[] {
   return [];
 }
 
-function parseStoredScopes(scopesJson: string): string[] {
-  try {
-    const parsed = JSON.parse(scopesJson);
-    return Array.isArray(parsed)
-      ? parsed.filter((scope): scope is string => typeof scope === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
 
 function parseTokenPayload(
   payload: unknown,
@@ -184,7 +177,7 @@ function needsRefresh(expiresAt: number): boolean {
 }
 
 export class ClaudeOAuthService {
-  private readonly claudeSessionRepository: ClaudeSessionRepository;
+  private readonly userProviderCredentialRepository: UserProviderCredentialRepository;
   private readonly oauthStateRepository: OauthStateRepository;
   private readonly logger: Logger;
 
@@ -192,7 +185,7 @@ export class ClaudeOAuthService {
     private readonly env: Env,
     logger: Logger = createLogger("claude-oauth-service.ts"),
   ) {
-    this.claudeSessionRepository = new ClaudeSessionRepository(env.DB);
+    this.userProviderCredentialRepository = new UserProviderCredentialRepository(env.DB);
     this.oauthStateRepository = new OauthStateRepository(env.DB);
     this.logger = logger.scope("claude-oauth-service.ts");
   }
@@ -289,27 +282,45 @@ export class ClaudeOAuthService {
   }
 
   async disconnect(userId: string): Promise<void> {
-    await this.claudeSessionRepository.deleteByUserId(userId);
+    await this.userProviderCredentialRepository.deleteByUserAndProvider(
+      userId,
+      CLAUDE_PROVIDER_ID,
+    );
   }
 
   /**
    * Get the valid credentials for a user, refreshing the access token if it is expired
    * @param userId the user id to get the credentials for
-   * @returns the typed credentials object that can be written to a .credentials.json file for the vm-agent
+   * @returns Result with the typed credentials object, or a ClaudeOAuthError on auth failure
    */
-  async getValidCredentials(userId: string): Promise<ClaudeCredentials> {
-    const credentials = await this.loadValidCredentials(userId);
-    return toClaudeCredentials(credentials);
+  async getValidCredentials(userId: string): Promise<Result<ClaudeCredentials, ClaudeOAuthError>> {
+    const result = await this.loadValidCredentials(userId);
+    if (!result.ok) {
+      return result;
+    }
+    return success(toClaudeCredentials(result.value));
+  }
+
+  /**
+   * Refreshes Claude credentials if needed and returns the current valid credentials.
+   * @param userId the user id to get the credentials for
+   * @returns Result with the typed credentials object, or a ClaudeOAuthError on auth failure
+   */
+  async refreshCredentialsIfNeeded(userId: string): Promise<Result<ClaudeCredentials, ClaudeOAuthError>> {
+    return this.getValidCredentials(userId);
   }
 
   /**
    * Get the valid credentials for a user, refreshing the access token if it is expired
    * @param userId the user id to get the credentials for
-   * @returns stringified json that can be written to a .credentials.json file for the vm-agent
+   * @returns Result with stringified json that can be written to a .credentials.json file for the vm-agent
    */
-  async getValidCredentialsJson(userId: string): Promise<string> {
-    const credentials = await this.getValidCredentials(userId);
-    return stringifyClaudeCredentials(credentials);
+  async getValidCredentialsJson(userId: string): Promise<Result<string, ClaudeOAuthError>> {
+    const result = await this.getValidCredentials(userId);
+    if (!result.ok) {
+      return result;
+    }
+    return success(stringifyClaudeCredentials(result.value));
   }
 
   /**
@@ -318,7 +329,11 @@ export class ClaudeOAuthService {
    * @returns the connection status for the user
    */
   async getConnectionStatus(userId: string): Promise<ClaudeConnectionStatus> {
-    const row = await this.claudeSessionRepository.getSessionByUserId(userId);
+    const row = await this.userProviderCredentialRepository.getByUserProviderAndMethod(
+      userId,
+      CLAUDE_PROVIDER_ID,
+      CLAUDE_AUTH_METHOD,
+    );
     if (!row) {
       return {
         connected: false,
@@ -329,143 +344,175 @@ export class ClaudeOAuthService {
     }
 
     if (row.requiresReauth) {
+      const metadata = await this.getStoredMetadata(row);
       return {
         connected: false,
         requiresReauth: true,
-        subscriptionType: row.subscriptionType,
-        rateLimitTier: row.rateLimitTier,
+        subscriptionType: metadata.subscriptionType,
+        rateLimitTier: metadata.rateLimitTier,
       };
     }
 
-    try {
-      const credentials = await this.loadValidCredentials(userId, row);
+    const result = await this.loadValidCredentials(userId, row);
+    if (result.ok) {
       return {
         connected: true,
         requiresReauth: false,
-        subscriptionType: credentials.subscriptionType,
-        rateLimitTier: credentials.rateLimitTier,
+        subscriptionType: result.value.subscriptionType,
+        rateLimitTier: result.value.rateLimitTier,
       };
-    } catch (error) {
-      if (error instanceof ClaudeOAuthError) {
-        if (error.code === "CLAUDE_REAUTH_REQUIRED") {
-          return {
-            connected: false,
-            requiresReauth: true,
-            subscriptionType: row.subscriptionType,
-            rateLimitTier: row.rateLimitTier,
-          };
-        }
-        if (error.code === "CLAUDE_AUTH_REQUIRED") {
-          return {
-            connected: false,
-            requiresReauth: false,
-            subscriptionType: null,
-            rateLimitTier: null,
-          };
-        }
-      }
+    }
 
-      this.logger.error("Failed to determine Claude connection status", {
-        error,
-        fields: { userId },
-      });
+    if (result.error.code === "CLAUDE_REAUTH_REQUIRED") {
+      const metadata = await this.getStoredMetadata(row);
+      return {
+        connected: false,
+        requiresReauth: true,
+        subscriptionType: metadata.subscriptionType,
+        rateLimitTier: metadata.rateLimitTier,
+      };
+    }
+
+    if (result.error.code === "CLAUDE_AUTH_REQUIRED") {
       return {
         connected: false,
         requiresReauth: false,
-        subscriptionType: row.subscriptionType,
-        rateLimitTier: row.rateLimitTier,
+        subscriptionType: null,
+        rateLimitTier: null,
       };
     }
+
+    this.logger.error("Failed to determine Claude connection status", {
+      error: result.error,
+      fields: { userId },
+    });
+    const metadata = await this.getStoredMetadata(row);
+    return {
+      connected: false,
+      requiresReauth: false,
+      subscriptionType: metadata.subscriptionType,
+      rateLimitTier: metadata.rateLimitTier,
+    };
   }
 
   private async loadValidCredentials(
     userId: string,
-    existingRow?: ClaudeSessionRecord,
-  ): Promise<ClaudeTokenPayload> {
-    const row = existingRow ?? await this.claudeSessionRepository.getSessionByUserId(userId);
+    existingRow?: UserProviderCredentialRecord,
+  ): Promise<Result<ClaudeTokenPayload, ClaudeOAuthError>> {
+    const row = existingRow ?? await this.userProviderCredentialRepository.getByUserProviderAndMethod(
+      userId,
+      CLAUDE_PROVIDER_ID,
+      CLAUDE_AUTH_METHOD,
+    );
     if (!row) {
-      throw new ClaudeOAuthError(
+      return failure(new ClaudeOAuthError(
         "CLAUDE_AUTH_REQUIRED",
         "Claude authentication required. Connect Claude before creating a session.",
         401,
-      );
+      ));
     }
 
     if (row.requiresReauth) {
-      throw new ClaudeOAuthError(
+      return failure(new ClaudeOAuthError(
         "CLAUDE_REAUTH_REQUIRED",
         "Claude authentication expired. Reconnect Claude before creating a session.",
         401,
-      );
+      ));
     }
 
-    if (needsRefresh(row.expiresAtMs)) {
-      return this.refreshStoredTokens(userId, row);
+    const decryptedJson = await readStoredCredentialJson(
+      row.encryptedCredentials,
+      this.env.TOKEN_ENCRYPTION_KEY,
+    );
+    const credentials = this.parseStoredPayload(decryptedJson);
+
+    if (needsRefresh(credentials.expiresAt)) {
+      try {
+        return success(await this.refreshStoredTokens(userId, credentials));
+      } catch (error) {
+        if (error instanceof ClaudeOAuthError) {
+          return failure(error);
+        }
+        throw error;
+      }
     }
 
-    return {
-      accessToken: await decrypt(row.encryptedAccessToken, this.env.TOKEN_ENCRYPTION_KEY),
-      refreshToken: await decrypt(row.encryptedRefreshToken, this.env.TOKEN_ENCRYPTION_KEY),
-      expiresAt: row.expiresAtMs,
-      scopes: parseStoredScopes(row.scopesJson),
-      subscriptionType: row.subscriptionType,
-      rateLimitTier: row.rateLimitTier,
-    };
+    return success(credentials);
   }
 
   private async refreshStoredTokens(
     userId: string,
-    row: ClaudeSessionRecord,
+    credentials: ClaudeTokenPayload,
   ): Promise<ClaudeTokenPayload> {
-    const refreshToken = await decrypt(row.encryptedRefreshToken, this.env.TOKEN_ENCRYPTION_KEY);
     let payload: unknown;
 
     try {
       payload = await this.postTokenRequest({
         grant_type: "refresh_token",
-        refresh_token: refreshToken,
+        refresh_token: credentials.refreshToken,
         client_id: CLAUDE_OAUTH_CLIENT_ID,
       });
     } catch (error) {
       this.logger.error("Error refreshing Claude tokens", { error });
       if (error instanceof ClaudeOAuthError && error.code === "CLAUDE_REAUTH_REQUIRED") {
-        await this.claudeSessionRepository.markRequiresReauth(userId);
+        await this.userProviderCredentialRepository.markRequiresReauth(
+          userId,
+          CLAUDE_PROVIDER_ID,
+          CLAUDE_AUTH_METHOD,
+        );
       }
       throw error;
     }
 
-    const credentials = parseTokenPayload(payload, {
-      scopes: parseStoredScopes(row.scopesJson),
-      subscriptionType: row.subscriptionType,
-      rateLimitTier: row.rateLimitTier,
+    const refreshedCredentials = parseTokenPayload(payload, {
+      scopes: credentials.scopes,
+      subscriptionType: credentials.subscriptionType,
+      rateLimitTier: credentials.rateLimitTier,
     });
     this.logger.info("successfully refreshed Claude tokens", { fields: { userId } });
-    await this.persistTokens(userId, credentials);
-    return credentials;
+    await this.persistTokens(userId, refreshedCredentials);
+    return refreshedCredentials;
   }
 
   private async persistTokens(
     userId: string,
     credentials: ClaudeTokenPayload,
   ): Promise<void> {
-    const encryptedAccessToken = await encrypt(
-      credentials.accessToken,
-      this.env.TOKEN_ENCRYPTION_KEY,
-    );
-    const encryptedRefreshToken = await encrypt(
-      credentials.refreshToken,
-      this.env.TOKEN_ENCRYPTION_KEY,
-    );
+    const encryptedCredentials = await encrypt(JSON.stringify(credentials), this.env.TOKEN_ENCRYPTION_KEY);
 
-    await this.claudeSessionRepository.upsertClaudeSession({
+    await this.userProviderCredentialRepository.upsert({
       userId,
-      encryptedAccessToken,
-      encryptedRefreshToken,
-      expiresAtMs: credentials.expiresAt,
-      scopesJson: JSON.stringify(credentials.scopes),
-      subscriptionType: credentials.subscriptionType,
-      rateLimitTier: credentials.rateLimitTier,
+      providerId: CLAUDE_PROVIDER_ID,
+      authMethod: CLAUDE_AUTH_METHOD,
+      encryptedCredentials,
+      requiresReauth: false,
     });
+  }
+
+  private parseStoredPayload(decryptedJson: string): ClaudeTokenPayload {
+    return JSON.parse(decryptedJson) as ClaudeTokenPayload;
+  }
+
+  private async getStoredMetadata(row: UserProviderCredentialRecord): Promise<{
+    subscriptionType: string | null;
+    rateLimitTier: string | null;
+  }> {
+    try {
+      const decryptedJson = await readStoredCredentialJson(
+        row.encryptedCredentials,
+        this.env.TOKEN_ENCRYPTION_KEY,
+      );
+      const parsed = this.parseStoredPayload(decryptedJson);
+      return {
+        subscriptionType: parsed.subscriptionType ?? null,
+        rateLimitTier: parsed.rateLimitTier ?? null,
+      };
+    } catch {
+      return {
+        subscriptionType: null,
+        rateLimitTier: null,
+      };
+    }
   }
 
   private async postTokenRequest(body: Record<string, string>): Promise<unknown> {

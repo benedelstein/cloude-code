@@ -41,8 +41,8 @@ export function AgentModeToggle({ agentMode, onToggle, disabled }: AgentModeTogg
       </TooltipTrigger>
       <TooltipContent>
         {isPlan
-          ? "Plan mode: read-only exploration. Click to switch to edit."
-          : "Edit mode: full access. Click to switch to plan."}
+          ? "Plan mode: read-only exploration"
+          : "Edit mode: full access"}
       </TooltipContent>
     </Tooltip>
   );

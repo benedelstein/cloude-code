@@ -20,15 +20,18 @@ import type {
   EditorCloseResponse,
   GitHubAuthUrlResponse,
   LogoutResponse,
-  OpenAIAuthUrlResponse,
   OpenAIStatusResponse,
   OpenAIDisconnectResponse,
+  OpenAIDeviceStartResponse,
+  OpenAIDeviceAttemptResponse,
   ClaudeAuthUrlResponse,
   ClaudeTokenResponse,
   ClaudeStatusResponse,
   ClaudeDisconnectResponse,
   AgentSettingsInput,
+  AgentMode,
   UploadAttachmentResponse,
+  ModelsResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -115,6 +118,7 @@ export async function createSession(
   initialMessage?: string,
   branch?: string,
   settings?: AgentSettingsInput,
+  agentMode?: AgentMode,
   attachmentIds?: string[],
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
@@ -125,6 +129,7 @@ export async function createSession(
       initialMessage,
       branch,
       settings,
+      agentMode,
       attachmentIds,
     }),
   });
@@ -224,9 +229,17 @@ export async function logoutUser(): Promise<LogoutResponse> {
   return apiFetch("/auth/logout", { method: "POST" });
 }
 
-// OpenAI OAuth
-export async function getOpenAIAuthUrl(): Promise<OpenAIAuthUrlResponse> {
-  return apiFetch("/auth/openai");
+// OpenAI Codex device auth
+export async function startOpenAIDeviceAuthorization(): Promise<OpenAIDeviceStartResponse> {
+  return apiFetch("/auth/openai/device/start", { method: "POST" });
+}
+
+export async function pollOpenAIDeviceAuthorization(
+  attemptId: string,
+  sessionId?: string,
+): Promise<OpenAIDeviceAttemptResponse> {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  return apiFetch(`/auth/openai/device/attempts/${attemptId}${query}`);
 }
 
 export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {
@@ -235,6 +248,11 @@ export async function getOpenAIStatus(): Promise<OpenAIStatusResponse> {
 
 export async function disconnectOpenAI(): Promise<OpenAIDisconnectResponse> {
   return apiFetch("/auth/openai/disconnect", { method: "POST" });
+}
+
+// Models
+export async function getModels(): Promise<ModelsResponse> {
+  return apiFetch("/models");
 }
 
 // Claude OAuth

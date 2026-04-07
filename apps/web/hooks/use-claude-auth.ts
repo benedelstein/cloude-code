@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   getClaudeAuthUrl,
   getClaudeStatus,
@@ -12,7 +13,8 @@ interface UseClaudeAuthOptions {
   sessionId?: string;
 }
 
-export function useClaudeAuth({ sessionId }: UseClaudeAuthOptions = {}) {
+export function useClaudeAuth(options: UseClaudeAuthOptions = {}) {
+  const { sessionId } = options;
   const [connected, setConnected] = useState(false);
   const [requiresReauth, setRequiresReauth] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function useClaudeAuth({ sessionId }: UseClaudeAuthOptions = {}) {
       setAwaitingCode(false);
       setPendingState(null);
       setCode("");
+      toast.success(requiresReauth ? "Claude reconnected." : "Claude connected.");
     } catch (exchangeError) {
       const message = exchangeError instanceof Error
         ? exchangeError.message
@@ -84,7 +87,7 @@ export function useClaudeAuth({ sessionId }: UseClaudeAuthOptions = {}) {
     } finally {
       setSubmittingCode(false);
     }
-  }, [code, pendingState, refreshStatus, sessionId]);
+  }, [code, pendingState, refreshStatus, requiresReauth, sessionId]);
 
   const cancelCodeEntry = useCallback(() => {
     setAwaitingCode(false);

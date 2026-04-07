@@ -72,19 +72,6 @@ export async function exchangeGitHubCode(
   });
 }
 
-export async function exchangeOpenAICode(
-  token: string,
-  code: string,
-  state: string,
-): Promise<void> {
-  return serverApiFetch("/auth/openai/token", {
-    token,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, state }),
-  });
-}
-
 export async function serverLogout(token: string): Promise<LogoutResponse> {
   return serverApiFetch("/auth/logout", {
     token,

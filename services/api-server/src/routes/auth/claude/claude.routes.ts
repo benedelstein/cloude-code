@@ -1,13 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { getAgentByName } from "agents";
 import type { Env } from "@/types";
 import { createLogger } from "@/lib/logger";
 import {
   ClaudeOAuthError,
   ClaudeOAuthService,
-} from "@/lib/claude-oauth-service";
-import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { SessionsRepository } from "@/repositories/sessions.repository";
+} from "@/lib/providers/claude-oauth-service";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   getClaudeAuthRoute,
@@ -15,6 +12,7 @@ import {
   getClaudeStatusRoute,
   postClaudeDisconnectRoute,
 } from "./schemas";
+import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
 
 export const claudeAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -43,21 +41,8 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
       code,
       state,
     });
-
     if (sessionId) {
-      const sessionsRepository = new SessionsRepository(c.env.DB);
-      const isOwnedByUser = await sessionsRepository.isOwnedByUser(sessionId, user.id);
-      if (isOwnedByUser) {
-        const sessionAgent = await getAgentByName<Env, SessionAgentDO>(
-          c.env.SESSION_AGENT,
-          sessionId,
-        );
-        await sessionAgent.refreshClaudeAuth();
-      } else {
-        logger.warn("Skipping Claude auth refresh for unauthorized session", {
-          fields: { sessionId, userId: user.id },
-        });
-      }
+      await requestSessionProviderConnectionRefresh(c.env, sessionId, logger);
     }
   } catch (error) {
     logger.error("Claude token exchange error", { error });
