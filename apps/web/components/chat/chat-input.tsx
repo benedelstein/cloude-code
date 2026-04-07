@@ -5,7 +5,7 @@ import { ArrowUp, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import { ProviderSigninPanel } from "@/components/provider-signin-panel";
+import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type {
   AgentMode,

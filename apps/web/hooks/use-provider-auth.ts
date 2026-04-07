@@ -33,6 +33,7 @@ export type OpenAIAuthHandle = ProviderAuthHandle & {
   attemptId: string | null;
   verificationUrl: string | null;
   userCode: string | null;
+  reset: () => void;
 };
 
 export type ProviderAuthHandleUnion = ClaudeAuthHandle | OpenAIAuthHandle;
@@ -89,6 +90,7 @@ export function useProviderAuth({ sessionId }: UseProviderAuthOptions = {}) {
     attemptId: openai.attemptId,
     verificationUrl: openai.verificationUrl,
     userCode: openai.userCode,
+    reset: openai.reset,
   }), [
     openai.attemptId,
     openai.connect,
@@ -96,6 +98,7 @@ export function useProviderAuth({ sessionId }: UseProviderAuthOptions = {}) {
     openai.disconnect,
     openai.error,
     openai.loading,
+    openai.reset,
     openai.requiresReauth,
     openai.userCode,
     openai.verificationUrl,

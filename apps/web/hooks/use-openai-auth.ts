@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   startOpenAIDeviceAuthorization,
   pollOpenAIDeviceAuthorization,
@@ -73,6 +74,7 @@ export function useOpenAIAuth(options: UseOpenAIAuthOptions = {}) {
             setAttemptId(null);
             setVerificationUrl(null);
             setUserCode(null);
+            toast.success(requiresReauth ? "OpenAI Codex reconnected." : "OpenAI Codex connected.");
             return;
           }
           if (status.status === "expired") {
@@ -104,7 +106,15 @@ export function useOpenAIAuth(options: UseOpenAIAuthOptions = {}) {
           : "Failed to start OpenAI device authorization.",
       );
     }
-  }, [clearPollTimeout, sessionId]);
+  }, [clearPollTimeout, requiresReauth, sessionId]);
+
+  const reset = useCallback(() => {
+    clearPollTimeout();
+    setAttemptId(null);
+    setVerificationUrl(null);
+    setUserCode(null);
+    setError(null);
+  }, [clearPollTimeout]);
 
   const disconnect = useCallback(async () => {
     clearPollTimeout();
@@ -126,6 +136,7 @@ export function useOpenAIAuth(options: UseOpenAIAuthOptions = {}) {
     userCode,
     error,
     connect,
+    reset,
     disconnect,
   };
 }

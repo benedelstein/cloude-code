@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import { ProviderSigninPanel } from "@/components/provider-signin-panel";
+import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
 import { PROVIDERS, isProviderModel } from "@repo/shared";
@@ -52,6 +52,20 @@ type StoredProviderModelSelection = {
   providerId: ProviderId;
   modelId: string;
 };
+
+function getFallbackProviderModelSelection(
+  handles: ReturnType<typeof useProviderAuth>["handles"],
+): StoredProviderModelSelection | null {
+  const firstConnectedHandle = handles.find((handle) => handle.connected);
+  if (firstConnectedHandle) {
+    return {
+      providerId: firstConnectedHandle.providerId,
+      modelId: PROVIDERS[firstConnectedHandle.providerId].defaultModel,
+    };
+  }
+
+  return null;
+}
 
 function RepoSelector({
   repos,
@@ -306,44 +320,70 @@ export function SessionCreationForm() {
   }, [message, isProviderConnected, isProviderLoading]);
 
   useEffect(() => {
-    if (selectedProvider || selectedModel || providerAuth.isAnyLoading) {
+    if (providerAuth.isAnyLoading) {
       return;
     }
 
+    const fallbackSelection = getFallbackProviderModelSelection(providerAuth.handles);
+    const activeProviderHandle = selectedProvider
+      ? providerAuth.getHandle(selectedProvider)
+      : null;
+
+    if (
+      selectedProvider &&
+      selectedModel &&
+      isProviderModel(selectedProvider, selectedModel) &&
+      (activeProviderHandle?.connected ?? false)
+    ) {
+      return;
+    }
+
+    let nextSelection: StoredProviderModelSelection | null = null;
     const rawSelection = localStorage.getItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
-    if (rawSelection) {
+    if (!selectedProvider && !selectedModel && rawSelection) {
       try {
         const parsed = JSON.parse(rawSelection) as {
           providerId?: string;
           modelId?: string;
         };
+        const parsedProviderHandle = parsed.providerId === "claude-code" || parsed.providerId === "openai-codex"
+          ? providerAuth.getHandle(parsed.providerId)
+          : null;
         if (
           parsed.providerId &&
           parsed.modelId &&
           (parsed.providerId === "claude-code" || parsed.providerId === "openai-codex") &&
-          isProviderModel(parsed.providerId, parsed.modelId)
+          isProviderModel(parsed.providerId, parsed.modelId) &&
+          (parsedProviderHandle?.connected ?? false)
         ) {
-          setSelectedProvider(parsed.providerId);
-          setSelectedModel(parsed.modelId);
-          return;
+          nextSelection = {
+            providerId: parsed.providerId,
+            modelId: parsed.modelId,
+          };
         }
       } catch {
         localStorage.removeItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
       }
     }
 
-    const firstConnectedHandle = providerAuth.handles.find((handle) => handle.connected);
-    if (firstConnectedHandle) {
-      setSelectedProvider(firstConnectedHandle.providerId);
-      setSelectedModel(PROVIDERS[firstConnectedHandle.providerId].defaultModel);
+    const resolvedSelection = nextSelection ?? fallbackSelection;
+    if (!resolvedSelection) {
+      setSelectedProvider(null);
+      setSelectedModel(null);
+      localStorage.removeItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
       return;
     }
 
-    setSelectedProvider("claude-code");
-    setSelectedModel(PROVIDERS["claude-code"].defaultModel);
+    setSelectedProvider(resolvedSelection.providerId);
+    setSelectedModel(resolvedSelection.modelId);
+    localStorage.setItem(
+      LAST_PROVIDER_MODEL_SELECTION_KEY,
+      JSON.stringify(resolvedSelection),
+    );
   }, [
     providerAuth.handles,
     providerAuth.isAnyLoading,
+    providerAuth.getHandle,
     selectedModel,
     selectedProvider,
   ]);
@@ -628,12 +668,10 @@ export function SessionCreationForm() {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Describe what you want to do..."
-            rows={isProviderConnected || isProviderLoading ? 4 : 2}
+            rows={4}
             disabled={isFormInteractionDisabled}
-          className={`w-full overflow-y-auto px-4 pb-2 bg-transparent text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50 ${
-            isProviderConnected || isProviderLoading ? "pt-4" : "pt-2"
-          }`}
-        />
+            className="w-full overflow-y-auto bg-transparent px-4 pb-2 pt-4 text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50"
+          />
 
           <div className="flex items-center justify-between px-3 pb-3">
             <div className="flex items-center gap-2">

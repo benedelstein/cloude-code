@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/popover";
 import {
   Command,
+  CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
@@ -56,8 +58,13 @@ export function ProviderModelSelector({
   disabled,
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const selectedHandle = selectedProvider
+    ? providerAuthHandles.find((handle) => handle.providerId === selectedProvider)
+    : null;
 
-  const hasSelection = selectedProvider !== null && selectedModel !== null;
+  const hasSelection = selectedProvider !== null
+    && selectedModel !== null
+    && (selectedHandle?.connected ?? false);
   const displayLabel = hasSelection
     ? getDisplayLabel(selectedProvider, selectedModel)
     : "Select a model";
@@ -90,7 +97,9 @@ export function ProviderModelSelector({
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="end">
         <Command>
+          <CommandInput placeholder="Search models..." />
           <CommandList>
+            <CommandEmpty>No matching models.</CommandEmpty>
             {providers.map((provider, index) => {
               const handle = providerAuthHandles.find(
                 (h) => h.providerId === provider.id,
@@ -133,11 +142,12 @@ export function ProviderModelSelector({
                     {provider.models.map((model) => {
                       const isSelected =
                         selectedProvider === provider.id &&
-                        selectedModel === model.id;
+                        selectedModel === model.id &&
+                        isConnected;
                       return (
                         <CommandItem
                           key={`${provider.id}:${model.id}`}
-                          value={`${provider.id}:${model.id}`}
+                          value={`${provider.displayName} ${model.displayName}`}
                           disabled={!isConnected}
                           onSelect={() => {
                             if (isConnected) {

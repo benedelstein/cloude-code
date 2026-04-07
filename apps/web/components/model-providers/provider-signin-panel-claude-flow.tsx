@@ -16,29 +16,29 @@ export function ProviderSigninPanelClaudeFlow({
   const submitLabel = handle.submittingCode ? "Submitting..." : "Complete sign in";
 
   return (
-    <>
-      <p className="mt-1 text-xs text-foreground-muted">{description}</p>
-      <ol className="mt-3 space-y-1 text-xs text-foreground-muted list-decimal list-inside">
+    <div className="space-y-4">
+      <p className="text-xs text-foreground-muted">{description}</p>
+      <ol className="space-y-1 text-xs text-foreground-muted list-decimal list-inside">
         <li>Click the button below and authorize Claude in a new tab.</li>
         <li>Copy the code from Claude and paste it here to finish.</li>
       </ol>
       {!handle.awaitingCode && (
-        <div className="mt-4">
+        <div>
           <button
             type="button"
             onClick={handle.connect}
-            className="inline-flex items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
+            className="inline-flex  mt-4 items-center gap-1.5 rounded-sm bg-foreground px-3 py-1.5 text-sm font-semibold text-background transition-colors hover:opacity-90 cursor-pointer"
           >
             {actionLabel}
           </button>
         </div>
       )}
       {handle.error && !handle.awaitingCode && (
-        <p className="mt-3 text-xs text-danger">{handle.error}</p>
+        <p className="text-xs text-danger">{handle.error}</p>
       )}
       {handle.awaitingCode && (
-        <div className="mt-4">
-          <label className="block text-xs text-foreground-muted mb-2">
+        <div className="space-y-3">
+          <label className="block text-xs text-foreground-muted">
             Paste the code from Claude:
           </label>
           <input
@@ -49,9 +49,9 @@ export function ProviderSigninPanelClaudeFlow({
             disabled={handle.submittingCode}
           />
           {handle.error && (
-            <p className="mt-2 text-xs text-danger">{handle.error}</p>
+            <p className="text-xs text-danger">{handle.error}</p>
           )}
-          <div className="mt-3 flex gap-2">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={handle.submitCode}
@@ -71,6 +71,6 @@ export function ProviderSigninPanelClaudeFlow({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

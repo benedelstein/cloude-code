@@ -410,10 +410,10 @@ export class OpenAICodexAuthService {
       OPENAI_CODEX_AUTH_METHOD,
     );
     if (!record) {
-      return failure(openAICodexAuthError("OPENAI_CODEX_AUTH_REQUIRED", "OpenAI Codex authentication required.", 401));
+      return failure(openAICodexAuthError("OPENAI_CODEX_AUTH_REQUIRED", "Codex authentication required.", 401));
     }
     if (record.requiresReauth) {
-      return failure(openAICodexAuthError("OPENAI_CODEX_REAUTH_REQUIRED", "OpenAI Codex authentication expired. Reconnect OpenAI Codex.", 401));
+      return failure(openAICodexAuthError("OPENAI_CODEX_REAUTH_REQUIRED", "Codex authentication expired. Reconnect Codex.", 401));
     }
 
     const decryptedJson = await readStoredCredentialJson(
