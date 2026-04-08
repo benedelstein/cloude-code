@@ -23,17 +23,27 @@ export const OPENAI_CODEX_PROVIDER_ID = "openai-codex" as const;
 
 export const AgentSettingsCodex = z.object({
   provider: z.literal(OPENAI_CODEX_PROVIDER_ID),
-  model: OpenAICodexModel.default("gpt-5.3-codex"),
+  model: OpenAICodexModel.default("gpt-5.4"),
   maxTokens: z.number().default(8192),
 });
 
 export const OPENAI_CODEX_PROVIDER = {
   id: OPENAI_CODEX_PROVIDER_ID,
   displayName: "OpenAI Codex",
-  defaultModel: "gpt-5.3-codex" as const,
+  defaultModel: "gpt-5.4" as const,
   authMethods: ["oauth" as const],
   todoToolName: "update_plan",
   models: [
+    {
+      id: "gpt-5.4" as const,
+      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4"],
+      isDefault: true,
+    },
+    {
+      id: "gpt-5.4-mini" as const,
+      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4-mini"],
+      isDefault: false,
+    },
     {
       id: "gpt-5.3-codex" as const,
       displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
