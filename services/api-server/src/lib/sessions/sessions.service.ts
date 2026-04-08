@@ -46,12 +46,15 @@ import {
   assertUserRepoAccess,
 } from "@/lib/user-session/session-repo-access";
 import type { Env } from "@/types";
+import { toSqliteDatetime } from "@/lib/utils/utils";
 
 const logger = createLogger("sessions.service.ts");
 
+const SESSION_CREATION_DAILY_LIMIT = 100;
+
 type SessionMessagesResponse = UIMessage[];
 
-type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503;
+type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
 
 export interface SessionsServiceError {
   domain: "sessions";
@@ -123,6 +126,11 @@ export class SessionsService {
     githubAccessToken: string;
     request: CreateSessionRequest;
   }): Promise<SessionsServiceResult<CreateSessionResponse>> {
+    const rateLimitResult = await this.assertSessionCreationRateLimit(params.userId);
+    if (!rateLimitResult.ok) {
+      return rateLimitResult;
+    }
+
     const repoAccessResult = await assertUserRepoAccess({
       env: this.env,
       userId: params.userId,
@@ -744,6 +752,23 @@ export class SessionsService {
     }
 
     return success(await this.getSessionAgent(params.sessionId));
+  }
+
+  private async assertSessionCreationRateLimit(
+    userId: string,
+  ): Promise<SessionsServiceResult<void>> {
+    const since = toSqliteDatetime(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const recentCount = await this.sessionsRepository.countRecentByUser(userId, since);
+
+    if (recentCount >= SESSION_CREATION_DAILY_LIMIT) {
+      return failure(this.buildError({
+        status: 429,
+        message: `Session creation limit reached. You can create up to ${SESSION_CREATION_DAILY_LIMIT} sessions per day.`,
+        code: "SESSION_RATE_LIMIT_EXCEEDED",
+      }));
+    }
+
+    return success(undefined);
   }
 
   private async assertSessionOwnership(

@@ -333,6 +333,22 @@ export class SessionsRepository {
     return sessionIds;
   }
 
+  /**
+   * Counts sessions created by a user since the given datetime.
+   * @param userId - The user whose sessions to count.
+   * @param since - ISO datetime string; only sessions with created_at > since are counted.
+   */
+  async countRecentByUser(userId: string, since: string): Promise<number> {
+    const row = await this.database
+      .prepare(
+        `SELECT COUNT(*) as count FROM sessions WHERE user_id = ? AND created_at > ?`,
+      )
+      .bind(userId, since)
+      .first<{ count: number }>();
+
+    return row?.count ?? 0;
+  }
+
   async isOwnedByUser(sessionId: string, userId: string): Promise<boolean> {
     const row = await this.database
       .prepare(`SELECT 1 as owned FROM sessions WHERE id = ? AND user_id = ?`)

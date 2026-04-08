@@ -52,6 +52,12 @@ sessionsRoutes.openapi(createSessionRoute, async (c) => {
   });
 
   if (!result.ok) {
+    if (result.error.status === 429) {
+      return c.json({
+        error: result.error.message,
+        code: result.error.code ?? "SESSION_RATE_LIMIT_EXCEEDED",
+      }, 429);
+    }
     if (result.error.status === 400) {
       return c.json({ error: result.error.message }, 400);
     }
