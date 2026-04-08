@@ -46,6 +46,7 @@ import {
   assertUserRepoAccess,
 } from "@/lib/user-session/session-repo-access";
 import type { Env } from "@/types";
+import { toSqliteDatetime } from "@/lib/utils/utils";
 
 const logger = createLogger("sessions.service.ts");
 
@@ -756,10 +757,7 @@ export class SessionsService {
   private async assertSessionCreationRateLimit(
     userId: string,
   ): Promise<SessionsServiceResult<void>> {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 19);
+    const since = toSqliteDatetime(new Date(Date.now() - 24 * 60 * 60 * 1000));
     const recentCount = await this.sessionsRepository.countRecentByUser(userId, since);
 
     if (recentCount >= SESSION_CREATION_DAILY_LIMIT) {
