@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronsUpDown, Check, Settings, GitBranch } from "lucide-react";
+import { ArrowUp, ChevronsUpDown, Check, GitBranch, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
@@ -32,7 +32,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -43,15 +42,52 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
+import { GithubIcon } from "@/components/github-icon";
 import type { AgentMode } from "@repo/shared";
 import Link from "next/link";
 
 const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
+const LIST_SCROLL_PREFETCH_THRESHOLD = 96;
 
 type StoredProviderModelSelection = {
   providerId: ProviderId;
   modelId: string;
 };
+
+function mergeBranches(
+  existingBranches: Branch[],
+  incomingBranches: Branch[],
+  defaultBranchName: string,
+): Branch[] {
+  const branchesByName = new Map<string, Branch>();
+
+  for (const branch of existingBranches) {
+    branchesByName.set(branch.name, branch);
+  }
+
+  for (const branch of incomingBranches) {
+    const existingBranch = branchesByName.get(branch.name);
+    branchesByName.set(branch.name, {
+      name: branch.name,
+      default: existingBranch?.default === true || branch.default,
+    });
+  }
+
+  if (!branchesByName.has(defaultBranchName)) {
+    branchesByName.set(defaultBranchName, {
+      name: defaultBranchName,
+      default: true,
+    });
+  }
+
+  return Array.from(branchesByName.values()).sort((leftBranch, rightBranch) => {
+    if (leftBranch.default !== rightBranch.default) {
+      return leftBranch.default ? -1 : 1;
+    }
+
+    return leftBranch.name.localeCompare(rightBranch.name);
+  });
+}
 
 function getFallbackProviderModelSelection(
   handles: ReturnType<typeof useProviderAuth>["handles"],
@@ -76,6 +112,9 @@ function RepoSelector({
   installUrl,
   open,
   onOpenChange,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   repos: Repo[];
   selectedRepo: Repo | null;
@@ -85,7 +124,33 @@ function RepoSelector({
   installUrl: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
+  const commandListRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open || !hasMore || loadingMore) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const commandList = commandListRef.current;
+      if (!commandList) {
+        return;
+      }
+
+      if (commandList.scrollHeight <= commandList.clientHeight + 1) {
+        onLoadMore();
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [hasMore, loadingMore, onLoadMore, open, repos.length]);
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <TooltipProvider delayDuration={300}>
@@ -97,13 +162,7 @@ function RepoSelector({
                 disabled={loading || disabled}
                 className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer min-w-0 max-w-[240px]"
               >
-                <svg
-                  className="h-3.5 w-3.5 shrink-0"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                >
-                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                </svg>
+                <GithubIcon className="h-3.5 w-3.5" />
                 <span className="truncate">
                   {loading && !selectedRepo
                     ? "Loading repos..."
@@ -121,7 +180,19 @@ function RepoSelector({
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search repos..." />
-          <CommandList>
+          <CommandList
+            ref={commandListRef}
+            onScroll={(event) => {
+              const commandList = event.currentTarget;
+              const hasReachedBottom =
+                commandList.scrollTop + commandList.clientHeight >=
+                commandList.scrollHeight - LIST_SCROLL_PREFETCH_THRESHOLD;
+
+              if (hasReachedBottom && hasMore && !loadingMore) {
+                onLoadMore();
+              }
+            }}
+          >
             <CommandEmpty>No repos found.</CommandEmpty>
             <CommandGroup>
               {repos.map((repo) => (
@@ -133,19 +204,20 @@ function RepoSelector({
                     onOpenChange(false);
                   }}
                 >
-                  <Check
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0",
-                      selectedRepo?.id === repo.id
-                        ? "opacity-100"
-                        : "opacity-0",
-                    )}
-                  />
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 truncate">
                     {repo.fullName}
                   </span>
+                  {selectedRepo?.id === repo.id && (
+                    <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
+                  )}
                 </CommandItem>
               ))}
+              {loadingMore && (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                  <LoadingSpinner className="h-3.5 w-3.5" />
+                  <span>Loading more repos...</span>
+                </div>
+              )}
             </CommandGroup>
           </CommandList>
           {installUrl && (
@@ -154,10 +226,14 @@ function RepoSelector({
                 href={installUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
+                className="group flex flex-col items-start gap-1 rounded-sm px-2 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
               >
-                <Settings className="h-3.5 w-3.5" />
-                Configure repo access on GitHub
+                Don&apos;t see your repo?
+                {/* <Settings className="h-3.5 w-3.5" /> */}
+                <div className="flex items-center gap-1 font-medium text-foreground group-hover:underline">
+                  Configure access on GitHub
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
               </Link>
             </div>
           )}
@@ -175,6 +251,9 @@ function BranchSelector({
   disabled,
   open,
   onOpenChange,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   branches: Branch[];
   selectedBranch: string | null;
@@ -183,7 +262,34 @@ function BranchSelector({
   disabled: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
+  const commandListRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open || !hasMore || loadingMore) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const commandList = commandListRef.current;
+      if (!commandList) {
+        return;
+      }
+
+      // Auto-fetch only when the list still does not overflow.
+      if (commandList.scrollHeight <= commandList.clientHeight + 1) {
+        onLoadMore();
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [branches.length, hasMore, loadingMore, onLoadMore, open]);
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <TooltipProvider delayDuration={300}>
@@ -209,7 +315,19 @@ function BranchSelector({
       <PopoverContent className="w-[240px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search branches..." />
-          <CommandList>
+          <CommandList
+            ref={commandListRef}
+            onScroll={(event) => {
+              const commandList = event.currentTarget;
+              const hasReachedBottom =
+                commandList.scrollTop + commandList.clientHeight >=
+                commandList.scrollHeight - LIST_SCROLL_PREFETCH_THRESHOLD;
+
+              if (hasReachedBottom && hasMore && !loadingMore) {
+                onLoadMore();
+              }
+            }}
+          >
             <CommandEmpty>No branches found.</CommandEmpty>
             <CommandGroup>
               {branches.map((branch) => (
@@ -221,24 +339,35 @@ function BranchSelector({
                     onOpenChange(false);
                   }}
                 >
-                  <Check
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0",
-                      selectedBranch === branch.name
-                        ? "opacity-100"
-                        : "opacity-0",
-                    )}
-                  />
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 truncate">
                     {branch.name}
                   </span>
-                  {branch.default && (
-                    <span className="ml-auto text-[10px] text-foreground-muted">
-                      default
+                  {(branch.default || selectedBranch === branch.name) && (
+                    <span className="ml-auto flex items-center gap-2">
+                      {branch.default && (
+                        <span
+                          className={
+                            selectedBranch === branch.name
+                              ? "text-[10px]"
+                              : "text-[10px] text-foreground-muted"
+                          }
+                        >
+                          default
+                        </span>
+                      )}
+                      {selectedBranch === branch.name && (
+                        <Check className="h-3.5 w-3.5 shrink-0" />
+                      )}
                     </span>
                   )}
                 </CommandItem>
               ))}
+              {loadingMore && (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                  <LoadingSpinner className="h-3.5 w-3.5" />
+                  <span>Loading more branches...</span>
+                </div>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
@@ -255,12 +384,16 @@ export function SessionCreationForm() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [installUrl, setInstallUrl] = useState<string | null>(null);
   const [reposLoading, setReposLoading] = useState(true);
+  const [reposCursor, setReposCursor] = useState<string | null>(null);
+  const [reposLoadingMore, setReposLoadingMore] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesCursor, setBranchesCursor] = useState<string | null>(null);
+  const [branchesLoadingMore, setBranchesLoadingMore] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
@@ -270,6 +403,9 @@ export function SessionCreationForm() {
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const reposRef = useRef<Repo[]>([]);
+  const branchesRef = useRef<Branch[]>([]);
+  const selectedRepoIdRef = useRef<number | null>(null);
 
   const providerAuth = useProviderAuth();
   const activeHandle = selectedProvider
@@ -278,6 +414,32 @@ export function SessionCreationForm() {
   const signinPanelHandle = providerAuth.getHandle(signinPanelProvider);
   const isProviderConnected = activeHandle?.connected ?? false;
   const isProviderLoading = activeHandle?.loading ?? false;
+
+  useEffect(() => {
+    reposRef.current = repos;
+  }, [repos]);
+
+  useEffect(() => {
+    selectedRepoIdRef.current = selectedRepo?.id ?? null;
+  }, [selectedRepo]);
+
+  useEffect(() => {
+    branchesRef.current = branches;
+  }, [branches]);
+
+  function mergeRepos(existingRepos: Repo[], incomingRepos: Repo[]): Repo[] {
+    const reposById = new Map<number, Repo>();
+
+    for (const repo of existingRepos) {
+      reposById.set(repo.id, repo);
+    }
+
+    for (const repo of incomingRepos) {
+      reposById.set(repo.id, repo);
+    }
+
+    return Array.from(reposById.values());
+  }
 
   const {
     attachments,
@@ -392,47 +554,60 @@ export function SessionCreationForm() {
   useEffect(() => {
     if (!selectedRepo) {
       setBranches([]);
+      setBranchesCursor(null);
+      setBranchesLoadingMore(false);
       setSelectedBranch(null);
       return;
     }
 
     let stale = false;
     const repoId = selectedRepo.id;
+    const defaultBranchName = selectedRepo.defaultBranch;
     const cacheKey = branchCacheKey(repoId);
 
     // Phase 1: Restore from cache
     const cached = readCache<ListBranchesResponse>(cacheKey);
     if (cached) {
-      setBranches(cached.data.branches);
-      const defaultBranch = cached.data.branches.find((b) => b.default);
-      setSelectedBranch(defaultBranch?.name ?? cached.data.branches[0]?.name ?? null);
+      const cachedBranches = mergeBranches(
+        [],
+        cached.data.branches,
+        defaultBranchName,
+      );
+      setBranches(cachedBranches);
+      setBranchesCursor(cached.data.cursor ?? null);
+      const defaultBranch = cachedBranches.find((branch) => branch.default);
+      setSelectedBranch(defaultBranch?.name ?? cachedBranches[0]?.name ?? defaultBranchName);
       setBranchesLoading(false);
     } else {
       setBranchesLoading(true);
       setBranches([]);
-      setSelectedBranch(selectedRepo.defaultBranch);
+      setBranchesCursor(null);
+      setSelectedBranch(defaultBranchName);
     }
+    setBranchesLoadingMore(false);
 
     // Phase 2: Revalidate
     (async () => {
       try {
-        const data = await listBranches(repoId);
+        const data = await listBranches(repoId, {});
         if (stale) return;
-        writeCache(cacheKey, data);
-        setBranches(data.branches);
+        const nextBranches = mergeBranches([], data.branches, defaultBranchName);
+        writeCache(cacheKey, { ...data, branches: nextBranches });
+        setBranches(nextBranches);
+        setBranchesCursor(data.cursor);
 
         setSelectedBranch((currentBranch) => {
           if (currentBranch) {
-            const stillExists = data.branches.find((b) => b.name === currentBranch);
+            const stillExists = nextBranches.find((branch) => branch.name === currentBranch);
             if (stillExists) return currentBranch;
           }
-          const defaultBranch = data.branches.find((b) => b.default);
-          return defaultBranch?.name ?? data.branches[0]?.name ?? null;
+          const defaultBranch = nextBranches.find((branch) => branch.default);
+          return defaultBranch?.name ?? nextBranches[0]?.name ?? defaultBranchName;
         });
       } catch {
         if (stale) return;
         if (!cached) {
-          setSelectedBranch(selectedRepo.defaultBranch);
+          setSelectedBranch(defaultBranchName);
         }
       } finally {
         if (!stale) setBranchesLoading(false);
@@ -444,12 +619,54 @@ export function SessionCreationForm() {
     };
   }, [selectedRepo]);
 
+  async function loadMoreBranches(): Promise<void> {
+    if (!selectedRepo || !branchesCursor || branchesLoadingMore) {
+      return;
+    }
+
+    const repoId = selectedRepo.id;
+    const defaultBranchName = selectedRepo.defaultBranch;
+    const cacheKey = branchCacheKey(repoId);
+    setBranchesLoadingMore(true);
+
+    try {
+      const data = await listBranches(repoId, {
+        cursor: branchesCursor,
+      });
+
+      if (selectedRepoIdRef.current !== repoId) {
+        return;
+      }
+
+      const nextBranches = mergeBranches(
+        branchesRef.current,
+        data.branches,
+        defaultBranchName,
+      );
+      setBranches(nextBranches);
+      setBranchesCursor(data.cursor);
+      writeCache(cacheKey, {
+        branches: nextBranches,
+        cursor: data.cursor,
+      });
+    } catch (error) {
+      toast.error("Failed to load more branches", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      if (selectedRepoIdRef.current === repoId) {
+        setBranchesLoadingMore(false);
+      }
+    }
+  }
+
   useEffect(() => {
     // Phase 1: Restore from cache (synchronous, instant render)
     const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
     if (cached) {
       setRepos(cached.data.repos);
       setInstallUrl(cached.data.installUrl);
+      setReposCursor(cached.data.cursor);
       setReposLoading(false);
 
       const lastRepoId = localStorage.getItem("lastRepoId");
@@ -470,19 +687,20 @@ export function SessionCreationForm() {
         writeCache(CACHE_KEY_REPOS, data);
         setRepos(data.repos);
         setInstallUrl(data.installUrl);
+        setReposCursor(data.cursor);
 
-        // Reconcile selection: keep current choice if it still exists in fresh data
         setSelectedRepo((currentSelected) => {
           if (currentSelected) {
-            const stillExists = data.repos.find((r) => r.id === currentSelected.id);
-            return stillExists ?? null;
+            const stillLoaded = data.repos.find((repo) => repo.id === currentSelected.id);
+            return stillLoaded ?? currentSelected;
           }
+
           const lastRepoId = localStorage.getItem("lastRepoId");
           const lastRepo = lastRepoId
             ? data.repos.find((r) => r.id === Number(lastRepoId))
             : undefined;
           if (lastRepo) return lastRepo;
-          if (data.repos.length === 1) return data.repos[0];
+          if (data.repos.length === 1 && !data.cursor) return data.repos[0];
           return null;
         });
       } catch (err) {
@@ -494,6 +712,42 @@ export function SessionCreationForm() {
       }
     })();
   }, []);
+
+  async function loadMoreRepos(): Promise<void> {
+    if (!reposCursor || reposLoadingMore) {
+      return;
+    }
+
+    setReposLoadingMore(true);
+
+    try {
+      const data = await listRepos({ cursor: reposCursor });
+      const nextRepos = mergeRepos(reposRef.current, data.repos);
+      const nextData: ListReposResponse = {
+        repos: nextRepos,
+        installUrl: data.installUrl,
+        cursor: data.cursor,
+      };
+
+      setRepos(nextRepos);
+      setInstallUrl(data.installUrl);
+      setReposCursor(data.cursor);
+      writeCache(CACHE_KEY_REPOS, nextData);
+      setSelectedRepo((currentSelected) => {
+        if (!currentSelected) {
+          return null;
+        }
+
+        return nextRepos.find((repo) => repo.id === currentSelected.id) ?? currentSelected;
+      });
+    } catch (error) {
+      toast.error("Failed to load more repositories", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setReposLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (!showSigninPanel) {
@@ -630,6 +884,9 @@ export function SessionCreationForm() {
               installUrl={installUrl}
               open={repoPickerOpen}
               onOpenChange={setRepoPickerOpen}
+              hasMore={reposCursor !== null}
+              loadingMore={reposLoadingMore}
+              onLoadMore={loadMoreRepos}
             />
             {selectedRepo && (branches.length > 0 || branchesLoading) && (
               <BranchSelector
@@ -640,6 +897,9 @@ export function SessionCreationForm() {
                 disabled={isFormInteractionDisabled}
                 open={branchPickerOpen}
                 onOpenChange={setBranchPickerOpen}
+                hasMore={branchesCursor !== null}
+                loadingMore={branchesLoadingMore}
+                onLoadMore={loadMoreBranches}
               />
             )}
           </div>
@@ -698,19 +958,27 @@ export function SessionCreationForm() {
               <button
                 type="submit"
                 disabled={isSubmitDisabled}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                aria-label={
+                  submitting
+                    ? "Creating session"
+                    : isUploadingAttachments
+                      ? "Uploading attachments"
+                      : "Start session"
+                }
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
               >
                 {submitting || isUploadingAttachments ? (
-                  <>
-                    <LoadingSpinner className="h-3 w-3" />
-                    {submitting ? "Creating..." : "Uploading..."}
-                  </>
+                  <LoadingSpinner className="h-3.5 w-3.5" />
                 ) : (
-                  <>
-                    Start
-                    <ArrowRight className="h-3 w-3" />
-                  </>
+                  <ArrowUp className="h-3.5 w-3.5" />
                 )}
+                <span className="sr-only">
+                  {submitting
+                    ? "Creating session"
+                    : isUploadingAttachments
+                      ? "Uploading attachments"
+                      : "Start session"}
+                </span>
               </button>
             </div>
           </div>

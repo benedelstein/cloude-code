@@ -8,3 +8,5 @@
 - For tailwind classes, prefer to DRY if they are repeated across multiple divs or components.
 
 globals.css contains global tailwind and css styling. 
+
+After completing visual changes, use the playwright tool to validate your changes.

@@ -105,12 +105,32 @@ export async function getCurrentUser(): Promise<UserInfo> {
   return apiFetch("/auth/me");
 }
 
-export async function listRepos(): Promise<ListReposResponse> {
-  return apiFetch("/repos");
+export async function listRepos(
+  options: { cursor?: string; limit?: number } = {},
+): Promise<ListReposResponse> {
+  const params = new URLSearchParams();
+  if (options.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  if (options.limit) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  return apiFetch(`/repos${query}`);
 }
 
-export async function listBranches(repoId: number): Promise<ListBranchesResponse> {
-  return apiFetch(`/repos/${repoId}/branches`);
+export async function listBranches(
+  repoId: number,
+  options: { cursor?: string } = {},
+): Promise<ListBranchesResponse> {
+  const params = new URLSearchParams();
+  if (options.cursor) {
+    params.set("cursor", options.cursor);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  return apiFetch(`/repos/${repoId}/branches${query}`);
 }
 
 export async function createSession(

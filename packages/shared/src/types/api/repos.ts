@@ -14,6 +14,7 @@ export type Repo = z.infer<typeof Repo>;
 export const ListReposResponse = z.object({
   repos: z.array(Repo),
   installUrl: z.string(),
+  cursor: z.string().nullable(),
 });
 export type ListReposResponse = z.infer<typeof ListReposResponse>;
 
@@ -25,5 +26,6 @@ export type Branch = z.infer<typeof Branch>;
 
 export const ListBranchesResponse = z.object({
   branches: z.array(Branch),
+  cursor: z.string().nullable(),
 });
 export type ListBranchesResponse = z.infer<typeof ListBranchesResponse>;
