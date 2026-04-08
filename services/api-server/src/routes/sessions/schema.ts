@@ -80,6 +80,10 @@ export const createSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access denied for the requested repository",
     },
+    429: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Session creation rate limit exceeded",
+    },
     503: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access could not be verified due to a GitHub dependency failure",
