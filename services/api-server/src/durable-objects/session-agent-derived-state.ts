@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import type { ClientState, SessionTodo } from "@repo/shared";
-import { extractPlanSnapshotFromPart, extractTodoSnapshotFromPart } from "@/lib/session-derived-state";
+import { extractDerivedStateFromPart } from "@/lib/session-derived-state";
 import type { LatestPlanRepository } from "./repositories/latest-plan-repository";
 
 export type DerivedStateContext = {
@@ -24,16 +24,19 @@ export function applyDerivedStateFromParts(
   let nextPlanLastUpdated: string | null = null;
 
   for (const completedPart of completedParts) {
-    const todos = extractTodoSnapshotFromPart(completedPart);
-    if (todos) {
-      nextTodos = todos;
+    const derivedState = extractDerivedStateFromPart(completedPart);
+    if (!derivedState) {
+      continue;
     }
 
-    const plan = extractPlanSnapshotFromPart(completedPart);
-    if (plan) {
+    if (derivedState.todos !== undefined) {
+      nextTodos = derivedState.todos;
+    }
+
+    if (derivedState.plan) {
       const storedPlan = context.latestPlanRepository.upsert(
         context.sessionId,
-        plan,
+        derivedState.plan,
         sourceMessageId,
       );
       nextPlanLastUpdated = storedPlan.updatedAt;

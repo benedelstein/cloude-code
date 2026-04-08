@@ -1,6 +1,8 @@
 "use client";
 
-interface TodoWritePartProps {
+import { isProviderTodoToolName } from "@repo/shared";
+
+interface TodoToolPartProps {
   part: {
     type: string;
     toolName?: string;
@@ -10,7 +12,17 @@ interface TodoWritePartProps {
   };
 }
 
-export function TodoWritePart({ part }: TodoWritePartProps) {
+/**
+ * Returns true when the part represents a provider todo-update tool.
+ *
+ * @param toolName Tool name resolved from the message part.
+ * @returns Whether the part should render with the specialized todo UI.
+ */
+export function isTodoToolName(toolName: string): boolean {
+  return isProviderTodoToolName(toolName);
+}
+
+export function TodoToolPart({ part }: TodoToolPartProps) {
   const state = part.state;
   const statusLabel = state === "output-available"
     ? "Completed"

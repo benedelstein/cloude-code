@@ -106,7 +106,7 @@ export function ClaudeSigninPanel({
                   type="button"
                   onClick={claude.cancelCodeEntry}
                   disabled={claude.submittingCode}
-                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-border text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>

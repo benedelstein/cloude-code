@@ -52,7 +52,7 @@ export function ProviderSigninPanelOpenAIFlow({
       <div className="space-y-4">
         <p className="text-xs text-foreground-muted">{description}</p>
         {deviceAuthNotice}
-        <div>
+        <div className="mt-4">
           <button
             type="button"
             onClick={handle.connect}

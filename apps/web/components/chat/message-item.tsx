@@ -10,7 +10,7 @@ import { ToolCallPart } from "@/components/parts/tool-call-part";
 import { ExitPlanModePart } from "@/components/parts/exit-plan-mode-part";
 import { BashPart } from "@/components/parts/bash-part";
 import { ReasoningPart } from "@/components/parts/reasoning-part";
-import { TodoWritePart } from "@/components/parts/todo-write-part";
+import { isTodoToolName, TodoToolPart } from "@/components/parts/todo-write-part";
 
 interface MessageItemProps {
   message: UIMessage;
@@ -173,8 +173,8 @@ export function MessageItem({ message, userAvatarUrl }: MessageItemProps) {
                   // Handle tool calls - they start with "tool-" prefix
                   if (isToolUIPart(part) || part.type.startsWith("tool-")) {
                     const toolName = (part as { toolName?: string }).toolName ?? part.type.replace(/^tool-/, "");
-                    if (toolName === "TodoWrite") {
-                      return <TodoWritePart key={key} part={part} />;
+                    if (isTodoToolName(toolName)) {
+                      return <TodoToolPart key={key} part={part} />;
                     }
                     if (toolName === "ExitPlanMode") {
                       return <ExitPlanModePart key={key} part={part} />;

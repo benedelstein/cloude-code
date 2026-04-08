@@ -6,7 +6,7 @@ import { execSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { buildSystemPromptAppend } from "../system-prompt";
+import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../system-prompt";
 import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 import { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
@@ -81,7 +81,11 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: buildSystemPromptAppend(sessionSuffix, spriteContext),
+          append: buildSystemPromptAppend(
+            sessionSuffix,
+            spriteContext,
+            getTodoToolNameForProvider(settings.provider),
+          ),
         },
         stderr: (data) => {
           emit({ type: "debug", message: `claude-cli stderr: ${data}` });

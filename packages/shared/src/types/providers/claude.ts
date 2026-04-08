@@ -22,6 +22,7 @@ export const CLAUDE_PROVIDER = {
   displayName: "Claude Code",
   defaultModel: "opus" as const,
   authMethods: ["oauth" as const],
+  todoToolName: "TodoWrite",
   models: [
     { id: "opus" as const, displayName: CLAUDE_MODEL_DISPLAY_NAMES.opus, isDefault: true },
     { id: "sonnet" as const, displayName: CLAUDE_MODEL_DISPLAY_NAMES.sonnet, isDefault: false },

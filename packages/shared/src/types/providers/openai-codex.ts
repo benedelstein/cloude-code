@@ -28,6 +28,7 @@ export const OPENAI_CODEX_PROVIDER = {
   displayName: "OpenAI Codex",
   defaultModel: "gpt-5.3-codex" as const,
   authMethods: ["oauth" as const],
+  todoToolName: "update_plan",
   models: [
     {
       id: "gpt-5.3-codex" as const,

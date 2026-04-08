@@ -1,13 +1,30 @@
-import { dedent } from "@repo/shared";
+import { dedent, getProviderTodoToolName, type ProviderId } from "@repo/shared";
+
+export type TodoToolName = ReturnType<typeof getProviderTodoToolName>;
 
 /**
- * System prompt appended to the Claude Code preset for the vm-agent.
+ * Returns the provider-specific todo tracking tool name.
+ *
+ * @param providerId Agent provider identifier.
+ * @returns Todo tool name exposed by the provider.
+ */
+export function getTodoToolNameForProvider(providerId: ProviderId): TodoToolName {
+  return getProviderTodoToolName(providerId);
+}
+
+/**
+ * System prompt appended to the provider preset/base instructions for the vm-agent.
  * Provides context about the environment and workflow instructions.
  *
  * @param sessionSuffix - First 4 characters of the session ID, used for branch naming.
  * @param spriteContext - Sprite's llm.txt file injected into the system prompt.
+ * @param todoToolName - Provider-specific todo tracking tool name.
  */
-export function buildSystemPromptAppend(sessionSuffix: string, spriteContext: string): string {
+export function buildSystemPromptAppend(
+  sessionSuffix: string,
+  spriteContext: string,
+  todoToolName: TodoToolName,
+): string {
   return dedent`
 <environment>
 
@@ -40,7 +57,7 @@ After pushing the branch, the user may create a pull request to merge the branch
 </git-workflow>
 
 <other-information>
-For multi-step tasks, you should use the \`TodoWrite\` tool to track your progress and surface information to the user.
+For multi-step tasks, you should use the \`${todoToolName}\` tool to track your progress and surface information to the user.
 For complex tasks, you can enter plan mode to get a better understanding of the task and plan your approach. \`EnterPlanMode\`
 </other-information>
 `;

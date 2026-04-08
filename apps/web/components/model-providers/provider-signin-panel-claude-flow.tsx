@@ -24,7 +24,7 @@ export function ProviderSigninPanelClaudeFlow({
         <li>Copy the code from Claude and paste it here to finish.</li>
       </ol>
       {!handle.awaitingCode && (
-        <div>
+        <div className="mt-4">
           <button
             type="button"
             onClick={handle.connect}
@@ -52,7 +52,7 @@ export function ProviderSigninPanelClaudeFlow({
           {handle.error && (
             <p className="text-xs text-danger">{handle.error}</p>
           )}
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handle.submitCode}
@@ -65,7 +65,7 @@ export function ProviderSigninPanelClaudeFlow({
               type="button"
               onClick={handle.cancelCodeEntry}
               disabled={handle.submittingCode}
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
+              className="px-3 py-1.5 text-sm font-medium rounded-sm border border-border text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

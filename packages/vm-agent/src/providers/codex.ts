@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
-import { buildSystemPromptAppend } from "../system-prompt";
+import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../system-prompt";
 import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 
@@ -32,7 +32,11 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
 
     setupCodexAuth(emit);
 
-    const systemPromptAppend = buildSystemPromptAppend(sessionSuffix, spriteContext);
+    const systemPromptAppend = buildSystemPromptAppend(
+      sessionSuffix,
+      spriteContext,
+      getTodoToolNameForProvider(settings.provider),
+    );
 
     let codexPath: string | undefined;
     try {

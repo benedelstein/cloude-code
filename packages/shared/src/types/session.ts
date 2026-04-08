@@ -78,7 +78,7 @@ export type ClientState = {
   pushedBranch: string | null;
   /** Branch the session was based off — used as the PR target */
   baseBranch: string | null;
-  /** Latest streamed todo snapshot from TodoWrite */
+  /** Latest streamed todo snapshot from the provider todo tool */
   todos: SessionTodo[] | null;
   /** Metadata for the latest persisted plan */
   plan: SessionPlanMetadata | null;

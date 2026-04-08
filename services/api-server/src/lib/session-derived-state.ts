@@ -4,49 +4,110 @@ import { z } from "zod";
 
 type MessagePart = UIMessage["parts"][number];
 
+type DynamicToolPart = MessagePart & {
+  type: "dynamic-tool";
+  toolName: string;
+  input?: unknown;
+  args?: unknown;
+};
+
+type DerivedStateSnapshot = {
+  todos?: z.infer<typeof SessionTodo>[] | null;
+  plan?: string | null;
+};
+
 const TodoWriteInput = z.object({
   todos: z.array(SessionTodo),
+});
+
+const UpdatePlanInput = z.object({
+  plan: z.array(z.object({
+    step: z.string(),
+    status: z.enum(["pending", "inProgress", "completed"]),
+  })),
 });
 
 const ExitPlanModeInput = z.object({
   plan: z.string().refine((value) => value.trim().length > 0),
 });
 
-function isDynamicToolPart(part: MessagePart): part is MessagePart & {
-  type: "dynamic-tool";
-  toolName: string;
-  input?: unknown;
-  args?: unknown;
-} {
+interface DerivedStateToolAdapter {
+  readonly toolName: string;
+  // eslint-disable-next-line no-unused-vars
+  extract: (...args: [DynamicToolPart]) => DerivedStateSnapshot | null;
+}
+
+function isDynamicToolPart(part: MessagePart): part is DynamicToolPart {
   return part.type === "dynamic-tool" && typeof (part as { toolName?: unknown }).toolName === "string";
 }
 
-function getPartInput(part: { input?: unknown; args?: unknown }): unknown {
+function getPartInput(part: Pick<DynamicToolPart, "input" | "args">): unknown {
   return part.args ?? part.input;
 }
 
-export function extractTodoSnapshotFromPart(part: MessagePart) {
-  if (!isDynamicToolPart(part) || part.toolName !== "TodoWrite") {
-    return null;
-  }
+class TodoWriteDerivedStateAdapter implements DerivedStateToolAdapter {
+  readonly toolName = "TodoWrite";
 
-  const parsed = TodoWriteInput.safeParse(getPartInput(part));
-  if (!parsed.success) {
-    return null;
-  }
+  extract(part: DynamicToolPart): DerivedStateSnapshot | null {
+    const parsed = TodoWriteInput.safeParse(getPartInput(part));
+    if (!parsed.success) {
+      return null;
+    }
 
-  return parsed.data.todos;
+    return { todos: parsed.data.todos };
+  }
 }
 
-export function extractPlanSnapshotFromPart(part: MessagePart) {
-  if (!isDynamicToolPart(part) || part.toolName !== "ExitPlanMode") {
+class CodexUpdatePlanDerivedStateAdapter implements DerivedStateToolAdapter {
+  readonly toolName = "update_plan";
+
+  extract(part: DynamicToolPart): DerivedStateSnapshot | null {
+    const parsed = UpdatePlanInput.safeParse(getPartInput(part));
+    if (!parsed.success) {
+      return null;
+    }
+
+    return {
+      todos: parsed.data.plan.map((item) => ({
+        content: item.step,
+        status: item.status === "inProgress" ? "in_progress" : item.status,
+      })),
+    };
+  }
+}
+
+class ExitPlanModeDerivedStateAdapter implements DerivedStateToolAdapter {
+  readonly toolName = "ExitPlanMode";
+
+  extract(part: DynamicToolPart): DerivedStateSnapshot | null {
+    const parsed = ExitPlanModeInput.safeParse(getPartInput(part));
+    if (!parsed.success) {
+      return null;
+    }
+
+    return { plan: parsed.data.plan };
+  }
+}
+
+const DERIVED_STATE_TOOL_ADAPTERS: readonly DerivedStateToolAdapter[] = [
+  new TodoWriteDerivedStateAdapter(),
+  new CodexUpdatePlanDerivedStateAdapter(),
+  new ExitPlanModeDerivedStateAdapter(),
+];
+
+const DERIVED_STATE_TOOL_ADAPTERS_BY_NAME = new Map(
+  DERIVED_STATE_TOOL_ADAPTERS.map((adapter) => [adapter.toolName, adapter]),
+);
+
+export function extractDerivedStateFromPart(part: MessagePart): DerivedStateSnapshot | null {
+  if (!isDynamicToolPart(part)) {
     return null;
   }
 
-  const parsed = ExitPlanModeInput.safeParse(getPartInput(part));
-  if (!parsed.success) {
+  const adapter = DERIVED_STATE_TOOL_ADAPTERS_BY_NAME.get(part.toolName);
+  if (!adapter) {
     return null;
   }
 
-  return parsed.data.plan;
+  return adapter.extract(part);
 }

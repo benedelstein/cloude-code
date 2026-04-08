@@ -25,6 +25,7 @@ export type ProviderDefinition = {
   defaultModel: ProviderModelId;
   authMethods: AuthMethod[];
   models: ProviderModelDefinition[];
+  todoToolName: string;
 };
 
 export const PROVIDERS: Record<ProviderId, ProviderDefinition> = {
@@ -36,6 +37,14 @@ export const PROVIDER_LIST = Object.values(PROVIDERS);
 
 export function getProviderDefinition(providerId: ProviderId): ProviderDefinition {
   return PROVIDERS[providerId];
+}
+
+export function getProviderTodoToolName(providerId: ProviderId): string {
+  return getProviderDefinition(providerId).todoToolName;
+}
+
+export function isProviderTodoToolName(toolName: string): boolean {
+  return PROVIDER_LIST.some((provider) => provider.todoToolName === toolName);
 }
 
 export function getProviderModelIds(providerId: ProviderId): ProviderModelId[] {
