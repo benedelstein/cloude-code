@@ -7,8 +7,7 @@ packages:
 # shared package version catalog
 # package.jsons should use "<package>": "catalog:"
 catalog:
-  "agents": "^0.3.6"
-  "partysocket": "^1.1.3"
+  "agents": "^0.10.0"
   "tsx": "^4.7.0"
   "typescript": "^5.7.0"
   "zod": "^4.3.6"
