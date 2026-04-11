@@ -42,6 +42,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     isHistoryLoading,
     isReady,
     isResponding,
+    isStreaming,
     repoFullName,
     pendingUserMessage,
     pushedBranch,
@@ -254,7 +255,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
                 onStop={stop}
                 disabled={!isReady}
-                isStreaming={isResponding}
+                isStreaming={isResponding || isStreaming}
                 agentMode={agentMode}
                 onAgentModeChange={setAgentMode}
                 selectedProvider={selectedProvider}

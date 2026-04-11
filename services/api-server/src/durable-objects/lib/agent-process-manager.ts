@@ -111,7 +111,6 @@ export interface AgentProcessManagerOptions {
   updateLastKnownAgentProcessId: (processId: number | null) => void;
   updateAgentSettings: (settings: AgentSettings) => void;
   updateAgentMode: (agentMode: AgentMode) => void;
-  updateIsResponding: (isResponding: boolean) => void;
   updateProviderConnection: (providerConnection: ProviderConnectionState) => void;
   /* eslint-enable no-unused-vars */
 }
@@ -133,7 +132,6 @@ export class AgentProcessManager {
   private readonly updateLastKnownAgentProcessId: (processId: number | null) => void;
   private readonly updateAgentSettings: (settings: AgentSettings) => void;
   private readonly updateAgentMode: (agentMode: AgentMode) => void;
-  private readonly updateIsResponding: (isResponding: boolean) => void;
   private readonly updateProviderConnection: (providerConnection: ProviderConnectionState) => void;
   private agentWebsocketSession: SpriteWebsocketSession | null = null;
   /** Shares a single in-flight session start across concurrent callers. */
@@ -154,7 +152,6 @@ export class AgentProcessManager {
     this.getServerState = options.getServerState;
     this.updateAgentSettings = options.updateAgentSettings;
     this.updateAgentMode = options.updateAgentMode;
-    this.updateIsResponding = options.updateIsResponding;
     this.updateProviderConnection = options.updateProviderConnection;
   }
 
@@ -287,7 +284,6 @@ export class AgentProcessManager {
     if (!this.agentWebsocketSession || !this.agentWebsocketSession.isConnected) {
       throw new Error("Agent session not connected");
     }
-    this.updateIsResponding(true);
     this.agentWebsocketSession.write(
       encodeAgentInput({
         type: "chat",

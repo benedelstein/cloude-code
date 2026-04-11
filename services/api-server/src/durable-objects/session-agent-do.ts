@@ -118,7 +118,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     pendingUserMessage: null,
     editorUrl: null,
     providerConnection: null,
-    isResponding: false,
     lastError: null,
     baseBranch: null,
     createdAt: new Date(),
@@ -190,8 +189,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.updatePartialState({ agentSettings: settings }),
       updateAgentMode: (agentMode) =>
         this.updatePartialState({ agentMode }),
-      updateIsResponding: (isResponding) =>
-        this.updatePartialState({ isResponding }),
       updateProviderConnection: (providerConnection) =>
         this.updatePartialState({ providerConnection }),
     });
@@ -201,7 +198,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
-      isResponding: false,
     });
 
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
@@ -299,7 +295,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
         this.updatePartialState({
-          isResponding: false,
           lastError: output.error,
           status: this.synthesizeStatus(),
         });
@@ -346,7 +341,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
           // Reset in-progress message state for the next response
           this.messageAccumulator.reset();
-          this.updatePartialState({ isResponding: false });
         }
         break;
       }
@@ -412,7 +406,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     this.messageAccumulator.reset();
     this.updateServerState({ lastKnownAgentProcessId: null });
-    this.updatePartialState({ isResponding: false });
   }
 
   // ============================================
@@ -1061,7 +1054,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
-        // TODO: If the process isnt running, reset `isResponding` back to false so we dont get stuck.
         this.agentProcessManager.cancel();
         break;
     }
@@ -1157,7 +1149,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // send to the agent.
     this.logger.info("Sending pending message");
     try {
-      this.updatePartialState({ isResponding: true });
       const attachmentRecords =
         await this.agentProcessManager.sendMessageToAgent(
           sessionId,
@@ -1169,7 +1160,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     } catch (error) {
       this.logger.error("Failed to send pending message", { error });
       this.updatePartialState({
-        isResponding: false,
         status: this.synthesizeStatus(),
       });
       this.broadcastMessage({
@@ -1312,7 +1302,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     notifyClients = true,
   ): Promise<void> {
     this.updatePartialState({
-      isResponding: false,
       lastError: "Repository access for this session is currently blocked.",
     });
     this.agentProcessManager.cancel();

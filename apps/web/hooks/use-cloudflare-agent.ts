@@ -99,9 +99,6 @@ export function useCloudflareAgent({
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
-  // Note: isResponding is primarily driven by server state via onStateUpdate.
-  // The local setter is only used for optimistic updates (sendMessage) and
-  // cleanup on connection loss (resetPendingResponse).
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
@@ -212,6 +209,7 @@ export function useCloudflareAgent({
         // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
+        setIsResponding(false);
         break;
 
       case "agent.ready":
@@ -279,7 +277,6 @@ export function useCloudflareAgent({
       setAgentModeState((prev) => prev ?? state.agentMode ?? "edit");
       // Initialize selected model from server settings (only if not yet set locally)
       setSelectedModel((prev) => prev ?? state.agentSettings.model);
-      setIsResponding(state.isResponding);
       setSessionStatus(state.status);
       setSessionErrorMessage(state.lastError);
     },

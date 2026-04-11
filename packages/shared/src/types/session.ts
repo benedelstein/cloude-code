@@ -94,8 +94,6 @@ export type ClientState = {
   providerConnection: ProviderConnectionState | null;
   /** Agent operational mode: "edit" (default, full access) or "plan" (read-only exploration) */
   agentMode: AgentMode;
-  /** Whether the agent is currently responding to a message — reset on restart */
-  isResponding: boolean;
   /** Last error message from provisioning or agent start — reset on restart. Used moreso for persistent errors - use a stream event for a transient error */
   lastError: string | null;
   createdAt: Date;

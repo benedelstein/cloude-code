@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, ChevronsUpDown, Check, GitBranch, ArrowUpRight } from "lucide-react";
+import { ChevronsUpDown, Check, GitBranch, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
@@ -42,6 +42,7 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
+import { SendButton } from "@/components/chat/send-button";
 import { GithubIcon } from "@/components/github-icon";
 import type { AgentMode } from "@repo/shared";
 import Link from "next/link";
@@ -461,15 +462,6 @@ export function SessionCreationForm() {
     deleteAttachment,
   });
   const isFormInteractionDisabled = submitting;
-  const isSubmitDisabled = (
-    !selectedProvider ||
-    !selectedModel ||
-    !isProviderConnected ||
-    !selectedRepo ||
-    hasPendingOrFailedUploads ||
-    (!message.trim() && attachments.length === 0) ||
-    submitting
-  );
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -782,8 +774,7 @@ export function SessionCreationForm() {
     setShowSigninPanel(true);
   };
 
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
-    e.preventDefault();
+  const submitMessage = async () => {
     const trimmedMessage = message.trim();
     if (!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
     if (hasPendingOrFailedUploads) {
@@ -835,6 +826,11 @@ export function SessionCreationForm() {
       toast.error("Failed to create session. Please try again.", { description: err instanceof Error ? err.message : "Unknown error" });
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    void submitMessage();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -955,31 +951,15 @@ export function SessionCreationForm() {
                 onConnect={handleProviderConnect}
                 disabled={isFormInteractionDisabled}
               />
-              <button
-                type="submit"
-                disabled={isSubmitDisabled}
-                aria-label={
-                  submitting
-                    ? "Creating session"
-                    : isUploadingAttachments
-                      ? "Uploading attachments"
-                      : "Start session"
-                }
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {submitting || isUploadingAttachments ? (
-                  <LoadingSpinner className="h-3.5 w-3.5" />
-                ) : (
-                  <ArrowUp className="h-3.5 w-3.5" />
-                )}
-                <span className="sr-only">
-                  {submitting
-                    ? "Creating session"
-                    : isUploadingAttachments
-                      ? "Uploading attachments"
-                      : "Start session"}
-                </span>
-              </button>
+              <SendButton
+                isStreaming={false}
+                isLoading={submitting || isUploadingAttachments}
+                isUploading={isUploadingAttachments}
+                disabled={!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo}
+                hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+                hasContent={Boolean(message.trim()) || attachments.length > 0}
+                onTap={() => void submitMessage()}
+              />
             </div>
           </div>
       </InputFrame>

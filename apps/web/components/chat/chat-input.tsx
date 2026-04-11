@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Square } from "lucide-react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
@@ -17,6 +15,7 @@ import type {
 import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
+import { SendButton } from "@/components/chat/send-button";
 import { toast } from "sonner";
 
 interface ChatInputProps {
@@ -125,8 +124,7 @@ export function ChatInput({
     signinHandle?.requiresReauth,
   ]);
 
-  const handleSubmit = async (event: React.SyntheticEvent) => {
-    event.preventDefault();
+  const submitMessage = () => {
     if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
       return;
     if (hasPendingOrFailedUploads) {
@@ -149,6 +147,11 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
+  };
+
+  const handleSubmit = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    submitMessage();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -255,39 +258,14 @@ export function ChatInput({
               disabled={disabled || isAuthBlocking}
             />
           )}
-        {isStreaming ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onStop}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-danger text-white hover:bg-danger/90 transition-colors"
-              >
-                <Square className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Stop generation</TooltipContent>
-          </Tooltip>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="submit"
-                disabled={disabled || isAuthBlocking || hasPendingOrFailedUploads || (!input.trim() && attachments.length === 0)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isUploading
-                ? "Uploading attachments..."
-                : hasPendingOrFailedUploads
-                  ? "Attachments must finish uploading before send."
-                  : "Enter to send. Shift+Enter for new line."}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <SendButton
+          isStreaming={isStreaming}
+          disabled={disabled || isAuthBlocking}
+          isUploading={isUploading}
+          hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+          hasContent={Boolean(input.trim()) || attachments.length > 0}
+          onTap={isStreaming ? onStop : submitMessage}
+        />
         </div>
       </div>
     </form>
