@@ -98,7 +98,7 @@ export function useCloudflareAgent({
   const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
-  const [isResponding, setIsResponding] = useState(false);
+  const [isResponding, setIsResponding] = useState(initialPendingUserMessage !== null);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
