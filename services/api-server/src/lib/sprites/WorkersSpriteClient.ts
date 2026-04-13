@@ -198,6 +198,24 @@ export class WorkersSpriteClient {
     }
   }
 
+  async killSession(sessionId: number, signal: "SIGINT" | "SIGTERM" = "SIGTERM"): Promise<void> {
+    const url = `${this.baseUrl}/v1/sprites/${this.name}/exec/${sessionId}/kill?signal=${signal}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new SpritesError(
+        `Failed to kill session ${sessionId}: ${response.status}`,
+        response.status,
+        text,
+      );
+    }
+  }
+
   async writeFile(
     path: string,
     content: string,

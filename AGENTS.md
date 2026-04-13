@@ -128,7 +128,12 @@ switch (expression) {
 - No speculative features or future-proofing.
 - No docstrings or comments on code that was not changed.
 
+## Documentation / Further Information
+
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.
+`docs/plans` contains artifacts about implementation plans for larger features. If you are planning a larger feature, you must create a plan file in that folder. Use `TEMPLATE.md` as a starting point. Once a plan's implmentation has been completed, move it to `docs/plans/complete/`
+
+
 
 ## Response style
 

@@ -25,7 +25,7 @@ The Durable Object is the source of truth for each session. It:
 
 A Durable Object is a stateful, on-demand class that can write to durable SQLite storage. It starts up as needed and shuts down after inactivity. The DO acts like a "mini-server" for each session, coordinating state in a thread-safe manner.
 
-Prefer to split out logic into scoped, separate service files inside of `lib/` for clarity and maintainability. See agent-process-manager.ts for an example.
+Prefer to split out logic into scoped, separate service files inside of `lib/` for clarity and maintainability.
 
 ### Request Routing
 
