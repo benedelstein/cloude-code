@@ -201,14 +201,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       );
     }
 
-    // Reset transient ClientState fields on every restart so they never get
+    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
+  }
+
+  async onStart(): Promise<void> {
+    // note: doing this here brecause we cant access this.name in the constructor. cf bug
+     // Reset transient ClientState fields on every restart so they never get
     // stuck from a previous instance's in-progress operation.
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
     });
-
-    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
+    this.logger.debug("onStart");
   }
 
   // ============================================
