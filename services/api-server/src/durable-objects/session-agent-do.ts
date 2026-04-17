@@ -1081,6 +1081,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     );
 
     try {
+      await this.onUserMessageSent(userMessage, attachmentRecords);
       await this.dispatchTurnToWorkflow({
         userMessage: {
           id: userMessage.id,
@@ -1088,7 +1089,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           attachmentIds,
         },
       });
-      await this.onUserMessageSent(userMessage, attachmentRecords);
       this.updatePartialState({ pendingUserMessage: null });
     } catch (error) {
       const errorMessage =
@@ -1160,6 +1160,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       });
     }
 
+    // save before dispatching to workflow to avoid race conditions
+    await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
     try {
       this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
       await this.dispatchTurnToWorkflow({
@@ -1178,7 +1180,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       });
     }
 
-    await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
     return success(undefined);
   }
 
