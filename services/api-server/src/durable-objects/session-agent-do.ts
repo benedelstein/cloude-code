@@ -70,10 +70,11 @@ import type {
   AgentProcessRunnerTurnResult,
   PreparedWorkflowTurn,
 } from "@/workflows/AgentProcessRunner";
-import type {
-  PrepareWorkflowTurnOverrides,
-  WorkflowTurnFailure,
-  WorkflowTurnPayload,
+import {
+  workflowTurnFailure,
+  type PrepareWorkflowTurnOverrides,
+  type WorkflowTurnFailure,
+  type WorkflowTurnPayload,
 } from "@/workflows/types";
 import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
 
@@ -186,9 +187,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       restartWorkflow: this.restartWorkflow.bind(this),
     });
 
-    // Rebuild in-memory accumulator + derived state from the WAL.
-    this.workflowTurnCoordinator.rehydratePendingMessageState();
-
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
   }
 
@@ -275,11 +273,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private queueRefreshProviderConnection(): void {
-    this.ctx.waitUntil(
-      this.refreshProviderConnection().catch((error) => {
-        this.logger.error("Failed to refresh provider connection state", { error });
-      }),
-    );
+    this.refreshProviderConnection().catch((error) => {
+      this.logger.error("Failed to refresh provider connection state", { error });
+    });
   }
 
   /**
@@ -345,17 +341,26 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   onWorkflowTurnFinished(
-    messageId: string,
+    userMessageId: string,
     result: AgentProcessRunnerTurnResult,
   ): void {
-    this.workflowTurnCoordinator.handleTurnFinished(messageId, result);
+    this.workflowTurnCoordinator.handleTurnFinished(userMessageId, result);
   }
 
   onWorkflowTurnFailed(
-    messageId: string,
+    userMessageId: string,
     error: WorkflowTurnFailure,
   ): void {
-    this.workflowTurnCoordinator.handleTurnFailed(messageId, error);
+    if (error.code === "PROVIDER_AUTH_REQUIRED") {
+      this.updatePartialState({
+        providerConnection: {
+          provider: this.state.agentSettings.provider,
+          connected: false,
+          requiresReauth: true,
+        },
+      });
+    }
+    this.workflowTurnCoordinator.handleTurnFailed(userMessageId, error);
   }
 
   async onWorkflowComplete(
@@ -621,11 +626,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private queueEnsureReady(): void {
-    this.ctx.waitUntil(
-      this.ensureReady().catch((error) => {
-        this.logger.error("ensureReady failed", { error });
-      }),
-    );
+    this.ensureReady().catch((error) => {
+      this.logger.error("ensureReady failed", { error });
+    });
   }
 
   private ensureProvisioned(): Promise<void> {
@@ -1007,7 +1010,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       const result = await this.dispatchChatMessageToWorkflow(payload, connection.id);
       if (!result.ok) {
         this.logger.warn("Workflow chat message dispatch failed", {
-          fields: { code: result.error.code ?? "unknown" },
+          fields: { code: result.error.code },
         });
         this.sendMessage(
           {
@@ -1080,7 +1083,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       attachmentIds,
     );
 
+    this.updatePartialState({ pendingUserMessage: null });
     try {
+      // TODO: mark the message failed if dispatch fails.
       await this.onUserMessageSent(userMessage, attachmentRecords);
       await this.dispatchTurnToWorkflow({
         userMessage: {
@@ -1089,7 +1094,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           attachmentIds,
         },
       });
-      this.updatePartialState({ pendingUserMessage: null });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -1112,10 +1116,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   ): Promise<Result<void, WorkflowTurnFailure>> {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
-      return failure({
-        code: "SESSION_NOT_INITIALIZED",
-        message: "Session is not initialized",
-      });
+      return failure(
+        workflowTurnFailure("SESSION_NOT_INITIALIZED", "Session is not initialized"),
+      );
     }
 
     const attachmentIds =
@@ -1125,10 +1128,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       attachmentIds,
     );
     if (attachmentRecords.length !== attachmentIds.length) {
-      return failure({
-        code: "ATTACHMENTS_NOT_FOUND",
-        message: "Some attachments were not found for this session",
-      });
+      return failure(
+        workflowTurnFailure(
+          "ATTACHMENTS_NOT_FOUND",
+          "Some attachments were not found for this session",
+          { attachmentIds },
+        ),
+      );
     }
 
     const content = payload.content?.trim();
@@ -1154,15 +1160,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       payload.messageId,
     );
     if (!userUiMessage) {
-      return failure({
-        code: "INVALID_MESSAGE",
-        message: "Message must include content or attachments",
-      });
+      return failure(
+        workflowTurnFailure(
+          "INVALID_MESSAGE",
+          "Message must include content or attachments",
+        ),
+      );
     }
 
-    // save before dispatching to workflow to avoid race conditions
-    await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
     try {
+      // save before dispatching to workflow to avoid race conditions
+      await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
       this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
       await this.dispatchTurnToWorkflow({
         userMessage: {
@@ -1174,10 +1182,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         agentMode: agentModeOverride,
       });
     } catch (error) {
-      return failure({
-        code: "WORKFLOW_DISPATCH_FAILED",
-        message: error instanceof Error ? error.message : String(error),
-      });
+      return failure(
+        workflowTurnFailure(
+          "WORKFLOW_DISPATCH_FAILED",
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
     }
 
     return success(undefined);
@@ -1194,12 +1204,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.logger.warn("Invalid provider model in workflow model switch", {
         fields: { provider: this.state.agentSettings.provider, model },
       });
-      return failure({
-        code: "INVALID_MODEL",
-        message: "Invalid model for the current provider",
-        provider: this.state.agentSettings.provider,
-        model,
-      });
+      return failure(
+        workflowTurnFailure(
+          "INVALID_MODEL",
+          "Invalid model for the current provider",
+          { provider: this.state.agentSettings.provider, model },
+        ),
+      );
     }
 
     this.updatePartialState({

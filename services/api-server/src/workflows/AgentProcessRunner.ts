@@ -324,7 +324,6 @@ export class AgentProcessRunner {
     );
     const snapshot = await adapter.getCredentialSnapshot(this.preparedTurn.userId);
     if (!snapshot.ok) {
-      // TODO: SURFACE CONNECTION ERRORS TO THE DO for reconnection
       return failure(mapProviderCredentialError(snapshot.error));
     }
     return success(snapshot.value);

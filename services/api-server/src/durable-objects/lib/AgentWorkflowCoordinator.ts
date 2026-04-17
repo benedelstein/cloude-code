@@ -24,11 +24,12 @@ import type {
   AgentProcessRunnerTurnResult,
   PreparedWorkflowTurn,
 } from "@/workflows/AgentProcessRunner";
-import type {
-  PrepareWorkflowTurnOverrides,
-  SessionTurnWorkflowParams,
-  WorkflowTurnFailure,
-  WorkflowTurnPayload,
+import {
+  workflowTurnFailure,
+  type PrepareWorkflowTurnOverrides,
+  type SessionTurnWorkflowParams,
+  type WorkflowTurnFailure,
+  type WorkflowTurnPayload,
 } from "@/workflows/types";
 
 const SESSION_TURN_WORKFLOW_BINDING = "SESSION_TURN_WORKFLOW";
@@ -115,6 +116,7 @@ export class AgentWorkflowCoordinator {
   private readonly getWorkflow: WorkflowTurnCoordinatorDeps["getWorkflow"];
   private readonly sendWorkflowEvent: WorkflowTurnCoordinatorDeps["sendWorkflowEvent"];
   private readonly restartWorkflow: WorkflowTurnCoordinatorDeps["restartWorkflow"];
+  private hasRehydratedPendingChunks: boolean = false;
 
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
   /** Serializes workflow create/send operations for this session. */
@@ -154,7 +156,8 @@ export class AgentWorkflowCoordinator {
    * Non-destructive: never commits a message and never clears the WAL. Cleanup of
    * the WAL is owned by terminal workflow RPCs and reconcileActiveTurn().
    */
-  rehydratePendingMessageState(): void {
+  rehydratePendingChunksIfNeeded(): void {
+    if (this.hasRehydratedPendingChunks) return;
     const serverState = this.getServerState();
     const sessionId = serverState.sessionId;
     if (!sessionId) return;
@@ -181,6 +184,7 @@ export class AgentWorkflowCoordinator {
         this.messageAccumulator.getMessageId(),
       );
     }
+    this.hasRehydratedPendingChunks = true;
 
     // If a workflow turn is durably marked active, schedule an async reconcile
     // that will clean up if the workflow is actually terminal.
@@ -269,22 +273,19 @@ export class AgentWorkflowCoordinator {
     const clientState = this.getClientState();
 
     if (!serverState.initialized || !serverState.sessionId) {
-      return failure({
-        code: "SESSION_NOT_INITIALIZED",
-        message: "Session is not initialized",
-      });
+      return failure(
+        workflowTurnFailure("SESSION_NOT_INITIALIZED", "Session is not initialized"),
+      );
     }
     if (!serverState.spriteName || !serverState.repoCloned) {
-      return failure({
-        code: "SESSION_NOT_READY",
-        message: "Session provisioning is not complete",
-      });
+      return failure(
+        workflowTurnFailure("SESSION_NOT_READY", "Session provisioning is not complete"),
+      );
     }
     if (!serverState.userId) {
-      return failure({
-        code: "USER_NOT_FOUND",
-        message: "Session user id is missing",
-      });
+      return failure(
+        workflowTurnFailure("USER_NOT_FOUND", "Session user id is missing"),
+      );
     }
     // the message id should have already been set when we dispatched the turn.
     if (
@@ -293,16 +294,14 @@ export class AgentWorkflowCoordinator {
       this.logger.warn("Another workflow turn is already active, not starting new turn", {
         fields: { userMessageId },
       });
-      return failure({
-        code: "TURN_NOT_ACTIVE",
-        message: "Another workflow turn is already active",
-      });
+      return failure(
+        workflowTurnFailure("TURN_NOT_ACTIVE", "Another workflow turn is already active"),
+      );
     }
     if (!this.messageRepository.getById(userMessageId)) {
-      return failure({
-        code: "MESSAGE_NOT_FOUND",
-        message: "Workflow turn message was not found",
-      });
+      return failure(
+        workflowTurnFailure("MESSAGE_NOT_FOUND", "Workflow turn message was not found"),
+      );
     }
 
     const parsedSettings = AgentSettings.safeParse({
@@ -311,14 +310,18 @@ export class AgentWorkflowCoordinator {
       maxTokens: clientState.agentSettings.maxTokens,
     });
     if (!parsedSettings.success) {
-      return failure({
-        code: "INVALID_AGENT_SETTINGS",
-        message: "Agent settings are invalid for workflow execution",
-        issues: parsedSettings.error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
+      return failure(
+        workflowTurnFailure(
+          "INVALID_AGENT_SETTINGS",
+          "Agent settings are invalid for workflow execution",
+          {
+            issues: parsedSettings.error.issues.map((issue) => ({
+              path: issue.path.join("."),
+              message: issue.message,
+            })),
+          },
+        ),
+      );
     }
 
     this.updateWorkflowState({ activeUserMessageId: userMessageId });
@@ -375,13 +378,14 @@ export class AgentWorkflowCoordinator {
    * @param chunk UI chunk emitted by the workflow-owned runner.
    */
   handleChunk(
-    messageId: string,
+    userMessageId: string,
     sequence: number,
     chunk: UIMessageChunk,
   ): void {
+    this.rehydratePendingChunksIfNeeded();
     // this.logger.debug(`Received chunk ${sequence} with type ${chunk.type} for turn ${messageId}`);
     void sequence;
-    if (this.isStaleRpc(messageId)) return;
+    if (this.isStaleRpc(userMessageId)) return;
     this.handleAgentOutput({
       type: "stream",
       chunk,
@@ -394,13 +398,13 @@ export class AgentWorkflowCoordinator {
    * @param result Terminal result returned by the workflow runner.
    */
   handleTurnFinished(
-    messageId: string,
+    userMessageId: string,
     result: AgentProcessRunnerTurnResult,
   ): void {
-    if (this.isStaleRpc(messageId)) return;
+    if (this.isStaleRpc(userMessageId)) return;
     this.logger.info("Workflow turn finished", {
       fields: {
-        messageId,
+        userMessageId,
         finishReason: result.finishReason ?? "unknown",
       },
     });
@@ -417,14 +421,15 @@ export class AgentWorkflowCoordinator {
    * @param error Modeled failure returned by the workflow runner.
    */
   handleTurnFailed(
-    messageId: string,
+    userMessageId: string,
     error: WorkflowTurnFailure,
   ): void {
-    if (this.isStaleRpc(messageId)) return;
+    if (this.isStaleRpc(userMessageId)) return;
+    this.rehydratePendingChunksIfNeeded();
     this.logger.error("Workflow turn failed", {
       fields: {
-        messageId,
-        code: error.code ?? "unknown",
+        userMessageId,
+        code: error.code,
       },
       error: error.message,
     });
@@ -432,7 +437,7 @@ export class AgentWorkflowCoordinator {
     const saved = this.commitAbortedMessage(this.messageAccumulator);
     if (saved) {
       this.logger.info("Saved interrupted message to SQLite on workflow failure", {
-        fields: { messageId },
+        fields: { userMessageId },
       });
     }
 
@@ -731,11 +736,11 @@ export class AgentWorkflowCoordinator {
    * currently-active turn. Permissive when active is null — a terminal RPC
    * may legitimately arrive just after reconcile cleared state.
    */
-  private isStaleRpc(messageId: string): boolean {
+  private isStaleRpc(userMessageId: string): boolean {
     const activeUserMessageId = this.getServerState().workflowState.activeUserMessageId;
-    if (activeUserMessageId && activeUserMessageId !== messageId) {
+    if (activeUserMessageId && activeUserMessageId !== userMessageId) {
       this.logger.warn("Ignoring workflow RPC for non-active message", {
-        fields: { incomingMessageId: messageId, activeUserMessageId },
+        fields: { incomingMessageId: userMessageId, activeUserMessageId },
       });
       return true;
     }

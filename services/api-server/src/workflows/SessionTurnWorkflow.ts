@@ -8,10 +8,11 @@ import {
   AgentProcessRunner,
   type PreparedWorkflowTurn,
 } from "@/workflows/AgentProcessRunner";
-import type {
-  SessionTurnWorkflowParams,
-  WorkflowTurnFailure,
-  WorkflowTurnPayload,
+import {
+  workflowTurnFailure,
+  type SessionTurnWorkflowParams,
+  type WorkflowTurnFailure,
+  type WorkflowTurnPayload,
 } from "@/workflows/types";
 
 const MESSAGE_AVAILABLE_EVENT_TYPE = "message_available";
@@ -131,22 +132,18 @@ export class SessionTurnWorkflow extends AgentWorkflow<
     if (
       typeof error === "object" &&
       error !== null &&
+      "domain" in error &&
+      "code" in error &&
       "message" in error &&
+      typeof (error as { code?: unknown }).code === "string" &&
       typeof (error as { message?: unknown }).message === "string"
     ) {
-      if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
-        return error as WorkflowTurnFailure;
-      }
-
-      return {
-        code: "WORKFLOW_TURN_FAILED",
-        message: (error as { message: string }).message,
-      };
+      return error as WorkflowTurnFailure;
     }
 
-    return {
-      code: "WORKFLOW_TURN_FAILED",
-      message: error instanceof Error ? error.message : String(error),
-    };
+    return workflowTurnFailure(
+      "WORKFLOW_TURN_FAILED",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
