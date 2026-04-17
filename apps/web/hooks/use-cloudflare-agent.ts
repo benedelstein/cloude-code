@@ -204,7 +204,6 @@ export function useCloudflareAgent({
       }
 
       case "agent.chunk":
-        console.log("[agent] agent.chunk", { chunkType: (msg.chunk as UIMessageChunk)?.type, hadStream: !!streamControllerRef.current, isConsuming: isConsumingRef.current });
         if (!streamControllerRef.current) {
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {

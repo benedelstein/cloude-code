@@ -208,6 +208,9 @@ export class AgentProcessRunner {
   private readonly onChunk: AgentProcessRunnerOptions["onChunk"];
   private agentSession: SpriteWebsocketSession | null = null;
   private stdoutBuffer = "";
+  // Serializes handleAgentStdout invocations so concurrent stdout frames
+  // cannot interleave their awaited onChunk RPCs and reorder chunks at the DO.
+  private stdoutProcessingPromise: Promise<void> = Promise.resolve();
   private chunkSequence = 0;
   private agentProcessId: number | null = null;
   private readonly turnStartedDeferred = createDeferred<void>();
@@ -379,13 +382,17 @@ export class AgentProcessRunner {
 
   private setupAgentSessionHandlers(session: SpriteWebsocketSession): void {
     session.onStdout((data: string) => {
-      void this.handleAgentStdout(data).catch((error) => {
-        this.failTurn(
-          agentProcessRunnerError("TURN_FAILED", error.message, {
-            cause: error.message,
-          }),
-        );
-      });
+      this.stdoutProcessingPromise = this.stdoutProcessingPromise
+        // prevent a prior failure from poisoning the chain for later chunks
+        .catch(() => undefined)
+        .then(() => this.handleAgentStdout(data))
+        .catch((error) => {
+          this.failTurn(
+            agentProcessRunnerError("TURN_FAILED", error.message, {
+              cause: error.message,
+            }),
+          );
+        });
     });
 
     session.onStderr((data: string) => {
