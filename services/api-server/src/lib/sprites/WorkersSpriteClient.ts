@@ -168,7 +168,7 @@ export class WorkersSpriteClient {
   }
 
   attachSession(
-    sessionId: string,
+    sessionId: string, // todo: make number?
     options: AttachSessionOptions = {},
   ): SpriteWebsocketSession {
     return new SpriteWebsocketSession(this.name, this.apiKey, this.baseUrl, {
@@ -198,6 +198,11 @@ export class WorkersSpriteClient {
     }
   }
 
+  /**
+   * Kills a session/processs running on the sprite.
+   * @param sessionId Sprite process ID to kill
+   * @param signal Signal to send to the process (default: SIGTERM)
+   */
   async killSession(sessionId: number, signal: "SIGINT" | "SIGTERM" = "SIGTERM"): Promise<void> {
     const url = `${this.baseUrl}/v1/sprites/${this.name}/exec/${sessionId}/kill?signal=${signal}`;
     const response = await fetch(url, {

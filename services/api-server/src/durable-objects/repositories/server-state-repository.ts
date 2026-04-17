@@ -21,10 +21,8 @@ export type ServerState = {
   workflowInstanceId: string | null;
   /** Active workflow-owned turn message id, if any */
   activeWorkflowMessageId: string | null;
-  /** Attachable Sprite exec-session id for the active workflow turn */
-  activeWorkflowExecSessionId: string | null;
-  /** Process ID for the active workflow-owned vm-agent turn */
-  activeWorkflowProcessId: number | null;
+  /** Sprite exec-session / process ID for the active workflow turn */
+  activeAgentProcessId: number | null;
 };
 
 function defaultServerState(): ServerState {
@@ -37,8 +35,7 @@ function defaultServerState(): ServerState {
     agentSessionId: null,
     workflowInstanceId: null,
     activeWorkflowMessageId: null,
-    activeWorkflowExecSessionId: null,
-    activeWorkflowProcessId: null,
+    activeAgentProcessId: null,
   };
 }
 

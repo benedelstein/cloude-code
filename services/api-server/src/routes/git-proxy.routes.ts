@@ -11,6 +11,7 @@ gitProxyRoutes.all("/:sessionId/*", async (c) => {
   const sessionId = c.req.param("sessionId");
   const stub = await getAgentByName<Env, SessionAgentDO>(c.env.SESSION_AGENT, sessionId);
   const url = new URL(c.req.url);
+  // TODO: REPLACE WITH RPC METHOD
   const doRequest = new Request(`http://do${url.pathname}${url.search}`, {
     method: c.req.method,
     headers: c.req.raw.headers,

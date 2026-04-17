@@ -61,7 +61,6 @@ export class MessageAccumulator {
     switch (chunk.type) {
       case "start":
         this.messageId = chunk.messageId;
-        this.logger.debug(`start chunk, messageId=${chunk.messageId}`);
         break;
 
       case "text-start":
@@ -72,6 +71,10 @@ export class MessageAccumulator {
       case "text-delta":
         if (this.currentTextId === chunk.id) {
           this.currentText += chunk.delta;
+        } else {
+          this.logger.warn(`[chunk-trace] text-delta received for unknown id`, {
+            fields: { chunkId: chunk.id, currentTextId: this.currentTextId },
+          });
         }
         break;
 
@@ -93,6 +96,10 @@ export class MessageAccumulator {
       case "reasoning-delta":
         if (this.currentReasoningId === chunk.id) {
           this.currentReasoning += chunk.delta;
+        } else {
+          this.logger.warn(`[chunk-trace] reasoning-delta for unknown id`, {
+            fields: { chunkId: chunk.id, currentReasoningId: this.currentReasoningId },
+          });
         }
         break;
 
@@ -120,6 +127,10 @@ export class MessageAccumulator {
         const toolCall = this.toolCalls.get(chunk.toolCallId);
         if (toolCall) {
           toolCall.inputText += chunk.inputTextDelta;
+        } else {
+          this.logger.warn(`[chunk-trace] tool-input-delta for unknown toolCallId`, {
+            fields: { toolCallId: chunk.toolCallId, knownToolCallIds: [...this.toolCalls.keys()] },
+          });
         }
         break;
       }

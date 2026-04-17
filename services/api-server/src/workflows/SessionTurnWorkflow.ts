@@ -3,7 +3,11 @@ import type { AgentWorkflowEvent, AgentWorkflowStep } from "agents/workflows";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { createLogger } from "@/lib/logger";
 import type { Env } from "@/types";
-import { AgentProcessRunner } from "@/workflows/AgentProcessRunner";
+import type { Result } from "@repo/shared";
+import {
+  AgentProcessRunner,
+  type PreparedWorkflowTurn,
+} from "@/workflows/AgentProcessRunner";
 import type {
   SessionTurnWorkflowParams,
   WorkflowTurnFailure,
@@ -26,9 +30,11 @@ export class SessionTurnWorkflow extends AgentWorkflow<
   ): Promise<void> {
     const { initialTurn, sessionId, spriteName } = event.payload;
     let nextTurn = initialTurn;
+    let turnCount = 0;
+    this.logger.debug(`starting workflow${initialTurn ? ` with initial turn` : ""}`);
 
     while (true) {
-      const turnPayload = nextTurn ?? (await this.waitForNextTurn(step));
+      const turnPayload = nextTurn ?? (await this.waitForNextTurn(step, turnCount));
       nextTurn = undefined;
 
       await step.do(
@@ -39,15 +45,18 @@ export class SessionTurnWorkflow extends AgentWorkflow<
           return { completed: true } as const;
         },
       );
+
+      turnCount++;
     }
   }
 
   private async waitForNextTurn(
     step: AgentWorkflowStep,
+    turnCount: number,
   ): Promise<WorkflowTurnPayload> {
     this.logger.debug("Waiting for next turn");
     const workflowEvent = await step.waitForEvent<WorkflowTurnPayload>(
-      "wait-for-turn",
+      `wait-for-turn:${turnCount}`,
       {
         type: MESSAGE_AVAILABLE_EVENT_TYPE,
       },
@@ -66,11 +75,13 @@ export class SessionTurnWorkflow extends AgentWorkflow<
     const logger = this.logger.scope(`turn:${messageId}`);
 
     try {
+      // Cast: Cloudflare RPC Promisify breaks discriminated unions at the type
+      // level, but the runtime value is still a plain { ok, value/error } object.
       const preparedTurn = await this.agent.prepareWorkflowTurn(messageId, {
         model,
         agentMode,
-      });
-      if ("error" in preparedTurn) {
+      }) as Result<PreparedWorkflowTurn, WorkflowTurnFailure>;
+      if (!preparedTurn.ok) {
         await this.agent.onWorkflowTurnFailed(
           messageId,
           this.toWorkflowTurnFailure(preparedTurn.error),
@@ -84,16 +95,15 @@ export class SessionTurnWorkflow extends AgentWorkflow<
         spriteName,
         sessionId,
         preparedTurn: preparedTurn.value,
-        onTurnStarted: async ({ spriteExecSessionId, spriteProcessId }) => {
-          await this.agent.onWorkflowTurnStarted(messageId, {
-            spriteExecSessionId,
-            spriteProcessId,
-          });
+        onTurnStarted: async (processId) => {
+          await this.agent.onWorkflowTurnStarted(messageId, processId);
         },
         onAgentSessionId: async (agentSessionId) => {
           await this.agent.onWorkflowSessionId(messageId, agentSessionId);
         },
         onChunk: async (sequence, chunk) => {
+          const c = chunk as { type?: string; toolCallId?: string };
+          this.logger.info(`[chunk-trace] workflow onChunk seq=${sequence} type=${c.type}${c.toolCallId ? ` toolCallId=${c.toolCallId}` : ""}`);
           await this.agent.onWorkflowChunk(messageId, sequence, chunk);
         },
       });

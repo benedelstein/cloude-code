@@ -65,6 +65,7 @@ export function ChatInput({
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [showSigninPanel, setShowSigninPanel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     attachments,
@@ -124,6 +125,12 @@ export function ChatInput({
     signinHandle?.requiresReauth,
   ]);
 
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsCancelling(false);
+    }
+  }, [isStreaming]);
+
   const submitMessage = () => {
     if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
       return;
@@ -163,6 +170,14 @@ export function ChatInput({
       event.preventDefault();
       void handleSubmit(event);
     }
+  };
+
+  const handleStop = () => {
+    if (isCancelling) {
+      return;
+    }
+    setIsCancelling(true);
+    onStop();
   };
 
   return (
@@ -258,14 +273,15 @@ export function ChatInput({
               disabled={disabled || isAuthBlocking}
             />
           )}
-        <SendButton
-          isStreaming={isStreaming}
-          disabled={disabled || isAuthBlocking}
-          isUploading={isUploading}
-          hasPendingOrFailedUploads={hasPendingOrFailedUploads}
-          hasContent={Boolean(input.trim()) || attachments.length > 0}
-          onTap={isStreaming ? onStop : submitMessage}
-        />
+          <SendButton
+            isStreaming={isStreaming}
+            isCancelling={isCancelling}
+            disabled={disabled || isAuthBlocking}
+            isUploading={isUploading}
+            hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+            hasContent={Boolean(input.trim()) || attachments.length > 0}
+            onTap={isStreaming ? handleStop : submitMessage}
+          />
         </div>
       </div>
     </form>

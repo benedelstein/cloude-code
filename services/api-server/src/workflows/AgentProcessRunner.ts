@@ -40,11 +40,6 @@ export type PreparedWorkflowTurn = {
   agentSessionId: string | null;
 };
 
-export type AgentProcessRunnerTurnStartMetadata = {
-  spriteExecSessionId: string | null;
-  spriteProcessId: number | null;
-};
-
 export type AgentProcessRunnerTurnResult = {
   finishReason: string | undefined;
 };
@@ -72,8 +67,9 @@ export type AgentProcessRunnerOptions = {
   spriteName: string;
   sessionId: string;
   preparedTurn: PreparedWorkflowTurn;
+  /** Callback when the agent process attaches */
   // eslint-disable-next-line no-unused-vars
-  onTurnStarted: (metadata: AgentProcessRunnerTurnStartMetadata) => Promise<void>;
+  onTurnStarted: (agentProcessId: number | null) => Promise<void>;
   // eslint-disable-next-line no-unused-vars
   onAgentSessionId: (agentSessionId: string) => Promise<void>;
   // eslint-disable-next-line no-unused-vars
@@ -89,7 +85,9 @@ type Deferred<T> = {
 export type AgentProcessRunnerRunTurnInput = {
   content?: string;
   attachmentIds: string[];
+  /** Optional model override for the turn. */
   model?: string;
+  /** Optional agent mode override for the turn. */
   agentMode?: AgentMode;
 };
 
@@ -211,8 +209,7 @@ export class AgentProcessRunner {
   private agentSession: SpriteWebsocketSession | null = null;
   private stdoutBuffer = "";
   private chunkSequence = 0;
-  private spriteProcessId: number | null = null;
-  private spriteExecSessionId: string | null = null;
+  private agentProcessId: number | null = null;
   private readonly turnStartedDeferred = createDeferred<void>();
   private readonly turnResultDeferred = createDeferred<Result<AgentProcessRunnerTurnResult, AgentProcessRunnerError>>();
   private turnSettled = false;
@@ -259,10 +256,7 @@ export class AgentProcessRunner {
       await this.agentSession.start();
 
       await this.waitForTurnStart();
-      await this.onTurnStarted({
-        spriteExecSessionId: this.spriteExecSessionId,
-        spriteProcessId: this.spriteProcessId,
-      });
+      await this.onTurnStarted(this.agentProcessId);
 
       this.logger.debug(`Sending user message to vm-agent: ${input.content}`);
       this.agentSession.write(
@@ -437,8 +431,13 @@ export class AgentProcessRunner {
       let output: AgentOutput;
       try {
         output = decodeAgentOutput(line);
-      } catch {
-        this.logger.debug(`Skipping invalid agent output: ${line}`);
+      } catch (error) {
+        // Loud log — a dropped line here silently loses a chunk (e.g. a
+        // tool-input-start) and desyncs the client stream.
+        this.logger.error(`Dropped unparseable agent output line`, {
+          error,
+          fields: { lineLength: line.length, linePreview: line.slice(0, 200) },
+        });
         continue;
       }
       await this.handleAgentOutput(output);
@@ -448,8 +447,7 @@ export class AgentProcessRunner {
   private handleAgentServerMessage(message: SpriteServerMessage): void {
     switch (message.type) {
       case "session_info":
-        // this is not the same as the agent's session id. It is the process id on the vm
-        this.spriteProcessId = message.session_id;
+        this.agentProcessId = message.session_id;
         this.turnStartedDeferred.resolve();
         break;
       default:
@@ -461,6 +459,8 @@ export class AgentProcessRunner {
     switch (output.type) {
       case "stream": {
         const chunk = output.chunk as UIMessageChunk;
+        const c = chunk as { type?: string; toolCallId?: string };
+        this.logger.info(`[chunk-trace] runner handleAgentOutput seq=${this.chunkSequence} type=${c.type}${c.toolCallId ? ` toolCallId=${c.toolCallId}` : ""}`);
         await this.onChunk(this.chunkSequence++, chunk);
     
         if (isTerminalChunk(chunk)) {
@@ -518,21 +518,7 @@ export class AgentProcessRunner {
     } catch (error) {
       this.logger.debug("Failed to close agent websocket", { error });
     }
-
-    // const commands: string[] = [];
-    // if (this.spriteProcessId !== null) {
-    //   commands.push(`kill ${this.spriteProcessId} 2>/dev/null || true`);
-    // }
-    // commands.push(`pkill -f '${HOME_DIR}/.cloude/agent.js' 2>/dev/null || true`);
-
-    // try {
-    //   await this.sprite.execWs(commands.join("\n"), {
-    //     cwd: WORKSPACE_DIR,
-    //     idleTimeoutMs: 5_000,
-    //   });
-    // } catch (error) {
-    //   this.logger.error("Failed to clean up vm-agent process", { error });
-    // }
+    // TODO: Kill the process?
   }
 
   private async waitForTurnStart(): Promise<void> {
