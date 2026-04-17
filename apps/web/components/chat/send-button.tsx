@@ -6,6 +6,7 @@ import { LoadingSpinner } from "@/components/parts/loading-spinner";
 
 interface SendButtonProps {
   isStreaming: boolean;
+  isCancelling?: boolean;
   /** Disables the send button (not applicable in streaming/stop mode). */
   disabled?: boolean;
   /** Shows a spinner and disables the button (e.g. submitting, uploading). */
@@ -18,6 +19,7 @@ interface SendButtonProps {
 
 export function SendButton({
   isStreaming,
+  isCancelling = false,
   disabled = false,
   isLoading = false,
   isUploading = false,
@@ -25,13 +27,19 @@ export function SendButton({
   hasContent,
   onTap,
 }: SendButtonProps) {
-  const isSendDisabled = !isStreaming && (disabled || isLoading || hasPendingOrFailedUploads || !hasContent);
+  const isActionLoading = isLoading || isCancelling;
+  const isSendDisabled = isStreaming
+    ? isCancelling
+    : disabled || isActionLoading || hasPendingOrFailedUploads || !hasContent;
 
   const tooltipText = (() => {
+    if (isCancelling) {
+      return "Stopping...";
+    }
     if (isStreaming) {
       return "Interrupt";
     }
-    if (isLoading) {
+    if (isActionLoading) {
       return isUploading ? "Uploading attachments..." : "Please wait...";
     }
     if (hasPendingOrFailedUploads) {
@@ -54,9 +62,9 @@ export function SendButton({
           }`}
         >
           <div className="relative h-3.5 w-3.5">
-            <ArrowUp className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${!isStreaming && !isLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
-            <Square className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${isStreaming ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
-            <LoadingSpinner className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${!isStreaming && isLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
+            <ArrowUp className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${!isStreaming && !isActionLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
+            <Square className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${isStreaming && !isCancelling ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
+            <LoadingSpinner className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${isActionLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
           </div>
         </button>
       </TooltipTrigger>

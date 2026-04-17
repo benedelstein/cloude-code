@@ -64,7 +64,8 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [showSigninPanel, setShowSigninPanel] = useState(false);
+  const [manuallyOpenedSigninPanel, setManuallyOpenedSigninPanel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     attachments,
@@ -99,30 +100,18 @@ export function ChatInput({
   const signinHandle = signinProviderId
     ? providerAuthHandles.find((handle) => handle.providerId === signinProviderId)
     : undefined;
+  // Open when the session requires auth, or when the user manually opens it
+  // from the provider selector. The server-required open auto-closes when
+  // providerAuthRequired clears (e.g. after reauth).
+  const showSigninPanel =
+    Boolean(signinHandle) && (providerAuthRequired !== null || manuallyOpenedSigninPanel);
   const isAuthBlocking = showSigninPanel && Boolean(signinProviderId && signinHandle);
 
-  // Show the auth panel automatically when the session provider requires auth.
   useEffect(() => {
-    if (!providerAuthRequired) {
-      return;
+    if (!isStreaming) {
+      setIsCancelling(false);
     }
-    setShowSigninPanel(true);
-  }, [providerAuthRequired]);
-
-  useEffect(() => {
-    if (!signinHandle) {
-      setShowSigninPanel(false);
-      return;
-    }
-
-    if (signinHandle.connected && !signinHandle.requiresReauth) {
-      setShowSigninPanel(false);
-    }
-  }, [
-    signinHandle?.connected,
-    signinHandle?.providerId,
-    signinHandle?.requiresReauth,
-  ]);
+  }, [isStreaming]);
 
   const submitMessage = () => {
     if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
@@ -165,6 +154,14 @@ export function ChatInput({
     }
   };
 
+  const handleStop = () => {
+    if (isCancelling) {
+      return;
+    }
+    setIsCancelling(true);
+    onStop();
+  };
+
   return (
     <form
       className="relative"
@@ -200,7 +197,9 @@ export function ChatInput({
           providerId={signinProviderId}
           handle={signinHandle}
           open={showSigninPanel}
-          onOpenChange={setShowSigninPanel}
+          onOpenChange={(open) => {
+            if (!open) setManuallyOpenedSigninPanel(false);
+          }}
         />
       )}
       <ChatAttachmentPreviews
@@ -253,19 +252,20 @@ export function ChatInput({
               selectedModel={selectedModel}
               providerAuthHandles={providerAuthHandles}
               onSelect={onProviderModelChange}
-              onConnect={() => setShowSigninPanel(true)}
+              onConnect={() => setManuallyOpenedSigninPanel(true)}
               allowedProviderIds={[selectedProvider]}
               disabled={disabled || isAuthBlocking}
             />
           )}
-        <SendButton
-          isStreaming={isStreaming}
-          disabled={disabled || isAuthBlocking}
-          isUploading={isUploading}
-          hasPendingOrFailedUploads={hasPendingOrFailedUploads}
-          hasContent={Boolean(input.trim()) || attachments.length > 0}
-          onTap={isStreaming ? onStop : submitMessage}
-        />
+          <SendButton
+            isStreaming={isStreaming}
+            isCancelling={isCancelling}
+            disabled={disabled || isAuthBlocking}
+            isUploading={isUploading}
+            hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+            hasContent={Boolean(input.trim()) || attachments.length > 0}
+            onTap={isStreaming ? handleStop : submitMessage}
+          />
         </div>
       </div>
     </form>

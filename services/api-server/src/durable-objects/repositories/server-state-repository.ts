@@ -17,8 +17,14 @@ export type ServerState = {
   repoCloned: boolean;
   /** Claude or Codex session ID for resuming agent state across restarts */
   agentSessionId: string | null;
-  /** Process ID of the last known agent process (for cleanup only) */
-  lastKnownAgentProcessId: number | null;
+  workflowState: {
+    /** The instance id of the currently running agent workflow */
+    instanceId: string | null;
+    /** The current user message id that the workflow is responding to */
+    activeUserMessageId: string | null;
+    /** Sprite exec-session / process ID for the active workflow turn */
+    activeAgentProcessId: number | null;
+  };
 };
 
 function defaultServerState(): ServerState {
@@ -29,7 +35,11 @@ function defaultServerState(): ServerState {
     spriteName: null,
     repoCloned: false,
     agentSessionId: null,
-    lastKnownAgentProcessId: null,
+    workflowState: {
+      instanceId: null,
+      activeUserMessageId: null,
+      activeAgentProcessId: null,
+    },
   };
 }
 

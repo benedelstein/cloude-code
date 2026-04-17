@@ -44,7 +44,12 @@ const WEBSOCKET_CLOSED_GOING_AWAY_CODE = 1001;
  */
 export class SpriteWebsocketSession {
   private readonly textEncoder = new TextEncoder();
-  private readonly textDecoder = new TextDecoder();
+  // Separate decoders per stream so partial multi-byte UTF-8 sequences split
+  // across WebSocket frames are stitched together correctly (via stream: true).
+  // Sharing a single decoder would cross-contaminate stdout and stderr streams.
+  private readonly stdoutDecoder = new TextDecoder();
+  private readonly stderrDecoder = new TextDecoder();
+  private readonly ttyDecoder = new TextDecoder();
   private ws: WebSocket | null = null;
   private readonly spriteName: string;
   private readonly apiKey: string;
@@ -367,7 +372,7 @@ export class SpriteWebsocketSession {
     if (this.ttyMode) {
       // TTY mode: binary = raw stdout, string = JSON control messages
       if (binaryPayload) {
-        const text = this.textDecoder.decode(binaryPayload);
+        const text = this.ttyDecoder.decode(binaryPayload, { stream: true });
         this.stdoutHandlers.forEach((h) => h(text));
       } else if (typeof data === "string") {
         try {
@@ -387,15 +392,19 @@ export class SpriteWebsocketSession {
 
         const streamId = binaryPayload[0]!;
         const payload = binaryPayload.subarray(1);
-        const text = this.textDecoder.decode(payload);
 
         switch (streamId) {
-          case StreamID.Stdout: // stdout
+          case StreamID.Stdout: {
+            // stream: true retains partial UTF-8 sequences across WebSocket frames
+            const text = this.stdoutDecoder.decode(payload, { stream: true });
             this.stdoutHandlers.forEach((h) => h(text));
             break;
-          case StreamID.Stderr: // stderr
+          }
+          case StreamID.Stderr: {
+            const text = this.stderrDecoder.decode(payload, { stream: true });
             this.stderrHandlers.forEach((h) => h(text));
             break;
+          }
           case StreamID.Exit: {
             this.finalizeExit(payload.length > 0 ? payload[0]! : 0);
             break;

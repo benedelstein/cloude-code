@@ -98,7 +98,7 @@ export function useCloudflareAgent({
   const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
-  const [isResponding, setIsResponding] = useState(initialPendingUserMessage !== null);
+  const [waitingForResponse, setWaitingForResponse] = useState(initialPendingUserMessage !== null);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
@@ -120,8 +120,11 @@ export function useCloudflareAgent({
     setAgentModeState(mode);
   }, []);
 
-  const resetPendingResponse = useCallback(() => {
-    setIsResponding(false);
+  const isResponding = waitingForResponse || streamingMessage !== null;
+
+  const resetPendingResponse = useCallback((reason: string) => {
+    console.log("[agent] resetPendingResponse", reason, { hadStream: !!streamControllerRef.current, wasConsuming: isConsumingRef.current });
+    setWaitingForResponse(false);
     setStreamingMessage(null);
     isConsumingRef.current = false;
     if (streamControllerRef.current) {
@@ -136,20 +139,28 @@ export function useCloudflareAgent({
 
   // Consume the stream with readUIMessageStream
   const consumeStream = useCallback(async (stream: ReadableStream<UIMessageChunk>) => {
-    if (isConsumingRef.current) return;
+    if (isConsumingRef.current) {
+      console.log("[agent] consumeStream skipped — already consuming");
+      return;
+    }
+    console.log("[agent] consumeStream started");
     isConsumingRef.current = true;
 
     try {
-      const messageStream = readUIMessageStream({ stream });
+      const messageStream = readUIMessageStream({
+        stream,
+        onError: (err) => console.error("[agent] readUIMessageStream internal error:", err),
+      });
 
       for await (const message of messageStream) {
-        // updates the message as new chunks come in. 
         setStreamingMessage(message);
       }
+      console.log("[agent] consumeStream ended normally");
     } catch (err) {
-      console.error("Error consuming stream:", err);
+      console.error("[agent] consumeStream error:", err);
     } finally {
       isConsumingRef.current = false;
+      streamControllerRef.current = null;
     }
   }, []);
 
@@ -162,33 +173,38 @@ export function useCloudflareAgent({
       case "sync.response": {
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
-        console.log("synced messages", synced);
+        const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        console.log("[agent] sync.response", { messageCount: synced.length, pendingChunkCount: pendingChunks?.length ?? 0, hadStream: !!streamControllerRef.current });
         if (synced.length > 0) {
           setPendingUserMessage(null);
         }
         setIsHistoryLoading(false);
 
-        // Replay buffered chunks for in-progress message (reconnect scenario)
-        const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        // Replay buffered chunks for in-progress message (reconnect scenario).
+        // Skip if a stream is already active — a sync.response can arrive
+        // mid-stream (e.g. WS reconnect) and would otherwise orphan the
+        // existing controller and buffer chunks into an unconsumed stream.
         if (pendingChunks && pendingChunks.length > 0) {
-          const stream = new ReadableStream<UIMessageChunk>({
-            start: (controller) => {
-              streamControllerRef.current = controller;
-              for (const chunk of pendingChunks) {
-                controller.enqueue(chunk);
-              }
-              // Leave stream open for new live chunks via agent.chunk
-            },
-          });
-          consumeStream(stream);
+          if (streamControllerRef.current) {
+            console.log("[agent] sync.response skipping pendingChunks replay — stream already active", { pendingChunkCount: pendingChunks.length });
+          } else {
+            const stream = new ReadableStream<UIMessageChunk>({
+              start: (controller) => {
+                streamControllerRef.current = controller;
+                for (const chunk of pendingChunks) {
+                  controller.enqueue(chunk);
+                }
+                // Leave stream open for new live chunks via agent.chunk
+              },
+            });
+            consumeStream(stream);
+          }
         }
         break;
       }
 
       case "agent.chunk":
         if (!streamControllerRef.current) {
-          // First chunk for a server-initiated response (e.g. pending message) —
-          // create a stream so the UI can render it
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {
               streamControllerRef.current = controller;
@@ -209,7 +225,7 @@ export function useCloudflareAgent({
         // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
-        setIsResponding(false);
+        setWaitingForResponse(false);
         break;
 
       case "agent.ready":
@@ -222,7 +238,7 @@ export function useCloudflareAgent({
         break;
 
       case "operation.error":
-        resetPendingResponse();
+        resetPendingResponse("operation.error");
         setOperationError(msg);
         setIsHistoryLoading(false);
         onError?.(new Error(msg.message));
@@ -245,11 +261,11 @@ export function useCloudflareAgent({
       }
     },
     onOpen: () => {
-      // Connection established - useAgent handles this
+      console.log("[agent] ws onOpen");
     },
     onClose: () => {
-      // useAgent will auto-reconnect
-      resetPendingResponse();
+      console.log("[agent] ws onClose", { hadStream: !!streamControllerRef.current, isConsuming: isConsumingRef.current });
+      resetPendingResponse("onClose");
       setOperationError(null);
     },
     onStateUpdate(state: ClientState) {
@@ -281,7 +297,8 @@ export function useCloudflareAgent({
       setSessionErrorMessage(state.lastError);
     },
     onError: (message) => {
-      resetPendingResponse();
+      console.log("[agent] ws onError", message);
+      resetPendingResponse("onError");
       setOperationError(null);
       console.warn("Transient websocket error", { host: DEFAULT_API_HOST, sessionId, message });
     },
@@ -310,7 +327,7 @@ export function useCloudflareAgent({
     if (userMessage) {
       setMessages((prev) => [...prev, userMessage]);
     }
-    setIsResponding(true);
+    setWaitingForResponse(true);
 
     // Create a new stream for this response
     const stream = new ReadableStream<UIMessageChunk>({

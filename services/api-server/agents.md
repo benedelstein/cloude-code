@@ -21,11 +21,20 @@ The Durable Object is the source of truth for each session. It:
 - Stores all messages in its SQLite database via repositories
 - Manages WebSocket connections to clients
 - Handles VM lifecycle (provisioning, health checks, cleanup)
-- Communicates with the vm-agent process on Sprites VMs via stdin/stdout NDJSON
+- Starts and communicates with the `SessionTurnWorkflow` to execute agent turns reliably.
 
 A Durable Object is a stateful, on-demand class that can write to durable SQLite storage. It starts up as needed and shuts down after inactivity. The DO acts like a "mini-server" for each session, coordinating state in a thread-safe manner.
 
-Prefer to split out logic into scoped, separate service files inside of `lib/` for clarity and maintainability. See agent-process-manager.ts for an example.
+NOTE: Prefer to split out logic into scoped, separate service files inside of `lib/` for clarity and maintainability.
+Otherwise, the DO can become a giant mess of a file.
+
+## SessionTurnWorkflow (`src/workflows/SessionTurnWorkflow.ts`)
+
+This workflow is a durable execution context for communicating with the vm-agent process on the sprite vm. It is long-lived and resilient. It will not die on inactivity, unlike a durable object. The workflow sets up a connection to 
+the agent process on the vm and communicates with it via stdin/stdout NDJSON. As it receives chunks, it forwards them
+to the DO via RPC methods. If the DO is inactive, the rpc will wake it up.
+
+This setup can survive long-running agent tasks with long gaps in between chunk outputs.
 
 ### Request Routing
 

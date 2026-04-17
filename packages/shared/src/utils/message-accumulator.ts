@@ -1,6 +1,5 @@
 import type { UIMessage, UIMessageChunk } from "ai";
-import type { Logger } from "@repo/shared";
-import { createLogger } from "./logger";
+import { ConsoleLogger, type Logger } from "../logging";
 
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
@@ -19,9 +18,10 @@ export interface ProcessChunkResult {
 /**
  * Accumulates UIMessageStream chunks into a complete UIMessage.
  * Used by the DO to build the final message for storage while streaming parts to clients.
+ * Also used by the vm-agent test harness to validate chunk ordering in isolation.
  */
 export class MessageAccumulator {
-  private readonly logger: Logger = createLogger("MessageAccumulator");
+  private readonly logger: Logger;
   private messageId: string | undefined = undefined;
   private parts: MessageParts = [];
   private metadata: unknown = undefined;
@@ -50,6 +50,10 @@ export class MessageAccumulator {
     }
   >();
 
+  constructor(logger?: Logger) {
+    this.logger = logger ?? new ConsoleLogger({}, "MessageAccumulator");
+  }
+
   /**
    * Process a stream chunk and accumulate it into the message.
    * @returns message completion state plus any parts fully materialized by this chunk
@@ -60,8 +64,12 @@ export class MessageAccumulator {
 
     switch (chunk.type) {
       case "start":
-        this.messageId = chunk.messageId;
-        this.logger.debug(`start chunk, messageId=${chunk.messageId}`);
+        if (this.messageId && chunk.messageId && this.messageId !== chunk.messageId) {
+          this.logger.warn(`[chunk-trace] start chunk with mismatched messageId`, {
+            fields: { chunkMessageId: chunk.messageId ?? "undefined", currentMessageId: this.messageId },
+          });
+        }
+        this.messageId = chunk.messageId ?? this.messageId;
         break;
 
       case "text-start":
@@ -72,6 +80,10 @@ export class MessageAccumulator {
       case "text-delta":
         if (this.currentTextId === chunk.id) {
           this.currentText += chunk.delta;
+        } else {
+          this.logger.warn(`[chunk-trace] text-delta received for unknown id`, {
+            fields: { chunkId: chunk.id, currentTextId: this.currentTextId },
+          });
         }
         break;
 
@@ -93,6 +105,10 @@ export class MessageAccumulator {
       case "reasoning-delta":
         if (this.currentReasoningId === chunk.id) {
           this.currentReasoning += chunk.delta;
+        } else {
+          this.logger.warn(`[chunk-trace] reasoning-delta for unknown id`, {
+            fields: { chunkId: chunk.id, currentReasoningId: this.currentReasoningId },
+          });
         }
         break;
 
@@ -120,6 +136,10 @@ export class MessageAccumulator {
         const toolCall = this.toolCalls.get(chunk.toolCallId);
         if (toolCall) {
           toolCall.inputText += chunk.inputTextDelta;
+        } else {
+          this.logger.warn(`[chunk-trace] tool-input-delta for unknown toolCallId`, {
+            fields: { toolCallId: chunk.toolCallId, knownToolCallIds: [...this.toolCalls.keys()] },
+          });
         }
         break;
       }
@@ -242,7 +262,7 @@ export class MessageAccumulator {
 
       case "finish-step":
         break;
-        
+
 
       case "abort":
         completedParts.push(...this.finalizePendingParts());
@@ -327,7 +347,7 @@ export class MessageAccumulator {
   getMessageId(): string | null {
     return this.messageId ?? null;
   }
-
+  
   getPendingChunks(): UIMessageChunk[] | undefined {
     return this.pendingChunks.length > 0
       ? [...this.pendingChunks]

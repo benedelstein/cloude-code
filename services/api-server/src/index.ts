@@ -18,6 +18,7 @@ import { LogLevel } from "@repo/shared";
 // import { logger as honoLogger } from "hono/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
+export { SessionTurnWorkflow } from "./workflows/SessionTurnWorkflow";
 
 const app = new Hono<{ Bindings: Env }>();
 

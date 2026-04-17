@@ -12,10 +12,11 @@ import {
   SessionStatus,
   LogLevel,
   ChatMessageEvent,
-  AgentOutput,
   AgentSettings,
   failure,
+  getProviderModelDefinition,
   success,
+  Result,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
@@ -32,7 +33,7 @@ import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
 import { configureGitRemote } from "@/lib/git-setup";
-import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
+import { ensureValidInstallationToken } from "./session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
 import { GitHubAppService } from "@/lib/github/github-app";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -54,13 +55,10 @@ import type {
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
-import { AgentProcessManager } from "./lib/agent-process-manager";
 import {
   createUserUiMessage,
   getUserMessageTextContent,
 } from "@/lib/utils/uimessage-utils";
-import { MessageAccumulator } from "@/lib/message-accumulator";
-import { applyDerivedStateFromParts } from "./session-agent-derived-state";
 import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
 import {
@@ -68,6 +66,17 @@ import {
   type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
 import { getProviderAuthService } from "@/lib/providers/provider-auth-service";
+import type {
+  AgentProcessRunnerTurnResult,
+  PreparedWorkflowTurn,
+} from "@/workflows/AgentProcessRunner";
+import {
+  workflowTurnFailure,
+  type PrepareWorkflowTurnOverrides,
+  type WorkflowTurnFailure,
+  type WorkflowTurnPayload,
+} from "@/workflows/types";
+import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -91,20 +100,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly serverStateRepository: ServerStateRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
-  private readonly agentProcessManager: AgentProcessManager;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
   /** Mutex for durable provisioning steps (sprite creation, repo clone) */
   private ensureProvisionedPromise: Promise<void> | null = null;
-  /** Mutex for ephemeral agent connection (runs fresh every DO instance) */
-  private ensureAgentStartedPromise: Promise<void> | null = null;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
   private githubToken: string | null = null;
   /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
   private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
-  private editorToken: string | null = null;
-  private messageAccumulator: MessageAccumulator = new MessageAccumulator();
+  // private editorToken: string | null = null;
+  private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -132,20 +138,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
     this.logger = createLogger("session-agent-do.ts");
 
-    // The Agents SDK allows clients to overwrite state via { type: "cf_agent_state" } WebSocket messages.
-    // There is no validation hook before the write, so we intercept at _setStateInternal.
-    // When source is a Connection (client), we reject the update entirely.
-    const superSetStateInternal = (this as any)._setStateInternal.bind(this);
-    (this as any)._setStateInternal = (
-      state: ClientState,
-      source: Connection | "server",
-    ) => {
-      if (source !== "server") {
-        this.logger.warn("Rejecting client-initiated state update attempt");
-        return;
-      }
-      return superSetStateInternal(state, source);
-    };
+    this.disableClientStateUpdates();
 
     const sql = this.sql.bind(this);
     this.messageRepository = new MessageRepository(sql);
@@ -168,39 +161,61 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // Load secrets from SQLite into memory
     this.githubToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
-    this.editorToken = this.secretRepository.get("editor_token");
+    // this.editorToken = this.secretRepository.get("editor_token");
 
     // Load server state from SQLite
     this.serverState = this.serverStateRepository.get();
 
-    this.recoverInterruptedMessage();
-
-    this.agentProcessManager = new AgentProcessManager({
+    // Wire up the workflow turn coordinator
+    this.workflowTurnCoordinator = new AgentWorkflowCoordinator({
       logger: this.logger,
-      env,
-      getClientState: () => this.state,
+      env: this.env,
+      messageRepository: this.messageRepository,
+      pendingChunkRepository: this.pendingChunkRepository,
+      latestPlanRepository: this.latestPlanRepository,
       getServerState: () => this.serverState,
-      onAgentOutput: (output) => this.handleAgentOutput(output),
-      onAgentError: (error) => this.handleAgentError(error),
-      onAgentExit: (code) => this.handleAgentExit(code),
-      updateLastKnownAgentProcessId: (processId) =>
-        this.updateServerState({ lastKnownAgentProcessId: processId }),
-      updateAgentSettings: (settings) =>
-        this.updatePartialState({ agentSettings: settings }),
-      updateAgentMode: (agentMode) =>
-        this.updatePartialState({ agentMode }),
-      updateProviderConnection: (providerConnection) =>
-        this.updatePartialState({ providerConnection }),
+      updateWorkflowState: (partial: Partial<ServerState["workflowState"]>) => this.updateServerState({ workflowState: { ...this.serverState.workflowState, ...partial } }),
+      updateAgentSessionId: (agentSessionId: string) => this.updateServerState({agentSessionId}),
+      getClientState: () => this.state,
+      updatePartialState: (partial: Partial<ClientState>) => this.updatePartialState(partial),
+      broadcastMessage: (msg: ServerMessage) => this.broadcastMessage(msg),
+      synthesizeStatus: () => this.synthesizeStatus(),
+      getWorkflowStatus: this.getWorkflowStatus.bind(this),
+      runWorkflow: this.runWorkflow.bind(this),
+      getWorkflow: this.getWorkflow.bind(this),
+      sendWorkflowEvent: this.sendWorkflowEvent.bind(this),
+      restartWorkflow: this.restartWorkflow.bind(this),
     });
 
+    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
+  }
+
+  async onStart(): Promise<void> {
+    // NOTE: doing this here brecause we cant access this.name in the constructor. cf bug
     // Reset transient ClientState fields on every restart so they never get
     // stuck from a previous instance's in-progress operation.
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
     });
+    this.logger.debug("onStart");
+  }
 
-    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
+  private disableClientStateUpdates(): void {
+    // The Agents SDK allows clients to overwrite state via { type: "cf_agent_state" } WebSocket messages.
+    // There is no validation hook before the write, so we intercept at _setStateInternal.
+    // When source is a Connection (client), we reject the update entirely.
+    const superSetStateInternal = (this as any)._setStateInternal.bind(this);
+    (this as any)._setStateInternal = (
+      state: ClientState,
+      source: Connection | "server",
+    ) => {
+      if (source !== "server") {
+        this.logger.warn("Rejecting client-initiated state update attempt");
+        return;
+      }
+      return superSetStateInternal(state, source);
+    };
   }
 
   // ============================================
@@ -225,7 +240,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     if (!this.serverState.initialized) return "initializing";
     if (!this.serverState.spriteName) return "provisioning";
     if (!this.serverState.repoCloned) return "cloning";
-    if (this.agentProcessManager.isConnecting()) return "attaching";
     return "ready";
   }
 
@@ -259,11 +273,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private queueRefreshProviderConnection(): void {
-    this.ctx.waitUntil(
-      this.refreshProviderConnection().catch((error) => {
-        this.logger.error("Failed to refresh provider connection state", { error });
-      }),
-    );
+    this.refreshProviderConnection().catch((error) => {
+      this.logger.error("Failed to refresh provider connection state", { error });
+    });
   }
 
   /**
@@ -281,131 +293,90 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   // ============================================
-  // Agent lifecycle
+  // Workflow RPC delegators
   // ============================================
 
-  private handleAgentOutput(output: AgentOutput): void {
-    switch (output.type) {
-      case "ready": {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        break;
-      }
-      case "error": {
-        this.logger.error(`vm-agent error: ${output.error}`);
-        this.messageAccumulator.reset();
-        this.pendingChunkRepository.clear();
-        this.updatePartialState({
-          lastError: output.error,
-          status: this.synthesizeStatus(),
-        });
-        break;
-      }
-      case "debug": {
-        this.logger.debug(`[vm-agent debug] ${output.message}`);
-        break;
-      }
-      case "stream": {
-        this.broadcastMessage({
-          type: "agent.chunk",
-          chunk: output.chunk,
-        });
-
-        // Write chunk to SQLite WAL before processing — survives DO eviction or process kill
-        this.pendingChunkRepository.append(output.chunk as UIMessageChunk);
-
-        // Accumulate chunks into UIMessage and extract derived state (todos, plan)
-        const { finishedMessage, completedParts } =
-          this.messageAccumulator.process(output.chunk as UIMessageChunk);
-        applyDerivedStateFromParts(
-          {
-            sessionId: this.serverState.sessionId!,
-            latestPlanRepository: this.latestPlanRepository,
-            updatePartialState: (partial) => this.updatePartialState(partial),
-          },
-          completedParts,
-          this.messageAccumulator.getMessageId(),
-        );
-
-        if (finishedMessage) {
-          const sessionId = this.serverState.sessionId!;
-          const stored = this.messageRepository.create(
-            sessionId,
-            finishedMessage,
-          );
-          // Flush WAL — message is now durably saved
-          this.pendingChunkRepository.clear();
-          this.broadcastMessage({
-            type: "agent.finish",
-            message: stored.message,
-          });
-
-          // Reset in-progress message state for the next response
-          this.messageAccumulator.reset();
-        }
-        break;
-      }
-      case "sessionId": {
-        // Persist the agent provider's session ID so it can be resumed on reconnect
-        this.logger.info(`Storing agent session ID: ${output.sessionId}`);
-        if (this.serverState.agentSessionId && this.serverState.agentSessionId !== output.sessionId) {
-          this.logger.warn(`Agent session ID mismatch: ${this.serverState.agentSessionId} !== ${output.sessionId}`);
-        }
-        this.updateServerState({ agentSessionId: output.sessionId });
-        break;
-      }
-    }
-  }
-  private handleAgentError(error: string): void {
-    this.logger.error("Agent error", { error });
+  /**
+   * Prepares a workflow turn for execution. The workflow should call this
+   * via RPC in order to prepare the state for a new conversation turn.
+   * @param userMessageId Durable user message identifier for the turn.
+   * @param overrides Optional per-turn model or mode overrides.
+   * @returns turn metadata needed by the workflow runner.
+   */
+  prepareWorkflowTurn(
+    userMessageId: string,
+    overrides: PrepareWorkflowTurnOverrides,
+  ): Result<PreparedWorkflowTurn, WorkflowTurnFailure> {
+    return this.workflowTurnCoordinator.prepareTurn(userMessageId, overrides);
   }
 
   /**
-   * Aborts the given accumulator, persists the result, flushes the WAL, and
-   * broadcasts agent.finish to any connected clients.
-   * @returns true if a message was saved, false if the accumulator had no content.
+   * Called when the agent process starts on the VM
+   * @param messageId Durable user message identifier for the turn.
+   * @param agentProcessId Sprite process ID captured when the process starts.
    */
-  private commitAbortedMessage(accumulator: MessageAccumulator): boolean {
-    const message = accumulator.forceAbort();
-    this.pendingChunkRepository.clear();
-    if (!message) return false;
-    const sessionId = this.serverState.sessionId!;
-    const stored = this.messageRepository.create(sessionId, message);
-    this.broadcastMessage({ type: "agent.finish", message: stored.message });
-    return true;
+  onWorkflowTurnStarted(
+    messageId: string,
+    agentProcessId: number | null,
+  ): boolean {
+    return this.workflowTurnCoordinator.handleTurnStarted(messageId, agentProcessId);
   }
 
   /**
-   * Replays any pending chunks left in SQLite from a previous DO instance and saves
-   * the result as an aborted message. Called on construction to handle forced eviction
-   * or process kills that occurred before a clean finish could be written.
+   * Called when the agent workflow emits its provider session id.
+   * Used for persisting and resuming sessions across restarts.
+   * @param messageId Durable user message identifier for the turn.
+   * @param agentSessionId Provider conversation session id.
    */
-  private recoverInterruptedMessage(): void {
-    if (!this.serverState.sessionId) return;
-
-    const orphanedChunks = this.pendingChunkRepository.getAll();
-    if (orphanedChunks.length === 0) return;
-
-    this.logger.info("Recovering interrupted message from pending chunks on DO restart");
-    const recoveryAccumulator = new MessageAccumulator();
-    for (const chunk of orphanedChunks) {
-      recoveryAccumulator.process(chunk);
-    }
-
-    if (!this.commitAbortedMessage(recoveryAccumulator)) {
-      this.logger.warn("No interrupted message created from pending chunks");
-    }
+  onWorkflowAgentSessionId(messageId: string, agentSessionId: string): void {
+    this.workflowTurnCoordinator.handleAgentSessionId(messageId, agentSessionId);
   }
 
-  private handleAgentExit(code: number): void {
-    this.logger.info(`Agent exited with code ${code}`);
+  onWorkflowChunk(
+    messageId: string,
+    sequence: number,
+    chunk: UIMessageChunk,
+  ): void {
+    this.workflowTurnCoordinator.handleChunk(messageId, sequence, chunk);
+  }
 
-    const saved = this.commitAbortedMessage(this.messageAccumulator);
-    if (saved) {
-      this.logger.info("Saved interrupted message to SQLite on agent exit");
+  onWorkflowTurnFinished(
+    userMessageId: string,
+    result: AgentProcessRunnerTurnResult,
+  ): void {
+    this.workflowTurnCoordinator.handleTurnFinished(userMessageId, result);
+  }
+
+  onWorkflowTurnFailed(
+    userMessageId: string,
+    error: WorkflowTurnFailure,
+  ): void {
+    if (error.code === "PROVIDER_AUTH_REQUIRED") {
+      this.updatePartialState({
+        providerConnection: {
+          provider: this.state.agentSettings.provider,
+          connected: false,
+          requiresReauth: true,
+        },
+      });
     }
+    this.workflowTurnCoordinator.handleTurnFailed(userMessageId, error);
+  }
 
-    this.messageAccumulator.reset();
-    this.updateServerState({ lastKnownAgentProcessId: null });
+  async onWorkflowComplete(
+    workflowName: string,
+    workflowId: string,
+    result: unknown,
+  ): Promise<void> {
+    await this.workflowTurnCoordinator.handleWorkflowComplete(workflowName, workflowId, result);
+  }
+
+  async onWorkflowError(
+    workflowName: string,
+    workflowId: string,
+    error: string,
+  ): Promise<void> {
+    await this.workflowTurnCoordinator.handleWorkflowError(workflowName, workflowId, error);
   }
 
   // ============================================
@@ -517,6 +488,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   onConnect(connection: Connection): void {
     this.logger.debug(`client connected: ${connection.id}`);
+    this.workflowTurnCoordinator.ensureRehydratedState();
 
     // Send initial connection state
     this.sendMessage(
@@ -536,7 +508,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         {
           type: "sync.response",
           messages: storedMessages.map((m) => m.message),
-          pendingChunks: this.messageAccumulator.getPendingChunks(),
+          pendingChunks: this.workflowTurnCoordinator.getPendingChunks(),
         },
         connection,
       );
@@ -651,15 +623,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       return;
     }
     await this.ensureProvisioned();
-    await this.ensureAgentStarted();
+    await this.maybeDispatchPendingMessage();
   }
 
   private queueEnsureReady(): void {
-    this.ctx.waitUntil(
-      this.ensureReady().catch((error) => {
-        this.logger.error("ensureReady failed", { error });
-      }),
-    );
+    this.ensureReady().catch((error) => {
+      this.logger.error("ensureReady failed", { error });
+    });
   }
 
   private ensureProvisioned(): Promise<void> {
@@ -711,51 +681,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to provision session", { error });
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
-      throw error;
-    }
-  }
-
-  private ensureAgentStarted(): Promise<void> {
-    if (this.ensureAgentStartedPromise) return this.ensureAgentStartedPromise;
-    this.ensureAgentStartedPromise = this._startAgent().finally(() => {
-      this.ensureAgentStartedPromise = null;
-    });
-    return this.ensureAgentStartedPromise;
-  }
-
-  private async _startAgent(): Promise<void> {
-    if (!this.serverState.spriteName || !this.serverState.repoCloned) {
-      throw new Error("Cannot start agent: session not fully provisioned");
-    }
-    if (this.agentProcessManager.isConnected()) return;
-
-    this.updatePartialState({ status: this.synthesizeStatus() });
-    try {
-      // Refresh GitHub installation token (may have expired during hibernation)
-      try {
-        await this.refreshGitHubToken();
-      } catch (error) {
-        this.logger.error("Failed to refresh GitHub token during agent start", {
-          error,
-        });
-      }
-
-      await this.agentProcessManager.ensureAgentSessionStarted();
-      this.updatePartialState({
-        status: this.synthesizeStatus(),
-        lastError: null,
-      });
-
-      // Send the pending initial message if one was stored
-      await this.maybeSendPendingMessage();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error("Failed to start agent", { error });
       this.updatePartialState({
         lastError: errorMessage,
         status: this.synthesizeStatus(),
@@ -1046,6 +971,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     connection: Connection,
     message: ClientMessage,
   ): Promise<void> {
+    this.workflowTurnCoordinator.ensureRehydratedState();
     switch (message.type) {
       case "chat.message":
         await this.handleChatMessage(connection, message);
@@ -1054,7 +980,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
-        this.agentProcessManager.cancel();
+        await this.cancelActiveWorkflowTurn();
         break;
     }
   }
@@ -1068,10 +994,26 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         return;
       }
 
-      await this.ensureReady(); // await any startup steps synchronously.
-      const result = await this.agentProcessManager.handleChatMessage(payload);
+      await this.ensureReady();
+
+      if (this.serverState.workflowState.activeUserMessageId || this.state.pendingUserMessage) {
+        // TODO: message queuing
+        this.sendMessage(
+          {
+            type: "operation.error",
+            code: "CHAT_MESSAGE_FAILED",
+            message: "Agent is already handling a message",
+          },
+          connection,
+        );
+        return;
+      }
+
+      const result = await this.dispatchChatMessageToWorkflow(payload, connection.id);
       if (!result.ok) {
-        this.logger.warn("Modeled chat message failure", { fields: { code: result.error.code } });
+        this.logger.warn("Workflow chat message dispatch failed", {
+          fields: { code: result.error.code },
+        });
         this.sendMessage(
           {
             type: "operation.error",
@@ -1082,14 +1024,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         );
         return;
       }
-      const { attachments } = result.value;
-      // persist the message to db and such.
-      const userUiMessage = createUserUiMessage(payload.content, attachments);
-      if (!userUiMessage) {
-        this.logger.error("Failed to create user UI message");
-        return;
-      }
-      await this.onUserMessageSent(userUiMessage, attachments, connection.id);
     } catch (error) {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
@@ -1119,7 +1053,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       {
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
-        pendingChunks: this.messageAccumulator.getPendingChunks(),
+        pendingChunks: this.workflowTurnCoordinator.getPendingChunks(),
       },
       connection,
     );
@@ -1130,36 +1064,44 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // ============================================
 
   /**
-   * Sends the pending initial message to the agent if one is stored.
-   * @returns true if the message was sent, false if not.
+   * Dispatches the pending initial message through the session workflow once provisioning completes.
    */
-  private async maybeSendPendingMessage(): Promise<void> {
-    if (!this.agentProcessManager.isConnected()) return;
-    const msg = this.state.pendingUserMessage;
-    if (!msg) {
+  private async maybeDispatchPendingMessage(): Promise<void> {
+    const pendingMessage = this.state.pendingUserMessage;
+    if (!pendingMessage || this.serverState.workflowState.activeUserMessageId) {
       return;
     }
-    const { message: userMessage, attachmentIds } = msg;
-
-    const content = getUserMessageTextContent(userMessage);
-
+    this.state.pendingUserMessage = null;
     const sessionId = this.serverState.sessionId;
-    if (!sessionId) return;
+    if (!sessionId) {
+      return;
+    }
 
-    // send to the agent.
-    this.logger.info("Sending pending message");
+    const { message: userMessage, attachmentIds } = pendingMessage;
+    const content = getUserMessageTextContent(userMessage);
+    // TODO: WHAT IF ATTACHMENT RESOLUTION FAILS?
+    const attachmentRecords = await this.getBoundAttachmentRecords(
+      sessionId,
+      attachmentIds,
+    );
+
+    this.updatePartialState({ pendingUserMessage: null });
     try {
-      const attachmentRecords =
-        await this.agentProcessManager.sendMessageToAgent(
-          sessionId,
+      // TODO: mark the message failed if dispatch fails.
+      await this.onUserMessageSent(userMessage, attachmentRecords);
+      await this.dispatchTurnToWorkflow({
+        userMessage: {
+          id: userMessage.id,
           content,
           attachmentIds,
-        );
-      await this.onUserMessageSent(userMessage, attachmentRecords);
-      this.updatePartialState({ pendingUserMessage: null });
+        },
+      });
     } catch (error) {
-      this.logger.error("Failed to send pending message", { error });
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error("Failed to dispatch pending workflow message", { error });
       this.updatePartialState({
+        lastError: errorMessage,
         status: this.synthesizeStatus(),
       });
       this.broadcastMessage({
@@ -1170,6 +1112,145 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
   }
 
+  private async dispatchChatMessageToWorkflow(
+    payload: ChatMessageEvent,
+    connectionId: string,
+  ): Promise<Result<void, WorkflowTurnFailure>> {
+    const sessionId = this.serverState.sessionId;
+    if (!sessionId) {
+      return failure(
+        workflowTurnFailure("SESSION_NOT_INITIALIZED", "Session is not initialized"),
+      );
+    }
+
+    const attachmentIds =
+      payload.attachments?.map((attachment) => attachment.attachmentId) ?? [];
+    const attachmentRecords = await this.getBoundAttachmentRecords(
+      sessionId,
+      attachmentIds,
+    );
+    if (attachmentRecords.length !== attachmentIds.length) {
+      return failure(
+        workflowTurnFailure(
+          "ATTACHMENTS_NOT_FOUND",
+          "Some attachments were not found for this session",
+          { attachmentIds },
+        ),
+      );
+    }
+
+    const content = payload.content?.trim();
+
+    let modelOverride: string | undefined;
+    if (payload.model && payload.model !== this.state.agentSettings.model) {
+      const modelResult = this.validateAndApplyModelSwitch(payload.model);
+      if (!modelResult.ok) {
+        return failure(modelResult.error);
+      }
+      modelOverride = modelResult.value;
+    }
+
+    let agentModeOverride: AgentMode | undefined;
+    if (payload.agentMode && payload.agentMode !== this.state.agentMode) {
+      this.updatePartialState({ agentMode: payload.agentMode });
+      agentModeOverride = payload.agentMode;
+    }
+
+    const userUiMessage = createUserUiMessage(
+      content,
+      attachmentRecords,
+      payload.messageId,
+    );
+    if (!userUiMessage) {
+      return failure(
+        workflowTurnFailure(
+          "INVALID_MESSAGE",
+          "Message must include content or attachments",
+        ),
+      );
+    }
+
+    try {
+      // save before dispatching to workflow to avoid race conditions
+      await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
+      this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
+      await this.dispatchTurnToWorkflow({
+        userMessage: {
+          id: userUiMessage.id,
+          content,
+          attachmentIds,
+        },
+        model: modelOverride,
+        agentMode: agentModeOverride,
+      });
+    } catch (error) {
+      return failure(
+        workflowTurnFailure(
+          "WORKFLOW_DISPATCH_FAILED",
+          error instanceof Error ? error.message : String(error),
+        ),
+      );
+    }
+
+    return success(undefined);
+  }
+
+  private validateAndApplyModelSwitch(
+    model: string,
+  ): Result<string, WorkflowTurnFailure> {
+    const validatedModel = getProviderModelDefinition(
+      this.state.agentSettings.provider,
+      model,
+    );
+    if (!validatedModel) {
+      this.logger.warn("Invalid provider model in workflow model switch", {
+        fields: { provider: this.state.agentSettings.provider, model },
+      });
+      return failure(
+        workflowTurnFailure(
+          "INVALID_MODEL",
+          "Invalid model for the current provider",
+          { provider: this.state.agentSettings.provider, model },
+        ),
+      );
+    }
+
+    this.updatePartialState({
+      agentSettings: {
+        ...this.state.agentSettings,
+        model: validatedModel.id,
+      } as AgentSettings,
+    });
+    return success(validatedModel.id);
+  }
+
+  private async getBoundAttachmentRecords(
+    sessionId: string,
+    attachmentIds: string[],
+  ): Promise<AttachmentRecord[]> {
+    if (attachmentIds.length === 0) {
+      return [];
+    }
+
+    const attachmentService = new AttachmentService(this.env.DB);
+    return attachmentService.getByIdsBoundToSession(sessionId, attachmentIds);
+  }
+
+  private async dispatchTurnToWorkflow(
+    turnPayload: WorkflowTurnPayload,
+  ): Promise<void> {
+    await this.workflowTurnCoordinator.dispatchTurn(turnPayload);
+  }
+
+  private async cancelActiveWorkflowTurn(): Promise<void> {
+    await this.workflowTurnCoordinator.cancelActiveTurn();
+  }
+
+  private async stopWorkflowManagedProcesses(): Promise<void> {
+    await this.workflowTurnCoordinator.stopManagedProcesses();
+  }
+
+  // handle side effects of sending a user message
   private async onUserMessageSent(
     message: UIMessage,
     attachmentRecords: AttachmentRecord[],
@@ -1177,6 +1258,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   ): Promise<void> {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
+    const existing = this.messageRepository.getById(message.id);
+    if (existing) {
+      return;
+    }
     const stored = this.messageRepository.create(sessionId, message);
     this.broadcastMessage(
       { type: "user.message", message: stored.message },
@@ -1304,8 +1389,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       lastError: "Repository access for this session is currently blocked.",
     });
-    this.agentProcessManager.cancel();
-    await this.agentProcessManager.stopSessionManagedProcesses();
+    await this.cancelActiveWorkflowTurn();
+    await this.stopWorkflowManagedProcesses();
     if (notifyClients) {
       this.broadcastMessage({
         type: "operation.error",

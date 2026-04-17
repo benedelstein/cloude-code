@@ -1,8 +1,10 @@
 import type { SessionAgentDO } from "./durable-objects/session-agent-do";
+import type { SessionTurnWorkflowParams } from "./workflows/types";
 
 export interface Env {
   // Durable Objects
   SESSION_AGENT: DurableObjectNamespace<SessionAgentDO>;
+  SESSION_TURN_WORKFLOW: Workflow<SessionTurnWorkflowParams>;
 
   // D1 Database
   DB: D1Database;
