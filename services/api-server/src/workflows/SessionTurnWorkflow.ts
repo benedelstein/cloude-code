@@ -38,7 +38,7 @@ export class SessionTurnWorkflow extends AgentWorkflow<
       nextTurn = undefined;
 
       await step.do(
-        `turn:${turnPayload.messageId}`,
+        `turn:${turnPayload.userMessage.id}`,
         { retries: { limit: 0, delay: "1 second" } },
         async () => {
           await this.runTurn(sessionId, spriteName, turnPayload);
@@ -71,19 +71,19 @@ export class SessionTurnWorkflow extends AgentWorkflow<
     spriteName: string,
     turnPayload: WorkflowTurnPayload,
   ): Promise<void> {
-    const { messageId, content, attachmentIds, model, agentMode } = turnPayload;
-    const logger = this.logger.scope(`turn:${messageId}`);
+    const { userMessage, model, agentMode } = turnPayload;
+    const logger = this.logger.scope(`turn:${userMessage.id}`);
 
     try {
       // Cast: Cloudflare RPC Promisify breaks discriminated unions at the type
       // level, but the runtime value is still a plain { ok, value/error } object.
-      const preparedTurn = await this.agent.prepareWorkflowTurn(messageId, {
+      const preparedTurn = await this.agent.prepareWorkflowTurn(userMessage.id, {
         model,
         agentMode,
       }) as Result<PreparedWorkflowTurn, WorkflowTurnFailure>;
       if (!preparedTurn.ok) {
         await this.agent.onWorkflowTurnFailed(
-          messageId,
+          userMessage.id,
           this.toWorkflowTurnFailure(preparedTurn.error),
         );
         return;
@@ -96,34 +96,32 @@ export class SessionTurnWorkflow extends AgentWorkflow<
         sessionId,
         preparedTurn: preparedTurn.value,
         onTurnStarted: async (processId) => {
-          await this.agent.onWorkflowTurnStarted(messageId, processId);
+          await this.agent.onWorkflowTurnStarted(userMessage.id, processId);
         },
         onAgentSessionId: async (agentSessionId) => {
-          await this.agent.onWorkflowSessionId(messageId, agentSessionId);
+          await this.agent.onWorkflowAgentSessionId(userMessage.id, agentSessionId);
         },
         onChunk: async (sequence, chunk) => {
-          const c = chunk as { type?: string; toolCallId?: string };
-          this.logger.info(`[chunk-trace] workflow onChunk seq=${sequence} type=${c.type}${c.toolCallId ? ` toolCallId=${c.toolCallId}` : ""}`);
-          await this.agent.onWorkflowChunk(messageId, sequence, chunk);
+          await this.agent.onWorkflowChunk(userMessage.id, sequence, chunk);
         },
       });
 
       const result = await runner.runTurn({
-        content,
-        attachmentIds,
+        content: userMessage.content,
+        attachmentIds: userMessage.attachmentIds,
         model,
         agentMode,
       });
       if (result.ok) {
-        await this.agent.onWorkflowTurnFinished(messageId, result.value);
+        await this.agent.onWorkflowTurnFinished(userMessage.id, result.value);
         return;
       }
 
-      await this.agent.onWorkflowTurnFailed(messageId, result.error);
+      await this.agent.onWorkflowTurnFailed(userMessage.id, result.error);
     } catch (error) {
       logger.error("Workflow turn failed unexpectedly", { error });
       await this.agent.onWorkflowTurnFailed(
-        messageId,
+        userMessage.id,
         this.toWorkflowTurnFailure(error),
       );
     }

@@ -1,9 +1,11 @@
 import type { AgentMode } from "@repo/shared";
 
 export type WorkflowTurnPayload = {
-  messageId: string;
-  content?: string;
-  attachmentIds: string[];
+  userMessage: {
+    id: string;
+    content?: string;
+    attachmentIds: string[];
+  };
   model?: string;
   agentMode?: AgentMode;
 };

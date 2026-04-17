@@ -173,7 +173,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       pendingChunkRepository: this.pendingChunkRepository,
       latestPlanRepository: this.latestPlanRepository,
       getServerState: () => this.serverState,
-      updateServerState: (partial: Partial<ServerState>) => this.updateServerState(partial),
+      updateWorkflowState: (partial: Partial<ServerState["workflowState"]>) => this.updateServerState({ workflowState: { ...this.serverState.workflowState, ...partial } }),
+      updateAgentSessionId: (agentSessionId: string) => this.updateServerState({agentSessionId}),
       getClientState: () => this.state,
       updatePartialState: (partial: Partial<ClientState>) => this.updatePartialState(partial),
       broadcastMessage: (msg: ServerMessage) => this.broadcastMessage(msg),
@@ -302,15 +303,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   /**
    * Prepares a workflow turn for execution. The workflow should call this
    * via RPC in order to prepare the state for a new conversation turn.
-   * @param messageId Durable user message identifier for the turn.
+   * @param userMessageId Durable user message identifier for the turn.
    * @param overrides Optional per-turn model or mode overrides.
    * @returns turn metadata needed by the workflow runner.
    */
   prepareWorkflowTurn(
-    messageId: string,
+    userMessageId: string,
     overrides: PrepareWorkflowTurnOverrides,
   ): Result<PreparedWorkflowTurn, WorkflowTurnFailure> {
-    return this.workflowTurnCoordinator.prepareTurn(messageId, overrides);
+    return this.workflowTurnCoordinator.prepareTurn(userMessageId, overrides);
   }
 
   /**
@@ -321,8 +322,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   onWorkflowTurnStarted(
     messageId: string,
     agentProcessId: number | null,
-  ): void {
-    this.workflowTurnCoordinator.handleTurnStarted(messageId, agentProcessId);
+  ): boolean {
+    return this.workflowTurnCoordinator.handleTurnStarted(messageId, agentProcessId);
   }
 
   /**
@@ -331,8 +332,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    * @param messageId Durable user message identifier for the turn.
    * @param agentSessionId Provider conversation session id.
    */
-  onWorkflowSessionId(messageId: string, agentSessionId: string): void {
-    this.workflowTurnCoordinator.handleSessionId(messageId, agentSessionId);
+  onWorkflowAgentSessionId(messageId: string, agentSessionId: string): void {
+    this.workflowTurnCoordinator.handleAgentSessionId(messageId, agentSessionId);
   }
 
   onWorkflowChunk(
@@ -990,7 +991,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
       await this.ensureReady();
 
-      if (this.serverState.activeWorkflowMessageId || this.state.pendingUserMessage) {
+      if (this.serverState.workflowState.activeUserMessageId || this.state.pendingUserMessage) {
+        // TODO: message queuing
         this.sendMessage(
           {
             type: "operation.error",
@@ -1061,7 +1063,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    */
   private async maybeDispatchPendingMessage(): Promise<void> {
     const pendingMessage = this.state.pendingUserMessage;
-    if (!pendingMessage || this.serverState.activeWorkflowMessageId) {
+    if (!pendingMessage || this.serverState.workflowState.activeUserMessageId) {
       return;
     }
     this.state.pendingUserMessage = null;
@@ -1080,9 +1082,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     try {
       await this.dispatchTurnToWorkflow({
-        messageId: userMessage.id,
-        content,
-        attachmentIds,
+        userMessage: {
+          id: userMessage.id,
+          content,
+          attachmentIds,
+        },
       });
       await this.onUserMessageSent(userMessage, attachmentRecords);
       this.updatePartialState({ pendingUserMessage: null });
@@ -1157,10 +1161,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     }
 
     try {
+      this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
       await this.dispatchTurnToWorkflow({
-        messageId: userUiMessage.id,
-        content,
-        attachmentIds,
+        userMessage: {
+          id: userUiMessage.id,
+          content,
+          attachmentIds,
+        },
         model: modelOverride,
         agentMode: agentModeOverride,
       });

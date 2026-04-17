@@ -466,8 +466,6 @@ export class AgentProcessRunner {
     switch (output.type) {
       case "stream": {
         const chunk = output.chunk as UIMessageChunk;
-        const c = chunk as { type?: string; toolCallId?: string };
-        this.logger.info(`[chunk-trace] runner handleAgentOutput seq=${this.chunkSequence} type=${c.type}${c.toolCallId ? ` toolCallId=${c.toolCallId}` : ""}`);
         await this.onChunk(this.chunkSequence++, chunk);
     
         if (isTerminalChunk(chunk)) {

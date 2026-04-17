@@ -64,8 +64,12 @@ export class MessageAccumulator {
 
     switch (chunk.type) {
       case "start":
-        this.messageId = chunk.messageId;
-        console.log(`start chunk: ${this.messageId}`);
+        if (this.messageId && chunk.messageId && this.messageId !== chunk.messageId) {
+          this.logger.warn(`[chunk-trace] start chunk with mismatched messageId`, {
+            fields: { chunkMessageId: chunk.messageId ?? "undefined", currentMessageId: this.messageId },
+          });
+        }
+        this.messageId = chunk.messageId ?? this.messageId;
         break;
 
       case "text-start":
@@ -343,7 +347,7 @@ export class MessageAccumulator {
   getMessageId(): string | null {
     return this.messageId ?? null;
   }
-
+  
   getPendingChunks(): UIMessageChunk[] | undefined {
     return this.pendingChunks.length > 0
       ? [...this.pendingChunks]

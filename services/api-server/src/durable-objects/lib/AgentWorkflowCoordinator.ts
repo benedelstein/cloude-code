@@ -50,7 +50,8 @@ export interface WorkflowTurnCoordinatorDeps {
   // DO state accessors (bound closures over `this` on the DO)
   /* eslint-disable no-unused-vars */
   getServerState: () => ServerState;
-  updateServerState: (partial: Partial<ServerState>) => void;
+  updateWorkflowState: (partial: Partial<ServerState["workflowState"]>) => void;
+  updateAgentSessionId: (agentSessionId: string) => void;
   getClientState: () => ClientState;
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage) => void;
@@ -103,7 +104,8 @@ export class AgentWorkflowCoordinator {
   private readonly pendingChunkRepository: PendingChunkRepository;
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly getServerState: () => ServerState;
-  private readonly updateServerState: (partial: Partial<ServerState>) => void;
+  private readonly updateWorkflowState: WorkflowTurnCoordinatorDeps["updateWorkflowState"];
+  private readonly updateAgentSessionId: WorkflowTurnCoordinatorDeps["updateAgentSessionId"];
   private readonly getClientState: () => ClientState;
   private readonly updatePartialState: (partial: Partial<ClientState>) => void;
   private readonly broadcastMessage: (message: ServerMessage) => void;
@@ -125,7 +127,8 @@ export class AgentWorkflowCoordinator {
     this.pendingChunkRepository = deps.pendingChunkRepository;
     this.latestPlanRepository = deps.latestPlanRepository;
     this.getServerState = deps.getServerState;
-    this.updateServerState = deps.updateServerState;
+    this.updateWorkflowState = deps.updateWorkflowState;
+    this.updateAgentSessionId = deps.updateAgentSessionId;
     this.getClientState = deps.getClientState;
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
@@ -162,7 +165,7 @@ export class AgentWorkflowCoordinator {
     this.logger.info("Rehydrating message accumulator from WAL on DO restart", {
       fields: {
         chunkCount: orphanedChunks.length,
-        activeWorkflowMessageId: serverState.activeWorkflowMessageId,
+        activeUserMessageId: serverState.workflowState.activeUserMessageId,
       },
     });
 
@@ -181,7 +184,7 @@ export class AgentWorkflowCoordinator {
 
     // If a workflow turn is durably marked active, schedule an async reconcile
     // that will clean up if the workflow is actually terminal.
-    if (serverState.activeWorkflowMessageId) {
+    if (serverState.workflowState.activeUserMessageId) {
       this.logger.info("Reconciling active workflow turn on DO restart");
       this.reconcileActiveTurn().catch((error: unknown) => {
         this.logger.error("reconcileActiveTurn failed", { error });
@@ -197,8 +200,8 @@ export class AgentWorkflowCoordinator {
    */
   async reconcileActiveTurn(): Promise<void> {
     const serverState = this.getServerState();
-    const { activeWorkflowMessageId, workflowInstanceId } = serverState;
-    if (!activeWorkflowMessageId || !workflowInstanceId) return;
+    const { activeUserMessageId, instanceId: workflowInstanceId } = serverState.workflowState;
+    if (!activeUserMessageId || !workflowInstanceId) return;
 
     let status;
     try {
@@ -230,7 +233,7 @@ export class AgentWorkflowCoordinator {
           fields: {
             workflowInstanceId,
             status: status.status,
-            activeWorkflowMessageId,
+            activeUserMessageId,
           },
         });
         this.commitAbortedMessage(this.messageAccumulator);
@@ -254,12 +257,12 @@ export class AgentWorkflowCoordinator {
 
   /**
    * Prepares turn metadata for workflow-owned execution.
-   * @param messageId Durable user message identifier for the turn.
+   * @param userMessageId Durable user message identifier for the turn.
    * @param overrides Optional per-turn model or mode overrides.
    * @returns The normalized turn metadata needed by the workflow runner.
    */
   prepareTurn(
-    messageId: string,
+    userMessageId: string,
     overrides: PrepareWorkflowTurnOverrides,
   ): Result<PreparedWorkflowTurn, WorkflowTurnFailure> {
     const serverState = this.getServerState();
@@ -283,19 +286,19 @@ export class AgentWorkflowCoordinator {
         message: "Session user id is missing",
       });
     }
+    // the message id should have already been set when we dispatched the turn.
     if (
-      serverState.activeWorkflowMessageId &&
-      serverState.activeWorkflowMessageId !== messageId
+      serverState.workflowState.activeUserMessageId !== userMessageId
     ) {
       this.logger.warn("Another workflow turn is already active, not starting new turn", {
-        fields: { messageId },
+        fields: { userMessageId },
       });
       return failure({
         code: "TURN_NOT_ACTIVE",
         message: "Another workflow turn is already active",
       });
     }
-    if (!this.messageRepository.getById(messageId)) {
+    if (!this.messageRepository.getById(userMessageId)) {
       return failure({
         code: "MESSAGE_NOT_FOUND",
         message: "Workflow turn message was not found",
@@ -318,9 +321,9 @@ export class AgentWorkflowCoordinator {
       });
     }
 
-    this.updateServerState({ activeWorkflowMessageId: messageId });
+    this.updateWorkflowState({ activeUserMessageId: userMessageId });
 
-    this.logger.debug(`Prepared workflow turn for messageId: ${messageId}`);
+    this.logger.debug(`Prepared workflow turn for user message id: ${userMessageId}`);
     return success({
       userId: serverState.userId,
       settings: parsedSettings.data,
@@ -331,17 +334,25 @@ export class AgentWorkflowCoordinator {
 
   /**
    * Records Sprite process metadata for a workflow-owned turn.
-   * @param messageId Durable user message identifier for the turn.
+   * @param userMessageId Durable user message identifier for the turn.
    * @param agentProcessId Sprite process ID captured when the runner starts.
    */
   handleTurnStarted(
-    messageId: string,
+    userMessageId: string,
     agentProcessId: number | null,
-  ): void {
-    this.updateServerState({
-      activeWorkflowMessageId: messageId,
+  ): boolean {
+    if (userMessageId !== this.getServerState().workflowState.activeUserMessageId) {
+      this.logger.warn("Another workflow turn is already active, not starting new turn", {
+        fields: { userMessageId },
+      });
+      return false;
+    }
+    // prepareTurn should have already set the active messsage id.
+    this.updateWorkflowState({
+      activeUserMessageId: userMessageId,
       activeAgentProcessId: agentProcessId,
     });
+    return true;
   }
 
   /**
@@ -349,7 +360,7 @@ export class AgentWorkflowCoordinator {
    * @param messageId Durable user message identifier for the turn.
    * @param agentSessionId Provider conversation session id.
    */
-  handleSessionId(messageId: string, agentSessionId: string): void {
+  handleAgentSessionId(messageId: string, agentSessionId: string): void {
     if (this.isStaleRpc(messageId)) return;
     this.handleAgentOutput({
       type: "sessionId",
@@ -443,12 +454,12 @@ export class AgentWorkflowCoordinator {
     const serverState = this.getServerState();
     if (
       workflowName === SESSION_TURN_WORKFLOW_BINDING &&
-      serverState.workflowInstanceId === workflowId
+      serverState.workflowState.instanceId === workflowId
     ) {
       this.logger.warn("Session workflow completed unexpectedly", {
         fields: { workflowId },
       });
-      this.updateServerState({ workflowInstanceId: null });
+      this.updateWorkflowState({ instanceId: null });
     } else {
       this.logger.warn(`Unknown workflow completed: ${workflowName} ${workflowId}`);
     }
@@ -463,7 +474,7 @@ export class AgentWorkflowCoordinator {
     const serverState = this.getServerState();
     if (
       workflowName === SESSION_TURN_WORKFLOW_BINDING &&
-      serverState.workflowInstanceId === workflowId
+      serverState.workflowState.instanceId === workflowId
     ) {
       this.logger.error("Session workflow errored", {
         fields: { workflowId },
@@ -474,7 +485,7 @@ export class AgentWorkflowCoordinator {
       // would see orphaned WAL chunks with no active turn.
       this.commitAbortedMessage(this.messageAccumulator);
       this.messageAccumulator.reset();
-      this.updateServerState({ workflowInstanceId: null });
+      this.updateWorkflowState({ instanceId: null });
       this.clearActiveTurnState();
       this.updatePartialState({
         lastError: error,
@@ -507,7 +518,13 @@ export class AgentWorkflowCoordinator {
     }
     const workflowId = sessionId;
 
-    this.updateServerState({ activeWorkflowMessageId: turnPayload.messageId });
+    if (serverState.workflowState.activeUserMessageId && serverState.workflowState.activeUserMessageId !== turnPayload.userMessage.id) {
+      this.logger.warn("Another workflow turn is already active, not starting new turn", {
+        fields: { userMessageId: turnPayload.userMessage.id },
+      });
+      return;
+    }
+    this.updateWorkflowState({ activeUserMessageId: turnPayload.userMessage.id });
 
     const previousDispatch = this.workflowDispatchPromise;
     const nextDispatch = previousDispatch
@@ -591,14 +608,14 @@ export class AgentWorkflowCoordinator {
       this.messageAccumulator.reset();
       this.clearActiveTurnState();
     };
-    const processId = serverState.activeAgentProcessId;
+    const processId = serverState.workflowState.activeAgentProcessId;
     if (!processId) {
       this.logger.debug("No agent process id to stop");
       cleanup();
       return;
     }
     try {
-      await sprite.killSession(processId, "SIGTERM");
+      await sprite.killSession(processId, "SIGINT");
     } catch (error) {
       // Session is already gone on the sprite — treat as successfully stopped
       // and clear the in-memory accumulator so no further chunks accumulate.
@@ -635,49 +652,10 @@ export class AgentWorkflowCoordinator {
         break;
       }
       case "debug":
-        // wont be received by the do, not forwarded by the workflow.
+        // wont be received by the DO, not forwarded by the workflow.
         break;
       case "stream": {
-        // const chunkType = (output.chunk as UIMessageChunk)?.type;
-        // const toolCallId = (output.chunk as { toolCallId?: string })?.toolCallId;
-        // this.logger.info(`[chunk-trace] broadcasting ${chunkType}${toolCallId ? ` toolCallId=${toolCallId}` : ""}`);
-        this.broadcastMessage({
-          type: "agent.chunk",
-          chunk: output.chunk,
-        });
-
-        // Write chunk to SQLite WAL before processing — survives DO eviction or process kill
-        this.pendingChunkRepository.append(output.chunk as UIMessageChunk);
-
-        // Accumulate chunks into UIMessage and extract derived state (todos, plan)
-        const { finishedMessage, completedParts } =
-          this.messageAccumulator.process(output.chunk as UIMessageChunk);
-        applyDerivedStateFromParts(
-          {
-            sessionId: serverState.sessionId!,
-            latestPlanRepository: this.latestPlanRepository,
-            updatePartialState: (partial) => this.updatePartialState(partial),
-          },
-          completedParts,
-          this.messageAccumulator.getMessageId(),
-        );
-
-        if (finishedMessage) {
-          const sessionId = serverState.sessionId!;
-          const stored = this.messageRepository.create(
-            sessionId,
-            finishedMessage,
-          );
-          // Flush WAL — message is now durably saved
-          this.pendingChunkRepository.clear();
-          this.broadcastMessage({
-            type: "agent.finish",
-            message: stored.message,
-          });
-
-          // Reset in-progress message state for the next response
-          this.messageAccumulator.reset();
-        }
+        this.handleStreamChunk(output.chunk as UIMessageChunk);
         break;
       }
       case "sessionId": {
@@ -686,9 +664,50 @@ export class AgentWorkflowCoordinator {
         if (serverState.agentSessionId && serverState.agentSessionId !== output.sessionId) {
           this.logger.warn(`Agent session ID mismatch: ${serverState.agentSessionId} !== ${output.sessionId}`);
         }
-        this.updateServerState({ agentSessionId: output.sessionId });
+        this.updateAgentSessionId(output.sessionId);
         break;
       }
+    }
+  }
+
+  private handleStreamChunk(chunk: UIMessageChunk): void {
+    const serverState = this.getServerState();
+    this.broadcastMessage({
+      type: "agent.chunk",
+      chunk,
+    });
+
+    // Write chunk to SQLite WAL before processing — survives DO eviction or process kill
+    this.pendingChunkRepository.append(chunk);
+
+    // Accumulate chunks into UIMessage and extract derived state (todos, plan)
+    const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
+    applyDerivedStateFromParts(
+      {
+        sessionId: serverState.sessionId!,
+        latestPlanRepository: this.latestPlanRepository,
+        updatePartialState: (partial) => this.updatePartialState(partial),
+      },
+      completedParts,
+      this.messageAccumulator.getMessageId(),
+    );
+
+    if (finishedMessage) {
+      this.logger.debug(`finished message: ${finishedMessage.id}`);
+      const sessionId = serverState.sessionId!;
+      const stored = this.messageRepository.create(
+        sessionId,
+        finishedMessage,
+      );
+      // Flush WAL — message is now durably saved
+      this.pendingChunkRepository.clear();
+      this.broadcastMessage({
+        type: "agent.finish",
+        message: stored.message,
+      });
+
+      // Reset in-progress message state for the next response
+      this.messageAccumulator.reset();
     }
   }
 
@@ -713,10 +732,10 @@ export class AgentWorkflowCoordinator {
    * may legitimately arrive just after reconcile cleared state.
    */
   private isStaleRpc(messageId: string): boolean {
-    const active = this.getServerState().activeWorkflowMessageId;
-    if (active && active !== messageId) {
+    const activeUserMessageId = this.getServerState().workflowState.activeUserMessageId;
+    if (activeUserMessageId && activeUserMessageId !== messageId) {
       this.logger.warn("Ignoring workflow RPC for non-active message", {
-        fields: { incomingMessageId: messageId, active },
+        fields: { incomingMessageId: messageId, activeUserMessageId },
       });
       return true;
     }
@@ -724,8 +743,8 @@ export class AgentWorkflowCoordinator {
   }
 
   private clearActiveTurnState(): void {
-    this.updateServerState({
-      activeWorkflowMessageId: null,
+    this.updateWorkflowState({
+      activeUserMessageId: null,
       activeAgentProcessId: null,
     });
   }
@@ -751,7 +770,7 @@ export class AgentWorkflowCoordinator {
   ): Promise<boolean> {
     const serverState = this.getServerState();
     if (
-      serverState.workflowInstanceId === workflowId &&
+      serverState.workflowState.instanceId === workflowId &&
       this.getWorkflow(workflowId)
     ) {
       return false;
@@ -776,11 +795,11 @@ export class AgentWorkflowCoordinator {
         throw error;
       }
       // Workflow already exists — initial turn was not baked in
-      this.updateServerState({ workflowInstanceId: workflowId });
+      this.updateWorkflowState({ instanceId: workflowId });
       return false;
     }
 
-    this.updateServerState({ workflowInstanceId: workflowId });
+    this.updateWorkflowState({ instanceId: workflowId });
     return true;
   }
 
@@ -788,7 +807,7 @@ export class AgentWorkflowCoordinator {
     workflowId: string,
     turnPayload: WorkflowTurnPayload,
   ): Promise<void> {
-    this.logger.debug(`Sending turn event to workflow ${workflowId} - ${turnPayload.messageId}`);
+    this.logger.debug(`Sending turn event to workflow ${workflowId} - ${turnPayload.userMessage.id}`);
     await this.sendWorkflowEvent(
       SESSION_TURN_WORKFLOW_BINDING,
       workflowId,
@@ -814,7 +833,7 @@ export class AgentWorkflowCoordinator {
         case "terminated":
         case "unknown":
           await this.restartWorkflow(workflowId);
-          this.updateServerState({ workflowInstanceId: workflowId });
+          this.updateWorkflowState({ instanceId: workflowId });
           return true;
         case "queued":
         case "running":
@@ -842,7 +861,7 @@ export class AgentWorkflowCoordinator {
     this.logger.debug("Sending cancel signal to workflow");
     const serverState = this.getServerState();
     const spriteName = serverState.spriteName;
-    const agentProcessId = serverState.activeAgentProcessId;
+    const agentProcessId = serverState.workflowState.activeAgentProcessId;
     if (!spriteName || !agentProcessId) {
       this.logger.debug("No sprite name or agent process id to send cancel signal to");
       return false;
