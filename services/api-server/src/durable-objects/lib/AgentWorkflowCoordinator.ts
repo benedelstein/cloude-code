@@ -116,7 +116,7 @@ export class AgentWorkflowCoordinator {
   private readonly getWorkflow: WorkflowTurnCoordinatorDeps["getWorkflow"];
   private readonly sendWorkflowEvent: WorkflowTurnCoordinatorDeps["sendWorkflowEvent"];
   private readonly restartWorkflow: WorkflowTurnCoordinatorDeps["restartWorkflow"];
-  private hasRehydratedPendingChunks: boolean = false;
+  private hasEnsuredRehydratedState: boolean = false;
 
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
   /** Serializes workflow create/send operations for this session. */
@@ -142,49 +142,40 @@ export class AgentWorkflowCoordinator {
     this.restartWorkflow = deps.restartWorkflow;
   }
 
-  /** Returns any pending (uncommitted) chunks for client sync. */
-  getPendingChunks(): UIMessageChunk[] | undefined {
-    return this.messageAccumulator.getPendingChunks();
-  }
-
-  // ============================================
-  // DO constructor hooks
-  // ============================================
-
   /**
-   * Rebuilds in-memory accumulator and derived state from the WAL on DO restart.
-   * Non-destructive: never commits a message and never clears the WAL. Cleanup of
-   * the WAL is owned by terminal workflow RPCs and reconcileActiveTurn().
+   * Rehydrates transient stream state from durable storage at most once per DO
+   * instance before any RPC or websocket path relies on that state.
    */
-  rehydratePendingChunksIfNeeded(): void {
-    if (this.hasRehydratedPendingChunks) return;
+  ensureRehydratedState(): void {
+    if (this.hasEnsuredRehydratedState) return;
     const serverState = this.getServerState();
     const sessionId = serverState.sessionId;
     if (!sessionId) return;
 
     const orphanedChunks = this.pendingChunkRepository.getAll();
-    if (orphanedChunks.length === 0) return;
-
-    this.logger.info("Rehydrating message accumulator from WAL on DO restart", {
-      fields: {
-        chunkCount: orphanedChunks.length,
-        activeUserMessageId: serverState.workflowState.activeUserMessageId,
-      },
-    });
-
-    for (const chunk of orphanedChunks) {
-      const { completedParts } = this.messageAccumulator.process(chunk);
-      applyDerivedStateFromParts(
-        {
-          sessionId,
-          latestPlanRepository: this.latestPlanRepository,
-          updatePartialState: (partial) => this.updatePartialState(partial),
+    if (orphanedChunks.length > 0) {
+      this.logger.info("Rehydrating message accumulator from WAL on DO restart", {
+        fields: {
+          chunkCount: orphanedChunks.length,
+          activeUserMessageId: serverState.workflowState.activeUserMessageId,
         },
-        completedParts,
-        this.messageAccumulator.getMessageId(),
-      );
+      });
+
+      for (const chunk of orphanedChunks) {
+        const { completedParts } = this.messageAccumulator.process(chunk);
+        applyDerivedStateFromParts(
+          {
+            sessionId,
+            latestPlanRepository: this.latestPlanRepository,
+            updatePartialState: (partial) => this.updatePartialState(partial),
+          },
+          completedParts,
+          this.messageAccumulator.getMessageId(),
+        );
+      }
     }
-    this.hasRehydratedPendingChunks = true;
+
+    this.hasEnsuredRehydratedState = true;
 
     // If a workflow turn is durably marked active, schedule an async reconcile
     // that will clean up if the workflow is actually terminal.
@@ -192,8 +183,14 @@ export class AgentWorkflowCoordinator {
       this.logger.info("Reconciling active workflow turn on DO restart");
       this.reconcileActiveTurn().catch((error: unknown) => {
         this.logger.error("reconcileActiveTurn failed", { error });
-      })
+      });
     }
+  }
+
+  /** Returns any pending (uncommitted) chunks for client sync. */
+  getPendingChunks(): UIMessageChunk[] | undefined {
+    this.ensureRehydratedState();
+    return this.messageAccumulator.getPendingChunks();
   }
 
   /**
@@ -344,6 +341,7 @@ export class AgentWorkflowCoordinator {
     userMessageId: string,
     agentProcessId: number | null,
   ): boolean {
+    this.ensureRehydratedState();
     if (userMessageId !== this.getServerState().workflowState.activeUserMessageId) {
       this.logger.warn("Another workflow turn is already active, not starting new turn", {
         fields: { userMessageId },
@@ -364,6 +362,7 @@ export class AgentWorkflowCoordinator {
    * @param agentSessionId Provider conversation session id.
    */
   handleAgentSessionId(messageId: string, agentSessionId: string): void {
+    this.ensureRehydratedState();
     if (this.isStaleRpc(messageId)) return;
     this.handleAgentOutput({
       type: "sessionId",
@@ -382,7 +381,7 @@ export class AgentWorkflowCoordinator {
     sequence: number,
     chunk: UIMessageChunk,
   ): void {
-    this.rehydratePendingChunksIfNeeded();
+    this.ensureRehydratedState();
     // this.logger.debug(`Received chunk ${sequence} with type ${chunk.type} for turn ${messageId}`);
     void sequence;
     if (this.isStaleRpc(userMessageId)) return;
@@ -401,6 +400,7 @@ export class AgentWorkflowCoordinator {
     userMessageId: string,
     result: AgentProcessRunnerTurnResult,
   ): void {
+    this.ensureRehydratedState();
     if (this.isStaleRpc(userMessageId)) return;
     this.logger.info("Workflow turn finished", {
       fields: {
@@ -425,7 +425,7 @@ export class AgentWorkflowCoordinator {
     error: WorkflowTurnFailure,
   ): void {
     if (this.isStaleRpc(userMessageId)) return;
-    this.rehydratePendingChunksIfNeeded();
+    this.ensureRehydratedState();
     this.logger.error("Workflow turn failed", {
       fields: {
         userMessageId,
@@ -446,6 +446,14 @@ export class AgentWorkflowCoordinator {
     this.updatePartialState({
       lastError: error.message,
       status: this.synthesizeStatus(),
+    });
+    // Unblock the client: without this, the UI stays in "responding" state
+    // because waitingForResponse is only cleared on agent.finish or
+    // operation.error.
+    this.broadcastMessage({
+      type: "operation.error",
+      code: "CHAT_MESSAGE_FAILED",
+      message: error.message,
     });
   }
 

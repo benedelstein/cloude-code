@@ -488,6 +488,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   onConnect(connection: Connection): void {
     this.logger.debug(`client connected: ${connection.id}`);
+    this.workflowTurnCoordinator.ensureRehydratedState();
 
     // Send initial connection state
     this.sendMessage(
@@ -970,6 +971,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     connection: Connection,
     message: ClientMessage,
   ): Promise<void> {
+    this.workflowTurnCoordinator.ensureRehydratedState();
     switch (message.type) {
       case "chat.message":
         await this.handleChatMessage(connection, message);

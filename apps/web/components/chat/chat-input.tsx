@@ -64,7 +64,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [showSigninPanel, setShowSigninPanel] = useState(false);
+  const [manuallyOpenedSigninPanel, setManuallyOpenedSigninPanel] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -100,30 +100,12 @@ export function ChatInput({
   const signinHandle = signinProviderId
     ? providerAuthHandles.find((handle) => handle.providerId === signinProviderId)
     : undefined;
+  // Open when the session requires auth, or when the user manually opens it
+  // from the provider selector. The server-required open auto-closes when
+  // providerAuthRequired clears (e.g. after reauth).
+  const showSigninPanel =
+    Boolean(signinHandle) && (providerAuthRequired !== null || manuallyOpenedSigninPanel);
   const isAuthBlocking = showSigninPanel && Boolean(signinProviderId && signinHandle);
-
-  // Show the auth panel automatically when the session provider requires auth.
-  useEffect(() => {
-    if (!providerAuthRequired) {
-      return;
-    }
-    setShowSigninPanel(true);
-  }, [providerAuthRequired]);
-
-  useEffect(() => {
-    if (!signinHandle) {
-      setShowSigninPanel(false);
-      return;
-    }
-
-    if (signinHandle.connected && !signinHandle.requiresReauth) {
-      setShowSigninPanel(false);
-    }
-  }, [
-    signinHandle?.connected,
-    signinHandle?.providerId,
-    signinHandle?.requiresReauth,
-  ]);
 
   useEffect(() => {
     if (!isStreaming) {
@@ -215,7 +197,9 @@ export function ChatInput({
           providerId={signinProviderId}
           handle={signinHandle}
           open={showSigninPanel}
-          onOpenChange={setShowSigninPanel}
+          onOpenChange={(open) => {
+            if (!open) setManuallyOpenedSigninPanel(false);
+          }}
         />
       )}
       <ChatAttachmentPreviews
@@ -268,7 +252,7 @@ export function ChatInput({
               selectedModel={selectedModel}
               providerAuthHandles={providerAuthHandles}
               onSelect={onProviderModelChange}
-              onConnect={() => setShowSigninPanel(true)}
+              onConnect={() => setManuallyOpenedSigninPanel(true)}
               allowedProviderIds={[selectedProvider]}
               disabled={disabled || isAuthBlocking}
             />
