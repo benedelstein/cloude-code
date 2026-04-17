@@ -13,7 +13,8 @@ import {
 import { SpritesError, WorkersSpriteClient } from "@/lib/sprites";
 import type { Env } from "@/types";
 import type { UIMessageChunk } from "ai";
-import { MessageAccumulator } from "@/lib/message-accumulator";
+import { MessageAccumulator } from "@repo/shared";
+import { createLogger } from "@/lib/logger";
 import { applyDerivedStateFromParts } from "../session-agent-derived-state";
 import type { MessageRepository } from "../repositories/message-repository";
 import type { PendingChunkRepository } from "../repositories/pending-chunk-repository";
@@ -113,7 +114,7 @@ export class AgentWorkflowCoordinator {
   private readonly sendWorkflowEvent: WorkflowTurnCoordinatorDeps["sendWorkflowEvent"];
   private readonly restartWorkflow: WorkflowTurnCoordinatorDeps["restartWorkflow"];
 
-  private messageAccumulator = new MessageAccumulator();
+  private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
   /** Serializes workflow create/send operations for this session. */
   private workflowDispatchPromise: Promise<void> = Promise.resolve();
 

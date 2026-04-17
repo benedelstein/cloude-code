@@ -27,6 +27,13 @@ type ClaudeCredentials = {
 function setupClaudeCredentials(emit: ProviderSetupContext["emit"]): void {
   const credentialsJson = process.env.CLAUDE_CREDENTIALS_JSON;
   if (!credentialsJson) {
+    // In production (Sprite VM) CLAUDE_CREDENTIALS_JSON must always be provided.
+    // For local dev, set VM_AGENT_LOCAL=1 to fall back to the user's existing
+    // ~/.claude/.credentials.json set up by the Claude CLI.
+    if (process.env.VM_AGENT_LOCAL === "1") {
+      emit({ type: "debug", message: "VM_AGENT_LOCAL=1 — using existing ~/.claude/.credentials.json" });
+      return;
+    }
     throw new Error("Missing CLAUDE_CREDENTIALS_JSON. Claude OAuth credentials are required.");
   }
 
@@ -75,7 +82,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         cwd: process.cwd(),
         resume: agentSessionId,
         permissionMode: getPermissionMode(initialAgentMode),
-        includePartialMessages: false,
+        includePartialMessages: false, // true
         streamingInput: "always",
         persistSession: true,
         systemPrompt: {

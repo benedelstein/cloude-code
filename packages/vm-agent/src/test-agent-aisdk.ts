@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { parseArgs } from "util";
-import { AgentOutput, encodeAgentInput, UIMessageChunk } from "@repo/shared";
+import { AgentOutput, encodeAgentInput, MessageAccumulator, UIMessageChunk } from "@repo/shared";
 
 const { values } = parseArgs({
   options: {
@@ -36,7 +36,15 @@ if (sessionId) {
 const agent = spawn("bun", spawnArgs, {
   stdio: ["pipe", "pipe", "inherit"],
   cwd: process.cwd(),
+  env: {
+    ...process.env,
+    VM_AGENT_LOCAL: "1",
+  },
 });
+
+// Run each stream chunk through the same validator the DO uses in production.
+// Orphan-chunk warnings surface via the default ConsoleLogger.
+const accumulator = new MessageAccumulator();
 
 // Read agent output
 const agentOutput = createInterface({ input: agent.stdout! });
@@ -54,12 +62,19 @@ agentOutput.on("line", (line) => {
         break;
       case "stream": {
         const chunk = output.chunk as UIMessageChunk | undefined;
+        if (chunk) {
+          const { finishedMessage } = accumulator.process(chunk);
+          if (finishedMessage) {
+            // Reset for the next turn so orphan detection isn't polluted by prior state.
+            accumulator.reset();
+          }
+        }
         if (chunk?.type === "text-delta") {
           process.stdout.write(chunk.delta);
         } else if (chunk?.type === "finish") {
           console.log(`\nFinished (${chunk.finishReason})`);
         } else {
-          console.log("chunk:", JSON.stringify(output.chunk));
+          console.log(`.`);
         }
         break;
       }

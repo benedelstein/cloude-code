@@ -1,6 +1,5 @@
 import type { UIMessage, UIMessageChunk } from "ai";
-import type { Logger } from "@repo/shared";
-import { createLogger } from "./logger";
+import { ConsoleLogger, type Logger } from "../logging";
 
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
@@ -19,9 +18,10 @@ export interface ProcessChunkResult {
 /**
  * Accumulates UIMessageStream chunks into a complete UIMessage.
  * Used by the DO to build the final message for storage while streaming parts to clients.
+ * Also used by the vm-agent test harness to validate chunk ordering in isolation.
  */
 export class MessageAccumulator {
-  private readonly logger: Logger = createLogger("MessageAccumulator");
+  private readonly logger: Logger;
   private messageId: string | undefined = undefined;
   private parts: MessageParts = [];
   private metadata: unknown = undefined;
@@ -50,6 +50,10 @@ export class MessageAccumulator {
     }
   >();
 
+  constructor(logger?: Logger) {
+    this.logger = logger ?? new ConsoleLogger({}, "MessageAccumulator");
+  }
+
   /**
    * Process a stream chunk and accumulate it into the message.
    * @returns message completion state plus any parts fully materialized by this chunk
@@ -61,6 +65,7 @@ export class MessageAccumulator {
     switch (chunk.type) {
       case "start":
         this.messageId = chunk.messageId;
+        console.log(`start chunk: ${this.messageId}`);
         break;
 
       case "text-start":
@@ -253,7 +258,7 @@ export class MessageAccumulator {
 
       case "finish-step":
         break;
-        
+
 
       case "abort":
         completedParts.push(...this.finalizePendingParts());
