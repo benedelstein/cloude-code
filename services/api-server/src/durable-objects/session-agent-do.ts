@@ -1,4 +1,4 @@
-import { SpritesCoordinator, WorkersSpriteClient } from "@/lib/sprites";
+import { SpritesCoordinator } from "@/lib/sprites";
 import {
   type ClientState,
   type AgentMode,
@@ -30,12 +30,9 @@ import {
 } from "./repositories/server-state-repository";
 import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
-import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
-import { configureGitRemote } from "@/lib/git-setup";
 import { ensureValidInstallationToken } from "./session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
-import { GitHubAppService } from "@/lib/github/github-app";
 import type { UIMessage, UIMessageChunk } from "ai";
 // DISABLED: editor feature imports — security issue (sprite URL set to public)
 // import {
@@ -77,8 +74,7 @@ import {
   type WorkflowTurnPayload,
 } from "@/workflows/types";
 import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
-
-const WORKSPACE_DIR = "/home/sprite/workspace";
+import { SessionProvisioner } from "./lib/SessionProvisioner";
 
 interface InitRequest {
   sessionId: string;
@@ -102,8 +98,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly pendingChunkRepository: PendingChunkRepository;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
-  /** Mutex for durable provisioning steps (sprite creation, repo clone) */
-  private ensureProvisionedPromise: Promise<void> | null = null;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
   private githubToken: string | null = null;
   /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
@@ -111,6 +105,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   // private editorToken: string | null = null;
   private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
+  private readonly provisioner: SessionProvisioner;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -184,6 +179,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       runWorkflow: this.runWorkflow.bind(this),
       getWorkflow: this.getWorkflow.bind(this),
       sendWorkflowEvent: this.sendWorkflowEvent.bind(this),
+    });
+
+    this.provisioner = new SessionProvisioner({
+      logger: this.logger,
+      env: this.env,
+      spritesCoordinator: this.spritesCoordinator,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updateServerState: (partial) => this.updateServerState(partial),
+      updatePartialState: (partial) => this.updatePartialState(partial),
+      synthesizeStatus: () => this.synthesizeStatus(),
+      refreshGitHubToken: () => this.refreshGitHubToken(),
+      ensureGitProxySecret: () => this.ensureGitProxySecret(),
     });
 
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
@@ -621,7 +629,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.logger.warn("Session not initialized — skipping ensureReady");
       return;
     }
-    await this.ensureProvisioned();
+    await this.provisioner.ensureProvisioned();
     await this.maybeDispatchPendingMessage();
   }
 
@@ -631,148 +639,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
   }
 
-  private ensureProvisioned(): Promise<void> {
-    if (this.ensureProvisionedPromise) return this.ensureProvisionedPromise;
-    this.ensureProvisionedPromise = this._provision().finally(() => {
-      this.ensureProvisionedPromise = null;
-    });
-    return this.ensureProvisionedPromise;
-  }
-
-  private async _provision(): Promise<void> {
-    try {
-      if (!this.serverState.spriteName) {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        this.logger.debug(
-          `Provisioning sprite for session ${this.serverState.sessionId}`,
-        );
-
-        const spriteResponse = await this.spritesCoordinator.createSprite({
-          name: this.serverState.sessionId!,
-        });
-
-        // Lock down outbound network access to known-good domains
-        const sprite = new WorkersSpriteClient(
-          spriteResponse.name,
-          this.env.SPRITES_API_KEY,
-          this.env.SPRITES_API_URL,
-        );
-        const workerHostname = new URL(this.env.WORKER_URL).hostname;
-        const networkPolicy = buildNetworkPolicy([
-          { domain: workerHostname, action: "allow" },
-        ]);
-        await sprite.setNetworkPolicy(networkPolicy);
-
-        this.updateServerState({ spriteName: spriteResponse.name });
-        this.updatePartialState({ status: this.synthesizeStatus() });
-      }
-
-      if (!this.serverState.repoCloned) {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        await this.cloneRepo(this.serverState.spriteName!);
-        this.updateServerState({ repoCloned: true });
-        this.updatePartialState({
-          status: this.synthesizeStatus(),
-          lastError: null,
-        });
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error("Failed to provision session", { error });
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Clones the repository onto the sprite and configures git remotes.
-   * Assumes the sprite is already created and the network policy is set.
-   */
-  private async cloneRepo(spriteName: string): Promise<void> {
-    const repoFullName = this.state.repoFullName!;
-    const sessionId = this.serverState.sessionId!;
-
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    const proxyBaseUrl = `${this.env.WORKER_URL}/git-proxy/${sessionId}`;
-    const cloneUrl = `${proxyBaseUrl}/github.com/${repoFullName}.git`;
-    const githubRemoteUrl = `https://github.com/${repoFullName}.git`;
-
-    // Check if the repo is already cloned (sprite may be persistent)
-    const isCloned = await sprite.execHttp(
-      `test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`,
-      {},
-    );
-    if (isCloned.stdout.includes("exists")) {
-      this.logger.info(
-        `Repo ${repoFullName} already cloned on sprite ${spriteName}`,
-      );
-    } else {
-      this.logger.info(`Cloning repo ${repoFullName} on sprite ${spriteName}`);
-      await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
-
-      // Fetch a read-only token scoped to contents:read for the initial clone
-      const github = new GitHubAppService(this.env, this.logger);
-      const cloneTokenResult = await github.getReadOnlyTokenForRepo(repoFullName);
-      if (!cloneTokenResult.ok) {
-        throw new Error(cloneTokenResult.error.message);
-      }
-      const cloneToken = cloneTokenResult.value;
-      const basicAuth = btoa(`x-access-token:${cloneToken}`);
-
-      // Also refresh the write token for the proxy (used after clone)
-      await this.refreshGitHubToken();
-      const cloneStart = Date.now();
-      const baseBranch = this.state.baseBranch;
-      const branchFlag = baseBranch ? `--branch ${baseBranch} ` : "";
-      const cloneResult = await sprite.execHttp(
-        `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
-        {},
-      );
-      this.logger.info(
-        `Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`,
-      );
-      if (cloneResult.exitCode !== 0) {
-        throw new Error(
-          `Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`,
-        );
-      }
-    }
-
-    // Detect the base branch (whatever branch the clone checked out)
-    const branchResult = await sprite.execHttp(
-      `cd ${WORKSPACE_DIR} && git rev-parse --abbrev-ref HEAD`,
-      {},
-    );
-    const actualBaseBranch = branchResult.stdout.trim() || "main";
-    if (actualBaseBranch !== this.state.baseBranch && this.state.baseBranch) {
-      this.logger.warn(
-        `Base branch ${this.state.baseBranch} does not match actual base branch ${actualBaseBranch}`,
-      );
-    }
-    this.updatePartialState({ baseBranch: actualBaseBranch });
-
+  /** Returns the cached git proxy secret, generating and persisting it if missing. */
+  private ensureGitProxySecret(): string {
     if (!this.gitProxySecret) {
       this.gitProxySecret = crypto.randomUUID();
       this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
     }
-
-    // Configure remote URLs, git identity, and proxy auth header
-    await configureGitRemote(sprite, {
-      workspaceDir: WORKSPACE_DIR,
-      githubRemoteUrl,
-      cloneUrl,
-      proxyBaseUrl,
-      gitProxySecret: this.gitProxySecret,
-    });
+    return this.gitProxySecret;
   }
 
   // ============================================
@@ -814,15 +687,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     );
 
     // Generate git proxy secret and persist
-    if (!this.gitProxySecret) {
-      this.gitProxySecret = crypto.randomUUID();
-      this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
-    } else {
-      // should never happen
-      this.logger.warn(
-        "Git proxy secret already exists, skipping generation(?)",
-      );
-    }
+    this.ensureGitProxySecret();
 
     const pendingAttachmentIds = data.initialAttachmentIds ?? [];
     const pendingUserUiMessage = await buildUserUiMessage(
