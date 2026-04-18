@@ -7,7 +7,7 @@ export interface GitProxyContext {
   gitProxySecret: string | null;
   repoFullName: string | null;
   sessionId: string | null;
-  githubToken: string | null;
+  githubInstallationToken: string | null;
   /** Branch name locked after first push (enforces single-branch pushes) */
   pushedBranch: string | null;
   env: Env;
@@ -17,7 +17,7 @@ export interface GitProxyContext {
 export interface GitProxyResult {
   response: Response;
   /** If the token was refreshed, the new token string (caller should cache it) */
-  githubToken: string | null;
+  githubInstallationToken: string | null;
   /** Branch name extracted from a successful push, or null if not a push */
   pushedBranch: string | null;
 }
@@ -35,13 +35,13 @@ export async function handleGitProxy(
   const authHeader = request.headers.get("Authorization");
   if (!context.gitProxySecret || authHeader !== `Bearer ${context.gitProxySecret}`) {
     logger.warn(`[git-proxy] auth failed: secret=${context.gitProxySecret ? "set" : "null"}, header=${authHeader ? "present" : "missing"}, match=${authHeader === `Bearer ${context.gitProxySecret}`}`);
-    return { response: new Response("unauthorized", { status: 401 }), githubToken: null, pushedBranch: null };
+    return { response: new Response("unauthorized", { status: 401 }), githubInstallationToken: null, pushedBranch: null };
   }
 
   // Strip the /git-proxy/<sessionId>/ prefix to get github.com/owner/repo.git/...
   const match = path.match(/^\/git-proxy\/[^/]+\/github\.com\/(.+)/);
   if (!match?.[1]) {
-    return { response: new Response("invalid path", { status: 400 }), githubToken: null, pushedBranch: null };
+    return { response: new Response("invalid path", { status: 400 }), githubInstallationToken: null, pushedBranch: null };
   }
   const githubPath = match[1];
 
@@ -50,7 +50,7 @@ export async function handleGitProxy(
     logger.warn(`[git-proxy] repo not allowed: ${githubPath} !== ${context.repoFullName}.git`);
     return { 
       response: new Response("repo not allowed", { status: 403 }),
-      githubToken: null,
+      githubInstallationToken: null,
       pushedBranch: null,
     };
   }
@@ -63,7 +63,7 @@ export async function handleGitProxy(
       logger.warn(`[git-proxy] push rejected: ${pushCheck.reason}`);
       return {
         response: new Response(`push rejected: ${pushCheck.reason}`, { status: 403 }),
-        githubToken: null,
+        githubInstallationToken: null,
         pushedBranch: null,
       };
     }
@@ -86,14 +86,14 @@ async function forwardToGitHub(
   context: GitProxyContext,
 ): Promise<GitProxyResult> {
   logger.debug(`[git-proxy] forwarding to GitHub: ${githubPath}`);
-  const githubToken = await ensureValidInstallationToken(context);
+  const githubInstallationToken = await ensureValidInstallationToken(context);
 
   const url = new URL(originalRequest.url);
   const targetUrl = `https://github.com/${githubPath}${url.search}`;
 
   // Use Authorization header instead of URL credentials — Workers' fetch() strips
   // credentials from URLs (user:pass@host), which causes 401 on private repos.
-  const basicAuth = btoa(`x-access-token:${githubToken}`);
+  const basicAuth = btoa(`x-access-token:${githubInstallationToken}`);
   const headers: Record<string, string> = {
     "User-Agent": "cloude-code-git-proxy",
     "Authorization": `Basic ${basicAuth}`,
@@ -111,7 +111,7 @@ async function forwardToGitHub(
   });
 
   logger.debug(`[git-proxy] GitHub response: ${response.status} for ${originalRequest.method} ${githubPath}`);
-  return { response, githubToken, pushedBranch: null };
+  return { response, githubInstallationToken, pushedBranch: null };
 }
 
 function validatePush(

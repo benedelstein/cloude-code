@@ -12,7 +12,7 @@ const WORKSPACE_DIR = "/home/sprite/workspace";
  * Dependencies injected from the SessionAgentDO into the provisioner.
  * Keeps coupling explicit and avoids a circular type reference to the DO class.
  */
-export interface SessionProvisionerDeps {
+export interface SessionProvisionServiceDeps {
   logger: Logger;
   env: Env;
   spritesCoordinator: SpritesCoordinator;
@@ -27,7 +27,7 @@ export interface SessionProvisionerDeps {
 }
 
 /**
- * Owns session provisioning for a SessionAgentDO: creating the sprite,
+ * Owns session VM provisioning for a SessionAgentDO: creating the sprite,
  * applying the network policy, cloning the repository, and configuring
  * git remotes. Each step is idempotent — skipped if the corresponding
  * checkpoint is already recorded in ServerState.
@@ -35,14 +35,14 @@ export interface SessionProvisionerDeps {
  * The SessionAgentDO owns this instance. All interaction is through the
  * injected deps so the provisioner has no reference to the DO class.
  */
-export class SessionProvisioner {
+export class SessionProvisionService {
   private readonly logger: Logger;
   private readonly env: Env;
   private readonly spritesCoordinator: SpritesCoordinator;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
-  private readonly updateServerState: SessionProvisionerDeps["updateServerState"];
-  private readonly updatePartialState: SessionProvisionerDeps["updatePartialState"];
+  private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
+  private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly refreshGitHubToken: () => Promise<void>;
   private readonly ensureGitProxySecret: () => string;
@@ -50,8 +50,8 @@ export class SessionProvisioner {
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
   private ensureProvisionedPromise: Promise<void> | null = null;
 
-  constructor(deps: SessionProvisionerDeps) {
-    this.logger = deps.logger.scope("session-provisioner");
+  constructor(deps: SessionProvisionServiceDeps) {
+    this.logger = deps.logger.scope("session-provision-service");
     this.env = deps.env;
     this.spritesCoordinator = deps.spritesCoordinator;
     this.getServerState = deps.getServerState;

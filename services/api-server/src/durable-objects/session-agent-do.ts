@@ -29,7 +29,6 @@ import {
 } from "./repositories/server-state-repository";
 import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
-import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
 import { ensureValidInstallationToken } from "./session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
 import type { UIMessageChunk } from "ai";
@@ -55,7 +54,6 @@ import {
   assertSessionRepoAccess,
   type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
-import { getProviderAuthService } from "@/lib/providers/provider-auth-service";
 import type {
   AgentProcessRunnerTurnResult,
   PreparedWorkflowTurn,
@@ -65,8 +63,10 @@ import type {
   WorkflowTurnFailure,
 } from "@/workflows/types";
 import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
-import { SessionProvisioner } from "./lib/SessionProvisioner";
+import { SessionProvisionService } from "./lib/SessionProvisionService";
 import { SessionChatDispatchService } from "./lib/SessionChatDispatchService";
+import { SessionProviderConnectionService } from "./lib/SessionProviderConnectionService";
+import { SessionGitProxyService } from "./lib/SessionGitProxyService";
 
 interface InitRequest {
   sessionId: string;
@@ -92,14 +92,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
-  private githubToken: string | null = null;
+  private githubInstallationToken: string | null = null;
   /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
   private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   // private editorToken: string | null = null;
   private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
-  private readonly provisioner: SessionProvisioner;
-  private readonly chatDispatch: SessionChatDispatchService;
+  private readonly provisionService: SessionProvisionService;
+  private readonly chatDispatchService: SessionChatDispatchService;
+  private readonly providerConnectionService: SessionProviderConnectionService;
+  private readonly gitProxyService: SessionGitProxyService;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -149,7 +151,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     ]);
 
     // Load secrets from SQLite into memory
-    this.githubToken = this.secretRepository.get("github_token");
+    this.githubInstallationToken = this.secretRepository.get("github_token");
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
     // this.editorToken = this.secretRepository.get("editor_token");
 
@@ -176,7 +178,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       sendWorkflowEvent: this.sendWorkflowEvent.bind(this),
     });
 
-    this.provisioner = new SessionProvisioner({
+    this.provisionService = new SessionProvisionService({
       logger: this.logger,
       env: this.env,
       spritesCoordinator: this.spritesCoordinator,
@@ -189,7 +191,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       ensureGitProxySecret: () => this.ensureGitProxySecret(),
     });
 
-    this.chatDispatch = new SessionChatDispatchService({
+    this.chatDispatchService = new SessionChatDispatchService({
       logger: this.logger,
       env: this.env,
       messageRepository: this.messageRepository,
@@ -200,6 +202,31 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
+    });
+
+    this.providerConnectionService = new SessionProviderConnectionService({
+      logger: this.logger,
+      env: this.env,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updatePartialState: (partial) => this.updatePartialState(partial),
+    });
+
+    this.gitProxyService = new SessionGitProxyService({
+      logger: this.logger,
+      env: this.env,
+      secretRepository: this.secretRepository,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updatePartialState: (partial) => this.updatePartialState(partial),
+      broadcastMessage: (msg) => this.broadcastMessage(msg),
+      getGitHubInstallationToken: () => this.githubInstallationToken,
+      setGitHubInstallationToken: (token) => {
+        this.githubInstallationToken = token;
+      },
+      getGitProxySecret: () => this.gitProxySecret,
+      assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
+      enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
     });
 
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
@@ -258,53 +285,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     return "ready";
   }
 
-  private async resolveProviderConnectionState(
-    providerId: ClientState["agentSettings"]["provider"],
-    userId: string | null,
-  ): Promise<ClientState["providerConnection"]> {
-    if (!userId) {
-      return {
-        provider: providerId,
-        connected: false,
-        requiresReauth: false,
-      };
-    }
-
-    try {
-      const service = getProviderAuthService(providerId, this.env, this.logger);
-      const status = await service.getConnectionStatus(userId);
-      return {
-        provider: providerId,
-        connected: status.connected,
-        requiresReauth: status.requiresReauth,
-      };
-    } catch (error) {
-      this.logger.error("Failed to resolve provider connection state", {
-        error,
-        fields: { provider: providerId, userId },
-      });
-      return null;
-    }
-  }
-
-  private queueRefreshProviderConnection(): void {
-    this.refreshProviderConnection().catch((error) => {
-      this.logger.error("Failed to refresh provider connection state", { error });
-    });
-  }
-
   /**
-   * Refreshes the active session provider connection state from the provider auth service.
-   * @returns Resolves when the cached provider connection state has been updated, if available.
+   * RPC entry point: refreshes the cached provider connection state.
+   * Called externally via DO stub from `refreshSessionProviderConnection`.
    */
   async refreshProviderConnection(): Promise<void> {
-    const providerConnection = await this.resolveProviderConnectionState(
-      this.state.agentSettings.provider,
-      this.serverState.userId,
-    );
-    if (providerConnection) {
-      this.updatePartialState({ providerConnection });
-    }
+    await this.providerConnectionService.refresh();
   }
 
   // ============================================
@@ -401,100 +387,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
-    const path = url.pathname;
-
-    // Git proxy: forward git operations to GitHub with auth
-    if (path.startsWith("/git-proxy/")) {
-      const accessResult = await this.assertSessionRepoAccess(); // ensure user still has access to the repo.
-      if (!accessResult.ok) {
-        switch (accessResult.error.code) {
-          case "REPO_ACCESS_BLOCKED":
-            await this.enforceSessionAccessBlocked();
-            return new Response(
-              JSON.stringify({
-                error: accessResult.error.message,
-                code: accessResult.error.code,
-              }),
-              {
-                status: accessResult.error.status,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          case "GITHUB_AUTH_REQUIRED":
-            return new Response(
-              JSON.stringify({
-                error: accessResult.error.message,
-                code: accessResult.error.code,
-              }),
-              {
-                status: 401,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          case "GITHUB_API_ERROR":
-            return new Response(
-              JSON.stringify({
-                error: accessResult.error.message,
-                code: accessResult.error.code,
-              }),
-              {
-                status: 503,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          case "SESSION_NOT_FOUND":
-            return new Response(
-              JSON.stringify({
-                error: accessResult.error.message,
-                code: accessResult.error.code,
-              }),
-              {
-                status: 404,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          case "INVALID_REPO":
-            return new Response(
-              JSON.stringify({
-                error: accessResult.error.message,
-                code: accessResult.error.code,
-              }),
-              {
-                status: 400,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          default: {
-            const exhaustiveCheck: never = accessResult.error;
-            throw new Error(`Unhandled session repo access error: ${JSON.stringify(exhaustiveCheck)}`);
-          }
-        }
-      }
-
-      const result = await handleGitProxy(
-        request,
-        path,
-        this.gitProxyContext(),
-      );
-      if (result.githubToken) {
-        this.githubToken = result.githubToken;
-      }
-      // Capture pushed branch name and notify clients
-      if (result.pushedBranch && result.response.ok) {
-        if (result.pushedBranch !== this.state.pushedBranch) {
-          this.updatePartialState({ pushedBranch: result.pushedBranch });
-          this.broadcastMessage({
-            type: "branch.pushed",
-            branch: result.pushedBranch,
-            repoFullName: this.state.repoFullName ?? "",
-          });
-        }
-      }
-      return result.response;
-    }
-
-    // Pass unhandled requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
+    // Pass all requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
     return super.fetch(request);
+  }
+
+  /**
+   * RPC entry point for the `/git-proxy/:sessionId/*` route. Handles repo
+   * access checks, forwards the git request to GitHub, and propagates any
+   * resulting token refresh or pushed-branch update into session state.
+   */
+  async handleGitProxy(request: Request): Promise<Response> {
+    return this.gitProxyService.handleRequest(request);
   }
 
   // ============================================
@@ -531,7 +434,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
     this.queueEnsureReady();
-    this.queueRefreshProviderConnection();
+    this.providerConnectionService.queueRefresh();
   }
 
   async onMessage(
@@ -637,8 +540,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       this.logger.warn("Session not initialized — skipping ensureReady");
       return;
     }
-    await this.provisioner.ensureProvisioned();
-    await this.chatDispatch.maybeDispatchPendingMessage();
+    await this.provisionService.ensureProvisioned();
+    await this.chatDispatchService.maybeDispatchPendingMessage();
   }
 
   private queueEnsureReady(): void {
@@ -689,7 +592,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       // Invalid model — fall back to the provider's default by omitting model
       settings = AgentSettings.parse({ provider, maxTokens });
     }
-    const providerConnection = await this.resolveProviderConnectionState(
+    const providerConnection = await this.providerConnectionService.resolveState(
       settings.provider,
       data.userId,
     );
@@ -881,7 +784,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         return;
       }
 
-      const result = await this.chatDispatch.dispatchChatMessage(payload, connection.id);
+      const result = await this.chatDispatchService.dispatchChatMessage(payload, connection.id);
       if (!result.ok) {
         this.logger.warn("Workflow chat message dispatch failed", {
           fields: { code: result.error.code },
@@ -943,22 +846,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // GitHub token helpers
   // ============================================
 
-  private gitProxyContext(): GitProxyContext {
-    return {
-      gitProxySecret: this.gitProxySecret,
+  private async refreshGitHubToken(): Promise<void> {
+    const token = await ensureValidInstallationToken({
       repoFullName: this.state.repoFullName,
-      sessionId: this.serverState.sessionId,
-      githubToken: this.githubToken,
-      pushedBranch: this.state.pushedBranch,
+      githubInstallationToken: this.githubInstallationToken,
       env: this.env,
       secretRepository: this.secretRepository,
-    };
-  }
-
-  private async refreshGitHubToken(): Promise<void> {
-    const token = await ensureValidInstallationToken(this.gitProxyContext());
+    });
     if (token) {
-      this.githubToken = token;
+      this.githubInstallationToken = token;
     }
   }
 

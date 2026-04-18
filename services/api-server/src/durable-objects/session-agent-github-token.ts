@@ -7,7 +7,7 @@ const logger = createLogger("session-agent-github-token.ts");
 
 export interface GitHubTokenContext {
   repoFullName: string | null;
-  githubToken: string | null;
+  githubInstallationToken: string | null;
   env: Env;
   secretRepository: SecretRepository;
 }
@@ -17,7 +17,7 @@ export interface GitHubTokenContext {
  * Returns the (possibly refreshed) token and persists it to the secret repository.
  */
 export async function ensureValidInstallationToken(context: GitHubTokenContext): Promise<string | null> {
-  if (!context.repoFullName) return context.githubToken;
+  if (!context.repoFullName) return context.githubInstallationToken;
 
   // GitHubAppService handles caching with a 5-minute buffer before expiry
   const github = new GitHubAppService(context.env, logger);
