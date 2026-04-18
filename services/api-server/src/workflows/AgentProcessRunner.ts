@@ -27,7 +27,7 @@ import {
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,
-} from "@/durable-objects/lib/attachment-service";
+} from "@/durable-objects/lib/agent-attachment-service";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";

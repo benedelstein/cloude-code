@@ -14,7 +14,6 @@ import {
   ChatMessageEvent,
   AgentSettings,
   failure,
-  getProviderModelDefinition,
   success,
   Result,
 } from "@repo/shared";
@@ -33,13 +32,12 @@ import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
 import { ensureValidInstallationToken } from "./session-agent-github-token";
 import { createLogger, initializeLogger } from "@/lib/logger";
-import type { UIMessage, UIMessageChunk } from "ai";
+import type { UIMessageChunk } from "ai";
 // DISABLED: editor feature imports — security issue (sprite URL set to public)
 // import {
 //   handleEditorOpen,
 //   handleEditorClose,
 // } from "./session-agent-editor";
-import { updateSessionHistoryData } from "./session-agent-history";
 import type {
   HandleCloseEditorResult,
   HandleDeleteSessionResult,
@@ -52,11 +50,6 @@ import type {
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
-import {
-  createUserUiMessage,
-  getUserMessageTextContent,
-} from "@/lib/utils/uimessage-utils";
-import { AttachmentRecord } from "@/types/attachments";
 import { buildUserUiMessage } from "@/lib/create-user-message";
 import {
   assertSessionRepoAccess,
@@ -67,14 +60,13 @@ import type {
   AgentProcessRunnerTurnResult,
   PreparedWorkflowTurn,
 } from "@/workflows/AgentProcessRunner";
-import {
-  workflowTurnFailure,
-  type PrepareWorkflowTurnOverrides,
-  type WorkflowTurnFailure,
-  type WorkflowTurnPayload,
+import type {
+  PrepareWorkflowTurnOverrides,
+  WorkflowTurnFailure,
 } from "@/workflows/types";
 import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
 import { SessionProvisioner } from "./lib/SessionProvisioner";
+import { SessionChatDispatchService } from "./lib/SessionChatDispatchService";
 
 interface InitRequest {
   sessionId: string;
@@ -96,6 +88,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly serverStateRepository: ServerStateRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
+  private readonly attachmentService: AttachmentService;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
@@ -106,6 +99,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // private editorToken: string | null = null;
   private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
   private readonly provisioner: SessionProvisioner;
+  private readonly chatDispatch: SessionChatDispatchService;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -144,6 +138,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
+    this.attachmentService = new AttachmentService(this.env.DB);
 
     migrateAll([
       this.messageRepository,
@@ -192,6 +187,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       synthesizeStatus: () => this.synthesizeStatus(),
       refreshGitHubToken: () => this.refreshGitHubToken(),
       ensureGitProxySecret: () => this.ensureGitProxySecret(),
+    });
+
+    this.chatDispatch = new SessionChatDispatchService({
+      logger: this.logger,
+      env: this.env,
+      messageRepository: this.messageRepository,
+      attachmentService: this.attachmentService,
+      workflowCoordinator: this.workflowTurnCoordinator,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updatePartialState: (partial) => this.updatePartialState(partial),
+      broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
+      synthesizeStatus: () => this.synthesizeStatus(),
     });
 
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
@@ -630,7 +638,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       return;
     }
     await this.provisioner.ensureProvisioned();
-    await this.maybeDispatchPendingMessage();
+    await this.chatDispatch.maybeDispatchPendingMessage();
   }
 
   private queueEnsureReady(): void {
@@ -873,7 +881,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         return;
       }
 
-      const result = await this.dispatchChatMessageToWorkflow(payload, connection.id);
+      const result = await this.chatDispatch.dispatchChatMessage(payload, connection.id);
       if (!result.ok) {
         this.logger.warn("Workflow chat message dispatch failed", {
           fields: { code: result.error.code },
@@ -923,243 +931,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     );
   }
 
-  // ============================================
-  // Attachment helpers
-  // ============================================
-
-  /**
-   * Dispatches the pending initial message through the session workflow once provisioning completes.
-   */
-  private async maybeDispatchPendingMessage(): Promise<void> {
-    const pendingMessage = this.state.pendingUserMessage;
-    if (!pendingMessage || this.serverState.workflowState.activeUserMessageId) {
-      return;
-    }
-    this.state.pendingUserMessage = null;
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) {
-      return;
-    }
-
-    const { message: userMessage, attachmentIds } = pendingMessage;
-    const content = getUserMessageTextContent(userMessage);
-    // TODO: WHAT IF ATTACHMENT RESOLUTION FAILS?
-    const attachmentRecords = await this.getBoundAttachmentRecords(
-      sessionId,
-      attachmentIds,
-    );
-
-    this.updatePartialState({ pendingUserMessage: null });
-    try {
-      // TODO: mark the message failed if dispatch fails.
-      this.onUserMessageSent(userMessage, attachmentRecords);
-      await this.dispatchTurnToWorkflow({
-        userMessage: {
-          id: userMessage.id,
-          content,
-          attachmentIds,
-        },
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error("Failed to dispatch pending workflow message", { error });
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
-      this.broadcastMessage({
-        type: "operation.error",
-        code: "CHAT_MESSAGE_FAILED",
-        message: "Failed to handle chat message",
-      });
-    }
-  }
-
-  private async dispatchChatMessageToWorkflow(
-    payload: ChatMessageEvent,
-    connectionId: string,
-  ): Promise<Result<void, WorkflowTurnFailure>> {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) {
-      return failure(
-        workflowTurnFailure("SESSION_NOT_INITIALIZED", "Session is not initialized"),
-      );
-    }
-
-    const attachmentIds =
-      payload.attachments?.map((attachment) => attachment.attachmentId) ?? [];
-    const attachmentRecords = await this.getBoundAttachmentRecords(
-      sessionId,
-      attachmentIds,
-    );
-    if (attachmentRecords.length !== attachmentIds.length) {
-      return failure(
-        workflowTurnFailure(
-          "ATTACHMENTS_NOT_FOUND",
-          "Some attachments were not found for this session",
-          { attachmentIds },
-        ),
-      );
-    }
-
-    const content = payload.content?.trim();
-
-    let modelOverride: string | undefined;
-    if (payload.model && payload.model !== this.state.agentSettings.model) {
-      const modelResult = this.validateAndApplyModelSwitch(payload.model);
-      if (!modelResult.ok) {
-        return failure(modelResult.error);
-      }
-      modelOverride = modelResult.value;
-    }
-
-    let agentModeOverride: AgentMode | undefined;
-    if (payload.agentMode && payload.agentMode !== this.state.agentMode) {
-      this.updatePartialState({ agentMode: payload.agentMode });
-      agentModeOverride = payload.agentMode;
-    }
-
-    const userUiMessage = createUserUiMessage(
-      content,
-      attachmentRecords,
-      payload.messageId,
-    );
-    if (!userUiMessage) {
-      return failure(
-        workflowTurnFailure(
-          "INVALID_MESSAGE",
-          "Message must include content or attachments",
-        ),
-      );
-    }
-
-    try {
-      // save before dispatching to workflow to avoid race conditions
-      this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
-      this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
-      await this.dispatchTurnToWorkflow({
-        userMessage: {
-          id: userUiMessage.id,
-          content,
-          attachmentIds,
-        },
-        model: modelOverride,
-        agentMode: agentModeOverride,
-      });
-    } catch (error) {
-      return failure(
-        workflowTurnFailure(
-          "WORKFLOW_DISPATCH_FAILED",
-          error instanceof Error ? error.message : String(error),
-        ),
-      );
-    }
-
-    return success(undefined);
-  }
-
-  private validateAndApplyModelSwitch(
-    model: string,
-  ): Result<string, WorkflowTurnFailure> {
-    const validatedModel = getProviderModelDefinition(
-      this.state.agentSettings.provider,
-      model,
-    );
-    if (!validatedModel) {
-      this.logger.warn("Invalid provider model in workflow model switch", {
-        fields: { provider: this.state.agentSettings.provider, model },
-      });
-      return failure(
-        workflowTurnFailure(
-          "INVALID_MODEL",
-          "Invalid model for the current provider",
-          { provider: this.state.agentSettings.provider, model },
-        ),
-      );
-    }
-
-    this.updatePartialState({
-      agentSettings: {
-        ...this.state.agentSettings,
-        model: validatedModel.id,
-      } as AgentSettings,
-    });
-    return success(validatedModel.id);
-  }
-
-  private async getBoundAttachmentRecords(
-    sessionId: string,
-    attachmentIds: string[],
-  ): Promise<AttachmentRecord[]> {
-    if (attachmentIds.length === 0) {
-      return [];
-    }
-
-    const attachmentService = new AttachmentService(this.env.DB);
-    return attachmentService.getByIdsBoundToSession(sessionId, attachmentIds);
-  }
-
-  private async dispatchTurnToWorkflow(
-    turnPayload: WorkflowTurnPayload,
-  ): Promise<void> {
-    await this.workflowTurnCoordinator.dispatchTurn(turnPayload);
-  }
-
   private async cancelActiveWorkflowTurn(): Promise<void> {
     await this.workflowTurnCoordinator.cancelActiveTurn();
   }
 
   private async stopWorkflowManagedProcesses(): Promise<void> {
     await this.workflowTurnCoordinator.stopManagedProcesses();
-  }
-
-  // handle side effects of sending a user message
-  private onUserMessageSent(
-    message: UIMessage,
-    attachmentRecords: AttachmentRecord[],
-    connectionId?: string,
-  ): void {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) return;
-    const existing = this.messageRepository.getById(message.id);
-    if (existing) {
-      return;
-    }
-    const stored = this.messageRepository.create(sessionId, message);
-    this.broadcastMessage(
-      { type: "user.message", message: stored.message },
-      connectionId ? [connectionId] : undefined,
-    );
-    // Sync to D1 history row and generate title
-    const content = getUserMessageTextContent(message);
-    const historyContent = this.toHistorySyncContent(
-      content,
-      attachmentRecords,
-    );
-    this.ctx.waitUntil(
-      updateSessionHistoryData({
-        database: this.env.DB,
-        anthropicApiKey: this.env.ANTHROPIC_API_KEY,
-        logger: this.logger,
-        sessionId,
-        messageContent: historyContent,
-        messageRepository: this.messageRepository,
-      }),
-    );
-  }
-
-  private toHistorySyncContent(
-    content: string | undefined,
-    attachments: AttachmentRecord[],
-  ): string {
-    if (content) {
-      return content;
-    }
-    if (attachments.length === 1) {
-      return `Uploaded image: ${attachments[0]!.filename}`;
-    }
-    return `Uploaded ${attachments.length} images`;
   }
 
   // ============================================
