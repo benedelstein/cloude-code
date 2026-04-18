@@ -763,9 +763,15 @@ export class AgentWorkflowCoordinator {
   }
 
   private isWorkflowAlreadyTrackedError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const message = error.message;
+    // "already being tracked" comes from the Agents SDK; "instance.already_exists" /
+    // "Instance already exists" is the underlying Cloudflare Workflows error surfaced
+    // when a workflow with the same id already exists.
     return (
-      error instanceof Error &&
-      error.message.includes("already being tracked")
+      message.includes("already being tracked") ||
+      message.includes("already_exists") ||
+      message.includes("Instance already exists")
     );
   }
 

@@ -1088,7 +1088,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({ pendingUserMessage: null });
     try {
       // TODO: mark the message failed if dispatch fails.
-      await this.onUserMessageSent(userMessage, attachmentRecords);
+      this.onUserMessageSent(userMessage, attachmentRecords);
       await this.dispatchTurnToWorkflow({
         userMessage: {
           id: userMessage.id,
@@ -1172,7 +1172,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     try {
       // save before dispatching to workflow to avoid race conditions
-      await this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
+      this.onUserMessageSent(userUiMessage, attachmentRecords, connectionId);
       this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
       await this.dispatchTurnToWorkflow({
         userMessage: {
@@ -1251,11 +1251,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   // handle side effects of sending a user message
-  private async onUserMessageSent(
+  private onUserMessageSent(
     message: UIMessage,
     attachmentRecords: AttachmentRecord[],
     connectionId?: string,
-  ): Promise<void> {
+  ): void {
     const sessionId = this.serverState.sessionId;
     if (!sessionId) return;
     const existing = this.messageRepository.getById(message.id);
