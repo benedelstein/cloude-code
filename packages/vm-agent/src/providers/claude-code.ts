@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../system-prompt";
-import type { AgentMode, AgentSettings } from "@repo/shared";
+import type { AgentMode, AgentSettings, ClaudeModel } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../agent-harness";
 import { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 
@@ -105,7 +105,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     return {
       modelId,
       getModel: (id, options: GetModelOptions) => {
-        return claudeCode(id, {
+        return claudeCode(resolveClaudeModelId(id as ClaudeModel), {
           settingSources: ["local", "project", "user"],
           resume: agentSessionId,
           permissionMode: getPermissionMode(options.agentMode),
@@ -138,4 +138,19 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
 const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
   return agentMode === "plan" ? "plan" : "bypassPermissions";
+};
+
+const resolveClaudeModelId = (model: ClaudeModel): string => {
+  switch (model) {
+    case "opus":
+      return "claude-opus-4-6[1m]";
+    case "sonnet":
+      return "sonnet";
+    case "haiku":
+      return "haiku";
+    default: {
+      const _exhaustive: never = model;
+      throw new Error(`Unhandled Claude model: ${_exhaustive}`);
+    }
+  }
 };
