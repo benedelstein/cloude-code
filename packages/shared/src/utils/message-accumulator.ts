@@ -59,6 +59,7 @@ export class MessageAccumulator {
    * @returns message completion state plus any parts fully materialized by this chunk
    */
   process(chunk: UIMessageChunk): ProcessChunkResult {
+    this.logger.info(`[chunk-trace] ${chunk.type}`);
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 

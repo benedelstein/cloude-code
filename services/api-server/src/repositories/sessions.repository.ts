@@ -1,4 +1,5 @@
 import type { SessionAccessBlockReason, SessionSummary } from "@repo/shared";
+import { fromSqliteDatetime, toSqliteDatetime } from "@/lib/utils/utils";
 
 export interface CreateSessionParams {
   id: string;
@@ -40,9 +41,9 @@ function rowToSummary(row: SessionRow): SessionSummary {
     repoFullName: row.repo_full_name,
     title: row.title,
     archived: row.archived === 1,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastMessageAt: row.last_message_at,
+    createdAt: fromSqliteDatetime(row.created_at),
+    updatedAt: fromSqliteDatetime(row.updated_at),
+    lastMessageAt: fromSqliteDatetime(row.last_message_at),
   };
 }
 
@@ -130,16 +131,21 @@ export class SessionsRepository {
 
     let query: string;
     const bindings: (string | number)[] = [userId];
+    // Cursor is the ISO-with-Z form sent to clients; convert back to SQLite's
+    // "YYYY-MM-DD HH:MM:SS" format so lexical comparison against updated_at works.
+    const cursorForQuery = options.cursor
+      ? toSqliteDatetime(new Date(options.cursor))
+      : null;
 
-    if (options.repoId && options.cursor) {
+    if (options.repoId && cursorForQuery) {
       query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.repoId, options.cursor, limit + 1);
+      bindings.push(options.repoId, cursorForQuery, limit + 1);
     } else if (options.repoId) {
       query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(options.repoId, limit + 1);
-    } else if (options.cursor) {
+    } else if (cursorForQuery) {
       query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.cursor, limit + 1);
+      bindings.push(cursorForQuery, limit + 1);
     } else {
       query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 ORDER BY updated_at DESC LIMIT ?`;
       bindings.push(limit + 1);

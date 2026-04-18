@@ -6,7 +6,9 @@ This file provides guidance to ai agents when working with code in this reposito
 
 cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) that are connected to an API server via WebSockets. Users connect to the API serve and create a session to make changes in a repository. The session gets its own Durable Object, which provisions a Sprite VM, clones the repository, and runs an agent process on the vm and communicates with the API server. 
 
-The Durable Object is the source of truth and coordinator for the session. It stores all messages in its sqlite db, handles websocket comms and forwards responses to and from the agent process on the vm (via stdin/stdout).
+The Durable Object is the source of truth and coordinator for the session. It stores all messages in its sqlite db, handles comms with a long-lived Workflow for the agent execution, and communicates with clients.
+
+The workflow `SessionTurnWorkflow` is a long-lived workflow that communicates with the agent process running on the vm and forwards data back to the DO.
 
 ## Build & Development Commands
 
@@ -98,7 +100,7 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 
 ## Error handling
 
-- Use `Result<T, E>` for expected business logic and operational failures.
+- Use `Result<T, E>` for expected business logic and operational failures. See `packages/shared/src/types/errors.ts` for more details.
 - Define `E` as a small tagged plain-object union with a stable `code` string; do not use `Error` subclasses for normal control flow.
 - Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
 - Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
@@ -106,9 +108,9 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 ## Best Practices
 
 - Always build, lint, and typecheck after completing a task to test it.
-- Prefer unabbreviated variable names rather than shortened ones. For example, prefer `let installation = ...` instead of `let inst = ...`. Variable names should not be too long (>30 chars) though.
-- Do not use emojis in your git messages or comments unless absolutely relevant and necessary.
-- Write instructive and clarifying comments where needed, but do not be too verbose. 
+- Prefer unabbreviated variable names rather than shortened ones. For example, prefer `const installation = ...` instead of `const inst = ...`. Variable names should not be too long (>30 chars) though.
+- Do not use emojis in your git messages or comments.
+- Write concise, instructive and clarifying comments where needed.
 - Always prefer to use async/await over callbacks and .then()/.catch()
 - For public methods, add doc comments describing the method, its parameters and return value.
 - When switching over entire cases, make switch statements exhaustive for maintainability - if we ever add a new case, it should be handled. Prefer switch to multiple if/else chains
@@ -123,7 +125,7 @@ switch (expression) {
         throw new Error(`Unhandled value: ${_exhaustiveCheck}`);
 }
 ```
-- Prefer the simplest working solution. Avoid over-engineering.
+- Prefer the simplest working solution. Avoid over-engineering, over-defensiveness. Do not create fallback error-handling logic to cover up an error that should not exist in the first place.
 - Avoid abstractions or helpers for single-use operations. If multiple uses, DRY up the code.
 - No speculative features or future-proofing.
 - No docstrings or comments on code that was not changed.
@@ -138,13 +140,9 @@ The docs/ folder contains specific documentation about certain parts of the code
 ## Response style
 
 ### Output
-- Answer is always line 1. Reasoning comes after, never before.
 - No preamble. No "Great question!", "Sure!", "Of course!", "Certainly!", "Absolutely!".
 - No hollow closings. No "I hope this helps!", "Let me know if you need anything!".
 - No restating the prompt. If the task is clear, execute immediately.
-- No explaining what you are about to do. Just do it.
-- No unsolicited suggestions. Do exactly what was asked, nothing more.
-- Structured output only: bullets, tables, code blocks. Prose only when explicitly requested.
 
 ### Token Efficiency
 - Compress responses. Every sentence must earn its place.

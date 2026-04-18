@@ -184,7 +184,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       runWorkflow: this.runWorkflow.bind(this),
       getWorkflow: this.getWorkflow.bind(this),
       sendWorkflowEvent: this.sendWorkflowEvent.bind(this),
-      restartWorkflow: this.restartWorkflow.bind(this),
     });
 
     this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);

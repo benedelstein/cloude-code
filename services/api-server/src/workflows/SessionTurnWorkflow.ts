@@ -83,6 +83,12 @@ export class SessionTurnWorkflow extends AgentWorkflow<
         agentMode,
       }) as Result<PreparedWorkflowTurn, WorkflowTurnFailure>;
       if (!preparedTurn.ok) {
+        // The DO has moved on (cancellation, reconnect race, or stale replay).
+        // Not a failure of this turn — just skip without surfacing to the UI.
+        if (preparedTurn.error.code === "TURN_NOT_ACTIVE") {
+          logger.debug("Turn is no longer active; skipping");
+          return;
+        }
         await this.agent.onWorkflowTurnFailed(
           userMessage.id,
           this.toWorkflowTurnFailure(preparedTurn.error),

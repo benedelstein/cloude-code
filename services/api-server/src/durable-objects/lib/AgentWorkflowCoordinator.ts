@@ -82,10 +82,6 @@ export interface WorkflowTurnCoordinatorDeps {
     workflowId: string,
     event: { type: string; payload: unknown },
   ) => Promise<void>;
-  restartWorkflow: (
-    workflowId: string,
-    options?: { resetTracking?: boolean },
-  ) => Promise<void>;
   /* eslint-enable no-unused-vars */
 }
 
@@ -115,7 +111,6 @@ export class AgentWorkflowCoordinator {
   private readonly runWorkflow: WorkflowTurnCoordinatorDeps["runWorkflow"];
   private readonly getWorkflow: WorkflowTurnCoordinatorDeps["getWorkflow"];
   private readonly sendWorkflowEvent: WorkflowTurnCoordinatorDeps["sendWorkflowEvent"];
-  private readonly restartWorkflow: WorkflowTurnCoordinatorDeps["restartWorkflow"];
   private hasEnsuredRehydratedState: boolean = false;
 
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
@@ -139,7 +134,6 @@ export class AgentWorkflowCoordinator {
     this.runWorkflow = deps.runWorkflow;
     this.getWorkflow = deps.getWorkflow;
     this.sendWorkflowEvent = deps.sendWorkflowEvent;
-    this.restartWorkflow = deps.restartWorkflow;
   }
 
   /**
@@ -239,6 +233,7 @@ export class AgentWorkflowCoordinator {
         });
         this.commitAbortedMessage(this.messageAccumulator);
         this.messageAccumulator.reset();
+        this.updateWorkflowState({ instanceId: null });
         this.clearActiveTurnState();
         this.updatePartialState({ status: this.synthesizeStatus() });
         return;
@@ -529,7 +524,6 @@ export class AgentWorkflowCoordinator {
     if (!sessionId || !spriteName) {
       throw new Error("Session workflow cannot start before provisioning completes");
     }
-    const workflowId = sessionId;
 
     if (serverState.workflowState.activeUserMessageId && serverState.workflowState.activeUserMessageId !== turnPayload.userMessage.id) {
       this.logger.warn("Another workflow turn is already active, not dispatching new turn", {
@@ -543,34 +537,28 @@ export class AgentWorkflowCoordinator {
     const nextDispatch = previousDispatch
       .catch(() => undefined)
       .then(async () => {
-        const created = await this.ensureWorkflowRunning(
+        const { workflowId, created } = await this.ensureWorkflowRunning(
           sessionId,
           spriteName,
-          workflowId,
           turnPayload,
         );
         // If the workflow was just created, the initial turn is already baked
         // into the workflow params — no need to send a separate event.
-        if (created) {
-          return;
-        }
+        if (created) return;
 
         try {
           await this.sendTurnEvent(workflowId, turnPayload);
         } catch (error) {
-          this.logger.warn("Failed to send event to existing workflow", {
+          // Existing workflow is dead (errored/terminated) or its event KV is
+          // corrupt. Drop it and mint a fresh workflow with this turn as its
+          // initialTurn — no restart (restart replays stale params) and no
+          // reuse of the old id (CF retains errored instances, would collide).
+          this.logger.warn("Send event failed; recreating workflow with fresh id", {
             error,
             fields: { workflowId },
           });
-
-          // if send fails, try to restart the workflow
-          const recovered = await this.recoverAfterSendFailure(workflowId);
-          if (!recovered) {
-            throw error;
-          }
-
-          this.logger.debug("Recovered workflow, retrying send");
-          await this.sendTurnEvent(workflowId, turnPayload);
+          this.updateWorkflowState({ instanceId: null });
+          await this.ensureWorkflowRunning(sessionId, spriteName, turnPayload);
         }
       });
 
@@ -762,64 +750,37 @@ export class AgentWorkflowCoordinator {
     });
   }
 
-  private isWorkflowAlreadyTrackedError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const message = error.message;
-    // "already being tracked" comes from the Agents SDK; "instance.already_exists" /
-    // "Instance already exists" is the underlying Cloudflare Workflows error surfaced
-    // when a workflow with the same id already exists.
-    return (
-      message.includes("already being tracked") ||
-      message.includes("already_exists") ||
-      message.includes("Instance already exists")
-    );
-  }
-
   /**
-   * Ensures a workflow instance is running for the session. If one is created,
-   * the initial turn payload is passed as a workflow param so the workflow can
-   * start immediately without waiting for an event.
-   * @returns true if a new workflow was created (initial turn baked in), false if already running.
+   * Ensures a workflow instance is running for the session. Reuses the
+   * persisted instance if still live; otherwise mints a fresh UUID and creates
+   * a new instance with `initialTurn` baked into its params.
+   * @returns the workflow id in use and whether a new instance was created.
    */
   private async ensureWorkflowRunning(
     sessionId: string,
     spriteName: string,
-    workflowId: string,
     initialTurn: WorkflowTurnPayload,
-  ): Promise<boolean> {
-    const serverState = this.getServerState();
-    if (
-      serverState.workflowState.instanceId === workflowId &&
-      this.getWorkflow(workflowId)
-    ) {
-      return false;
+  ): Promise<{ workflowId: string; created: boolean }> {
+    const existingId = this.getServerState().workflowState.instanceId;
+    if (existingId && this.getWorkflow(existingId)) {
+      return { workflowId: existingId, created: false };
     }
 
-    try {
-      await this.runWorkflow(
-        SESSION_TURN_WORKFLOW_BINDING,
-        {
-          sessionId,
-          spriteName,
-          initialTurn,
-        } satisfies SessionTurnWorkflowParams,
-        {
-          id: workflowId,
-          agentBinding: "SESSION_AGENT",
-        },
-      );
-      this.logger.debug(`Workflow ${workflowId} started`);
-    } catch (error) {
-      if (!this.isWorkflowAlreadyTrackedError(error)) {
-        throw error;
-      }
-      // Workflow already exists — initial turn was not baked in
-      this.updateWorkflowState({ instanceId: workflowId });
-      return false;
+    const workflowId = crypto.randomUUID();
+    const actualInstanceId = await this.runWorkflow(
+      SESSION_TURN_WORKFLOW_BINDING,
+      { sessionId, spriteName, initialTurn } satisfies SessionTurnWorkflowParams,
+      { id: workflowId, agentBinding: "SESSION_AGENT" },
+    );
+    if (actualInstanceId !== workflowId) {
+      // shouldnt occur.
+      this.logger.error("Workflow id mismatch", {
+        fields: { workflowId, actualInstanceId },
+      });
     }
-
     this.updateWorkflowState({ instanceId: workflowId });
-    return true;
+    this.logger.debug(`Workflow ${workflowId} started`);
+    return { workflowId, created: true };
   }
 
   private async sendTurnEvent(
@@ -835,45 +796,6 @@ export class AgentWorkflowCoordinator {
         payload: turnPayload,
       },
     );
-  }
-
-  private async recoverAfterSendFailure(
-    workflowId: string,
-  ): Promise<boolean> {
-    try {
-      const status = await this.getWorkflowStatus(
-        SESSION_TURN_WORKFLOW_BINDING,
-        workflowId,
-      );
-
-      switch (status.status) {
-        case "complete":
-        case "errored":
-        case "terminated":
-        case "unknown":
-          await this.restartWorkflow(workflowId);
-          this.updateWorkflowState({ instanceId: workflowId });
-          return true;
-        case "queued":
-        case "running":
-        case "waiting":
-        case "paused":
-        case "waitingForPause":
-          return false;
-        default: {
-          const exhaustiveCheck: never = status.status;
-          throw new Error(
-            `Unhandled workflow status during recovery: ${exhaustiveCheck}`,
-          );
-        }
-      }
-    } catch (statusError) {
-      this.logger.warn("Failed to inspect or recover session workflow", {
-        error: statusError,
-        fields: { workflowId },
-      });
-      return false;
-    }
   }
 
   private async sendCancelSignal(): Promise<boolean> {

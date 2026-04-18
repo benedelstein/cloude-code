@@ -6,7 +6,7 @@ How a single conversation turn is executed end-to-end across the `SessionAgentDO
 
 - `**SessionAgentDO**` (`services/api-server/src/durable-objects/session-agent-do.ts`) — source of truth. Owns SQLite (`messages`, `pending_message_chunks`, `server_state`), WebSocket connections, and the public RPC surface that the workflow calls back into.
 - `**AgentWorkflowCoordinator**` (`services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts`) — DO-side orchestration. Holds the in-memory `MessageAccumulator`, dispatches turns to the workflow, reconciles state on DO restart. The DO's workflow RPC methods delegate directly into this class.
-- `**SessionTurnWorkflow**` (`services/api-server/src/workflows/SessionTurnWorkflow.ts`) — Cloudflare Agents workflow, one instance per session. Infinite loop parked on `step.waitForEvent("message_available")`. Each turn runs inside `step.do(" turn:{id}", { retries: { limit: 0 } }, ...)` so a failed turn surfaces as an explicit abort rather than a silent retry.
+- `**SessionTurnWorkflow**` (`services/api-server/src/workflows/SessionTurnWorkflow.ts`) — Cloudflare Agents workflow. One live instance per session at a time, identified by a fresh `crypto.randomUUID()` minted on create (not derived from `sessionId`). Infinite loop parked on `step.waitForEvent("message_available")`. Each turn runs inside `step.do("turn:{id}", { retries: { limit: 0 } }, ...)` so a failed turn surfaces as an explicit abort rather than a silent retry. On workflow error the instance id is dropped and the next dispatch mints a new one — we never reuse a dead workflow.
 - `**AgentProcessRunner**` (`services/api-server/src/workflows/AgentProcessRunner.ts`) — per-turn helper created inside the workflow step. Attaches to the Sprite VM, spawns `vm-agent`, pipes the user message in via stdin, parses NDJSON out of stdout, and forwards chunks back to the DO via RPC.
 
 ## Request Diagram
@@ -133,10 +133,9 @@ Terminal chunk types: `finish`, `abort` ([AgentProcessRunner.ts:167](../services
 
 `dispatchTurn` ([AgentWorkflowCoordinator.ts:525](../services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts:525)) serializes create/send via `workflowDispatchPromise` so concurrent requests can't race.
 
-- **First turn of a session**: `ensureWorkflowRunning` calls `runWorkflow(SESSION_TURN_WORKFLOW, { sessionId, spriteName, initialTurn }, { id: sessionId, agentBinding: "SESSION_AGENT" })`. The workflow picks up `initialTurn` directly from params and runs it immediately — **no separate event is sent**. This avoids a race where the event fires before the workflow is subscribed.
-- **Subsequent turns**: `sendWorkflowEvent(id, { type: "message_available", payload: turn })`.
-- **Send failure recovery**: if `sendWorkflowEvent` throws and the workflow status is terminal (`complete`/`errored`/`terminated`/`unknown`), `restartWorkflow` is invoked and the send is retried.
-- `**already being tracked` error**: treated as a no-op — the workflow instance already exists; fall through to `sendTurnEvent`.
+- **No live workflow** (first turn, or previous workflow errored and cleared `instanceId`): `ensureWorkflowRunning` mints `crypto.randomUUID()`, calls `runWorkflow(SESSION_TURN_WORKFLOW, { sessionId, spriteName, initialTurn }, { id: <uuid>, agentBinding: "SESSION_AGENT" })`, and persists the id to `workflowState.instanceId`. The workflow picks up `initialTurn` directly from params and runs it immediately — **no separate event is sent**. This avoids a race where the event fires before the workflow is subscribed.
+- **Live workflow**: `sendWorkflowEvent(instanceId, { type: "message_available", payload: turn })`.
+- **Send failure recovery**: if `sendWorkflowEvent` throws, the existing workflow is dead or its event KV is corrupt. `instanceId` is cleared and `ensureWorkflowRunning` is called again — it mints a new UUID and creates a fresh instance with the current turn as `initialTurn`. We never `restartWorkflow` (CF replays the original params, which would re-fire a stale turn) and never reuse the old id (CF retains errored instances, collision would be guaranteed).
 
 ## Cancel Path
 
@@ -153,7 +152,7 @@ Terminal chunk types: `finish`, `abort` ([AgentProcessRunner.ts:167](../services
 2. If `workflowState.activeUserMessageId` is set, spawn `reconcileActiveTurn`:
   - Call `getWorkflowStatus(id)`.
   - `queued`/`running`/`waiting`/`paused`/`waitingForPause` → workflow is alive; it will drive RPCs to completion. No action.
-  - `complete`/`errored`/`terminated`/`unknown` → workflow is dead. `commitAbortedMessage` (forceAbort accumulator, persist partial `UIMessage`, clear WAL, broadcast `agent.finish`), then clear active turn state.
+  - `complete`/`errored`/`terminated`/`unknown` → workflow is dead. `commitAbortedMessage` (forceAbort accumulator, persist partial `UIMessage`, clear WAL, broadcast `agent.finish`), clear `instanceId`, then clear active turn state. The next dispatch mints a fresh UUID and creates a new workflow.
 
 Because the workflow's turn step is `retries: { limit: 0 }`, a crashed step never silently re-runs — it either completes via RPC or bubbles up to `onWorkflowError`, which itself calls `commitAbortedMessage` to preserve the invariant.
 
@@ -169,8 +168,8 @@ Because the workflow's turn step is `retries: { limit: 0 }`, a crashed step neve
 | `vm-agent` fails to emit `session_info` within 10s | `waitForTurnStart`                                                | `TURN_DID_NOT_START`                                                                                 |
 | `vm-agent` exits before terminal chunk             | runner `onExit`                                                   | `TURN_EXITED` (with exit code)                                                                       |
 | Unparseable NDJSON from stdout                     | `handleAgentStdout`                                               | Logged loudly, line dropped (can desync client stream)                                               |
-| Workflow `sendEvent` fails                         | `dispatchTurn`                                                    | restart workflow + retry once                                                                        |
-| Workflow itself errors                             | Agents SDK → `onWorkflowError`                                    | commit partial, clear `instanceId`                                                                   |
+| Workflow `sendEvent` fails                         | `dispatchTurn`                                                    | clear `instanceId`, create a fresh workflow with this turn as `initialTurn`                          |
+| Workflow itself errors                             | Agents SDK → `onWorkflowError`                                    | commit partial, clear `instanceId` (next dispatch creates fresh)                                     |
 
 
 ## Related Files
