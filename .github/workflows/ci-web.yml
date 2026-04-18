@@ -5,12 +5,20 @@ on:
     paths:
       - "apps/web/**"
       - "packages/shared/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "eslint.config.js"
       - "pnpm-lock.yaml"
       - ".github/workflows/ci-web.yml"
   pull_request:
     paths:
       - "apps/web/**"
       - "packages/shared/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "eslint.config.js"
       - "pnpm-lock.yaml"
       - ".github/workflows/ci-web.yml"
 
@@ -35,10 +43,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build --filter "@repo/web"
+        run: pnpm exec turbo run build --filter=@repo/shared --filter=@repo/web
 
       - name: Typecheck
-        run: pnpm typecheck --filter "@repo/web"
+        run: pnpm exec turbo run typecheck --filter=@repo/shared --filter=@repo/web
 
       - name: Lint
-        run: pnpm lint --filter "@repo/web"
+        run: pnpm exec turbo run lint --filter=@repo/shared --filter=@repo/web
+
+      - name: Test
+        run: pnpm exec turbo run test --filter=@repo/shared --filter=@repo/web

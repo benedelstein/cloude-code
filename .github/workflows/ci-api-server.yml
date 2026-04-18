@@ -6,6 +6,10 @@ on:
       - "services/api-server/**"
       - "packages/shared/**"
       - "packages/vm-agent/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "eslint.config.js"
       - "pnpm-lock.yaml"
       - ".github/workflows/ci-api-server.yml"
   pull_request:
@@ -13,6 +17,10 @@ on:
       - "services/api-server/**"
       - "packages/shared/**"
       - "packages/vm-agent/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "eslint.config.js"
       - "pnpm-lock.yaml"
       - ".github/workflows/ci-api-server.yml"
 
@@ -40,13 +48,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build --filter "@repo/api-server"
+        run: pnpm exec turbo run build --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
       - name: Typecheck
-        run: pnpm typecheck --filter "@repo/api-server"
+        run: pnpm exec turbo run typecheck --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
       - name: Lint
-        run: pnpm lint --filter "@repo/api-server"
+        run: pnpm exec turbo run lint --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
       - name: Test
-        run: pnpm test --filter "@repo/api-server"
+        run: pnpm exec turbo run test --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server

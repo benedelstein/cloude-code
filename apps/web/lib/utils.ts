@@ -11,6 +11,10 @@ export function normalizeHost(value: string): string {
     return "";
   }
 
+  if (!/^[a-z][a-z\d+\-.]*:\/\//i.test(trimmedValue)) {
+    return trimmedValue.replace(/^(https?|wss?):\/\//, "").replace(/\/+$/, "");
+  }
+
   try {
     return new URL(trimmedValue).host;
   } catch {

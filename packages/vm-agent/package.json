@@ -7,7 +7,7 @@
     "dev": "bun run src/index.ts",
     "test": "vitest run --passWithNoTests",
     "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
-    "lint": "eslint src/",
+    "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test:coverage": "vitest run --coverage --passWithNoTests",

@@ -6,8 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint app/ components/ lib/",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint app/ components/ hooks/ lib/ tests/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -38,13 +40,17 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@vitest/coverage-v8": "catalog:",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4.0.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
