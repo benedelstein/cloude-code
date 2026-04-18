@@ -228,7 +228,7 @@ export function SessionSidebar() {
                   className="cursor-pointer font-medium py-5"
                   tooltip="New session"
                 >
-                  <Link href="/">
+                  <Link href="/" className="flex items-center gap-2">
                     <Edit className="h-4 w-4" />
                     <span>New session</span>
                   </Link>

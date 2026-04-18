@@ -33,7 +33,6 @@ const ExitPlanModeInput = z.object({
 
 interface DerivedStateToolAdapter {
   readonly toolName: string;
-  // eslint-disable-next-line no-unused-vars
   extract: (...args: [DynamicToolPart]) => DerivedStateSnapshot | null;
 }
 

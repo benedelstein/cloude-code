@@ -14,11 +14,8 @@ interface AppRightSidebarControls {
   enabled: boolean;
   open: boolean;
   mobileOpen: boolean;
-  // eslint-disable-next-line no-unused-vars
   setEnabled: (enabled: boolean) => void;
-  // eslint-disable-next-line no-unused-vars
   setOpen: (open: boolean) => void;
-  // eslint-disable-next-line no-unused-vars
   setMobileOpen: (open: boolean) => void;
 }
 

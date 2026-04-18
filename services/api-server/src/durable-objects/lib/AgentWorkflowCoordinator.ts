@@ -49,7 +49,6 @@ export interface WorkflowTurnCoordinatorDeps {
   latestPlanRepository: LatestPlanRepository;
 
   // DO state accessors (bound closures over `this` on the DO)
-  /* eslint-disable no-unused-vars */
   getServerState: () => ServerState;
   updateWorkflowState: (partial: Partial<ServerState["workflowState"]>) => void;
   updateAgentSessionId: (agentSessionId: string) => void;
@@ -57,10 +56,8 @@ export interface WorkflowTurnCoordinatorDeps {
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage) => void;
   synthesizeStatus: () => SessionStatus;
-  /* eslint-enable no-unused-vars */
 
   // Agents SDK workflow primitives (bound to the DO)
-  /* eslint-disable no-unused-vars */
   getWorkflowStatus: (
     workflowName: string,
     workflowId: string,
@@ -82,7 +79,6 @@ export interface WorkflowTurnCoordinatorDeps {
     workflowId: string,
     event: { type: string; payload: unknown },
   ) => Promise<void>;
-  /* eslint-enable no-unused-vars */
 }
 
 /**

@@ -33,7 +33,6 @@ export interface AuthCredentialSnapshot {
 }
 
 export interface ProviderCredentialAdapter {
-  /* eslint-disable-next-line no-unused-vars */
   getCredentialSnapshot(_userId: string): Promise<Result<AuthCredentialSnapshot, ProviderCredentialError>>;
 }
 

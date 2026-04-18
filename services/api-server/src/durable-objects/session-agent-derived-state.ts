@@ -7,7 +7,6 @@ export type DerivedStateContext = {
   sessionId: string;
   latestPlanRepository: LatestPlanRepository;
   // TODO: scope this down so it can only update todos and plan.
-  // eslint-disable-next-line no-unused-vars
   updatePartialState: (partial: Partial<Pick<ClientState, "todos" | "plan">>) => void;
 };
 

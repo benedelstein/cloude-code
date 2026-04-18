@@ -23,7 +23,7 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: "^_",
         },
       ],
-      "no-unused-vars": "warn",
+      "no-unused-vars": "off",
       "quotes": [
         "error",
         "double",

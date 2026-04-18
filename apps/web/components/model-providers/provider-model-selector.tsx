@@ -30,9 +30,7 @@ interface ProviderModelSelectorProps {
   selectedModel: string | null;
   providerAuthHandles: ProviderAuthHandleUnion[];
   allowedProviderIds?: ProviderId[];
-  // eslint-disable-next-line no-unused-vars
   onSelect: (providerId: ProviderId, modelId: string) => void;
-  // eslint-disable-next-line no-unused-vars
   onConnect: (providerId: ProviderId) => void;
   disabled?: boolean;
 }

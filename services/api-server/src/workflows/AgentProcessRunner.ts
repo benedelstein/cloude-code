@@ -68,17 +68,13 @@ export type AgentProcessRunnerOptions = {
   sessionId: string;
   preparedTurn: PreparedWorkflowTurn;
   /** Callback when the agent process attaches */
-  // eslint-disable-next-line no-unused-vars
   onTurnStarted: (agentProcessId: number | null) => Promise<void>;
-  // eslint-disable-next-line no-unused-vars
   onAgentSessionId: (agentSessionId: string) => Promise<void>;
-  // eslint-disable-next-line no-unused-vars
   onChunk: (sequence: number, chunk: UIMessageChunk) => Promise<void>;
 };
 
 type Deferred<T> = {
   promise: Promise<T>;
-  // eslint-disable-next-line no-unused-vars
   resolve: (value: T) => void;
 };
 
@@ -188,7 +184,6 @@ function isAgentProcessRunnerError(
 }
 
 function createDeferred<T>(): Deferred<T> {
-  // eslint-disable-next-line no-unused-vars
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise;

@@ -19,25 +19,20 @@ import { SendButton } from "@/components/chat/send-button";
 import { toast } from "sonner";
 
 interface ChatInputProps {
-  // eslint-disable-next-line no-unused-vars
   onSend: (message: {
     content?: string;
     attachments?: MessageAttachmentRef[];
     optimisticAttachments?: AttachmentDescriptor[];
   }) => void;
-  // eslint-disable-next-line no-unused-vars
   onUploadAttachments: (files: File[]) => Promise<AttachmentDescriptor[]>;
-  // eslint-disable-next-line no-unused-vars
   onDeleteAttachment: (attachmentId: string) => Promise<void>;
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
   agentMode?: AgentMode;
-  // eslint-disable-next-line no-unused-vars
   onAgentModeChange?: (mode: AgentMode) => void;
   selectedProvider: ProviderId | null;
   selectedModel: string | null;
-  // eslint-disable-next-line no-unused-vars
   onProviderModelChange?: (providerId: ProviderId, modelId: string) => void;
   providerAuthHandles: ProviderAuthHandleUnion[];
   providerAuthRequired: ProviderAuthRequired;

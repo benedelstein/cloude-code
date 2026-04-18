@@ -5,7 +5,6 @@ import { ImagePlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ImageAttachButtonProps {
-  // eslint-disable-next-line no-unused-vars
   onFiles: (files: File[]) => void;
   disabled?: boolean;
 }

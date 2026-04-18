@@ -23,7 +23,6 @@ import {
 } from "@repo/shared";
 
 export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
-  // eslint-disable-next-line no-unused-vars
   emit: (_output: AgentOutput) => void;
   settings: S;
   agentMode: AgentMode;
@@ -43,14 +42,12 @@ export type GetModelOptions = {
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
   modelId: ModelId;
-  // eslint-disable-next-line no-unused-vars
   getModel: (_modelId: ModelId, _options: GetModelOptions) => LanguageModel;
   getStreamTextExtras?: () => StreamTextExtras;
   cleanup?: () => Promise<void>;
 }
 
 export interface AgentProviderConfig<S extends AgentSettings = AgentSettings> {
-  // eslint-disable-next-line no-unused-vars
   setup(_context: ProviderSetupContext<S>): Promise<SetupResult<S["model"]>>;
 }
 
@@ -76,7 +73,6 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
 
   // Message queue
   const pendingMessages: AgentInputMessage[] = [];
-  // eslint-disable-next-line no-unused-vars
   let messageResolver: ((message: AgentInputMessage) => void) | null = null;
 
   function queueMessage(message: AgentInputMessage): void {

@@ -42,7 +42,6 @@ export interface UseCloudflareAgentOptions {
   // reconnect handshake uses a fresh one. Noop otherwise.
   refreshWebSocketToken?: () => void;
   initialPendingUserMessage?: UIMessage | null;
-  // eslint-disable-next-line no-unused-vars
   onError?: (error: Error) => void;
 }
 
@@ -68,15 +67,12 @@ export interface UseCloudflareAgentReturn {
   agentSettings: AgentSettings | null;
   providerConnection: ProviderConnectionState | null;
   agentMode: AgentMode;
-  // eslint-disable-next-line no-unused-vars
   setAgentMode: (mode: AgentMode) => void;
   selectedModel: string | null;
-  // eslint-disable-next-line no-unused-vars
   setSelectedModel: (model: string) => void;
   selectedProvider: ProviderId | null;
   editorUrl: string | null;
   providerAuthRequired: ProviderAuthRequired;
-  // eslint-disable-next-line no-unused-vars
   sendMessage: (message: {
     content?: string;
     attachments?: MessageAttachmentRef[];

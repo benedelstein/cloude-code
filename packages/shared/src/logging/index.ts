@@ -24,7 +24,6 @@ export interface LogParams {
   error?: unknown;
 }
 
-/* eslint-disable no-unused-vars */
 export interface Logger {
   log(message: string, params?: LogParams): void;
   debug(message: string, params?: LogParams): void;
@@ -33,7 +32,6 @@ export interface Logger {
   error(message: string, params?: LogParams): void;
   scope(loggerName: string): Logger;
 }
-/* eslint-enable no-unused-vars */
 
 export interface ConsoleLoggerOptions {
   includeTimestamp?: boolean;

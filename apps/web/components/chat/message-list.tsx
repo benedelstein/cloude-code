@@ -21,7 +21,6 @@ interface MessageListProps {
   pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
   rightInset?: string;
-  // eslint-disable-next-line no-unused-vars
   onHasNewMessages?: (hasNew: boolean) => void;
   scrollToBottomRef?: React.RefObject<(() => void) | null>;
 }

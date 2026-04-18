@@ -4,7 +4,6 @@ import { OpenAICodexAuthService } from "./openai-codex-auth-service";
 import type { Env } from "@/types";
 import type { ProviderConnectionStatus } from "./connection-status";
 
-/* eslint-disable no-unused-vars */
 export interface ProviderAuthService<TCredentials> {
   getConnectionStatus(_userId: string): Promise<ProviderConnectionStatus>;
   disconnect(_userId: string): Promise<void>;

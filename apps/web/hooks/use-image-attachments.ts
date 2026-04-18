@@ -17,9 +17,7 @@ export interface PendingImageAttachment {
 }
 
 interface UseImageAttachmentsOptions {
-  // eslint-disable-next-line no-unused-vars
   uploadFile: (file: File) => Promise<AttachmentDescriptor>;
-  // eslint-disable-next-line no-unused-vars
   deleteAttachment?: (attachmentId: string) => Promise<void>;
   maxAttachments?: number;
   maxAttachmentBytes?: number;

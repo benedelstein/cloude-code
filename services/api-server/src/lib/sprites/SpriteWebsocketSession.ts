@@ -525,7 +525,6 @@ export class SpriteWebsocketSession {
   // Event handlers
   //==========================================================================================================
 
-  /* eslint-disable no-unused-vars */
   onStdout(handler: (data: string) => void): () => void {
     this.stdoutHandlers.add(handler);
     return () => this.stdoutHandlers.delete(handler);
@@ -633,5 +632,4 @@ export class SpriteWebsocketSession {
   get isDone(): boolean {
     return this.done;
   }
-  /* eslint-enable no-unused-vars */
 }
