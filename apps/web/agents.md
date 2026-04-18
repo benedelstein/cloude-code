@@ -6,6 +6,7 @@
 - components/ui is generated from the shadcn library. We use shadcn for common components like tooltips, sidebars, toasts, etc. 
    see https://ui.shadcn.com/docs for docs on a component if you are not certain - prefer to look up docs than to rely on your knowledge if unsure.
 - For tailwind classes, prefer to DRY if they are repeated across multiple divs or components.
+- Prefer next/Link for navigation instead of a button with onClick or an <a> tag.
 
 globals.css contains global tailwind and css styling. 
 

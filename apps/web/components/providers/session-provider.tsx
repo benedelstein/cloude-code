@@ -27,6 +27,7 @@ interface SessionProviderProps {
 
 interface SessionProviderWithTokenProps extends SessionProviderProps {
   webSocketToken: SessionWebSocketTokenResponse;
+  refreshWebSocketToken: () => void;
   initialPendingUserMessage: UIMessage | null;
 }
 
@@ -78,12 +79,14 @@ function createPendingSession(
 function SessionProviderWithToken({
   sessionId,
   webSocketToken,
+  refreshWebSocketToken,
   initialPendingUserMessage,
   children,
 }: SessionProviderWithTokenProps) {
   const session = useCloudflareAgent({
     sessionId,
     webSocketToken,
+    refreshWebSocketToken,
     initialPendingUserMessage,
     onError: (error) => {
       console.error("Session error:", error);
@@ -120,7 +123,7 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
     setInitialPendingUserMessage(consumeInitialPendingUserMessage(sessionId));
   }, [sessionId]);
 
-  const webSocketToken = useSessionWebSocketToken({
+  const { token: webSocketToken, refresh: refreshWebSocketToken } = useSessionWebSocketToken({
     sessionId,
     onAuthError: (error) => {
       setTokenSessionStatus(null);
@@ -156,6 +159,7 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
     <SessionProviderWithToken
       sessionId={sessionId}
       webSocketToken={webSocketToken}
+      refreshWebSocketToken={refreshWebSocketToken}
       initialPendingUserMessage={initialPendingUserMessage}
     >
       {children}

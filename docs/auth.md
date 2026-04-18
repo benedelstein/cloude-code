@@ -67,11 +67,19 @@ Browser                    Next.js proxy (/api/*)       API Server
 
 ## Websocket Auth
 
-Websockets send directly to the server, so they cannot carry a cookie as auth. 
-Instead, we generate a short-lived token for websocket authentication.
+Websockets can't carry the session cookie — browsers don't let you set headers on `new WebSocket()`, and cross-origin cookie scoping doesn't cleanly apply to WS upgrades. So we mint a short-lived, stateless, signed token via `POST /sessions/{sessionId}/websocket-token` (authenticated via the normal cookie → Bearer BFF path), and the client passes it as a URL query param on the WS upgrade: `wss://.../agents/session/{id}?token=...`.
 
-This isn't exactly a JWT, but it's a stateless token with a known structure that can be verified by the server.
-Before initiating a websocket connection, the client fetches a token from the server using /sessions/{sessionId}/websocket-token.
+The token carries `sessionId`, `userId`, and `expiresAt`, signed with `WEBSOCKET_TOKEN_SIGNING_KEY`. It's verified at the upgrade handler (`agent.routes.ts`), which also re-checks session→repo access before forwarding to the Durable Object.
+
+### Key properties
+
+- **Verified only at the WS upgrade.** Once the socket is established, the token is stripped from the URL and never re-checked. The live socket is the auth. A connection opened at t=0 with a 5-minute token will keep working at t=1h.
+- **Short TTL is leak mitigation, not session lifetime control.** Query strings are the leakiest place to put a credential (server access logs, browser history, referrer headers, proxy logs). A ~5-minute expiry caps the blast radius if the URL leaks — an attacker can use a stolen token to open a new socket only within that window. It does **not** expire in-flight connections.
+- **No proactive token refresh on the client.** Because nothing rechecks after upgrade, a periodic timer-based refresh adds churn without adding safety — and in our stack it actually causes duplicate `sync.response` events, since changing the token changes the `usePartySocket` memo key and forces a fresh WS connection. Refresh only happens lazily on socket close if the cached token has already expired (`use-session-websocket-token.ts` / `use-cloudflare-agent.ts`).
+
+### Keep-alive
+
+We don't send app-level pings. Cloudflare answers protocol-level `ping` control frames automatically without waking the DO, but browser JS can't initiate protocol pings (the W3C WebSocket API doesn't expose them). An app-level `{type:"ping"}` message would work but would wake the DO every interval and defeat hibernation — only add it if we see real idle drops on specific networks.
 
 ## Relevant Files
 

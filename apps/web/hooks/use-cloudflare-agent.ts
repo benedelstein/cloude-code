@@ -38,6 +38,9 @@ const DEFAULT_API_HOST = resolveDefaultApiHost();
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
+  // Called when the socket closes with an already-expired token so the next
+  // reconnect handshake uses a fresh one. Noop otherwise.
+  refreshWebSocketToken?: () => void;
   initialPendingUserMessage?: UIMessage | null;
   // eslint-disable-next-line no-unused-vars
   onError?: (error: Error) => void;
@@ -85,6 +88,7 @@ export interface UseCloudflareAgentReturn {
 export function useCloudflareAgent({
   sessionId,
   webSocketToken,
+  refreshWebSocketToken,
   initialPendingUserMessage = null,
   onError,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
@@ -267,6 +271,13 @@ export function useCloudflareAgent({
       console.log("[agent] ws onClose", { hadStream: !!streamControllerRef.current, isConsuming: isConsumingRef.current });
       resetPendingResponse("onClose");
       setOperationError(null);
+      // Token is only verified at the WS upgrade. If it's already past expiry,
+      // partysocket's auto-reconnect would 401 with the stale token — fetch a
+      // fresh one so the next handshake succeeds. Otherwise let partysocket
+      // reconnect with the current token untouched (no extra sync churn).
+      if (Date.now() >= new Date(webSocketToken.expiresAt).getTime()) {
+        refreshWebSocketToken?.();
+      }
     },
     onStateUpdate(state: ClientState) {
       setHasHydratedState(true);

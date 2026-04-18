@@ -69,7 +69,7 @@ describe("useSessionWebSocketToken", () => {
       sessionId: "session-1",
     }));
 
-    expect(result.current).toEqual(token);
+    expect(result.current.token).toEqual(token);
 
     await act(async () => {
       await flushMicrotasks();
@@ -91,7 +91,7 @@ describe("useSessionWebSocketToken", () => {
       await flushMicrotasks();
     });
 
-    expect(result.current).toEqual(token);
+    expect(result.current.token).toEqual(token);
     expect(createSessionWebSocketToken).toHaveBeenCalledWith("session-2");
   });
 
@@ -123,7 +123,7 @@ describe("useSessionWebSocketToken", () => {
       await flushMicrotasks();
     });
 
-    expect(result.current).toEqual(token);
+    expect(result.current.token).toEqual(token);
     expect(createSessionWebSocketToken).toHaveBeenCalledTimes(2);
   });
 
@@ -148,31 +148,51 @@ describe("useSessionWebSocketToken", () => {
       message: "denied",
       code: "AUTH_DENIED",
     });
-    expect(result.current).toBeNull();
+    expect(result.current.token).toBeNull();
     expect(createSessionWebSocketToken).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes the token before expiry", async () => {
+  it("does not fetch proactively while a token is still present", async () => {
     vi.useFakeTimers();
 
     const firstToken = makeToken(new Date(Date.now() + 90_000).toISOString());
+    consumeInitialSessionWebSocketToken.mockReturnValue(firstToken);
+
+    const { result } = renderHook(() => useSessionWebSocketToken({
+      sessionId: "session-5",
+    }));
+
+    expect(result.current.token).toEqual(firstToken);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await flushMicrotasks();
+    });
+
+    expect(createSessionWebSocketToken).not.toHaveBeenCalled();
+    expect(result.current.token).toEqual(firstToken);
+  });
+
+  it("refresh() fetches a new token and swaps it in", async () => {
+    const firstToken = makeToken(new Date(Date.now() + 5 * 60_000).toISOString());
     const secondToken = makeToken(new Date(Date.now() + 10 * 60_000).toISOString());
 
     consumeInitialSessionWebSocketToken.mockReturnValue(firstToken);
     createSessionWebSocketToken.mockResolvedValue(secondToken);
 
     const { result } = renderHook(() => useSessionWebSocketToken({
-      sessionId: "session-5",
+      sessionId: "session-5b",
     }));
 
-    expect(result.current).toEqual(firstToken);
+    expect(result.current.token).toEqual(firstToken);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      result.current.refresh();
       await flushMicrotasks();
     });
 
-    expect(result.current).toEqual(secondToken);
+    expect(createSessionWebSocketToken).toHaveBeenCalledWith("session-5b");
+    expect(result.current.token).toEqual(secondToken);
   });
 
   it("deduplicates in-flight requests for the same session", async () => {
@@ -202,8 +222,8 @@ describe("useSessionWebSocketToken", () => {
     });
 
     await waitFor(() => {
-      expect(firstHook.result.current).toEqual(token);
-      expect(secondHook.result.current).toEqual(token);
+      expect(firstHook.result.current.token).toEqual(token);
+      expect(secondHook.result.current.token).toEqual(token);
     });
 
     expect(onReconnectRecovered).toHaveBeenCalledTimes(2);

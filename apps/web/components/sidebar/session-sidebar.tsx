@@ -43,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import Link from "next/link";
 
 const SESSION_LIST_LOADING_ITEMS: SessionSummary[] = [
   {
@@ -184,7 +185,7 @@ export function SessionSidebar() {
             <DropdownMenuTrigger asChild>
               <SidebarMenuAction
                 showOnHover
-                className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md !bg-sidebar-border hover:!bg-[#c9d1db]"
+                className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-border! hover:bg-[#c9d1db]!"
               >
                 <MoreHorizontal className="h-3 w-3" />
               </SidebarMenuAction>
@@ -227,8 +228,10 @@ export function SessionSidebar() {
                   className="cursor-pointer font-medium py-5"
                   tooltip="New session"
                 >
-                  <Edit className="h-4 w-4" />
-                  <span>New session</span>
+                  <Link href="/">
+                    <Edit className="h-4 w-4" />
+                    <span>New session</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
