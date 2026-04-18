@@ -288,7 +288,7 @@ export class AgentWorkflowCoordinator {
     if (
       serverState.workflowState.activeUserMessageId !== userMessageId
     ) {
-      this.logger.warn("Another workflow turn is already active, not starting new turn", {
+      this.logger.warn("Another workflow turn is already active, not preparing new turn", {
         fields: { userMessageId },
       });
       return failure(
@@ -532,7 +532,7 @@ export class AgentWorkflowCoordinator {
     const workflowId = sessionId;
 
     if (serverState.workflowState.activeUserMessageId && serverState.workflowState.activeUserMessageId !== turnPayload.userMessage.id) {
-      this.logger.warn("Another workflow turn is already active, not starting new turn", {
+      this.logger.warn("Another workflow turn is already active, not dispatching new turn", {
         fields: { userMessageId: turnPayload.userMessage.id },
       });
       return;
