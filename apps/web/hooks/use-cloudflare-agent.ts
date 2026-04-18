@@ -218,13 +218,6 @@ export function useCloudflareAgent({
         break;
 
       case "agent.finish":
-        console.log("[agent.finish] finish parts:  ", (msg.message as UIMessage).parts?.map((p) => p.type));
-        console.log("[agent.finish] finish message:", msg.message);
-        setStreamingMessage((current) => {
-          console.log("[agent.finish] streamed parts:", current?.parts?.map((p) => p.type));
-          console.log("[agent.finish] streamed message:", current);
-          return current;
-        });
         if (streamControllerRef.current) {
           streamControllerRef.current.close();
           streamControllerRef.current = null;

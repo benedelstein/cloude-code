@@ -1,8 +1,19 @@
-import type { UIMessage, UIMessageChunk } from "ai";
+import type { DynamicToolUIPart, ReasoningUIPart, TextUIPart, UIMessage, UIMessageChunk } from "ai";
 import { ConsoleLogger, type Logger } from "../logging";
 
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
+
+// Writable view over DynamicToolUIPart's discriminated union. The SDK type
+// requires state and fields (input/output/errorText) to be set together per
+// variant, which blocks in-place mutation as the tool transitions states.
+// We keep the object identity but relax field constraints for mutation.
+type MutableDynamicToolUIPart = Omit<DynamicToolUIPart, "state" | "input" | "output" | "errorText"> & {
+  state: DynamicToolUIPart["state"];
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+};
 
 export interface ProcessChunkResult {
   /**
@@ -19,6 +30,12 @@ export interface ProcessChunkResult {
  * Accumulates UIMessageStream chunks into a complete UIMessage.
  * Used by the DO to build the final message for storage while streaming parts to clients.
  * Also used by the vm-agent test harness to validate chunk ordering in isolation.
+ *
+ * Ordering: parts are inserted into `parts` when their opening chunk arrives
+ * (text-start / reasoning-start / tool-input-start) and mutated in place as
+ * deltas and terminal chunks arrive. This mirrors the AI SDK's
+ * processUIMessageStream and preserves the order in which parts began
+ * streaming, even when a later part finishes before an earlier one.
  */
 export class MessageAccumulator {
   private readonly logger: Logger;
@@ -28,25 +45,19 @@ export class MessageAccumulator {
   private finished = false;
   private pendingChunks: UIMessageChunk[] = [];
 
-  // In-progress text accumulation
-  private currentTextId: string | null = null;
-  private currentText = "";
+  // Active in-progress parts, keyed by their stream id. Values are the same
+  // references stored in `parts`, so mutations here update the array too.
+  private activeTextParts = new Map<string, TextUIPart>();
+  private activeReasoningParts = new Map<string, ReasoningUIPart>();
 
-  // In-progress reasoning accumulation
-  private currentReasoningId: string | null = null;
-  private currentReasoning = "";
-
-  // In-progress tool calls (keyed by toolCallId)
+  // Active tool calls, keyed by toolCallId. Holds the part reference plus
+  // input-text accumulation used only as a repair path if `tool-input-available`
+  // is never received.
   private toolCalls = new Map<
     string,
     {
-      toolName: string;
+      part: MutableDynamicToolUIPart;
       inputText: string;
-      input?: unknown;
-      output?: unknown;
-      state: string;
-      title?: string;
-      providerExecuted?: boolean;
     }
   >();
 
@@ -59,7 +70,6 @@ export class MessageAccumulator {
    * @returns message completion state plus any parts fully materialized by this chunk
    */
   process(chunk: UIMessageChunk): ProcessChunkResult {
-    this.logger.info(`[chunk-trace] ${chunk.type}`);
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 
@@ -73,65 +83,78 @@ export class MessageAccumulator {
         this.messageId = chunk.messageId ?? this.messageId;
         break;
 
-      case "text-start":
-        this.currentTextId = chunk.id;
-        this.currentText = "";
+      case "text-start": {
+        const textPart: TextUIPart = { type: "text", text: "", state: "streaming" };
+        this.activeTextParts.set(chunk.id, textPart);
+        this.parts.push(textPart);
         break;
+      }
 
-      case "text-delta":
-        if (this.currentTextId === chunk.id) {
-          this.currentText += chunk.delta;
+      case "text-delta": {
+        const textPart = this.activeTextParts.get(chunk.id);
+        if (textPart) {
+          textPart.text += chunk.delta;
         } else {
           this.logger.warn(`[chunk-trace] text-delta received for unknown id`, {
-            fields: { chunkId: chunk.id, currentTextId: this.currentTextId },
+            fields: { chunkId: chunk.id, activeIds: [...this.activeTextParts.keys()] },
           });
         }
         break;
+      }
 
-      case "text-end":
-        if (this.currentTextId === chunk.id && this.currentText) {
-          const messagePart = { type: "text", text: this.currentText, state: "done" } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-          this.currentTextId = null;
-          this.currentText = "";
+      case "text-end": {
+        const textPart = this.activeTextParts.get(chunk.id);
+        if (textPart) {
+          textPart.state = "done";
+          this.activeTextParts.delete(chunk.id);
+          completedParts.push(textPart);
         }
         break;
+      }
 
-      case "reasoning-start":
-        this.currentReasoningId = chunk.id;
-        this.currentReasoning = "";
+      case "reasoning-start": {
+        const reasoningPart: ReasoningUIPart = { type: "reasoning", text: "", state: "streaming" };
+        this.activeReasoningParts.set(chunk.id, reasoningPart);
+        this.parts.push(reasoningPart);
         break;
+      }
 
-      case "reasoning-delta":
-        if (this.currentReasoningId === chunk.id) {
-          this.currentReasoning += chunk.delta;
+      case "reasoning-delta": {
+        const reasoningPart = this.activeReasoningParts.get(chunk.id);
+        if (reasoningPart) {
+          reasoningPart.text += chunk.delta;
         } else {
           this.logger.warn(`[chunk-trace] reasoning-delta for unknown id`, {
-            fields: { chunkId: chunk.id, currentReasoningId: this.currentReasoningId },
+            fields: { chunkId: chunk.id, activeIds: [...this.activeReasoningParts.keys()] },
           });
         }
         break;
+      }
 
-      case "reasoning-end":
-        if (this.currentReasoningId === chunk.id && this.currentReasoning) {
-          const messagePart = { type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-          this.currentReasoningId = null;
-          this.currentReasoning = "";
+      case "reasoning-end": {
+        const reasoningPart = this.activeReasoningParts.get(chunk.id);
+        if (reasoningPart) {
+          reasoningPart.state = "done";
+          this.activeReasoningParts.delete(chunk.id);
+          completedParts.push(reasoningPart);
         }
         break;
+      }
 
-      case "tool-input-start":
-        this.toolCalls.set(chunk.toolCallId, {
+      case "tool-input-start": {
+        const toolPart: MutableDynamicToolUIPart = {
+          type: "dynamic-tool",
           toolName: chunk.toolName,
-          inputText: "",
+          toolCallId: chunk.toolCallId,
           state: "input-streaming",
+          input: undefined,
           title: chunk.title,
           providerExecuted: chunk.providerExecuted,
-        });
+        };
+        this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
+        this.parts.push(toolPart as DynamicToolUIPart);
         break;
+      }
 
       case "tool-input-delta": {
         const toolCall = this.toolCalls.get(chunk.toolCallId);
@@ -146,114 +169,94 @@ export class MessageAccumulator {
       }
 
       case "tool-input-available": {
-        const availableTool = this.toolCalls.get(chunk.toolCallId);
-        if (availableTool) {
-          availableTool.input = chunk.input;
-          availableTool.state = "input-available";
+        const existing = this.toolCalls.get(chunk.toolCallId);
+        if (existing) {
+          existing.part.input = chunk.input;
+          existing.part.state = "input-available";
         } else {
-          this.toolCalls.set(chunk.toolCallId, {
+          // No prior tool-input-start — fall back to inserting the part now.
+          const toolPart: MutableDynamicToolUIPart = {
+            type: "dynamic-tool",
             toolName: chunk.toolName,
-            inputText: "",
-            input: chunk.input,
+            toolCallId: chunk.toolCallId,
             state: "input-available",
+            input: chunk.input,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
-          });
+          };
+          this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
+          this.parts.push(toolPart as DynamicToolUIPart);
         }
         break;
       }
 
       case "tool-output-available": {
-        const outputTool = this.toolCalls.get(chunk.toolCallId);
-        if (outputTool) {
-          outputTool.output = chunk.output;
-          outputTool.state = "output-available";
-          const messagePart = {
-            type: "dynamic-tool",
-            toolName: outputTool.toolName,
-            toolCallId: chunk.toolCallId,
-            state: "output-available",
-            input: outputTool.input,
-            output: chunk.output,
-            title: outputTool.title,
-            providerExecuted: outputTool.providerExecuted,
-          } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
+        const toolCall = this.toolCalls.get(chunk.toolCallId);
+        if (toolCall) {
+          toolCall.part.output = chunk.output;
+          toolCall.part.state = "output-available";
           this.toolCalls.delete(chunk.toolCallId);
+          completedParts.push(toolCall.part as DynamicToolUIPart);
         }
         break;
       }
 
       case "tool-output-error": {
-        const errorTool = this.toolCalls.get(chunk.toolCallId);
-        if (errorTool) {
-          const messagePart = {
-            type: "dynamic-tool",
-            toolName: errorTool.toolName,
-            toolCallId: chunk.toolCallId,
-            state: "output-error",
-            input: errorTool.input,
-            errorText: chunk.errorText,
-            title: errorTool.title,
-            providerExecuted: errorTool.providerExecuted,
-          } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
+        const toolCall = this.toolCalls.get(chunk.toolCallId);
+        if (toolCall) {
+          toolCall.part.errorText = chunk.errorText;
+          toolCall.part.state = "output-error";
           this.toolCalls.delete(chunk.toolCallId);
+          completedParts.push(toolCall.part as DynamicToolUIPart);
         }
         break;
       }
 
-      case "source-url":
-        {
-          const messagePart = {
+      case "source-url": {
+        const messagePart = {
           type: "source-url",
           sourceId: chunk.sourceId,
           url: chunk.url,
           title: chunk.title,
           providerMetadata: chunk.providerMetadata,
-          } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-        }
+        } as MessagePart;
+        this.parts.push(messagePart);
+        completedParts.push(messagePart);
         break;
+      }
 
-      case "source-document":
-        {
-          const messagePart = {
+      case "source-document": {
+        const messagePart = {
           type: "source-document",
           sourceId: chunk.sourceId,
           mediaType: chunk.mediaType,
           title: chunk.title,
           filename: chunk.filename,
           providerMetadata: chunk.providerMetadata,
-          } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-        }
+        } as MessagePart;
+        this.parts.push(messagePart);
+        completedParts.push(messagePart);
         break;
+      }
 
-      case "file":
-        {
-          const messagePart = {
+      case "file": {
+        const messagePart = {
           type: "file",
           mediaType: chunk.mediaType,
           url: chunk.url,
           providerMetadata: chunk.providerMetadata,
-          } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-        }
+        } as MessagePart;
+        this.parts.push(messagePart);
+        completedParts.push(messagePart);
         break;
+      }
 
-      case "start-step":
-        {
-          const messagePart = { type: "step-start" } as MessagePart;
-          this.parts.push(messagePart);
-          completedParts.push(messagePart);
-        }
+      case "start-step": {
+        const messagePart = { type: "step-start" } as MessagePart;
+        this.parts.push(messagePart);
+        completedParts.push(messagePart);
         break;
+      }
 
       case "finish":
         completedParts.push(...this.finalizePendingParts());
@@ -263,7 +266,6 @@ export class MessageAccumulator {
 
       case "finish-step":
         break;
-
 
       case "abort":
         completedParts.push(...this.finalizePendingParts());
@@ -280,49 +282,39 @@ export class MessageAccumulator {
     return { completedParts };
   }
 
+  /**
+   * Close out any parts still in-flight at terminal-chunk time.
+   * Parts are already in `this.parts`; we just mutate their state and
+   * report them via completedParts so consumers see the close-out.
+   */
   private finalizePendingParts(): MessagePart[] {
     const completedParts: MessagePart[] = [];
 
-    if (this.currentText) {
-      const messagePart = { type: "text", text: this.currentText, state: "done" } as MessagePart;
-      this.parts.push(messagePart);
-      completedParts.push(messagePart);
-      this.currentText = "";
-      this.currentTextId = null;
+    for (const [, textPart] of this.activeTextParts) {
+      textPart.state = "done";
+      completedParts.push(textPart);
     }
+    this.activeTextParts.clear();
 
-    if (this.currentReasoning) {
-      const messagePart = { type: "reasoning", text: this.currentReasoning, state: "done" } as MessagePart;
-      this.parts.push(messagePart);
-      completedParts.push(messagePart);
-      this.currentReasoning = "";
-      this.currentReasoningId = null;
+    for (const [, reasoningPart] of this.activeReasoningParts) {
+      reasoningPart.state = "done";
+      completedParts.push(reasoningPart);
     }
+    this.activeReasoningParts.clear();
 
-    for (const [toolCallId, tool] of this.toolCalls) {
-      let input = tool.input;
-      if (!input && tool.inputText) {
+    for (const [, toolCall] of this.toolCalls) {
+      // Try to repair input from the streamed input-text if input never became available.
+      if (toolCall.part.input === undefined && toolCall.inputText) {
         try {
-          input = JSON.parse(tool.inputText);
+          toolCall.part.input = JSON.parse(toolCall.inputText);
         } catch {
-          input = tool.inputText;
+          toolCall.part.input = toolCall.inputText;
         }
       }
-
-      const messagePart = {
-        type: "dynamic-tool",
-        toolName: tool.toolName,
-        toolCallId,
-        state: tool.state,
-        input,
-        ...(tool.output !== undefined && { output: tool.output }),
-        title: tool.title,
-        providerExecuted: tool.providerExecuted,
-      } as MessagePart;
-      this.parts.push(messagePart);
-      completedParts.push(messagePart);
+      completedParts.push(toolCall.part as DynamicToolUIPart);
     }
     this.toolCalls.clear();
+
     return completedParts;
   }
 
@@ -348,7 +340,7 @@ export class MessageAccumulator {
   getMessageId(): string | null {
     return this.messageId ?? null;
   }
-  
+
   getPendingChunks(): UIMessageChunk[] | undefined {
     return this.pendingChunks.length > 0
       ? [...this.pendingChunks]
@@ -361,11 +353,14 @@ export class MessageAccumulator {
    * @returns the partial message, or null if no message was started.
    */
   forceAbort(): UIMessage | null {
-    // If no content was accumulated there is nothing worth saving
-    if (this.parts.length === 0 && !this.currentText && !this.currentReasoning && this.toolCalls.size === 0) {
+    if (
+      this.parts.length === 0
+      && this.activeTextParts.size === 0
+      && this.activeReasoningParts.size === 0
+      && this.toolCalls.size === 0
+    ) {
       return null;
     }
-    // messageId is optional on the "start" chunk — fall back to a generated id
     if (!this.messageId) {
       this.messageId = crypto.randomUUID();
     }
@@ -381,10 +376,8 @@ export class MessageAccumulator {
     this.parts = [];
     this.metadata = undefined;
     this.finished = false;
-    this.currentTextId = null;
-    this.currentText = "";
-    this.currentReasoningId = null;
-    this.currentReasoning = "";
+    this.activeTextParts.clear();
+    this.activeReasoningParts.clear();
     this.toolCalls.clear();
   }
 }
