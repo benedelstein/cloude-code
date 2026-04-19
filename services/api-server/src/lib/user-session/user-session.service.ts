@@ -42,7 +42,6 @@ export class UserSessionService {
       userId: session.id,
       encryptedGithubAccessToken: session.githubAccessToken,
       tokenExpiresAt: session.tokenExpiresAt,
-      sessionToken: session.sessionToken,
     });
 
     if (!githubAccessToken) {
@@ -62,17 +61,27 @@ export class UserSessionService {
   async getValidGitHubAccessTokenByUserId(
     userId: string,
   ): Promise<string | null> {
-    const latestSession = await this.repository.getLatestActiveAuthSessionByUserId(userId);
-    if (!latestSession) {
+    const credentials = await this.repository.getGitHubCredentialsByUserId(userId);
+    if (!credentials) {
       return null;
     }
 
     return this.ensureValidGitHubAccessToken({
       userId,
-      encryptedGithubAccessToken: latestSession.githubAccessToken,
-      tokenExpiresAt: latestSession.tokenExpiresAt,
-      sessionToken: latestSession.sessionToken,
+      encryptedGithubAccessToken: credentials.encryptedAccessToken,
+      tokenExpiresAt: credentials.accessTokenExpiresAt,
     });
+  }
+
+  /**
+   * Forces a GitHub user token refresh using the stored per-user credentials.
+   * @param userId - Authenticated user id.
+   * @returns The refreshed GitHub access token, or null when refresh is not possible.
+   */
+  async forceRefreshGitHubAccessTokenByUserId(
+    userId: string,
+  ): Promise<string | null> {
+    return this.refreshGitHubAccessToken(userId);
   }
 
   // ensures access token is valid, refreshing if needed.
@@ -80,7 +89,6 @@ export class UserSessionService {
     userId: string;
     encryptedGithubAccessToken: string;
     tokenExpiresAt: string | null;
-    sessionToken: string;
   }): Promise<string | null> {
     const currentAccessToken = await decrypt(
       params.encryptedGithubAccessToken,
@@ -94,27 +102,19 @@ export class UserSessionService {
       return currentAccessToken;
     }
 
-    return this.refreshGitHubAccessToken({
-      userId: params.userId,
-      sessionToken: params.sessionToken,
-    });
+    return this.refreshGitHubAccessToken(params.userId);
   }
 
-  private async refreshGitHubAccessToken(params: {
-    userId: string;
-    sessionToken: string;
-  }): Promise<string | null> {
-    const encryptedRefreshToken = await this.repository.getRefreshTokenByUserId(
-      params.userId,
-    );
-    if (!encryptedRefreshToken) {
+  private async refreshGitHubAccessToken(userId: string): Promise<string | null> {
+    const credentials = await this.repository.getGitHubCredentialsByUserId(userId);
+    if (!credentials?.encryptedRefreshToken) {
       return null;
     }
 
     try {
       const github = new GitHubAppService(this.env, logger);
       const decryptedRefreshToken = await decrypt(
-        encryptedRefreshToken,
+        credentials.encryptedRefreshToken,
         this.env.TOKEN_ENCRYPTION_KEY,
       );
       const refreshed = await github.refreshUserToken(decryptedRefreshToken);
@@ -127,11 +127,10 @@ export class UserSessionService {
         this.env.TOKEN_ENCRYPTION_KEY,
       );
 
-      await this.repository.updateSessionAndRefreshToken({
-        sessionToken: params.sessionToken,
-        githubAccessToken: encryptedAccessToken,
-        tokenExpiresAt: refreshed.expiresAt,
-        userId: params.userId,
+      await this.repository.updateGitHubCredentials({
+        userId,
+        encryptedAccessToken,
+        accessTokenExpiresAt: refreshed.expiresAt,
         encryptedRefreshToken: encryptedRefreshTokenNext,
         refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt ?? null,
       });
@@ -140,7 +139,7 @@ export class UserSessionService {
     } catch (error) {
       logger.warn("Failed to refresh GitHub user token", {
         error,
-        fields: { userId: params.userId },
+        fields: { userId },
       });
       return null;
     }

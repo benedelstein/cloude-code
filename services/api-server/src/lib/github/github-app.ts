@@ -91,7 +91,8 @@ export type GitHubAppErrorCode =
   | "INSTALLATION_NOT_FOUND"
   | "REPO_NOT_ACCESSIBLE"
   | "INVALID_REPO"
-  | "GITHUB_API_ERROR";
+  | "GITHUB_API_ERROR"
+  | "GITHUB_AUTH_ERROR";
 
 export type GitHubAppServiceError = {
   code: GitHubAppErrorCode;
@@ -516,13 +517,32 @@ export class GitHubAppService {
   }
 
   /**
+   * Returns true when GitHub rejects the user's OAuth token.
+   */
+  private isUserAuthenticationFailure(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) {
+      return false;
+    }
+
+    if ("status" in error && error.status === 401) {
+      return true;
+    }
+
+    if ("message" in error && typeof error.message === "string") {
+      return error.message.toLowerCase().includes("bad credentials");
+    }
+
+    return false;
+  }
+
+  /**
    * Finds a repo accessible by a user id for a given installation id and repo id.
    * @param userId - The user id.
    * @param userAccessToken - The user's access token.
    * @param installationId - The installation id.
    * @param repoId - The repo id to look up.
    * @returns The repository data.
-   * 
+   *
    * See https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app
    */
   async getUserAccessibleInstallationRepoById(
@@ -576,6 +596,13 @@ export class GitHubAppService {
         return failure({
           code: "INSTALLATION_NOT_FOUND",
           message: `No GitHub App installation found for installation ${installationId}.`,
+        });
+      }
+
+      if (this.isUserAuthenticationFailure(error)) {
+        return failure({
+          code: "GITHUB_AUTH_ERROR",
+          message: "GitHub user authentication is no longer valid.",
         });
       }
 
@@ -709,6 +736,13 @@ export class GitHubAppService {
         return failure({
           code: "REPO_NOT_ACCESSIBLE",
           message: `Repository ${repoId} is not accessible to the authenticated user.`,
+        });
+      }
+
+      if (this.isUserAuthenticationFailure(error)) {
+        return failure({
+          code: "GITHUB_AUTH_ERROR",
+          message: "GitHub user authentication is no longer valid.",
         });
       }
 

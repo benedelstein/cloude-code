@@ -134,7 +134,7 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     return c.json({ error: "Failed to create user" }, 500);
   }
 
-  // Create auth session with access token (30 days)
+  // Create auth session (30 days)
   const sessionToken = crypto.randomUUID();
   const sessionExpires = new Date(
     Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -143,19 +143,16 @@ authRoutes.openapi(postTokenRoute, async (c) => {
   await userSessionRepository.createAuthSession(
     sessionToken,
     user.id,
-    encryptedAccess,
-    result.expiresAt ?? null,
     sessionExpires,
   );
 
-  // Upsert refresh token (one per user)
-  if (encryptedRefresh) {
-    await userSessionRepository.upsertRefreshToken(
-      user.id,
-      encryptedRefresh,
-      result.refreshTokenExpiresAt ?? null,
-    );
-  }
+  await userSessionRepository.upsertGitHubCredentials({
+    userId: user.id,
+    encryptedAccessToken: encryptedAccess,
+    accessTokenExpiresAt: result.expiresAt ?? null,
+    encryptedRefreshToken: encryptedRefresh ?? null,
+    refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
+  });
 
   // Check if user has any GitHub App installations
   const userOctokit = new Octokit({ auth: result.accessToken });
