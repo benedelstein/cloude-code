@@ -584,9 +584,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       data.userId,
     );
 
-    // Generate git proxy secret and persist
-    this.gitProxyService.ensureGitProxySecret();
-
     const pendingAttachmentIds = data.initialAttachmentIds ?? [];
     const pendingUserUiMessage = await buildUserUiMessage(
       data.sessionId,
