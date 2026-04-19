@@ -198,6 +198,37 @@ export class UserSessionRepository {
     ]);
   }
 
+  /**
+   * Update the GitHub access token on every active auth session for a user and
+   * rotate the stored refresh token in the same write batch.
+   */
+  async updateAllSessionsAccessTokenAndRefreshToken(params: {
+    userId: string;
+    githubAccessToken: string;
+    tokenExpiresAt: string | null;
+    encryptedRefreshToken: string;
+    refreshTokenExpiresAt: string | null;
+  }): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `UPDATE auth_sessions SET github_access_token = ?, token_expires_at = ?
+         WHERE user_id = ?`,
+      ).bind(
+        params.githubAccessToken,
+        params.tokenExpiresAt,
+        params.userId,
+      ),
+      this.database.prepare(
+        `UPDATE user_refresh_tokens SET encrypted_token = ?, expires_at = ?,
+         updated_at = datetime('now') WHERE user_id = ?`,
+      ).bind(
+        params.encryptedRefreshToken,
+        params.refreshTokenExpiresAt,
+        params.userId,
+      ),
+    ]);
+  }
+
   async updateRefreshToken(
     userId: string,
     encryptedToken: string,

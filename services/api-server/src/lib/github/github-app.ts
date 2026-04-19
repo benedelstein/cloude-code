@@ -96,6 +96,8 @@ export type GitHubAppErrorCode =
 export type GitHubAppServiceError = {
   code: GitHubAppErrorCode;
   message: string;
+  status?: number;
+  details?: string;
 };
 
 export type GitHubAppResult<T> = Result<T, GitHubAppServiceError>;
@@ -739,9 +741,27 @@ export class GitHubAppService {
     error: unknown,
   ): GitHubAppResult<T> {
     this.logger.error(message, { error });
+    const errorStatus = (
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof error.status === "number"
+    )
+      ? error.status
+      : undefined;
+    const errorDetails = (
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof error.message === "string"
+    )
+      ? error.message
+      : undefined;
     return failure({
       code: "GITHUB_API_ERROR",
       message,
+      status: errorStatus,
+      details: errorDetails,
     });
   }
 

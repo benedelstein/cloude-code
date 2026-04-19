@@ -37,6 +37,8 @@ type UserRepoAccessError =
       code: "GITHUB_API_ERROR";
       status: 503;
       message: string;
+      githubStatus?: number;
+      githubDetails?: string;
     };
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
@@ -75,6 +77,8 @@ export type SessionRepoAccessResult = Result<RepoAccessValue, SessionRepoAccessE
 function mapGitHubAppErrorToUserRepoAccessError(error: {
   code: GitHubAppErrorCode;
   message: string;
+  status?: number;
+  details?: string;
 }): UserRepoAccessError {
   switch (error.code) {
     case "INSTALLATION_NOT_FOUND":
@@ -95,12 +99,24 @@ function mapGitHubAppErrorToUserRepoAccessError(error: {
         code: error.code,
         status: 503,
         message: error.message,
+        githubStatus: error.status,
+        githubDetails: error.details,
       };
     default: {
       const exhaustiveCheck: never = error.code;
       throw new Error(`Unhandled GitHub app error code: ${String(exhaustiveCheck)}`);
     }
   }
+}
+
+function isGitHubBadCredentialsError(error: {
+  code: "GITHUB_API_ERROR";
+  githubStatus?: number;
+  githubDetails?: string;
+}): boolean {
+  return error.githubStatus === 401
+    && typeof error.githubDetails === "string"
+    && error.githubDetails.includes("Bad credentials");
 }
 
 function blockedSessionAccessResult(justBlocked: boolean): SessionRepoAccessResult {
@@ -178,7 +194,27 @@ export async function assertUserRepoAccess(params: {
   repoId: number;
   githubAccessToken: string;
 }): Promise<UserRepoAccessResult> {
-  return resolveAccessibleRepoForRecovery(params);
+  const accessResult = await resolveAccessibleRepoForRecovery(params);
+  if (
+    accessResult.ok
+    || accessResult.error.code !== "GITHUB_API_ERROR"
+    || !isGitHubBadCredentialsError(accessResult.error)
+  ) {
+    return accessResult;
+  }
+
+  const userSessionService = new UserSessionService(params.env);
+  const refreshedAccessToken = await userSessionService.forceRefreshGitHubAccessTokenByUserId(
+    params.userId,
+  );
+  if (!refreshedAccessToken) {
+    return accessResult;
+  }
+
+  return resolveAccessibleRepoForRecovery({
+    ...params,
+    githubAccessToken: refreshedAccessToken,
+  });
 }
 
 /**
@@ -244,6 +280,92 @@ export async function assertSessionRepoAccess(params: {
         githubAccessToken,
         installationId: session.installationId as number,
       });
+
+  if (
+    !repoAccessResult.ok
+    && repoAccessResult.error.code === "GITHUB_API_ERROR"
+    && isGitHubBadCredentialsError(repoAccessResult.error)
+  ) {
+    const userSessionService = new UserSessionService(env);
+    const refreshedAccessToken = await userSessionService.forceRefreshGitHubAccessTokenByUserId(
+      userId,
+    );
+
+    if (refreshedAccessToken) {
+      const retryResult = shouldUseRecoveryPath
+        ? await resolveAccessibleRepoForRecovery({
+            env,
+            userId,
+            repoId: session.repoId,
+            githubAccessToken: refreshedAccessToken,
+          })
+        : await getUserAccessibleRepoForInstallation({
+            env,
+            userId,
+            repoId: session.repoId,
+            githubAccessToken: refreshedAccessToken,
+            installationId: session.installationId as number,
+          });
+
+      if (retryResult.ok) {
+        if (
+          session.installationId !== retryResult.value.installationId ||
+          session.repoFullName !== retryResult.value.repoFullName ||
+          session.accessBlockedAt !== null ||
+          session.accessBlockReason !== null
+        ) {
+          await sessionsRepository.clearAccessBlockAndUpdateBinding(sessionId, {
+            installationId: retryResult.value.installationId,
+            repoFullName: retryResult.value.repoFullName,
+          });
+        }
+        return success(retryResult.value);
+      }
+
+      switch (retryResult.error.code) {
+        case "REPO_NOT_ACCESSIBLE":
+          await sessionsRepository.blockSessionForAccessCheckDenied(sessionId, {
+            clearInstallationId: false,
+            preserveExistingBlockReason:
+              shouldUseRecoveryPath && session.accessBlockReason !== null,
+          });
+          return blockedSessionAccessResult(!shouldUseRecoveryPath);
+        case "INSTALLATION_NOT_FOUND":
+          await sessionsRepository.blockSessionForAccessCheckDenied(sessionId, {
+            clearInstallationId: true,
+            preserveExistingBlockReason:
+              shouldUseRecoveryPath && session.accessBlockReason !== null,
+          });
+          return blockedSessionAccessResult(!shouldUseRecoveryPath);
+        case "GITHUB_API_ERROR":
+          logger.warn("GitHub session repo access check failed after forced token refresh.", {
+            fields: {
+              userId,
+              sessionId,
+              repoId: session.repoId,
+              installationId: session.installationId,
+              code: retryResult.error.code,
+              recoveryPath: shouldUseRecoveryPath,
+            },
+          });
+          return failure({
+            code: "GITHUB_API_ERROR",
+            status: 503,
+            message: "GitHub repository access could not be verified right now. Please retry.",
+          });
+        case "INVALID_REPO":
+          return failure({
+            code: "INVALID_REPO",
+            status: 400,
+            message: "Invalid repository.",
+          });
+        default: {
+          const exhaustiveCheck: never = retryResult.error;
+          throw new Error(`Unhandled retried session repo access error: ${String(exhaustiveCheck)}`);
+        }
+      }
+    }
+  }
 
   if (!repoAccessResult.ok) {
     switch (repoAccessResult.error.code) {

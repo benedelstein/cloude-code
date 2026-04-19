@@ -42,7 +42,6 @@ export class UserSessionService {
       userId: session.id,
       encryptedGithubAccessToken: session.githubAccessToken,
       tokenExpiresAt: session.tokenExpiresAt,
-      sessionToken: session.sessionToken,
     });
 
     if (!githubAccessToken) {
@@ -71,7 +70,19 @@ export class UserSessionService {
       userId,
       encryptedGithubAccessToken: latestSession.githubAccessToken,
       tokenExpiresAt: latestSession.tokenExpiresAt,
-      sessionToken: latestSession.sessionToken,
+    });
+  }
+
+  async forceRefreshGitHubAccessTokenByUserId(
+    userId: string,
+  ): Promise<string | null> {
+    const latestSession = await this.repository.getLatestActiveAuthSessionByUserId(userId);
+    if (!latestSession) {
+      return null;
+    }
+
+    return this.refreshGitHubAccessToken({
+      userId,
     });
   }
 
@@ -80,7 +91,6 @@ export class UserSessionService {
     userId: string;
     encryptedGithubAccessToken: string;
     tokenExpiresAt: string | null;
-    sessionToken: string;
   }): Promise<string | null> {
     const currentAccessToken = await decrypt(
       params.encryptedGithubAccessToken,
@@ -96,13 +106,11 @@ export class UserSessionService {
 
     return this.refreshGitHubAccessToken({
       userId: params.userId,
-      sessionToken: params.sessionToken,
     });
   }
 
   private async refreshGitHubAccessToken(params: {
     userId: string;
-    sessionToken: string;
   }): Promise<string | null> {
     const encryptedRefreshToken = await this.repository.getRefreshTokenByUserId(
       params.userId,
@@ -127,11 +135,10 @@ export class UserSessionService {
         this.env.TOKEN_ENCRYPTION_KEY,
       );
 
-      await this.repository.updateSessionAndRefreshToken({
-        sessionToken: params.sessionToken,
+      await this.repository.updateAllSessionsAccessTokenAndRefreshToken({
+        userId: params.userId,
         githubAccessToken: encryptedAccessToken,
         tokenExpiresAt: refreshed.expiresAt,
-        userId: params.userId,
         encryptedRefreshToken: encryptedRefreshTokenNext,
         refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt ?? null,
       });
