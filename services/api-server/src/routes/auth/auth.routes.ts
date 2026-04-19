@@ -140,14 +140,10 @@ authRoutes.openapi(postTokenRoute, async (c) => {
     Date.now() + 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  await userSessionRepository.createAuthSession(
+  await userSessionRepository.createAuthSessionWithGitHubCredentials({
     sessionToken,
-    user.id,
-    sessionExpires,
-  );
-
-  await userSessionRepository.upsertGitHubCredentials({
     userId: user.id,
+    sessionExpiresAt: sessionExpires,
     encryptedAccessToken: encryptedAccess,
     accessTokenExpiresAt: result.expiresAt ?? null,
     encryptedRefreshToken: encryptedRefresh ?? null,

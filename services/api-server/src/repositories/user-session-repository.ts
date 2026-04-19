@@ -110,6 +110,49 @@ export class UserSessionRepository {
       .run();
   }
 
+  async createAuthSessionWithGitHubCredentials(params: {
+    sessionToken: string;
+    userId: string;
+    sessionExpiresAt: string;
+    encryptedAccessToken: string;
+    accessTokenExpiresAt: string | null;
+    encryptedRefreshToken: string | null;
+    refreshTokenExpiresAt: string | null;
+  }): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `INSERT INTO auth_sessions (token, user_id, expires_at)
+         VALUES (?, ?, ?)`,
+      ).bind(
+        params.sessionToken,
+        params.userId,
+        params.sessionExpiresAt,
+      ),
+      this.database.prepare(
+        `INSERT INTO user_github_credentials (
+           user_id,
+           encrypted_access_token,
+           access_token_expires_at,
+           encrypted_refresh_token,
+           refresh_token_expires_at
+         )
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (user_id) DO UPDATE SET
+           encrypted_access_token = excluded.encrypted_access_token,
+           access_token_expires_at = excluded.access_token_expires_at,
+           encrypted_refresh_token = excluded.encrypted_refresh_token,
+           refresh_token_expires_at = excluded.refresh_token_expires_at,
+           updated_at = datetime('now')`,
+      ).bind(
+        params.userId,
+        params.encryptedAccessToken,
+        params.accessTokenExpiresAt,
+        params.encryptedRefreshToken,
+        params.refreshTokenExpiresAt,
+      ),
+    ]);
+  }
+
   async upsertGitHubCredentials(params: {
     userId: string;
     encryptedAccessToken: string;
