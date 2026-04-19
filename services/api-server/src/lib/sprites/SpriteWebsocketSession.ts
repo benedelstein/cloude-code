@@ -158,7 +158,6 @@ export class SpriteWebsocketSession {
         error: error.message,
       });
       this.finalizeTransportFailure(new Error("WebSocket error"), {
-        emitError: true,
         closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE,
       });
     });
@@ -253,6 +252,13 @@ export class SpriteWebsocketSession {
           }
         }
 
+        if (this.config.options.maxRunAfterDisconnect) {
+          wsUrl.searchParams.set(
+            "max_run_after_disconnect",
+            this.config.options.maxRunAfterDisconnect,
+          );
+        }
+
         return wsUrl;
       }
       case "attach": {
@@ -313,10 +319,7 @@ export class SpriteWebsocketSession {
       logger.error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
       this.finalizeTransportFailure(
         new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`),
-        {
-          emitError: true,
-          closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE,
-        },
+        { closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE },
       );
     }, idleTimeoutMs);
   }
@@ -439,7 +442,6 @@ export class SpriteWebsocketSession {
       new Error(
         `WebSocket closed before receiving process exit: code=${event.code}${reasonSuffix}`,
       ),
-      { emitError: false },
     );
   }
 
@@ -456,7 +458,7 @@ export class SpriteWebsocketSession {
     this.serverMessageHandlers.forEach((h) => h(parsed));
 
     if (parsed.type === "exit") {
-      logger.debug(`Received exit message}`);
+      logger.debug(`Received exit message`);
       this.finalizeExit(parsed.exit_code);
     }
   }
@@ -481,13 +483,18 @@ export class SpriteWebsocketSession {
     this.close();
   }
 
-  /** Call when websocket transport fails */
+  /**
+   * Call when websocket transport fails or the WS closes without a clean
+   * process exit frame. Notifies `onError` handlers, rejects any `.wait()`
+   * waiters, and optionally closes the socket with the given code.
+   *
+   * Re-entry is safe: the `done` guard makes this idempotent, and every
+   * normal-termination path sets `done = true` before calling `close()`,
+   * so the follow-up close event no-ops in `handleWSClose`.
+   */
   private finalizeTransportFailure(
     error: Error,
-    options: {
-      emitError: boolean;
-      closeCode?: number;
-    },
+    options: { closeCode?: number } = {},
   ): void {
     if (this.done) {
       return;
@@ -496,10 +503,7 @@ export class SpriteWebsocketSession {
     this.terminalError = error;
     this.clearIdleTimeout();
 
-    if (options.emitError) {
-      this.errorHandlers.forEach((handler) => handler(error));
-    }
-
+    this.errorHandlers.forEach((handler) => handler(error));
     this.rejectPendingWaits(error);
 
     if (typeof options.closeCode === "number") {

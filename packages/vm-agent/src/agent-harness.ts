@@ -119,6 +119,9 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
         mediaType: attachment.mediaType,
       });
     }
+    const heartbeatInterval = setInterval(() => {
+      emit({ type: "heartbeat" });
+    }, 15_000);
 
     try {
       const extras = setupResult.getStreamTextExtras?.() ?? {};
@@ -141,6 +144,7 @@ export async function runAgentHarness<S extends AgentSettings>(config: AgentProv
         emit({ type: "error", error: String(e) });
       }
     } finally {
+      clearInterval(heartbeatInterval);
       currentAbortController = null;
     }
   }

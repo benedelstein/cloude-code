@@ -364,6 +364,12 @@ export class AgentProcessRunner {
         SESSION_ID: this.sessionId,
         ...envVars,
       },
+      // vm-agent emits a heartbeat every 15 seconds while responding,
+      // so we need to set the idle timeout to tolerate 3 missed heartbeats before detecting a stale process.
+      idleTimeoutMs: 45_000,
+      // Keep the vm-agent process alive for 60s after the websocket disconnects
+      // so a subsequent turn can reattach instead of spawning a fresh process.
+      maxRunAfterDisconnect: "60s",
     });
 
     if (model) {
@@ -393,6 +399,8 @@ export class AgentProcessRunner {
       this.logger.error(`vm-agent stderr: ${data}`);
     });
 
+    // NOTE: called when the vm-agent process exits. distinct from the websocket connection closing.
+    // a exit should always close the websocket, but a websocket close does not always mean the process exited.
     session.onExit((code: number) => {
       if (this.turnSettled) {
         return;
@@ -486,6 +494,11 @@ export class AgentProcessRunner {
       case "debug":
         this.logger.debug(`Debug message received from vm-agent: ${output.message}`);
         return;
+      case "heartbeat":
+        // idle-timeout watchdog was already rearmed on frame receipt in
+        // handleMessage. No further action needed.
+        this.logger.debug("Heartbeat received from vm-agent");
+        return;
       default: {
         const exhaustiveCheck: never = output;
         throw new Error(
@@ -512,12 +525,13 @@ export class AgentProcessRunner {
   }
 
   private async cleanup(): Promise<void> {
+    // close the websocket connection to the agent process.
     try {
       this.agentSession?.close();
     } catch (error) {
       this.logger.debug("Failed to close agent websocket", { error });
     }
-    // TODO: Kill the process?
+    // TODO: Kill the process? or dont and allow attaching to an existing one later.
   }
 
   private async waitForTurnStart(): Promise<void> {

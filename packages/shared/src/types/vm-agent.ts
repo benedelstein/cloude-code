@@ -86,12 +86,18 @@ export const AgentSessionIdOutput = z.object({
   sessionId: z.string(),
 });
 
+/** Sent while the agent is mid-response to keep listeners alive. */
+export const AgentHeartbeatOutput = z.object({
+  type: z.literal("heartbeat"),
+});
+
 export const AgentOutput = z.discriminatedUnion("type", [
   AgentReadyOutput,
   AgentDebugOutput,
   AgentErrorOutput,
   AgentStreamOutput,
   AgentSessionIdOutput,
+  AgentHeartbeatOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 

@@ -19,13 +19,33 @@ export interface ExecResult {
 }
 
 export interface NewExecSessionOptions {
+    /** The working directory for the process */
     cwd?: string;
+    /** Environment variables to set for the process. If omitted, no environment variables are set. */
     env?: Record<string, string>;
+    /** Whether to use TTY mode. If omitted, false */
     tty?: boolean;
+    /** Number of columns in the TTY. If omitted, the sprite will use the default. */
     cols?: number;
+    /** Number of rows in the TTY. If omitted, the sprite will use the default. */
     rows?: number;
+    /** Unsure */
     detachable?: boolean;
+    /**
+     * The amount of time to wait for stdout /stderr to appear before timing out the websocket connection.
+     * If omitted, no idle timeout is applied.
+     * Note - a long running process may emit stdout /stderr slowly, so only use this for processes that are 
+     * expected to emit output regularly.
+     */
     idleTimeoutMs?: number;
+    /**
+     * Duration the process continues running on the sprite after the
+     * websocket client disconnects. Accepts Go-style duration strings
+     * (e.g. "60s", "5m") or "0" to keep the process alive indefinitely.
+     * Sprite defaults: 0 for TTY, 10s for non-TTY.
+     * See https://sprites.dev/api/sprites/exec
+     */
+    maxRunAfterDisconnect?: string;
 }
 
 export interface AttachSessionOptions {
