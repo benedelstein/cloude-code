@@ -18,16 +18,15 @@ export interface SessionGitProxyServiceDeps {
   broadcastMessage: (msg: ServerMessage) => void;
   getGitHubInstallationToken: () => string | null;
   setGitHubInstallationToken: (token: string) => void;
-  getGitProxySecret: () => string | null;
   assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   enforceSessionAccessBlocked: () => Promise<void>;
 }
 
 /**
  * Session-scoped wrapper around the agnostic `handleGitProxy` helper.
- * Owns access-control, state mutations (githubInstallationToken cache, pushedBranch),
- * and the `branch.pushed` broadcast that were previously inlined in the
- * DO's fetch() handler.
+ * Owns the git-proxy shared secret (persisted via `SecretRepository`),
+ * access-control, state mutations (githubInstallationToken cache,
+ * pushedBranch), and the `branch.pushed` broadcast.
  */
 export class SessionGitProxyService {
   private readonly logger: Logger;
@@ -39,9 +38,10 @@ export class SessionGitProxyService {
   private readonly broadcastMessage: SessionGitProxyServiceDeps["broadcastMessage"];
   private readonly getGitHubInstallationToken: () => string | null;
   private readonly setGitHubInstallationToken: (token: string) => void;
-  private readonly getGitProxySecret: () => string | null;
   private readonly assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   private readonly enforceSessionAccessBlocked: () => Promise<void>;
+  /** Shared secret for authenticating sprite → worker git-proxy requests. */
+  private gitProxySecret: string | null;
 
   constructor(deps: SessionGitProxyServiceDeps) {
     this.logger = deps.logger.scope("session-git-proxy");
@@ -53,9 +53,18 @@ export class SessionGitProxyService {
     this.broadcastMessage = deps.broadcastMessage;
     this.getGitHubInstallationToken = deps.getGitHubInstallationToken;
     this.setGitHubInstallationToken = deps.setGitHubInstallationToken;
-    this.getGitProxySecret = deps.getGitProxySecret;
     this.assertSessionRepoAccess = deps.assertSessionRepoAccess;
     this.enforceSessionAccessBlocked = deps.enforceSessionAccessBlocked;
+    this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
+  }
+
+  /** Returns the cached git-proxy secret, generating and persisting it if missing. */
+  ensureGitProxySecret(): string {
+    if (!this.gitProxySecret) {
+      this.gitProxySecret = crypto.randomUUID();
+      this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
+    }
+    return this.gitProxySecret;
   }
 
   /**
@@ -93,7 +102,7 @@ export class SessionGitProxyService {
 
   private buildContext(): GitProxyContext {
     return {
-      gitProxySecret: this.getGitProxySecret(),
+      gitProxySecret: this.gitProxySecret,
       repoFullName: this.getClientState().repoFullName,
       sessionId: this.getServerState().sessionId,
       githubInstallationToken: this.getGitHubInstallationToken(),

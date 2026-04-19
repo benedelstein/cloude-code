@@ -93,8 +93,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private serverState: ServerState;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
   private githubInstallationToken: string | null = null;
-  /** Random nonce for git proxy auth (in-memory cache, persisted in SQLite secrets) */
-  private gitProxySecret: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   // private editorToken: string | null = null;
   private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
@@ -152,7 +150,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     // Load secrets from SQLite into memory
     this.githubInstallationToken = this.secretRepository.get("github_token");
-    this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
     // this.editorToken = this.secretRepository.get("editor_token");
 
     // Load server state from SQLite
@@ -188,7 +185,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
       refreshGitHubToken: () => this.refreshGitHubToken(),
-      ensureGitProxySecret: () => this.ensureGitProxySecret(),
+      ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
     });
 
     this.chatDispatchService = new SessionChatDispatchService({
@@ -224,7 +221,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       setGitHubInstallationToken: (token) => {
         this.githubInstallationToken = token;
       },
-      getGitProxySecret: () => this.gitProxySecret,
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
     });
@@ -550,15 +546,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
   }
 
-  /** Returns the cached git proxy secret, generating and persisting it if missing. */
-  private ensureGitProxySecret(): string {
-    if (!this.gitProxySecret) {
-      this.gitProxySecret = crypto.randomUUID();
-      this.secretRepository.set("git_proxy_secret", this.gitProxySecret);
-    }
-    return this.gitProxySecret;
-  }
-
   // ============================================
   // Init handler
   // ============================================
@@ -598,7 +585,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     );
 
     // Generate git proxy secret and persist
-    this.ensureGitProxySecret();
+    this.gitProxyService.ensureGitProxySecret();
 
     const pendingAttachmentIds = data.initialAttachmentIds ?? [];
     const pendingUserUiMessage = await buildUserUiMessage(
