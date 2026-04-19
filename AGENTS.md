@@ -12,6 +12,12 @@ The workflow `SessionTurnWorkflow` is a long-lived workflow that communicates wi
 
 ## Build & Development Commands
 
+### Development
+
+- Use `pnpm` for all package-manager commands.
+- If `pnpm` is not available on `PATH`, use `corepack pnpm`.
+- Do not install `pnpm` globally.
+
 ```bash
 # Install dependencies
 pnpm install
