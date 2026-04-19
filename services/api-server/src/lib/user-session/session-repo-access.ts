@@ -37,6 +37,11 @@ type UserRepoAccessError =
       code: "GITHUB_API_ERROR";
       status: 503;
       message: string;
+    }
+  | {
+      code: "GITHUB_AUTH_ERROR";
+      status: 401;
+      message: string;
     };
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
@@ -94,6 +99,12 @@ function mapGitHubAppErrorToUserRepoAccessError(error: {
       return {
         code: error.code,
         status: 503,
+        message: error.message,
+      };
+    case "GITHUB_AUTH_ERROR":
+      return {
+        code: error.code,
+        status: 401,
         message: error.message,
       };
     default: {
@@ -165,6 +176,37 @@ async function resolveAccessibleRepoForRecovery(params: {
 }
 
 /**
+ * Runs a repo access check once with the caller's current GitHub token and retries
+ * exactly once with a freshly refreshed token if GitHub rejects the original token
+ * as no longer valid.
+ */
+async function retryUserRepoAccessAfterTokenRefresh(params: {
+  env: Env;
+  userId: string;
+  githubAccessToken: string;
+  resolve: (githubAccessToken: string) => Promise<UserRepoAccessResult>;
+}): Promise<UserRepoAccessResult> {
+  const initialResult = await params.resolve(params.githubAccessToken);
+  if (initialResult.ok || initialResult.error.code !== "GITHUB_AUTH_ERROR") {
+    return initialResult;
+  }
+
+  const userSessionService = new UserSessionService(params.env);
+  const refreshedGitHubAccessToken = await userSessionService.forceRefreshGitHubAccessTokenByUserId(
+    params.userId,
+  );
+  if (!refreshedGitHubAccessToken || refreshedGitHubAccessToken === params.githubAccessToken) {
+    return initialResult;
+  }
+
+  logger.info("Retrying GitHub repo access check with refreshed user token.", {
+    fields: { userId: params.userId },
+  });
+
+  return params.resolve(refreshedGitHubAccessToken);
+}
+
+/**
  * Checks whether a user can access a repo before a session is created.
  * @param params.env - Worker environment.
  * @param params.userId - Authenticated user id.
@@ -178,7 +220,18 @@ export async function assertUserRepoAccess(params: {
   repoId: number;
   githubAccessToken: string;
 }): Promise<UserRepoAccessResult> {
-  return resolveAccessibleRepoForRecovery(params);
+  return retryUserRepoAccessAfterTokenRefresh({
+    env: params.env,
+    userId: params.userId,
+    githubAccessToken: params.githubAccessToken,
+    resolve: (githubAccessToken) =>
+      resolveAccessibleRepoForRecovery({
+        env: params.env,
+        userId: params.userId,
+        repoId: params.repoId,
+        githubAccessToken,
+      }),
+  });
 }
 
 /**
@@ -230,20 +283,26 @@ export async function assertSessionRepoAccess(params: {
     session.accessBlockedAt !== null || session.installationId === null;
 
   // TODO: Fall back from a stale non-null installation binding if webhook invalidation is missed.
-  const repoAccessResult = shouldUseRecoveryPath
-    ? await resolveAccessibleRepoForRecovery({
-        env,
-        userId,
-        repoId: session.repoId,
-        githubAccessToken,
-      })
-    : await getUserAccessibleRepoForInstallation({
-        env,
-        userId,
-        repoId: session.repoId,
-        githubAccessToken,
-        installationId: session.installationId as number,
-      });
+  const repoAccessResult = await retryUserRepoAccessAfterTokenRefresh({
+    env,
+    userId,
+    githubAccessToken,
+    resolve: (nextGitHubAccessToken) =>
+      shouldUseRecoveryPath
+        ? resolveAccessibleRepoForRecovery({
+            env,
+            userId,
+            repoId: session.repoId,
+            githubAccessToken: nextGitHubAccessToken,
+          })
+        : getUserAccessibleRepoForInstallation({
+            env,
+            userId,
+            repoId: session.repoId,
+            githubAccessToken: nextGitHubAccessToken,
+            installationId: session.installationId as number,
+          }),
+  });
 
   if (!repoAccessResult.ok) {
     switch (repoAccessResult.error.code) {
@@ -276,6 +335,21 @@ export async function assertSessionRepoAccess(params: {
           code: repoAccessResult.error.code,
           status: 503,
           message: "GitHub repository access could not be verified right now. Please retry.",
+        });
+      case "GITHUB_AUTH_ERROR":
+        logger.warn("GitHub user authentication expired during session repo access check.", {
+          fields: {
+            userId,
+            sessionId,
+            repoId: session.repoId,
+            installationId: session.installationId,
+            recoveryPath: shouldUseRecoveryPath,
+          },
+        });
+        return failure({
+          code: "GITHUB_AUTH_REQUIRED",
+          status: 401,
+          message: "GitHub authentication required to verify session access.",
         });
       case "INVALID_REPO":
         return failure({
