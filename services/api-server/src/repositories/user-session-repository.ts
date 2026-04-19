@@ -140,8 +140,14 @@ export class UserSessionRepository {
          ON CONFLICT (user_id) DO UPDATE SET
            encrypted_access_token = excluded.encrypted_access_token,
            access_token_expires_at = excluded.access_token_expires_at,
-           encrypted_refresh_token = excluded.encrypted_refresh_token,
-           refresh_token_expires_at = excluded.refresh_token_expires_at,
+           encrypted_refresh_token = COALESCE(
+             excluded.encrypted_refresh_token,
+             user_github_credentials.encrypted_refresh_token
+           ),
+           refresh_token_expires_at = COALESCE(
+             excluded.refresh_token_expires_at,
+             user_github_credentials.refresh_token_expires_at
+           ),
            updated_at = datetime('now')`,
       ).bind(
         params.userId,
@@ -172,8 +178,14 @@ export class UserSessionRepository {
        ON CONFLICT (user_id) DO UPDATE SET
          encrypted_access_token = excluded.encrypted_access_token,
          access_token_expires_at = excluded.access_token_expires_at,
-         encrypted_refresh_token = excluded.encrypted_refresh_token,
-         refresh_token_expires_at = excluded.refresh_token_expires_at,
+         encrypted_refresh_token = COALESCE(
+           excluded.encrypted_refresh_token,
+           user_github_credentials.encrypted_refresh_token
+         ),
+         refresh_token_expires_at = COALESCE(
+           excluded.refresh_token_expires_at,
+           user_github_credentials.refresh_token_expires_at
+         ),
          updated_at = datetime('now')`,
     )
       .bind(
