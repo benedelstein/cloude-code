@@ -175,6 +175,11 @@ async function resolveAccessibleRepoForRecovery(params: {
   });
 }
 
+/**
+ * Runs a repo access check once with the caller's current GitHub token and retries
+ * exactly once with a freshly refreshed token if GitHub rejects the original token
+ * as no longer valid.
+ */
 async function retryUserRepoAccessAfterTokenRefresh(params: {
   env: Env;
   userId: string;
