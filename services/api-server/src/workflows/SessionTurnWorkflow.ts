@@ -38,14 +38,30 @@ export class SessionTurnWorkflow extends AgentWorkflow<
       const turnPayload = nextTurn ?? (await this.waitForNextTurn(step, turnCount));
       nextTurn = undefined;
 
-      await step.do(
-        `turn:${turnPayload.userMessage.id}`,
-        { retries: { limit: 0, delay: "1 second" } },
-        async () => {
-          await this.runTurn(sessionId, spriteName, turnPayload);
-          return { completed: true } as const;
-        },
-      );
+      try {
+        await step.do(
+          `turn:${turnPayload.userMessage.id}`,
+          { retries: { limit: 0, delay: "1 second" } },
+          async () => {
+            await this.runTurn(sessionId, spriteName, turnPayload);
+            return { completed: true } as const;
+          },
+        );
+      } catch (error) {
+        // Reached if the step body was terminated externally (runtime
+        // killed, workflow replayed a persisted failure, etc.) and the
+        // step body's own try/catch in runTurn never got to run. This
+        // handler executes in whichever runtime resumes the workflow,
+        // so the DO still gets notified and the UI doesn't hang.
+        this.logger.error("step.do failed; notifying DO from workflow replay", {
+          error,
+          fields: { userMessageId: turnPayload.userMessage.id, turnCount },
+        });
+        await this.agent.onWorkflowTurnFailed(
+          turnPayload.userMessage.id,
+          this.toWorkflowTurnFailure(error),
+        );
+      }
 
       turnCount++;
     }

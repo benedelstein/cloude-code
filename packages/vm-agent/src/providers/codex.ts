@@ -14,16 +14,22 @@ type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
   const authJson = process.env.CODEX_AUTH_JSON;
-  if (authJson) {
-    const codexDir = join(homedir(), ".codex");
-    if (!existsSync(codexDir)) {
-      mkdirSync(codexDir, { recursive: true });
+  if (!authJson) {
+    // In production (Sprite VM) CLAUDE_CREDENTIALS_JSON must always be provided.
+    // For local dev, set VM_AGENT_LOCAL=1 to fall back to the user's existing
+    // ~/.claude/.credentials.json set up by the Claude CLI.
+    if (process.env.VM_AGENT_LOCAL === "1") {
+      emit({ type: "debug", message: "VM_AGENT_LOCAL=1 — using existing ~/.claude/.credentials.json" });
+      return;
     }
-    writeFileSync(join(codexDir, "auth.json"), authJson, { mode: 0o600 });
-    emit({ type: "debug", message: "Wrote ~/.codex/auth.json from CODEX_AUTH_JSON env" });
-  } else {
-    throw new Error("No codex authentication found. Set CODEX_AUTH_JSON.");
+    throw new Error("Missing CODEX_AUTH_JSON. Codex authentication is required.");
   }
+  const codexDir = join(homedir(), ".codex");
+  if (!existsSync(codexDir)) {
+    mkdirSync(codexDir, { recursive: true });
+  }
+  writeFileSync(join(codexDir, "auth.json"), authJson, { mode: 0o600 });
+  emit({ type: "debug", message: "Wrote ~/.codex/auth.json from CODEX_AUTH_JSON env" });
 }
 
 export const codexProvider: AgentProviderConfig<CodexSettings> = {
@@ -64,25 +70,33 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
 
     emit({ type: "debug", message: `Codex app-server provider initialized (model: ${modelId})` });
 
+    const onSessionId = (sid: string | undefined) => {
+      if (!sid || sid === agentSessionId) return;
+      agentSessionId = sid;
+      emit({ type: "debug", message: `Codex session ID: ${sid}` });
+      emit({ type: "sessionId", sessionId: sid });
+      if (args.sessionId && sid !== args.sessionId) {
+        emit({ type: "debug", message: `Codex session ID mismatch: ${sid} !== ${args.sessionId}` });
+      }
+    };
+
     // NOTE: codex-app-server in persistent mode automatically resumes thread state
-    // even when the model is changed. No need to pass in a thread id. 
+    // even when the model is changed. No need to pass in a thread id.
     return {
       modelId,
-      getModel: (id, options: GetModelOptions) =>
-        provider(id, {
+      getModel: (id, options: GetModelOptions) => {
+        const model = provider(id, {
           sandboxPolicy: getSandboxPolicy(options.agentMode),
-        }),
+          resume: agentSessionId,
+        });
+        return withThreadIdInterceptor(model, onSessionId);
+      },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
+          // Runs at the end of each step. Thread ID is usually captured earlier
+          // via the doStream interceptor; this is a fallback.
           const stepSessionId = (step.providerMetadata?.["codex-app-server"] as { threadId?: string })?.threadId;
-          emit({ type: "debug", message: `Codex step session ID: ${stepSessionId}` });
-          if (stepSessionId && stepSessionId !== agentSessionId) {
-            agentSessionId = stepSessionId;
-            emit({ type: "sessionId", sessionId: agentSessionId });
-            if (args.sessionId && agentSessionId !== args.sessionId) {
-              emit({ type: "debug", message: `Codex session ID mismatch: ${agentSessionId} !== ${args.sessionId}` });
-            }
-          }
+          onSessionId(stepSessionId);
         },
       }),
       cleanup: async () => {
@@ -91,6 +105,28 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     };
   },
 };
+
+/**
+ * Wraps the model's `doStream` so we read `persistentThreadId` as soon as the
+ * underlying `startOrResumeThread` resolves (inside doStream, before streaming
+ * begins). This fires well before `onStepFinish` and survives mid-stream aborts.
+ */
+function withThreadIdInterceptor<M extends object>(
+  model: M,
+  onSessionId: (_sid: string | undefined) => void,
+): M {
+  const patched = model as M & {
+    doStream: (_opts: unknown) => Promise<unknown>;
+    persistentThreadId?: string;
+  };
+  const original = patched.doStream.bind(patched);
+  patched.doStream = async (opts: unknown) => {
+    const result = await original(opts);
+    onSessionId(patched.persistentThreadId);
+    return result;
+  };
+  return model;
+}
 
 const getSandboxPolicy = (agentMode: AgentMode): CodexAppServerSettings["sandboxPolicy"] => {
   return agentMode === "plan" ? "read-only" : "danger-full-access";

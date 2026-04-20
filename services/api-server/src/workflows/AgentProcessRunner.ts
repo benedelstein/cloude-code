@@ -193,7 +193,10 @@ function createDeferred<T>(): Deferred<T> {
 
 export class AgentProcessRunner {
   private readonly env: Env;
-  private readonly logger: Logger;
+  // Reassigned at runTurn entry to scope every log with a per-run UUID, so
+  // logs across a stuck turn can be correlated (and replays/Worker swaps
+  // detected by the appearance of a second runId for the same turn).
+  private logger: Logger;
   private readonly sprite: WorkersSpriteClient;
   private readonly sessionId: string;
   private readonly preparedTurn: PreparedWorkflowTurn;
@@ -231,6 +234,10 @@ export class AgentProcessRunner {
   async runTurn(
     input: AgentProcessRunnerRunTurnInput,
   ): Promise<Result<AgentProcessRunnerTurnResult, AgentProcessRunnerError>> {
+    const runId = crypto.randomUUID().slice(0, 8);
+    this.logger = this.logger.scope(`run:${runId}`);
+    this.logger.debug("runTurn started", { fields: { runId } });
+
     try {
       const attachmentResult = await this.resolveAttachments(input.attachmentIds);
       if (!attachmentResult.ok) {
@@ -272,7 +279,9 @@ export class AgentProcessRunner {
         }) + "\n",
       );
 
-      return await this.turnResultDeferred.promise;
+      const result = await this.turnResultDeferred.promise;
+      this.logger.debug("runTurn settled", { fields: { ok: result.ok } });
+      return result;
     } catch (error) {
       if (isAgentProcessRunnerError(error)) {
         return failure(error);
@@ -369,7 +378,7 @@ export class AgentProcessRunner {
       idleTimeoutMs: 45_000,
       // Keep the vm-agent process alive for 60s after the websocket disconnects
       // so a subsequent turn can reattach instead of spawning a fresh process.
-      maxRunAfterDisconnect: "60s",
+      maxRunAfterDisconnect: "5s",
     });
 
     if (model) {
@@ -497,7 +506,7 @@ export class AgentProcessRunner {
       case "heartbeat":
         // idle-timeout watchdog was already rearmed on frame receipt in
         // handleMessage. No further action needed.
-        this.logger.debug("Heartbeat received from vm-agent");
+        this.logger.debug("heartbeat received");
         return;
       default: {
         const exhaustiveCheck: never = output;

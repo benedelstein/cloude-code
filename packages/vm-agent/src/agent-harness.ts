@@ -4,6 +4,7 @@
  */
 import {
   type LanguageModel,
+  StreamTextOnErrorCallback,
   type StreamTextOnStepFinishCallback,
   type ToolSet,
   type UserContent,
@@ -34,6 +35,7 @@ export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
 export type StreamTextExtras = {
   providerOptions?: Parameters<typeof streamText>[0]["providerOptions"];
   onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>;
+  onError?: StreamTextOnErrorCallback;
 };
 
 export type GetModelOptions = {

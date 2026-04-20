@@ -49,11 +49,11 @@ export const OPENAI_CODEX_PROVIDER = {
       displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
       isDefault: true,
     },
-    {
-      id: "gpt-5.2-codex" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2-codex"],
-      isDefault: false,
-    },
+    // {
+    //   id: "gpt-5.2-codex" as const,
+    //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2-codex"],
+    //   isDefault: false,
+    // },
     // {
     //   id: "gpt-5.1-codex-max" as const,
     //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.1-codex-max"],

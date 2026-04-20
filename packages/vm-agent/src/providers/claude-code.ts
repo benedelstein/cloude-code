@@ -82,7 +82,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         cwd: process.cwd(),
         resume: agentSessionId,
         permissionMode: getPermissionMode(initialAgentMode),
-        includePartialMessages: false, // true
+        includePartialMessages: true,
         streamingInput: "always",
         persistSession: true,
         systemPrompt: {
@@ -102,39 +102,60 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     const modelId = settings.model;
 
+    const onSessionId = (sid: string | undefined) => {
+      if (!sid || sid === agentSessionId) return;
+      agentSessionId = sid;
+      emit({ type: "debug", message: `Claude session ID: ${sid}` });
+      emit({ type: "sessionId", sessionId: sid });
+      if (args.sessionId && sid !== args.sessionId) {
+        emit({
+          type: "debug",
+          message: `Claude session ID mismatch: ${sid} !== ${args.sessionId}`,
+        });
+      }
+    };
+
     return {
       modelId,
       getModel: (id, options: GetModelOptions) => {
-        return claudeCode(resolveClaudeModelId(id as ClaudeModel), {
+        const model = claudeCode(resolveClaudeModelId(id as ClaudeModel), {
           settingSources: ["local", "project", "user"],
           resume: agentSessionId,
           permissionMode: getPermissionMode(options.agentMode),
         });
+        return withSessionIdInterceptor(model, onSessionId);
       },
       getStreamTextExtras: (): StreamTextExtras => ({
         onStepFinish: (step) => {
+          // Runs at the end of each step. Session ID is usually captured
+          // earlier via the setSessionId interceptor; this is a fallback.
           const stepSessionId = (
             step.providerMetadata?.["claude-code"] as { sessionId?: string }
           )?.sessionId;
-          if (stepSessionId && stepSessionId !== agentSessionId) {
-            agentSessionId = stepSessionId;
-            emit({
-              type: "debug",
-              message: `Claude session ID: ${agentSessionId}`,
-            });
-            emit({ type: "sessionId", sessionId: agentSessionId });
-            if (args.sessionId && agentSessionId !== args.sessionId) {
-              emit({
-                type: "debug",
-                message: `Claude session ID mismatch: ${agentSessionId} !== ${args.sessionId}`,
-              });
-            }
-          }
+          onSessionId(stepSessionId);
         },
       }),
     };
   },
 };
+
+/**
+ * Patches the model's `setSessionId` so we're notified as soon as the provider
+ * learns the Claude session ID from the CLI's `system/init` message — well
+ * before `onStepFinish` fires, so it survives mid-stream aborts.
+ */
+function withSessionIdInterceptor<M extends object>(
+  model: M,
+  onSessionId: (_sid: string) => void,
+): M {
+  const patched = model as M & { setSessionId: (_sid: string) => void };
+  const original = patched.setSessionId.bind(patched);
+  patched.setSessionId = (sid: string) => {
+    original(sid);
+    onSessionId(sid);
+  };
+  return model;
+}
 
 const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
   return agentMode === "plan" ? "plan" : "bypassPermissions";
