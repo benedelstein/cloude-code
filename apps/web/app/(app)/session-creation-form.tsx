@@ -11,7 +11,7 @@ import { ProviderSigninPanel } from "@/components/model-providers/provider-signi
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
 import { PROVIDERS, isProviderModel } from "@repo/shared";
-import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
+import { readCache, writeCache, CACHE_KEY_REPOS, CACHE_KEY_RECENT_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
   buildOptimisticUserMessage,
@@ -31,6 +31,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command";
 import {
   Tooltip,
@@ -49,6 +50,7 @@ import Link from "next/link";
 
 const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
 const LIST_SCROLL_PREFETCH_THRESHOLD = 96;
+const MAX_RECENT_REPOS = 3;
 
 type StoredProviderModelSelection = {
   providerId: ProviderId;
@@ -90,6 +92,11 @@ function mergeBranches(
   });
 }
 
+function mergeRecentRepos(existingRecentRepos: Repo[], nextRepo: Repo): Repo[] {
+  const dedupedRepos = existingRecentRepos.filter((repo) => repo.id !== nextRepo.id);
+  return [nextRepo, ...dedupedRepos].slice(0, MAX_RECENT_REPOS);
+}
+
 function getFallbackProviderModelSelection(
   handles: ReturnType<typeof useProviderAuth>["handles"],
 ): StoredProviderModelSelection | null {
@@ -106,6 +113,7 @@ function getFallbackProviderModelSelection(
 
 function RepoSelector({
   repos,
+  recentRepos,
   selectedRepo,
   onSelect,
   loading,
@@ -118,6 +126,7 @@ function RepoSelector({
   onLoadMore,
 }: {
   repos: Repo[];
+  recentRepos: Repo[];
   selectedRepo: Repo | null;
   onSelect: (repo: Repo) => void;
   loading: boolean;
@@ -130,6 +139,8 @@ function RepoSelector({
   onLoadMore: () => void;
 }) {
   const commandListRef = useRef<HTMLDivElement | null>(null);
+  const recentRepoIds = new Set(recentRepos.map((repo) => repo.id));
+  const otherRepos = repos.filter((repo) => !recentRepoIds.has(repo.id));
 
   useEffect(() => {
     if (!open || !hasMore || loadingMore) {
@@ -195,8 +206,32 @@ function RepoSelector({
             }}
           >
             <CommandEmpty>No repos found.</CommandEmpty>
-            <CommandGroup>
-              {repos.map((repo) => (
+            {recentRepos.length > 0 && (
+              <>
+                <CommandGroup heading="Recent">
+                  {recentRepos.map((repo) => (
+                    <CommandItem
+                      key={repo.id}
+                      value={repo.fullName}
+                      onSelect={() => {
+                        onSelect(repo);
+                        onOpenChange(false);
+                      }}
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {repo.fullName}
+                      </span>
+                      {selectedRepo?.id === repo.id && (
+                        <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {otherRepos.length > 0 && <CommandSeparator />}
+              </>
+            )}
+            <CommandGroup heading={recentRepos.length > 0 ? "All repos" : undefined}>
+              {otherRepos.map((repo) => (
                 <CommandItem
                   key={repo.id}
                   value={repo.fullName}
@@ -388,6 +423,7 @@ export function SessionCreationForm() {
   const [reposCursor, setReposCursor] = useState<string | null>(null);
   const [reposLoadingMore, setReposLoadingMore] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
+  const [recentRepos, setRecentRepos] = useState<Repo[]>([]);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
@@ -440,6 +476,14 @@ export function SessionCreationForm() {
     }
 
     return Array.from(reposById.values());
+  }
+
+  function recordRecentRepo(repo: Repo): void {
+    setRecentRepos((currentRecentRepos) => {
+      const nextRecentRepos = mergeRecentRepos(currentRecentRepos, repo);
+      writeCache(CACHE_KEY_RECENT_REPOS, nextRecentRepos);
+      return nextRecentRepos;
+    });
   }
 
   const {
@@ -655,6 +699,10 @@ export function SessionCreationForm() {
   useEffect(() => {
     // Phase 1: Restore from cache (synchronous, instant render)
     const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
+    const cachedRecentRepos = readCache<Repo[]>(CACHE_KEY_RECENT_REPOS);
+    if (cachedRecentRepos) {
+      setRecentRepos(cachedRecentRepos.data);
+    }
     if (cached) {
       setRepos(cached.data.repos);
       setInstallUrl(cached.data.installUrl);
@@ -664,6 +712,7 @@ export function SessionCreationForm() {
       const lastRepoId = localStorage.getItem("lastRepoId");
       const lastRepo = lastRepoId
         ? cached.data.repos.find((r) => r.id === Number(lastRepoId))
+          ?? cachedRecentRepos?.data.find((repo) => repo.id === Number(lastRepoId))
         : undefined;
       if (lastRepo) {
         setSelectedRepo(lastRepo);
@@ -680,6 +729,13 @@ export function SessionCreationForm() {
         setRepos(data.repos);
         setInstallUrl(data.installUrl);
         setReposCursor(data.cursor);
+        setRecentRepos((currentRecentRepos) => {
+          const nextRecentRepos = currentRecentRepos
+            .map((recentRepo) => data.repos.find((repo) => repo.id === recentRepo.id) ?? recentRepo)
+            .slice(0, MAX_RECENT_REPOS);
+          writeCache(CACHE_KEY_RECENT_REPOS, nextRecentRepos);
+          return nextRecentRepos;
+        });
 
         setSelectedRepo((currentSelected) => {
           if (currentSelected) {
@@ -725,6 +781,13 @@ export function SessionCreationForm() {
       setInstallUrl(data.installUrl);
       setReposCursor(data.cursor);
       writeCache(CACHE_KEY_REPOS, nextData);
+      setRecentRepos((currentRecentRepos) => {
+        const nextRecentRepos = currentRecentRepos
+          .map((recentRepo) => nextRepos.find((repo) => repo.id === recentRepo.id) ?? recentRepo)
+          .slice(0, MAX_RECENT_REPOS);
+        writeCache(CACHE_KEY_RECENT_REPOS, nextRecentRepos);
+        return nextRecentRepos;
+      });
       setSelectedRepo((currentSelected) => {
         if (!currentSelected) {
           return null;
@@ -785,6 +848,7 @@ export function SessionCreationForm() {
     setSubmitting(true);
     try {
       localStorage.setItem("lastRepoId", String(selectedRepo.id));
+      recordRecentRepo(selectedRepo);
       const branchToUse = selectedBranch && selectedBranch !== selectedRepo.defaultBranch
         ? selectedBranch
         : undefined;
@@ -873,8 +937,13 @@ export function SessionCreationForm() {
           <div className="flex items-center gap-2 min-w-0">
             <RepoSelector
               repos={repos}
+              recentRepos={recentRepos}
               selectedRepo={selectedRepo}
-              onSelect={setSelectedRepo}
+              onSelect={(repo) => {
+                setSelectedRepo(repo);
+                recordRecentRepo(repo);
+                localStorage.setItem("lastRepoId", String(repo.id));
+              }}
               loading={reposLoading}
               disabled={isFormInteractionDisabled}
               installUrl={installUrl}

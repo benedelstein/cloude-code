@@ -35,6 +35,7 @@ export function writeCache<T>(key: string, data: T): void {
 }
 
 export const CACHE_KEY_REPOS = "cache:repos";
+export const CACHE_KEY_RECENT_REPOS = "cache:recent-repos";
 
 export function branchCacheKey(repoId: number): string {
   return `cache:branches:${repoId}`;
