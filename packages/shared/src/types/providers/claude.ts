@@ -4,7 +4,7 @@ export const ClaudeModel = z.enum(["opus", "sonnet", "haiku"]);
 export type ClaudeModel = z.infer<typeof ClaudeModel>;
 
 export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
-  opus: "Claude Opus 4.6",
+  opus: "Claude Opus 4.7 (1M context)",
   sonnet: "Claude Sonnet 4.6",
   haiku: "Claude Haiku 4.5",
 };

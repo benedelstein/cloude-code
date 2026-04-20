@@ -164,7 +164,7 @@ const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
 const resolveClaudeModelId = (model: ClaudeModel): string => {
   switch (model) {
     case "opus":
-      return "claude-opus-4-6[1m]";
+      return "claude-opus-4-7[1m]";
     case "sonnet":
       return "sonnet";
     case "haiku":
