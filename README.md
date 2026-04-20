@@ -1,24 +1,62 @@
-# Cloude Code ☁️
+# cloude-code
 
-A remote agent coding environment similar to Claude Background agents and inspired by https://builders.ramp.com/post/why-we-built-our-background-agent
+cloude-code is a cloud-hosted coding agent system. It provisions an isolated Sprite VM per session, runs an agent inside that VM, and coordinates the session through a Cloudflare Durable Object plus a long-lived workflow.
 
-## Services
+## Packages
 
-- api-server: Handles user connection and session management. Coordinates between vm server and client.
-- vm-server: Runs a VM for the session with an agent process. Pulls in the repository and edits files, runs commands, etc.
-- Clients (apps/*): Connects to the server and sends messages to the agent. Tbd.
+- `services/api-server` — Hono + Cloudflare Workers API, Durable Objects, workflows.
+- `packages/vm-agent` — VM-side agent harness and provider adapters.
+- `packages/shared` — shared schemas, API contracts, provider types, utilities.
+- `apps/web` — Next.js client.
+- `scripts` — local debugging and live test helpers.
 
-## Development
+## Common commands
 
 ```bash
 pnpm install
-
+pnpm doctor
 pnpm build
+pnpm lint
+pnpm typecheck
+pnpm test
 ```
 
-Make sure envs are set
+### Local development
+
 ```bash
-cd services/api-server && pnpm dev
-
-cd apps/web && pnpm dev
+pnpm dev:api    # Cloudflare Worker API only
+pnpm dev:web    # Next.js web app only
+pnpm dev:local  # API + web + scripts workspace dev tasks
 ```
+
+## Task entrypoints
+
+### Session lifecycle and orchestration
+- `services/api-server/src/durable-objects/session-agent-do.ts`
+- `services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts`
+- `services/api-server/src/workflows/SessionTurnWorkflow.ts`
+- `services/api-server/src/workflows/AgentProcessRunner.ts`
+
+### API routes
+- `services/api-server/src/index.ts`
+- `services/api-server/src/routes/`
+- `services/api-server/src/lib/`
+
+### VM agent runtime
+- `packages/vm-agent/src/index.ts`
+- `packages/vm-agent/src/agent-harness.ts`
+- `packages/vm-agent/src/system-prompt.ts`
+- `packages/vm-agent/src/providers/`
+
+### Web app
+- `apps/web/app/(app)/session/[sessionId]/session-page-client.tsx`
+- `apps/web/components/chat/`
+- `apps/web/components/sidebar/`
+- `apps/web/lib/client-api.ts`
+
+## Notes for contributors and agents
+
+- Use `pnpm` commands from the repo root.
+- Keep API route handlers thin; put business logic in services and persistence in repositories.
+- Shared types belong in `packages/shared`.
+- After changes, validate with `pnpm build && pnpm lint && pnpm typecheck`.

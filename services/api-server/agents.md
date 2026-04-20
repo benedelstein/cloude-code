@@ -57,10 +57,9 @@ D1 Repositories (`src/repositories/`)
 - `UserSessionRepository` - User session persistence
 - `SessionHistoryRepository` - Session history persistence
 
-
 ## Important Best practices
 
-- For creating routes, define the openapi schemas in `schema.ts` and then import those into your routes (e.g. `sessions.routes.ts`). 
-- Always define each return type for your routes, do not use `as any` for casting. Be type-safe!
+- For creating routes, define the openapi schemas in `schema.ts` and then import those into your routes (e.g. `sessions.routes.ts`).
+- Always define each return type for your routes, do not use `as any` for casting. Be type-safe.
 - For route handler logic, place the logic inside `lib/<domain>/<name>.service.ts` (or inside the DO for routes that need it), not directly in the route handler. The route handler should be only for verifying input, handling errors, and returning to the client.
-- Add doc comments to public-facing methods, for clarity. And add concise(!) inline comments where necessary.
+- Add doc comments to public-facing methods, for clarity. And add concise inline comments where necessary.
