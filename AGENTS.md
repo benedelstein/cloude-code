@@ -138,8 +138,17 @@ switch (expression) {
 
 ## Documentation / Further Information
 
-The docs/ folder contains specific documentation about certain parts of the codebase, if needed.
-`docs/plans` contains artifacts about implementation plans for larger features. If you are planning a larger feature, you must create a plan file in that folder. Use `TEMPLATE.md` as a starting point. Once a plan's implmentation has been completed, move it to `docs/plans/complete/`
+The `docs/` folder is the source of architectural truth. Read what's relevant before touching unfamiliar areas.
+
+- `docs/onboarding.md` — repo layout, cold-start, decision tree for "where does this code go?"
+- `docs/api-server-map.md` — file-by-file map of `services/api-server/src/`
+- `docs/session-lifecycle.md` — `SessionAgentDO` status machine + restart paths
+- `docs/vm-agent.md` — vm-agent NDJSON protocol, provider interface, how to add a provider
+- `docs/turn-workflow.md` — per-turn RPC surface across DO ↔ Workflow ↔ VM
+- `docs/auth.md`, `docs/github-app-auth.md` — GitHub OAuth + installation tokens
+- `docs/webhook-tunnel.md` — local cloudflared setup for Sprite → worker callbacks
+
+`docs/plans/` contains artifacts about implementation plans for larger features. If you are planning a larger feature, you must create a plan file in that folder. Use `TEMPLATE.md` as a starting point. Once a plan's implementation has been completed, move it to `docs/plans/complete/`.
 
 
 

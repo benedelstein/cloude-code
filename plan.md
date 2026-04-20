@@ -1,5 +1,9 @@
 # Plan: OpenAI OAuth Flow for Codex Provider
 
+**Status:** IN_PROGRESS — open questions below are blockers before merging.
+**Last updated:** 2026-04-20
+**Owner:** unassigned
+
 ## Overview
 
 Implement OAuth 2.0 PKCE flow against OpenAI's auth server so users can connect their
