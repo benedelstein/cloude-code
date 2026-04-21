@@ -40,3 +40,5 @@ coverage/
 *.bak
 *.tmp
 .vercel
+
+.playwright-cli/

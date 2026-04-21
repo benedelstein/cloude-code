@@ -27,6 +27,5 @@ export interface Env {
   GITHUB_APP_SLUG: string;
   TOKEN_ENCRYPTION_KEY: string;
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
-  // ALLOWED_GITHUB_LOGINS: string;
   PORT: string;
 }
