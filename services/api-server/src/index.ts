@@ -14,8 +14,8 @@ import { modelsRoutes } from "./routes/models.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
 import { initializeLogger } from "./lib/logger";
+import { requestLoggerMiddleware } from "./middleware/request-logger.middleware";
 import { LogLevel } from "@repo/shared";
-// import { logger as honoLogger } from "hono/logger";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 export { SessionTurnWorkflow } from "./workflows/SessionTurnWorkflow";
@@ -30,8 +30,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// DISABLED FOR NOW - dont log sensitive query params etc.
-// app.use(honoLogger()); // logs request timings
+app.use("*", requestLoggerMiddleware);
 
 app.use(
   "*",
