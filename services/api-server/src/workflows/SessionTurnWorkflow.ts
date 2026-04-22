@@ -29,6 +29,7 @@ export class SessionTurnWorkflow extends AgentWorkflow<
     event: AgentWorkflowEvent<SessionTurnWorkflowParams>,
     step: AgentWorkflowStep,
   ): Promise<void> {
+    console.log("ehllo"); // test. remove
     const { initialTurn, sessionId, spriteName } = event.payload;
     let nextTurn = initialTurn;
     let turnCount = 0;
