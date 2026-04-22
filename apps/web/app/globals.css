@@ -113,6 +113,12 @@ a {
   font-size: 0.875em;
 }
 
+/* Tailwind Typography wraps inline code with literal backticks via pseudo-elements; strip them. */
+.prose code::before,
+.prose code::after {
+  content: none;
+}
+
 .prose pre code {
   background: transparent;
   padding: 0;
