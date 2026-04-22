@@ -215,12 +215,13 @@ export class AgentWorkflowCoordinator {
       case "paused":
       case "waitingForPause":
         // Workflow is alive — it will drive the turn to completion via RPC.
+        this.logger.info(`[reconcileActiveTurn] workflow is alive, skipping reconcile`);
         return;
       case "complete":
       case "errored":
       case "terminated":
       case "unknown": {
-        this.logger.warn("Reconciling terminal workflow on DO restart", {
+        this.logger.warn("[reconcileActiveTurn] reconciling orphaned message from workflow", {
           fields: {
             workflowInstanceId,
             status: status.status,
