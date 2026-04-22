@@ -29,12 +29,12 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "catalog:",
-    "@cloudflare/workers-types": "^4.20260129.0",
+    "@cloudflare/workers-types": "4.20260421.1",
     "@octokit/webhooks": "13.9.1",
     "dotenv": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "^4.60.0",
+    "wrangler": "^4.84.1",
     "vitest": "catalog:"
   }
 }

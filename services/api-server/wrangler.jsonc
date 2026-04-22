@@ -68,6 +68,7 @@
     }
   ],
   "limits": {
+    "cpu_ms": 30000,
     "subrequests": 10000
   },
   "observability": {
