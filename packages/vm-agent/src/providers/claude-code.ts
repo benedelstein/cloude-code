@@ -82,7 +82,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         cwd: process.cwd(),
         resume: agentSessionId,
         permissionMode: getPermissionMode(initialAgentMode),
-        includePartialMessages: true,
+        includePartialMessages: false, // reduces chunk amount
         streamingInput: "always",
         persistSession: true,
         systemPrompt: {
