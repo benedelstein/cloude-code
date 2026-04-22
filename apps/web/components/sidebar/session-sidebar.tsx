@@ -95,6 +95,10 @@ export function SessionSidebar() {
     setOpenMobile(false);
   };
 
+  const closeMobileSidebar = () => {
+    setOpenMobile(false);
+  };
+
   const handleArchiveSession = async (sessionId: string) => {
     setArchivingSessionId(sessionId);
     if (sessionId === activeSessionId) {
@@ -141,39 +145,54 @@ export function SessionSidebar() {
     const displayTitle = session.title || repositoryName || session.id.slice(0, 8);
     const timestamp = session.lastMessageAt || session.updatedAt;
 
+    const rowContent = (
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+        {loading ? (
+          <>
+            <Skeleton className="h-5 w-11/12" />
+            <div className="flex h-4 items-center gap-1.5">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="truncate text-sm">
+              {displayTitle}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-foreground-muted truncate">
+                {repositoryName}
+              </span>
+              <span className="text-xs font-mono text-foreground-muted shrink-0">
+                · {formatRelativeTime(timestamp)}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    );
+
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton
-          isActive={!loading && isActive}
-          onClick={loading ? undefined : () => navigate(`/session/${session.id}`)}
-          className="cursor-pointer h-auto min-h-[46px] py-2"
-        >
-          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-            {loading ? (
-              <>
-                <Skeleton className="h-5 w-11/12" />
-                <div className="flex h-4 items-center gap-1.5">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-12" />
-                </div>
-              </>
-            ) : (
-              <>
-                <span className="truncate text-sm">
-                  {displayTitle}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-foreground-muted truncate">
-                    {repositoryName}
-                  </span>
-                  <span className="text-xs font-mono text-foreground-muted shrink-0">
-                    · {formatRelativeTime(timestamp)}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </SidebarMenuButton>
+        {loading ? (
+          <SidebarMenuButton
+            isActive={false}
+            className="cursor-pointer h-auto min-h-[46px] py-2"
+          >
+            {rowContent}
+          </SidebarMenuButton>
+        ) : (
+          <SidebarMenuButton
+            asChild
+            isActive={isActive}
+            className="cursor-pointer h-auto min-h-[46px] py-2"
+          >
+            <Link href={`/session/${session.id}`} onClick={closeMobileSidebar}>
+              {rowContent}
+            </Link>
+          </SidebarMenuButton>
+        )}
         {loading ? (
           <></> // dont show
         ) : isActionLoading ? (
@@ -224,11 +243,11 @@ export function SessionSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => navigate("/")}
+                  asChild
                   className="cursor-pointer font-medium py-5"
                   tooltip="New session"
                 >
-                  <Link href="/" className="flex items-center gap-2">
+                  <Link href="/" onClick={closeMobileSidebar}>
                     <Edit className="h-4 w-4" />
                     <span>New session</span>
                   </Link>
