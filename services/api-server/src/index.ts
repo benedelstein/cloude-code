@@ -30,7 +30,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.use("*", requestLoggerMiddleware);
+app.use("*", requestLoggerMiddleware); // instead of default cf logger
 
 app.use(
   "*",

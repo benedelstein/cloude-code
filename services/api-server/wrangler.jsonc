@@ -67,10 +67,13 @@
       "custom_domain": true
     }
   ],
+  "limits": {
+    "subrequests": 10000
+  },
   "observability": {
     "logs": {
       "enabled": true,
-      "invocation_logs": true
+      "invocation_logs": false
     }
   }
   // Secrets (set via wrangler secret put):
