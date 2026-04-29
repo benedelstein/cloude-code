@@ -15,7 +15,6 @@ import {
   AgentSettings,
   failure,
   success,
-  Result,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import { Agent, type Connection } from "agents";
@@ -50,19 +49,14 @@ import type {
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
 import { buildUserUiMessage } from "@/lib/create-user-message";
+import { timingSafeCompare } from "@/lib/utils/crypto";
 import {
   assertSessionRepoAccess,
   type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
-import type {
-  AgentProcessRunnerTurnResult,
-  PreparedWorkflowTurn,
-} from "@/workflows/AgentProcessRunner";
-import type {
-  PrepareWorkflowTurnOverrides,
-  WorkflowTurnFailure,
-} from "@/workflows/types";
-import { AgentWorkflowCoordinator } from "./lib/AgentWorkflowCoordinator";
+import type { AgentEvent } from "@repo/shared";
+import { AgentTurnCoordinator } from "./lib/AgentTurnCoordinator";
+import { SpriteAgentProcessManager } from "./lib/SpriteAgentProcessManager";
 import { SessionProvisionService } from "./lib/SessionProvisionService";
 import { SessionChatDispatchService } from "./lib/SessionChatDispatchService";
 import { SessionProviderConnectionService } from "./lib/SessionProviderConnectionService";
@@ -95,7 +89,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private githubInstallationToken: string | null = null;
   /** Connection token for the VS Code editor (in-memory cache, persisted in SQLite secrets) */
   // private editorToken: string | null = null;
-  private readonly workflowTurnCoordinator: AgentWorkflowCoordinator;
+  private readonly turnCoordinator: AgentTurnCoordinator;
+  private readonly processManager: SpriteAgentProcessManager;
   private readonly provisionService: SessionProvisionService;
   private readonly chatDispatchService: SessionChatDispatchService;
   private readonly providerConnectionService: SessionProviderConnectionService;
@@ -155,24 +150,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // Load server state from SQLite
     this.serverState = this.serverStateRepository.get();
 
-    // Wire up the workflow turn coordinator
-    this.workflowTurnCoordinator = new AgentWorkflowCoordinator({
+    this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
       env: this.env,
       messageRepository: this.messageRepository,
       pendingChunkRepository: this.pendingChunkRepository,
       latestPlanRepository: this.latestPlanRepository,
       getServerState: () => this.serverState,
-      updateWorkflowState: (partial: Partial<ServerState["workflowState"]>) => this.updateServerState({ workflowState: { ...this.serverState.workflowState, ...partial } }),
-      updateAgentSessionId: (agentSessionId: string) => this.updateServerState({agentSessionId}),
+      updateServerState: (partial) => this.updateServerState(partial),
       getClientState: () => this.state,
-      updatePartialState: (partial: Partial<ClientState>) => this.updatePartialState(partial),
+      updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg: ServerMessage) => this.broadcastMessage(msg),
       synthesizeStatus: () => this.synthesizeStatus(),
-      getWorkflowStatus: this.getWorkflowStatus.bind(this),
-      runWorkflow: this.runWorkflow.bind(this),
-      getWorkflow: this.getWorkflow.bind(this),
-      sendWorkflowEvent: this.sendWorkflowEvent.bind(this),
+    });
+
+    this.processManager = new SpriteAgentProcessManager({
+      env: this.env,
+      logger: this.logger,
+      secretRepository: this.secretRepository,
+      getServerState: () => this.serverState,
+      updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
+      getClientState: () => this.state,
     });
 
     this.provisionService = new SessionProvisionService({
@@ -193,7 +191,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       env: this.env,
       messageRepository: this.messageRepository,
       attachmentService: this.attachmentService,
-      workflowCoordinator: this.workflowTurnCoordinator,
+      turnCoordinator: this.turnCoordinator,
+      processManager: this.processManager,
       getServerState: () => this.serverState,
       getClientState: () => this.state,
       updatePartialState: (partial) => this.updatePartialState(partial),
@@ -290,102 +289,59 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   // ============================================
-  // Workflow RPC delegators
+  // Webhook RPC handlers (called from /internal webhook routes)
   // ============================================
 
   /**
-   * Prepares a workflow turn for execution. The workflow should call this
-   * via RPC in order to prepare the state for a new conversation turn.
-   * @param userMessageId Durable user message identifier for the turn.
-   * @param overrides Optional per-turn model or mode overrides.
-   * @returns turn metadata needed by the workflow runner.
+   * Verifies the bearer token against the per-session webhook secret.
+   * Used by the internal webhook routes before forwarding to chunk/event
+   * handlers. Constant-time compare.
    */
-  prepareWorkflowTurn(
-    userMessageId: string,
-    overrides: PrepareWorkflowTurnOverrides,
-  ): Result<PreparedWorkflowTurn, WorkflowTurnFailure> {
-    return this.workflowTurnCoordinator.prepareTurn(userMessageId, overrides);
-  }
-
-  /**
-   * Called when the agent process starts on the VM
-   * @param messageId Durable user message identifier for the turn.
-   * @param agentProcessId Sprite process ID captured when the process starts.
-   */
-  onWorkflowTurnStarted(
-    messageId: string,
-    agentProcessId: number | null,
-  ): boolean {
-    return this.workflowTurnCoordinator.handleTurnStarted(messageId, agentProcessId);
-  }
-
-  /**
-   * Called when the agent workflow emits its provider session id.
-   * Used for persisting and resuming sessions across restarts.
-   * @param messageId Durable user message identifier for the turn.
-   * @param agentSessionId Provider conversation session id.
-   */
-  onWorkflowAgentSessionId(messageId: string, agentSessionId: string): void {
-    this.workflowTurnCoordinator.handleAgentSessionId(messageId, agentSessionId);
-  }
-
-  onWorkflowChunk(
-    messageId: string,
-    sequence: number,
-    chunk: UIMessageChunk,
-  ): void {
-    this.workflowTurnCoordinator.handleChunk(messageId, sequence, chunk);
-  }
-
-  onWorkflowTurnFinished(
-    userMessageId: string,
-    result: AgentProcessRunnerTurnResult,
-  ): void {
-    this.workflowTurnCoordinator.handleTurnFinished(userMessageId, result);
-  }
-
-  onWorkflowTurnFailed(
-    userMessageId: string,
-    error: WorkflowTurnFailure,
-  ): void {
-    if (error.code === "PROVIDER_AUTH_REQUIRED") {
-      this.updatePartialState({
-        providerConnection: {
-          provider: this.state.agentSettings.provider,
-          connected: false,
-          requiresReauth: true,
-        },
-      });
+  verifyWebhookToken(token: string): boolean {
+    const expected = this.secretRepository.get("webhook_token");
+    if (!expected) {
+      this.logger.warn("verifyWebhookToken: no webhook_token stored for session");
+      return false;
     }
-    this.workflowTurnCoordinator.handleTurnFailed(userMessageId, error);
+    const ok = timingSafeCompare(expected, token);
+    if (!ok) this.logger.warn("verifyWebhookToken: token mismatch");
+    return ok;
   }
 
-  async onWorkflowComplete(
-    workflowName: string,
-    workflowId: string,
-    result: unknown,
-  ): Promise<void> {
-    await this.workflowTurnCoordinator.handleWorkflowComplete(workflowName, workflowId, result);
+  /**
+   * Webhook entry point for streamed chunks. The batch is applied in order;
+   * a terminal chunk in the batch finalizes the turn.
+   */
+  handleWebhookChunks(
+    userMessageId: string,
+    chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
+  ): void {
+    this.logger.info("handleWebhookChunks", {
+      fields: {
+        userMessageId,
+        chunkCount: chunks.length,
+        activeUserMessageId: this.serverState.activeUserMessageId,
+      },
+    });
+    this.turnCoordinator.ensureRehydratedState();
+    this.turnCoordinator.handleChunks(userMessageId, chunks);
   }
 
-  async onWorkflowError(
-    workflowName: string,
-    workflowId: string,
-    error: string,
-  ): Promise<void> {
-    await this.workflowTurnCoordinator.handleWorkflowError(workflowName, workflowId, error);
+  /**
+   * Webhook entry point for non-stream agent events. Dispatches on the
+   * AgentEvent discriminator.
+   */
+  handleWebhookEvent(event: AgentEvent): void {
+    this.logger.info("handleWebhookEvent", {
+      fields: { eventType: event.type },
+    });
+    this.turnCoordinator.ensureRehydratedState();
+    this.turnCoordinator.handleEvent(event);
   }
 
   // ============================================
-  // HTTP Handlers
+  // HTTP/RPC Handlers
   // ============================================
-
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    this.logger.debug(`[HTTP request] ${request.method} ${url.pathname}`);
-    // Pass all requests to Agent SDK (WebSocket upgrades, internal setup routes, etc.)
-    return super.fetch(request);
-  }
 
   /**
    * RPC entry point for the `/git-proxy/:sessionId/*` route. Handles repo
@@ -402,7 +358,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
   onConnect(connection: Connection): void {
     this.logger.debug(`client connected: ${connection.id}`);
-    this.workflowTurnCoordinator.ensureRehydratedState();
+    this.turnCoordinator.ensureRehydratedState();
 
     // Send initial connection state
     this.sendMessage(
@@ -422,7 +378,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         {
           type: "sync.response",
           messages: storedMessages.map((m) => m.message),
-          pendingChunks: this.workflowTurnCoordinator.getPendingChunks(),
+          pendingChunks: this.turnCoordinator.getPendingChunks(),
         },
         connection,
       );
@@ -707,6 +663,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   async handleDeleteSession(): Promise<HandleDeleteSessionResult> {
     // TODO: CLOSE EDITOR
 
+    // Force-kill any running vm-agent process before we tear down the sprite.
+    try {
+      await this.processManager.kill();
+    } catch (error) {
+      this.logger.warn("Failed to kill vm-agent on session delete", { error });
+    }
+
     // Clean up sprite
     if (this.serverState.spriteName) {
       try {
@@ -730,7 +693,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     connection: Connection,
     message: ClientMessage,
   ): Promise<void> {
-    this.workflowTurnCoordinator.ensureRehydratedState();
+    this.turnCoordinator.ensureRehydratedState();
     switch (message.type) {
       case "chat.message":
         await this.handleChatMessage(connection, message);
@@ -739,7 +702,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
-        await this.cancelActiveWorkflowTurn();
+        await this.cancelActiveTurn();
         break;
     }
   }
@@ -755,7 +718,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
       await this.ensureReady();
 
-      if (this.serverState.workflowState.activeUserMessageId || this.state.pendingUserMessage) {
+      if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
         // TODO: message queuing
         this.sendMessage(
           {
@@ -812,18 +775,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       {
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
-        pendingChunks: this.workflowTurnCoordinator.getPendingChunks(),
+        pendingChunks: this.turnCoordinator.getPendingChunks(),
       },
       connection,
     );
   }
 
-  private async cancelActiveWorkflowTurn(): Promise<void> {
-    await this.workflowTurnCoordinator.cancelActiveTurn();
-  }
-
-  private async stopWorkflowManagedProcesses(): Promise<void> {
-    await this.workflowTurnCoordinator.stopManagedProcesses();
+  private async cancelActiveTurn(): Promise<void> {
+    await this.processManager.cancelActiveTurn();
   }
 
   // ============================================
@@ -910,8 +869,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       lastError: "Repository access for this session is currently blocked.",
     });
-    await this.cancelActiveWorkflowTurn();
-    await this.stopWorkflowManagedProcesses();
+    await this.processManager.cancelActiveTurn();
+    await this.processManager.kill();
     if (notifyClients) {
       this.broadcastMessage({
         type: "operation.error",
@@ -926,6 +885,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // ============================================
 
   private broadcastMessage(message: ServerMessage, without?: string[]): void {
+    let connectionCount = 0;
+    try {
+      connectionCount = Array.from(this.getConnections()).length;
+    } catch {
+      // getConnections may not be available in all contexts
+    }
+    this.logger.info("broadcastMessage", {
+      fields: { type: message.type, connectionCount },
+    });
     this.broadcast(JSON.stringify(message), without);
   }
 
