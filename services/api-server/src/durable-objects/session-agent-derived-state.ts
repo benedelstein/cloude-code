@@ -6,7 +6,6 @@ import type { LatestPlanRepository } from "./repositories/latest-plan-repository
 export type DerivedStateContext = {
   sessionId: string;
   latestPlanRepository: LatestPlanRepository;
-  // TODO: scope this down so it can only update todos and plan.
   updatePartialState: (partial: Partial<Pick<ClientState, "todos" | "plan">>) => void;
 };
 

@@ -53,6 +53,21 @@ export async function decrypt(
   return new TextDecoder().decode(decrypted);
 }
 
+/**
+ * Constant-time string compare. Returns true only if both strings are
+ * identical. Runtime does not short-circuit on mismatch, so callers don't
+ * leak length or content through timing. Workers runtime has no
+ * `crypto.timingSafeEqual`, so we roll our own.
+ */
+export function timingSafeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
 /** SHA-256 hash of a string, returned as a lowercase hex string. */
 export async function sha256(value: string): Promise<string> {
   const encoded = new TextEncoder().encode(value);

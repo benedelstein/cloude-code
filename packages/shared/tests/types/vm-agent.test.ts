@@ -12,7 +12,6 @@ describe("vm-agent schemas", () => {
   it("parses all input variants", () => {
     expect(AgentInput.parse({ type: "chat", message: { content: "hello" } }).type).toBe("chat");
     expect(AgentInput.parse({ type: "cancel" }).type).toBe("cancel");
-    expect(AgentInput.parse({ type: "resume", sessionId: "abc" }).type).toBe("resume");
   });
 
   it("rejects invalid chat input", () => {

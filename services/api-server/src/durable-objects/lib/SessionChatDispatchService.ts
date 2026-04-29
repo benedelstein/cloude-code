@@ -3,6 +3,7 @@ import {
   type AgentSettings,
   type ChatMessageEvent,
   type ClientState,
+  type DomainError,
   type Logger,
   type ServerMessage,
   type SessionStatus,
@@ -19,22 +20,50 @@ import { createUserUiMessage, getUserMessageTextContent } from "@/lib/utils/uime
 import { updateSessionHistoryData } from "../session-agent-history";
 import type { MessageRepository } from "../repositories/message-repository";
 import type { ServerState } from "../repositories/server-state-repository";
-import type { AgentWorkflowCoordinator } from "./AgentWorkflowCoordinator";
-import {
-  workflowTurnFailure,
-  type WorkflowTurnFailure,
-} from "@/workflows/types";
+import type { AgentTurnCoordinator } from "./AgentTurnCoordinator";
+import type {
+  SpriteAgentProcessManager,
+  SpriteAgentProcessManagerError,
+} from "./SpriteAgentProcessManager";
+
+const CHAT_DISPATCH_DOMAIN = "chat_dispatch";
+
+export type ChatDispatchError =
+  | DomainError<
+      typeof CHAT_DISPATCH_DOMAIN,
+      | "SESSION_NOT_INITIALIZED"
+      | "INVALID_MESSAGE"
+      | "INVALID_MODEL"
+      | "DISPATCH_FAILED",
+      object
+    >
+  | SpriteAgentProcessManagerError;
+
+function chatDispatchError<
+  Code extends Extract<ChatDispatchError, { domain: typeof CHAT_DISPATCH_DOMAIN }>["code"],
+>(
+  code: Code,
+  message: string,
+  details: object = {},
+): Extract<ChatDispatchError, { code: Code }> {
+  return {
+    domain: CHAT_DISPATCH_DOMAIN,
+    code,
+    message,
+    ...details,
+  } as Extract<ChatDispatchError, { code: Code }>;
+}
 
 /**
  * Dependencies injected from the SessionAgentDO into the chat dispatch service.
- * Keeps coupling explicit and avoids a circular type reference to the DO class.
  */
 export interface SessionChatDispatchServiceDeps {
   logger: Logger;
   env: Env;
   messageRepository: MessageRepository;
   attachmentService: AttachmentService;
-  workflowCoordinator: AgentWorkflowCoordinator;
+  turnCoordinator: AgentTurnCoordinator;
+  processManager: SpriteAgentProcessManager;
 
   getServerState: () => ServerState;
   getClientState: () => ClientState;
@@ -44,18 +73,18 @@ export interface SessionChatDispatchServiceDeps {
 }
 
 /**
- * Owns dispatching user chat turns into the agent workflow:
- * validates the incoming chat payload (attachments, model, agent mode),
- * persists the user message, syncs session history, and hands off to
- * the workflow coordinator. Also drives the initial-message dispatch
- * after provisioning completes.
+ * Owns dispatching user chat turns into the vm-agent process.
+ * Validates the payload, persists the user message, delegates to
+ * SpriteAgentProcessManager to spawn the process, and registers the turn
+ * with the coordinator so inbound webhooks can correlate.
  */
 export class SessionChatDispatchService {
   private readonly logger: Logger;
   private readonly env: Env;
   private readonly messageRepository: MessageRepository;
   private readonly attachmentService: AttachmentService;
-  private readonly workflowCoordinator: AgentWorkflowCoordinator;
+  private readonly turnCoordinator: AgentTurnCoordinator;
+  private readonly processManager: SpriteAgentProcessManager;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
   private readonly updatePartialState: SessionChatDispatchServiceDeps["updatePartialState"];
@@ -67,7 +96,8 @@ export class SessionChatDispatchService {
     this.env = deps.env;
     this.messageRepository = deps.messageRepository;
     this.attachmentService = deps.attachmentService;
-    this.workflowCoordinator = deps.workflowCoordinator;
+    this.turnCoordinator = deps.turnCoordinator;
+    this.processManager = deps.processManager;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
     this.updatePartialState = deps.updatePartialState;
@@ -76,19 +106,19 @@ export class SessionChatDispatchService {
   }
 
   /**
-   * Dispatches a chat message from a client into a new workflow turn.
+   * Dispatches a chat message from a client into a new vm-agent turn.
    * Resolves bound attachments, applies any model/agent-mode overrides,
-   * persists the user message, and hands off to the workflow coordinator.
+   * persists the user message, and spawns the agent process.
    */
   async dispatchChatMessage(
     payload: ChatMessageEvent,
     connectionId: string,
-  ): Promise<Result<void, WorkflowTurnFailure>> {
+  ): Promise<Result<void, ChatDispatchError>> {
     const serverState = this.getServerState();
     const sessionId = serverState.sessionId;
     if (!sessionId) {
       return failure(
-        workflowTurnFailure("SESSION_NOT_INITIALIZED", "Session is not initialized"),
+        chatDispatchError("SESSION_NOT_INITIALIZED", "Session is not initialized"),
       );
     }
 
@@ -105,9 +135,7 @@ export class SessionChatDispatchService {
     let modelOverride: string | undefined;
     if (payload.model && payload.model !== clientState.agentSettings.model) {
       const modelResult = this.validateAndApplyModelSwitch(payload.model);
-      if (!modelResult.ok) {
-        return failure(modelResult.error);
-      }
+      if (!modelResult.ok) return failure(modelResult.error);
       modelOverride = modelResult.value;
     }
 
@@ -124,103 +152,119 @@ export class SessionChatDispatchService {
     );
     if (!userUiMessage) {
       return failure(
-        workflowTurnFailure(
+        chatDispatchError(
           "INVALID_MESSAGE",
           "Message must include content or attachments",
         ),
       );
     }
 
-    try {
-      // save before dispatching to workflow to avoid race conditions
-      // TODO: mark the message failed if dispatch fails.
-      this.onUserMessageSent(userUiMessage, attachmentIds, connectionId);
-      this.logger.debug(`dispatching message with id: ${userUiMessage.id}`);
-      await this.workflowCoordinator.dispatchTurn({
-        userMessage: {
-          id: userUiMessage.id,
-          content,
-          attachmentIds,
-        },
-        model: modelOverride,
-        agentMode: agentModeOverride,
-      });
-    } catch (error) {
-      return failure(
-        workflowTurnFailure(
-          "WORKFLOW_DISPATCH_FAILED",
-          error instanceof Error ? error.message : String(error),
-        ),
+    this.onUserMessageSent(userUiMessage, attachmentIds, connectionId);
+
+    const dispatchResult = await this.spawnTurn({
+      userMessageId: userUiMessage.id,
+      content,
+      attachmentIds,
+      model: modelOverride,
+      agentMode: agentModeOverride,
+    });
+    if (!dispatchResult.ok) {
+      this.turnCoordinator.handleTurnSpawnFailed(
+        userUiMessage.id,
+        dispatchResult.error.message,
       );
+      return failure(dispatchResult.error);
     }
 
     return success(undefined);
   }
 
   /**
-   * Dispatches the pending initial message through the session workflow once
-   * provisioning completes. No-op if there is no pending message or a turn is
-   * already in flight.
+   * Dispatches the pending initial message once provisioning completes.
+   * No-op if there is no pending message or a turn is already in flight.
    */
   async maybeDispatchPendingMessage(): Promise<void> {
     const clientState = this.getClientState();
     const serverState = this.getServerState();
     const pendingMessage = clientState.pendingUserMessage;
-    if (!pendingMessage || serverState.workflowState.activeUserMessageId) {
-      return;
-    }
+    if (!pendingMessage || serverState.activeUserMessageId) return;
     const sessionId = serverState.sessionId;
-    if (!sessionId) {
-      return;
-    }
+    if (!sessionId) return;
 
+    this.logger.debug(`dispatching pending message: ${pendingMessage.message.id}`);
     const { message: userMessage, attachmentIds } = pendingMessage;
     const content = getUserMessageTextContent(userMessage);
 
     this.updatePartialState({ pendingUserMessage: null });
-    try {
-      // TODO: mark the message failed if dispatch fails.
-      this.onUserMessageSent(userMessage, attachmentIds);
-      await this.workflowCoordinator.dispatchTurn({
-        userMessage: {
-          id: userMessage.id,
-          content,
-          attachmentIds,
-        },
+    this.onUserMessageSent(userMessage, attachmentIds);
+
+    const dispatchResult = await this.spawnTurn({
+      userMessageId: userMessage.id,
+      content,
+      attachmentIds,
+    });
+    if (!dispatchResult.ok) {
+      this.logger.error("Failed to dispatch pending message", {
+        fields: { code: dispatchResult.error.code },
+        error: dispatchResult.error.message,
       });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error("Failed to dispatch pending workflow message", { error });
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
-      this.broadcastMessage({
-        type: "operation.error",
-        code: "CHAT_MESSAGE_FAILED",
-        message: "Failed to handle chat message",
-      });
+      this.turnCoordinator.handleTurnSpawnFailed(
+        userMessage.id,
+        dispatchResult.error.message,
+      );
     }
+  }
+
+  private async spawnTurn(args: {
+    userMessageId: string;
+    content: string | undefined;
+    attachmentIds: string[];
+    model?: string;
+    agentMode?: AgentMode;
+  }): Promise<Result<void, ChatDispatchError>> {
+    // Register the turn before spawning so any webhook that races in with
+    // chunks is not rejected as stale.
+    this.turnCoordinator.beginTurn(args.userMessageId, null);
+
+    const spawnResult = await this.processManager.dispatchMessage({
+      userMessage: {
+        id: args.userMessageId,
+        content: args.content,
+        attachmentIds: args.attachmentIds,
+      },
+      model: args.model,
+      agentMode: args.agentMode,
+    });
+    if (!spawnResult.ok) {
+      return failure(spawnResult.error);
+    }
+
+    // Record the process id now that we have it so cancel can find it.
+    // TODO: clean this up. kind of silly to call beginTurn twice
+    this.turnCoordinator.beginTurn(
+      args.userMessageId,
+      spawnResult.value.agentProcessId,
+    );
+    return success(undefined);
   }
 
   private validateAndApplyModelSwitch(
     model: string,
-  ): Result<string, WorkflowTurnFailure> {
+  ): Result<string, ChatDispatchError> {
     const clientState = this.getClientState();
     const validatedModel = getProviderModelDefinition(
       clientState.agentSettings.provider,
       model,
     );
     if (!validatedModel) {
-      this.logger.warn("Invalid provider model in workflow model switch", {
+      this.logger.warn("Invalid provider model in chat dispatch", {
         fields: { provider: clientState.agentSettings.provider, model },
       });
       return failure(
-        workflowTurnFailure(
-          "INVALID_MODEL",
-          "Invalid model for the current provider",
-          { provider: clientState.agentSettings.provider, model },
-        ),
+        chatDispatchError("INVALID_MODEL", "Invalid model for the current provider", {
+          provider: clientState.agentSettings.provider,
+          model,
+        }),
       );
     }
 
@@ -241,7 +285,6 @@ export class SessionChatDispatchService {
     return this.attachmentService.getByIdsBoundToSession(sessionId, attachmentIds);
   }
 
-  // handle side effects of sending a user message
   private onUserMessageSent(
     message: UIMessage,
     attachmentIds: string[],
@@ -265,9 +308,7 @@ export class SessionChatDispatchService {
     message: UIMessage,
     attachmentIds: string[],
   ): Promise<void> {
-    // Sync to D1 history row and generate title
     const content = getUserMessageTextContent(message);
-    // TODO: WHAT IF ATTACHMENT RESOLUTION FAILS?
     const attachmentRecords = await this.getBoundAttachmentRecords(
       sessionId,
       attachmentIds,
