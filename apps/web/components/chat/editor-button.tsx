@@ -142,7 +142,7 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
 
   async function handleArchiveSession(): Promise<void> {
     setIsArchiving(true);
-    router.push("/");
+    router.push("/dashboard");
     try {
       await archiveSession(sessionId);
       removeSession(sessionId);
@@ -156,7 +156,7 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
   async function handleDeleteSession(): Promise<void> {
     setIsDeleting(true);
     setDeleteDialogOpen(false);
-    router.push("/");
+    router.push("/dashboard");
     try {
       await deleteSession(sessionId);
       removeSession(sessionId);
