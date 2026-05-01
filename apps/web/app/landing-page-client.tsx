@@ -3,51 +3,33 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
-type WispParticle = {
-  x: number;
+type Ribbon = {
   y: number;
-  previousX: number;
-  previousY: number;
-  velocityX: number;
-  velocityY: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  hue: number;
+  width: number;
+  drift: number;
+  phase: number;
+  opacity: number;
 };
 
-const particleCount = 720;
-const cloudHue = 202;
+const cloudRibbons: Ribbon[] = [
+  { y: 0.34, width: 110, drift: 0.2, phase: 0.4, opacity: 0.28 },
+  { y: 0.43, width: 150, drift: 0.16, phase: 1.7, opacity: 0.24 },
+  { y: 0.52, width: 180, drift: 0.12, phase: 3.1, opacity: 0.2 },
+  { y: 0.61, width: 135, drift: 0.18, phase: 4.2, opacity: 0.18 },
+];
 
-function wrap(value: number, max: number): number {
-  if (value < 0) {
-    return value + max;
-  }
-  if (value > max) {
-    return value - max;
-  }
-  return value;
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
-function noise(x: number, y: number, time: number): number {
-  return (
-    Math.sin(x * 0.007 + time * 0.55) +
-    Math.sin(y * 0.009 - time * 0.42) +
-    Math.sin((x + y) * 0.004 + time * 0.31)
-  );
-}
-
-function WispyCloudBackground() {
+function FluidCloudBackground() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pointerRef = useRef({
-    x: 0,
-    y: 0,
-    previousX: 0,
-    previousY: 0,
-    active: false,
-    dragging: false,
-    velocityX: 0,
-    velocityY: 0,
+    x: 0.52,
+    y: 0.48,
+    previousX: 0.52,
+    previousY: 0.48,
+    force: 0,
   });
 
   useEffect(() => {
@@ -62,183 +44,131 @@ function WispyCloudBackground() {
     }
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const particles: WispParticle[] = [];
-    let width = 0;
-    let height = 0;
+    let width = 1;
+    let height = 1;
     let pixelRatio = 1;
     let animationFrame = 0;
 
-    const resetParticle = (particle: WispParticle, nearPointer = false) => {
-      const pointer = pointerRef.current;
-      const cloudCenterX = width * 0.52;
-      const cloudCenterY = height * 0.48;
-      const spreadX = width * 0.46;
-      const spreadY = Math.max(150, height * 0.22);
-      const angle = Math.random() * Math.PI * 2;
-      const radius = Math.sqrt(Math.random());
-
-      particle.x =
-        nearPointer && pointer.active
-          ? pointer.x + (Math.random() - 0.5) * 260
-          : cloudCenterX + Math.cos(angle) * spreadX * radius;
-      particle.y =
-        nearPointer && pointer.active
-          ? pointer.y + (Math.random() - 0.5) * 180
-          : cloudCenterY + Math.sin(angle) * spreadY * radius;
-      particle.previousX = particle.x;
-      particle.previousY = particle.y;
-      particle.velocityX = (Math.random() - 0.5) * 0.18;
-      particle.velocityY = (Math.random() - 0.5) * 0.12;
-      particle.maxLife = 300 + Math.random() * 340;
-      particle.life = particle.maxLife * Math.random();
-      particle.size = 1.2 + Math.random() * 3.8;
-      particle.hue = cloudHue + (Math.random() - 0.5) * 18;
-    };
-
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+      pixelRatio = Math.min(window.devicePixelRatio || 1, 1.2);
       width = Math.max(1, rect.width);
       height = Math.max(1, rect.height);
       canvas.width = Math.floor(width * pixelRatio);
       canvas.height = Math.floor(height * pixelRatio);
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      particles.length = 0;
-
-      for (let index = 0; index < particleCount; index += 1) {
-        const particle = {} as WispParticle;
-        resetParticle(particle);
-        particles.push(particle);
-      }
     };
 
     const updatePointer = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const pointer = pointerRef.current;
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      const velocity = Math.hypot(x - pointer.x, y - pointer.y);
 
-      pointer.velocityX = x - pointer.x;
-      pointer.velocityY = y - pointer.y;
       pointer.previousX = pointer.x;
       pointer.previousY = pointer.y;
-      pointer.x = x;
-      pointer.y = y;
-      pointer.active = true;
+      pointer.x = clamp(x, 0, 1);
+      pointer.y = clamp(y, 0, 1);
+      pointer.force = clamp(pointer.force + velocity * 8, 0, 1);
     };
 
-    const startDrag = (event: PointerEvent) => {
-      updatePointer(event);
-      pointerRef.current.dragging = true;
-    };
+    const drawRibbon = (ribbon: Ribbon, time: number) => {
+      const pointer = pointerRef.current;
+      const gradient = context.createLinearGradient(width * 0.18, 0, width * 0.82, height);
 
-    const stopDrag = () => {
-      pointerRef.current.dragging = false;
-    };
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${ribbon.opacity * 0.9})`);
+      gradient.addColorStop(0.42, `rgba(235, 244, 251, ${ribbon.opacity})`);
+      gradient.addColorStop(0.72, `rgba(107, 167, 213, ${ribbon.opacity * 0.62})`);
+      gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
 
-    const clearPointer = () => {
-      pointerRef.current.active = false;
-      pointerRef.current.dragging = false;
-    };
-
-    const drawMistGlow = (time: number) => {
-      const mist = context.createRadialGradient(
-        width * 0.52,
-        height * 0.48,
-        40,
-        width * 0.52,
-        height * 0.48,
-        Math.max(width, height) * 0.46,
-      );
-
-      mist.addColorStop(0, "rgba(255, 255, 255, 0.68)");
-      mist.addColorStop(0.34, "rgba(235, 244, 251, 0.36)");
-      mist.addColorStop(0.66, "rgba(107, 167, 213, 0.12)");
-      mist.addColorStop(1, "rgba(107, 167, 213, 0)");
-      context.fillStyle = mist;
-      context.fillRect(0, 0, width, height);
-
-      context.strokeStyle = "rgba(255, 255, 255, 0.24)";
-      context.lineWidth = Math.max(36, width * 0.035);
+      context.strokeStyle = gradient;
       context.lineCap = "round";
-      context.beginPath();
+      context.lineJoin = "round";
 
-      for (let index = 0; index <= 90; index += 1) {
-        const progress = index / 90;
-        const x = width * (0.12 + progress * 0.78);
-        const y =
-          height * 0.48 +
-          Math.sin(progress * Math.PI * 2.2 + time * 0.24) * height * 0.055;
+      for (let strand = 0; strand < 6; strand += 1) {
+        const strandOffset = (strand - 2.5) * ribbon.width * 0.18;
+        const strandAlpha = 1 - Math.abs(strand - 2.5) / 4;
 
-        if (index === 0) {
-          context.moveTo(x, y);
-        } else {
-          context.lineTo(x, y);
+        context.globalAlpha = strandAlpha;
+        context.lineWidth = ribbon.width * (0.22 + strand * 0.035);
+        context.beginPath();
+
+        for (let index = 0; index <= 72; index += 1) {
+          const progress = index / 72;
+          const x = progress * width;
+          const pointerDistance = progress - pointer.x;
+          const pointerFalloff = Math.max(
+            0,
+            1 - Math.hypot(pointerDistance * 1.55, (ribbon.y - pointer.y) * 2.4) / 0.55,
+          );
+          const ambient =
+            Math.sin(progress * Math.PI * 2.4 + time * ribbon.drift + ribbon.phase) *
+              ribbon.width *
+              0.22 +
+            Math.sin(progress * Math.PI * 6.2 - time * ribbon.drift * 1.7 + ribbon.phase) *
+              ribbon.width *
+              0.08;
+          const curl =
+            Math.sin(pointerDistance * 18 - time * 2.2 + strand) *
+            pointerFalloff *
+            pointer.force *
+            ribbon.width *
+            0.8;
+          const drag =
+            (pointer.y - pointer.previousY) *
+            height *
+            pointerFalloff *
+            pointer.force *
+            0.9;
+          const y = ribbon.y * height + strandOffset + ambient + curl + drag;
+
+          if (index === 0) {
+            context.moveTo(x, y);
+          } else {
+            context.lineTo(x, y);
+          }
         }
+
+        context.stroke();
       }
 
-      context.stroke();
+      context.globalAlpha = 1;
     };
 
     const draw = (timeStamp: number) => {
       const time = timeStamp / 1000;
       const pointer = pointerRef.current;
+      const sky = context.createLinearGradient(0, 0, width, height);
+
+      sky.addColorStop(0, "#f8fafc");
+      sky.addColorStop(0.42, "#ebf4fb");
+      sky.addColorStop(1, "#ffffff");
+      context.globalCompositeOperation = "source-over";
+      context.globalAlpha = 1;
+      context.fillStyle = sky;
+      context.fillRect(0, 0, width, height);
 
       context.globalCompositeOperation = "source-over";
-      context.fillStyle = "rgba(248, 250, 252, 0.16)";
-      context.fillRect(0, 0, width, height);
-      drawMistGlow(time);
-
-      context.globalCompositeOperation = "lighter";
-      context.lineCap = "round";
-
-      for (const particle of particles) {
-        particle.previousX = particle.x;
-        particle.previousY = particle.y;
-
-        const field = noise(particle.x, particle.y, time);
-        const angle = field * Math.PI * 0.72;
-        particle.velocityX += Math.cos(angle) * 0.035;
-        particle.velocityY += Math.sin(angle) * 0.035;
-
-        if (pointer.active) {
-          const deltaX = particle.x - pointer.x;
-          const deltaY = particle.y - pointer.y;
-          const distance = Math.hypot(deltaX, deltaY);
-          const influence = Math.max(0, 1 - distance / (pointer.dragging ? 320 : 220));
-
-          if (influence > 0) {
-            const tangent = Math.atan2(deltaY, deltaX) + Math.PI / 2;
-            const dragForce = pointer.dragging ? 0.32 : 0.16;
-            particle.velocityX += Math.cos(tangent) * influence * dragForce;
-            particle.velocityY += Math.sin(tangent) * influence * dragForce;
-            particle.velocityX += pointer.velocityX * influence * 0.018;
-            particle.velocityY += pointer.velocityY * influence * 0.018;
-          }
-        }
-
-        particle.velocityX *= 0.985;
-        particle.velocityY *= 0.985;
-        particle.x = wrap(particle.x + particle.velocityX, width);
-        particle.y = wrap(particle.y + particle.velocityY, height);
-        particle.life -= 1;
-
-        const age = particle.life / particle.maxLife;
-        const alpha = Math.sin(age * Math.PI) * 0.2;
-        context.strokeStyle = `hsla(${particle.hue}, 72%, 74%, ${alpha})`;
-        context.lineWidth = particle.size;
-        context.beginPath();
-        context.moveTo(particle.previousX, particle.previousY);
-        context.lineTo(particle.x, particle.y);
-        context.stroke();
-
-        if (particle.life <= 0) {
-          resetParticle(particle, pointer.dragging);
-        }
+      for (const ribbon of cloudRibbons) {
+        drawRibbon(ribbon, reducedMotion ? 0 : time);
       }
 
-      pointer.velocityX *= 0.78;
-      pointer.velocityY *= 0.78;
+      const veil = context.createRadialGradient(
+        width * 0.5,
+        height * 0.48,
+        60,
+        width * 0.5,
+        height * 0.48,
+        Math.max(width, height) * 0.62,
+      );
+      veil.addColorStop(0, "rgba(255, 255, 255, 0.12)");
+      veil.addColorStop(0.62, "rgba(255, 255, 255, 0.48)");
+      veil.addColorStop(1, "rgba(255, 255, 255, 0.9)");
+      context.fillStyle = veil;
+      context.fillRect(0, 0, width, height);
+
+      pointer.force *= 0.94;
 
       if (!reducedMotion) {
         animationFrame = requestAnimationFrame(draw);
@@ -246,8 +176,6 @@ function WispyCloudBackground() {
     };
 
     resize();
-    context.fillStyle = "#f8fafc";
-    context.fillRect(0, 0, width, height);
     draw(0);
 
     if (!reducedMotion) {
@@ -256,19 +184,11 @@ function WispyCloudBackground() {
 
     window.addEventListener("resize", resize);
     window.addEventListener("pointermove", updatePointer, { passive: true });
-    window.addEventListener("pointerdown", startDrag);
-    window.addEventListener("pointerup", stopDrag);
-    window.addEventListener("pointercancel", stopDrag);
-    window.addEventListener("pointerleave", clearPointer);
 
     return () => {
       cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", updatePointer);
-      window.removeEventListener("pointerdown", startDrag);
-      window.removeEventListener("pointerup", stopDrag);
-      window.removeEventListener("pointercancel", stopDrag);
-      window.removeEventListener("pointerleave", clearPointer);
     };
   }, []);
 
@@ -285,53 +205,31 @@ export function LandingPageClient() {
   return (
     <main className="min-h-screen overflow-hidden bg-background text-foreground select-none">
       <section className="relative isolate min-h-screen">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,#f8fafc_0%,#ebf4fb_38%,#ffffff_72%)]" />
-        <WispyCloudBackground />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.18),rgba(255,255,255,0.74)_64%,rgba(255,255,255,0.92)_100%)]" />
+        <FluidCloudBackground />
 
-        <div className="absolute inset-x-4 top-5 z-20 sm:inset-x-6 sm:top-6">
-          <header className="mx-auto flex max-w-6xl items-center justify-between rounded-full border border-white/80 bg-white/70 px-4 py-3 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-            <Link href="/" className="flex items-center gap-3">
-              <span className="h-3 w-3 rounded-full bg-accent shadow-[0_0_28px_rgba(107,167,213,0.85)]" />
-              <span className="text-sm font-semibold tracking-[0.28em] text-foreground">
-                CLOUDE
-              </span>
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-[0_10px_30px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:border-accent hover:text-accent"
-            >
-              Log in / dashboard
-            </Link>
-          </header>
-        </div>
+        <header className="absolute right-4 top-5 z-20 sm:right-6 sm:top-6">
+          <Link
+            href="/dashboard"
+            className="rounded-full border border-border bg-white/76 px-5 py-3 text-sm font-semibold text-foreground shadow-[0_16px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-accent hover:text-accent"
+          >
+            Log in
+          </Link>
+        </header>
 
-        <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center px-6 pb-16 pt-24 sm:items-center sm:pb-20 sm:pt-36 sm:text-center">
-          <p className="mb-6 inline-flex rounded-full border border-accent/25 bg-white/72 px-4 py-2 text-sm font-semibold text-[#28516d] shadow-[0_14px_50px_rgba(107,167,213,0.16)] backdrop-blur-lg">
-            Drag the cloud
-          </p>
-          <h1 className="max-w-5xl text-balance text-7xl font-semibold tracking-[-0.085em] text-foreground sm:text-8xl lg:text-[10rem]">
+        <div className="pointer-events-none relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center px-6 pb-8 pt-24 sm:items-center sm:pb-20 sm:pt-36 sm:text-center">
+          <h1 className="max-w-5xl text-balance text-[4rem] font-semibold leading-[0.82] tracking-[-0.085em] text-foreground sm:text-8xl lg:text-[10rem]">
             Cloude Code
           </h1>
-          <p className="mt-8 max-w-2xl text-pretty text-xl leading-8 text-[#3f5f73] sm:text-2xl sm:leading-9">
+          <p className="mt-5 max-w-2xl text-pretty text-base leading-6 text-[#3f5f73] sm:mt-8 sm:text-2xl sm:leading-9">
             Agents get a full cloud computer to code, test, verify the app, and
             ship PRs autonomously.
           </p>
-          <div className="mt-10 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <div className="mt-7 flex w-full sm:mt-10 sm:w-auto">
             <Link
               href="/dashboard"
-              className="group rounded-full bg-foreground px-8 py-4 text-center text-sm font-semibold text-white shadow-[0_24px_70px_rgba(15,23,42,0.2)] transition hover:-translate-y-1 hover:bg-accent"
+              className="pointer-events-auto w-full rounded-full bg-foreground px-10 py-4 text-center text-sm font-semibold text-white shadow-[0_24px_70px_rgba(15,23,42,0.2)] transition hover:-translate-y-1 hover:bg-accent sm:w-auto"
             >
-              Start a session
-              <span className="ml-2 inline-block transition group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-full border border-white/80 bg-white/66 px-8 py-4 text-center text-sm font-semibold text-foreground shadow-[0_18px_55px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:-translate-y-1 hover:border-accent"
-            >
-              View dashboard
+              Get started
             </Link>
           </div>
         </div>
