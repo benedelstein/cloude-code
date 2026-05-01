@@ -223,8 +223,9 @@ export class SessionChatDispatchService {
     agentMode?: AgentMode;
   }): Promise<Result<void, ChatDispatchError>> {
     // Register the turn before spawning so any webhook that races in with
-    // chunks is not rejected as stale.
-    this.turnCoordinator.beginTurn(args.userMessageId, null);
+    // chunks is not rejected as stale. The processId is filled in below once
+    // the spawn returns.
+    this.turnCoordinator.beginTurn(args.userMessageId);
 
     const spawnResult = await this.processManager.dispatchMessage({
       userMessage: {
@@ -239,12 +240,7 @@ export class SessionChatDispatchService {
       return failure(spawnResult.error);
     }
 
-    // Record the process id now that we have it so cancel can find it.
-    // TODO: clean this up. kind of silly to call beginTurn twice
-    this.turnCoordinator.beginTurn(
-      args.userMessageId,
-      spawnResult.value.agentProcessId,
-    );
+    this.turnCoordinator.attachProcessId(spawnResult.value.agentProcessId);
     return success(undefined);
   }
 

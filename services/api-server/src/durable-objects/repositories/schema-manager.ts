@@ -1,8 +1,50 @@
-import type { Repository } from "./types";
+import type { Repository, SqlFn } from "./types";
 
-/** Runs migrate() on all registered repositories. */
-export function migrateAll(repositories: Repository[]): void {
+interface AppliedRow {
+  version: number;
+}
+
+/**
+ * Runs each repository's pending migrations and records applied versions in a
+ * `schema_migrations(repo, version)` table. Already-applied migrations are
+ * skipped on subsequent cold starts, so a destructive migration (e.g. drop /
+ * recreate) only runs once per DO.
+ */
+export function migrateAll(sql: SqlFn, repositories: Repository[]): void {
+  sql`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      repo TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (repo, version)
+    )
+  `;
+
   for (const repo of repositories) {
-    repo.migrate();
+    const rows = sql<AppliedRow>`
+      SELECT version FROM schema_migrations WHERE repo = ${repo.name}
+    `;
+    const maxApplied =
+      rows.length > 0 ? Math.max(...rows.map((row) => row.version)) : -1;
+
+    repo.migrations.forEach((step, index) => {
+      if (index <= maxApplied) return;
+      // Wrap (step + bookkeeping insert) in a transaction so a partial
+      // failure rolls back the schema change. Without this, a throw mid-step
+      // could leave the DB altered but unrecorded, and the next cold start
+      // would re-run a destructive migration.
+      sql`BEGIN`;
+      try {
+        step(sql);
+        sql`
+          INSERT INTO schema_migrations (repo, version)
+          VALUES (${repo.name}, ${index})
+        `;
+        sql`COMMIT`;
+      } catch (error) {
+        sql`ROLLBACK`;
+        throw error;
+      }
+    });
   }
 }

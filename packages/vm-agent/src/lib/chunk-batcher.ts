@@ -56,10 +56,18 @@ export class ChunkBatcher {
     if (this.buffer.length === 0) return this.flushChain;
     const batch = this.buffer;
     this.buffer = [];
-    // todo: cant this promise length grow unbounded?
     this.flushChain = this.flushChain
       .catch(() => undefined)
       .then(() => this.opts.flush(batch));
     return this.flushChain;
+  }
+
+  /**
+   * Resets the per-process sequence counter to 0. Caller must have awaited
+   * `flushNow()` first so the in-flight chain can't observe a stale counter.
+   * Used between turns within a single process so each turn starts at seq 0.
+   */
+  reset(): void {
+    this.sequence = 0;
   }
 }

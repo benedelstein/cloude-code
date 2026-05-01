@@ -62,8 +62,12 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
   emit: (_output: AgentOutput) => void;
   /** Fires before processing each queued message. */
   onTurnStart?: (_message: AgentInputMessage) => void;
-  /** Fires in the `finally` after each message is processed. */
-  onTurnEnd?: (_result: AgentTurnEndResult) => void;
+  /**
+   * Fires in the `finally` after each message is processed. The loop awaits
+   * this callback, so async cleanup (e.g. flushing batched chunks) runs to
+   * completion before the next iteration starts or shutdown progresses.
+   */
+  onTurnEnd?: (_result: AgentTurnEndResult) => void | Promise<void>;
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
 }
@@ -300,10 +304,10 @@ export function startAgentHarness<S extends AgentSettings>(
       onTurnStart?.(entry.message);
       try {
         const result = await processMessage(entry);
-        onTurnEnd?.(result);
+        await onTurnEnd?.(result);
       } catch (error) {
         emit({ type: "error", error: String(error) });
-        onTurnEnd?.({ aborted: false });
+        await onTurnEnd?.({ aborted: false });
       }
     }
   }

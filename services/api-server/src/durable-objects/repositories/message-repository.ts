@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
 /**
  * Stored message wraps UIMessage with session metadata.
@@ -18,19 +18,22 @@ interface MessageRow {
 }
 
 export class MessageRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "messages";
+  readonly migrations: ReadonlyArray<Migration> = [
+    (sql) => {
+      sql`
+        CREATE TABLE IF NOT EXISTS messages (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          message TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `;
+      sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
+    },
+  ];
 
-  migrate(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `;
-    this.sql`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`;
-  }
+  constructor(private sql: SqlFn) {}
 
   /**
    * Store a UIMessage.

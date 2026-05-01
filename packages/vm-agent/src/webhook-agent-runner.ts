@@ -38,6 +38,9 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
 const DEFAULT_BATCH_MAX_CHUNKS = 50;
 const DEFAULT_BATCH_MAX_AGE_MS = 300;
+/** Hard cap on shutdown draining so a wedged webhook retry can't block exit. */
+const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
+const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
 export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly harness: AgentHarnessHandle;
@@ -72,8 +75,10 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       initialAgentMode: opts.initialAgentMode,
       emit: (output) => this.handleEmit(output),
       onTurnStart: () => this.cancelIdleTimer(),
-      onTurnEnd: (result) => void this.onTurnEnd(result),
+      onTurnEnd: (result) => this.onTurnEnd(result),
     });
+
+    this.installSignalHandlers();
   }
 
   /**
@@ -93,12 +98,33 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     this.harness.cancel();
   }
 
+  /**
+   * Cancels the in-flight turn (if any), waits for the harness to drain its
+   * abort terminal chunk through the batcher, then exits. Bounded by
+   * `SHUTDOWN_DRAIN_TIMEOUT_MS` so a stuck webhook retry can't block exit.
+   *
+   * Used by both the idle timer and the SIGTERM/SIGINT handlers — the cancel
+   * step is a no-op when no turn is active.
+   */
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
     this.cancelIdleTimer();
-    await this.batcher.flushNow();
-    await this.harness.shutdown();
+
+    // Aborting the current streamText causes the harness to emit a terminal
+    // abort chunk into the batcher (forcing a flush), so the DO finalizes
+    // the turn through the normal terminal-chunk path.
+    this.harness.cancel();
+
+    const drain = (async () => {
+      await this.harness.shutdown();
+      await this.batcher.flushNow();
+    })();
+    const deadline = new Promise<void>((resolve) => {
+      setTimeout(resolve, SHUTDOWN_DRAIN_TIMEOUT_MS);
+    });
+    await Promise.race([drain, deadline]);
+
     this.onShutdown();
   }
 
@@ -134,8 +160,21 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     // The DO learns about turn completion from the terminal stream chunk
     // inside the last batch — we just flush and arm the idle timer here.
     await this.batcher.flushNow();
+    // Reset the per-process sequence counter so the next turn (if a future
+    // long-lived runner reuses this process) starts at seq 0, matching the
+    // DO's first-chunk expectation.
+    this.batcher.reset();
     this.activeUserMessageId = null;
-    this.startIdleTimer();
+    if (!this.shuttingDown) this.startIdleTimer();
+  }
+
+  private installSignalHandlers(): void {
+    for (const signal of SHUTDOWN_SIGNALS) {
+      process.on(signal, () => {
+        this.log("warn", `received ${signal}, draining and exiting`);
+        void this.shutdown();
+      });
+    }
   }
 
   private startIdleTimer(): void {
