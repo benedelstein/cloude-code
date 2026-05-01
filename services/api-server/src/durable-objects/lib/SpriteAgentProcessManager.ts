@@ -193,14 +193,19 @@ export class SpriteAgentProcessManager {
     return spawn;
   }
 
-  /** Terminates the active agent process. */
-  async cancelActiveTurn(): Promise<void> {
+  /**
+   * Terminates the active agent process via SIGTERM. Returns
+   * `processAlreadyGone: true` when the sprite reports 404, so callers can
+   * finalize turn state immediately rather than waiting for a terminal chunk
+   * that will never arrive.
+   */
+  async cancelActiveTurn(): Promise<{ processAlreadyGone: boolean }> {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
     if (!processId || !spriteName) {
       this.logger.debug("No active agent process to cancel");
-      return;
+      return { processAlreadyGone: false };
     }
 
     const sprite = new WorkersSpriteClient(
@@ -211,15 +216,17 @@ export class SpriteAgentProcessManager {
     try {
       await sprite.killSession(processId, "SIGTERM");
       this.logger.debug("Agent process terminated");
+      return { processAlreadyGone: false };
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Agent process already gone on cancel");
-        return;
+        return { processAlreadyGone: true };
       }
       this.logger.warn("Failed to terminate agent process", {
         error,
         fields: { processId },
       });
+      return { processAlreadyGone: false };
     }
   }
 

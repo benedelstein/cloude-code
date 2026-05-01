@@ -782,7 +782,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   }
 
   private async cancelActiveTurn(): Promise<void> {
-    await this.processManager.cancelActiveTurn();
+    const { processAlreadyGone } = await this.processManager.cancelActiveTurn();
+    // If the sprite process is already dead, no terminal chunk will arrive to
+    // finalize the turn — clear state directly so the next chat.message isn't
+    // rejected as "Agent is already handling a message".
+    if (processAlreadyGone) {
+      this.turnCoordinator.markTurnCanceled();
+    }
   }
 
   // ============================================
@@ -869,7 +875,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       lastError: "Repository access for this session is currently blocked.",
     });
-    await this.processManager.cancelActiveTurn();
+    const { processAlreadyGone } = await this.processManager.cancelActiveTurn();
+    if (processAlreadyGone) {
+      this.turnCoordinator.markTurnCanceled();
+    }
     await this.processManager.kill();
     if (notifyClients) {
       this.broadcastMessage({

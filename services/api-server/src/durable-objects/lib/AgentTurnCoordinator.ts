@@ -132,13 +132,13 @@ export class AgentTurnCoordinator {
         this.updatePartialState({ plan: lastPlan });
       }
       // WAL is sorted ascending; last seen = highest sequence in the WAL.
-      this.lastSeenChunkSequence =
-        orphanedChunks[orphanedChunks.length - 1]!.sequence;
+      this.lastSeenChunkSequence = orphanedChunks[orphanedChunks.length - 1]!.sequence;
     }
 
     this.hasEnsuredRehydratedState = true;
 
     if (serverState.activeUserMessageId) {
+      // if active user message id, then ... ?
       this.logger.info("Reconciling active turn on DO restart");
       this.reconcileActiveTurn().catch((error: unknown) => {
         this.logger.error("reconcileActiveTurn failed", { error });
@@ -417,19 +417,35 @@ export class AgentTurnCoordinator {
 
   /**
    * Aborts the in-memory accumulator, flushes the WAL, persists whatever is
-   * there, and broadcasts agent.finish. Returns true if a message was saved.
+   * there, and broadcasts agent.finish. Always clears active turn state so
+   * the session can accept a new message. Returns true if a partial message
+   * was saved.
    */
   private commitAbortedMessage(): boolean {
     const message = this.messageAccumulator.forceAbort();
     this.pendingChunkRepository.clear();
-    if (!message) return false;
-    const sessionId = this.getServerState().sessionId!;
-    const stored = this.messageRepository.create(sessionId, message);
-    this.broadcastMessage({ type: "agent.finish", message: stored.message });
-    this.messageAccumulator.reset();
+    let saved = false;
+    if (message) {
+      const sessionId = this.getServerState().sessionId!;
+      const stored = this.messageRepository.create(sessionId, message);
+      this.broadcastMessage({ type: "agent.finish", message: stored.message });
+      this.messageAccumulator.reset();
+      saved = true;
+    }
     this.clearActiveTurnState();
-    this.pendingChunkRepository.clear();
-    return true;
+    return saved;
+  }
+
+  /**
+   * Public cancel hook for callers that have already torn down the agent
+   * process out-of-band (e.g. SIGTERM with no terminal chunk arriving, or a
+   * 404 from killSession). Persists any accumulated partial as aborted and
+   * clears active turn state so the user can send a new message.
+   */
+  markTurnCanceled(): void {
+    if (!this.getServerState().activeUserMessageId) return;
+    this.commitAbortedMessage();
+    this.updatePartialState({ status: this.synthesizeStatus() });
   }
 
   /**
