@@ -1,4 +1,4 @@
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
 /**
  * Durable server-only session state — never synced to clients.
@@ -37,16 +37,19 @@ function defaultServerState(): ServerState {
 }
 
 export class ServerStateRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "server_state";
+  readonly migrations: ReadonlyArray<Migration> = [
+    (sql) => {
+      sql`
+        CREATE TABLE IF NOT EXISTS server_state (
+          id TEXT PRIMARY KEY NOT NULL,
+          state TEXT NOT NULL DEFAULT '{}'
+        )
+      `;
+    },
+  ];
 
-  migrate(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS server_state (
-        id TEXT PRIMARY KEY NOT NULL,
-        state TEXT NOT NULL DEFAULT '{}'
-      )
-    `;
-  }
+  constructor(private sql: SqlFn) {}
 
   get(): ServerState {
     const rows = this.sql<{ state: string }>`SELECT state FROM server_state WHERE id = 'state'`;

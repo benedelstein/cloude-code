@@ -153,20 +153,28 @@ export class AgentTurnCoordinator {
   }
 
   /**
-   * Records that a new turn has started for `userMessageId`, backed by the
-   * given sprite process. Called by SessionChatDispatchService right before
-   * the vm-agent process is spawned, so the webhook handler can validate
-   * inbound payloads against it.
+   * Marks `userMessageId` as the active turn before the sprite process is
+   * spawned so any webhook racing in with chunks correlates correctly.
+   * `agentProcessId` is filled in later via `attachProcessId` once the spawn
+   * returns.
    */
-  beginTurn(userMessageId: string, agentProcessId: number | null): void {
+  beginTurn(userMessageId: string): void {
     this.updateServerState({
       activeUserMessageId: userMessageId,
-      agentProcessId,
+      agentProcessId: null,
     });
     this.updatePartialState({
       lastError: null,
       status: this.synthesizeStatus(),
     });
+  }
+
+  /**
+   * Records the sprite exec process id for the active turn so cancel/kill
+   * paths can target it. Called immediately after a successful spawn.
+   */
+  attachProcessId(agentProcessId: number): void {
+    this.updateServerState({ agentProcessId });
   }
 
   /**

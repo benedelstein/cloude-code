@@ -1,4 +1,4 @@
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
 export interface StoredLatestPlan {
   sessionId: string;
@@ -15,18 +15,21 @@ interface LatestPlanRow {
 }
 
 export class LatestPlanRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "latest_session_plans";
+  readonly migrations: ReadonlyArray<Migration> = [
+    (sql) => {
+      sql`
+        CREATE TABLE IF NOT EXISTS latest_session_plans (
+          session_id TEXT PRIMARY KEY,
+          plan_text TEXT NOT NULL,
+          source_message_id TEXT,
+          updated_at TEXT NOT NULL
+        )
+      `;
+    },
+  ];
 
-  migrate(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS latest_session_plans (
-        session_id TEXT PRIMARY KEY,
-        plan_text TEXT NOT NULL,
-        source_message_id TEXT,
-        updated_at TEXT NOT NULL
-      )
-    `;
-  }
+  constructor(private sql: SqlFn) {}
 
   upsert(sessionId: string, plan: string, sourceMessageId: string | null): StoredLatestPlan {
     const updatedAt = new Date().toISOString();

@@ -1,5 +1,5 @@
 import type { UIMessageChunk } from "ai";
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
 interface PendingChunkRow {
   sequence: number;
@@ -17,20 +17,24 @@ interface PendingChunkRow {
  * silently ignored.
  */
 export class PendingChunkRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "pending_message_chunks";
+  readonly migrations: ReadonlyArray<Migration> = [
+    // v0: replace any pre-existing chunk-only table with a sequence-keyed WAL.
+    // Tracked in `schema_migrations`, so this destructive step runs at most
+    // once per DO. New DOs land directly on this shape; previously-deployed
+    // DOs lose any in-flight WAL on first cold start under this version.
+    (sql) => {
+      sql`DROP TABLE IF EXISTS pending_message_chunks`;
+      sql`
+        CREATE TABLE pending_message_chunks (
+          sequence INTEGER PRIMARY KEY,
+          chunk    TEXT NOT NULL
+        )
+      `;
+    },
+  ];
 
-  migrate(): void {
-    // Drop and recreate to add the sequence column. The WAL is best-effort
-    // recovery and is cleared on every clean finish, so dropping it on deploy
-    // only affects turns actively streaming at deploy time.
-    this.sql`DROP TABLE IF EXISTS pending_message_chunks`;
-    this.sql`
-      CREATE TABLE IF NOT EXISTS pending_message_chunks (
-        sequence INTEGER PRIMARY KEY,
-        chunk    TEXT NOT NULL
-      )
-    `;
-  }
+  constructor(private sql: SqlFn) {}
 
   /**
    * I nserts a chunk into the WAL keyed by its transport sequence.
