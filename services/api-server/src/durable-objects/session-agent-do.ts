@@ -135,7 +135,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
     this.attachmentService = new AttachmentService(this.env.DB);
 
-    migrateAll(sql, [
+    migrateAll(sql, ctx.storage, [
       this.messageRepository,
       this.secretRepository,
       this.latestPlanRepository,

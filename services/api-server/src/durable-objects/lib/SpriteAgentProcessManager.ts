@@ -33,7 +33,26 @@ import type { ServerState } from "../repositories/server-state-repository";
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const VM_AGENT_LOG_DIR = `${HOME_DIR}/.cloude/logs`;
+const VM_AGENT_SCRIPT_PATH = `${HOME_DIR}/.cloude/agent-webhook.js`;
 const AGENT_PROCESS_MANAGER_DOMAIN = "agent_process_manager";
+
+/**
+ * SHA-256 hex of the embedded vm-agent bundle. Cached for the worker isolate
+ * lifetime since the bundle string is constant per deploy.
+ */
+let cachedBundleHash: Promise<string> | null = null;
+function getBundleHash(): Promise<string> {
+  if (!cachedBundleHash) {
+    cachedBundleHash = crypto.subtle
+      .digest("SHA-256", new TextEncoder().encode(VM_AGENT_WEBHOOK_SCRIPT))
+      .then((buf) =>
+        Array.from(new Uint8Array(buf))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(""),
+      );
+  }
+  return cachedBundleHash;
+}
 
 export type SpriteAgentProcessManagerError =
   | DomainError<
@@ -425,11 +444,28 @@ export class SpriteAgentProcessManager {
     }
   }
 
+  /**
+   * Writes the vm-agent bundle to the sprite, skipping the upload when the
+   * file already on disk matches the embedded bundle. The sprite is the source
+   * of truth — we hash on the sprite via `sha256sum` instead of tracking a
+   * "last written" hash in DO state, so a sprite reset or missing file
+   * naturally falls through to a re-upload.
+   */
   private async writeVmAgentScript(sprite: WorkersSpriteClient): Promise<void> {
-    await sprite.writeFile(
-      `${HOME_DIR}/.cloude/agent-webhook.js`,
-      VM_AGENT_WEBHOOK_SCRIPT,
-    );
+    const expectedHash = await getBundleHash();
+    try {
+      const result = await sprite.execHttp(
+        `sha256sum ${VM_AGENT_SCRIPT_PATH} 2>/dev/null | cut -d' ' -f1`,
+      );
+      if (result.exitCode === 0 && result.stdout.trim() === expectedHash) {
+        this.logger.debug("vm-agent script unchanged, skipping upload");
+        return;
+      }
+    } catch (error) {
+      this.logger.debug("vm-agent hash check failed, will re-upload", { error });
+    }
+    this.logger.debug("vm-agent script hash check failed, will re-upload");
+    await sprite.writeFile(VM_AGENT_SCRIPT_PATH, VM_AGENT_WEBHOOK_SCRIPT);
   }
 
   private buildAgentArgs(args: {

@@ -9,8 +9,16 @@ interface AppliedRow {
  * `schema_migrations(repo, version)` table. Already-applied migrations are
  * skipped on subsequent cold starts, so a destructive migration (e.g. drop /
  * recreate) only runs once per DO.
+ *
+ * Each (step + bookkeeping insert) pair runs inside `transactionSync` so a
+ * partial failure rolls back the schema change. Durable Objects require the
+ * JS transaction API rather than raw SQL `BEGIN`/`COMMIT`.
  */
-export function migrateAll(sql: SqlFn, repositories: Repository[]): void {
+export function migrateAll(
+  sql: SqlFn,
+  storage: DurableObjectStorage,
+  repositories: Repository[],
+): void {
   sql`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       repo TEXT NOT NULL,
@@ -29,22 +37,13 @@ export function migrateAll(sql: SqlFn, repositories: Repository[]): void {
 
     repo.migrations.forEach((step, index) => {
       if (index <= maxApplied) return;
-      // Wrap (step + bookkeeping insert) in a transaction so a partial
-      // failure rolls back the schema change. Without this, a throw mid-step
-      // could leave the DB altered but unrecorded, and the next cold start
-      // would re-run a destructive migration.
-      sql`BEGIN`;
-      try {
+      storage.transactionSync(() => {
         step(sql);
         sql`
           INSERT INTO schema_migrations (repo, version)
           VALUES (${repo.name}, ${index})
         `;
-        sql`COMMIT`;
-      } catch (error) {
-        sql`ROLLBACK`;
-        throw error;
-      }
+      });
     });
   }
 }
