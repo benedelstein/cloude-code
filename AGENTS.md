@@ -136,6 +136,13 @@ switch (expression) {
 - No speculative features or future-proofing.
 - No docstrings or comments on code that was not changed.
 
+### Logging
+The app-wide logger is available as `Logger` in `packages/shared/src/logging/index.ts`. Loggers should be scoped to the module they are in.
+NOTE: Use string interpolation for logging rather than the structured fields dict.
+```typescript
+logger.info(`received chunk ${sequence}, expected ${expected}`);
+```
+
 ## Documentation / Further Information
 
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.

@@ -37,7 +37,7 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
 
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
 const DEFAULT_BATCH_MAX_CHUNKS = 50;
-const DEFAULT_BATCH_MAX_AGE_MS = 100;
+const DEFAULT_BATCH_MAX_AGE_MS = 300;
 
 export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly harness: AgentHarnessHandle;

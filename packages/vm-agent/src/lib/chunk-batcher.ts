@@ -42,8 +42,8 @@ export class ChunkBatcher {
     }
 
     if (!this.timer) {
-      // bounded-age: timer starts when the first chunk lands in an empty
-      // buffer, and is NOT reset on subsequent arrivals.
+      // bounded-age: timer starts when the first chunk lands in an empty buffer 
+      // and is not reset on subsequent arrivals.
       this.timer = setTimeout(() => this.flushNow(), this.opts.maxAgeMs);
     }
   }
@@ -56,6 +56,7 @@ export class ChunkBatcher {
     if (this.buffer.length === 0) return this.flushChain;
     const batch = this.buffer;
     this.buffer = [];
+    // todo: cant this promise length grow unbounded?
     this.flushChain = this.flushChain
       .catch(() => undefined)
       .then(() => this.opts.flush(batch));

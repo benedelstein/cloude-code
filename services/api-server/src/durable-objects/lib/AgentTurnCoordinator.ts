@@ -57,6 +57,18 @@ export class AgentTurnCoordinator {
   private readonly updatePartialState: (partial: Partial<ClientState>) => void;
   private readonly broadcastMessage: (message: ServerMessage) => void;
   private readonly synthesizeStatus: () => SessionStatus;
+  /**
+   * The highest chunk sequence applied within the active turn. `null` means
+   * no chunks have been applied yet (fresh turn or post-clear). Lazily set
+   * on first chunk arrival, or rehydrated from `MAX(WAL.sequence)` after a
+   * DO restart that picked up an in-flight turn. Reset to `null` whenever
+   * the turn ends.
+   *
+   * Used only for gap detection — duplicate detection lives in the WAL via
+   * the UNIQUE sequence column. Relies on `ChunkBatcher` serializing flushes;
+   * if that ever changes, this scheme must be revisited.
+   */
+  private lastSeenChunkSequence: number | null = null;
 
   private hasEnsuredRehydratedState = false;
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
@@ -97,7 +109,7 @@ export class AgentTurnCoordinator {
       // backfill any plans or todos that were missed
       let lastTodos: ClientState["todos"] | null | undefined;
       let lastPlan: ClientState["plan"] | null | undefined;
-      for (const chunk of orphanedChunks) {
+      for (const { chunk } of orphanedChunks) {
         const { completedParts } = this.messageAccumulator.process(chunk);
         applyDerivedStateFromParts(
           {
@@ -119,11 +131,13 @@ export class AgentTurnCoordinator {
       if (lastPlan !== undefined) {
         this.updatePartialState({ plan: lastPlan });
       }
+      // WAL is sorted ascending; last seen = highest sequence in the WAL.
+      this.lastSeenChunkSequence =
+        orphanedChunks[orphanedChunks.length - 1]!.sequence;
     }
 
     this.hasEnsuredRehydratedState = true;
 
-    // TODO: im not sure that 
     if (serverState.activeUserMessageId) {
       this.logger.info("Reconciling active turn on DO restart");
       this.reconcileActiveTurn().catch((error: unknown) => {
@@ -166,25 +180,47 @@ export class AgentTurnCoordinator {
   ): void {
     this.ensureRehydratedState();
     if (this.isStaleRpc(userMessageId)) return;
-    this.logger.debug(`handling ${chunks.length} chunks for message ${userMessageId}`);
+    if (this.getServerState().activeUserMessageId === null) {
+      // No active turn (clean finish, abort, or gap already cleared state).
+      // Drop late chunks silently so retries of a terminated batch can't
+      // restart accumulation against cleared state.
+      this.logger.debug(
+        `ignoring ${chunks.length} chunks for ${userMessageId}: no active turn`,
+      );
+      return;
+    }
 
     for (const { sequence, chunk } of chunks) {
-      void sequence; // carried for ordering/debugging; not used locally
-      this.handleStreamChunk(chunk);
-
-      if (isTerminalChunk(chunk)) {
-        this.logger.info("Terminal chunk received", {
-          fields: {
-            userMessageId,
-            finishReason: getChunkFinishReason(chunk) ?? "unknown",
-          },
-        });
-        this.clearActiveTurnState();
-        this.updatePartialState({
-          lastError: null,
-          status: this.synthesizeStatus(),
-        });
+      // Gap check skipped for the very first chunk (lastSeen is null) — the
+      // vm-agent's ChunkBatcher always starts a turn at 0, so a non-zero
+      // first chunk would imply pre-first-chunk loss, which is rare and
+      // would manifest as a malformed message downstream.
+      if (this.lastSeenChunkSequence !== null) {
+        const expected = this.lastSeenChunkSequence + 1;
+        if (sequence > expected) {
+          this.logger.error(
+            `chunk stream gap for ${userMessageId}: expected ${expected}, received ${sequence}`,
+          );
+          this.handleStreamGap(expected, sequence);
+          return;
+        }
+        if (sequence < expected) {
+          // WAL unique check should catch this so fall through
+          this.logger.warn(`Chunk is lower than expected. Expected ${expected}, received ${sequence}`);
+        }
       }
+      // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
+      // means this chunk was already applied by a prior batch (retry).
+      const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence);
+      if (!inserted) {
+        this.logger.warn(`dropping duplicate chunk (WAL conflict) ${sequence}`);
+        continue;
+      }
+      const ended = this.handleStreamChunk(chunk);
+      if (ended) {
+        return;
+      }
+      this.lastSeenChunkSequence = sequence;
     }
   }
 
@@ -246,8 +282,6 @@ export class AgentTurnCoordinator {
     if (saved) {
       this.logger.info("Committed partial message on spawn failure");
     }
-    this.messageAccumulator.reset();
-    this.clearActiveTurnState();
     this.updatePartialState({
       lastError: errorMessage,
       status: this.synthesizeStatus(),
@@ -291,8 +325,6 @@ export class AgentTurnCoordinator {
           "Reconcile: sprite process is gone; committing partial as aborted",
         );
         this.commitAbortedMessage();
-        this.messageAccumulator.reset();
-        this.clearActiveTurnState();
         this.updatePartialState({ status: this.synthesizeStatus() });
         return;
       }
@@ -308,10 +340,18 @@ export class AgentTurnCoordinator {
     }
   }
 
-  private handleStreamChunk(chunk: UIMessageChunk): void {
+  /**
+   * Applies a single fresh chunk: broadcasts to clients, feeds the
+   * accumulator, and finalizes the message + clears turn state if the chunk
+   * was terminal. Returns `true` when the turn ended as a result of this
+   * chunk (terminal finish/abort), `false` otherwise. Caller uses this
+   * signal to stop processing any remaining chunks in the batch.
+   * 
+   * @returns `true` if the turn ended as a result of this chunk (terminal finish/abort)
+   */
+  private handleStreamChunk(chunk: UIMessageChunk): boolean {
     const serverState = this.getServerState();
     this.broadcastMessage({ type: "agent.chunk", chunk });
-    this.pendingChunkRepository.append(chunk);
 
     const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
     applyDerivedStateFromParts(
@@ -324,16 +364,28 @@ export class AgentTurnCoordinator {
       this.messageAccumulator.getMessageId(),
     );
 
-    if (finishedMessage) {
-      this.logger.debug(`finished message: ${finishedMessage.id}`);
-      const stored = this.messageRepository.create(
-        serverState.sessionId!,
-        finishedMessage,
-      );
-      this.pendingChunkRepository.clear();
-      this.broadcastMessage({ type: "agent.finish", message: stored.message });
-      this.messageAccumulator.reset();
-    }
+    if (!finishedMessage) return false;
+
+    this.logger.debug(`finished message: ${finishedMessage.id}`);
+    const stored = this.messageRepository.create(
+      serverState.sessionId!,
+      finishedMessage,
+    );
+    this.pendingChunkRepository.clear();
+    this.broadcastMessage({ type: "agent.finish", message: stored.message });
+    this.messageAccumulator.reset();
+    this.logger.info("Terminal chunk received", {
+      fields: {
+        userMessageId: serverState.activeUserMessageId,
+        finishReason: getChunkFinishReason(chunk) ?? "unknown",
+      },
+    });
+    this.clearActiveTurnState();
+    this.updatePartialState({
+      lastError: null,
+      status: this.synthesizeStatus(),
+    });
+    return true;
   }
 
   /**
@@ -347,6 +399,9 @@ export class AgentTurnCoordinator {
     const sessionId = this.getServerState().sessionId!;
     const stored = this.messageRepository.create(sessionId, message);
     this.broadcastMessage({ type: "agent.finish", message: stored.message });
+    this.messageAccumulator.reset();
+    this.clearActiveTurnState();
+    this.pendingChunkRepository.clear();
     return true;
   }
 
@@ -371,16 +426,26 @@ export class AgentTurnCoordinator {
       activeUserMessageId: null,
       agentProcessId: null,
     });
+    this.lastSeenChunkSequence = null;
   }
-}
 
-function isTerminalChunk(chunk: UIMessageChunk): boolean {
-  switch (chunk.type) {
-    case "finish":
-    case "abort":
-      return true;
-    default:
-      return false;
+  /**
+   * Aborts the active turn after a chunk stream gap (a missing sequence id
+   * that the sender will never re-deliver). Commits whatever was streamed so
+   * far, surfaces an error to the client, and clears state so subsequent
+   * retried batches for the dead turn are dropped by the no-active guard.
+   */
+  private handleStreamGap(expected: number, received: number): void {
+    this.commitAbortedMessage();
+    this.updatePartialState({
+      lastError: `Chunk stream gap: expected ${expected}, received ${received}`,
+      status: this.synthesizeStatus(),
+    });
+    this.broadcastMessage({
+      type: "operation.error",
+      code: "CHAT_MESSAGE_FAILED",
+      message: "Streaming error: missing chunks; turn aborted",
+    });
   }
 }
 

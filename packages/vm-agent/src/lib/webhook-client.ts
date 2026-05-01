@@ -59,7 +59,7 @@ export class WebhookClient {
           elapsedMs: Date.now() - startedAt,
         });
         if (res.ok) return;
-        if (res.status < 500 && res.status !== 429) {
+        if (res.status < 500 && res.status !== 429) { // TODO: ISNT 429 RETRYABLE? just need to get the retry-after...
           this.log("warn", "webhook post received non-retryable status", {
             path,
             status: res.status,
@@ -84,7 +84,8 @@ export class WebhookClient {
         this.log("warn", "webhook post exhausted retries, dropping", { path });
         return;
       }
-      await sleep(delay);
+      const jitterMs = Math.random() * 100;
+      await sleep(delay + jitterMs);
       delay = Math.min(delay * 2, this.maxDelayMs);
     }
   }
