@@ -161,7 +161,6 @@ export class AgentTurnCoordinator {
   beginTurn(userMessageId: string): void {
     this.updateServerState({
       activeUserMessageId: userMessageId,
-      agentProcessId: null,
     });
     this.updatePartialState({
       lastError: null,
