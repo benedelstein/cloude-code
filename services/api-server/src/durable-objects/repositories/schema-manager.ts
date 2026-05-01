@@ -29,11 +29,22 @@ export function migrateAll(sql: SqlFn, repositories: Repository[]): void {
 
     repo.migrations.forEach((step, index) => {
       if (index <= maxApplied) return;
-      step(sql);
-      sql`
-        INSERT INTO schema_migrations (repo, version)
-        VALUES (${repo.name}, ${index})
-      `;
+      // Wrap (step + bookkeeping insert) in a transaction so a partial
+      // failure rolls back the schema change. Without this, a throw mid-step
+      // could leave the DB altered but unrecorded, and the next cold start
+      // would re-run a destructive migration.
+      sql`BEGIN`;
+      try {
+        step(sql);
+        sql`
+          INSERT INTO schema_migrations (repo, version)
+          VALUES (${repo.name}, ${index})
+        `;
+        sql`COMMIT`;
+      } catch (error) {
+        sql`ROLLBACK`;
+        throw error;
+      }
     });
   }
 }
