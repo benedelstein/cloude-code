@@ -6,7 +6,7 @@ import {
   type SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
-import type { UIMessageChunk } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import { MessageAccumulator } from "@repo/shared";
 import { createLogger } from "@/lib/logger";
 import { applyDerivedStateFromParts } from "../session-agent-derived-state";
@@ -190,23 +190,30 @@ export class AgentTurnCoordinator {
       return;
     }
 
+    // Buffer freshly-inserted chunks and emit one agent.chunks broadcast per
+    // batch (or per exit point). Each ws emit fans out to every attached client,
+    // so collapsing N → 1 is meaningfully cheaper.
+    const buffered: UIMessageChunk[] = [];
     for (const { sequence, chunk } of chunks) {
       // Gap check skipped for the very first chunk (lastSeen is null) — the
-      // vm-agent's ChunkBatcher always starts a turn at 0, so a non-zero
-      // first chunk would imply pre-first-chunk loss, which is rare and
-      // would manifest as a malformed message downstream.
+      // vm-agent's ChunkBatcher always starts a turn at 0
       if (this.lastSeenChunkSequence !== null) {
         const expected = this.lastSeenChunkSequence + 1;
         if (sequence > expected) {
           this.logger.error(
             `chunk stream gap for ${userMessageId}: expected ${expected}, received ${sequence}`,
           );
+          this.flushBufferedChunks(buffered);
           this.handleStreamGap(expected, sequence);
           return;
         }
         if (sequence < expected) {
           // WAL unique check should catch this so fall through
           this.logger.warn(`Chunk is lower than expected. Expected ${expected}, received ${sequence}`);
+        }
+      } else {
+        if (sequence !== 0) {
+          this.logger.warn(`Nonzero first chunk received: ${sequence}`);
         }
       }
       // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
@@ -216,12 +223,18 @@ export class AgentTurnCoordinator {
         this.logger.warn(`dropping duplicate chunk (WAL conflict) ${sequence}`);
         continue;
       }
-      const ended = this.handleStreamChunk(chunk);
-      if (ended) {
+      buffered.push(chunk);
+      const result = this.handleStreamChunk(chunk);
+      if (result.ended) {
+        // Flush the batched chunks (including this terminal one) before the
+        // agent.finish so the wire order stays chunks → finish.
+        this.flushBufferedChunks(buffered);
+        this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
         return;
       }
       this.lastSeenChunkSequence = sequence;
     }
+    this.flushBufferedChunks(buffered);
   }
 
   /**
@@ -341,17 +354,19 @@ export class AgentTurnCoordinator {
   }
 
   /**
-   * Applies a single fresh chunk: broadcasts to clients, feeds the
-   * accumulator, and finalizes the message + clears turn state if the chunk
-   * was terminal. Returns `true` when the turn ended as a result of this
-   * chunk (terminal finish/abort), `false` otherwise. Caller uses this
-   * signal to stop processing any remaining chunks in the batch.
-   * 
-   * @returns `true` if the turn ended as a result of this chunk (terminal finish/abort)
+   * Applies a single fresh chunk: feeds the accumulator and, if the chunk was
+   * terminal, persists the finished message and clears turn state. Does NOT
+   * broadcast — the caller handles batched broadcasting so chunk and finish
+   * events keep their wire order (chunks → finish).
+   *
+   * @returns When the chunk is non-terminal: `{ ended: false }`. When the
+   *   chunk is terminal: `{ ended: true, finishMessage }` with the persisted
+   *   UIMessage that the caller should broadcast as `agent.finish`.
    */
-  private handleStreamChunk(chunk: UIMessageChunk): boolean {
+  private handleStreamChunk(
+    chunk: UIMessageChunk,
+  ): { ended: false } | { ended: true; finishMessage: UIMessage } {
     const serverState = this.getServerState();
-    this.broadcastMessage({ type: "agent.chunk", chunk });
 
     const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
     applyDerivedStateFromParts(
@@ -364,7 +379,7 @@ export class AgentTurnCoordinator {
       this.messageAccumulator.getMessageId(),
     );
 
-    if (!finishedMessage) return false;
+    if (!finishedMessage) return { ended: false };
 
     this.logger.debug(`finished message: ${finishedMessage.id}`);
     const stored = this.messageRepository.create(
@@ -372,7 +387,6 @@ export class AgentTurnCoordinator {
       finishedMessage,
     );
     this.pendingChunkRepository.clear();
-    this.broadcastMessage({ type: "agent.finish", message: stored.message });
     this.messageAccumulator.reset();
     this.logger.info("Terminal chunk received", {
       fields: {
@@ -385,7 +399,13 @@ export class AgentTurnCoordinator {
       lastError: null,
       status: this.synthesizeStatus(),
     });
-    return true;
+    return { ended: true, finishMessage: stored.message };
+  }
+
+  /** Emits buffered chunks as a single agent.chunks */
+  private flushBufferedChunks(buffered: UIMessageChunk[]): void {
+    if (buffered.length === 0) return;
+    this.broadcastMessage({ type: "agent.chunks", chunks: buffered });
   }
 
   /**

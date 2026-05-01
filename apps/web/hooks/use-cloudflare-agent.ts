@@ -194,7 +194,7 @@ export function useCloudflareAgent({
                 for (const chunk of pendingChunks) {
                   controller.enqueue(chunk);
                 }
-                // Leave stream open for new live chunks via agent.chunk
+                // Leave stream open for new live chunks via agent.chunks
               },
             });
             consumeStream(stream);
@@ -203,19 +203,25 @@ export function useCloudflareAgent({
         break;
       }
 
-      case "agent.chunk":
+      case "agent.chunks": {
+        const incoming = msg.chunks as UIMessageChunk[];
         if (!streamControllerRef.current) {
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {
               streamControllerRef.current = controller;
-              controller.enqueue(msg.chunk as UIMessageChunk);
+              for (const chunk of incoming) {
+                controller.enqueue(chunk);
+              }
             },
           });
           consumeStream(stream);
         } else {
-          streamControllerRef.current.enqueue(msg.chunk as UIMessageChunk);
+          for (const chunk of incoming) {
+            streamControllerRef.current.enqueue(chunk);
+          }
         }
         break;
+      }
 
       case "agent.finish":
         if (streamControllerRef.current) {
