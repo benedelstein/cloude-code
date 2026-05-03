@@ -8,71 +8,66 @@ import { SessionCreationForm } from "./session-creation-form";
 
 type CloudConfig = {
   id: string;
-  width: number;
-  height: number;
-  top: string;
-  left: string;
-  durationSeconds: number;
-  delaySeconds: number;
-  opacity: number;
+  className: string;
+  style: React.CSSProperties;
 };
 
 const cloudConfigs: CloudConfig[] = [
   {
     id: "cloud-a",
-    width: 320,
-    height: 120,
-    top: "12%",
-    left: "8%",
-    durationSeconds: 34,
-    delaySeconds: -8,
-    opacity: 0.3,
+    className: "homepage-cloud homepage-cloud-large",
+    style: {
+      top: "11%",
+      left: "10%",
+      animationDuration: "32s",
+      animationDelay: "-6s",
+    },
   },
   {
     id: "cloud-b",
-    width: 260,
-    height: 96,
-    top: "22%",
-    left: "68%",
-    durationSeconds: 28,
-    delaySeconds: -18,
-    opacity: 0.36,
+    className: "homepage-cloud homepage-cloud-medium",
+    style: {
+      top: "9%",
+      right: "12%",
+      animationDuration: "28s",
+      animationDelay: "-14s",
+    },
   },
   {
     id: "cloud-c",
-    width: 420,
-    height: 140,
-    top: "58%",
-    left: "72%",
-    durationSeconds: 38,
-    delaySeconds: -12,
-    opacity: 0.24,
+    className: "homepage-cloud homepage-cloud-small",
+    style: {
+      top: "28%",
+      left: "28%",
+      animationDuration: "24s",
+      animationDelay: "-11s",
+    },
   },
   {
     id: "cloud-d",
-    width: 290,
-    height: 108,
-    top: "68%",
-    left: "14%",
-    durationSeconds: 31,
-    delaySeconds: -21,
-    opacity: 0.28,
+    className: "homepage-cloud homepage-cloud-medium",
+    style: {
+      top: "33%",
+      right: "10%",
+      animationDuration: "30s",
+      animationDelay: "-18s",
+    },
   },
   {
     id: "cloud-e",
-    width: 210,
-    height: 82,
-    top: "44%",
-    left: "42%",
-    durationSeconds: 26,
-    delaySeconds: -4,
-    opacity: 0.22,
+    className: "homepage-cloud homepage-cloud-large homepage-cloud-soft",
+    style: {
+      bottom: "12%",
+      left: "52%",
+      animationDuration: "36s",
+      animationDelay: "-9s",
+    },
   },
 ];
 
 export function HomePageClient() {
   const { loading, isAuthenticated, login } = useAuth();
-  const [pointerPosition, setPointerPosition] = useState({ x: 50, y: 42 });
+  const [pointerPosition, setPointerPosition] = useState({ x: 48, y: 24 });
   const accentStyle = useMemo(
     () =>
       ({
@@ -84,7 +79,7 @@ export function HomePageClient() {
 
   return (
     <div
-      className="relative isolate flex min-h-full items-center justify-center overflow-hidden bg-[#020817] px-4 py-10"
+      className="homepage-sky relative isolate flex min-h-full items-center justify-center overflow-hidden px-4 py-10"
       onPointerMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const x = ((event.clientX - bounds.left) / bounds.width) * 100;
@@ -93,81 +88,106 @@ export function HomePageClient() {
       }}
       style={accentStyle}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.22),_transparent_32%),linear-gradient(180deg,_#081225_0%,_#030712_100%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-80 [background:radial-gradient(circle_at_var(--pointer-x)_var(--pointer-y),rgba(96,165,250,0.3),transparent_18%),radial-gradient(circle_at_20%_20%,rgba(147,197,253,0.14),transparent_24%),radial-gradient(circle_at_80%_30%,rgba(59,130,246,0.18),transparent_20%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:140px_140px] opacity-[0.06]" />
+      <div className="homepage-grid pointer-events-none absolute inset-0" />
+      <div className="homepage-glow pointer-events-none absolute inset-0" />
+      <div className="homepage-haze pointer-events-none absolute inset-0" />
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {cloudConfigs.map((cloud) => (
-          <div
-            key={cloud.id}
-            className="cloud-drift absolute"
-            style={{
-              top: cloud.top,
-              left: cloud.left,
-              width: `${cloud.width}px`,
-              height: `${cloud.height}px`,
-              animationDuration: `${cloud.durationSeconds}s`,
-              animationDelay: `${cloud.delaySeconds}s`,
-              opacity: cloud.opacity,
-            }}
-          >
-            <div className="cloud-shape h-full w-full" />
-          </div>
+          <div key={cloud.id} className={cloud.className} style={cloud.style} />
         ))}
       </div>
 
-      <div className="relative z-10 w-full max-w-4xl">
-        <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-medium tracking-[0.24em] text-sky-100/90 uppercase backdrop-blur-md">
-            <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.85)]" />
+      <div className="relative z-10 w-full max-w-5xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-4 py-1.5 text-xs font-medium tracking-[0.24em] text-accent uppercase shadow-shadow shadow-md backdrop-blur-sm">
+            <span className="h-2 w-2 rounded-full bg-accent" />
             Cloud Code
           </div>
-          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-white sm:text-6xl md:text-7xl">
-            Drift into your next build.
+          <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl md:text-7xl">
+            Calm clouds. Sharp tools.
           </h1>
-          <p className="mt-5 max-w-2xl text-base leading-7 text-sky-100/75 sm:text-lg">
-            Pick a repo, drop in a prompt, and launch a coding session inside a living cloudscape.
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-foreground-muted sm:text-lg">
+            Start a coding session from a quieter, more polished launch pad built to feel like the rest of the app.
           </p>
         </div>
 
-        <div className="relative mx-auto mt-10 w-full max-w-3xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-[0_30px_120px_rgba(14,165,233,0.18)] backdrop-blur-2xl sm:p-8">
-          <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/60 to-transparent" />
-          <div className="pointer-events-none absolute -left-12 top-10 h-32 w-32 rounded-full bg-cyan-400/15 blur-3xl" />
-          <div className="pointer-events-none absolute -right-8 bottom-6 h-28 w-28 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="mx-auto mt-10 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_1.35fr]">
+          <div className="rounded-2xl border border-border bg-background/88 p-6 shadow-shadow shadow-xl backdrop-blur-sm">
+            <div className="mb-6 flex items-center gap-2 text-xs font-medium tracking-[0.24em] text-accent uppercase">
+              <span className="h-2 w-2 rounded-full bg-accent" />
+              Atmosphere
+            </div>
 
-          <div className="relative">
-            <div className="mb-6 flex items-center justify-center gap-3 text-sky-50/80">
-              <div className="flex gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-rose-300/70" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-300/70" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/70" />
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-background-secondary/80 p-4">
+                <p className="text-sm font-medium text-foreground">
+                  Soft motion, not splash-page chaos.
+                </p>
+                <p className="mt-1 text-sm leading-6 text-foreground-muted">
+                  Clouds now drift with layered depth, subtle highlights, and UI-matched contrast.
+                </p>
               </div>
-              <span className="text-xs uppercase tracking-[0.3em] text-sky-100/55">
-                {isAuthenticated ? "Start a session" : "Get started"}
-              </span>
+
+              <div className="rounded-xl border border-border bg-background-secondary/80 p-4">
+                <p className="text-sm font-medium text-foreground">
+                  Interactive without feeling gimmicky.
+                </p>
+                <p className="mt-1 text-sm leading-6 text-foreground-muted">
+                  Pointer movement gently bends the ambient glow instead of overpowering the page.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-background-secondary/80 p-4">
+                <p className="text-sm font-medium text-foreground">
+                  Same design language as the workspace.
+                </p>
+                <p className="mt-1 text-sm leading-6 text-foreground-muted">
+                  Borders, backgrounds, shadows, and accent color all match the existing shell and form components.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background/92 p-4 shadow-shadow shadow-xl backdrop-blur-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-background-secondary px-4 py-3">
+              <div>
+                <p className="text-xs font-medium tracking-[0.22em] text-accent uppercase">
+                  Launch panel
+                </p>
+                <p className="mt-1 text-sm text-foreground-muted">
+                  {isAuthenticated
+                    ? "Pick a repo and start building."
+                    : "Sign in first, then launch a session."}
+                </p>
+              </div>
+              <div className="flex gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-300" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+              </div>
             </div>
 
             {loading ? (
-              <div className="flex min-h-[280px] items-center justify-center">
-                <LoadingSpinner className="h-6 w-6 text-white" />
+              <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-border bg-background-secondary/70">
+                <LoadingSpinner className="h-6 w-6 text-accent" />
               </div>
             ) : isAuthenticated ? (
               <SessionCreationForm />
             ) : (
-              <div className="flex min-h-[280px] flex-col items-center justify-center gap-5 px-4 py-10 text-center">
-                <div className="max-w-xl">
-                  <h2 className="text-2xl font-semibold text-white sm:text-3xl">
-                    Sign in to launch a cloud coding session.
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-border bg-background-secondary/70 px-6 text-center">
+                <div className="max-w-md">
+                  <h2 className="text-2xl font-semibold text-foreground">
+                    Sign in to open your first cloud session.
                   </h2>
-                  <p className="mt-3 text-sm leading-6 text-sky-100/70 sm:text-base">
-                    Connect GitHub, choose a repo, and drop straight into the animated workspace you asked for.
+                  <p className="mt-3 text-sm leading-6 text-foreground-muted sm:text-base">
+                    Connect GitHub, choose a repository, and the full session form will appear here.
                   </p>
                 </div>
 
                 <button
                   onClick={() => void login()}
-                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.18)] transition hover:scale-[1.01] hover:bg-slate-100"
+                  className="mt-6 inline-flex items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground shadow-shadow shadow-md transition-colors hover:bg-background-secondary"
                 >
                   <Image src="/github_logo.svg" alt="GitHub" width={18} height={18} />
                   Sign in with GitHub
