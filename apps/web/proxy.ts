@@ -7,9 +7,8 @@ const publicRoutes = ["/login"];
 // https://nextjs.org/docs/app/guides/authentication#optimistic-checks-with-proxy-optional
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = publicRoutes.some((route) =>
-    pathname.startsWith(route),
-  );
+  const isPublic = pathname === "/"
+    || publicRoutes.some((route) => pathname.startsWith(route));
 
   if (isPublic) {
     return NextResponse.next();

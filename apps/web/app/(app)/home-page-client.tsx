@@ -1,6 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
+import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import { useAuth } from "@/hooks/use-auth";
 import { SessionCreationForm } from "./session-creation-form";
 
 type CloudConfig = {
@@ -68,6 +71,7 @@ const cloudConfigs: CloudConfig[] = [
 ];
 
 export function HomePageClient() {
+  const { loading, isAuthenticated, login } = useAuth();
   const [pointerPosition, setPointerPosition] = useState({ x: 50, y: 42 });
   const accentStyle = useMemo(
     () =>
@@ -140,11 +144,36 @@ export function HomePageClient() {
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/70" />
               </div>
               <span className="text-xs uppercase tracking-[0.3em] text-sky-100/55">
-                Start a session
+                {isAuthenticated ? "Start a session" : "Get started"}
               </span>
             </div>
 
-            <SessionCreationForm />
+            {loading ? (
+              <div className="flex min-h-[280px] items-center justify-center">
+                <LoadingSpinner className="h-6 w-6 text-white" />
+              </div>
+            ) : isAuthenticated ? (
+              <SessionCreationForm />
+            ) : (
+              <div className="flex min-h-[280px] flex-col items-center justify-center gap-5 px-4 py-10 text-center">
+                <div className="max-w-xl">
+                  <h2 className="text-2xl font-semibold text-white sm:text-3xl">
+                    Sign in to launch a cloud coding session.
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-sky-100/70 sm:text-base">
+                    Connect GitHub, choose a repo, and drop straight into the animated workspace you asked for.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => void login()}
+                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.18)] transition hover:scale-[1.01] hover:bg-slate-100"
+                >
+                  <Image src="/github_logo.svg" alt="GitHub" width={18} height={18} />
+                  Sign in with GitHub
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
