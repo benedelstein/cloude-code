@@ -178,3 +178,57 @@ a {
   --radius-md: 10px;
   --radius-lg: 16px;
 }
+
+@keyframes cloud-drift {
+  0% {
+    transform: translate3d(-18px, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(22px, -12px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(-18px, 0, 0) scale(1);
+  }
+}
+
+.cloud-drift {
+  animation-name: cloud-drift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.cloud-shape {
+  position: relative;
+  border-radius: 9999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.36) 0%,
+    rgba(191, 219, 254, 0.2) 100%
+  );
+  filter: blur(2px);
+  box-shadow:
+    0 0 80px rgba(125, 211, 252, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.cloud-shape::before,
+.cloud-shape::after {
+  content: "";
+  position: absolute;
+  bottom: 18%;
+  border-radius: 9999px;
+  background: inherit;
+}
+
+.cloud-shape::before {
+  left: 14%;
+  width: 34%;
+  height: 78%;
+}
+
+.cloud-shape::after {
+  right: 16%;
+  width: 42%;
+  height: 92%;
+}
