@@ -32,8 +32,10 @@ import type { ServerState } from "../repositories/server-state-repository";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";
-const VM_AGENT_LOG_DIR = `${HOME_DIR}/.cloude/logs`;
-const VM_AGENT_SCRIPT_PATH = `${HOME_DIR}/.cloude/agent-webhook.js`;
+const APP_DIR = `${HOME_DIR}/.cloude`;
+const VM_AGENT_LOG_DIR = `${APP_DIR}/logs`;
+const VM_AGENT_SCRIPT_PATH = `${APP_DIR}/agent-webhook.js`;
+const VM_AGENT_MESSAGE_DIR = `${APP_DIR}/turns`;
 const AGENT_PROCESS_MANAGER_DOMAIN = "agent_process_manager";
 
 /**
@@ -344,10 +346,16 @@ export class SpriteAgentProcessManager {
           ? (resolvedAttachments as AgentInputAttachment[])
           : undefined,
     };
+    const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
+    await this.writeInitialMessageFile(
+      sprite,
+      initialMessagePath,
+      initialMessageWithAttachments,
+    );
 
     // Wrap bun in a shell so we can redirect stdout/stderr to a log file on
     // the sprite. The child stdin is /dev/null because webhook-mode is
-    // spawn-and-forget: the initial turn is already in argv and control
+    // spawn-and-forget: the initial message is staged in a file and control
     // messages must not keep the process coupled to websocket-backed stdin.
     // `exec` replaces the shell with bun so we don't leak a wrapper process.
     // "$@" preserves argv boundaries so JSON args with spaces/quotes stay
@@ -355,7 +363,7 @@ export class SpriteAgentProcessManager {
     const agentArgs = this.buildAgentArgs({
       settings,
       agentMode,
-      initialMessage: initialMessageWithAttachments,
+      initialMessagePath,
       userMessageId: input.userMessage.id,
       agentSessionId: serverState.agentSessionId ?? undefined,
       model: input.model,
@@ -444,6 +452,14 @@ export class SpriteAgentProcessManager {
     }
   }
 
+  private async writeInitialMessageFile(
+    sprite: WorkersSpriteClient,
+    path: string,
+    message: AgentInputMessage,
+  ): Promise<void> {
+    await sprite.writeFile(path, JSON.stringify(message), { mode: "0600" });
+  }
+
   /**
    * Writes the vm-agent bundle to the sprite, skipping the upload when the
    * file already on disk matches the embedded bundle. The sprite is the source
@@ -471,20 +487,20 @@ export class SpriteAgentProcessManager {
   private buildAgentArgs(args: {
     settings: AgentSettings;
     agentMode: AgentMode;
-    initialMessage: AgentInputMessage;
+    initialMessagePath: string;
     userMessageId: string;
     agentSessionId: string | undefined;
     model: string | undefined;
   }): string[] {
     const cliArgs = [
       "run",
-      `${HOME_DIR}/.cloude/agent-webhook.js`,
+      VM_AGENT_SCRIPT_PATH,
       "--provider",
       JSON.stringify(args.settings),
       "--agentMode",
       args.agentMode,
-      "--initialMessage",
-      JSON.stringify(args.initialMessage),
+      "--initialMessagePath",
+      args.initialMessagePath,
       "--userMessageId",
       args.userMessageId,
     ];

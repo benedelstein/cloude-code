@@ -14,8 +14,11 @@
  * fired, or because you ^C).
  */
 import { spawn } from "child_process";
-import { parseArgs } from "util";
 import { randomUUID } from "crypto";
+import { writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { parseArgs } from "util";
 import {
   CLAUDE_PROVIDER,
   MessageAccumulator,
@@ -157,16 +160,20 @@ console.log();
 // use its models list only when the user explicitly asks for claude-code.
 void CLAUDE_PROVIDER;
 
-const settingsJson = JSON.stringify({ provider, model });
-const initialMessageJson = JSON.stringify({ content: prompt });
+const initialMessagePath = join(tmpdir(), `vm-agent-message-${randomUUID()}.json`);
+writeFileSync(initialMessagePath, JSON.stringify({ content: prompt }), {
+  mode: 0o600,
+});
 
 const spawnArgs = [
   "run",
   "src/index-webhook.ts",
   "--provider",
-  settingsJson,
-  "--initialMessage",
-  initialMessageJson,
+  JSON.stringify({ provider, model }),
+  "--agentMode",
+  "edit",
+  "--initialMessagePath",
+  initialMessagePath,
   "--userMessageId",
   userMessageId,
 ];

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../attachments";
 import { SessionStatus, AgentMode, AgentSettingsInput, SessionSummary } from "../session";
 
 /** Minimal session info returned by API */
@@ -29,7 +30,7 @@ export const CreateSessionRequest = z.object({
   agentMode: AgentMode.optional().describe("Agent operational mode"),
   branch: z.string().min(1).optional().describe("Optional branch to base the session on (defaults to repo's default branch)"),
   initialMessage: z.string().min(1).optional().describe("Optional first message to send immediately after session creation"),
-  attachmentIds: z.array(z.uuid()).max(20).optional().describe("Optional uploaded attachment IDs to bind to this session on create"),
+  attachmentIds: z.array(z.uuid()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional().describe("Optional uploaded attachment IDs to bind to this session on create"),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
+
 export const MessageAttachmentRef = z.object({
   attachmentId: z.uuid(),
 });

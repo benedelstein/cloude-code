@@ -1,7 +1,7 @@
 /**
  * Webhook-mode vm-agent entrypoint. The process is spawned fresh per turn
- * with the initial user message encoded in CLI args; chunk/event delivery
- * back to the DO flows via HTTPS webhooks.
+ * with the initial user message loaded from a sprite-local payload file;
+ * chunk/event delivery back to the DO flows via HTTPS webhooks.
  */
 import { parseArgs } from "util";
 import {
@@ -10,6 +10,7 @@ import {
   type AgentMode,
 } from "@repo/shared";
 import { type AgentProviderConfig } from "./lib/agent-harness";
+import { loadInitialMessageFromFile } from "./lib/webhook-initial-message";
 import { claudeCodeProvider } from "./providers/claude-code";
 import { codexProvider } from "./providers/codex";
 import { WebhookAgentRunner } from "./webhook-agent-runner";
@@ -36,6 +37,7 @@ const { values } = parseArgs({
     sessionId: { type: "string", short: "s" },
     agentMode: { type: "string" },
     initialMessage: { type: "string" },
+    initialMessagePath: { type: "string" },
     userMessageId: { type: "string" },
     model: { type: "string" },
   },
@@ -49,11 +51,24 @@ function requireString(name: string, value: unknown): string {
   return value;
 }
 
-const settings = AgentSettings.parse(JSON.parse(requireString("provider", values.provider)));
-const userMessageId = requireString("userMessageId", values.userMessageId);
-const initialMessage = AgentInputMessage.parse(
-  JSON.parse(requireString("initialMessage", values.initialMessage)),
+function loadInitialMessage() {
+  if (
+    typeof values.initialMessagePath === "string" &&
+    values.initialMessagePath.length > 0
+  ) {
+    return loadInitialMessageFromFile(values.initialMessagePath);
+  }
+
+  return AgentInputMessage.parse(
+    JSON.parse(requireString("initialMessage", values.initialMessage)),
+  );
+}
+
+const settings = AgentSettings.parse(
+  JSON.parse(requireString("provider", values.provider)),
 );
+const userMessageId = requireString("userMessageId", values.userMessageId);
+const initialMessage = loadInitialMessage();
 
 const webhookUrl = process.env.DO_WEBHOOK_URL;
 const webhookToken = process.env.DO_WEBHOOK_TOKEN;
@@ -76,7 +91,9 @@ const batchMaxAgeMs = process.env.BATCH_MAX_AGE_MS
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const providerConfig: AgentProviderConfig<any> =
-  settings.provider === "claude-code" ? claudeCodeProvider : codexProvider;
+  settings.provider === "claude-code"
+    ? claudeCodeProvider
+    : codexProvider;
 
 const runner = new WebhookAgentRunner({
   config: providerConfig,

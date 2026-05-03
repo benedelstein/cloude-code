@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AttachmentDescriptor } from "@repo/shared";
+import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  type AttachmentDescriptor,
+} from "@repo/shared";
 import { toast } from "sonner";
 
-export const DEFAULT_MAX_ATTACHMENTS = 20;
+export const DEFAULT_MAX_ATTACHMENTS = MAX_ATTACHMENTS_PER_MESSAGE;
 export const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 export interface PendingImageAttachment {

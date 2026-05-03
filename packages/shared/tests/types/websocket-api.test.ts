@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
 import { ClientMessage, ServerMessage } from "../../src/types/websocket-api";
 
 describe("websocket api schemas", () => {
@@ -31,5 +32,27 @@ describe("websocket api schemas", () => {
       attachments: [{ attachmentId: "123e4567-e89b-12d3-a456-426614174000" }],
     });
     expect(withAttachment.type).toBe("chat.message");
+  });
+
+  it("limits chat messages to five attachments", () => {
+    const attachment = {
+      attachmentId: "123e4567-e89b-12d3-a456-426614174000",
+    };
+
+    expect(() => ClientMessage.parse({
+      type: "chat.message",
+      attachments: Array.from(
+        { length: MAX_ATTACHMENTS_PER_MESSAGE },
+        () => attachment,
+      ),
+    })).not.toThrow();
+
+    expect(() => ClientMessage.parse({
+      type: "chat.message",
+      attachments: Array.from(
+        { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
+        () => attachment,
+      ),
+    })).toThrow();
   });
 });

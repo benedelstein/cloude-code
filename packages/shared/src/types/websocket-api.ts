@@ -1,7 +1,10 @@
 import { z } from "zod/v4";
 import type { UIMessage, UIMessagePart } from "ai";
 import { AgentMode, SessionStatus } from "./session";
-import { MessageAttachmentRef } from "./attachments";
+import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MessageAttachmentRef,
+} from "./attachments";
 
 // Re-export AI SDK types for convenience
 export type { UIMessage, UIMessagePart };
@@ -12,7 +15,7 @@ export type { UIMessage, UIMessagePart };
 export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().trim().min(1).optional(),
-  attachments: z.array(MessageAttachmentRef).max(20).optional(),
+  attachments: z.array(MessageAttachmentRef).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
   messageId: z.uuid().optional(),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),

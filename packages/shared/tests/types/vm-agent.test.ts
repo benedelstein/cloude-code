@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
 import {
   AgentInput,
+  AgentInputMessage,
   AgentOutput,
   decodeAgentInput,
   decodeAgentOutput,
@@ -16,6 +18,28 @@ describe("vm-agent schemas", () => {
 
   it("rejects invalid chat input", () => {
     expect(() => AgentInput.parse({ type: "chat", message: {} })).toThrow();
+  });
+
+  it("limits input messages to five attachments", () => {
+    const attachment = {
+      filename: "image.png",
+      mediaType: "image/png",
+      dataUrl: "data:image/png;base64,abc",
+    };
+
+    expect(() => AgentInputMessage.parse({
+      attachments: Array.from(
+        { length: MAX_ATTACHMENTS_PER_MESSAGE },
+        () => attachment,
+      ),
+    })).not.toThrow();
+
+    expect(() => AgentInputMessage.parse({
+      attachments: Array.from(
+        { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
+        () => attachment,
+      ),
+    })).toThrow();
   });
 
   it("parses all output variants", () => {

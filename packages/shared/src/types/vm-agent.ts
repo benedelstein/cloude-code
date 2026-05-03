@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { AgentMode } from "./session";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "./attachments";
 
 // Re-export AI SDK types
 export type { UIMessage, UIMessageChunk };
@@ -18,7 +19,7 @@ export type AgentInputAttachment = z.infer<typeof AgentInputAttachment>;
 
 export const AgentInputMessage = z.object({
   content: z.string().trim().min(1).optional(),
-  attachments: z.array(AgentInputAttachment).max(20).optional(),
+  attachments: z.array(AgentInputAttachment).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
 }).refine(
   (value) => Boolean(value.content) || (value.attachments?.length ?? 0) > 0,
   {
