@@ -267,9 +267,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 disabledPlaceholder={sessionErrorMessage ?? undefined}
               />
             </InputFrame>
-            <p className="mt-2 text-center text-xs text-foreground-muted/60">
-              Press Enter to submit, Shift+Enter for new line
-            </p>
           </div>
         </div>
       </div>

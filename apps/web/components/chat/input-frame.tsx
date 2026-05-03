@@ -35,7 +35,7 @@ export function InputFrame({ children, footer, className }: InputFrameProps) {
         className,
       )}
     >
-      <div className="relative z-10 rounded-lg border border-accent/50 bg-background overflow-hidden focus-within:border-accent transition-shadow shadow-shadow shadow-sm m-[-1px]">
+      <div className="relative z-10 rounded-lg border border-accent/50 bg-background overflow-hidden focus-within:border-accent transition-shadow shadow-shadow shadow-sm -m-px">
         {children}
       </div>
       <div className="px-3 py-2.5 overflow-hidden">
