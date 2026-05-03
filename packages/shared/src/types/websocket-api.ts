@@ -88,12 +88,12 @@ export const OperationErrorEvent = z.object({
 });
 export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 
-// AI SDK UIMessageStream chunk (for real-time streaming)
-export const AgentChunkEvent = z.object({
-  type: z.literal("agent.chunk"),
-  chunk: z.unknown(), // UIMessageStreamPart from AI SDK
+// AI SDK UIMessageStream chunks (for real-time streaming, batched per webhook delivery)
+export const AgentChunksEvent = z.object({
+  type: z.literal("agent.chunks"),
+  chunks: z.array(z.unknown()), // UIMessageStreamPart[] from AI SDK
 });
-export type AgentChunkEvent = z.infer<typeof AgentChunkEvent>;
+export type AgentChunksEvent = z.infer<typeof AgentChunksEvent>;
 
 // Agent message finished (accumulated UIMessage saved)
 export const AgentFinishEvent = z.object({
@@ -131,7 +131,7 @@ export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
   SyncResponseEvent,
   OperationErrorEvent,
-  AgentChunkEvent,
+  AgentChunksEvent,
   AgentFinishEvent,
   AgentReadyEvent,
   UserMessageEvent,

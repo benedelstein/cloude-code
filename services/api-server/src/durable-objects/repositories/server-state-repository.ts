@@ -1,4 +1,4 @@
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
 /**
  * Durable server-only session state — never synced to clients.
@@ -17,14 +17,10 @@ export type ServerState = {
   repoCloned: boolean;
   /** Claude or Codex session ID for resuming agent state across restarts */
   agentSessionId: string | null;
-  workflowState: {
-    /** The instance id of the currently running agent workflow */
-    instanceId: string | null;
-    /** The current user message id that the workflow is responding to */
-    activeUserMessageId: string | null;
-    /** Sprite exec-session / process ID for the active workflow turn */
-    activeAgentProcessId: number | null;
-  };
+  /** Sprite exec-session / process ID for the currently running vm-agent. */
+  agentProcessId: number | null;
+  /** User message id currently being handled by the agent, or null if idle. */
+  activeUserMessageId: string | null;
 };
 
 function defaultServerState(): ServerState {
@@ -35,30 +31,31 @@ function defaultServerState(): ServerState {
     spriteName: null,
     repoCloned: false,
     agentSessionId: null,
-    workflowState: {
-      instanceId: null,
-      activeUserMessageId: null,
-      activeAgentProcessId: null,
-    },
+    agentProcessId: null,
+    activeUserMessageId: null,
   };
 }
 
 export class ServerStateRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "server_state";
+  readonly migrations: ReadonlyArray<Migration> = [
+    (sql) => {
+      sql`
+        CREATE TABLE IF NOT EXISTS server_state (
+          id TEXT PRIMARY KEY NOT NULL,
+          state TEXT NOT NULL DEFAULT '{}'
+        )
+      `;
+    },
+  ];
 
-  migrate(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS server_state (
-        id TEXT PRIMARY KEY NOT NULL,
-        state TEXT NOT NULL DEFAULT '{}'
-      )
-    `;
-  }
+  constructor(private sql: SqlFn) {}
 
   get(): ServerState {
     const rows = this.sql<{ state: string }>`SELECT state FROM server_state WHERE id = 'state'`;
     if (!rows[0]?.state) return defaultServerState();
-    return JSON.parse(rows[0].state) as ServerState;
+    // Merge on defaults so older persisted states without newer fields stay valid.
+    return { ...defaultServerState(), ...JSON.parse(rows[0].state) } as ServerState;
   }
 
   update(partial: Partial<ServerState>): void {

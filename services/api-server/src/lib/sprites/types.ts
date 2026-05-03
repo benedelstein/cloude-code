@@ -25,6 +25,8 @@ export interface NewExecSessionOptions {
     env?: Record<string, string>;
     /** Whether to use TTY mode. If omitted, false */
     tty?: boolean;
+    /** Whether to attach websocket-backed stdin to the process. If omitted, true. */
+    stdin?: boolean;
     /** Number of columns in the TTY. If omitted, the sprite will use the default. */
     cols?: number;
     /** Number of rows in the TTY. If omitted, the sprite will use the default. */

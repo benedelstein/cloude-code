@@ -11,6 +11,7 @@ import { agentRoutes } from "./routes/agent.routes";
 import { gitProxyRoutes } from "./routes/git-proxy.routes";
 import { debugRoutes } from "./routes/debug.routes";
 import { modelsRoutes } from "./routes/models.routes";
+import { internalRoutes } from "./routes/internal.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
 import { initializeLogger } from "./lib/logger";
@@ -18,7 +19,6 @@ import { requestLoggerMiddleware } from "./middleware/request-logger.middleware"
 import { LogLevel } from "@repo/shared";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
-export { SessionTurnWorkflow } from "./workflows/SessionTurnWorkflow";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -50,6 +50,7 @@ app.get("/health", (c) => {
 
 app.route("/agents", agentRoutes);
 app.route("/git-proxy", gitProxyRoutes);
+app.route("/internal", internalRoutes);
 app.route("/_debug", debugRoutes);
 
 app.route("/auth", authRoutes);

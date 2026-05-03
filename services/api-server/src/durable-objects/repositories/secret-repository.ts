@@ -1,6 +1,10 @@
-import type { SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./types";
 
-export type SecretKey = "github_token" | "git_proxy_secret" | "editor_token";
+export type SecretKey =
+  | "github_token"
+  | "git_proxy_secret"
+  | "editor_token"
+  | "webhook_token";
 
 interface SecretRow {
   key: SecretKey;
@@ -8,16 +12,19 @@ interface SecretRow {
 }
 
 export class SecretRepository implements Repository {
-  constructor(private sql: SqlFn) {}
+  readonly name = "secrets";
+  readonly migrations: ReadonlyArray<Migration> = [
+    (sql) => {
+      sql`
+        CREATE TABLE IF NOT EXISTS secrets (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      `;
+    },
+  ];
 
-  migrate(): void {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS secrets (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    `;
-  }
+  constructor(private sql: SqlFn) {}
 
   get(key: SecretKey): string | null {
     const rows = this.sql<SecretRow>`SELECT value FROM secrets WHERE key = ${key}`;

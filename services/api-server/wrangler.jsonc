@@ -41,13 +41,6 @@
       "new_sqlite_classes": ["SessionAgentDO"]
     }
   ],
-  "workflows": [
-    {
-      "name": "session-turn-workflow",
-      "binding": "SESSION_TURN_WORKFLOW",
-      "class_name": "SessionTurnWorkflow",
-    },
-  ],
   "d1_databases": [
     {
       "binding": "DB",

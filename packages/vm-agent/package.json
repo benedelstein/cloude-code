@@ -4,14 +4,15 @@
   "type": "module",
   "main": "dist/vm-agent.bundle.js",
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "dev": "bun run src/index-ndjson.ts",
     "test": "vitest run --passWithNoTests",
-    "build": "bun build src/index.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify",
+    "build": "bun build src/index-ndjson.ts --outfile=dist/vm-agent.bundle.js --target=bun --minify && bun build src/index-webhook.ts --outfile=dist/vm-agent-webhook.bundle.js --target=bun --minify",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "test:live:agent": "bun run src/test-agent-aisdk.ts"
+    "test:live:agent": "bun run src/test-agent-aisdk.ts",
+    "test:live:webhook": "bun run src/test-webhook-runner.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",

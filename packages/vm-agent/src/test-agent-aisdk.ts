@@ -35,7 +35,7 @@ const elapsed = () => `+${String(Date.now() - turnStart).padStart(5, " ")}ms`;
 const log = (tag: string, ...rest: unknown[]) => console.log(`[${elapsed()}] ${tag}`, ...rest);
 
 // Spawn the AI SDK agent process
-const spawnArgs = ["run", "src/index.ts", "--provider", settings];
+const spawnArgs = ["run", "src/index-ndjson.ts", "--provider", settings];
 if (sessionId) {
   spawnArgs.push("--sessionId", sessionId);
 }

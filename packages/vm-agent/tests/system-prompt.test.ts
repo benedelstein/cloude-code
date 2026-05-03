@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPromptAppend } from "../src/system-prompt";
+import { buildSystemPromptAppend } from "../src/lib/system-prompt";
 
 describe("buildSystemPromptAppend", () => {
   it("includes sprite context, branch naming instructions, and Claude todo guidance", () => {

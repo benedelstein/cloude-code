@@ -95,7 +95,9 @@ export class SpriteWebsocketSession {
 
     const wsUrl = this.createWsUrl();
 
-    wsUrl.searchParams.set("stdin", "true");
+    if (this.config.mode === "exec" && (this.config.options.stdin ?? true)) {
+      wsUrl.searchParams.set("stdin", "true");
+    }
 
     if (this.config.options.env) {
       for (const [key, value] of Object.entries(this.config.options.env)) {

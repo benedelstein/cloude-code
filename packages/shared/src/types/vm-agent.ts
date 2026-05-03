@@ -31,6 +31,12 @@ export type AgentInputMessage = z.infer<typeof AgentInputMessage>;
 export const AgentChatInput = z.object({
   type: z.literal("chat"),
   message: AgentInputMessage,
+  /**
+   * Identifier of the user message this turn belongs to. Required in the
+   * webhook flow so the vm-agent can tag outbound chunks; optional on the
+   * legacy stdio path where the DO tracks this server-side.
+   */
+  userMessageId: z.string().optional(),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch agent mode before processing the message. */
@@ -41,15 +47,9 @@ export const AgentCancelInput = z.object({
   type: z.literal("cancel"),
 });
 
-export const AgentResumeInput = z.object({
-  type: z.literal("resume"),
-  sessionId: z.string(),
-});
-
 export const AgentInput = z.discriminatedUnion("type", [
   AgentChatInput,
   AgentCancelInput,
-  AgentResumeInput,
 ]);
 export type AgentInput = z.infer<typeof AgentInput>;
 
@@ -91,13 +91,26 @@ export const AgentHeartbeatOutput = z.object({
   type: z.literal("heartbeat"),
 });
 
-export const AgentOutput = z.discriminatedUnion("type", [
+/**
+ * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
+ * /chunks and everything else (ready, error, sessionId, heartbeat, debug) to
+ * /events as a single event per POST.
+ */
+export const AgentEvent = z.discriminatedUnion("type", [
   AgentReadyOutput,
   AgentDebugOutput,
   AgentErrorOutput,
-  AgentStreamOutput,
   AgentSessionIdOutput,
   AgentHeartbeatOutput,
+]);
+export type AgentEvent = z.infer<typeof AgentEvent>;
+
+/**
+ * All agent output types, including stream chunks.
+ */
+export const AgentOutput = z.discriminatedUnion("type", [
+  ...AgentEvent.options,
+  AgentStreamOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 

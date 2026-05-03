@@ -4,7 +4,16 @@ export type SqlFn = <T = Record<string, string | number | boolean | null>>(
   ...values: (string | number | boolean | null)[]
 ) => T[];
 
-/** Repositories must implement migrate() for schema initialization. */
+/** A single forward-only schema migration step. */
+export type Migration = (sql: SqlFn) => void;
+
+/**
+ * Repositories declare a stable `name` and an append-only list of migrations.
+ * The schema manager records applied versions per repo and only runs new steps
+ * on each cold start. Migrations must never be reordered or removed — append
+ * new versions at the end of the list.
+ */
 export interface Repository {
-  migrate(): void;
+  readonly name: string;
+  readonly migrations: ReadonlyArray<Migration>;
 }

@@ -318,14 +318,11 @@ export class MessageAccumulator {
     return completedParts;
   }
 
-  /**
-   * Get the accumulated message.
-   * Should only be called after process() returns true.
-   */
-  getMessage(): UIMessage | null {
+  private getMessage(): UIMessage | null {
     if (!this.finished) return null;
 
     return {
+      // typically the id will be null until the end. the harnesses do not declare an id in their start chunks (afaict)
       id: this.messageId ?? crypto.randomUUID(),
       role: "assistant",
       parts: this.parts,
