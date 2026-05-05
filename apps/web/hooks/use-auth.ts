@@ -190,7 +190,7 @@ export function useAuth() {
   const logout = useCallback(async () => {
     await logoutUser();
     setUser(null);
-    window.location.href = "/login";
+    window.location.href = "/";
   }, []);
 
   return {

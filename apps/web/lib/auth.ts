@@ -18,14 +18,14 @@ export const verifySession = cache(async (): Promise<UserInfo> => {
   const sessionToken = await decryptSessionToken(encryptedToken);
 
   if (!sessionToken) {
-    redirect("/login");
+    redirect("/");
   }
 
   try {
     return await getAuthenticatedUser(sessionToken);
   } catch (cause) {
     if (cause instanceof ServerApiError && cause.status === 401) {
-      redirect("/login");
+      redirect("/");
     }
     throw new Error("Failed to verify session", { cause });
   }
