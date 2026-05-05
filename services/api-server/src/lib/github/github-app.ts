@@ -18,6 +18,7 @@ import type {
   RepositorySelection,
 } from "@/repositories/github-installation-repository";
 import { GitHubUserRepoAccessCacheRepository } from "@/repositories/github-user-repo-access-cache-repository";
+import { GitHubUserRepoListingSyncRepository } from "@/repositories/github-user-repo-listing-sync-repository";
 import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
@@ -85,6 +86,8 @@ export interface GitHubRepositoryData {
   owner: string;
   name: string;
   defaultBranch?: string;
+  private?: boolean;
+  description?: string | null;
 }
 
 export type GitHubAppErrorCode =
@@ -107,6 +110,7 @@ export class GitHubAppService {
   private readonly installationRepository: GitHubInstallationRepository;
   private readonly sessionsRepository: SessionsRepository;
   private readonly userRepoAccessCacheRepository: GitHubUserRepoAccessCacheRepository;
+  private readonly userRepoListingSyncRepository: GitHubUserRepoListingSyncRepository;
   private readonly tokenCacheRepository: InstallationTokenCacheRepository;
   private readonly userSessionRepository: UserSessionRepository;
   private readonly clientId: string;
@@ -128,6 +132,7 @@ export class GitHubAppService {
     this.installationRepository = new GitHubInstallationRepository(env.DB);
     this.sessionsRepository = new SessionsRepository(env.DB);
     this.userRepoAccessCacheRepository = new GitHubUserRepoAccessCacheRepository(env.DB);
+    this.userRepoListingSyncRepository = new GitHubUserRepoListingSyncRepository(env.DB);
     this.tokenCacheRepository = new InstallationTokenCacheRepository(env.DB);
     this.userSessionRepository = new UserSessionRepository(env.DB);
     this.clientId = env.GITHUB_APP_CLIENT_ID;
@@ -505,6 +510,8 @@ export class GitHubAppService {
       owner: repo.owner.login,
       name: repo.name,
       defaultBranch: repo.default_branch,
+      private: repo.private,
+      description: repo.description,
     }));
 
     await this.cacheUserAccessibleInstallationRepos(
@@ -924,6 +931,9 @@ export class GitHubAppService {
   ): Promise<void> {
     const installationId = payload.installation.id;
     this.logger.info(`github installation deleted: ${installationId}`);
+    // Clear listing-sync markers BEFORE access-cache rows are deleted, so the
+    // sub-select can still find affected users.
+    await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
     await this.installationRepository.delete(installationId);
     const sessionIds = await this.sessionsRepository.blockSessionsForDeletedInstallation(
@@ -938,6 +948,7 @@ export class GitHubAppService {
     const installationId = payload.installation.id;
     this.logger.info(`github installation suspended: ${installationId}`);
     await this.installationRepository.setSuspended(installationId, true);
+    await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
     const sessionIds = await this.sessionsRepository.blockSessionsForSuspendedInstallation(
       installationId,
@@ -951,6 +962,7 @@ export class GitHubAppService {
     const installationId = payload.installation.id;
     this.logger.info(`github installation unsuspended: ${installationId}`);
     await this.installationRepository.setSuspended(installationId, false);
+    await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
   }
 
@@ -981,6 +993,9 @@ export class GitHubAppService {
     // nOTE: Don't upsert cache rows to `allowed = true`; a repo being added to the installation does not
     // guarantee the authenticated user can access it. Instead, invalidate any
     // stale cache rows that GitHub's repository-selection transition may have changed.
+    // Also clear listing-sync markers for affected users so the next /repos request
+    // picks up newly-added repos within the picker rather than waiting for TTL.
+    await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     if (previousRepositorySelection === "all" && repositorySelection === "selected") {
       await this.installationRepository.deleteByInstallationIdExceptRepoIds(
         installationId,
@@ -1021,6 +1036,7 @@ export class GitHubAppService {
       installationId,
       repoIds,
     );
+    await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
       installationId,
       repoIds,

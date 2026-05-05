@@ -18,6 +18,11 @@ export const ListReposResponse = z.object({
 });
 export type ListReposResponse = z.infer<typeof ListReposResponse>;
 
+export const SearchReposResponse = z.object({
+  repos: z.array(Repo),
+});
+export type SearchReposResponse = z.infer<typeof SearchReposResponse>;
+
 export const Branch = z.object({
   name: z.string(),
   default: z.boolean(),

@@ -5,6 +5,7 @@ import type {
   Repo,
   ListReposResponse,
   ListBranchesResponse,
+  SearchReposResponse,
   CreateSessionResponse,
   SessionWebSocketTokenResponse,
   DeleteSessionResponse,
@@ -118,6 +119,18 @@ export async function listRepos(
 
   const query = params.size > 0 ? `?${params.toString()}` : "";
   return apiFetch(`/repos${query}`);
+}
+
+export async function searchRepos(
+  query: string,
+  options: { limit?: number } = {},
+): Promise<SearchReposResponse> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  if (options.limit) {
+    params.set("limit", String(options.limit));
+  }
+  return apiFetch(`/repos/search?${params.toString()}`);
 }
 
 export async function listBranches(
