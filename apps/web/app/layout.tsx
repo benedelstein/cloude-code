@@ -1,6 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Caprasimo } from "next/font/google";
 import "./globals.css";
 import { Sonner } from "@/components/ui/sonner";
+
+const caprasimo = Caprasimo({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-caprasimo",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Cloude Code",
@@ -20,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={caprasimo.variable}>
       <body className="antialiased">
         {children}
         <Sonner />

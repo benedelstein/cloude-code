@@ -247,7 +247,7 @@ export function SessionSidebar() {
                   className="cursor-pointer font-medium py-5"
                   tooltip="New session"
                 >
-                  <Link href="/" onClick={closeMobileSidebar}>
+                  <Link href="/dashboard" onClick={closeMobileSidebar}>
                     <Edit className="h-4 w-4" />
                     <span>New session</span>
                   </Link>

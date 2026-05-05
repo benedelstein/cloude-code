@@ -13,8 +13,8 @@
   --foreground-tertiary: #acacac;
   --border: #d6dadf;
   --border-strong: #84a9d4;
-  --accent: #6ba7d5;
-  --accent-hover: #5BA0D9;
+  --accent: #2D7EDB;
+  --accent-hover: #2D7EDB;
   --accent-subtle: #EBF4FB;
   --accent-foreground: #ffffff;
   --danger: #ef4444;
@@ -125,6 +125,8 @@ a {
 }
 
 @theme inline {
+  --font-display: var(--font-caprasimo);
+
   /* Custom app colors */
   --color-background: var(--background);
   --color-background-secondary: var(--background-secondary);

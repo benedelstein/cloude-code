@@ -1,7 +1,7 @@
 import { verifySession } from "@/lib/auth";
-import { HomePageClient } from "./home-page-client";
+import { HomePageClient } from "../home-page-client";
 
-export default async function Home() {
+export default async function DashboardPage() {
   await verifySession();
 
   return <HomePageClient />;
