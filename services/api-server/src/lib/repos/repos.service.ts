@@ -331,15 +331,17 @@ export class ReposService {
       installations.map((installation) => installation.id),
     );
 
-    // Only mark the listing as fully synced when every installation succeeded.
-    // Otherwise the failed installation keeps its prior rows and the next
-    // request will retry (synced_at remains stale or null).
-    if (allSucceeded) {
-      await this.listingSyncRepository.setSyncedAt(
-        params.userId,
-        new Date().toISOString(),
-      );
-    }
+    // Always advance synced_at, even on partial failure. Otherwise a single
+    // installation that keeps failing would block the cold-start path
+    // indefinitely (every request re-runs fullSync inline) and burn the
+    // user's GitHub rate limit. The 5min freshness TTL becomes the retry
+    // cadence for the failed installation; webhook invalidation still forces
+    // immediate refreshes when access actually changes. Other installations'
+    // fresh rows are already committed, so the picker stays mostly correct.
+    await this.listingSyncRepository.setSyncedAt(
+      params.userId,
+      new Date().toISOString(),
+    );
 
     logger.info(
       `full repo sync for user ${params.userId}: ${totalRepoCount} repos across ${installations.length} installations in ${Date.now() - startedAt}ms (allSucceeded=${allSucceeded})`,
