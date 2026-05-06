@@ -9,4 +9,5 @@ export {
   type GithubOAuthUser as OAuthUser,
   type GithubOAuthTokenResult as OAuthTokenResult,
   type RefreshedToken,
+  type GitHubRepositoryData,
 } from "./github-app";

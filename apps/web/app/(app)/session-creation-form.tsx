@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronsUpDown, Check, GitBranch, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
-import { listRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
+import { listRepos, searchRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
@@ -116,6 +116,10 @@ function RepoSelector({
   hasMore,
   loadingMore,
   onLoadMore,
+  searchQuery,
+  onSearchQueryChange,
+  searching,
+  isSearchMode,
 }: {
   repos: Repo[];
   selectedRepo: Repo | null;
@@ -128,11 +132,16 @@ function RepoSelector({
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  searching: boolean;
+  isSearchMode: boolean;
 }) {
   const commandListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!open || !hasMore || loadingMore) {
+    // Only auto-prefetch in browse mode (search mode does not paginate).
+    if (!open || isSearchMode || !hasMore || loadingMore) {
       return;
     }
 
@@ -150,7 +159,7 @@ function RepoSelector({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [hasMore, loadingMore, onLoadMore, open, repos.length]);
+  }, [hasMore, loadingMore, onLoadMore, open, repos.length, isSearchMode]);
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -179,11 +188,23 @@ function RepoSelector({
         </Tooltip>
       </TooltipProvider>
       <PopoverContent className="w-[280px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search repos..." />
+        {/*
+          shouldFilter={false} disables cmdk's client-side filtering so the
+          displayed list matches exactly what the server returned in search
+          mode (and remains a normal browse list in non-search mode).
+        */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search repos..."
+            value={searchQuery}
+            onValueChange={onSearchQueryChange}
+          />
           <CommandList
             ref={commandListRef}
             onScroll={(event) => {
+              if (isSearchMode) {
+                return;
+              }
               const commandList = event.currentTarget;
               const hasReachedBottom =
                 commandList.scrollTop + commandList.clientHeight >=
@@ -194,8 +215,16 @@ function RepoSelector({
               }
             }}
           >
-            <CommandEmpty>No repos found.</CommandEmpty>
+            {!searching && repos.length === 0 && (
+              <CommandEmpty>No repos found.</CommandEmpty>
+            )}
             <CommandGroup>
+              {searching && repos.length === 0 && (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                  <LoadingSpinner className="h-3.5 w-3.5" />
+                  <span>Searching...</span>
+                </div>
+              )}
               {repos.map((repo) => (
                 <CommandItem
                   key={repo.id}
@@ -213,7 +242,7 @@ function RepoSelector({
                   )}
                 </CommandItem>
               ))}
-              {loadingMore && (
+              {!isSearchMode && loadingMore && (
                 <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
                   <LoadingSpinner className="h-3.5 w-3.5" />
                   <span>Loading more repos...</span>
@@ -388,6 +417,9 @@ export function SessionCreationForm() {
   const [reposCursor, setReposCursor] = useState<string | null>(null);
   const [reposLoadingMore, setReposLoadingMore] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
+  const [repoSearchQuery, setRepoSearchQuery] = useState("");
+  const [repoSearchResults, setRepoSearchResults] = useState<Repo[]>([]);
+  const [repoSearchLoading, setRepoSearchLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
@@ -705,6 +737,48 @@ export function SessionCreationForm() {
     })();
   }, []);
 
+  // Debounced server-side repo search. When the input has a value, we hit
+  // /repos/search and replace the displayed list with those results. When the
+  // input is empty, we revert to the paginated browse list.
+  useEffect(() => {
+    const trimmedQuery = repoSearchQuery.trim();
+    if (trimmedQuery.length === 0) {
+      setRepoSearchResults([]);
+      setRepoSearchLoading(false);
+      return;
+    }
+
+    let stale = false;
+    setRepoSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchRepos(trimmedQuery);
+        if (stale) return;
+        setRepoSearchResults(data.repos);
+      } catch (error) {
+        if (stale) return;
+        toast.error("Repo search failed", {
+          description: error instanceof Error ? error.message : "Unknown error",
+        });
+        setRepoSearchResults([]);
+      } finally {
+        if (!stale) setRepoSearchLoading(false);
+      }
+    }, 200);
+
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [repoSearchQuery]);
+
+  // Reset the search input when the picker closes so reopening starts clean.
+  useEffect(() => {
+    if (!repoPickerOpen && repoSearchQuery !== "") {
+      setRepoSearchQuery("");
+    }
+  }, [repoPickerOpen, repoSearchQuery]);
+
   async function loadMoreRepos(): Promise<void> {
     if (!reposCursor || reposLoadingMore) {
       return;
@@ -872,7 +946,7 @@ export function SessionCreationForm() {
         footer={
           <div className="flex items-center gap-2 min-w-0">
             <RepoSelector
-              repos={repos}
+              repos={repoSearchQuery.trim().length > 0 ? repoSearchResults : repos}
               selectedRepo={selectedRepo}
               onSelect={setSelectedRepo}
               loading={reposLoading}
@@ -883,6 +957,10 @@ export function SessionCreationForm() {
               hasMore={reposCursor !== null}
               loadingMore={reposLoadingMore}
               onLoadMore={loadMoreRepos}
+              searchQuery={repoSearchQuery}
+              onSearchQueryChange={setRepoSearchQuery}
+              searching={repoSearchLoading}
+              isSearchMode={repoSearchQuery.trim().length > 0}
             />
             {selectedRepo && (branches.length > 0 || branchesLoading) && (
               <BranchSelector

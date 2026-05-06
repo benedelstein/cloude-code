@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { ListReposResponse, ListBranchesResponse } from "@repo/shared";
+import { ListReposResponse, ListBranchesResponse, SearchReposResponse } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
 
@@ -20,6 +20,27 @@ export const listReposRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Invalid pagination cursor",
+    },
+  },
+});
+
+export const searchReposRoute = createRoute({
+  method: "get",
+  path: "/search",
+  request: {
+    query: z.object({
+      q: z.string().min(1).max(200),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: SearchReposResponse } },
+      description: "Repos matching the query, served from the per-user cache",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Invalid search request",
     },
   },
 });

@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { ReposService } from "@/lib/repos/repos.service";
 import { authMiddleware, type AuthUser } from "@/middleware/auth.middleware";
 import type { Env } from "@/types";
-import { listBranchesRoute, listReposRoute } from "./routes";
+import { listBranchesRoute, listReposRoute, searchReposRoute } from "./routes";
 
 export const reposRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -21,6 +21,25 @@ reposRoutes.openapi(listReposRoute, async (c) => {
     executionCtx: c.executionCtx,
     limit,
     cursor,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.error.message }, result.error.status);
+  }
+
+  return c.json(result.value, 200);
+});
+
+reposRoutes.openapi(searchReposRoute, async (c) => {
+  const user = c.get("user");
+  const { q, limit } = c.req.valid("query");
+  const reposService = new ReposService(c.env);
+  const result = await reposService.searchRepos({
+    userId: user.id,
+    githubAccessToken: user.githubAccessToken,
+    executionCtx: c.executionCtx,
+    query: q,
+    limit,
   });
 
   if (!result.ok) {
