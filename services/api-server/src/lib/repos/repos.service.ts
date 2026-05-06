@@ -20,6 +20,10 @@ const LISTING_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 // Per-row expiry for cache entries written by full-sync. Generous so cache
 // rows don't expire mid-listing while we're between syncs.
 const LISTING_ROW_TTL_MS = 24 * 60 * 60 * 1000;
+// A held fullSync claim older than this is treated as crashed/abandoned.
+// Bounded above by realistic worst-case fullSync duration (many large orgs)
+// and below by acceptable retry latency after a real crash.
+const STALE_CLAIM_AFTER_MS = 60 * 1000;
 
 type ReposServiceStatus = 400;
 
@@ -218,27 +222,54 @@ export class ReposService {
 
     const ageMs = Date.now() - new Date(syncedAt).getTime();
     if (Number.isNaN(ageMs) || ageMs > LISTING_FRESHNESS_TTL_MS) {
-      this.scheduleBackgroundFullSync(params);
+      await this.scheduleBackgroundFullSync(params);
     }
     return success(undefined);
   }
 
-  private scheduleBackgroundFullSync(params: {
+  /**
+   * Try to claim the per-user fullSync slot, then schedule a background sync
+   * via waitUntil if we got it. The await here is on the cheap claim query
+   * only — the sync itself runs after the response is sent.
+   *
+   * If another request already holds the claim we short-circuit. The holder
+   * will populate the cache shortly; the next request after the freshness TTL
+   * will re-attempt. Cold-start path does not use this gate (see ensureFreshListing).
+   */
+  private async scheduleBackgroundFullSync(params: {
     userId: string;
     githubAccessToken: string;
     executionCtx: ExecutionContext;
-  }): void {
+  }): Promise<void> {
+    const claimed = await this.listingSyncRepository.tryClaimSync(
+      params.userId,
+      new Date().toISOString(),
+      STALE_CLAIM_AFTER_MS,
+    );
+    if (!claimed) {
+      logger.info(
+        `background sync skipped for user ${params.userId} - another sync in flight`,
+      );
+      return;
+    }
+
     params.executionCtx.waitUntil(
       this.fullSync({
         userId: params.userId,
         githubAccessToken: params.githubAccessToken,
-      }).then((result) => {
+      }).then(async (result) => {
         if (!result.ok) {
+          // fullSync failure path didn't call setSyncedAt, so the claim is
+          // still held. Release it explicitly so the next request can retry
+          // without waiting for the stale-claim window.
+          await this.listingSyncRepository.releaseSyncClaim(params.userId);
           logger.error(
             `Background repo listing sync failed for user ${params.userId}: ${result.error.message}`,
           );
         }
-      }).catch((error) => {
+        // Success path: setSyncedAt inside fullSync already cleared sync_started_at.
+      }).catch(async (error) => {
+        await this.listingSyncRepository.releaseSyncClaim(params.userId);
         logger.error(
           `Background repo listing sync threw for user ${params.userId}`,
           { error },
