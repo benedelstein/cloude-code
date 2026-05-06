@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const OpenAICodexModel = z.enum([
+  "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",
   "gpt-5.3-codex",
@@ -11,6 +12,7 @@ export const OpenAICodexModel = z.enum([
 export type OpenAICodexModel = z.infer<typeof OpenAICodexModel>;
 
 export const OPENAI_CODEX_MODEL_DISPLAY_NAMES: Record<OpenAICodexModel, string> = {
+  "gpt-5.5": "GPT-5.5",
   "gpt-5.4": "GPT-5.4",
   "gpt-5.4-mini": "GPT-5.4 Mini",
   "gpt-5.3-codex": "GPT-5.3 Codex",
@@ -34,6 +36,11 @@ export const OPENAI_CODEX_PROVIDER = {
   authMethods: ["oauth" as const],
   todoToolName: "update_plan",
   models: [
+    {
+      id: "gpt-5.5" as const,
+      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.5"],
+      isDefault: false,
+    },
     {
       id: "gpt-5.4" as const,
       displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4"],
