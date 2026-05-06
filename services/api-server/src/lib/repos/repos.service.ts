@@ -203,20 +203,16 @@ export class ReposService {
     const syncedAt = await this.listingSyncRepository.getSyncedAt(params.userId);
 
     if (syncedAt === null) {
-      const cachedCount = await this.cacheRepository.countAllowedByUser(params.userId);
-      if (cachedCount === 0) {
-        // Cold cache: must sync inline before returning anything.
-        const result = await this.fullSync({
-          userId: params.userId,
-          githubAccessToken: params.githubAccessToken,
-        });
-        if (!result.ok) {
-          return result;
-        }
-        return success(undefined);
+      // No sync marker: always inline-sync. Pre-existing rows from the old
+      // paginated flow are partial (only pages the user happened to scroll),
+      // so trusting them would serve incomplete listing/search results.
+      const result = await this.fullSync({
+        userId: params.userId,
+        githubAccessToken: params.githubAccessToken,
+      });
+      if (!result.ok) {
+        return result;
       }
-      // We have legacy cached rows but no sync marker: serve them and refresh in bg.
-      this.scheduleBackgroundFullSync(params);
       return success(undefined);
     }
 

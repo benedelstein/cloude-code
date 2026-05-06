@@ -277,19 +277,6 @@ export class GitHubUserRepoAccessCacheRepository {
     return result.results ?? [];
   }
 
-  /**
-   * Count allowed listing rows for a user. Used to detect first-ever sync.
-   */
-  async countAllowedByUser(userId: string): Promise<number> {
-    const row = await this.database.prepare(
-      `SELECT COUNT(*) AS count FROM github_user_repo_access_cache
-       WHERE user_id = ? AND allowed = 1 AND repo_full_name IS NOT NULL`,
-    )
-      .bind(userId)
-      .first<{ count: number }>();
-    return row?.count ?? 0;
-  }
-
   async deleteByInstallationId(installationId: number): Promise<void> {
     await this.database.prepare(
       `DELETE FROM github_user_repo_access_cache WHERE installation_id = ?`,
