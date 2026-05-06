@@ -279,9 +279,16 @@ export class ReposService {
       });
     }
 
-    const entries: Array<{ installationId: number; repository: GitHubRepositoryData }> = [];
+    // Per-installation atomic writes: a transient failure on one installation
+    // leaves its prior cached rows intact and does not affect other
+    // installations. The user-level `synced_at` only advances if every
+    // installation succeeded - any failure means the next request retries.
+    const expiresAt = new Date(Date.now() + LISTING_ROW_TTL_MS).toISOString();
+    let totalRepoCount = 0;
+    let allSucceeded = true;
 
     for (const installation of installations) {
+      let installationRepos: GitHubRepositoryData[];
       try {
         const repositories = await octokit.paginate(
           octokit.rest.apps.listInstallationReposForAuthenticatedUser,
@@ -290,43 +297,52 @@ export class ReposService {
             per_page: 100,
           },
         );
-        for (const repository of repositories) {
-          entries.push({
-            installationId: installation.id,
-            repository: {
-              id: repository.id,
-              fullName: repository.full_name,
-              owner: repository.owner.login,
-              name: repository.name,
-              defaultBranch: repository.default_branch,
-              private: repository.private,
-              description: repository.description,
-            },
-          });
-        }
+        installationRepos = repositories.map((repository) => ({
+          id: repository.id,
+          fullName: repository.full_name,
+          owner: repository.owner.login,
+          name: repository.name,
+          defaultBranch: repository.default_branch,
+          private: repository.private,
+          description: repository.description,
+        }));
       } catch (error) {
-        // A single installation failing shouldn't tank the whole sync;
-        // log and continue so other installations still populate.
         logger.error(
           `Failed to list repos for installation ${installation.id} (user ${params.userId})`,
           { error },
         );
+        allSucceeded = false;
+        continue;
       }
+
+      await this.cacheRepository.replaceAllowedListingForUserInstallation(
+        params.userId,
+        installation.id,
+        installationRepos,
+        expiresAt,
+      );
+      totalRepoCount += installationRepos.length;
     }
 
-    const expiresAt = new Date(Date.now() + LISTING_ROW_TTL_MS).toISOString();
-    await this.cacheRepository.replaceAllowedListingForUser(
+    // Prune installations the user no longer has access to. Authoritative
+    // because step-1's installations list succeeded.
+    await this.cacheRepository.deleteByUserExceptInstallationIds(
       params.userId,
-      entries,
-      expiresAt,
-    );
-    await this.listingSyncRepository.setSyncedAt(
-      params.userId,
-      new Date().toISOString(),
+      installations.map((installation) => installation.id),
     );
 
+    // Only mark the listing as fully synced when every installation succeeded.
+    // Otherwise the failed installation keeps its prior rows and the next
+    // request will retry (synced_at remains stale or null).
+    if (allSucceeded) {
+      await this.listingSyncRepository.setSyncedAt(
+        params.userId,
+        new Date().toISOString(),
+      );
+    }
+
     logger.info(
-      `full repo sync for user ${params.userId}: ${entries.length} repos across ${installations.length} installations in ${Date.now() - startedAt}ms`,
+      `full repo sync for user ${params.userId}: ${totalRepoCount} repos across ${installations.length} installations in ${Date.now() - startedAt}ms (allSucceeded=${allSucceeded})`,
     );
     return success(undefined);
   }

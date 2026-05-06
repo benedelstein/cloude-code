@@ -157,53 +157,51 @@ export class GitHubUserRepoAccessCacheRepository {
   }
 
   /**
-   * Atomically replace the user's full allowed-listing cache.
-   * Inserts (or updates) every entry and deletes any rows for this user that
-   * are not present in the new set. Used after a successful full sync.
+   * Atomically replace the cached allowed-listing rows for a single
+   * (user, installation) pair. Upserts every entry and deletes any prior rows
+   * for this user+installation not present in the new set. Other installations
+   * are untouched, so a transient failure on one installation cannot wipe
+   * cached data for the user's other installations.
+   *
    * @param userId Authenticated user id.
-   * @param entries Repos the user can access, each tagged with its installation id.
+   * @param installationId GitHub installation id.
+   * @param repositories Repos the user can access in this installation.
    * @param expiresAt ISO 8601 expiry for each row.
    */
-  async replaceAllowedListingForUser(
+  async replaceAllowedListingForUserInstallation(
     userId: string,
-    entries: Array<{
-      installationId: number;
-      repository: GitHubRepositoryData;
-    }>,
+    installationId: number,
+    repositories: GitHubRepositoryData[],
     expiresAt: string,
   ): Promise<void> {
-    const upserts = entries.map((entry) =>
+    const upserts = repositories.map((repository) =>
       this.buildAllowedUpsertStatement(
         userId,
-        entry.installationId,
-        entry.repository,
+        installationId,
+        repository,
         expiresAt,
       ),
     );
 
-    // Delete any rows for this user that are not in the new entry set.
-    // Using NOT IN with a tuple list isn't portable in D1, so we delete by
-    // (installation_id, repo_id) pairs absent from the new set.
-    const keepKeys = new Set(
-      entries.map((entry) => `${entry.installationId}:${entry.repository.id}`),
-    );
+    const keepRepoIds = new Set(repositories.map((repository) => repository.id));
 
-    // Read existing rows for this user to compute deletes.
+    // Read existing rows for this user+installation to compute deletes.
+    // D1 doesn't have a portable NOT IN tuple form, so we enumerate-and-filter.
     const existingRows = await this.database.prepare(
-      `SELECT installation_id, repo_id FROM github_user_repo_access_cache
-       WHERE user_id = ? AND allowed = 1`,
+      `SELECT repo_id FROM github_user_repo_access_cache
+       WHERE user_id = ? AND installation_id = ? AND allowed = 1`,
     )
-      .bind(userId)
-      .all<{ installation_id: number; repo_id: number }>();
+      .bind(userId, installationId)
+      .all<{ repo_id: number }>();
 
     const deletes = (existingRows.results ?? [])
-      .filter((row) => !keepKeys.has(`${row.installation_id}:${row.repo_id}`))
+      .filter((row) => !keepRepoIds.has(row.repo_id))
       .map((row) =>
         this.database.prepare(
           `DELETE FROM github_user_repo_access_cache
            WHERE user_id = ? AND installation_id = ? AND repo_id = ?`,
         )
-          .bind(userId, row.installation_id, row.repo_id),
+          .bind(userId, installationId, row.repo_id),
       );
 
     const batch = [...upserts, ...deletes];
@@ -211,6 +209,38 @@ export class GitHubUserRepoAccessCacheRepository {
       return;
     }
     await this.database.batch(batch);
+  }
+
+  /**
+   * Delete cached allowed-listing rows for a user that belong to installations
+   * NOT in the given allowlist. Used after a full sync to prune installations
+   * the user has lost access to (e.g. removed from an org). Safe to call only
+   * after the authoritative installations list has been fetched from GitHub.
+   *
+   * @param userId Authenticated user id.
+   * @param installationIds Installation ids to keep.
+   */
+  async deleteByUserExceptInstallationIds(
+    userId: string,
+    installationIds: number[],
+  ): Promise<void> {
+    if (installationIds.length === 0) {
+      await this.database.prepare(
+        `DELETE FROM github_user_repo_access_cache WHERE user_id = ?`,
+      )
+        .bind(userId)
+        .run();
+      return;
+    }
+
+    const placeholders = installationIds.map(() => "?").join(", ");
+    await this.database.prepare(
+      `DELETE FROM github_user_repo_access_cache
+       WHERE user_id = ?
+         AND installation_id NOT IN (${placeholders})`,
+    )
+      .bind(userId, ...installationIds)
+      .run();
   }
 
   /**
