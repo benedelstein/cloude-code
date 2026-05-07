@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 // Flat illustration-style clouds with cursor parallax. Each cloud is a single
@@ -95,7 +95,7 @@ export function CloudField() {
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none absolute inset-0 overflow-hidden"
+      className="pointer-events-none absolute inset-0 overflow-x-clip"
       style={{ "--mx": "0.5", "--my": "0.5" } as CSSProperties}
     >
       {CLOUDS.map((cloud, index) => (
@@ -106,34 +106,63 @@ export function CloudField() {
   );
 }
 
-// Full-width bottom cloud bank: bumpy top stroked, sides + bottom bleed past
-// the viewport so no edge strokes are visible.
+// Bottom-bank silhouette paths. Top is bumpy (visible cloud edge against the
+// blue sky); body extends down to the bottom of the viewBox so it can fade
+// out via a vertical alpha mask. Two density variants so narrow viewports
+// don't end up with bumps crammed together.
+const BANK_FILL_DESKTOP =
+  "M 0 280 L 0 170 Q 30 140 60 150 Q 90 110 140 130 Q 180 80 220 110 Q 260 60 320 100 Q 360 40 410 90 Q 460 60 510 95 Q 560 30 620 85 Q 670 60 720 90 Q 760 40 820 85 Q 870 60 920 90 Q 970 70 1000 110 L 1000 280 Z";
+
+const BANK_STROKE_DESKTOP =
+  "M 0 170 Q 30 140 60 150 Q 90 110 140 130 Q 180 80 220 110 Q 260 60 320 100 Q 360 40 410 90 Q 460 60 510 95 Q 560 30 620 85 Q 670 60 720 90 Q 760 40 820 85 Q 870 60 920 90 Q 970 70 1000 110";
+
+const BANK_FILL_COMPACT =
+  "M 0 280 L 0 170 Q 60 120 140 140 Q 240 60 340 100 Q 460 30 560 95 Q 680 50 780 100 Q 880 50 1000 110 L 1000 280 Z";
+
+const BANK_STROKE_COMPACT =
+  "M 0 170 Q 60 120 140 140 Q 240 60 340 100 Q 460 30 560 95 Q 680 50 780 100 Q 880 50 1000 110";
+
+// Full-width bottom cloud bank: bumpy top silhouette over a body that fades
+// smoothly to transparent toward the bottom. Sides bleed past the viewport
+// (clipped by the parent's overflow-x-clip).
 function BottomBank() {
-  // Same parallax magnitude as a depth=1 cloud.
+  // Same parallax magnitude as a depth=1 cloud. Sign is inverted so that
+  // moving the cursor right reveals the right end of the bank.
   const px = 60;
   const py = 32;
+
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const update = () => setCompact(window.innerWidth < 768);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const fadeMask = "linear-gradient(to bottom, black 0%, black 55%, transparent 100%)";
+
   return (
     <div
-      className="absolute bottom-0"
+      className="absolute z-20"
       style={{
+        bottom: "-22vh",
         left: "-5vw",
         width: "110vw",
-        transform: `translate(calc((var(--mx) - 0.5) * ${px}px), calc((var(--my) - 0.5) * ${py}px))`,
+        transform: `translate(calc((0.5 - var(--mx)) * ${px}px), calc((0.5 - var(--my)) * ${py}px))`,
         willChange: "transform",
+        maskImage: fadeMask,
+        WebkitMaskImage: fadeMask,
       }}
     >
       <svg
         viewBox="0 0 1000 280"
         preserveAspectRatio="none"
         className="block w-full"
-        style={{ height: "30vh" }}
+        style={{ height: "55vh" }}
       >
+        <path d={compact ? BANK_FILL_COMPACT : BANK_FILL_DESKTOP} fill="#ffffff" />
         <path
-          d="M 0 280 L 0 170 Q 30 140 60 150 Q 90 110 140 130 Q 180 80 220 110 Q 260 60 320 100 Q 360 40 410 90 Q 460 60 510 95 Q 560 30 620 85 Q 670 60 720 90 Q 760 40 820 85 Q 870 60 920 90 Q 970 70 1000 110 L 1000 280 Z"
-          fill="#ffffff"
-        />
-        <path
-          d="M 0 170 Q 30 140 60 150 Q 90 110 140 130 Q 180 80 220 110 Q 260 60 320 100 Q 360 40 410 90 Q 460 60 510 95 Q 560 30 620 85 Q 670 60 720 90 Q 760 40 820 85 Q 870 60 920 90 Q 970 70 1000 110"
+          d={compact ? BANK_STROKE_COMPACT : BANK_STROKE_DESKTOP}
           fill="none"
           stroke="#6b8aa8"
           strokeWidth={1.2}
@@ -148,11 +177,14 @@ function BottomBank() {
 function Cloud({ x, y, width, depth, variant, flip }: CloudConfig) {
   const px = (depth * 60).toFixed(1);
   const py = (depth * 32).toFixed(1);
+  // Width in vmax so portrait phones (where vh > vw) get visibly larger
+  // clouds rather than shrinking with the narrow viewport.
   const style: CSSProperties = {
     left: `${x}%`,
     top: `${y}%`,
-    width: `${width}vw`,
-    transform: `translate(calc((var(--mx) - 0.5) * ${px}px), calc((var(--my) - 0.5) * ${py}px))${flip ? " scaleX(-1)" : ""}`,
+    width: `${width}vmax`,
+    transform: `translate(calc((0.5 - var(--mx)) * ${px}px), calc((0.5 - var(--my)) * ${py}px))${flip ? " scaleX(-1)" : ""}`,
+    filter: "drop-shadow(0 4px 6px rgba(31, 45, 61, 0.12))",
     willChange: "transform",
   };
   return (
