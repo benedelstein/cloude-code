@@ -60,12 +60,12 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
     }
     return (
       <CloudButton className={sizeClass} disabled={loading} onClick={handleSignIn}>
+        {label}
         {loading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
           <ArrowRight className="h-5 w-5" />
         )}
-        {label}
       </CloudButton>
     );
   };
