@@ -109,11 +109,11 @@ export function DeviceConnections() {
         >
           <span
             aria-hidden
-            className="absolute inset-0 animate-ping rounded-full bg-sky-300 opacity-50"
+            className="absolute inset-0 animate-ping rounded-full bg-sky-100 opacity-100"
             style={{ animationDuration: "2.4s", animationDelay: `${i * 0.7}s` }}
           />
-          <span className="relative flex h-full w-full items-center justify-center rounded-full border border-sky-700 bg-sky-100">
-            <Icon className="h-7 w-7 text-sky-700" strokeWidth={1.75} />
+          <span className="relative flex h-full w-full items-center justify-center rounded-full border border-dark-blue bg-sky-100">
+            <Icon className="h-7 w-7 text-dark-blue" strokeWidth={1.75} />
           </span>
         </div>
       ))}

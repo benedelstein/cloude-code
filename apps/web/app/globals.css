@@ -12,6 +12,7 @@
   --foreground-muted: #64748b;
   --foreground-tertiary: #acacac;
   --border: #d6dadf;
+  --dark-blue: #050C56;
   --border-strong: #84a9d4;
   --accent: #2D7EDB;
   --accent-hover: #2D7EDB;
@@ -135,6 +136,7 @@ a {
   --color-foreground-tertiary: var(--foreground-tertiary);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-dark-blue: var(--dark-blue);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-subtle: var(--accent-subtle);

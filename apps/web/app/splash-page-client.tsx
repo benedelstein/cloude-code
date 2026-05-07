@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Github, Loader2 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
@@ -14,6 +13,7 @@ import { CloudIllustration } from "@/components/ui/cloud-illustration";
 import { SiteFooter } from "@/components/site-footer";
 import { ComputerCluster } from "./computer-cluster";
 import { DeviceConnections } from "./device-connections";
+import { HarnessIllustration } from "./harness-illustration";
 import { StickyHeader } from "./sticky-header";
 
 interface SplashPageClientProps {
@@ -125,13 +125,13 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
           >
             Agent teams built for parallel scale.
           </p>
-          <p
+          {/* <p
             className="mt-2 max-w-xl text-pretty text-sm text-muted-foreground"
             style={{ textShadow: "0 0 10px rgba(255,255,255,0.85)" }}
           >
             Cloude Code gives agents their own full environment to work on, so you can
             scale up output without being limited by your own hardware.
-          </p>
+          </p> */}
 
           <div className="mt-8 flex justify-center">{renderPrimaryCTA("lg")}</div>
         </div>
@@ -166,7 +166,7 @@ const FEATURES: Feature[] = [
   {
     title: "Always on, anywhere",
     body:
-      "Kick off a task from your phone or your laptop. Agents keep working while you don't.",
+      "Monitor tasks from your phone or your laptop. Agents keep working while you don't.",
     illustration: <DeviceConnections />,
   },
 ];
@@ -179,6 +179,10 @@ function FeaturesSection() {
           <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Serious agents deserve their own computers.
           </h2>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Cloude Code gives agents the same tools you use, 
+            free from the limitations of running on your own hardware.
+          </p>
         </div>
         <div className="mt-24 flex flex-col gap-24 sm:gap-32">
           {FEATURES.map((feature, i) => {
@@ -210,34 +214,6 @@ function FeaturesSection() {
   );
 }
 
-function HarnessIllustration() {
-  return (
-    <div className="relative h-48 w-64 sm:h-56 sm:w-72">
-      <Image
-        src="/claude_code_icon.svg"
-        alt="Claude Code"
-        width={96}
-        height={96}
-        className="absolute left-1/2 top-2 h-20 w-20 -translate-x-1/2 object-contain sm:h-24 sm:w-24"
-      />
-      <Image
-        src="/openai_logo.svg"
-        alt="OpenAI"
-        width={88}
-        height={88}
-        className="absolute bottom-4 left-4 h-20 w-20 object-contain sm:h-24 sm:w-24"
-      />
-      <Image
-        src="/gemini_logo.svg"
-        alt="Gemini"
-        width={88}
-        height={88}
-        className="absolute bottom-8 right-2 h-20 w-20 object-contain sm:h-24 sm:w-24"
-      />
-    </div>
-  );
-}
-
 function CTASection({ cta }: { cta: ReactNode }) {
   return (
     <section className="relative overflow-hidden bg-sky-200">
@@ -252,9 +228,9 @@ function CTASection({ cta }: { cta: ReactNode }) {
           transform: "translateY(-39%)",
         }}
       >
-        <CloudBank flip className="h-full" />
+        <CloudBank flip className="h-full" fill="var(--color-background-secondary)" />
       </div>
-      <div className="relative mx-auto max-w-3xl px-6 py-24 text-center sm:px-8 sm:py-32">
+      <div className="relative mx-auto max-w-3xl px-6 pt-32 pb-24 text-center md:px-8 md:pt-48 sm:pb-32">
         <h2
           className="font-display text-4xl font-normal text-white leading-[1.05] sm:text-6xl"
           style={TITLE_STROKE}

@@ -198,7 +198,7 @@ export function ComputerCluster() {
             }}
           >
             <Monitor
-              className="text-sky-700"
+              className="text-dark-blue"
               strokeWidth={1.75}
               style={{ width: size * 0.5, height: size * 0.5 }}
             />

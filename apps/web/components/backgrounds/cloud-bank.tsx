@@ -13,19 +13,21 @@ const BANK_STROKE_DESKTOP =
   "M 0 170 Q 30 140 60 150 Q 90 110 140 130 Q 180 80 220 110 Q 260 60 320 100 Q 360 40 410 90 Q 460 60 500 80 Q 540 60 590 90 Q 640 40 680 100 Q 740 60 780 110 Q 820 80 860 130 Q 910 110 940 150 Q 970 140 1000 170";
 
 const BANK_FILL_COMPACT =
-  "M 0 280 L 0 170 Q 60 120 140 140 Q 240 60 340 100 Q 440 30 500 80 Q 560 30 660 100 Q 760 60 860 140 Q 940 120 1000 170 L 1000 280 Z";
+  "M 0 280 L 0 170 Q 80 150 180 160 Q 320 110 420 145 Q 500 120 580 145 Q 680 110 820 160 Q 920 150 1000 170 L 1000 280 Z";
 
 const BANK_STROKE_COMPACT =
-  "M 0 170 Q 60 120 140 140 Q 240 60 340 100 Q 440 30 500 80 Q 560 30 660 100 Q 760 60 860 140 Q 940 120 1000 170";
+  "M 0 170 Q 80 150 180 160 Q 320 110 420 145 Q 500 120 580 145 Q 680 110 820 160 Q 920 150 1000 170";
 
 interface CloudBankProps {
   /** Flip vertically — bumpy edge points down instead of up. */
   flip?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  /** Body fill color. Defaults to white. */
+  fill?: string;
 }
 
-export function CloudBank({ flip, className, style }: CloudBankProps) {
+export function CloudBank({ flip, className, style, fill = "#ffffff" }: CloudBankProps) {
   const [compact, setCompact] = useState(false);
   useEffect(() => {
     const update = () => setCompact(window.innerWidth < 768);
@@ -44,7 +46,7 @@ export function CloudBank({ flip, className, style }: CloudBankProps) {
         transform: flip ? "scaleY(-1)" : style?.transform,
       }}
     >
-      <path d={compact ? BANK_FILL_COMPACT : BANK_FILL_DESKTOP} fill="#ffffff" />
+      <path d={compact ? BANK_FILL_COMPACT : BANK_FILL_DESKTOP} fill={fill} />
       <path
         d={compact ? BANK_STROKE_COMPACT : BANK_STROKE_DESKTOP}
         fill="none"
