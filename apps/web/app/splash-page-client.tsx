@@ -2,15 +2,19 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Github, Laptop, Loader2, Monitor, Smartphone } from "lucide-react";
+import { ArrowRight, Github, Loader2 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { CloudButton } from "@/components/ui/cloud-button";
 import { CloudBackground } from "@/components/backgrounds/cloud-background";
+import { CloudBank } from "@/components/backgrounds/cloud-bank";
 import { CloudIllustration } from "@/components/ui/cloud-illustration";
 import { SiteFooter } from "@/components/site-footer";
+import { ComputerCluster } from "./computer-cluster";
+import { DeviceConnections } from "./device-connections";
+import { StickyHeader } from "./sticky-header";
 
 interface SplashPageClientProps {
   hasSessionCookie: boolean;
@@ -18,11 +22,6 @@ interface SplashPageClientProps {
 
 const TITLE_STROKE: CSSProperties = {
   WebkitTextStroke: "4px #1f2d3d",
-  paintOrder: "stroke fill",
-};
-
-const WORDMARK_STROKE: CSSProperties = {
-  WebkitTextStroke: "2px #1f2d3d",
   paintOrder: "stroke fill",
 };
 
@@ -124,7 +123,7 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
             className="mt-4 max-w-xl text-pretty text-base text-secondary-foreground sm:text-lg"
             style={{ textShadow: "0 0 10px rgba(255,255,255,0.85)" }}
           >
-            IDK WHAT TO SAY HERE.
+            Agent teams built for parallel scale.
           </p>
           <p
             className="mt-2 max-w-xl text-pretty text-sm text-muted-foreground"
@@ -145,43 +144,6 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
   );
 }
 
-function StickyHeader({ children }: { children: ReactNode }) {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > window.innerHeight * 0.5);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <header className="fixed inset-x-0 top-0 z-50 h-20">
-      <div
-        className={`absolute inset-0 border-b border-black/5 bg-white/85 backdrop-blur-sm transition-opacity duration-300 ${
-          scrolled ? "opacity-100" : "opacity-0"
-        }`}
-      />
-      <div className="relative flex h-full items-center justify-between px-5 sm:px-8">
-        <span
-          className={`font-display text-xl font-normal text-white leading-none transition-all duration-300 motion-reduce:transition-none sm:text-2xl ${
-            scrolled
-              ? "translate-y-0 opacity-100"
-              : "-translate-y-1 opacity-0 motion-reduce:translate-y-0"
-          }`}
-          style={WORDMARK_STROKE}
-          aria-hidden={!scrolled}
-        >
-          Cloude Code
-        </span>
-        <div>{children}</div>
-      </div>
-    </header>
-  );
-}
-
 interface Feature {
   title: string;
   body: string;
@@ -193,7 +155,7 @@ const FEATURES: Feature[] = [
     title: "Environments for real work",
     body:
       "Laptops were made for humans to work during their workdays, not for agents to crank out code around the clock. Cloude Code gives each agent its own persistent computer to build, run, and test in — not just an ephemeral sandbox to edit files.",
-    illustration: <ParallelComputersIllustration />,
+    illustration: <ComputerCluster />,
   },
   {
     title: "Your favorite harness",
@@ -205,7 +167,7 @@ const FEATURES: Feature[] = [
     title: "Always on, anywhere",
     body:
       "Kick off a task from your phone or your laptop. Agents keep working while you don't.",
-    illustration: <AnywhereIllustration />,
+    illustration: <DeviceConnections />,
   },
 ];
 
@@ -248,103 +210,6 @@ function FeaturesSection() {
   );
 }
 
-// Deterministic Poisson-disk-like sampler — picks ~N points inside the box
-// with each pair separated by at least `minDist`, so the cluster feels
-// scattered but never overlaps. Seeded so the layout is stable across
-// renders (and SSR).
-function seededRandom(seed: number) {
-  let s = seed;
-  return () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-}
-
-interface Bubble {
-  x: number;
-  y: number;
-  size: number;
-}
-
-function generateCluster({
-  width,
-  height,
-  count,
-  sizeRange,
-  seed,
-}: {
-  width: number;
-  height: number;
-  count: number;
-  sizeRange: [number, number];
-  seed: number;
-}): Bubble[] {
-  const rand = seededRandom(seed);
-  const points: Bubble[] = [];
-  const maxAttempts = 6000;
-
-  for (let attempt = 0; attempt < maxAttempts && points.length < count; attempt++) {
-    const size = sizeRange[0] + rand() * (sizeRange[1] - sizeRange[0]);
-    const x = rand() * (width - size);
-    const y = rand() * (height - size);
-    const padding = -2; // slight overlap allowed for tighter packing
-
-    const collides = points.some((p) => {
-      const cx = x + size / 2;
-      const cy = y + size / 2;
-      const pcx = p.x + p.size / 2;
-      const pcy = p.y + p.size / 2;
-      const dx = cx - pcx;
-      const dy = cy - pcy;
-      const minDist = (size + p.size) / 2 + padding;
-      return dx * dx + dy * dy < minDist * minDist;
-    });
-
-    if (!collides) points.push({ x, y, size });
-  }
-
-  return points;
-}
-
-const MONITOR_CLUSTER = generateCluster({
-  width: 360,
-  height: 260,
-  count: 22,
-  sizeRange: [48, 80],
-  seed: 11,
-});
-// Mark one of the larger bubbles as "live" so the green dot reads.
-const LIVE_INDEX = MONITOR_CLUSTER.reduce(
-  (best, b, i) => (b.size > MONITOR_CLUSTER[best].size ? i : best),
-  0,
-);
-
-function ParallelComputersIllustration() {
-  return (
-    <div className="relative h-[260px] w-[360px]">
-      {MONITOR_CLUSTER.map((m, i) => (
-        <div
-          key={i}
-          className="absolute flex items-center justify-center rounded-full bg-sky-100"
-          style={{ left: m.x, top: m.y, width: m.size, height: m.size }}
-        >
-          <Monitor
-            className="text-sky-700"
-            strokeWidth={1.75}
-            style={{ width: m.size * 0.5, height: m.size * 0.5 }}
-          />
-          {i === LIVE_INDEX && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function HarnessIllustration() {
   return (
     <div className="relative h-48 w-64 sm:h-56 sm:w-72">
@@ -373,36 +238,29 @@ function HarnessIllustration() {
   );
 }
 
-function AnywhereIllustration() {
-  return (
-    <div className="flex items-center gap-6">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100">
-        <Smartphone className="h-9 w-9 text-sky-700" strokeWidth={1.75} />
-      </div>
-      <span className="relative flex h-3 w-3">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
-      </span>
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100">
-        <Laptop className="h-9 w-9 text-sky-700" strokeWidth={1.75} />
-      </div>
-    </div>
-  );
-}
-
 function CTASection({ cta }: { cta: ReactNode }) {
   return (
-    <section className="relative py-24 text-center sm:py-32">
-      <div className="mx-auto max-w-3xl px-6 sm:px-8">
+    <section className="relative overflow-hidden bg-sky-200">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{
+          height: "40vh",
+          // Body of the bank is the top ~39% of the SVG (y=0..110 of viewBox 0..280
+          // after flip). Translating up by that fraction lands the body-bumps
+          // boundary at section top so overflow-hidden clips the body cleanly.
+          transform: "translateY(-39%)",
+        }}
+      >
+        <CloudBank flip className="h-full" />
+      </div>
+      <div className="relative mx-auto max-w-3xl px-6 py-24 text-center sm:px-8 sm:py-32">
         <h2
           className="font-display text-4xl font-normal text-white leading-[1.05] sm:text-6xl"
           style={TITLE_STROKE}
         >
-          Footer CTA goes here.
+          Try it now
         </h2>
-        {/* <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
-          Spin up as many agents as you have ideas. Cloude Code handles the machines.
-        </p> */}
         <div className="mt-10 flex justify-center">{cta}</div>
       </div>
     </section>
