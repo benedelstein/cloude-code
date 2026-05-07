@@ -103,7 +103,7 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
       <section className="relative z-10 h-svh overflow-x-clip">
         <CloudBackground />
 
-        <div className="relative z-10 mx-auto flex h-full max-w-5xl flex-col items-center justify-center px-5 pb-24 pt-20 text-center sm:px-8">
+        <div className="relative z-10 mx-auto flex h-full max-w-5xl flex-col items-center justify-center px-5 pb-24 pt-20 text-center md:px-8">
           <div
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[60%] w-[80%] max-w-2xl -translate-x-1/2 -translate-y-1/2"
@@ -114,13 +114,13 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
             }}
           />
           <h1
-            className="font-display text-5xl font-normal text-white leading-[0.96] tracking-normal sm:text-7xl lg:text-8xl"
+            className="font-display text-5xl font-normal text-white leading-[0.96] tracking-normal md:text-7xl lg:text-8xl"
             style={TITLE_STROKE}
           >
             Cloude Code
           </h1>
           <p
-            className="mt-4 max-w-xl text-pretty text-base text-secondary-foreground sm:text-lg"
+            className="mt-4 max-w-xl text-pretty text-base text-secondary-foreground md:text-lg"
             style={{ textShadow: "0 0 10px rgba(255,255,255,0.85)" }}
           >
             Agent teams built for parallel scale.
@@ -138,7 +138,7 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
       </section>
 
       <FeaturesSection />
-      <CTASection cta={renderPrimaryCTA("xl", "Start Building")} />
+      <CTASection cta={renderPrimaryCTA("xl", "Get Started")} />
       <SiteFooter />
     </main>
   );
@@ -160,7 +160,7 @@ const FEATURES: Feature[] = [
   {
     title: "Your favorite harness",
     body:
-      "Cloude Code runs your preferred provider's own agent harness directly. Connect your Claude or OpenAI login — no API keys needed. More providers to come.",
+      "Cloude Code runs your preferred provider's own agent harness directly on its dev computer. Connect your Claude or OpenAI login — no API keys needed. More providers to come.",
     illustration: <HarnessIllustration />,
   },
   {
@@ -173,18 +173,18 @@ const FEATURES: Feature[] = [
 
 function FeaturesSection() {
   return (
-    <section className="relative py-24 sm:py-32">
-      <div className="mx-auto max-w-6xl px-6 sm:px-8">
+    <section className="relative py-24 md:py-32">
+      <div className="mx-auto max-w-6xl px-6 md:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             Serious agents deserve their own computers.
           </h2>
           <p className="mt-4 text-sm text-muted-foreground">
-            Cloude Code gives agents the same tools you use, 
+            Give your agents the same tools you use, in their own isolated environment —
             free from the limitations of running on your own hardware.
           </p>
         </div>
-        <div className="mt-24 flex flex-col gap-24 sm:gap-32">
+        <div className="mt-24 flex flex-col gap-24 md:gap-32">
           {FEATURES.map((feature, i) => {
             const flipped = i % 2 === 1;
             return (
@@ -216,7 +216,7 @@ function FeaturesSection() {
 
 function CTASection({ cta }: { cta: ReactNode }) {
   return (
-    <section className="relative overflow-hidden bg-sky-200">
+    <section className="relative overflow-hidden bg-linear-to-b from-background-secondary via-sky-100 to-sky-200">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0"
@@ -230,12 +230,12 @@ function CTASection({ cta }: { cta: ReactNode }) {
       >
         <CloudBank flip className="h-full" fill="var(--color-background-secondary)" />
       </div>
-      <div className="relative mx-auto max-w-3xl px-6 pt-32 pb-24 text-center md:px-8 md:pt-48 sm:pb-32">
+      <div className="relative mx-auto max-w-3xl px-6 pt-32 pb-24 text-center md:px-8 md:pt-48 md:pb-32">
         <h2
-          className="font-display text-4xl font-normal text-white leading-[1.05] sm:text-6xl"
+          className="font-display text-3xl md:text-5xl font-normal text-white leading-[1.05]"
           style={TITLE_STROKE}
         >
-          Try it now
+          Start your agent team 
         </h2>
         <div className="mt-10 flex justify-center">{cta}</div>
       </div>

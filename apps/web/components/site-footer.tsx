@@ -8,13 +8,13 @@ const WORDMARK_STROKE: CSSProperties = {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-background pt-32 pb-48">
-      <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 sm:px-8 md:flex-row md:items-start md:justify-between">
+    <footer className="border-t border-border bg-background pt-24 pb-32 md:pt-48 md:pb-64">
+      <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 md:px-8 md:flex-row md:items-start md:justify-between">
         <div>
           <span
             className="font-display text-3xl font-normal text-white leading-none"
             style={WORDMARK_STROKE}
-          >
+          >w
             Cloude Code
           </span>
           <p className="mt-4 text-sm text-muted-foreground">
@@ -38,7 +38,7 @@ export function SiteFooter() {
           />
         </div>
       </div>
-      <div className="mx-auto mt-12 flex max-w-5xl items-center justify-between px-6 text-xs text-muted-foreground sm:px-8">
+      <div className="mx-auto mt-12 flex max-w-5xl items-center justify-between px-6 text-xs text-muted-foreground md:px-8">
         <span>© {new Date().getFullYear()} BZE, LLC</span>
       </div>
     </footer>

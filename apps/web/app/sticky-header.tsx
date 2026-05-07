@@ -31,14 +31,14 @@ export function StickyHeader({ children }: { children: ReactNode }) {
           scrolled ? "opacity-100" : "opacity-0"
         }`}
       />
-      <div className="relative flex h-full items-center justify-between px-5 sm:px-8">
+      <div className="relative flex h-full items-center justify-between px-5 md:px-8">
         <button
           type="button"
           onClick={scrollToTop}
           aria-label="Scroll to top"
           aria-hidden={!scrolled}
           tabIndex={scrolled ? 0 : -1}
-          className={`font-display text-xl font-normal text-white leading-none transition-all duration-300 motion-reduce:transition-none sm:text-2xl ${
+          className={`font-display text-xl font-normal text-white leading-none transition-all duration-300 motion-reduce:transition-none md:text-2xl ${
             scrolled
               ? "translate-y-0 opacity-100"
               : "-translate-y-1 opacity-0 motion-reduce:translate-y-0"
