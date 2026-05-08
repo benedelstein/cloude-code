@@ -24,7 +24,7 @@ export default function GithubInstallCompletePage() {
       return;
     }
 
-    router.replace("/dashboard");
+    router.replace("/");
   }, [router]);
 
   return (

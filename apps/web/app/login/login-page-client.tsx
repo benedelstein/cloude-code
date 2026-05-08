@@ -17,7 +17,7 @@ export function LoginPageClient({ isInstallComplete }: LoginPageClientProps) {
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      router.replace("/dashboard");
+      router.replace("/");
     }
   }, [loading, isAuthenticated, router]);
 

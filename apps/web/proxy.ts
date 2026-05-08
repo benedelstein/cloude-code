@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionTokenFromRequest } from "@/lib/session";
 
-const publicRoutes = ["/", "/login"];
+const publicRoutes = ["/login"];
 
 // Optimistic auth check — reads cookie only, no DB call.
 // https://nextjs.org/docs/app/guides/authentication#optimistic-checks-with-proxy-optional
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = publicRoutes.some((route) => pathname === route);
+  const isPublic = publicRoutes.some((route) =>
+    pathname.startsWith(route),
+  );
 
   if (isPublic) {
     return NextResponse.next();
