@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type PointerEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface CloudButtonProps {
@@ -176,9 +176,27 @@ export function CloudButton({
     </>
   );
 
+  // Mouse/pen morph on hover-enter. Touch morphs on pointerdown (active press)
+  // instead — iOS Safari treats hover-style visual changes from pointerenter
+  // on touch as "first-tap previews hover" and can withhold the synthetic
+  // click, but pointerdown is a press and doesn't trigger that heuristic.
+  const handleHoverEnter = (e: PointerEvent) => {
+    if (e.pointerType === "touch") return;
+    animateTo(1);
+  };
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.pointerType !== "touch") return;
+    animateTo(1);
+  };
+  // Reverse for any input: hover-out for mouse/pen, finger lift / drag-off
+  // for touch. Cancel covers gesture interruption (e.g. scroll takeover).
+  const handleLeaveOrCancel = () => animateTo(0);
+
   const handlers = {
-    onPointerEnter: () => animateTo(1),
-    onPointerLeave: () => animateTo(0),
+    onPointerEnter: handleHoverEnter,
+    onPointerDown: handlePointerDown,
+    onPointerLeave: handleLeaveOrCancel,
+    onPointerCancel: handleLeaveOrCancel,
     onFocus: () => animateTo(1),
     onBlur: () => animateTo(0),
   };
