@@ -207,6 +207,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
+          providerId={selectedProvider}
           rightInset={rightSidebarInset}
           onHasNewMessages={setShowScrollToBottom}
           scrollToBottomRef={scrollToBottomRef}

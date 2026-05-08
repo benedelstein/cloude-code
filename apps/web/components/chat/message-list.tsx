@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
-import type { ListReposResponse } from "@repo/shared";
+import type { ListReposResponse, ProviderId } from "@repo/shared";
 import { AlertTriangle, MessageCircle } from "lucide-react";
 import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
@@ -20,6 +20,7 @@ interface MessageListProps {
   isResponding?: boolean;
   pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
+  providerId?: ProviderId | null;
   rightInset?: string;
   onHasNewMessages?: (hasNew: boolean) => void;
   scrollToBottomRef?: React.RefObject<(() => void) | null>;
@@ -34,6 +35,7 @@ export function MessageList({
   isResponding,
   pendingUserMessage,
   userAvatarUrl,
+  providerId,
   rightInset = "0rem",
   onHasNewMessages,
   scrollToBottomRef,
@@ -187,12 +189,14 @@ export function MessageList({
               message={message}
               isStreaming={streamingMessage?.id === message.id}
               userAvatarUrl={userAvatarUrl}
+              providerId={providerId}
             />
           ))}
           {shouldRenderPendingUserMessage && pendingUserMessage && (
             <MessageItem
               message={pendingUserMessage}
               userAvatarUrl={userAvatarUrl}
+              providerId={providerId}
             />
           )}
           {isResponding && <TypingIndicator />}
