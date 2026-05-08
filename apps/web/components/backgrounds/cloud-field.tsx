@@ -44,6 +44,8 @@ const CLOUDS: CloudConfig[] = [
   { x: 80,  y: 64, width: 14, depth: 0.45, variant: 2 },
 ];
 
+const SETTLE_EPSILON = 0.0005;
+
 export function CloudField() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -54,43 +56,87 @@ export function CloudField() {
     }
 
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      return;
+    }
 
     let rafId: number | null = null;
     let targetX = 0.5;
     let targetY = 0.5;
     let currentX = 0.5;
     let currentY = 0.5;
+    let visible = true;
+    let tabVisible = document.visibilityState === "visible";
 
     const tick = () => {
       currentX += (targetX - currentX) * 0.08;
       currentY += (targetY - currentY) * 0.08;
       container.style.setProperty("--mx", currentX.toFixed(4));
       container.style.setProperty("--my", currentY.toFixed(4));
+      // Stop the loop once settled at the target. pointermove restarts it.
+      if (
+        Math.abs(targetX - currentX) < SETTLE_EPSILON &&
+        Math.abs(targetY - currentY) < SETTLE_EPSILON
+      ) {
+        rafId = null;
+        return;
+      }
       rafId = requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (rafId !== null) return;
+      if (!visible || !tabVisible) return;
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const stop = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
     };
 
     const handlePointerMove = (event: PointerEvent) => {
       targetX = event.clientX / window.innerWidth;
       targetY = event.clientY / window.innerHeight;
+      start();
     };
 
     const handlePointerLeave = () => {
       targetX = 0.5;
       targetY = 0.5;
+      start();
     };
 
-    if (!prefersReducedMotion) {
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerleave", handlePointerLeave);
-      rafId = requestAnimationFrame(tick);
-    }
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerleave", handlePointerLeave);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        visible = entry.isIntersecting;
+        if (visible) start();
+        else stop();
+      },
+      { threshold: 0 },
+    );
+    observer.observe(container);
+
+    const handleVisibility = () => {
+      tabVisible = document.visibilityState === "visible";
+      if (tabVisible) start();
+      else stop();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerleave", handlePointerLeave);
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
+      document.removeEventListener("visibilitychange", handleVisibility);
+      observer.disconnect();
+      stop();
     };
   }, []);
 
@@ -147,8 +193,6 @@ function Cloud({ x, y, width, depth, variant, flip }: CloudConfig) {
     top: `${y}%`,
     width: `${width}vmax`,
     transform: `translate(calc((0.5 - var(--mx)) * ${px}px), calc((0.5 - var(--my)) * ${py}px))${flip ? " scaleX(-1)" : ""}`,
-    filter: "drop-shadow(0 4px 6px rgba(31, 45, 61, 0.12))",
-    willChange: "transform",
   };
   return (
     <div className="absolute" style={style}>
@@ -169,10 +213,15 @@ const PATHS: Record<0 | 1 | 2, string> = {
 };
 
 function CloudShape({ variant }: { variant: 0 | 1 | 2 }) {
+  const d = PATHS[variant];
   return (
-    <svg viewBox="0 0 200 100" preserveAspectRatio="none" className="block h-auto w-full">
+    <svg viewBox="0 0 200 104" preserveAspectRatio="none" className="block h-auto w-full">
+      {/* Flat shadow: same path offset down, translucent dark fill. Cheaper
+          than a CSS drop-shadow filter (which forces a paint each parallax
+          frame). */}
+      <path d={d} transform="translate(0 2)" fill="rgba(31, 45, 61, 0.10)" />
       <path
-        d={PATHS[variant]}
+        d={d}
         fill="#ffffff"
         stroke="#6b8aa8"
         strokeWidth={1.2}

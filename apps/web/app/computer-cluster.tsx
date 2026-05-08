@@ -1,7 +1,7 @@
 "use client";
 
 import { Monitor } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 const W = 360;
 const H = 260;
@@ -83,7 +83,7 @@ const DAMPING = 0.92;
 const GRAVITY = 0.18;
 const CURSOR_RADIUS = 110;
 const CURSOR_STRENGTH = 2.6;
-const COLLISION_ITERS = 6;
+const COLLISION_ITERS = 3;
 
 function step(bodies: Body[], cursor: { x: number; y: number } | null) {
   for (const b of bodies) {
@@ -158,24 +158,88 @@ function makeWarmedBodies(): Body[] {
 }
 
 export function ComputerCluster() {
-  const [bodies] = useState<Body[]>(makeWarmedBodies);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const bodiesRef = useRef<Body[]>(makeWarmedBodies());
   const cursorRef = useRef<{ x: number; y: number } | null>(null);
-  const [, setTick] = useState(0);
+
+  // Render once with warmed positions; the rAF loop mutates transforms directly.
+  const initialBodies = bodiesRef.current;
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const bodies = bodiesRef.current;
+    const nodes = nodeRefs.current;
     let raf = 0;
+    let visible = true;
+    let tabVisible = document.visibilityState === "visible";
+
+    const writeTransforms = () => {
+      for (let i = 0; i < bodies.length; i++) {
+        const b = bodies[i]!;
+        const node = nodes[i];
+        if (node) {
+          node.style.transform = `translate3d(${b.x - b.r}px, ${b.y - b.r}px, 0)`;
+        }
+      }
+    };
+
     const loop = () => {
       step(bodies, cursorRef.current);
-      setTick((n) => (n + 1) | 0);
+      writeTransforms();
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [bodies]);
+
+    const start = () => {
+      if (raf !== 0) return;
+      if (!visible || !tabVisible) return;
+      raf = requestAnimationFrame(loop);
+    };
+
+    const stop = () => {
+      if (raf !== 0) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        visible = entry.isIntersecting;
+        if (visible) {
+          console.log("ComputerCluster: onscreen, resuming");
+          start();
+        } else {
+          console.log("ComputerCluster: offscreen, pausing");
+          stop();
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(container);
+
+    const handleVisibility = () => {
+      tabVisible = document.visibilityState === "visible";
+      if (tabVisible) start();
+      else stop();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      stop();
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   return (
     <div
+      ref={containerRef}
       className="relative h-[260px] w-[360px]"
       onPointerMove={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
@@ -185,12 +249,15 @@ export function ComputerCluster() {
         cursorRef.current = null;
       }}
     >
-      {bodies.map((b, i) => {
+      {initialBodies.map((b, i) => {
         const size = b.r * 2;
         return (
           <div
             key={i}
-            className="absolute left-0 top-0 flex items-center justify-center rounded-full bg-sky-100 will-change-transform"
+            ref={(el) => {
+              nodeRefs.current[i] = el;
+            }}
+            className="absolute left-0 top-0 flex items-center justify-center rounded-full bg-sky-100"
             style={{
               width: size,
               height: size,
