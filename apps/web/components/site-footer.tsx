@@ -8,13 +8,13 @@ const WORDMARK_STROKE: CSSProperties = {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-background pt-24 pb-32 md:pt-48 md:pb-64">
+    <footer className="border-t border-border bg-background-secondary pt-24 pb-32 md:pt-48 md:pb-64">
       <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 md:px-8 md:flex-row md:items-start md:justify-between">
         <div>
           <span
             className="font-display text-3xl font-normal text-white leading-none"
             style={WORDMARK_STROKE}
-          >w
+          >
             Cloude Code
           </span>
           <p className="mt-4 text-sm text-muted-foreground">
