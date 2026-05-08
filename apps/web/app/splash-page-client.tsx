@@ -230,7 +230,7 @@ function CTASection({ cta }: { cta: ReactNode }) {
       >
         <CloudBank flip className="h-full" fill="var(--color-background-secondary)" />
       </div>
-      <div className="relative mx-auto max-w-3xl px-6 pt-32 pb-24 text-center md:px-8 md:pt-48 md:pb-32">
+      <div className="relative mx-auto max-w-3xl px-6 pt-40 pb-24 text-center md:px-8 md:pt-56 md:pb-32">
         <h2
           className="font-display text-3xl md:text-5xl font-normal text-white leading-[1.05]"
           style={TITLE_STROKE}
