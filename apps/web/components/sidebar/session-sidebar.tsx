@@ -102,7 +102,7 @@ export function SessionSidebar() {
   const handleArchiveSession = async (sessionId: string) => {
     setArchivingSessionId(sessionId);
     if (sessionId === activeSessionId) {
-      navigate("/");
+      navigate("/dashboard");
     }
     try {
       await archiveSession(sessionId);
@@ -118,7 +118,7 @@ export function SessionSidebar() {
     setTerminatingSessionId(sessionId);
     setDeleteDialogSessionId(null);
     if (sessionId === activeSessionId) {
-      navigate("/");
+      navigate("/dashboard");
     }
     try {
       await deleteSession(sessionId);
