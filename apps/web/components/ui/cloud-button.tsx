@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type PointerEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface CloudButtonProps {
@@ -176,9 +176,22 @@ export function CloudButton({
     </>
   );
 
+  // Skip morph for touch input. iOS Safari treats hover-style visual changes
+  // triggered by pointerenter as a "first-tap reveals hover" interaction and
+  // can withhold the synthetic click, requiring a second tap to navigate.
+  // Mouse/pen still get the hover morph; touch gets a plain, reliable click.
+  const handleHoverEnter = (e: PointerEvent) => {
+    if (e.pointerType === "touch") return;
+    animateTo(1);
+  };
+  const handleHoverLeave = (e: PointerEvent) => {
+    if (e.pointerType === "touch") return;
+    animateTo(0);
+  };
+
   const handlers = {
-    onPointerEnter: () => animateTo(1),
-    onPointerLeave: () => animateTo(0),
+    onPointerEnter: handleHoverEnter,
+    onPointerLeave: handleHoverLeave,
     onFocus: () => animateTo(1),
     onBlur: () => animateTo(0),
   };
