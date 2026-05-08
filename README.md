@@ -6,7 +6,7 @@ A remote agent coding environment similar to Claude Background agents and inspir
 
 - api-server: Handles user connection and session management. Coordinates between vm server and client.
 - vm-server: Runs a VM for the session with an agent process. Pulls in the repository and edits files, runs commands, etc.
-- Clients (apps/*): Connects to the server and sends messages to the agent. Tbd.
+- Clients (apps/*): Connect to the server and send messages to the agent. TBD.
 
 ## Development
 
