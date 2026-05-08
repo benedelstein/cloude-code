@@ -176,22 +176,27 @@ export function CloudButton({
     </>
   );
 
-  // Skip morph for touch input. iOS Safari treats hover-style visual changes
-  // triggered by pointerenter as a "first-tap reveals hover" interaction and
-  // can withhold the synthetic click, requiring a second tap to navigate.
-  // Mouse/pen still get the hover morph; touch gets a plain, reliable click.
+  // Mouse/pen morph on hover-enter. Touch morphs on pointerdown (active press)
+  // instead — iOS Safari treats hover-style visual changes from pointerenter
+  // on touch as "first-tap previews hover" and can withhold the synthetic
+  // click, but pointerdown is a press and doesn't trigger that heuristic.
   const handleHoverEnter = (e: PointerEvent) => {
     if (e.pointerType === "touch") return;
     animateTo(1);
   };
-  const handleHoverLeave = (e: PointerEvent) => {
-    if (e.pointerType === "touch") return;
-    animateTo(0);
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.pointerType !== "touch") return;
+    animateTo(1);
   };
+  // Reverse for any input: hover-out for mouse/pen, finger lift / drag-off
+  // for touch. Cancel covers gesture interruption (e.g. scroll takeover).
+  const handleLeaveOrCancel = () => animateTo(0);
 
   const handlers = {
     onPointerEnter: handleHoverEnter,
-    onPointerLeave: handleHoverLeave,
+    onPointerDown: handlePointerDown,
+    onPointerLeave: handleLeaveOrCancel,
+    onPointerCancel: handleLeaveOrCancel,
     onFocus: () => animateTo(1),
     onBlur: () => animateTo(0),
   };
