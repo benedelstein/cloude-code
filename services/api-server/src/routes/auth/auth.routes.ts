@@ -8,8 +8,10 @@ import type { AuthUser } from "@/middleware/auth.middleware";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import { UserRepository } from "@/repositories/user-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
+import { validateRedirectOrigin } from "@/lib/auth/preview-origin";
 import {
   getGithubRoute,
+  getBounceTargetRoute,
   postTokenRoute,
   getMeRoute,
   postLogoutRoute,
@@ -22,10 +24,28 @@ export const authRoutes = new OpenAPIHono<{
 const logger = createLogger("auth.routes.ts");
 
 /**
- * GET auth/github — returns the install + authorize URL
+ * GET auth/github — returns the install + authorize URL.
+ *
+ * Accepts an optional `origin` query param. The caller's window origin is
+ * recorded against the state nonce so the prod bouncer can 302 the OAuth code
+ * back to a Vercel preview branch after GitHub's callback. Origin is validated
+ * against the prod web origin or the preview allowlist regex before being
+ * stored.
+ *
  * @returns The install + authorize URL and the nonce token
  */
 authRoutes.openapi(getGithubRoute, async (c) => {
+  const { origin: requestedOrigin } = c.req.valid("query");
+  const redirectOrigin = requestedOrigin ?? c.env.WEB_ORIGIN;
+
+  const originResult = validateRedirectOrigin(redirectOrigin, c.env);
+  if (!originResult.ok) {
+    logger.warn(
+      `Rejecting GitHub OAuth start: ${originResult.error.message}`,
+    );
+    return c.json({ error: originResult.error.message }, 400);
+  }
+
   // create a nonce token for CSRF protection
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
@@ -34,17 +54,50 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   logger.info("Starting GitHub OAuth flow", {
     fields: {
       expiresAt,
+      redirectOrigin: originResult.value,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     },
   });
 
-  await oauthStateRepository.create(state, expiresAt);
+  await oauthStateRepository.create(state, expiresAt, null, originResult.value);
 
   const github = new GitHubAppService(c.env, logger);
   const url = github.getAuthUrl(state);
 
   return c.json({ url, state }, 200);
+});
+
+/**
+ * GET /auth/bounce-target — Look up the recorded redirect origin for a state.
+ *
+ * Called server-to-server by the prod web app's /api/auth/bounce route to
+ * discover where to 302 the OAuth code+state after GitHub's redirect. Reads
+ * but does not consume the state row (single-use consumption still happens in
+ * /auth/token). Re-validates the stored origin against the current allowlist
+ * for defense-in-depth.
+ */
+authRoutes.openapi(getBounceTargetRoute, async (c) => {
+  const { state } = c.req.valid("query");
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
+
+  const storedOrigin = await oauthStateRepository.peekRedirectOrigin(state);
+  if (!storedOrigin) {
+    logger.warn(
+      `Bounce target lookup failed: unknown or expired state ${state.slice(0, 8)}`,
+    );
+    return c.json({ error: "Invalid or expired state" }, 400);
+  }
+
+  const originResult = validateRedirectOrigin(storedOrigin, c.env);
+  if (!originResult.ok) {
+    logger.error(
+      `Bounce target lookup rejected stored origin: ${originResult.error.message}`,
+    );
+    return c.json({ error: originResult.error.message }, 400);
+  }
+
+  return c.json({ redirectOrigin: originResult.value }, 200);
 });
 
 /**

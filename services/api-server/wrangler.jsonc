@@ -20,6 +20,8 @@
     "GITHUB_APP_ID": "2799576",
     "GITHUB_APP_CLIENT_ID": "Iv23lirr1sj5RthzlsAs",
     "LOG_LEVEL": "info",
+    "WEB_ORIGIN": "https://cloudecode.dev",
+    "PREVIEW_ORIGIN_ALLOWLIST_REGEX": "^https://cloude-code-[a-z0-9][a-z0-9-]*-benedelsteins-projects\\.vercel\\.app$",
   },
   "dev": {
     "port": 8787

@@ -12,6 +12,8 @@ export interface Env {
   ENVIRONMENT: string;
   LOG_LEVEL: string;
   WORKER_URL: string;
+  WEB_ORIGIN: string;
+  PREVIEW_ORIGIN_ALLOWLIST_REGEX: string;
 
   // Secrets
   ANTHROPIC_API_KEY: string;
