@@ -5,20 +5,42 @@ import {
   githubAuthPopupMessageType,
 } from "@/types/auth";
 import { setSessionCookie } from "@/lib/session";
-import { exchangeGitHubCode, ServerApiError } from "@/lib/server-api";
+import {
+  exchangeGitHubCode,
+  getOAuthBounceTarget,
+  ServerApiError,
+} from "@/lib/server-api";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const state = requestUrl.searchParams.get("state");
 
   if (!code || !state) {
-    return new NextResponse(postPopupMessage({
-      type: githubAuthPopupMessageType.authError,
-      error: "Missing GitHub authorization code or state.",
-    }), {
-      headers: { "Content-Type": "text/html" },
-    });
+    return popupErrorResponse("Missing GitHub authorization code or state.");
+  }
+
+  // Peek the originating origin recorded against this state. If GitHub
+  // redirected us here but the flow started on a different origin (e.g. a
+  // Vercel preview branch), 302 the code+state to that origin's /api/auth/callback
+  // so the cookie is set on the originating origin and postMessage to the
+  // popup's opener succeeds the same-origin check.
+  let recordedOrigin: string;
+  try {
+    const target = await getOAuthBounceTarget(state);
+    recordedOrigin = target.redirectOrigin;
+  } catch (error) {
+    const message = error instanceof ServerApiError
+      ? "GitHub sign-in could not be completed. The session may have expired — please try again."
+      : "Failed to resolve sign-in target. Try again.";
+    return popupErrorResponse(message);
+  }
+
+  if (recordedOrigin !== requestUrl.origin) {
+    const target = new URL("/api/auth/callback", recordedOrigin);
+    target.searchParams.set("code", code);
+    target.searchParams.set("state", state);
+    return NextResponse.redirect(target.toString(), 302);
   }
 
   let tokenResponse;
@@ -28,13 +50,7 @@ export async function GET(request: NextRequest) {
     const message = error instanceof ServerApiError
       ? error.message
       : "GitHub sign-in failed. Try again.";
-    return new NextResponse(
-      postPopupMessage({
-        type: githubAuthPopupMessageType.authError,
-        error: message,
-      }),
-      { headers: { "Content-Type": "text/html" } },
-    );
+    return popupErrorResponse(message);
   }
 
   const { token, user, hasInstallations, installUrl } = tokenResponse;
@@ -53,6 +69,16 @@ export async function GET(request: NextRequest) {
   await setSessionCookie(result, token);
 
   return result;
+}
+
+function popupErrorResponse(error: string): NextResponse {
+  return new NextResponse(
+    postPopupMessage({
+      type: githubAuthPopupMessageType.authError,
+      error,
+    }),
+    { headers: { "Content-Type": "text/html" } },
+  );
 }
 
 function postPopupMessage(
