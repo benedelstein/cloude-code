@@ -49,6 +49,10 @@ const API_BASE = "/api";
 // signal at boot, not a session expiration. Don't broadcast it.
 const UNAUTHORIZED_SUPPRESSED_PATHS = new Set(["/auth/me"]);
 
+// Dispatched on the window when any /api/* call returns 401 (except for the
+// suppressed paths above). useAuth listens for this and clears user state.
+export const AUTH_UNAUTHORIZED_EVENT = "auth:unauthorized";
+
 type ApiErrorResponse = {
   error?: string;
   details?: string;
@@ -85,7 +89,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     // revoked the GitHub App, or the session was deleted). Listened to by
     // useAuth, which clears local user state and surfaces the login flow.
     if (res.status === 401 && typeof window !== "undefined" && !UNAUTHORIZED_SUPPRESSED_PATHS.has(path)) {
-      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+      window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
     }
 
     throw new ApiError(message, res.status, code, details);

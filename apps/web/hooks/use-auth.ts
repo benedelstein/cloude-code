@@ -7,6 +7,7 @@ import {
 } from "@/types/auth";
 import {
   ApiError,
+  AUTH_UNAUTHORIZED_EVENT,
   getCurrentUser,
   getGitHubAuthUrl,
   logoutUser,
@@ -60,9 +61,9 @@ export function useAuth() {
       // Best-effort cookie cleanup; ignore failures (cookie may already be gone).
       void logoutUser().catch(() => undefined);
     };
-    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => {
-      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     };
   }, []);
 
