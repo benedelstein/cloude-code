@@ -45,8 +45,10 @@ async function handler(
   responseHeaders.delete("content-length");
 
   // Buffer the response too, for the same reason — streaming non-2xx bodies
-  // through NextResponse has caused 500s in this runtime.
-  const responseBody = await res.arrayBuffer();
+  // through NextResponse has caused 500s in this runtime. Status codes that
+  // forbid a body (204, 304) must be returned with null body.
+  const bodylessStatus = res.status === 204 || res.status === 304;
+  const responseBody = bodylessStatus ? null : await res.arrayBuffer();
 
   return new NextResponse(responseBody, {
     status: res.status,
