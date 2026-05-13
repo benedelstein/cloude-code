@@ -255,7 +255,11 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
 
 // GitHub OAuth
 export async function getGitHubAuthUrl(): Promise<GitHubAuthUrlResponse> {
-  return apiFetch("/auth/github");
+  // Pass the current window origin so the server can record it against the
+  // state nonce. After GitHub redirects to the prod bouncer, the bouncer 302s
+  // back to this origin's /api/auth/callback. Required for Vercel previews.
+  const origin = encodeURIComponent(window.location.origin);
+  return apiFetch(`/auth/github?origin=${origin}`);
 }
 
 export async function logoutUser(): Promise<LogoutResponse> {

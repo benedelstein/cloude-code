@@ -8,6 +8,7 @@ import type { AuthUser } from "@/middleware/auth.middleware";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import { UserRepository } from "@/repositories/user-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
+import { validateRedirectOrigin } from "@/lib/auth/preview-origin";
 import {
   getGithubRoute,
   postTokenRoute,
@@ -22,10 +23,28 @@ export const authRoutes = new OpenAPIHono<{
 const logger = createLogger("auth.routes.ts");
 
 /**
- * GET auth/github — returns the install + authorize URL
+ * GET auth/github — returns the install + authorize URL.
+ *
+ * Accepts an optional `origin` query param. The caller's window origin is
+ * recorded against the state nonce so the prod bouncer can 302 the OAuth code
+ * back to a Vercel preview branch after GitHub's callback. Origin is validated
+ * against the prod web origin or the preview allowlist regex before being
+ * stored.
+ *
  * @returns The install + authorize URL and the nonce token
  */
 authRoutes.openapi(getGithubRoute, async (c) => {
+  const { origin: requestedOrigin } = c.req.valid("query");
+  const redirectOrigin = requestedOrigin ?? c.env.WEB_ORIGIN;
+
+  const originResult = validateRedirectOrigin(redirectOrigin, c.env);
+  if (!originResult.ok) {
+    logger.warn(
+      `Rejecting GitHub OAuth start: ${originResult.error.message}`,
+    );
+    return c.json({ error: originResult.error.message }, 400);
+  }
+
   // create a nonce token for CSRF protection
   const state = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
@@ -34,17 +53,65 @@ authRoutes.openapi(getGithubRoute, async (c) => {
   logger.info("Starting GitHub OAuth flow", {
     fields: {
       expiresAt,
+      redirectOrigin: originResult.value,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     },
   });
 
-  await oauthStateRepository.create(state, expiresAt);
+  await oauthStateRepository.create(state, expiresAt, null, originResult.value);
 
   const github = new GitHubAppService(c.env, logger);
   const url = github.getAuthUrl(state);
 
   return c.json({ url, state }, 200);
+});
+
+/**
+ * GET /auth/callback — GitHub OAuth callback entry point.
+ *
+ * GitHub redirects the popup here with `code` and `state`. We peek the state's
+ * recorded origin (without consuming the row — that happens in /auth/token),
+ * re-validate it against the allowlist for defense-in-depth, and 302 the popup
+ * to `<recorded-origin>/api/auth/finalize` so the cookie is set on the
+ * originating origin and postMessage to the popup's opener succeeds the
+ * same-origin check.
+ *
+ * This is a GitHub integration entry point, not a public API, so it's a plain
+ * Hono route (no OpenAPI schema) and unauthenticated — the state nonce is the
+ * single-use random secret that gates the flow.
+ */
+authRoutes.get("/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+
+  if (!code || !state) {
+    logger.warn("OAuth callback missing code or state");
+    return c.text("Missing GitHub authorization code or state.", 400);
+  }
+
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
+  const storedOrigin = await oauthStateRepository.peekRedirectOrigin(state);
+  if (!storedOrigin) {
+    logger.warn(
+      `OAuth callback failed: unknown or expired state ${state.slice(0, 8)}`,
+    );
+    return c.text("Invalid or expired sign-in session. Try again.", 400);
+  }
+
+  const originResult = validateRedirectOrigin(storedOrigin, c.env);
+  if (!originResult.ok) {
+    logger.error(
+      `OAuth callback rejected stored origin: ${originResult.error.message}`,
+    );
+    return c.text(originResult.error.message, 400);
+  }
+
+  const target = new URL("/api/auth/finalize", originResult.value);
+  target.searchParams.set("code", code);
+  target.searchParams.set("state", state);
+
+  return c.redirect(target.toString(), 302);
 });
 
 /**

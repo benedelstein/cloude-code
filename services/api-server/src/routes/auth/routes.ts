@@ -15,10 +15,21 @@ const ErrorResponse = z.object({
 export const getGithubRoute = createRoute({
   method: "get",
   path: "/github",
+  request: {
+    query: z.object({
+      // Optional origin to bounce back to after GitHub redirects to prod.
+      // Must match the prod web origin or the preview allowlist regex.
+      origin: z.string().optional(),
+    }),
+  },
   responses: {
     200: {
       content: { "application/json": { schema: GitHubAuthUrlResponse } },
       description: "GitHub OAuth authorization URL",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Origin is not allowed",
     },
   },
 });
