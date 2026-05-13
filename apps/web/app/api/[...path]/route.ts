@@ -26,19 +26,29 @@ async function handler(
   }
 
   const hasBody = !["GET", "HEAD"].includes(req.method);
+  // Buffer the request body before forwarding. Streaming `req.body` directly
+  // into fetch is unreliable in Next.js's Node runtime — if the body has been
+  // touched upstream, the stream is null/closed and undici throws
+  // "expected non-null body source" with `duplex: "half"`.
+  const body = hasBody ? await req.arrayBuffer() : undefined;
+
   const res = await fetch(target, {
     method: req.method,
     headers,
-    ...(hasBody && { body: req.body, duplex: "half" }),
+    body,
   });
 
   const responseHeaders = new Headers(res.headers);
-  // Remove hop-by-hop and encoding headers — fetch() already decompresses the body
+  // Remove hop-by-hop and encoding headers — fetch() already decompressed.
   responseHeaders.delete("transfer-encoding");
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("content-length");
 
-  return new NextResponse(res.body, {
+  // Buffer the response too, for the same reason — streaming non-2xx bodies
+  // through NextResponse has caused 500s in this runtime.
+  const responseBody = await res.arrayBuffer();
+
+  return new NextResponse(responseBody, {
     status: res.status,
     statusText: res.statusText,
     headers: responseHeaders,

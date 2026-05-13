@@ -51,6 +51,21 @@ export function useAuth() {
       .finally(() => setLoading(false));
   }, []);
 
+  // React to any /api/* call returning 401 (e.g. GitHub App revoked, session
+  // deleted, refresh token expired). Clear local user state so the next
+  // render shows the login surface instead of failing requests in a loop.
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      // Best-effort cookie cleanup; ignore failures (cookie may already be gone).
+      void logoutUser().catch(() => undefined);
+    };
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+    };
+  }, []);
+
   const login = useCallback(async () => {
     setAuthError(null);
     setLoading(true);

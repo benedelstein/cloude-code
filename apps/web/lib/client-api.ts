@@ -45,6 +45,10 @@ export const WS_API_URL =
 // All REST calls go through the Next.js API proxy (same-origin, cookie-based auth)
 const API_BASE = "/api";
 
+// /auth/me 401s when there's no session — that's a normal "logged-out check"
+// signal at boot, not a session expiration. Don't broadcast it.
+const UNAUTHORIZED_SUPPRESSED_PATHS = new Set(["/auth/me"]);
+
 type ApiErrorResponse = {
   error?: string;
   details?: string;
@@ -75,6 +79,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
     if (res.status === 401 && message === `Request failed: ${res.status}`) {
       message = "Unauthorized";
+    }
+
+    // Notify the app shell that our session is no longer valid (e.g. user
+    // revoked the GitHub App, or the session was deleted). Listened to by
+    // useAuth, which clears local user state and surfaces the login flow.
+    if (res.status === 401 && typeof window !== "undefined" && !UNAUTHORIZED_SUPPRESSED_PATHS.has(path)) {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     }
 
     throw new ApiError(message, res.status, code, details);
