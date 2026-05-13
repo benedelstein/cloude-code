@@ -72,20 +72,6 @@ export async function exchangeGitHubCode(
   });
 }
 
-/**
- * Look up the originating browser origin recorded against a state nonce.
- * Used by the OAuth callback to decide whether to handle the code directly
- * or 302 it to the origin that started the flow (e.g. a Vercel preview).
- * Does not consume the state — single-use consumption happens in /auth/token.
- */
-export async function getOAuthBounceTarget(
-  state: string,
-): Promise<{ redirectOrigin: string }> {
-  return serverApiFetch(
-    `/auth/bounce-target?state=${encodeURIComponent(state)}`,
-  );
-}
-
 export async function serverLogout(token: string): Promise<LogoutResponse> {
   return serverApiFetch("/auth/logout", {
     token,

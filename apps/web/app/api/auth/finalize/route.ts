@@ -5,42 +5,23 @@ import {
   githubAuthPopupMessageType,
 } from "@/types/auth";
 import { setSessionCookie } from "@/lib/session";
-import {
-  exchangeGitHubCode,
-  getOAuthBounceTarget,
-  ServerApiError,
-} from "@/lib/server-api";
+import { exchangeGitHubCode, ServerApiError } from "@/lib/server-api";
 
+/**
+ * Finalizes a GitHub OAuth sign-in on the originating origin.
+ *
+ * Reached via 302 from the api-server's `/auth/callback`. The api-server has
+ * already validated that this origin matches the one recorded against the
+ * state nonce, so we just exchange the code for a session token, set the
+ * cookie on this origin, and postMessage the popup's opener.
+ */
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const state = requestUrl.searchParams.get("state");
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
 
   if (!code || !state) {
     return popupErrorResponse("Missing GitHub authorization code or state.");
-  }
-
-  // Peek the originating origin recorded against this state. If GitHub
-  // redirected us here but the flow started on a different origin (e.g. a
-  // Vercel preview branch), 302 the code+state to that origin's /api/auth/callback
-  // so the cookie is set on the originating origin and postMessage to the
-  // popup's opener succeeds the same-origin check.
-  let recordedOrigin: string;
-  try {
-    const target = await getOAuthBounceTarget(state);
-    recordedOrigin = target.redirectOrigin;
-  } catch (error) {
-    const message = error instanceof ServerApiError
-      ? "GitHub sign-in could not be completed. The session may have expired — please try again."
-      : "Failed to resolve sign-in target. Try again.";
-    return popupErrorResponse(message);
-  }
-
-  if (recordedOrigin !== requestUrl.origin) {
-    const target = new URL("/api/auth/callback", recordedOrigin);
-    target.searchParams.set("code", code);
-    target.searchParams.set("state", state);
-    return NextResponse.redirect(target.toString(), 302);
   }
 
   let tokenResponse;

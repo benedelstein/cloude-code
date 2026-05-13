@@ -12,10 +12,6 @@ const ErrorResponse = z.object({
   error: z.string(),
 });
 
-const BounceTargetResponse = z.object({
-  redirectOrigin: z.string(),
-});
-
 export const getGithubRoute = createRoute({
   method: "get",
   path: "/github",
@@ -34,26 +30,6 @@ export const getGithubRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Origin is not allowed",
-    },
-  },
-});
-
-export const getBounceTargetRoute = createRoute({
-  method: "get",
-  path: "/bounce-target",
-  request: {
-    query: z.object({
-      state: z.string().min(1),
-    }),
-  },
-  responses: {
-    200: {
-      content: { "application/json": { schema: BounceTargetResponse } },
-      description: "Recorded redirect origin for the given state token",
-    },
-    400: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "State is unknown, expired, or maps to a non-allowed origin",
     },
   },
 });

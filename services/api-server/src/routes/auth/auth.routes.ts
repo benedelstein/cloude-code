@@ -11,7 +11,6 @@ import { UserSessionRepository } from "@/repositories/user-session-repository";
 import { validateRedirectOrigin } from "@/lib/auth/preview-origin";
 import {
   getGithubRoute,
-  getBounceTargetRoute,
   postTokenRoute,
   getMeRoute,
   postLogoutRoute,
@@ -69,35 +68,50 @@ authRoutes.openapi(getGithubRoute, async (c) => {
 });
 
 /**
- * GET /auth/bounce-target — Look up the recorded redirect origin for a state.
+ * GET /auth/callback — GitHub OAuth callback entry point.
  *
- * Called server-to-server by the prod web app's /api/auth/bounce route to
- * discover where to 302 the OAuth code+state after GitHub's redirect. Reads
- * but does not consume the state row (single-use consumption still happens in
- * /auth/token). Re-validates the stored origin against the current allowlist
- * for defense-in-depth.
+ * GitHub redirects the popup here with `code` and `state`. We peek the state's
+ * recorded origin (without consuming the row — that happens in /auth/token),
+ * re-validate it against the allowlist for defense-in-depth, and 302 the popup
+ * to `<recorded-origin>/api/auth/finalize` so the cookie is set on the
+ * originating origin and postMessage to the popup's opener succeeds the
+ * same-origin check.
+ *
+ * This is a GitHub integration entry point, not a public API, so it's a plain
+ * Hono route (no OpenAPI schema) and unauthenticated — the state nonce is the
+ * single-use random secret that gates the flow.
  */
-authRoutes.openapi(getBounceTargetRoute, async (c) => {
-  const { state } = c.req.valid("query");
-  const oauthStateRepository = new OauthStateRepository(c.env.DB);
+authRoutes.get("/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
 
+  if (!code || !state) {
+    logger.warn("OAuth callback missing code or state");
+    return c.text("Missing GitHub authorization code or state.", 400);
+  }
+
+  const oauthStateRepository = new OauthStateRepository(c.env.DB);
   const storedOrigin = await oauthStateRepository.peekRedirectOrigin(state);
   if (!storedOrigin) {
     logger.warn(
-      `Bounce target lookup failed: unknown or expired state ${state.slice(0, 8)}`,
+      `OAuth callback failed: unknown or expired state ${state.slice(0, 8)}`,
     );
-    return c.json({ error: "Invalid or expired state" }, 400);
+    return c.text("Invalid or expired sign-in session. Try again.", 400);
   }
 
   const originResult = validateRedirectOrigin(storedOrigin, c.env);
   if (!originResult.ok) {
     logger.error(
-      `Bounce target lookup rejected stored origin: ${originResult.error.message}`,
+      `OAuth callback rejected stored origin: ${originResult.error.message}`,
     );
-    return c.json({ error: originResult.error.message }, 400);
+    return c.text(originResult.error.message, 400);
   }
 
-  return c.json({ redirectOrigin: originResult.value }, 200);
+  const target = new URL("/api/auth/finalize", originResult.value);
+  target.searchParams.set("code", code);
+  target.searchParams.set("state", state);
+
+  return c.redirect(target.toString(), 302);
 });
 
 /**
