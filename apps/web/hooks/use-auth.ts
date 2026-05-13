@@ -7,6 +7,7 @@ import {
 } from "@/types/auth";
 import {
   ApiError,
+  AUTH_UNAUTHORIZED_EVENT,
   getCurrentUser,
   getGitHubAuthUrl,
   logoutUser,
@@ -49,6 +50,26 @@ export function useAuth() {
         }
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // React to any /api/* call returning 401 (e.g. GitHub App revoked, session
+  // deleted, refresh token expired). Clear local user state so the next
+  // render shows the login surface instead of failing requests in a loop.
+  // Cookie cleanup uses raw fetch instead of logoutUser/apiFetch so that
+  // a 401 from /auth/logout itself can't re-trigger this handler — keeps
+  // loop-safety independent of how /auth/logout is routed.
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => undefined);
+    };
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
   }, []);
 
   const login = useCallback(async () => {
