@@ -4,38 +4,49 @@
 
 GitHub OAuth via a GitHub App, with server-side session tokens stored in an HTTP-only cookie. The Next.js web app acts as a BFF (backend-for-frontend) proxy so the session token never touches client-side JavaScript.
 
+The GitHub App's "User authorization callback URL" is `https://api.cloudecode.dev/auth/callback` — pinned to the api-server, not the web app. The api-server owns the OAuth state and decides which web origin the popup lands on for cookie-set. This is how sign-in works on Vercel preview branches as well as prod.
+
 ## Flow
 
 ```
 Browser                    Next.js (web)                API Server              GitHub
   |                            |                            |                      |
   |-- Click "Sign in" -------->|                            |                      |
-  |                            |-- GET /auth/github ------->|                      |
+  |-- (popup opens) ---------->|                            |                      |
+  |                            |-- GET /auth/github -------># validate origin       |
+  |                            |   ?origin=<window.origin>  # (prod or preview      |
+  |                            |                            #  allowlist regex)     |
+  |                            |                            # insert oauth_states   |
+  |                            |                            #   { state, redirect_origin }
   |                            |<-- { url, state } ---------|                      |
   |                            |                            |                      |
-  |-- Open popup to url ------>|                            |                      |
+  |-- Set popup.location = url ------------------------------------------------------|
+  |                                                                                 |
+  |                  (user authorizes on GitHub)                                    |
+  |                                                                                 |
+  |<-- Redirect to api.cloudecode.dev/auth/callback?code=X&state=Y -----------------|
+  |                                                         |                      |
+  |                                                         # peek redirect_origin  |
+  |                                                         # (does not consume)    |
+  |                                                         # re-validate against   |
+  |                                                         #   allowlist           |
+  |<-- 302 <recorded-origin>/api/auth/finalize?code=X&state=Y -----------------------|
   |                            |                            |                      |
-  |                            |                   (user authorizes on GitHub)      |
-  |                            |                            |                      |
-  |<-- Redirect to /api/auth/callback?code=X&state=Y --------------------------------|
-  |                            |                            |                      |
+  |-- GET /api/auth/finalize ->|                            |                      |
   |                            |-- POST /auth/token ------->|                      |
-  |                            |   { code, state }          |-- exchange code ---->|
+  |                            |   { code, state }          | consumeValid(state)  |
+  |                            |                            | (atomic, single-use) |
+  |                            |                            |-- exchange code ---->|
   |                            |                            |<-- tokens, user -----|
-  |                            |                            |                      |
-  |                            |                            | validate state (nonce)
-  |                            |                            | check allowlist
-  |                            |                            | encrypt tokens
-  |                            |                            | upsert user
-  |                            |                            | create 30-day session
-  |                            |                            |                      |
-  |                            |<-- { token, user } --------|                      |
-  |                            |                            |                      |
-  |<-- Set session_token cookie |                            |                      |
-  |<-- postMessage to parent --|                            |                      |
-  |                            |                            |                      |
-  | (popup closes, user is logged in)                       |                      |
+  |                            |                            | encrypt tokens       |
+  |                            |                            | upsert user          |
+  |                            |                            | create 30-day session|
+  |                            |<-- { token, user, ... } ---|                      |
+  |<-- Set session_token cookie ----------------------------                        |
+  |    + HTML script: postMessage(opener), window.close()                           |
 ```
+
+Prod and preview take the same path. On prod, the 302 lands the popup back at `cloudecode.dev/api/auth/finalize`; on a preview, it lands at `<preview>.vercel.app/api/auth/finalize`. The cookie is always set on the origin that started the flow.
 
 ## Authenticated Requests
 
@@ -62,8 +73,20 @@ Browser                    Next.js proxy (/api/*)       API Server
 - **BFF proxy**: The Next.js `/api/[...path]` catch-all extracts the cookie and forwards it as a `Bearer` token. The API server only deals with Bearer auth.
 - **Encrypted GitHub tokens**: GitHub access/refresh tokens are encrypted with `TOKEN_ENCRYPTION_KEY` before storage.
 - **State token (nonce)**: A random single-use state token with 10-min expiry prevents CSRF on the OAuth callback. Consumed atomically via `DELETE ... RETURNING`.
+- **Origin-bound state**: The state row carries a `redirect_origin` column. The browser passes its `window.location.origin` on `/auth/github`; the server validates it (see allowlist below) and records it against the state. The api-server's `/auth/callback` reads this origin to decide where to 302 the popup. The redirect target is therefore never trusted from URL parameters — only from server-recorded state.
+- **Preview-origin allowlist**: `PREVIEW_ORIGIN_ALLOWLIST_REGEX` pins the Vercel project name *and* team slug as literals (e.g. `^https://cloude-code-[a-z0-9][a-z0-9-]*-benedelsteins-projects\.vercel\.app$`). Vercel team slugs are globally unique, so no other team can produce a URL matching the regex. The prod origin (`WEB_ORIGIN`) is exempt. Validated both on write (when state is created) and on read (at callback time) for defense-in-depth.
 - **Allowlist**: Only GitHub logins in `ALLOWED_GITHUB_LOGINS` can authenticate.
 - **Token refresh**: The auth middleware transparently refreshes expired GitHub access tokens using the stored refresh token.
+
+## Preview Branches
+
+Vercel preview branches share one GitHub App with prod, which means one callback URL. The callback lives on the api-server (`api.cloudecode.dev/auth/callback`); GitHub redirects every sign-in there regardless of which web origin started it. The api-server reads the recorded origin from the state row and 302s the popup back to that origin's `/api/auth/finalize`, which sets the cookie scoped to that origin and posts the popup's opener (also on that origin, so the same-origin `postMessage` check in `use-auth.ts` passes).
+
+Two browser rules force this hop:
+- Cookies are origin-scoped — api-server on `api.cloudecode.dev` cannot Set-Cookie for `<preview>.vercel.app` (different registrable domain).
+- `window.opener.postMessage` is rejected by the opener's same-origin check unless the popup ends on the opener's origin.
+
+So whatever does the cookie-set + opener notification has to run on the originating origin. That's `/api/auth/finalize`.
 
 ## Websocket Auth
 
@@ -85,13 +108,15 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 
 | File | Purpose |
 |------|---------|
-| `services/api-server/src/routes/auth/auth.routes.ts` | OAuth endpoints (GET /auth/github, POST /auth/token, logout) |
+| `services/api-server/src/routes/auth/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, logout |
 | `services/api-server/src/middleware/auth.middleware.ts` | Session validation, token refresh |
+| `services/api-server/src/lib/auth/preview-origin.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
 | `services/api-server/src/lib/github/github-app.ts` | GitHub App OAuth helpers |
+| `services/api-server/src/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
 | `services/api-server/src/lib/crypto.ts` | Token encryption/decryption |
-| `apps/web/app/api/auth/callback/route.ts` | OAuth callback, sets cookie |
+| `apps/web/app/api/auth/finalize/route.ts` | Exchanges code for session token, sets cookie, posts opener |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
-| `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout) |
+| `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout, popup management) |
 
 ## Authentication Rules
 
