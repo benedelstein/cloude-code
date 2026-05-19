@@ -58,8 +58,7 @@ export function MessageList({
   const isNearBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) return true;
-    // pb-64 (256px) on the scroll container sits behind the floating input,
-    // so the user appears at the bottom well before scrollTop reaches the end.
+    // Keep a forgiving threshold so autoscroll remains stable while content streams.
     const threshold = 200;
     return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
   }, []);
@@ -146,7 +145,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-y-auto pt-20 pb-64 transition-[padding] duration-200 ease-linear"
+      className="h-full overflow-y-auto overscroll-y-contain pt-20 pb-8 touch-pan-y [-webkit-overflow-scrolling:touch] transition-[padding] duration-200 ease-linear"
       style={{ paddingRight: rightInset }}
     >
       {showError && (

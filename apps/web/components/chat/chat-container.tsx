@@ -136,7 +136,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <AppHeaderPortal>
         <div className="flex min-w-0 w-full items-center justify-between gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
@@ -196,30 +196,36 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
         </div>
       </AppHeaderPortal>
 
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <MessageList
-          messages={messages}
-          streamingMessage={streamingMessage}
-          isHistoryLoading={isHistoryLoading}
-          sessionErrorMessage={sessionErrorMessage}
-          sessionErrorCode={sessionErrorCode}
-          isResponding={isResponding}
-          pendingUserMessage={pendingUserMessage}
-          userAvatarUrl={user?.avatarUrl}
-          rightInset={rightSidebarInset}
-          onHasNewMessages={setShowScrollToBottom}
-          scrollToBottomRef={scrollToBottomRef}
-        />
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Messages */}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <MessageList
+            messages={messages}
+            streamingMessage={streamingMessage}
+            isHistoryLoading={isHistoryLoading}
+            sessionErrorMessage={sessionErrorMessage}
+            sessionErrorCode={sessionErrorCode}
+            isResponding={isResponding}
+            pendingUserMessage={pendingUserMessage}
+            userAvatarUrl={user?.avatarUrl}
+            rightInset={rightSidebarInset}
+            onHasNewMessages={setShowScrollToBottom}
+            scrollToBottomRef={scrollToBottomRef}
+          />
+        </div>
 
-      {/* Branch Bar + Input - floating at bottom */}
-      <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
+        {/* Branch Bar + Input */}
         <div
-          className="pt-8 transition-[padding] duration-200 ease-linear"
+          className="z-10 shrink-0 pt-6 transition-[padding] duration-200 ease-linear"
           style={{ paddingRight: rightSidebarInset }}
         >
-          <div className="max-w-4xl mx-auto px-4 pb-2" style={{ background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)" }}>
+          <div
+            className="mx-auto max-w-4xl px-4 pb-2"
+            style={{
+              background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)",
+              paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+            }}
+          >
             <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
               className: "mb-2 flex justify-center",
             })}>
@@ -228,7 +234,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   <button
                     type="button"
                     onClick={() => scrollToBottomRef.current?.()}
-                    className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-foreground-muted shadow-shadow shadow-md transition-colors hover:text-foreground"
                   >
                     <ArrowDown className="h-4 w-4" />
                   </button>
