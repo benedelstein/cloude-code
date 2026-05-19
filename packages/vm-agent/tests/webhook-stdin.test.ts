@@ -1,0 +1,69 @@
+import { describe, expect, it, vi } from "vitest";
+import { encodeAgentInput } from "@repo/shared";
+import { handleWebhookStdinLine, type WebhookStdinLogger } from "../src/lib/webhook-stdin";
+
+describe("handleWebhookStdinLine", () => {
+  function createLogger(): WebhookStdinLogger {
+    return vi.fn();
+  }
+
+  it("queues chat inputs with the webhook user message id", () => {
+    const runner = {
+      queueMessage: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const logger = createLogger();
+
+    handleWebhookStdinLine(
+      encodeAgentInput({
+        type: "chat",
+        userMessageId: "user-message-2",
+        message: { content: "follow up" },
+        model: "gpt-5.2-codex",
+        agentMode: "plan",
+      }),
+      runner,
+      logger,
+    );
+
+    expect(runner.queueMessage).toHaveBeenCalledWith(
+      "user-message-2",
+      { content: "follow up" },
+      { model: "gpt-5.2-codex", agentMode: "plan" },
+    );
+    expect(runner.cancel).not.toHaveBeenCalled();
+  });
+
+  it("drops chat inputs without a user message id", () => {
+    const runner = {
+      queueMessage: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const logger = createLogger();
+
+    handleWebhookStdinLine(
+      encodeAgentInput({ type: "chat", message: { content: "missing id" } }),
+      runner,
+      logger,
+    );
+
+    expect(runner.queueMessage).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith(
+      "warn",
+      "stdin chat input missing userMessageId; dropping turn",
+    );
+  });
+
+  it("forwards cancel inputs to the runner", () => {
+    const runner = {
+      queueMessage: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const logger = createLogger();
+
+    handleWebhookStdinLine(encodeAgentInput({ type: "cancel" }), runner, logger);
+
+    expect(runner.cancel).toHaveBeenCalledOnce();
+    expect(runner.queueMessage).not.toHaveBeenCalled();
+  });
+});

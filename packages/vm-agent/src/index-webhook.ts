@@ -4,6 +4,7 @@
  * chunk/event delivery back to the DO flows via HTTPS webhooks.
  */
 import { parseArgs } from "util";
+import { createInterface } from "readline";
 import {
   AgentInputMessage,
   AgentSettings,
@@ -11,6 +12,7 @@ import {
 } from "@repo/shared";
 import { type AgentProviderConfig } from "./lib/agent-harness";
 import { loadInitialMessageFromFile } from "./lib/webhook-initial-message";
+import { handleWebhookStdinLine } from "./lib/webhook-stdin";
 import { claudeCodeProvider } from "./providers/claude-code";
 import { codexProvider } from "./providers/codex";
 import { WebhookAgentRunner } from "./webhook-agent-runner";
@@ -114,3 +116,10 @@ runner.queueMessage(userMessageId, initialMessage, {
   model: typeof values.model === "string" ? values.model : undefined,
   agentMode: values.agentMode === "plan" ? "plan" : undefined,
 });
+
+const readline = createInterface({ input: process.stdin });
+readline.on("line", (line) => {
+  handleWebhookStdinLine(line, runner, consoleLogger);
+});
+
+process.stdin.resume();
