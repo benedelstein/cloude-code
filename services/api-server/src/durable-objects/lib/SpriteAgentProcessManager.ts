@@ -7,6 +7,7 @@ import {
   type DomainError,
   type Logger,
   type Result,
+  encodeAgentInput,
   failure,
   success,
 } from "@repo/shared";
@@ -166,9 +167,10 @@ export type DispatchMessageResult = Result<
 /**
  * Owns the lifecycle of the vm-agent process on the sprite for a session.
  *
- * In v1, every turn spawns a fresh process (cold-path only). The initial
- * user message is passed via CLI args at spawn, and chunks flow back to the
- * DO through HTTPS webhooks — no long-lived websocket is held open here.
+ * Reuses the vm-agent process while it is alive inside its post-turn idle
+ * window. New turns are sent to the existing process via stdin. If the saved
+ * sprite process id is stale (or attach/write fails), the id is cleared and a
+ * fresh process is spawned with the initial turn staged on disk.
  *
  * `cancelActiveTurn()` terminates the active exec session. `kill()` does the
  * same and is used on session delete.
@@ -196,16 +198,18 @@ export class SpriteAgentProcessManager {
   }
 
   /**
-   * Spawns a fresh vm-agent process on the sprite with the given user message
-   * as its initial turn. Concurrent callers share a single in-flight spawn so
-   * back-to-back dispatches cannot race to spawn two processes.
+   * Dispatches a turn to the vm-agent. Prefers attaching to the saved sprite
+   * process id and writing the turn to stdin; falls back to spawning a fresh
+   * process when the saved id is missing or stale. Concurrent callers share a
+   * single in-flight operation so back-to-back dispatches cannot race to write
+   * or spawn twice.
    */
   async dispatchMessage(input: DispatchMessageInput): Promise<DispatchMessageResult> {
     if (this.startMutex) return this.startMutex;
 
     const spawn = (async (): Promise<DispatchMessageResult> => {
       try {
-        return await this.doSpawn(input);
+        return await this.doDispatch(input);
       } finally {
         this.startMutex = null;
       }
@@ -289,7 +293,7 @@ export class SpriteAgentProcessManager {
   // Private
   // ============================================
 
-  private async doSpawn(
+  private async doDispatch(
     input: DispatchMessageInput,
   ): Promise<DispatchMessageResult> {
     const serverState = this.getServerState();
@@ -321,11 +325,13 @@ export class SpriteAgentProcessManager {
     }
     const resolvedAttachments = attachmentsResult.value.agentAttachments;
 
-    const credentialResult = await this.loadCredentialSnapshot(settings, userId);
-    if (!credentialResult.ok) {
-      return failure(credentialResult.error);
-    }
-    const credentialSnapshot = credentialResult.value;
+    const agentMessage: AgentInputMessage = {
+      content: input.userMessage.content,
+      attachments:
+        resolvedAttachments.length > 0
+          ? (resolvedAttachments as AgentInputAttachment[])
+          : undefined,
+    };
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -333,24 +339,34 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_URL,
     );
 
+    const reused = await this.tryDispatchToExistingProcess(sprite, {
+      processId: serverState.agentProcessId,
+      userMessageId: input.userMessage.id,
+      message: agentMessage,
+      model: input.model,
+      agentMode: input.agentMode,
+    });
+    if (reused) {
+      return success({ agentProcessId: reused.agentProcessId });
+    }
+
+    const credentialResult = await this.loadCredentialSnapshot(settings, userId);
+    if (!credentialResult.ok) {
+      return failure(credentialResult.error);
+    }
+    const credentialSnapshot = credentialResult.value;
+
     await this.writeCredentialFiles(sprite, credentialSnapshot);
     await this.writeVmAgentScript(sprite);
 
     const webhookToken = this.ensureWebhookToken();
     const webhookUrl = this.buildWebhookUrl(sessionId);
 
-    const initialMessageWithAttachments: AgentInputMessage = {
-      content: input.userMessage.content,
-      attachments:
-        resolvedAttachments.length > 0
-          ? (resolvedAttachments as AgentInputAttachment[])
-          : undefined,
-    };
     const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
     await this.writeInitialMessageFile(
       sprite,
       initialMessagePath,
-      initialMessageWithAttachments,
+      agentMessage,
     );
 
     // Wrap bun in a shell so we can redirect stdout/stderr to a log file on
@@ -419,6 +435,53 @@ export class SpriteAgentProcessManager {
         session.close();
       } catch (error) {
         this.logger.debug("Failed to close setup websocket", { error });
+      }
+    }
+  }
+
+  private async tryDispatchToExistingProcess(
+    sprite: WorkersSpriteClient,
+    args: {
+      processId: number | null;
+      userMessageId: string;
+      message: AgentInputMessage;
+      model: string | undefined;
+      agentMode: AgentMode | undefined;
+    },
+  ): Promise<{ agentProcessId: number } | null> {
+    if (!args.processId) return null;
+
+    const session = sprite.attachSession(String(args.processId), {
+      idleTimeoutMs: 10_000,
+    });
+
+    try {
+      await session.start();
+      session.write(
+        `${encodeAgentInput({
+          type: "chat",
+          userMessageId: args.userMessageId,
+          message: args.message,
+          model: args.model,
+          agentMode: args.agentMode,
+        })}\n`,
+      );
+      this.logger.debug("Dispatched turn to existing vm-agent process", {
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
+      return { agentProcessId: args.processId };
+    } catch (error) {
+      this.logger.warn("Existing vm-agent process is not reusable; spawning a new one", {
+        error,
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
+      this.updateAgentProcessId(null);
+      return null;
+    } finally {
+      try {
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close attach websocket", { error });
       }
     }
   }

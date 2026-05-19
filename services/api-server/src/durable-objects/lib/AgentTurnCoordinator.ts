@@ -401,7 +401,7 @@ export class AgentTurnCoordinator {
         finishReason: getChunkFinishReason(chunk) ?? "unknown",
       },
     });
-    this.clearActiveTurnState();
+    this.clearActiveTurnState({ preserveAgentProcessId: true });
     this.updatePartialState({
       lastError: null,
       status: this.synthesizeStatus(),
@@ -464,10 +464,14 @@ export class AgentTurnCoordinator {
     return false;
   }
 
-  private clearActiveTurnState(): void {
+  private clearActiveTurnState(
+    options: { preserveAgentProcessId?: boolean } = {},
+  ): void {
     this.updateServerState({
       activeUserMessageId: null,
-      agentProcessId: null,
+      agentProcessId: options.preserveAgentProcessId
+        ? this.getServerState().agentProcessId
+        : null,
     });
     this.lastSeenChunkSequence = null;
   }
