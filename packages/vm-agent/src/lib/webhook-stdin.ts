@@ -5,7 +5,7 @@ import {
 } from "@repo/shared";
 
 export interface WebhookStdinRunner {
-  queueMessage(
+  queueStdinMessage(
     userMessageId: string,
     message: AgentInputMessage,
     overrides?: { model?: string; agentMode?: AgentMode },
@@ -37,7 +37,7 @@ export function handleWebhookStdinLine(
           log("warn", "stdin chat input missing userMessageId; dropping turn");
           return;
         }
-        runner.queueMessage(input.userMessageId, input.message, {
+        runner.queueStdinMessage(input.userMessageId, input.message, {
           model: input.model,
           agentMode: input.agentMode,
         });

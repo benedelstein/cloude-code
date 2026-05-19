@@ -53,7 +53,7 @@ vi.mock("../../src/durable-objects/lib/agent-attachment-service", () => ({
   },
 }));
 
-import { encodeAgentInput } from "@repo/shared";
+import { encodeAgentInput, encodeAgentOutput } from "@repo/shared";
 import { SpritesError } from "@/lib/sprites";
 import { SpriteAgentProcessManager } from "../../src/durable-objects/lib/SpriteAgentProcessManager";
 

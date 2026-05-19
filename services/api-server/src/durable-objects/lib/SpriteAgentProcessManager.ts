@@ -8,6 +8,7 @@ import {
   type Logger,
   type Result,
   encodeAgentInput,
+  decodeAgentOutput,
   failure,
   success,
 } from "@repo/shared";
@@ -457,6 +458,7 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
+      const stdinAck = this.waitForStdinAck(session, args.userMessageId, 5_000);
       session.write(
         `${encodeAgentInput({
           type: "chat",
@@ -466,6 +468,7 @@ export class SpriteAgentProcessManager {
           agentMode: args.agentMode,
         })}\n`,
       );
+      await stdinAck;
       this.logger.debug("Dispatched turn to existing vm-agent process", {
         fields: { processId: args.processId, userMessageId: args.userMessageId },
       });
@@ -484,6 +487,76 @@ export class SpriteAgentProcessManager {
         this.logger.debug("Failed to close attach websocket", { error });
       }
     }
+  }
+
+  private waitForStdinAck(
+    session: SpriteWebsocketSession,
+    userMessageId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let buffer = "";
+      let settled = false;
+      const disposers: Array<() => void> = [];
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        for (const dispose of disposers) dispose();
+      };
+
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const processLine = (line: string) => {
+        const trimmedLine = line.replace(/\r$/, "");
+        if (!trimmedLine) return;
+        try {
+          const output = decodeAgentOutput(trimmedLine);
+          if (output.type === "stdin_ack" && output.userMessageId === userMessageId) {
+            settle(resolve);
+          }
+        } catch {
+          // Attached stdout is noisy (debug logs, provider output, stderr via tee).
+          // Only valid typed AgentOutput lines participate in the ack handshake.
+        }
+      };
+
+      const timeout = setTimeout(() => {
+        settle(() =>
+          reject(
+            new Error(`Timed out waiting for stdin ack for ${userMessageId}`),
+          ),
+        );
+      }, timeoutMs);
+
+      disposers.push(
+        session.onStdout((chunk) => {
+          buffer += chunk;
+          let newlineIndex = buffer.indexOf("\n");
+          while (newlineIndex !== -1) {
+            const line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            processLine(line);
+            newlineIndex = buffer.indexOf("\n");
+          }
+        }),
+      );
+      disposers.push(
+        session.onError((error) => {
+          settle(() => reject(error));
+        }),
+      );
+      disposers.push(
+        session.onExit((code) => {
+          settle(() => reject(new Error(`vm-agent exited before stdin ack: ${code}`)));
+        }),
+      );
+
+    });
   }
 
   private async loadCredentialSnapshot(

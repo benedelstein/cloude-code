@@ -10,6 +10,7 @@ import {
   type AgentOutput,
   type AgentSettings,
   type UIMessageChunk,
+  encodeAgentOutput,
 } from "@repo/shared";
 import {
   type AgentHarnessHandle,
@@ -94,6 +95,18 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     this.harness.queueMessage(message, overrides);
   }
 
+  /**
+   * Queues a user turn from stdin and emits a typed ack once accepted.
+   */
+  queueStdinMessage(
+    userMessageId: string,
+    message: AgentInputMessage,
+    overrides?: { model?: string; agentMode?: AgentMode },
+  ): void {
+    this.queueMessage(userMessageId, message, overrides);
+    this.handleEmit({ type: "stdin_ack", userMessageId });
+  }
+
   cancel(): void {
     this.harness.cancel();
   }
@@ -129,14 +142,28 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   }
 
   private handleEmit(output: AgentOutput): void {
-    if (output.type === "stream") {
-      this.batcher.add(output.chunk as UIMessageChunk);
-      return;
+    switch (output.type) {
+      case "stream":
+        this.batcher.add(output.chunk as UIMessageChunk);
+        return;
+      case "stdin_ack":
+        process.stdout.write(encodeAgentOutput(output) + "\n");
+        return;
+      case "ready":
+      case "debug":
+      case "error":
+      case "sessionId":
+      case "heartbeat":
+        this.log("debug", "emit event -> /events", { ...output });
+        // Process-level events go straight to /events, one POST per event.
+        // Fire-and-forget — the WebhookClient handles retries internally.
+        void this.http.post("/events", { event: output });
+        return;
+      default: {
+        const exhaustiveCheck: never = output;
+        throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
+      }
     }
-    this.log("debug", "emit event -> /events", { ...output });
-    // Process-level events go straight to /events, one POST per event.
-    // Fire-and-forget — the WebhookClient handles retries internally.
-    void this.http.post("/events", { event: output });
   }
 
   private async flushChunkBatch(batch: ChunkBatchItem[]): Promise<void> {

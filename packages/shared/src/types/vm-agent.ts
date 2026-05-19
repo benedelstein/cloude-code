@@ -92,6 +92,11 @@ export const AgentHeartbeatOutput = z.object({
   type: z.literal("heartbeat"),
 });
 
+export const AgentStdinAckOutput = z.object({
+  type: z.literal("stdin_ack"),
+  userMessageId: z.string().min(1),
+});
+
 /**
  * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
  * /chunks and everything else (ready, error, sessionId, heartbeat, debug) to
@@ -107,11 +112,12 @@ export const AgentEvent = z.discriminatedUnion("type", [
 export type AgentEvent = z.infer<typeof AgentEvent>;
 
 /**
- * All agent output types, including stream chunks.
+ * All agent output types, including stream chunks and local stdin acks.
  */
 export const AgentOutput = z.discriminatedUnion("type", [
   ...AgentEvent.options,
   AgentStreamOutput,
+  AgentStdinAckOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 
