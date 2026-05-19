@@ -150,10 +150,25 @@ describe("SpriteAgentProcessManager", () => {
   });
 
   it("attaches to an idle vm-agent process and sends the new message on stdin", async () => {
+    let stdoutHandler: ((chunk: string) => void) | undefined;
     const existingSession = {
       start: vi.fn().mockResolvedValue(undefined),
-      write: vi.fn(),
+      write: vi.fn(() => {
+        stdoutHandler?.("debug log\n");
+        stdoutHandler?.(
+          encodeAgentOutput({
+            type: "stdin_ack",
+            userMessageId: "user-message-2",
+          }) + "\n",
+        );
+      }),
       close: vi.fn(),
+      onStdout: vi.fn((handler) => {
+        stdoutHandler = handler;
+        return vi.fn();
+      }),
+      onError: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
     };
     mockState.attachSession.mockReturnValue(existingSession);
 
@@ -181,6 +196,45 @@ describe("SpriteAgentProcessManager", () => {
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+  });
+
+  it("falls back to spawning when attached process exits before stdin ack", async () => {
+    let exitHandler: ((code: number) => void) | undefined;
+    const staleSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn(() => {
+        exitHandler?.(1);
+      }),
+      close: vi.fn(),
+      onStdout: vi.fn(() => vi.fn()),
+      onError: vi.fn(() => vi.fn()),
+      onExit: vi.fn((handler) => {
+        exitHandler = handler;
+        return vi.fn();
+      }),
+    };
+    const spawnSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn(),
+      onServerMessage: vi.fn((handler) => {
+        handler({ type: "session_info", session_id: 84, tty: true });
+        return vi.fn();
+      }),
+    };
+    mockState.attachSession.mockReturnValue(staleSession);
+    mockState.createSession.mockReturnValue(spawnSession);
+
+    const serverState = createServerState({ agentProcessId: 42 });
+    const { manager, updateAgentProcessId } = createManager(serverState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    expect(mockState.createSession).toHaveBeenCalledOnce();
+    expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
   });
 
   it("resets a stale process id and falls back to spawning when attach returns 404", async () => {

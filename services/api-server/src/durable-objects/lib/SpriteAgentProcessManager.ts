@@ -92,6 +92,18 @@ function managerError<Code extends SpriteAgentProcessManagerError["code"]>(
   } as Extract<SpriteAgentProcessManagerError, { code: Code }>;
 }
 
+
+function consumeLines(
+  buffer: string,
+  chunk: string,
+): { lines: string[]; remainder: string } {
+  const parts = `${buffer}${chunk}`.split("\n");
+  return {
+    lines: parts.slice(0, -1),
+    remainder: parts.at(-1) ?? "",
+  };
+}
+
 function mapProviderCredentialError(
   error: ProviderCredentialError,
 ): Extract<
@@ -458,7 +470,7 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
-      const stdinAck = this.waitForStdinAck(session, args.userMessageId, 5_000);
+      const stdinAck = this.waitForStdinAck(session, args.userMessageId, 2_000);
       session.write(
         `${encodeAgentInput({
           type: "chat",
@@ -514,10 +526,24 @@ export class SpriteAgentProcessManager {
       const processLine = (line: string) => {
         const trimmedLine = line.replace(/\r$/, "");
         if (!trimmedLine) return;
+
         try {
           const output = decodeAgentOutput(trimmedLine);
-          if (output.type === "stdin_ack" && output.userMessageId === userMessageId) {
-            settle(resolve);
+          switch (output.type) {
+            case "stdin_ack":
+              if (output.userMessageId === userMessageId) settle(resolve);
+              return;
+            case "stream":
+            case "ready":
+            case "debug":
+            case "error":
+            case "sessionId":
+            case "heartbeat":
+              return;
+            default: {
+              const exhaustiveCheck: never = output;
+              throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
+            }
           }
         } catch {
           // Attached stdout is noisy (debug logs, provider output, stderr via tee).
@@ -535,14 +561,9 @@ export class SpriteAgentProcessManager {
 
       disposers.push(
         session.onStdout((chunk) => {
-          buffer += chunk;
-          let newlineIndex = buffer.indexOf("\n");
-          while (newlineIndex !== -1) {
-            const line = buffer.slice(0, newlineIndex);
-            buffer = buffer.slice(newlineIndex + 1);
-            processLine(line);
-            newlineIndex = buffer.indexOf("\n");
-          }
+          const parsed = consumeLines(buffer, chunk);
+          buffer = parsed.remainder;
+          for (const line of parsed.lines) processLine(line);
         }),
       );
       disposers.push(
@@ -555,7 +576,6 @@ export class SpriteAgentProcessManager {
           settle(() => reject(new Error(`vm-agent exited before stdin ack: ${code}`)));
         }),
       );
-
     });
   }
 
