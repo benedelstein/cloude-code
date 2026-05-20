@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
 import {
+  AgentChunksWebhookBody,
+  AgentEventsWebhookBody,
   AgentInput,
   AgentInputMessage,
   AgentOutput,
+  SequencedAgentStreamOutput,
   decodeAgentInput,
   decodeAgentOutput,
   encodeAgentInput,
@@ -48,6 +51,39 @@ describe("vm-agent schemas", () => {
     expect(AgentOutput.parse({ type: "error", error: "e" }).type).toBe("error");
     expect(AgentOutput.parse({ type: "stream", chunk: { any: "value" } }).type).toBe("stream");
     expect(AgentOutput.parse({ type: "sessionId", sessionId: "s" }).type).toBe("sessionId");
+  });
+
+  it("parses sequenced stream chunk webhook batches", () => {
+    expect(
+      SequencedAgentStreamOutput.parse({
+        type: "stream",
+        sequence: 0,
+        chunk: { type: "finish", finishReason: "stop" },
+      }),
+    ).toEqual({
+      type: "stream",
+      sequence: 0,
+      chunk: { type: "finish", finishReason: "stop" },
+    });
+
+    expect(
+      AgentChunksWebhookBody.parse({
+        userMessageId: "user-message-1",
+        chunks: [
+          {
+            type: "stream",
+            sequence: 0,
+            chunk: { type: "finish", finishReason: "stop" },
+          },
+        ],
+      }).chunks[0]?.type,
+    ).toBe("stream");
+
+    expect(
+      AgentEventsWebhookBody.parse({
+        event: { type: "debug", message: "ready-ish" },
+      }).event.type,
+    ).toBe("debug");
   });
 
   it("roundtrips encode/decode", () => {

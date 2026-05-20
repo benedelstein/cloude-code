@@ -52,6 +52,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly log: NonNullable<WebhookAgentRunnerOptions["logger"]>;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private activeUserMessageId: string | null = null;
+  private readonly userMessageIds = new WeakMap<AgentInputMessage, string>();
   private shuttingDown = false;
 
   constructor(private readonly opts: WebhookAgentRunnerOptions<S>) {
@@ -75,7 +76,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       args: opts.args,
       initialAgentMode: opts.initialAgentMode,
       emit: (output) => this.handleEmit(output),
-      onTurnStart: () => this.cancelIdleTimer(),
+      onTurnStart: (message) => this.onTurnStart(message),
       onTurnEnd: (result) => this.onTurnEnd(result),
     });
 
@@ -91,7 +92,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
     this.cancelIdleTimer();
-    this.activeUserMessageId = userMessageId;
+    this.userMessageIds.set(message, userMessageId);
     this.harness.queueMessage(message, overrides);
   }
 
@@ -147,6 +148,8 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         this.batcher.add(output.chunk as UIMessageChunk);
         return;
       case "stdin_ack":
+        // write directly to stdout so caller can synchronously await the ack
+        // (via websocket)
         process.stdout.write(encodeAgentOutput(output) + "\n");
         return;
       case "ready":
@@ -183,7 +186,20 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     await this.http.post("/chunks", { userMessageId, chunks: batch });
   }
 
+  private onTurnStart(message: AgentInputMessage): void {
+    this.cancelIdleTimer();
+    const userMessageId = this.userMessageIds.get(message);
+    this.userMessageIds.delete(message);
+    if (!userMessageId) {
+      this.log("warn", "turn started without queued userMessageId");
+      this.activeUserMessageId = null;
+      return;
+    }
+    this.activeUserMessageId = userMessageId;
+  }
+
   private async onTurnEnd(_result: AgentTurnEndResult): Promise<void> {
+    const endedUserMessageId = this.activeUserMessageId;
     // The DO learns about turn completion from the terminal stream chunk
     // inside the last batch — we just flush and arm the idle timer here.
     await this.batcher.flushNow();
@@ -191,7 +207,9 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     // long-lived runner reuses this process) starts at seq 0, matching the
     // DO's first-chunk expectation.
     this.batcher.reset();
-    this.activeUserMessageId = null;
+    if (this.activeUserMessageId === endedUserMessageId) {
+      this.activeUserMessageId = null;
+    }
     if (!this.shuttingDown) this.startIdleTimer();
   }
 

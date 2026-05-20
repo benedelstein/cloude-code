@@ -177,6 +177,11 @@ export type DispatchMessageResult = Result<
   SpriteAgentProcessManagerError
 >;
 
+type ExistingProcessDispatchResult =
+  | { status: "reused"; agentProcessId: number }
+  | { status: "fallback" }
+  | { status: "failed"; error: SpriteAgentProcessManagerError };
+
 /**
  * Owns the lifecycle of the vm-agent process on the sprite for a session.
  *
@@ -352,15 +357,18 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_URL,
     );
 
-    const reused = await this.tryDispatchToExistingProcess(sprite, {
+    const reuseResult = await this.tryDispatchToExistingProcess(sprite, {
       processId: serverState.agentProcessId,
       userMessageId: input.userMessage.id,
       message: agentMessage,
       model: input.model,
       agentMode: input.agentMode,
     });
-    if (reused) {
-      return success({ agentProcessId: reused.agentProcessId });
+    if (reuseResult.status === "reused") {
+      return success({ agentProcessId: reuseResult.agentProcessId });
+    }
+    if (reuseResult.status === "failed") {
+      return failure(reuseResult.error);
     }
 
     const credentialResult = await this.loadCredentialSnapshot(settings, userId);
@@ -461,12 +469,13 @@ export class SpriteAgentProcessManager {
       model: string | undefined;
       agentMode: AgentMode | undefined;
     },
-  ): Promise<{ agentProcessId: number } | null> {
-    if (!args.processId) return null;
+  ): Promise<ExistingProcessDispatchResult> {
+    if (!args.processId) return { status: "fallback" };
 
     const session = sprite.attachSession(String(args.processId), {
       idleTimeoutMs: 10_000,
     });
+    let wroteStdin = false;
 
     try {
       await session.start();
@@ -480,24 +489,68 @@ export class SpriteAgentProcessManager {
           agentMode: args.agentMode,
         })}\n`,
       );
+      wroteStdin = true;
       await stdinAck;
       this.logger.debug("Dispatched turn to existing vm-agent process", {
         fields: { processId: args.processId, userMessageId: args.userMessageId },
       });
-      return { agentProcessId: args.processId };
+      return { status: "reused", agentProcessId: args.processId };
     } catch (error) {
+      this.updateAgentProcessId(null);
+      if (wroteStdin) {
+        await this.killUncertainProcess(sprite, args.processId, error);
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          status: "failed",
+          error: managerError(
+            "TURN_DID_NOT_START",
+            "Existing vm-agent process did not acknowledge the stdin turn",
+            {
+              cause: message,
+              processId: args.processId,
+              userMessageId: args.userMessageId,
+            },
+          ),
+        };
+      }
+
       this.logger.warn("Existing vm-agent process is not reusable; spawning a new one", {
         error,
         fields: { processId: args.processId, userMessageId: args.userMessageId },
       });
-      this.updateAgentProcessId(null);
-      return null;
+      return { status: "fallback" };
     } finally {
       try {
         session.close();
       } catch (error) {
         this.logger.debug("Failed to close attach websocket", { error });
       }
+    }
+  }
+
+  private async killUncertainProcess(
+    sprite: WorkersSpriteClient,
+    processId: number,
+    cause: unknown,
+  ): Promise<void> {
+    this.logger.warn("Existing vm-agent process did not ack stdin; killing it", {
+      error: cause,
+      fields: { processId },
+    });
+    try {
+      await sprite.killSession(processId, "SIGTERM");
+    } catch (error) {
+      if (error instanceof SpritesError && error.statusCode === 404) {
+        this.logger.debug("Unacknowledged vm-agent process was already gone", {
+          fields: { processId },
+        });
+        return;
+      }
+      this.logger.warn("Failed to kill unacknowledged vm-agent process", {
+        error,
+        fields: { processId },
+      });
     }
   }
 

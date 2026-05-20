@@ -198,9 +198,9 @@ describe("SpriteAgentProcessManager", () => {
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
   });
 
-  it("falls back to spawning when attached process exits before stdin ack", async () => {
+  it("kills and fails when attached process exits after stdin write without ack", async () => {
     let exitHandler: ((code: number) => void) | undefined;
-    const staleSession = {
+    const uncertainSession = {
       start: vi.fn().mockResolvedValue(undefined),
       write: vi.fn(() => {
         exitHandler?.(1);
@@ -213,16 +213,7 @@ describe("SpriteAgentProcessManager", () => {
         return vi.fn();
       }),
     };
-    const spawnSession = {
-      start: vi.fn().mockResolvedValue(undefined),
-      close: vi.fn(),
-      onServerMessage: vi.fn((handler) => {
-        handler({ type: "session_info", session_id: 84, tty: true });
-        return vi.fn();
-      }),
-    };
-    mockState.attachSession.mockReturnValue(staleSession);
-    mockState.createSession.mockReturnValue(spawnSession);
+    mockState.attachSession.mockReturnValue(uncertainSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
     const { manager, updateAgentProcessId } = createManager(serverState);
@@ -231,10 +222,13 @@ describe("SpriteAgentProcessManager", () => {
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("TURN_DID_NOT_START");
+    }
     expect(updateAgentProcessId).toHaveBeenCalledWith(null);
-    expect(mockState.createSession).toHaveBeenCalledOnce();
-    expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
+    expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
+    expect(mockState.createSession).not.toHaveBeenCalled();
   });
 
   it("resets a stale process id and falls back to spawning when attach returns 404", async () => {

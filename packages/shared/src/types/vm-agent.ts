@@ -75,6 +75,14 @@ export const AgentStreamOutput = z.object({
   type: z.literal("stream"),
   chunk: z.unknown(), // UIMessageChunk from AI SDK
 });
+export type AgentStreamOutput = z.infer<typeof AgentStreamOutput>;
+
+export const SequencedAgentStreamOutput = AgentStreamOutput.extend({
+  sequence: z.number().int().nonnegative(),
+});
+export type SequencedAgentStreamOutput = z.infer<
+  typeof SequencedAgentStreamOutput
+>;
 
 export const AgentDebugOutput = z.object({
   type: z.literal("debug"),
@@ -120,6 +128,21 @@ export const AgentOutput = z.discriminatedUnion("type", [
   AgentStdinAckOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
+
+// ============================================
+// Webhook body types
+// ============================================
+
+export const AgentChunksWebhookBody = z.object({
+  userMessageId: z.string().min(1),
+  chunks: z.array(SequencedAgentStreamOutput),
+});
+export type AgentChunksWebhookBody = z.infer<typeof AgentChunksWebhookBody>;
+
+export const AgentEventsWebhookBody = z.object({
+  event: AgentEvent,
+});
+export type AgentEventsWebhookBody = z.infer<typeof AgentEventsWebhookBody>;
 
 // ============================================
 // Helper functions for encoding/decoding
