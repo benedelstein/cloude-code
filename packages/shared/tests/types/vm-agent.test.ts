@@ -16,7 +16,7 @@ import {
 describe("vm-agent schemas", () => {
   it("parses all input variants", () => {
     expect(AgentInput.parse({ type: "chat", message: { content: "hello" } }).type).toBe("chat");
-    expect(AgentInput.parse({ type: "cancel" }).type).toBe("cancel");
+    expect(AgentInput.parse({ type: "cancel", userMessageId: "user-message-1" }).type).toBe("cancel");
   });
 
   it("rejects invalid chat input", () => {
@@ -51,6 +51,7 @@ describe("vm-agent schemas", () => {
     expect(AgentOutput.parse({ type: "error", error: "e" }).type).toBe("error");
     expect(AgentOutput.parse({ type: "stream", chunk: { any: "value" } }).type).toBe("stream");
     expect(AgentOutput.parse({ type: "sessionId", sessionId: "s" }).type).toBe("sessionId");
+    expect(AgentOutput.parse({ type: "cancel_ack", userMessageId: "user-message-1" }).type).toBe("cancel_ack");
   });
 
   it("parses sequenced stream chunk webhook batches", () => {

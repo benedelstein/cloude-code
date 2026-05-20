@@ -80,9 +80,10 @@ export interface AgentHarnessHandle {
   queueMessage(
     _message: AgentInputMessage,
     _overrides?: { model?: string; agentMode?: AgentMode },
+    _turnKey?: string,
   ): void;
-  /** Aborts the in-flight turn, if any. Safe to call when idle. */
-  cancel(): void;
+  /** Aborts the in-flight turn, or removes a matching queued turn. */
+  cancelTurn(_turnKey?: string): boolean;
   /**
    * Stops the loop cleanly. Any in-flight turn is allowed to finish;
    * subsequent queued messages are dropped. Resolves once the loop exits.
@@ -94,6 +95,7 @@ interface QueueEntry {
   message: AgentInputMessage;
   model?: string;
   agentMode?: AgentMode;
+  turnKey?: string;
 }
 
 const SHUTDOWN_POISON: QueueEntry = Object.freeze({
@@ -129,12 +131,14 @@ export function startAgentHarness<S extends AgentSettings>(
   function queueMessage(
     message: AgentInputMessage,
     overrides?: { model?: string; agentMode?: AgentMode },
+    turnKey?: string,
   ): void {
     if (stopped) return;
     const entry: QueueEntry = {
       message,
       model: overrides?.model,
       agentMode: overrides?.agentMode,
+      turnKey,
     };
     if (messageResolver) {
       // already awaiting a message, resolve the current promise
@@ -161,11 +165,33 @@ export function startAgentHarness<S extends AgentSettings>(
   let stopped = false;
   let loopDone: Promise<void> | null = null;
   let currentAbortController: AbortController | null = null;
+  let currentTurnKey: string | null = null;
+  const canceledTurnKeys = new Set<string>();
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
 
-  function cancel(): void {
-    currentAbortController?.abort();
+  function cancel(turnKey?: string): boolean {
+    if (!turnKey) {
+      currentAbortController?.abort();
+      return currentAbortController !== null;
+    }
+
+    const pendingIndex = pendingMessages.findIndex(
+      (entry) => entry.turnKey === turnKey,
+    );
+    if (pendingIndex !== -1) {
+      pendingMessages.splice(pendingIndex, 1);
+      return true;
+    }
+
+    if (currentTurnKey !== turnKey) return false;
+
+    if (currentAbortController) {
+      currentAbortController.abort();
+    } else {
+      canceledTurnKeys.add(turnKey);
+    }
+    return true;
   }
 
   async function shutdown(): Promise<void> {
@@ -293,26 +319,36 @@ export function startAgentHarness<S extends AgentSettings>(
       const entry = await consumeUserMessageQueue();
       if (stopped || entry === SHUTDOWN_POISON) break;
 
-      const ready = await ensureSetup();
-      if (!ready) continue;
+      currentTurnKey = entry.turnKey ?? null;
 
-      emit({
-        type: "debug",
-        message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
-      });
-
-      onTurnStart?.(entry.message);
       try {
+        const ready = await ensureSetup();
+        if (!ready) continue;
+
+        if (currentTurnKey && canceledTurnKeys.delete(currentTurnKey)) {
+          await onTurnEnd?.({ finishReason: "abort", aborted: true });
+          continue;
+        }
+
+        emit({
+          type: "debug",
+          message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
+        });
+
+        onTurnStart?.(entry.message);
         const result = await processMessage(entry);
         await onTurnEnd?.(result);
       } catch (error) {
         emit({ type: "error", error: String(error) });
         await onTurnEnd?.({ aborted: false });
+      } finally {
+        if (currentTurnKey) canceledTurnKeys.delete(currentTurnKey);
+        currentTurnKey = null;
       }
     }
   }
 
   loopDone = runLoop();
 
-  return { queueMessage, cancel, shutdown };
+  return { queueMessage, cancelTurn: cancel, shutdown };
 }

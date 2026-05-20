@@ -76,7 +76,7 @@ rl.on("line", (rawLine) => {
         break;
       case "cancel":
         emit({ type: "debug", message: "cancel received; aborting current operation" });
-        handle.cancel();
+        handle.cancelTurn(input.userMessageId);
         break;
     }
   } catch (e) {

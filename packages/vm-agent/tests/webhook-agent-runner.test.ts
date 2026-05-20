@@ -53,6 +53,7 @@ describe("WebhookAgentRunner", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   it("does not let a queued next turn lose its user message id while the prior turn drains", async () => {
@@ -110,6 +111,99 @@ describe("WebhookAgentRunner", () => {
 
     expect(chunkPosts.map((post) => post.userMessageId)).toContain("user-message-1");
     expect(chunkPosts.map((post) => post.userMessageId)).toContain("user-message-2");
+
+    await runner.shutdown();
+  });
+
+  it("acks a scoped cancel only when the requested turn is queued or running", async () => {
+    const releaseStream = createDeferred();
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        await releaseStream.promise;
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown: () => {},
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await waitFor(() => mockState.streamText.mock.calls.length === 1);
+
+    runner.cancelTurn("different-message");
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining('"cancel_ack"'),
+    );
+
+    runner.cancelTurn("user-message-1");
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"cancel_ack"'),
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining('"userMessageId":"user-message-1"'),
+    );
+
+    releaseStream.resolve();
+    await runner.shutdown();
+  });
+
+  it("removes a queued turn when scoped cancel is acknowledged", async () => {
+    const releaseFirstTurn = createDeferred();
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        await releaseFirstTurn.promise;
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown: () => {},
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await waitFor(() => mockState.streamText.mock.calls.length === 1);
+
+    runner.queueMessage("user-message-2", { content: "second" });
+    runner.cancelTurn("user-message-2");
+
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining('"userMessageId":"user-message-2"'),
+    );
+
+    releaseFirstTurn.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockState.streamText).toHaveBeenCalledTimes(1);
 
     await runner.shutdown();
   });

@@ -34,6 +34,17 @@ describe("websocket api schemas", () => {
     expect(withAttachment.type).toBe("chat.message");
   });
 
+  it("parses active turn state on sync responses", () => {
+    const server = ServerMessage.parse({
+      type: "sync.response",
+      messages: [],
+      activeTurn: { userMessageId: "user-message-1" },
+    });
+
+    expect(server.type).toBe("sync.response");
+    expect(server.activeTurn?.userMessageId).toBe("user-message-1");
+  });
+
   it("limits chat messages to five attachments", () => {
     const attachment = {
       attachmentId: "123e4567-e89b-12d3-a456-426614174000",

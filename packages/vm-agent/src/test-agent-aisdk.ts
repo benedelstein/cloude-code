@@ -108,7 +108,7 @@ console.log("Type a message to send to the agent. Ctrl+C to exit.\n");
 
 userInput.on("line", (line) => {
   if (line === "/cancel") {
-    const message = encodeAgentInput({ type: "cancel" });
+    const message = encodeAgentInput({ type: "cancel", userMessageId: "manual" });
     console.log(`\nCancelling...`);
     agent.stdin!.write(message + "\n");
     return;

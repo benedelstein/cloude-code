@@ -10,7 +10,7 @@ describe("handleWebhookStdinLine", () => {
   it("queues chat inputs with the webhook user message id", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
-      cancel: vi.fn(),
+      cancelTurn: vi.fn(),
     };
     const logger = createLogger();
 
@@ -31,13 +31,13 @@ describe("handleWebhookStdinLine", () => {
       { content: "follow up" },
       { model: "gpt-5.2-codex", agentMode: "plan" },
     );
-    expect(runner.cancel).not.toHaveBeenCalled();
+    expect(runner.cancelTurn).not.toHaveBeenCalled();
   });
 
   it("drops chat inputs without a user message id", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
-      cancel: vi.fn(),
+      cancelTurn: vi.fn(),
     };
     const logger = createLogger();
 
@@ -57,13 +57,17 @@ describe("handleWebhookStdinLine", () => {
   it("forwards cancel inputs to the runner", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
-      cancel: vi.fn(),
+      cancelTurn: vi.fn(),
     };
     const logger = createLogger();
 
-    handleWebhookStdinLine(encodeAgentInput({ type: "cancel" }), runner, logger);
+    handleWebhookStdinLine(
+      encodeAgentInput({ type: "cancel", userMessageId: "user-message-2" }),
+      runner,
+      logger,
+    );
 
-    expect(runner.cancel).toHaveBeenCalledOnce();
+    expect(runner.cancelTurn).toHaveBeenCalledWith("user-message-2");
     expect(runner.queueStdinMessage).not.toHaveBeenCalled();
   });
 });

@@ -93,7 +93,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   ): void {
     this.cancelIdleTimer();
     this.userMessageIds.set(message, userMessageId);
-    this.harness.queueMessage(message, overrides);
+    this.harness.queueMessage(message, overrides, userMessageId);
   }
 
   /**
@@ -108,8 +108,11 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     this.handleEmit({ type: "stdin_ack", userMessageId });
   }
 
-  cancel(): void {
-    this.harness.cancel();
+  cancelTurn(userMessageId: string): void {
+    const canceled = this.harness.cancelTurn(userMessageId);
+    if (canceled) {
+      this.handleEmit({ type: "cancel_ack", userMessageId });
+    }
   }
 
   /**
@@ -128,7 +131,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     // Aborting the current streamText causes the harness to emit a terminal
     // abort chunk into the batcher (forcing a flush), so the DO finalizes
     // the turn through the normal terminal-chunk path.
-    this.harness.cancel();
+    this.harness.cancelTurn();
 
     const drain = (async () => {
       await this.harness.shutdown();
@@ -148,6 +151,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         this.batcher.add(output.chunk as UIMessageChunk);
         return;
       case "stdin_ack":
+      case "cancel_ack":
         // write directly to stdout so caller can synchronously await the ack
         // (via websocket)
         process.stdout.write(encodeAgentOutput(output) + "\n");

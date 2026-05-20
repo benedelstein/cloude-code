@@ -69,6 +69,7 @@ export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
   messages: z.array(UIMessageSchema),
   pendingChunks: z.array(z.unknown()).optional(),
+  activeTurn: z.object({ userMessageId: z.string().min(1) }).nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
 

@@ -182,6 +182,10 @@ type ExistingProcessDispatchResult =
   | { status: "fallback" }
   | { status: "failed"; error: SpriteAgentProcessManagerError };
 
+type CancelActiveTurnResult = {
+  processPreserved: boolean;
+};
+
 /**
  * Owns the lifecycle of the vm-agent process on the sprite for a session.
  *
@@ -190,8 +194,9 @@ type ExistingProcessDispatchResult =
  * sprite process id is stale (or attach/write fails), the id is cleared and a
  * fresh process is spawned with the initial turn staged on disk.
  *
- * `cancelActiveTurn()` terminates the active exec session. `kill()` does the
- * same and is used on session delete.
+ * `cancelActiveTurn()` gracefully cancels the active turn when possible and
+ * falls back to terminating the exec session. `kill()` is used on session
+ * delete.
  */
 export class SpriteAgentProcessManager {
   private readonly env: Env;
@@ -237,15 +242,17 @@ export class SpriteAgentProcessManager {
   }
 
   /**
-   * Best-effort terminates the active agent process via SIGTERM.
+   * Best-effort cancels the active turn. When the process acknowledges the
+   * scoped cancel it can be reused; otherwise it is fenced with SIGTERM.
    */
-  async cancelActiveTurn(): Promise<void> {
+  async cancelActiveTurn(): Promise<CancelActiveTurnResult> {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) {
+    const userMessageId = serverState.activeUserMessageId;
+    if (!processId || !spriteName || !userMessageId) {
       this.logger.debug("No active agent process to cancel");
-      return;
+      return { processPreserved: false };
     }
 
     const sprite = new WorkersSpriteClient(
@@ -253,19 +260,46 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_KEY,
       this.env.SPRITES_API_URL,
     );
+    const session = sprite.attachSession(String(processId), {
+      idleTimeoutMs: 10_000,
+    });
+
     try {
-      await sprite.killSession(processId, "SIGTERM");
-      this.logger.debug("Agent process terminated");
+      await session.start();
+      const cancelAck = this.waitForCancelAck(session, userMessageId, 2_000);
+      session.write(`${encodeAgentInput({ type: "cancel", userMessageId })}\n`);
+      await cancelAck;
+      this.logger.debug("Agent process acknowledged turn cancel");
+      return { processPreserved: true };
     } catch (error) {
-      if (error instanceof SpritesError && error.statusCode === 404) {
-        this.logger.debug("Agent process already gone on cancel");
-        return;
-      }
-      this.logger.warn("Failed to terminate agent process", {
+      this.logger.warn("Graceful agent cancel failed; terminating process", {
         error,
-        fields: { processId },
+        fields: { processId, userMessageId },
       });
+      await this.killActiveProcess(sprite, processId, error);
+      return { processPreserved: false };
+    } finally {
+      try {
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close cancel attach websocket", { error });
+      }
     }
+  }
+
+  /** Terminates the cached active process and clears its id. */
+  async terminateActiveProcess(): Promise<void> {
+    const serverState = this.getServerState();
+    const processId = serverState.agentProcessId;
+    const spriteName = serverState.spriteName;
+    if (!processId || !spriteName) return;
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    await this.killActiveProcess(sprite, processId, new Error("terminating active process"));
   }
 
   /** Force-kills the active agent process. Used on session delete. */
@@ -538,16 +572,42 @@ export class SpriteAgentProcessManager {
     });
     try {
       await sprite.killSession(processId, "SIGTERM");
+      this.updateAgentProcessId(null);
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Unacknowledged vm-agent process was already gone", {
           fields: { processId },
         });
+        this.updateAgentProcessId(null);
         return;
       }
       this.logger.warn("Failed to kill unacknowledged vm-agent process", {
         error,
         fields: { processId },
+      });
+    }
+  }
+
+  private async killActiveProcess(
+    sprite: WorkersSpriteClient,
+    processId: number,
+    cause: unknown,
+  ): Promise<void> {
+    try {
+      await sprite.killSession(processId, "SIGTERM");
+      this.updateAgentProcessId(null);
+      this.logger.debug("Agent process terminated");
+    } catch (error) {
+      if (error instanceof SpritesError && error.statusCode === 404) {
+        this.logger.debug("Agent process already gone", {
+          fields: { processId },
+        });
+        this.updateAgentProcessId(null);
+        return;
+      }
+      this.logger.warn("Failed to terminate agent process", {
+        error,
+        fields: { processId, cause: cause instanceof Error ? cause.message : String(cause) },
       });
     }
   }
@@ -584,6 +644,7 @@ export class SpriteAgentProcessManager {
             case "stdin_ack":
               if (output.userMessageId === userMessageId) settle(resolve);
               return;
+            case "cancel_ack":
             case "stream":
             case "ready":
             case "debug":
@@ -625,6 +686,85 @@ export class SpriteAgentProcessManager {
       disposers.push(
         session.onExit((code) => {
           settle(() => reject(new Error(`vm-agent exited before stdin ack: ${code}`)));
+        }),
+      );
+    });
+  }
+
+  private waitForCancelAck(
+    session: SpriteWebsocketSession,
+    userMessageId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let buffer = "";
+      let settled = false;
+      const disposers: Array<() => void> = [];
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        for (const dispose of disposers) dispose();
+      };
+
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const processLine = (line: string) => {
+        const trimmedLine = line.replace(/\r$/, "");
+        if (!trimmedLine) return;
+
+        try {
+          const output = decodeAgentOutput(trimmedLine);
+          switch (output.type) {
+            case "cancel_ack":
+              if (output.userMessageId === userMessageId) settle(resolve);
+              return;
+            case "stdin_ack":
+            case "stream":
+            case "ready":
+            case "debug":
+            case "error":
+            case "sessionId":
+            case "heartbeat":
+              return;
+            default: {
+              const exhaustiveCheck: never = output;
+              throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
+            }
+          }
+        } catch {
+          // Attached stdout is noisy; only typed AgentOutput lines participate
+          // in the cancel ack handshake.
+        }
+      };
+
+      const timeout = setTimeout(() => {
+        settle(() =>
+          reject(
+            new Error(`Timed out waiting for cancel ack for ${userMessageId}`),
+          ),
+        );
+      }, timeoutMs);
+
+      disposers.push(
+        session.onStdout((chunk) => {
+          const parsed = consumeLines(buffer, chunk);
+          buffer = parsed.remainder;
+          for (const line of parsed.lines) processLine(line);
+        }),
+      );
+      disposers.push(
+        session.onError((error) => {
+          settle(() => reject(error));
+        }),
+      );
+      disposers.push(
+        session.onExit((code) => {
+          settle(() => reject(new Error(`vm-agent exited before cancel ack: ${code}`)));
         }),
       );
     });

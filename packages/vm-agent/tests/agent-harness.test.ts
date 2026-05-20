@@ -205,7 +205,7 @@ describe("startAgentHarness", () => {
 
     // Wait for ready + the stream to have started before cancelling.
     await pollOutputs(outputs, (current) => current.some((o) => o.type === "ready"));
-    handle.cancel();
+    handle.cancelTurn();
 
     await pollOutputs(outputs, () => onTurnEnd.mock.calls.length === 1);
     expect(onTurnEnd).toHaveBeenCalledWith({ finishReason: "abort", aborted: true });

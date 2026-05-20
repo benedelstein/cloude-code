@@ -10,7 +10,7 @@ export interface WebhookStdinRunner {
     message: AgentInputMessage,
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void;
-  cancel(): void;
+  cancelTurn(_userMessageId: string): void;
 }
 
 export type WebhookStdinLogger = (
@@ -44,7 +44,7 @@ export function handleWebhookStdinLine(
         break;
       case "cancel":
         log("debug", "cancel received on stdin; aborting current operation");
-        runner.cancel();
+        runner.cancelTurn(input.userMessageId);
         break;
     }
   } catch (error) {

@@ -96,6 +96,7 @@ function createClientState(): ClientState {
     pullRequest: null,
     pushedBranch: null,
     pendingUserMessage: null,
+    activeTurn: null,
     providerConnection: null,
     createdAt: new Date(),
   } as ClientState;
@@ -141,6 +142,7 @@ function createManager(serverState: ServerState) {
 
 describe("SpriteAgentProcessManager", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     mockState.getCredentialSnapshot.mockResolvedValue({
       ok: true,
@@ -153,6 +155,83 @@ describe("SpriteAgentProcessManager", () => {
     mockState.execHttp.mockResolvedValue({ stdout: "", stderr: "", exitCode: 1 });
     mockState.writeFile.mockResolvedValue(undefined);
     mockState.killSession.mockResolvedValue(undefined);
+  });
+
+  it("gracefully cancels the active turn with a matching cancel ack", async () => {
+    let stdoutHandler: ((chunk: string) => void) | undefined;
+    const existingSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn(() => {
+        stdoutHandler?.(
+          encodeAgentOutput({
+            type: "cancel_ack",
+            userMessageId: "user-message-2",
+          }) + "\n",
+        );
+      }),
+      close: vi.fn(),
+      onStdout: vi.fn((handler) => {
+        stdoutHandler = handler;
+        return vi.fn();
+      }),
+      onError: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+    };
+    mockState.attachSession.mockReturnValue(existingSession);
+
+    const serverState = createServerState({
+      agentProcessId: 42,
+      activeUserMessageId: "user-message-2",
+    });
+    const { manager, updateAgentProcessId } = createManager(serverState);
+
+    const result = await manager.cancelActiveTurn();
+
+    expect(result).toEqual({ processPreserved: true });
+    expect(existingSession.write).toHaveBeenCalledWith(
+      encodeAgentInput({ type: "cancel", userMessageId: "user-message-2" }) + "\n",
+    );
+    expect(mockState.killSession).not.toHaveBeenCalled();
+    expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+  });
+
+  it("kills the active process when cancel ack times out", async () => {
+    vi.useFakeTimers();
+    let stdoutHandler: ((chunk: string) => void) | undefined;
+    const existingSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn(() => {
+        stdoutHandler?.(
+          encodeAgentOutput({
+            type: "cancel_ack",
+            userMessageId: "different-message",
+          }) + "\n",
+        );
+      }),
+      close: vi.fn(),
+      onStdout: vi.fn((handler) => {
+        stdoutHandler = handler;
+        return vi.fn();
+      }),
+      onError: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+    };
+    mockState.attachSession.mockReturnValue(existingSession);
+
+    const serverState = createServerState({
+      agentProcessId: 42,
+      activeUserMessageId: "user-message-2",
+    });
+    const { manager, updateAgentProcessId } = createManager(serverState);
+
+    const cancelPromise = manager.cancelActiveTurn();
+    await vi.advanceTimersByTimeAsync(2_000);
+    const result = await cancelPromise;
+
+    expect(result).toEqual({ processPreserved: false });
+    expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
+    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    vi.useRealTimers();
   });
 
   it("attaches to an idle vm-agent process and sends the new message on stdin", async () => {

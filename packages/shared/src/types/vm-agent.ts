@@ -46,6 +46,7 @@ export const AgentChatInput = z.object({
 
 export const AgentCancelInput = z.object({
   type: z.literal("cancel"),
+  userMessageId: z.string().min(1),
 });
 
 export const AgentInput = z.discriminatedUnion("type", [
@@ -105,6 +106,11 @@ export const AgentStdinAckOutput = z.object({
   userMessageId: z.string().min(1),
 });
 
+export const AgentCancelAckOutput = z.object({
+  type: z.literal("cancel_ack"),
+  userMessageId: z.string().min(1),
+});
+
 /**
  * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
  * /chunks and everything else (ready, error, sessionId, heartbeat, debug) to
@@ -126,6 +132,7 @@ export const AgentOutput = z.discriminatedUnion("type", [
   ...AgentEvent.options,
   AgentStreamOutput,
   AgentStdinAckOutput,
+  AgentCancelAckOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 
