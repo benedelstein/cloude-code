@@ -237,18 +237,15 @@ export class SpriteAgentProcessManager {
   }
 
   /**
-   * Terminates the active agent process via SIGTERM. Returns
-   * `processAlreadyGone: true` when the sprite reports 404, so callers can
-   * finalize turn state immediately rather than waiting for a terminal chunk
-   * that will never arrive.
+   * Best-effort terminates the active agent process via SIGTERM.
    */
-  async cancelActiveTurn(): Promise<{ processAlreadyGone: boolean }> {
+  async cancelActiveTurn(): Promise<void> {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
     if (!processId || !spriteName) {
       this.logger.debug("No active agent process to cancel");
-      return { processAlreadyGone: false };
+      return;
     }
 
     const sprite = new WorkersSpriteClient(
@@ -259,17 +256,15 @@ export class SpriteAgentProcessManager {
     try {
       await sprite.killSession(processId, "SIGTERM");
       this.logger.debug("Agent process terminated");
-      return { processAlreadyGone: false };
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Agent process already gone on cancel");
-        return { processAlreadyGone: true };
+        return;
       }
       this.logger.warn("Failed to terminate agent process", {
         error,
         fields: { processId },
       });
-      return { processAlreadyGone: false };
     }
   }
 
@@ -364,11 +359,13 @@ export class SpriteAgentProcessManager {
       model: input.model,
       agentMode: input.agentMode,
     });
-    if (reuseResult.status === "reused") {
-      return success({ agentProcessId: reuseResult.agentProcessId });
-    }
-    if (reuseResult.status === "failed") {
-      return failure(reuseResult.error);
+    switch (reuseResult.status) {
+      case "reused":
+        return success({ agentProcessId: reuseResult.agentProcessId });
+      case "failed":
+        return failure(reuseResult.error);
+      case "fallback":
+        break;
     }
 
     const credentialResult = await this.loadCredentialSnapshot(settings, userId);
@@ -383,6 +380,7 @@ export class SpriteAgentProcessManager {
     const webhookToken = this.ensureWebhookToken();
     const webhookUrl = this.buildWebhookUrl(sessionId);
 
+    // write the initial message to a file, messages with attachments are too large for argv
     const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
     await this.writeInitialMessageFile(
       sprite,
@@ -479,6 +477,7 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
+      // wait for the agent process to explicitly acknowledge the message write
       const stdinAck = this.waitForStdinAck(session, args.userMessageId, 2_000);
       session.write(
         `${encodeAgentInput({
@@ -499,8 +498,7 @@ export class SpriteAgentProcessManager {
       this.updateAgentProcessId(null);
       if (wroteStdin) {
         await this.killUncertainProcess(sprite, args.processId, error);
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         return {
           status: "failed",
           error: managerError(

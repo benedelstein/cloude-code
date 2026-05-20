@@ -54,7 +54,7 @@ vi.mock("../../src/durable-objects/lib/agent-attachment-service", () => ({
 }));
 
 import { encodeAgentInput, encodeAgentOutput } from "@repo/shared";
-import { SpritesError } from "@/lib/sprites";
+import { SpritesError } from "../../src/lib/sprites";
 import { SpriteAgentProcessManager } from "../../src/durable-objects/lib/SpriteAgentProcessManager";
 
 function createLogger(): Logger {
@@ -92,6 +92,12 @@ function createClientState(): ClientState {
     latestPr: null,
     editorUrl: null,
     lastError: null,
+    pulledBranch: null,
+    pullRequest: null,
+    pushedBranch: null,
+    pendingUserMessage: null,
+    providerConnection: null,
+    createdAt: new Date(),
   } as ClientState;
 }
 
@@ -184,6 +190,53 @@ describe("SpriteAgentProcessManager", () => {
     expect(result.ok).toBe(true);
     expect(mockState.attachSession).toHaveBeenCalledWith("42", { idleTimeoutMs: 10_000 });
     expect(existingSession.start).toHaveBeenCalledOnce();
+    expect(existingSession.write).toHaveBeenCalledWith(
+      encodeAgentInput({
+        type: "chat",
+        userMessageId: "user-message-2",
+        message: { content: "second turn" },
+        model: "gpt-5.2-codex",
+        agentMode: "plan",
+      }) + "\n",
+    );
+    expect(existingSession.close).toHaveBeenCalledOnce();
+    expect(mockState.createSession).not.toHaveBeenCalled();
+    expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+  });
+
+  it("waits for a stdin ack split across stdout chunks", async () => {
+    let stdoutHandler: ((chunk: string) => void) | undefined;
+    const existingSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn(() => {
+        const ackLine =
+          encodeAgentOutput({
+            type: "stdin_ack",
+            userMessageId: "user-message-2",
+          }) + "\n";
+        stdoutHandler?.(ackLine.slice(0, 12));
+        stdoutHandler?.(ackLine.slice(12));
+      }),
+      close: vi.fn(),
+      onStdout: vi.fn((handler) => {
+        stdoutHandler = handler;
+        return vi.fn();
+      }),
+      onError: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+    };
+    mockState.attachSession.mockReturnValue(existingSession);
+
+    const serverState = createServerState({ agentProcessId: 42 });
+    const { manager, updateAgentProcessId } = createManager(serverState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-2", content: "second turn", attachmentIds: [] },
+      model: "gpt-5.2-codex",
+      agentMode: "plan",
+    });
+
+    expect(result.ok).toBe(true);
     expect(existingSession.write).toHaveBeenCalledWith(
       encodeAgentInput({
         type: "chat",
