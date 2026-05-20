@@ -100,7 +100,7 @@ export function useCloudflareAgent({
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
   const [waitingForResponse, setWaitingForResponse] = useState(initialPendingUserMessage !== null);
-  const [serverActiveTurn, setServerActiveTurn] = useState<ActiveTurnState>(null);
+  const [serverActiveTurn, setServerActiveTurn] = useState<ActiveTurnState | null>(null);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
@@ -125,7 +125,7 @@ export function useCloudflareAgent({
 
   const isResponding = waitingForResponse || streamingMessage !== null || serverActiveTurn !== null;
 
-  const applyServerActiveTurn = useCallback((activeTurn: ActiveTurnState) => {
+  const applyServerActiveTurn = useCallback((activeTurn: ActiveTurnState | null) => {
     setServerActiveTurn(activeTurn);
     if (activeTurn) {
       hasSeenServerActiveTurnRef.current = true;
