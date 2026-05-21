@@ -136,5 +136,3 @@ const readline = createInterface({ input: process.stdin });
 readline.on("line", (line) => {
   handleWebhookStdinLine(line, runner, logger);
 });
-
-process.stdin.resume();

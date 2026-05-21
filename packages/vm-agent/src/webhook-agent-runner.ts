@@ -171,8 +171,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         return;
       case "stdin_ack":
       case "cancel_ack":
-        // write directly to stdout so caller can synchronously await the ack
-        // (via websocket)
+        // Write directly to stdout so the attaching DO can await the ack.
         process.stdout.write(encodeAgentOutput(output) + "\n");
         return;
       case "ready":
@@ -191,11 +190,9 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       case "debug":
         this.log("debug", output.message);
         return;
-      default: {
-        const exhaustiveCheck: never = output;
-        throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
-      }
     }
+    const exhaustiveCheck: never = output;
+    throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
   }
 
   private async flushChunkBatch(batch: ChunkBatchItem[]): Promise<void> {
