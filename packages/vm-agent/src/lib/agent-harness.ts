@@ -166,7 +166,7 @@ export function startAgentHarness<S extends AgentSettings>(
   let loopDone: Promise<void> | null = null;
   let currentAbortController: AbortController | null = null;
   let currentTurnKey: string | null = null;
-  const canceledTurnKeys = new Set<string>();
+  const turnKeysCanceledBeforeStreamStart = new Set<string>();
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
 
@@ -189,7 +189,9 @@ export function startAgentHarness<S extends AgentSettings>(
     if (currentAbortController) {
       currentAbortController.abort();
     } else {
-      canceledTurnKeys.add(turnKey);
+      // The loop has claimed this turn, but streamText has not created its
+      // AbortController yet. Mark it so the loop skips before starting work.
+      turnKeysCanceledBeforeStreamStart.add(turnKey);
     }
     return true;
   }
@@ -325,7 +327,12 @@ export function startAgentHarness<S extends AgentSettings>(
         const ready = await ensureSetup();
         if (!ready) continue;
 
-        if (currentTurnKey && canceledTurnKeys.delete(currentTurnKey)) {
+        if (
+          currentTurnKey &&
+          turnKeysCanceledBeforeStreamStart.delete(currentTurnKey)
+        ) {
+          // A cancel arrived while setup was running, before streamText began.
+          // Treat it as an aborted turn and continue to the next queued item.
           await onTurnEnd?.({ finishReason: "abort", aborted: true });
           continue;
         }
@@ -342,7 +349,9 @@ export function startAgentHarness<S extends AgentSettings>(
         emit({ type: "error", error: String(error) });
         await onTurnEnd?.({ aborted: false });
       } finally {
-        if (currentTurnKey) canceledTurnKeys.delete(currentTurnKey);
+        if (currentTurnKey) {
+          turnKeysCanceledBeforeStreamStart.delete(currentTurnKey);
+        }
         currentTurnKey = null;
       }
     }
