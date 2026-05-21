@@ -422,10 +422,9 @@ export class SpriteAgentProcessManager {
       agentMessage,
     );
 
-    // Wrap bun in a shell so we can redirect stdout/stderr to a log file on
-    // the sprite. The child stdin is /dev/null because webhook-mode is
-    // spawn-and-forget: the initial message is staged in a file and control
-    // messages must not keep the process coupled to websocket-backed stdin.
+    // Wrap bun in a shell so stdout/stderr are mirrored to a sprite log file.
+    // The initial message is staged in a file; reused turns and cancels attach
+    // to this exec session later and write typed NDJSON to stdin.
     // `exec` replaces the shell with bun so we don't leak a wrapper process.
     // "$@" preserves argv boundaries so JSON args with spaces/quotes stay
     // intact.
