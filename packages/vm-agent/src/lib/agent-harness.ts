@@ -61,7 +61,7 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
   /** Called for every output the harness produces. */
   emit: (_output: AgentOutput) => void;
   /** Fires before processing each queued message. */
-  onTurnStart?: (_message: AgentInputMessage) => void;
+  onTurnStart?: (_message: AgentInputMessage, _turnKey: string) => void;
   /**
    * Fires in the `finally` after each message is processed. The loop awaits
    * this callback, so async cleanup (e.g. flushing batched chunks) runs to
@@ -79,8 +79,8 @@ export interface AgentHarnessHandle {
    */
   queueMessage(
     _message: AgentInputMessage,
+    _turnKey: string,
     _overrides?: { model?: string; agentMode?: AgentMode },
-    _turnKey?: string,
   ): void;
   /** Aborts the in-flight turn, or removes a matching queued turn. */
   cancelTurn(_turnKey?: string): boolean;
@@ -95,12 +95,13 @@ interface QueueEntry {
   message: AgentInputMessage;
   model?: string;
   agentMode?: AgentMode;
-  turnKey?: string;
+  turnKey: string;
   abortController: AbortController;
 }
 
 const SHUTDOWN_POISON: QueueEntry = Object.freeze({
   message: { content: "__SHUTDOWN__" },
+  turnKey: "__SHUTDOWN__",
   abortController: new AbortController(),
 }) as QueueEntry;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -132,8 +133,8 @@ export function startAgentHarness<S extends AgentSettings>(
 
   function queueMessage(
     message: AgentInputMessage,
+    turnKey: string,
     overrides?: { model?: string; agentMode?: AgentMode },
-    turnKey?: string,
   ): void {
     if (stopped) return;
     const entry: QueueEntry = {
@@ -331,7 +332,7 @@ export function startAgentHarness<S extends AgentSettings>(
           message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
         });
 
-        onTurnStart?.(entry.message);
+        onTurnStart?.(entry.message, entry.turnKey);
         const result = await processMessage(entry);
         await onTurnEnd?.(result);
       } catch (error) {

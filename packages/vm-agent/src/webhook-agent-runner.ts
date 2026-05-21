@@ -52,7 +52,6 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly log: NonNullable<WebhookAgentRunnerOptions["logger"]>;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private activeUserMessageId: string | null = null;
-  private readonly userMessageIds = new WeakMap<AgentInputMessage, string>();
   private shuttingDown = false;
 
   constructor(private readonly opts: WebhookAgentRunnerOptions<S>) {
@@ -76,7 +75,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       args: opts.args,
       initialAgentMode: opts.initialAgentMode,
       emit: (output) => this.handleEmit(output),
-      onTurnStart: (message) => this.onTurnStart(message),
+      onTurnStart: (_message, userMessageId) => this.onTurnStart(userMessageId),
       onTurnEnd: (result) => this.onTurnEnd(result),
     });
 
@@ -92,8 +91,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
     this.cancelIdleTimer();
-    this.userMessageIds.set(message, userMessageId);
-    this.harness.queueMessage(message, overrides, userMessageId);
+    this.harness.queueMessage(message, userMessageId, overrides);
   }
 
   /**
@@ -190,15 +188,8 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     await this.http.post("/chunks", { userMessageId, chunks: batch });
   }
 
-  private onTurnStart(message: AgentInputMessage): void {
+  private onTurnStart(userMessageId: string): void {
     this.cancelIdleTimer();
-    const userMessageId = this.userMessageIds.get(message);
-    this.userMessageIds.delete(message);
-    if (!userMessageId) {
-      this.log("warn", "turn started without queued userMessageId");
-      this.activeUserMessageId = null;
-      return;
-    }
     this.activeUserMessageId = userMessageId;
   }
 
