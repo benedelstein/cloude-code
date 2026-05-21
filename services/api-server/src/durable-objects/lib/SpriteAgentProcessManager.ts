@@ -510,6 +510,7 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
+      this.logger.debug(`Attached to existing vm-agent process ${args.processId}, waiting for stdin ack`);
       // wait for the agent process to explicitly acknowledge the message write
       const stdinAck = this.waitForStdinAck(session, args.userMessageId, 2_000);
       session.write(
@@ -530,7 +531,18 @@ export class SpriteAgentProcessManager {
     } catch (error) {
       this.updateAgentProcessId(null);
       if (wroteStdin) {
-        await this.killUncertainProcess(sprite, args.processId, error);
+        const processStopped = await this.killUncertainProcess(
+          sprite,
+          args.processId,
+          error,
+        );
+        if (processStopped) {
+          this.logger.warn("Existing vm-agent process stopped before stdin ack; spawning a new one", {
+            error,
+            fields: { processId: args.processId, userMessageId: args.userMessageId },
+          });
+          return { status: "fallback" };
+        }
         const message = error instanceof Error ? error.message : String(error);
         return {
           status: "failed",
@@ -553,6 +565,7 @@ export class SpriteAgentProcessManager {
       return { status: "fallback" };
     } finally {
       try {
+        // detach from the websocket on the sprite, but agent process will keep running.
         session.close();
       } catch (error) {
         this.logger.debug("Failed to close attach websocket", { error });
@@ -564,7 +577,7 @@ export class SpriteAgentProcessManager {
     sprite: WorkersSpriteClient,
     processId: number,
     cause: unknown,
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.logger.warn("Existing vm-agent process did not ack stdin; killing it", {
       error: cause,
       fields: { processId },
@@ -572,18 +585,20 @@ export class SpriteAgentProcessManager {
     try {
       await sprite.killSession(processId, "SIGTERM");
       this.updateAgentProcessId(null);
+      return true;
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Unacknowledged vm-agent process was already gone", {
           fields: { processId },
         });
         this.updateAgentProcessId(null);
-        return;
+        return true;
       }
       this.logger.warn("Failed to kill unacknowledged vm-agent process", {
         error,
         fields: { processId },
       });
+      return false;
     }
   }
 
