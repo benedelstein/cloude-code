@@ -190,9 +190,11 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       case "debug":
         this.log("debug", output.message);
         return;
+      default: {
+        const exhaustiveCheck: never = output;
+        throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
+      }
     }
-    const exhaustiveCheck: never = output;
-    throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
   }
 
   private async flushChunkBatch(batch: ChunkBatchItem[]): Promise<void> {
