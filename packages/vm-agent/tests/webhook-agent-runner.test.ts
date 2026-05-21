@@ -59,7 +59,10 @@ describe("WebhookAgentRunner", () => {
   it("does not let a queued next turn lose its user message id while the prior turn drains", async () => {
     const firstChunkPostStarted = createDeferred();
     const releaseFirstChunkPost = createDeferred();
-    const chunkPosts: Array<{ userMessageId: string }> = [];
+    const chunkPosts: Array<{
+      userMessageId: string;
+      chunks: Array<{ sequence: number; chunk: unknown; type?: never }>;
+    }> = [];
 
     globalThis.fetch = vi.fn(async (url, init) => {
       if (String(url).endsWith("/chunks")) {
@@ -111,6 +114,9 @@ describe("WebhookAgentRunner", () => {
 
     expect(chunkPosts.map((post) => post.userMessageId)).toContain("user-message-1");
     expect(chunkPosts.map((post) => post.userMessageId)).toContain("user-message-2");
+    for (const chunk of chunkPosts.flatMap((post) => post.chunks)) {
+      expect(chunk).not.toHaveProperty("type");
+    }
 
     await runner.shutdown();
   });

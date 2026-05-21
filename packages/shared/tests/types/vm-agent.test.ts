@@ -6,7 +6,7 @@ import {
   AgentInput,
   AgentInputMessage,
   AgentOutput,
-  SequencedAgentStreamOutput,
+  SequencedAgentStreamChunk,
   decodeAgentInput,
   decodeAgentOutput,
   encodeAgentInput,
@@ -61,13 +61,11 @@ describe("vm-agent schemas", () => {
 
   it("parses sequenced stream chunk webhook batches", () => {
     expect(
-      SequencedAgentStreamOutput.parse({
-        type: "stream",
+      SequencedAgentStreamChunk.parse({
         sequence: 0,
         chunk: { type: "finish", finishReason: "stop" },
       }),
     ).toEqual({
-      type: "stream",
       sequence: 0,
       chunk: { type: "finish", finishReason: "stop" },
     });
@@ -77,13 +75,12 @@ describe("vm-agent schemas", () => {
         userMessageId: "user-message-1",
         chunks: [
           {
-            type: "stream",
             sequence: 0,
             chunk: { type: "finish", finishReason: "stop" },
           },
         ],
-      }).chunks[0]?.type,
-    ).toBe("stream");
+      }).chunks[0]?.sequence,
+    ).toBe(0);
 
     expect(
       AgentEventsWebhookBody.parse({

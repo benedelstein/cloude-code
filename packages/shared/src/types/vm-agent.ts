@@ -74,11 +74,12 @@ export const AgentStreamOutput = z.object({
 });
 export type AgentStreamOutput = z.infer<typeof AgentStreamOutput>;
 
-export const SequencedAgentStreamOutput = AgentStreamOutput.extend({
+export const SequencedAgentStreamChunk = z.object({
   sequence: z.number().int().nonnegative(),
+  chunk: z.unknown(), // UIMessageChunk from AI SDK
 });
-export type SequencedAgentStreamOutput = z.infer<
-  typeof SequencedAgentStreamOutput
+export type SequencedAgentStreamChunk = z.infer<
+  typeof SequencedAgentStreamChunk
 >;
 
 export const AgentDebugOutput = z.object({
@@ -138,7 +139,7 @@ export type AgentOutput = z.infer<typeof AgentOutput>;
 
 export const AgentChunksWebhookBody = z.object({
   userMessageId: z.string().min(1),
-  chunks: z.array(SequencedAgentStreamOutput),
+  chunks: z.array(SequencedAgentStreamChunk),
 });
 export type AgentChunksWebhookBody = z.infer<typeof AgentChunksWebhookBody>;
 

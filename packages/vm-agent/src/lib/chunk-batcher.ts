@@ -3,9 +3,9 @@
  * flush. Flushes are serialized on an in-flight promise chain so network
  * reordering cannot swap batches at the DO.
  */
-import type { SequencedAgentStreamOutput, UIMessageChunk } from "@repo/shared";
+import type { SequencedAgentStreamChunk, UIMessageChunk } from "@repo/shared";
 
-export type ChunkBatchItem = SequencedAgentStreamOutput;
+export type ChunkBatchItem = SequencedAgentStreamChunk;
 
 export interface ChunkBatcherOptions {
   maxChunks: number;
@@ -31,7 +31,7 @@ export class ChunkBatcher {
   constructor(private readonly opts: ChunkBatcherOptions) {}
 
   add(chunk: UIMessageChunk): void {
-    this.buffer.push({ type: "stream", sequence: this.sequence++, chunk });
+    this.buffer.push({ sequence: this.sequence++, chunk });
 
     if (isTerminalChunk(chunk) || this.buffer.length >= this.opts.maxChunks) {
       this.flushNow();

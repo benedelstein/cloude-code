@@ -13,7 +13,7 @@ import { createLogger } from "@/lib/logger";
  *
  * Traffic shape:
  *   POST /internal/session/:sessionId/chunks
- *     Body: { userMessageId: string, chunks: [{ type: "stream", sequence, chunk }, ...] }
+ *     Body: { userMessageId: string, chunks: [{ sequence, chunk }, ...] }
  *   POST /internal/session/:sessionId/events
  *     Body: { event: AgentEvent }
  */
