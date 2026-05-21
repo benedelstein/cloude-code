@@ -111,31 +111,6 @@ NOTE: if adding new dependencies in multiple packages in the repo, prefer to use
 - Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
 - Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
 
-## Best Practices
-
-- Always build, lint, and typecheck after completing a task to test it.
-- Prefer unabbreviated variable names rather than shortened ones. For example, prefer `const installation = ...` instead of `const inst = ...`. Variable names should not be too long (>30 chars) though.
-- Do not use emojis in your git messages or comments.
-- Write concise, instructive and clarifying comments where needed.
-- Always prefer to use async/await over callbacks and .then()/.catch()
-- For public methods, add doc comments describing the method, its parameters and return value.
-- When switching over entire cases, make switch statements exhaustive for maintainability - if we ever add a new case, it should be handled. Prefer switch to multiple if/else chains
-```typescript
-switch (expression) {
-    case "value1":
-        break;
-    case "value2":
-        break;
-    default:
-        const _exhaustiveCheck: never = expression;
-        throw new Error(`Unhandled value: ${_exhaustiveCheck}`);
-}
-```
-- Prefer the simplest working solution. Avoid over-engineering, over-defensiveness. Do not create fallback error-handling logic to cover up an error that should not exist in the first place.
-- Avoid abstractions or helpers for single-use operations. If multiple uses, DRY up the code.
-- No speculative features or future-proofing.
-- No docstrings or comments on code that was not changed.
-
 ### Logging
 The app-wide logger is available as `Logger` in `packages/shared/src/logging/index.ts`. Loggers should be scoped to the module they are in.
 NOTE: Use string interpolation for logging rather than the structured fields dict.
@@ -147,7 +122,6 @@ logger.info(`received chunk ${sequence}, expected ${expected}`);
 
 The docs/ folder contains specific documentation about certain parts of the codebase, if needed.
 `docs/plans` contains artifacts about implementation plans for larger features. If you are planning a larger feature, you must create a plan file in that folder. Use `TEMPLATE.md` as a starting point. Once a plan's implmentation has been completed, move it to `docs/plans/complete/`
-
 
 
 ## Response style
@@ -182,6 +156,29 @@ The docs/ folder contains specific documentation about certain parts of the code
 - Apply them silently. Do not re-announce learned behavior.
 - If the user corrects a mistake: fix it, remember it, move on.
 
-### Scope Control
-- Do not add features beyond what was asked.
-- Do not refactor surrounding code when fixing a bug.
+
+## Best Practices
+
+- Always build, lint, and typecheck after completing a task to test it.
+- Prefer unabbreviated variable names rather than shortened ones. For example, prefer `const installation = ...` instead of `const inst = ...`. Variable names should not be too long (>30 chars) though.
+- Do not use emojis in your git messages or comments.
+- Write concise, instructive and clarifying comments where needed.
+- Always prefer to use async/await over callbacks and .then()/.catch()
+- For public methods, add doc comments describing the method, its parameters and return value.
+- When switching over entire cases, make switch statements exhaustive for maintainability - if we ever add a new case, it should be handled. Prefer switch to multiple if/else chains
+```typescript
+switch (expression) {
+    case "value1":
+        break;
+    case "value2":
+        break;
+    default:
+        const _exhaustiveCheck: never = expression;
+        throw new Error(`Unhandled value: ${_exhaustiveCheck}`);
+}
+```
+- Prefer switch statements over if/else, and prefer exhaustive switch statements.
+- Prefer the simplest working solution. Avoid over-engineering, over-defensiveness. Do not create fallback error-handling logic to cover up an error that should not exist in the first place.
+- Avoid abstractions or helpers for single-use operations. If multiple uses, DRY up the code.
+- No speculative features or future-proofing.
+- No docstrings or comments on code that was not changed.

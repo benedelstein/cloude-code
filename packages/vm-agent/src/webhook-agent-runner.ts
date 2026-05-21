@@ -10,6 +10,7 @@ import {
   type AgentOutput,
   type AgentSettings,
   type UIMessageChunk,
+  encodeAgentOutput,
 } from "@repo/shared";
 import {
   type AgentHarnessHandle,
@@ -28,6 +29,7 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
   idleTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
   batchMaxChunks?: number;
   batchMaxAgeMs?: number;
   /** Hook for runner shutdown — defaults to process.exit(0). */
@@ -35,10 +37,19 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
   logger?: (_level: "debug" | "warn", _message: string, _meta?: unknown) => void;
 }
 
+/** Amount of time after a turn ends waiting for new turns to come in, before shutting down. */
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
+/**
+ * Sprites suspend processes after roughly 30s without stdout activity. Keep
+ * this below that threshold so the vm-agent stays reusable while active or
+ * idle.
+ */
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
+/** Maximum number of chunks to buffer before flushing. */
 const DEFAULT_BATCH_MAX_CHUNKS = 50;
+/** Maximum age of a chunk batch before flushing. */
 const DEFAULT_BATCH_MAX_AGE_MS = 300;
-/** Hard cap on shutdown draining so a wedged webhook retry can't block exit. */
+/** Hard cap on shutdown draining duration so a wedged webhook retry can't block exit. */
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
@@ -47,14 +58,18 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly batcher: ChunkBatcher;
   private readonly http: WebhookClient;
   private readonly idleTimeoutMs: number;
+  private readonly heartbeatIntervalMs: number;
   private readonly onShutdown: () => void;
   private readonly log: NonNullable<WebhookAgentRunnerOptions["logger"]>;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private activeUserMessageId: string | null = null;
   private shuttingDown = false;
 
   constructor(private readonly opts: WebhookAgentRunnerOptions<S>) {
     this.idleTimeoutMs = opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    this.heartbeatIntervalMs =
+      opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.onShutdown = opts.onShutdown ?? (() => process.exit(0));
     this.log = opts.logger ?? (() => {});
 
@@ -74,11 +89,12 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       args: opts.args,
       initialAgentMode: opts.initialAgentMode,
       emit: (output) => this.handleEmit(output),
-      onTurnStart: () => this.cancelIdleTimer(),
+      onTurnStart: (_message, userMessageId) => this.onTurnStart(userMessageId),
       onTurnEnd: (result) => this.onTurnEnd(result),
     });
 
     this.installSignalHandlers();
+    this.startHeartbeatInterval();
   }
 
   /**
@@ -90,12 +106,26 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
     this.cancelIdleTimer();
-    this.activeUserMessageId = userMessageId;
-    this.harness.queueMessage(message, overrides);
+    this.harness.queueMessage(message, userMessageId, overrides);
   }
 
-  cancel(): void {
-    this.harness.cancel();
+  /**
+   * Queues a user turn from stdin and emits a typed ack once accepted.
+   */
+  queueStdinMessage(
+    userMessageId: string,
+    message: AgentInputMessage,
+    overrides?: { model?: string; agentMode?: AgentMode },
+  ): void {
+    this.queueMessage(userMessageId, message, overrides);
+    this.handleEmit({ type: "stdin_ack", userMessageId });
+  }
+
+  cancelTurn(userMessageId: string): void {
+    const canceled = this.harness.cancelTurn(userMessageId);
+    if (canceled) {
+      this.handleEmit({ type: "cancel_ack", userMessageId });
+    }
   }
 
   /**
@@ -109,12 +139,17 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
+    this.log("debug", "shutting down.");
     this.cancelIdleTimer();
+    this.cancelHeartbeatInterval();
 
     // Aborting the current streamText causes the harness to emit a terminal
     // abort chunk into the batcher (forcing a flush), so the DO finalizes
     // the turn through the normal terminal-chunk path.
-    this.harness.cancel();
+    const canceled = this.harness.cancelTurn();
+    if (canceled) {
+      this.log("debug", "cancelled in-flight turn");
+    }
 
     const drain = (async () => {
       await this.harness.shutdown();
@@ -125,18 +160,41 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     });
     await Promise.race([drain, deadline]);
 
+    this.log("debug", "shutdown complete");
     this.onShutdown();
   }
 
   private handleEmit(output: AgentOutput): void {
-    if (output.type === "stream") {
-      this.batcher.add(output.chunk as UIMessageChunk);
-      return;
+    switch (output.type) {
+      case "stream":
+        this.batcher.add(output.chunk as UIMessageChunk);
+        return;
+      case "stdin_ack":
+      case "cancel_ack":
+        // Write directly to stdout so the attaching DO can await the ack.
+        process.stdout.write(encodeAgentOutput(output) + "\n");
+        return;
+      case "ready":
+      case "error":
+      case "sessionId":
+        this.log("debug", "emit event -> /events", { ...output });
+        // Process-level events go straight to /events, one POST per event.
+        // Fire-and-forget — the WebhookClient handles retries internally.
+        void this.http.post("/events", { event: output });
+        return;
+      case "heartbeat":
+        // write directly to stdout to keep process alive.
+        process.stdout.write(encodeAgentOutput(output) + "\n");
+        this.log("debug", "emit heartbeat -> stdout");
+        return;
+      case "debug":
+        this.log("debug", output.message);
+        return;
+      default: {
+        const exhaustiveCheck: never = output;
+        throw new Error(`Unhandled agent output: ${JSON.stringify(exhaustiveCheck)}`);
+      }
     }
-    this.log("debug", "emit event -> /events", { ...output });
-    // Process-level events go straight to /events, one POST per event.
-    // Fire-and-forget — the WebhookClient handles retries internally.
-    void this.http.post("/events", { event: output });
   }
 
   private async flushChunkBatch(batch: ChunkBatchItem[]): Promise<void> {
@@ -156,7 +214,13 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     await this.http.post("/chunks", { userMessageId, chunks: batch });
   }
 
+  private onTurnStart(userMessageId: string): void {
+    this.cancelIdleTimer();
+    this.activeUserMessageId = userMessageId;
+  }
+
   private async onTurnEnd(_result: AgentTurnEndResult): Promise<void> {
+    const endedUserMessageId = this.activeUserMessageId;
     // The DO learns about turn completion from the terminal stream chunk
     // inside the last batch — we just flush and arm the idle timer here.
     await this.batcher.flushNow();
@@ -164,7 +228,9 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     // long-lived runner reuses this process) starts at seq 0, matching the
     // DO's first-chunk expectation.
     this.batcher.reset();
-    this.activeUserMessageId = null;
+    if (this.activeUserMessageId === endedUserMessageId) {
+      this.activeUserMessageId = null;
+    }
     if (!this.shuttingDown) this.startIdleTimer();
   }
 
@@ -189,5 +255,23 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
+  }
+
+  private startHeartbeatInterval(): void {
+    this.emitHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      this.emitHeartbeat();
+    }, this.heartbeatIntervalMs);
+  }
+
+  private cancelHeartbeatInterval(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  private emitHeartbeat(): void {
+    this.handleEmit({ type: "heartbeat" });
   }
 }

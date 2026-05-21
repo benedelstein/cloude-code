@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { getAgentByName } from "agents";
-import { AgentEvent } from "@repo/shared";
-import { z } from "zod";
+import { AgentChunksWebhookBody, AgentEventsWebhookBody } from "@repo/shared";
 import type { UIMessageChunk } from "ai";
 import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
@@ -20,20 +19,6 @@ import { createLogger } from "@/lib/logger";
  */
 export const internalRoutes = new Hono<{ Bindings: Env }>();
 const logger = createLogger("internal.routes.ts");
-
-const ChunkItemSchema = z.object({
-  sequence: z.number(),
-  chunk: z.unknown(),
-});
-
-const ChunksBodySchema = z.object({
-  userMessageId: z.string().min(1),
-  chunks: z.array(ChunkItemSchema),
-});
-
-const EventBodySchema = z.object({
-  event: AgentEvent,
-});
 
 function parseBearerToken(auth: string | undefined): string | null {
   if (!auth) return null;
@@ -91,7 +76,7 @@ internalRoutes.post("/session/:sessionId/chunks", async (c) => {
     return c.json({ error: "Invalid JSON" }, 400);
   }
 
-  const parsed = ChunksBodySchema.safeParse(body);
+  const parsed = AgentChunksWebhookBody.safeParse(body);
   if (!parsed.success) {
     logger.warn("[/chunks] invalid body", {
       fields: {
@@ -160,7 +145,7 @@ internalRoutes.post("/session/:sessionId/events", async (c) => {
     return c.json({ error: "Invalid JSON" }, 400);
   }
 
-  const parsed = EventBodySchema.safeParse(body);
+  const parsed = AgentEventsWebhookBody.safeParse(body);
   if (!parsed.success) {
     logger.warn("[/events] invalid body", {
       fields: {

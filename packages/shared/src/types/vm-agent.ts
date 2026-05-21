@@ -32,12 +32,8 @@ export type AgentInputMessage = z.infer<typeof AgentInputMessage>;
 export const AgentChatInput = z.object({
   type: z.literal("chat"),
   message: AgentInputMessage,
-  /**
-   * Identifier of the user message this turn belongs to. Required in the
-   * webhook flow so the vm-agent can tag outbound chunks; optional on the
-   * legacy stdio path where the DO tracks this server-side.
-   */
-  userMessageId: z.string().optional(),
+  /** Identifier of the user message this turn belongs to. */
+  userMessageId: z.string().min(1),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch agent mode before processing the message. */
@@ -46,6 +42,7 @@ export const AgentChatInput = z.object({
 
 export const AgentCancelInput = z.object({
   type: z.literal("cancel"),
+  userMessageId: z.string().min(1),
 });
 
 export const AgentInput = z.discriminatedUnion("type", [
@@ -75,6 +72,15 @@ export const AgentStreamOutput = z.object({
   type: z.literal("stream"),
   chunk: z.unknown(), // UIMessageChunk from AI SDK
 });
+export type AgentStreamOutput = z.infer<typeof AgentStreamOutput>;
+
+export const SequencedAgentStreamChunk = z.object({
+  sequence: z.number().int().nonnegative(),
+  chunk: z.unknown(), // UIMessageChunk from AI SDK
+});
+export type SequencedAgentStreamChunk = z.infer<
+  typeof SequencedAgentStreamChunk
+>;
 
 export const AgentDebugOutput = z.object({
   type: z.literal("debug"),
@@ -92,6 +98,16 @@ export const AgentHeartbeatOutput = z.object({
   type: z.literal("heartbeat"),
 });
 
+export const AgentStdinAckOutput = z.object({
+  type: z.literal("stdin_ack"),
+  userMessageId: z.string().min(1),
+});
+
+export const AgentCancelAckOutput = z.object({
+  type: z.literal("cancel_ack"),
+  userMessageId: z.string().min(1),
+});
+
 /**
  * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
  * /chunks and everything else (ready, error, sessionId, heartbeat, debug) to
@@ -107,13 +123,30 @@ export const AgentEvent = z.discriminatedUnion("type", [
 export type AgentEvent = z.infer<typeof AgentEvent>;
 
 /**
- * All agent output types, including stream chunks.
+ * All agent output types, including stream chunks and local stdin acks.
  */
 export const AgentOutput = z.discriminatedUnion("type", [
   ...AgentEvent.options,
   AgentStreamOutput,
+  AgentStdinAckOutput,
+  AgentCancelAckOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
+
+// ============================================
+// Webhook body types
+// ============================================
+
+export const AgentChunksWebhookBody = z.object({
+  userMessageId: z.string().min(1),
+  chunks: z.array(SequencedAgentStreamChunk),
+});
+export type AgentChunksWebhookBody = z.infer<typeof AgentChunksWebhookBody>;
+
+export const AgentEventsWebhookBody = z.object({
+  event: AgentEvent,
+});
+export type AgentEventsWebhookBody = z.infer<typeof AgentEventsWebhookBody>;
 
 // ============================================
 // Helper functions for encoding/decoding

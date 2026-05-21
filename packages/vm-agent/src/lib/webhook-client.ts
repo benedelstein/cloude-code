@@ -77,6 +77,7 @@ export class WebhookClient {
           attempt,
           elapsedMs: Date.now() - startedAt,
           error: String(error),
+          url,
         });
       }
 

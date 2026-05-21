@@ -106,6 +106,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     todos: null,
     plan: null,
     pendingUserMessage: null,
+    activeTurn: null,
     editorUrl: null,
     providerConnection: null,
     lastError: null,
@@ -162,6 +163,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg: ServerMessage) => this.broadcastMessage(msg),
       synthesizeStatus: () => this.synthesizeStatus(),
+      terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -234,6 +236,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
+      activeTurn: this.serverState.activeUserMessageId
+        ? { userMessageId: this.serverState.activeUserMessageId }
+        : null,
     });
     this.logger.debug("onStart");
   }
@@ -312,10 +317,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    * Webhook entry point for streamed chunks. The batch is applied in order;
    * a terminal chunk in the batch finalizes the turn.
    */
-  handleWebhookChunks(
+  async handleWebhookChunks(
     userMessageId: string,
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
-  ): void {
+  ): Promise<void> {
     this.logger.info("handleWebhookChunks", {
       fields: {
         userMessageId,
@@ -324,7 +329,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       },
     });
     this.turnCoordinator.ensureRehydratedState();
-    this.turnCoordinator.handleChunks(userMessageId, chunks);
+    await this.turnCoordinator.handleChunks(userMessageId, chunks);
   }
 
   /**
@@ -379,6 +384,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
           type: "sync.response",
           messages: storedMessages.map((m) => m.message),
           pendingChunks: this.turnCoordinator.getPendingChunks(),
+          activeTurn: this.serverState.activeUserMessageId
+            ? { userMessageId: this.serverState.activeUserMessageId }
+            : null,
         },
         connection,
       );
@@ -702,7 +710,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         await this.handleSyncRequest(connection);
         break;
       case "operation.cancel":
-        await this.cancelActiveTurn();
+        await this.cancelActiveTurnAndClearState();
         break;
     }
   }
@@ -717,6 +725,22 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       }
 
       await this.ensureReady();
+
+      if (
+        this.serverState.activeUserMessageId &&
+        !this.serverState.agentProcessId &&
+        !this.state.pendingUserMessage
+      ) {
+        const staleUserMessageId = this.serverState.activeUserMessageId;
+        this.logger.warn(
+          "Clearing active turn with no agent process before chat dispatch",
+          { fields: { userMessageId: staleUserMessageId } },
+        );
+        this.turnCoordinator.handleTurnSpawnFailed(
+          staleUserMessageId,
+          "Previous agent turn did not start",
+        );
+      }
 
       if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
         // TODO: message queuing
@@ -766,7 +790,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
     const sessionId = this.serverState.sessionId;
     if (!sessionId) {
-      this.sendMessage({ type: "sync.response", messages: [] }, connection);
+      this.sendMessage(
+        { type: "sync.response", messages: [], activeTurn: null },
+        connection,
+      );
       return;
     }
 
@@ -776,19 +803,21 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         type: "sync.response",
         messages: storedMessages.map((m) => m.message),
         pendingChunks: this.turnCoordinator.getPendingChunks(),
+        activeTurn: this.serverState.activeUserMessageId
+          ? { userMessageId: this.serverState.activeUserMessageId }
+          : null,
       },
       connection,
     );
   }
 
-  private async cancelActiveTurn(): Promise<void> {
-    const { processAlreadyGone } = await this.processManager.cancelActiveTurn();
-    // If the sprite process is already dead, no terminal chunk will arrive to
-    // finalize the turn — clear state directly so the next chat.message isn't
-    // rejected as "Agent is already handling a message".
-    if (processAlreadyGone) {
-      this.turnCoordinator.markTurnCanceled();
-    }
+  private async cancelActiveTurnAndClearState(): Promise<void> {
+    const result = await this.processManager.cancelActiveTurn();
+    // Treat cancel as locally authoritative: a SIGTERM may not produce a
+    // terminal abort chunk, but the user must be able to send the next turn.
+    this.turnCoordinator.markTurnCanceled({
+      preserveAgentProcessId: result.processPreserved,
+    });
   }
 
   // ============================================
@@ -875,10 +904,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.updatePartialState({
       lastError: "Repository access for this session is currently blocked.",
     });
-    const { processAlreadyGone } = await this.processManager.cancelActiveTurn();
-    if (processAlreadyGone) {
-      this.turnCoordinator.markTurnCanceled();
-    }
+    await this.cancelActiveTurnAndClearState();
     await this.processManager.kill();
     if (notifyClients) {
       this.broadcastMessage({

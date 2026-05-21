@@ -7,6 +7,8 @@ import {
   type DomainError,
   type Logger,
   type Result,
+  encodeAgentInput,
+  decodeAgentOutput,
   failure,
   success,
 } from "@repo/shared";
@@ -90,6 +92,18 @@ function managerError<Code extends SpriteAgentProcessManagerError["code"]>(
   } as Extract<SpriteAgentProcessManagerError, { code: Code }>;
 }
 
+
+function consumeLines(
+  buffer: string,
+  chunk: string,
+): { lines: string[]; remainder: string } {
+  const parts = `${buffer}${chunk}`.split("\n");
+  return {
+    lines: parts.slice(0, -1),
+    remainder: parts.at(-1) ?? "",
+  };
+}
+
 function mapProviderCredentialError(
   error: ProviderCredentialError,
 ): Extract<
@@ -163,15 +177,26 @@ export type DispatchMessageResult = Result<
   SpriteAgentProcessManagerError
 >;
 
+type ExistingProcessDispatchResult =
+  | { status: "reused"; agentProcessId: number }
+  | { status: "fallback" }
+  | { status: "failed"; error: SpriteAgentProcessManagerError };
+
+type CancelActiveTurnResult = {
+  processPreserved: boolean;
+};
+
 /**
  * Owns the lifecycle of the vm-agent process on the sprite for a session.
  *
- * In v1, every turn spawns a fresh process (cold-path only). The initial
- * user message is passed via CLI args at spawn, and chunks flow back to the
- * DO through HTTPS webhooks — no long-lived websocket is held open here.
+ * Reuses the vm-agent process while it is alive inside its post-turn idle
+ * window. New turns are sent to the existing process via stdin. If the saved
+ * sprite process id is stale (or attach/write fails), the id is cleared and a
+ * fresh process is spawned with the initial turn staged on disk.
  *
- * `cancelActiveTurn()` terminates the active exec session. `kill()` does the
- * same and is used on session delete.
+ * `cancelActiveTurn()` gracefully cancels the active turn when possible and
+ * falls back to terminating the exec session. `kill()` is used on session
+ * delete.
  */
 export class SpriteAgentProcessManager {
   private readonly env: Env;
@@ -196,16 +221,18 @@ export class SpriteAgentProcessManager {
   }
 
   /**
-   * Spawns a fresh vm-agent process on the sprite with the given user message
-   * as its initial turn. Concurrent callers share a single in-flight spawn so
-   * back-to-back dispatches cannot race to spawn two processes.
+   * Dispatches a turn to the vm-agent. Prefers attaching to the saved sprite
+   * process id and writing the turn to stdin; falls back to spawning a fresh
+   * process when the saved id is missing or stale. Concurrent callers share a
+   * single in-flight operation so back-to-back dispatches cannot race to write
+   * or spawn twice.
    */
   async dispatchMessage(input: DispatchMessageInput): Promise<DispatchMessageResult> {
     if (this.startMutex) return this.startMutex;
 
     const spawn = (async (): Promise<DispatchMessageResult> => {
       try {
-        return await this.doSpawn(input);
+        return await this.doDispatch(input);
       } finally {
         this.startMutex = null;
       }
@@ -215,18 +242,17 @@ export class SpriteAgentProcessManager {
   }
 
   /**
-   * Terminates the active agent process via SIGTERM. Returns
-   * `processAlreadyGone: true` when the sprite reports 404, so callers can
-   * finalize turn state immediately rather than waiting for a terminal chunk
-   * that will never arrive.
+   * Best-effort cancels the active turn. When the process acknowledges the
+   * scoped cancel it can be reused; otherwise it is fenced with SIGTERM.
    */
-  async cancelActiveTurn(): Promise<{ processAlreadyGone: boolean }> {
+  async cancelActiveTurn(): Promise<CancelActiveTurnResult> {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) {
+    const userMessageId = serverState.activeUserMessageId;
+    if (!processId || !spriteName || !userMessageId) {
       this.logger.debug("No active agent process to cancel");
-      return { processAlreadyGone: false };
+      return { processPreserved: false };
     }
 
     const sprite = new WorkersSpriteClient(
@@ -234,21 +260,51 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_KEY,
       this.env.SPRITES_API_URL,
     );
+    const session = sprite.attachSession(String(processId), {
+      idleTimeoutMs: 10_000,
+    });
+
     try {
-      await sprite.killSession(processId, "SIGTERM");
-      this.logger.debug("Agent process terminated");
-      return { processAlreadyGone: false };
+      await session.start();
+      const cancelAck = this.waitForAck(
+        session,
+        "cancel_ack",
+        userMessageId,
+        2_000,
+      );
+      session.write(`${encodeAgentInput({ type: "cancel", userMessageId })}\n`);
+      await cancelAck;
+      this.logger.debug("Agent process acknowledged turn cancel");
+      return { processPreserved: true };
     } catch (error) {
-      if (error instanceof SpritesError && error.statusCode === 404) {
-        this.logger.debug("Agent process already gone on cancel");
-        return { processAlreadyGone: true };
-      }
-      this.logger.warn("Failed to terminate agent process", {
+      this.logger.warn("Graceful agent cancel failed; terminating process", {
         error,
-        fields: { processId },
+        fields: { processId, userMessageId },
       });
-      return { processAlreadyGone: false };
+      await this.killActiveProcess(sprite, processId, error);
+      return { processPreserved: false };
+    } finally {
+      try {
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close cancel attach websocket", { error });
+      }
     }
+  }
+
+  /** Terminates the cached active process and clears its id. */
+  async terminateActiveProcess(): Promise<void> {
+    const serverState = this.getServerState();
+    const processId = serverState.agentProcessId;
+    const spriteName = serverState.spriteName;
+    if (!processId || !spriteName) return;
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    await this.killActiveProcess(sprite, processId, new Error("terminating active process"));
   }
 
   /** Force-kills the active agent process. Used on session delete. */
@@ -289,7 +345,7 @@ export class SpriteAgentProcessManager {
   // Private
   // ============================================
 
-  private async doSpawn(
+  private async doDispatch(
     input: DispatchMessageInput,
   ): Promise<DispatchMessageResult> {
     const serverState = this.getServerState();
@@ -321,11 +377,13 @@ export class SpriteAgentProcessManager {
     }
     const resolvedAttachments = attachmentsResult.value.agentAttachments;
 
-    const credentialResult = await this.loadCredentialSnapshot(settings, userId);
-    if (!credentialResult.ok) {
-      return failure(credentialResult.error);
-    }
-    const credentialSnapshot = credentialResult.value;
+    const agentMessage: AgentInputMessage = {
+      content: input.userMessage.content,
+      attachments:
+        resolvedAttachments.length > 0
+          ? (resolvedAttachments as AgentInputAttachment[])
+          : undefined,
+    };
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -333,77 +391,93 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_URL,
     );
 
-    await this.writeCredentialFiles(sprite, credentialSnapshot);
-    await this.writeVmAgentScript(sprite);
-
-    const webhookToken = this.ensureWebhookToken();
-    const webhookUrl = this.buildWebhookUrl(sessionId);
-
-    const initialMessageWithAttachments: AgentInputMessage = {
-      content: input.userMessage.content,
-      attachments:
-        resolvedAttachments.length > 0
-          ? (resolvedAttachments as AgentInputAttachment[])
-          : undefined,
-    };
-    const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
-    await this.writeInitialMessageFile(
-      sprite,
-      initialMessagePath,
-      initialMessageWithAttachments,
-    );
-
-    // Wrap bun in a shell so we can redirect stdout/stderr to a log file on
-    // the sprite. The child stdin is /dev/null because webhook-mode is
-    // spawn-and-forget: the initial message is staged in a file and control
-    // messages must not keep the process coupled to websocket-backed stdin.
-    // `exec` replaces the shell with bun so we don't leak a wrapper process.
-    // "$@" preserves argv boundaries so JSON args with spaces/quotes stay
-    // intact.
-    const agentArgs = this.buildAgentArgs({
-      settings,
-      agentMode,
-      initialMessagePath,
+    const reuseResult = await this.tryDispatchToExistingProcess(sprite, {
+      processId: serverState.agentProcessId,
       userMessageId: input.userMessage.id,
-      agentSessionId: serverState.agentSessionId ?? undefined,
+      message: agentMessage,
       model: input.model,
+      agentMode: input.agentMode,
     });
-    const logPath = `${VM_AGENT_LOG_DIR}/${sessionId}.log`;
-    // Run inside a shell so we can tee stdout/stderr to both the sprite exec
-    // TTY and a log file. Sprites only appear to keep detached sessions awake
-    // while there is TTY output, so plain file redirection is not enough. We
-    // intentionally do NOT wrap with setsid/nohup — `detachable: true` puts
-    // the process inside a tmux session on the sprite, and setsid would tear
-    // it out of tmux's session group, breaking the keep-running behavior.
-    const session = sprite.createSession(
-      "sh",
-      [
-        "-c",
-        `mkdir -p ${VM_AGENT_LOG_DIR} && bun "$@" 2>&1 | tee -a ${logPath}`,
-        "vm-agent",
-        ...agentArgs,
-      ],
-      {
-        cwd: WORKSPACE_DIR,
-        // TTY + detachable matches the sprite docs example for sessions that
-        // "stay alive after disconnect". Without TTY, sessions appear to be
-        // suspended once the spawn websocket closes regardless of
-        // `maxRunAfterDisconnect`. Output is redirected to a log file inside
-        // the shell wrapper, so we never actually write to the PTY.
-        tty: true,
-        detachable: true,
-        env: {
-          SESSION_ID: sessionId,
-          DO_WEBHOOK_URL: webhookUrl,
-          DO_WEBHOOK_TOKEN: webhookToken,
-          ...credentialSnapshot.envVars,
-        },
-        idleTimeoutMs: 45_000,
-        // maxRunAfterDisconnect: "0",
-      },
-    );
+    switch (reuseResult.status) {
+      case "reused":
+        return success({ agentProcessId: reuseResult.agentProcessId });
+      case "failed":
+        return failure(reuseResult.error);
+      case "fallback":
+        break;
+    }
 
+    const credentialResult = await this.loadCredentialSnapshot(settings, userId);
+    if (!credentialResult.ok) {
+      return failure(credentialResult.error);
+    }
+    const credentialSnapshot = credentialResult.value;
+
+    let session: SpriteWebsocketSession | null = null;
     try {
+      await this.writeCredentialFiles(sprite, credentialSnapshot);
+      await this.writeVmAgentScript(sprite);
+
+      const webhookToken = this.ensureWebhookToken();
+      const webhookUrl = this.buildWebhookUrl(sessionId);
+
+      // write the initial message to a file, messages with attachments are too large for argv
+      const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
+      await this.writeInitialMessageFile(
+        sprite,
+        initialMessagePath,
+        agentMessage,
+      );
+
+      // Wrap bun in a shell so stdout/stderr are mirrored to a sprite log file.
+      // The initial message is staged in a file; reused turns and cancels attach
+      // to this exec session later and write typed NDJSON to stdin.
+      // `exec` replaces the shell with bun so we don't leak a wrapper process.
+      // "$@" preserves argv boundaries so JSON args with spaces/quotes stay
+      // intact.
+      const agentArgs = this.buildAgentArgs({
+        settings,
+        agentMode,
+        initialMessagePath,
+        userMessageId: input.userMessage.id,
+        agentSessionId: serverState.agentSessionId ?? undefined,
+        model: input.model,
+      });
+      const logPath = `${VM_AGENT_LOG_DIR}/${sessionId}.log`;
+      // Run inside a shell so we can tee stdout/stderr to both the sprite exec
+      // TTY and a log file. Sprites only appear to keep detached sessions awake
+      // while there is TTY output, so plain file redirection is not enough. We
+      // intentionally do NOT wrap with setsid/nohup — `detachable: true` puts
+      // the process inside a tmux session on the sprite, and setsid would tear
+      // it out of tmux's session group, breaking the keep-running behavior.
+      session = sprite.createSession(
+        "sh",
+        [
+          "-c",
+          `mkdir -p ${VM_AGENT_LOG_DIR} && bun "$@" 2>&1 | tee -a ${logPath}`,
+          "vm-agent",
+          ...agentArgs,
+        ],
+        {
+          cwd: WORKSPACE_DIR,
+          // TTY + detachable matches the sprite docs example for sessions that
+          // "stay alive after disconnect". Without TTY, sessions appear to be
+          // suspended once the spawn websocket closes regardless of
+          // `maxRunAfterDisconnect`. Output is redirected to a log file inside
+          // the shell wrapper, so we never actually write to the PTY.
+          tty: true,
+          detachable: true,
+          env: {
+            SESSION_ID: sessionId,
+            DO_WEBHOOK_URL: webhookUrl,
+            DO_WEBHOOK_TOKEN: webhookToken,
+            ...credentialSnapshot.envVars,
+          },
+          idleTimeoutMs: 45_000,
+          // maxRunAfterDisconnect: "0",
+        },
+      );
+
       const processId = await this.startAndCaptureProcessId(session);
       this.updateAgentProcessId(processId);
       return success({ agentProcessId: processId });
@@ -414,13 +488,215 @@ export class SpriteAgentProcessManager {
     } finally {
       // Close our setup websocket. The vm-agent keeps running on the sprite
       // for up to maxRunAfterDisconnect.
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
-        session.close();
-      } catch (error) {
-        this.logger.debug("Failed to close setup websocket", { error });
+      if (session) {
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 2_000));
+          session.close();
+        } catch (error) {
+          this.logger.debug("Failed to close setup websocket", { error });
+        }
       }
     }
+  }
+
+  private async tryDispatchToExistingProcess(
+    sprite: WorkersSpriteClient,
+    args: {
+      processId: number | null;
+      userMessageId: string;
+      message: AgentInputMessage;
+      model: string | undefined;
+      agentMode: AgentMode | undefined;
+    },
+  ): Promise<ExistingProcessDispatchResult> {
+    if (!args.processId) return { status: "fallback" };
+
+    const session = sprite.attachSession(String(args.processId), {
+      idleTimeoutMs: 10_000,
+    });
+    let wroteStdin = false;
+
+    try {
+      await session.start();
+      this.logger.debug(`Attached to existing vm-agent process ${args.processId}, waiting for stdin ack`);
+      // wait for the agent process to explicitly acknowledge the message write
+      const stdinAck = this.waitForAck(
+        session,
+        "stdin_ack",
+        args.userMessageId,
+        2_000,
+      );
+      session.write(
+        `${encodeAgentInput({
+          type: "chat",
+          userMessageId: args.userMessageId,
+          message: args.message,
+          model: args.model,
+          agentMode: args.agentMode,
+        })}\n`,
+      );
+      wroteStdin = true;
+      await stdinAck;
+      this.logger.debug("Dispatched turn to existing vm-agent process", {
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
+      return { status: "reused", agentProcessId: args.processId };
+    } catch (error) {
+      this.updateAgentProcessId(null);
+      if (wroteStdin) {
+        const processStopped = await this.killUncertainProcess(sprite, args.processId);
+        if (processStopped) {
+          this.logger.warn("Existing vm-agent process stopped before stdin ack; spawning a new one", {
+            error,
+            fields: { processId: args.processId, userMessageId: args.userMessageId },
+          });
+          return { status: "fallback" };
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          status: "failed",
+          error: managerError(
+            "TURN_DID_NOT_START",
+            "Existing vm-agent process did not acknowledge the stdin turn",
+            {
+              cause: message,
+              processId: args.processId,
+              userMessageId: args.userMessageId,
+            },
+          ),
+        };
+      }
+
+      this.logger.warn("Existing vm-agent process is not reusable; spawning a new one", {
+        error,
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
+      return { status: "fallback" };
+    } finally {
+      try {
+        // detach from the websocket on the sprite, but agent process will keep running.
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close attach websocket", { error });
+      }
+    }
+  }
+
+  private async killUncertainProcess(
+    sprite: WorkersSpriteClient,
+    processId: number
+  ): Promise<boolean> {
+    this.logger.debug("Existing vm-agent process did not ack stdin; killing it");
+    try {
+      await sprite.killSession(processId, "SIGTERM");
+      this.updateAgentProcessId(null);
+      return true;
+    } catch (error) {
+      if (error instanceof SpritesError && error.statusCode === 404) {
+        this.logger.debug("Unacknowledged vm-agent process was already gone", {
+          fields: { processId },
+        });
+        this.updateAgentProcessId(null);
+        return true;
+      }
+      this.logger.warn("Failed to kill unacknowledged vm-agent process", {
+        error,
+        fields: { processId },
+      });
+      return false;
+    }
+  }
+
+  private async killActiveProcess(
+    sprite: WorkersSpriteClient,
+    processId: number,
+    cause: unknown,
+  ): Promise<void> {
+    try {
+      await sprite.killSession(processId, "SIGTERM");
+      this.updateAgentProcessId(null);
+      this.logger.debug("Agent process terminated");
+    } catch (error) {
+      if (error instanceof SpritesError && error.statusCode === 404) {
+        this.logger.debug("Agent process already gone", {
+          fields: { processId },
+        });
+        this.updateAgentProcessId(null);
+        return;
+      }
+      this.logger.warn("Failed to terminate agent process", {
+        error,
+        fields: { processId, cause: cause instanceof Error ? cause.message : String(cause) },
+      });
+    }
+  }
+
+  private waitForAck(
+    session: SpriteWebsocketSession,
+    expectedType: "stdin_ack" | "cancel_ack",
+    userMessageId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const ackName = expectedType === "stdin_ack" ? "stdin ack" : "cancel ack";
+    return new Promise((resolve, reject) => {
+      let buffer = "";
+      let settled = false;
+      const disposers: Array<() => void> = [];
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        for (const dispose of disposers) dispose();
+      };
+
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const processLine = (line: string) => {
+        const trimmedLine = line.replace(/\r$/, "");
+        if (!trimmedLine) return;
+
+        try {
+          const output = decodeAgentOutput(trimmedLine);
+          if (output.type === expectedType) {
+            if (output.userMessageId === userMessageId) settle(resolve);
+            return;
+          }
+        } catch {
+          // Attached stdout is noisy; only typed AgentOutput lines participate
+          // in the ack handshake.
+        }
+      };
+
+      const timeout = setTimeout(() => {
+        settle(() =>
+          reject(
+            new Error(`Timed out waiting for ${ackName} for ${userMessageId}`),
+          ),
+        );
+      }, timeoutMs);
+
+      disposers.push(
+        session.onStdout((chunk) => {
+          const parsed = consumeLines(buffer, chunk);
+          buffer = parsed.remainder;
+          for (const line of parsed.lines) processLine(line);
+        }),
+      );
+      disposers.push(
+        session.onError((error) => {
+          settle(() => reject(error));
+        }),
+      );
+      disposers.push(
+        session.onExit((code) => {
+          settle(() => reject(new Error(`vm-agent exited before ${ackName}: ${code}`)));
+        }),
+      );
+    });
   }
 
   private async loadCredentialSnapshot(

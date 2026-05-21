@@ -22,6 +22,7 @@ import type {
   ClientMessage,
   ProviderAuthRequired,
   ProviderId,
+  ActiveTurnState,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -99,6 +100,7 @@ export function useCloudflareAgent({
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
   const [waitingForResponse, setWaitingForResponse] = useState(initialPendingUserMessage !== null);
+  const [serverActiveTurn, setServerActiveTurn] = useState<ActiveTurnState | null>(null);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
@@ -114,13 +116,26 @@ export function useCloudflareAgent({
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
   const serverAgentModeRef = useRef<AgentMode>("edit");
+  const hasSeenServerActiveTurnRef = useRef(false);
   const resolvedAgentMode = agentMode ?? "edit";
 
   const setAgentMode = useCallback((mode: AgentMode) => {
     setAgentModeState(mode);
   }, []);
 
-  const isResponding = waitingForResponse || streamingMessage !== null;
+  const isResponding = waitingForResponse || streamingMessage !== null || serverActiveTurn !== null;
+
+  const applyServerActiveTurn = useCallback((activeTurn: ActiveTurnState | null) => {
+    setServerActiveTurn(activeTurn);
+    if (activeTurn) {
+      hasSeenServerActiveTurnRef.current = true;
+      return;
+    }
+    if (hasSeenServerActiveTurnRef.current) {
+      hasSeenServerActiveTurnRef.current = false;
+      setWaitingForResponse(false);
+    }
+  }, []);
 
   const resetPendingResponse = useCallback((reason: string) => {
     console.log("[agent] resetPendingResponse", reason, { hadStream: !!streamControllerRef.current, wasConsuming: isConsumingRef.current });
@@ -174,6 +189,7 @@ export function useCloudflareAgent({
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
         const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        applyServerActiveTurn(msg.activeTurn);
         console.log("[agent] sync.response", { messageCount: synced.length, pendingChunkCount: pendingChunks?.length ?? 0, hadStream: !!streamControllerRef.current });
         if (synced.length > 0) {
           setPendingUserMessage(null);
@@ -232,6 +248,7 @@ export function useCloudflareAgent({
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
         setWaitingForResponse(false);
+        applyServerActiveTurn(null);
         break;
 
       case "agent.ready":
@@ -245,12 +262,13 @@ export function useCloudflareAgent({
 
       case "operation.error":
         resetPendingResponse("operation.error");
+        applyServerActiveTurn(null);
         setOperationError(msg);
         setIsHistoryLoading(false);
         onError?.(new Error(msg.message));
         break;
     }
-  }, [onError, resetPendingResponse]);
+  }, [applyServerActiveTurn, onError, resetPendingResponse]);
 
   // Use Cloudflare's useAgent hook
   const agent = useAgent<ClientState>({
@@ -290,6 +308,7 @@ export function useCloudflareAgent({
       setTodos(prev => JSON.stringify(prev) === JSON.stringify(state.todos) ? prev : state.todos);
       setPlan(prev => JSON.stringify(prev) === JSON.stringify(state.plan) ? prev : state.plan);
       setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
+      applyServerActiveTurn(state.activeTurn ?? null);
       setEditorUrl(state.editorUrl);
       setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
       setProviderConnection(prev => JSON.stringify(prev) === JSON.stringify(state.providerConnection) ? prev : state.providerConnection);

@@ -208,7 +208,7 @@ export class SpriteWebsocketSession {
           if (result.success) {
             cleanup();
             logger.info(
-              `Session info received: ${result.data.tty ? "TTY" : "non-TTY"}`,
+              `Process info received: ${result.data.tty ? "TTY mode true" : "non-TTY mode"}`,
             );
             this.ttyMode = result.data.tty;
             this.dispatchServerMessage(result.data);

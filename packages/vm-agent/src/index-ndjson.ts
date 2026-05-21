@@ -69,14 +69,18 @@ rl.on("line", (rawLine) => {
     const input = decodeAgentInput(line);
     switch (input.type) {
       case "chat":
-        handle.queueMessage(input.message, {
-          model: input.model,
-          agentMode: input.agentMode,
-        });
+        handle.queueMessage(
+          input.message,
+          input.userMessageId,
+          {
+            model: input.model,
+            agentMode: input.agentMode,
+          },
+        );
         break;
       case "cancel":
         emit({ type: "debug", message: "cancel received; aborting current operation" });
-        handle.cancel();
+        handle.cancelTurn(input.userMessageId);
         break;
     }
   } catch (e) {

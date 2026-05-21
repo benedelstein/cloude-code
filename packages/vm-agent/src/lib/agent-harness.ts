@@ -61,7 +61,7 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
   /** Called for every output the harness produces. */
   emit: (_output: AgentOutput) => void;
   /** Fires before processing each queued message. */
-  onTurnStart?: (_message: AgentInputMessage) => void;
+  onTurnStart?: (_message: AgentInputMessage, _turnId: string) => void;
   /**
    * Fires in the `finally` after each message is processed. The loop awaits
    * this callback, so async cleanup (e.g. flushing batched chunks) runs to
@@ -79,10 +79,11 @@ export interface AgentHarnessHandle {
    */
   queueMessage(
     _message: AgentInputMessage,
+    _turnId: string,
     _overrides?: { model?: string; agentMode?: AgentMode },
   ): void;
-  /** Aborts the in-flight turn, if any. Safe to call when idle. */
-  cancel(): void;
+  /** Aborts the in-flight turn, or removes a matching queued turn. */
+  cancelTurn(_turnId?: string): boolean;
   /**
    * Stops the loop cleanly. Any in-flight turn is allowed to finish;
    * subsequent queued messages are dropped. Resolves once the loop exits.
@@ -94,22 +95,15 @@ interface QueueEntry {
   message: AgentInputMessage;
   model?: string;
   agentMode?: AgentMode;
+  turnId: string;
+  abortController: AbortController;
 }
 
 const SHUTDOWN_POISON: QueueEntry = Object.freeze({
   message: { content: "__SHUTDOWN__" },
+  turnId: "__SHUTDOWN__",
+  abortController: new AbortController(),
 }) as QueueEntry;
-const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
-
-function getHeartbeatIntervalMs(): number {
-  const rawValue = process.env.VM_AGENT_HEARTBEAT_INTERVAL_MS;
-  if (!rawValue) return DEFAULT_HEARTBEAT_INTERVAL_MS;
-
-  const value = Number(rawValue);
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_HEARTBEAT_INTERVAL_MS;
-  return value;
-}
-
 /**
  * Starts the agent harness loop and returns a handle for the caller to drive
  * it. Setup runs lazily, triggered by the first queued message.
@@ -128,6 +122,7 @@ export function startAgentHarness<S extends AgentSettings>(
 
   function queueMessage(
     message: AgentInputMessage,
+    turnId: string,
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
     if (stopped) return;
@@ -135,6 +130,8 @@ export function startAgentHarness<S extends AgentSettings>(
       message,
       model: overrides?.model,
       agentMode: overrides?.agentMode,
+      turnId,
+      abortController: new AbortController(),
     };
     if (messageResolver) {
       // already awaiting a message, resolve the current promise
@@ -160,12 +157,28 @@ export function startAgentHarness<S extends AgentSettings>(
 
   let stopped = false;
   let loopDone: Promise<void> | null = null;
-  let currentAbortController: AbortController | null = null;
+  let currentEntry: QueueEntry | null = null;
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
 
-  function cancel(): void {
-    currentAbortController?.abort();
+  function cancelTurn(turnId?: string): boolean {
+    if (!turnId) {
+      currentEntry?.abortController.abort();
+      return currentEntry !== null;
+    }
+
+    const pendingIndex = pendingMessages.findIndex(
+      (entry) => entry.turnId === turnId,
+    );
+    if (pendingIndex !== -1) {
+      pendingMessages[pendingIndex]!.abortController.abort();
+      pendingMessages.splice(pendingIndex, 1);
+      return true;
+    }
+
+    if (currentEntry?.turnId !== turnId) return false;
+    currentEntry.abortController.abort();
+    return true;
   }
 
   async function shutdown(): Promise<void> {
@@ -192,8 +205,6 @@ export function startAgentHarness<S extends AgentSettings>(
       emit({ type: "debug", message: `Agent mode updated to: ${entry.agentMode}` });
     }
 
-    currentAbortController = new AbortController();
-
     const userContentParts: UserContent = [];
     if (message.content) {
       userContentParts.push({ type: "text", text: message.content });
@@ -205,10 +216,6 @@ export function startAgentHarness<S extends AgentSettings>(
         mediaType: attachment.mediaType,
       });
     }
-    const heartbeatInterval = setInterval(() => {
-      emit({ type: "heartbeat" });
-    }, getHeartbeatIntervalMs());
-
     let finishReason: string | undefined;
     let aborted = false;
     try {
@@ -218,7 +225,7 @@ export function startAgentHarness<S extends AgentSettings>(
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],
-        abortSignal: currentAbortController.signal,
+        abortSignal: entry.abortController.signal,
         ...extras,
       });
 
@@ -236,9 +243,6 @@ export function startAgentHarness<S extends AgentSettings>(
       } else {
         emit({ type: "error", error: String(e) });
       }
-    } finally {
-      clearInterval(heartbeatInterval);
-      currentAbortController = null;
     }
     return { finishReason, aborted };
   }
@@ -293,26 +297,37 @@ export function startAgentHarness<S extends AgentSettings>(
       const entry = await consumeUserMessageQueue();
       if (stopped || entry === SHUTDOWN_POISON) break;
 
-      const ready = await ensureSetup();
-      if (!ready) continue;
+      currentEntry = entry;
 
-      emit({
-        type: "debug",
-        message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
-      });
-
-      onTurnStart?.(entry.message);
       try {
+        const ready = await ensureSetup();
+        if (!ready) continue;
+
+        if (entry.abortController.signal.aborted) {
+          // A scoped cancel may arrive after the loop claims the turn but
+          // before streamText starts. Skip the model call in that case.
+          await onTurnEnd?.({ finishReason: "abort", aborted: true });
+          continue;
+        }
+
+        emit({
+          type: "debug",
+          message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
+        });
+
+        onTurnStart?.(entry.message, entry.turnId);
         const result = await processMessage(entry);
         await onTurnEnd?.(result);
       } catch (error) {
         emit({ type: "error", error: String(error) });
         await onTurnEnd?.({ aborted: false });
+      } finally {
+        currentEntry = null;
       }
     }
   }
 
   loopDone = runLoop();
 
-  return { queueMessage, cancel, shutdown };
+  return { queueMessage, cancelTurn, shutdown };
 }

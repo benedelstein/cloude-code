@@ -31,6 +31,7 @@ describe("ChunkBatcher", () => {
     await batcher.flushNow();
     expect(calls).toHaveLength(1);
     expect(calls[0]?.map((b) => b.sequence)).toEqual([0, 1, 2]);
+    expect(calls[0]?.[0]).not.toHaveProperty("type");
   });
 
   it("flushes after maxAgeMs even on slow arrival", async () => {

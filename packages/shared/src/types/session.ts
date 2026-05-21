@@ -57,6 +57,10 @@ export type ProviderConnectionState = {
   requiresReauth: boolean;
 };
 
+export type ActiveTurnState = {
+  userMessageId: string;
+};
+
 /**
  * Durable state synced to clients via Cloudflare Agents SDK.
  * IMPORTANT: ClientState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
@@ -88,6 +92,8 @@ export type ClientState = {
     /** Attachments to send with the message. Also found within UIMessage parts but here they are more easily accessible. */
     attachmentIds: string[];
   } | null;
+  /** Active agent turn known by the server, even before any assistant chunks exist. */
+  activeTurn: ActiveTurnState | null;
   /** Public URL for the VS Code editor (set when editor is open) */
   editorUrl: string | null;
   /** Auth connection state for the session's fixed provider */

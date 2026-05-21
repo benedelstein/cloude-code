@@ -34,6 +34,7 @@ export interface AgentTurnCoordinatorDeps {
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage) => void;
   synthesizeStatus: () => SessionStatus;
+  terminateActiveProcess: () => Promise<void>;
 }
 
 /**
@@ -57,6 +58,7 @@ export class AgentTurnCoordinator {
   private readonly updatePartialState: (partial: Partial<ClientState>) => void;
   private readonly broadcastMessage: (message: ServerMessage) => void;
   private readonly synthesizeStatus: () => SessionStatus;
+  private readonly terminateActiveProcess: () => Promise<void>;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -85,6 +87,7 @@ export class AgentTurnCoordinator {
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
     this.synthesizeStatus = deps.synthesizeStatus;
+    this.terminateActiveProcess = deps.terminateActiveProcess;
   }
 
   /**
@@ -163,6 +166,7 @@ export class AgentTurnCoordinator {
       activeUserMessageId: userMessageId,
     });
     this.updatePartialState({
+      activeTurn: { userMessageId },
       lastError: null,
       status: this.synthesizeStatus(),
     });
@@ -181,10 +185,10 @@ export class AgentTurnCoordinator {
    * persists to WAL, broadcasts, and finalizes the turn if a terminal chunk
    * is present.
    */
-  handleChunks(
+  async handleChunks(
     userMessageId: string,
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
-  ): void {
+  ): Promise<void> {
     this.ensureRehydratedState();
     if (this.isStaleRpc(userMessageId)) return;
     if (this.getServerState().activeUserMessageId === null) {
@@ -211,7 +215,7 @@ export class AgentTurnCoordinator {
             `chunk stream gap for ${userMessageId}: expected ${expected}, received ${sequence}`,
           );
           this.flushBufferedChunks(buffered);
-          this.handleStreamGap(expected, sequence);
+          await this.handleStreamGap(expected, sequence);
           return;
         }
         if (sequence < expected) {
@@ -401,7 +405,7 @@ export class AgentTurnCoordinator {
         finishReason: getChunkFinishReason(chunk) ?? "unknown",
       },
     });
-    this.clearActiveTurnState();
+    this.clearActiveTurnState({ preserveAgentProcessId: true });
     this.updatePartialState({
       lastError: null,
       status: this.synthesizeStatus(),
@@ -418,22 +422,23 @@ export class AgentTurnCoordinator {
   /**
    * Aborts the in-memory accumulator, flushes the WAL, persists whatever is
    * there, and broadcasts agent.finish. Always clears active turn state so
-   * the session can accept a new message. Returns true if a partial message
-   * was saved.
+   * the session can accept a new message.
+   *
+   * @returns true if a partial message was saved.
    */
-  private commitAbortedMessage(): boolean {
-    const message = this.messageAccumulator.forceAbort();
+  private commitAbortedMessage(
+    options: { preserveAgentProcessId?: boolean } = {},
+  ): boolean {
+    const abortedMessage = this.messageAccumulator.forceAbort();
     this.pendingChunkRepository.clear();
-    let saved = false;
-    if (message) {
+    if (abortedMessage) {
       const sessionId = this.getServerState().sessionId!;
-      const stored = this.messageRepository.create(sessionId, message);
+      const stored = this.messageRepository.create(sessionId, abortedMessage);
       this.broadcastMessage({ type: "agent.finish", message: stored.message });
       this.messageAccumulator.reset();
-      saved = true;
     }
-    this.clearActiveTurnState();
-    return saved;
+    this.clearActiveTurnState(options);
+    return !!abortedMessage;
   }
 
   /**
@@ -442,9 +447,11 @@ export class AgentTurnCoordinator {
    * 404 from killSession). Persists any accumulated partial as aborted and
    * clears active turn state so the user can send a new message.
    */
-  markTurnCanceled(): void {
+  markTurnCanceled(
+    options: { preserveAgentProcessId?: boolean } = {},
+  ): void {
     if (!this.getServerState().activeUserMessageId) return;
-    this.commitAbortedMessage();
+    this.commitAbortedMessage(options);
     this.updatePartialState({ status: this.synthesizeStatus() });
   }
 
@@ -464,11 +471,16 @@ export class AgentTurnCoordinator {
     return false;
   }
 
-  private clearActiveTurnState(): void {
+  private clearActiveTurnState(
+    options: { preserveAgentProcessId?: boolean } = {},
+  ): void {
     this.updateServerState({
       activeUserMessageId: null,
-      agentProcessId: null,
+      agentProcessId: options.preserveAgentProcessId
+        ? this.getServerState().agentProcessId
+        : null,
     });
+    this.updatePartialState({ activeTurn: null });
     this.lastSeenChunkSequence = null;
   }
 
@@ -478,8 +490,8 @@ export class AgentTurnCoordinator {
    * far, surfaces an error to the client, and clears state so subsequent
    * retried batches for the dead turn are dropped by the no-active guard.
    */
-  private handleStreamGap(expected: number, received: number): void {
-    this.commitAbortedMessage();
+  private async handleStreamGap(expected: number, received: number): Promise<void> {
+    this.commitAbortedMessage({ preserveAgentProcessId: true });
     this.updatePartialState({
       lastError: `Chunk stream gap: expected ${expected}, received ${received}`,
       status: this.synthesizeStatus(),
@@ -489,6 +501,8 @@ export class AgentTurnCoordinator {
       code: "CHAT_MESSAGE_FAILED",
       message: "Streaming error: missing chunks; turn aborted",
     });
+
+    await this.terminateActiveProcess();
   }
 }
 

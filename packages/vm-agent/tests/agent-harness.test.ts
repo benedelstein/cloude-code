@@ -154,10 +154,10 @@ describe("startAgentHarness", () => {
       onTurnEnd,
     });
 
-    handle.queueMessage({ content: "hi" });
+    handle.queueMessage({ content: "hi" }, "user-message-1");
 
     await pollOutputs(outputs, () => onTurnEnd.mock.calls.length === 1);
-    expect(onTurnStart).toHaveBeenCalledWith({ content: "hi" });
+    expect(onTurnStart).toHaveBeenCalledWith({ content: "hi" }, "user-message-1");
     expect(onTurnEnd).toHaveBeenCalledWith({ finishReason: "stop", aborted: false });
 
     await handle.shutdown();
@@ -205,7 +205,7 @@ describe("startAgentHarness", () => {
 
     // Wait for ready + the stream to have started before cancelling.
     await pollOutputs(outputs, (current) => current.some((o) => o.type === "ready"));
-    handle.cancel();
+    handle.cancelTurn();
 
     await pollOutputs(outputs, () => onTurnEnd.mock.calls.length === 1);
     expect(onTurnEnd).toHaveBeenCalledWith({ finishReason: "abort", aborted: true });
