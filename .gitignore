@@ -42,3 +42,4 @@ coverage/
 .vercel
 
 .playwright-cli/
+.playwright-mcp/

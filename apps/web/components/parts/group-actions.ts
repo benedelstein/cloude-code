@@ -16,9 +16,9 @@ export interface SingleAction {
 
 export type ActionItem = ActionGroup | SingleAction;
 
-const GROUPABLE_KINDS = new Set<ToolKind>(["read", "search", "web", "other"]);
+const GROUPABLE_KINDS = new Set<ToolKind>(["read", "search", "web", "bash", "other"]);
 
-type GroupableKind = "read" | "search" | "web" | "other";
+type GroupableKind = "read" | "search" | "web" | "bash" | "other";
 
 function isGroupable(kind: ToolKind): kind is GroupableKind {
   return GROUPABLE_KINDS.has(kind);

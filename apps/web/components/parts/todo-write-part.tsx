@@ -1,6 +1,19 @@
 "use client";
 
+import { ListChecks } from "lucide-react";
+import clsx from "clsx";
 import { isProviderTodoToolName } from "@repo/shared";
+import { ExpandableSummary } from "./expandable-summary";
+
+interface TodoItem {
+  content?: unknown;
+  step?: unknown;
+  text?: unknown;
+  description?: unknown;
+  status?: unknown;
+  state?: unknown;
+  activeForm?: unknown;
+}
 
 interface TodoToolPartProps {
   part: {
@@ -14,53 +27,69 @@ interface TodoToolPartProps {
 
 /**
  * Returns true when the part represents a provider todo-update tool.
- *
- * @param toolName Tool name resolved from the message part.
- * @returns Whether the part should render with the specialized todo UI.
  */
 export function isTodoToolName(toolName: string): boolean {
   return isProviderTodoToolName(toolName);
 }
 
 export function TodoToolPart({ part }: TodoToolPartProps) {
-  const state = part.state;
-  const statusLabel = state === "output-available"
-    ? "Completed"
-    : state === "input-available"
-      ? "Pending"
-      : "Running...";
-  const statusClassName = state === "output-available"
-    ? "text-green-500"
-    : state === "input-available"
-      ? "text-yellow-500"
-      : "text-blue-500";
+  const input = (part.args ?? part.input) as { todos?: unknown; plan?: unknown; steps?: unknown } | undefined;
+  const rawTodos = input?.todos ?? input?.plan ?? input?.steps ?? [];
+  const todos: TodoItem[] = Array.isArray(rawTodos) ? (rawTodos as TodoItem[]) : [];
+  const total = todos.length;
+  const completed = todos.filter((todo) => isCompleted(todo)).length;
+  const summary = total > 0
+    ? `Updated todos (${completed}/${total})`
+    : "Updated todos";
 
   return (
-    <div className="my-2 border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-muted/50">
-        <ListIcon />
-        <span className="font-medium text-sm flex-1">Updated todos</span>
-        <span className={`text-xs ${statusClassName}`}>{statusLabel}</span>
-      </div>
-    </div>
+    <ExpandableSummary
+      icon={<ListChecks className="w-3.5 h-3.5" />}
+      summary={summary}
+      detail={
+        todos.length > 0 ? (
+          <ul className="my-1 space-y-0.5 text-xs">
+            {todos.map((todo, index) => {
+              const status = todoStatus(todo);
+              const content = todoContent(todo);
+              return (
+                <li key={index} className="flex items-baseline gap-2">
+                  <span className="text-foreground-muted">
+                    {status === "completed" ? "✓" : status === "in_progress" ? "→" : "•"}
+                  </span>
+                  <span className={clsx(status === "completed" && "text-foreground-muted line-through")}>
+                    {content}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : undefined
+      }
+    />
   );
 }
 
-function ListIcon() {
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function todoContent(todo: TodoItem): string {
   return (
-    <svg
-      className="w-4 h-4 text-muted-foreground"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-      />
-    </svg>
+    asString(todo.content)
+    || asString(todo.step)
+    || asString(todo.text)
+    || asString(todo.description)
+    || asString(todo.activeForm)
   );
+}
+
+function todoStatus(todo: TodoItem): string {
+  const status = asString(todo.status) || asString(todo.state);
+  if (status === "done") return "completed";
+  return status;
+}
+
+function isCompleted(todo: TodoItem): boolean {
+  return todoStatus(todo) === "completed";
 }

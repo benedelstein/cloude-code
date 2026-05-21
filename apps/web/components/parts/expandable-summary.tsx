@@ -30,14 +30,14 @@ export function ExpandableSummary({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const canExpand = !disabled && detail !== undefined && detail !== null && detail !== false;
   return (
-    <div className={clsx("my-1", className)}>
+    <div className={clsx("my-1 min-w-0", className)}>
       <button
         type="button"
         onClick={() => canExpand && setExpanded((value) => !value)}
         className={clsx(
-          "w-full flex items-center gap-2 px-2 py-1 rounded text-left text-sm",
+          "w-fit max-w-full flex items-center gap-2 px-2 py-1 rounded text-left text-sm",
           canExpand
-            ? "hover:bg-muted/40 cursor-pointer"
+            ? clsx("cursor-pointer", expanded ? "bg-muted/70" : "hover:bg-muted/55")
             : "cursor-default",
         )}
         aria-expanded={canExpand ? expanded : undefined}
@@ -48,7 +48,7 @@ export function ExpandableSummary({
             {icon}
           </span>
         )}
-        <span className="flex-1 min-w-0 truncate">{summary}</span>
+        <span className="min-w-0 truncate">{summary}</span>
         {status && (
           <span className="shrink-0 text-xs text-foreground-muted">{status}</span>
         )}
@@ -62,7 +62,7 @@ export function ExpandableSummary({
         )}
       </button>
       {canExpand && expanded && (
-        <div className="mt-1 ml-6 pl-3 border-l border-border/60 text-sm">
+        <div className="mt-1 mb-2 text-sm min-w-0 overflow-hidden">
           {detail}
         </div>
       )}

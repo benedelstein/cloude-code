@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
 import clsx from "clsx";
 import type { EditAction } from "@repo/shared";
@@ -23,46 +23,152 @@ export function EditPart({ action }: EditPartProps) {
   return (
     <ExpandableSummary
       icon={<Pencil className="w-3.5 h-3.5" />}
-      summary={<>Edited <span className="font-mono">{name}</span></>}
-      detail={action.diff ? <DiffView diff={action.diff} /> : <span className="text-xs text-foreground-muted">(no diff yet)</span>}
+      summary={<>Edited <span className="font-mono text-foreground-muted">{name}</span></>}
+      detail={
+        action.diff
+          ? <DiffView diff={action.diff} filename={name} />
+          : <span className="text-xs text-foreground-muted">(no diff yet)</span>
+      }
     />
   );
 }
 
-interface DiffViewProps {
-  diff: string;
+type DiffLineKind = "context" | "added" | "removed" | "hunk";
+
+interface DiffLine {
+  kind: DiffLineKind;
+  text: string;
+  oldLineNo?: number;
+  newLineNo?: number;
 }
 
-function DiffView({ diff }: DiffViewProps) {
+interface ParsedDiff {
+  lines: DiffLine[];
+  added: number;
+  removed: number;
+}
+
+function parseDiff(diff: string): ParsedDiff {
+  const out: DiffLine[] = [];
+  let oldLine = 1;
+  let newLine = 1;
+  let added = 0;
+  let removed = 0;
+
+  for (const raw of diff.split("\n")) {
+    if (raw.startsWith("@@")) {
+      const match = /@@ -([0-9]+)(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@/.exec(raw);
+      if (match) {
+        oldLine = parseInt(match[1]!, 10);
+        newLine = parseInt(match[2]!, 10);
+      }
+      out.push({ kind: "hunk", text: raw });
+      continue;
+    }
+    if (raw.startsWith("+++") || raw.startsWith("---")) {
+      // File headers (rare here) — skip rendering, do not consume line numbers.
+      continue;
+    }
+    if (raw.startsWith("+")) {
+      out.push({ kind: "added", text: raw.slice(1), newLineNo: newLine });
+      newLine++;
+      added++;
+      continue;
+    }
+    if (raw.startsWith("-")) {
+      out.push({ kind: "removed", text: raw.slice(1), oldLineNo: oldLine });
+      oldLine++;
+      removed++;
+      continue;
+    }
+    // Context line (space prefix or no prefix)
+    const text = raw.startsWith(" ") ? raw.slice(1) : raw;
+    out.push({ kind: "context", text, oldLineNo: oldLine, newLineNo: newLine });
+    oldLine++;
+    newLine++;
+  }
+
+  return { lines: out, added, removed };
+}
+
+interface DiffViewProps {
+  diff: string;
+  filename?: string;
+}
+
+function DiffView({ diff, filename }: DiffViewProps) {
+  const parsed = useMemo(() => parseDiff(diff), [diff]);
   const [expanded, setExpanded] = useState(false);
-  const lines = diff.split("\n");
-  const isTruncated = !expanded && lines.length > MAX_VISIBLE_LINES;
-  const visible = isTruncated ? lines.slice(0, MAX_VISIBLE_LINES) : lines;
+  const isTruncated = !expanded && parsed.lines.length > MAX_VISIBLE_LINES;
+  const visible = isTruncated ? parsed.lines.slice(0, MAX_VISIBLE_LINES) : parsed.lines;
+  const remaining = parsed.lines.length - MAX_VISIBLE_LINES;
+
   return (
-    <div className="my-1">
-      <pre className="rounded bg-background/40 px-2 py-1 text-xs leading-snug overflow-x-auto">
+    <div className="my-1 rounded-md border border-border overflow-hidden bg-background-secondary text-xs">
+      {(filename || parsed.added || parsed.removed) && (
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/30">
+          <span className="font-mono text-foreground-muted truncate">{filename ?? ""}</span>
+          <span className="shrink-0 font-mono text-foreground-muted">
+            <span className="text-green-600 dark:text-green-400">+{parsed.added}</span>
+            {" "}
+            <span className="text-red-600 dark:text-red-400">-{parsed.removed}</span>
+          </span>
+        </div>
+      )}
+      <div className="overflow-x-auto font-mono leading-relaxed">
         {visible.map((line, index) => (
-          <div
-            key={index}
-            className={clsx(
-              "font-mono whitespace-pre",
-              line.startsWith("+") && "bg-green-500/10 text-green-700 dark:text-green-400",
-              line.startsWith("-") && "bg-red-500/10 text-red-700 dark:text-red-400",
-            )}
-          >
-            {line || " "}
-          </div>
+          <DiffRow key={index} line={line} />
         ))}
-      </pre>
-      {lines.length > MAX_VISIBLE_LINES && (
+      </div>
+      {isTruncated && (
         <button
           type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="mt-1 text-xs text-accent hover:underline"
+          onClick={() => setExpanded(true)}
+          className="w-full border-t border-border px-3 py-1.5 text-xs text-foreground-muted hover:bg-muted/40 cursor-pointer"
         >
-          {expanded ? "Show less" : `Show ${lines.length - MAX_VISIBLE_LINES} more lines`}
+          Show {remaining} more lines
         </button>
       )}
+    </div>
+  );
+}
+
+function DiffRow({ line }: { line: DiffLine }) {
+  if (line.kind === "hunk") {
+    return (
+      <div className="px-3 py-0.5 bg-muted/20 text-foreground-muted border-y border-border">
+        {line.text}
+      </div>
+    );
+  }
+  const bgClass = line.kind === "added"
+    ? "bg-green-500/10"
+    : line.kind === "removed"
+      ? "bg-red-500/10"
+      : "";
+  const stripeClass = line.kind === "added"
+    ? "bg-green-500/70"
+    : line.kind === "removed"
+      ? "bg-red-500/70"
+      : "bg-transparent";
+  const textClass = line.kind === "added"
+    ? "text-green-800 dark:text-green-300"
+    : line.kind === "removed"
+      ? "text-red-800 dark:text-red-300"
+      : "text-foreground";
+
+  return (
+    <div className={clsx("flex items-stretch", bgClass)}>
+      <span className={clsx("w-0.5 shrink-0", stripeClass)} />
+      <span className="w-10 shrink-0 select-none text-right pr-2 text-foreground-muted/70 tabular-nums">
+        {line.oldLineNo ?? ""}
+      </span>
+      <span className="w-10 shrink-0 select-none text-right pr-3 text-foreground-muted/70 tabular-nums">
+        {line.newLineNo ?? ""}
+      </span>
+      <span className={clsx("whitespace-pre flex-1 pr-3", textClass)}>
+        {line.text || " "}
+      </span>
     </div>
   );
 }

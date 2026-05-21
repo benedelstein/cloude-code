@@ -61,10 +61,6 @@ type RenderItem =
   | { kind: "plan"; key: string; part: DynamicToolUIPart }
   | { kind: "action-item"; key: string; item: ActionItem };
 
-function isWorkItem(item: RenderItem): boolean {
-  return item.kind !== "text";
-}
-
 export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }: MessageItemProps) {
   const isUser = message.role === "user";
   const metadata = (message.metadata ?? {}) as Record<string, unknown>;
@@ -210,12 +206,12 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   return (
     <>
       <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-        <div className={`max-w-[85%] ${isUser ? "order-1" : "order-1"}`}>
+        <div className={clsx("order-1", isUser ? "max-w-[85%]" : "w-[85%]")}>
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
               <div
                 className={clsx(
-                  "rounded-md",
+                  "rounded-md min-w-0 overflow-hidden",
                   isUser && "px-3 py-2 bg-accent-subtle text-accent-foreground",
                 )}
               >
@@ -252,7 +248,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                       isStreaming={false}
                     />
                     {workExpanded && (
-                      <div className="mb-2 ml-2 space-y-0.5">
+                      <div className="space-y-0.5">
                         <WorkItems
                           items={renderItems.slice(0, collapsedPrefixLength)}
                           isStreaming={!!isStreaming}
@@ -339,11 +335,11 @@ function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStreaming }:
     <button
       type="button"
       onClick={onToggle}
-      className="mb-1 flex w-full items-center gap-2 px-2 py-1 text-xs text-foreground-muted hover:text-foreground transition-colors text-left rounded hover:bg-muted/40 cursor-pointer"
+      className="flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-muted hover:text-foreground transition-colors text-left rounded cursor-pointer"
       aria-expanded={expanded}
     >
-      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded && "rotate-90")} />
       <span>{label}</span>
+      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded && "rotate-90")} />
     </button>
   );
 }

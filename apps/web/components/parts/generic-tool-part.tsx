@@ -18,7 +18,7 @@ export function GenericToolPart({ action }: GenericToolPartProps) {
           {action.input !== undefined && (
             <div>
               <div className="mb-1 text-foreground-muted">Input</div>
-              <pre className="rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap break-words">
+              <pre className="rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap wrap-break-word">
                 {safeStringify(action.input)}
               </pre>
             </div>
@@ -26,7 +26,7 @@ export function GenericToolPart({ action }: GenericToolPartProps) {
           {action.output !== undefined && (
             <div>
               <div className="mb-1 text-foreground-muted">Output</div>
-              <pre className="max-h-60 overflow-auto rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap break-words">
+              <pre className="max-h-60 overflow-auto rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap wrap-break-word">
                 {safeStringify(action.output)}
               </pre>
             </div>

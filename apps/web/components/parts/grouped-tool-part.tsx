@@ -1,12 +1,14 @@
 "use client";
 
 import type {
+  BashAction,
   OtherAction,
   ReadAction,
   SearchAction,
   WebAction,
 } from "@repo/shared";
 import type { ActionGroup } from "./group-actions";
+import { BashGroupPart } from "./bash-part";
 import { ReadGroupPart } from "./read-part";
 import { SearchGroupPart } from "./search-part";
 import { WebGroupPart } from "./web-part";
@@ -18,6 +20,8 @@ interface GroupedToolPartProps {
 
 export function GroupedToolPart({ group }: GroupedToolPartProps) {
   switch (group.kind) {
+    case "bash":
+      return <BashGroupPart actions={group.actions.map((action) => action.payload as BashAction)} />;
     case "read":
       return <ReadGroupPart actions={group.actions.map((action) => action.payload as ReadAction)} />;
     case "search":

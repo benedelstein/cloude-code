@@ -24,7 +24,7 @@ export function WritePart({ action }: WritePartProps) {
   return (
     <ExpandableSummary
       icon={icon}
-      summary={<>{label} <span className="font-mono">{name}</span></>}
+      summary={<>{label} <span className="font-mono text-foreground-muted">{name}</span></>}
       detail={
         action.content
           ? (
