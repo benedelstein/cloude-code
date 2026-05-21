@@ -207,4 +207,61 @@ describe("WebhookAgentRunner", () => {
 
     await runner.shutdown();
   });
+
+  it("emits process heartbeats while active and idle", async () => {
+    const log = vi.fn();
+    const releaseStream = createDeferred();
+
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        await releaseStream.promise;
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      heartbeatIntervalMs: 5,
+      onShutdown: () => {},
+      logger: log,
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await waitFor(() => mockState.streamText.mock.calls.length === 1);
+
+    await waitFor(() =>
+      log.mock.calls.some(
+        ([level, message, meta]) =>
+          level === "debug" &&
+          message === "emit event -> /events" &&
+          meta?.type === "heartbeat",
+      ),
+    );
+    const activeHeartbeatCount = log.mock.calls.filter(
+      ([, message, meta]) =>
+        message === "emit event -> /events" && meta?.type === "heartbeat",
+    ).length;
+
+    releaseStream.resolve();
+
+    await waitFor(
+      () =>
+        log.mock.calls.filter(
+          ([, message, meta]) =>
+            message === "emit event -> /events" && meta?.type === "heartbeat",
+        ).length > activeHeartbeatCount,
+    );
+
+    await runner.shutdown();
+  });
 });

@@ -12,25 +12,31 @@ import {
 } from "@repo/shared";
 import { type AgentProviderConfig } from "./lib/agent-harness";
 import { loadInitialMessageFromFile } from "./lib/webhook-initial-message";
-import { handleWebhookStdinLine } from "./lib/webhook-stdin";
+import { handleWebhookStdinLine, WebhookStdinLogger } from "./lib/webhook-stdin";
 import { claudeCodeProvider } from "./providers/claude-code";
 import { codexProvider } from "./providers/codex";
 import { WebhookAgentRunner } from "./webhook-agent-runner";
 
 // The api-server spawns us with stdout/stderr already redirected to a file on
-// the sprite (~/.cloude/logs/<sessionId>.log), so plain console.log is safe —
-// file writes don't block on missing readers.
+// the sprite (~/.cloude/logs/<sessionId>.log)
 function consoleLogger(
   level: "debug" | "warn",
   message: string,
+  runId: string,
   meta?: unknown,
 ): void {
-  const line = `[${new Date().toISOString()}] [${level}] ${message}`;
+  const line = `[${new Date().toISOString()}] [${level}] [${runId}] ${message}`;
   if (level === "warn") {
     console.warn(line, meta ?? "");
   } else {
     console.log(line, meta ?? "");
   }
+}
+
+function createLogger(runId: string): WebhookStdinLogger {
+  return (level: "debug" | "warn", message: string, meta?: unknown) => {
+    consoleLogger(level, message, runId, meta);
+  };
 }
 
 const { values } = parseArgs({
@@ -84,6 +90,9 @@ const initialAgentMode: AgentMode = values.agentMode === "plan" ? "plan" : "edit
 const idleTimeoutMs = process.env.IDLE_TIMEOUT_MS
   ? Number(process.env.IDLE_TIMEOUT_MS)
   : undefined;
+const heartbeatIntervalMs = process.env.VM_AGENT_HEARTBEAT_INTERVAL_MS
+  ? Number(process.env.VM_AGENT_HEARTBEAT_INTERVAL_MS)
+  : undefined;
 const batchMaxChunks = process.env.BATCH_MAX_CHUNKS
   ? Number(process.env.BATCH_MAX_CHUNKS)
   : undefined;
@@ -97,6 +106,11 @@ const providerConfig: AgentProviderConfig<any> =
     ? claudeCodeProvider
     : codexProvider;
 
+// unique identifier for this running instance.
+const runId = crypto.randomUUID();
+
+const logger = createLogger(runId);
+
 const runner = new WebhookAgentRunner({
   config: providerConfig,
   settings,
@@ -105,9 +119,10 @@ const runner = new WebhookAgentRunner({
   args,
   initialAgentMode,
   idleTimeoutMs,
+  heartbeatIntervalMs,
   batchMaxChunks,
   batchMaxAgeMs,
-  logger: consoleLogger,
+  logger,
 });
 
 // Kick off the initial turn immediately. The runner converts overrides into
@@ -119,7 +134,7 @@ runner.queueMessage(userMessageId, initialMessage, {
 
 const readline = createInterface({ input: process.stdin });
 readline.on("line", (line) => {
-  handleWebhookStdinLine(line, runner, consoleLogger);
+  handleWebhookStdinLine(line, runner, logger);
 });
 
 process.stdin.resume();

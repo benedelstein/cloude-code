@@ -248,8 +248,7 @@ export function useCloudflareAgent({
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
         setWaitingForResponse(false);
-        hasSeenServerActiveTurnRef.current = false;
-        setServerActiveTurn(null);
+        applyServerActiveTurn(null);
         break;
 
       case "agent.ready":
@@ -263,8 +262,7 @@ export function useCloudflareAgent({
 
       case "operation.error":
         resetPendingResponse("operation.error");
-        hasSeenServerActiveTurnRef.current = false;
-        setServerActiveTurn(null);
+        applyServerActiveTurn(null);
         setOperationError(msg);
         setIsHistoryLoading(false);
         onError?.(new Error(msg.message));

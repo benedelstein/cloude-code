@@ -61,7 +61,7 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
   /** Called for every output the harness produces. */
   emit: (_output: AgentOutput) => void;
   /** Fires before processing each queued message. */
-  onTurnStart?: (_message: AgentInputMessage, _turnKey: string) => void;
+  onTurnStart?: (_message: AgentInputMessage, _turnId: string) => void;
   /**
    * Fires in the `finally` after each message is processed. The loop awaits
    * this callback, so async cleanup (e.g. flushing batched chunks) runs to
@@ -79,11 +79,11 @@ export interface AgentHarnessHandle {
    */
   queueMessage(
     _message: AgentInputMessage,
-    _turnKey: string,
+    _turnId: string,
     _overrides?: { model?: string; agentMode?: AgentMode },
   ): void;
   /** Aborts the in-flight turn, or removes a matching queued turn. */
-  cancelTurn(_turnKey?: string): boolean;
+  cancelTurn(_turnId?: string): boolean;
   /**
    * Stops the loop cleanly. Any in-flight turn is allowed to finish;
    * subsequent queued messages are dropped. Resolves once the loop exits.
@@ -95,26 +95,15 @@ interface QueueEntry {
   message: AgentInputMessage;
   model?: string;
   agentMode?: AgentMode;
-  turnKey: string;
+  turnId: string;
   abortController: AbortController;
 }
 
 const SHUTDOWN_POISON: QueueEntry = Object.freeze({
   message: { content: "__SHUTDOWN__" },
-  turnKey: "__SHUTDOWN__",
+  turnId: "__SHUTDOWN__",
   abortController: new AbortController(),
 }) as QueueEntry;
-const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
-
-function getHeartbeatIntervalMs(): number {
-  const rawValue = process.env.VM_AGENT_HEARTBEAT_INTERVAL_MS;
-  if (!rawValue) return DEFAULT_HEARTBEAT_INTERVAL_MS;
-
-  const value = Number(rawValue);
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_HEARTBEAT_INTERVAL_MS;
-  return value;
-}
-
 /**
  * Starts the agent harness loop and returns a handle for the caller to drive
  * it. Setup runs lazily, triggered by the first queued message.
@@ -133,7 +122,7 @@ export function startAgentHarness<S extends AgentSettings>(
 
   function queueMessage(
     message: AgentInputMessage,
-    turnKey: string,
+    turnId: string,
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
     if (stopped) return;
@@ -141,7 +130,7 @@ export function startAgentHarness<S extends AgentSettings>(
       message,
       model: overrides?.model,
       agentMode: overrides?.agentMode,
-      turnKey,
+      turnId,
       abortController: new AbortController(),
     };
     if (messageResolver) {
@@ -172,14 +161,14 @@ export function startAgentHarness<S extends AgentSettings>(
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
 
-  function cancel(turnKey?: string): boolean {
-    if (!turnKey) {
+  function cancelTurn(turnId?: string): boolean {
+    if (!turnId) {
       currentEntry?.abortController.abort();
       return currentEntry !== null;
     }
 
     const pendingIndex = pendingMessages.findIndex(
-      (entry) => entry.turnKey === turnKey,
+      (entry) => entry.turnId === turnId,
     );
     if (pendingIndex !== -1) {
       pendingMessages[pendingIndex]!.abortController.abort();
@@ -187,7 +176,7 @@ export function startAgentHarness<S extends AgentSettings>(
       return true;
     }
 
-    if (currentEntry?.turnKey !== turnKey) return false;
+    if (currentEntry?.turnId !== turnId) return false;
     currentEntry.abortController.abort();
     return true;
   }
@@ -227,10 +216,6 @@ export function startAgentHarness<S extends AgentSettings>(
         mediaType: attachment.mediaType,
       });
     }
-    const heartbeatInterval = setInterval(() => {
-      emit({ type: "heartbeat" });
-    }, getHeartbeatIntervalMs());
-
     let finishReason: string | undefined;
     let aborted = false;
     try {
@@ -258,8 +243,6 @@ export function startAgentHarness<S extends AgentSettings>(
       } else {
         emit({ type: "error", error: String(e) });
       }
-    } finally {
-      clearInterval(heartbeatInterval);
     }
     return { finishReason, aborted };
   }
@@ -332,7 +315,7 @@ export function startAgentHarness<S extends AgentSettings>(
           message: `processing message: contentLength=${entry.message.content?.length ?? 0}, attachments=${entry.message.attachments?.length ?? 0}`,
         });
 
-        onTurnStart?.(entry.message, entry.turnKey);
+        onTurnStart?.(entry.message, entry.turnId);
         const result = await processMessage(entry);
         await onTurnEnd?.(result);
       } catch (error) {
@@ -346,5 +329,5 @@ export function startAgentHarness<S extends AgentSettings>(
 
   loopDone = runLoop();
 
-  return { queueMessage, cancelTurn: cancel, shutdown };
+  return { queueMessage, cancelTurn, shutdown };
 }

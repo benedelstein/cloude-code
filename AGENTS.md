@@ -176,8 +176,8 @@ switch (expression) {
         const _exhaustiveCheck: never = expression;
         throw new Error(`Unhandled value: ${_exhaustiveCheck}`);
 }
-- Prefer switch statements over if/else, and prefer exhaustive switch statements.
 ```
+- Prefer switch statements over if/else, and prefer exhaustive switch statements.
 - Prefer the simplest working solution. Avoid over-engineering, over-defensiveness. Do not create fallback error-handling logic to cover up an error that should not exist in the first place.
 - Avoid abstractions or helpers for single-use operations. If multiple uses, DRY up the code.
 - No speculative features or future-proofing.

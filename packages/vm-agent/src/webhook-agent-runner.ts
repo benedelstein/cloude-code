@@ -29,6 +29,7 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
   idleTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
   batchMaxChunks?: number;
   batchMaxAgeMs?: number;
   /** Hook for runner shutdown — defaults to process.exit(0). */
@@ -36,10 +37,19 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
   logger?: (_level: "debug" | "warn", _message: string, _meta?: unknown) => void;
 }
 
+/** Amount of time after a turn ends waiting for new turns to come in, before shutting down. */
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
+/**
+ * Sprites suspend processes after roughly 30s without stdout activity. Keep
+ * this below that threshold so the vm-agent stays reusable while active or
+ * idle.
+ */
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
+/** Maximum number of chunks to buffer before flushing. */
 const DEFAULT_BATCH_MAX_CHUNKS = 50;
+/** Maximum age of a chunk batch before flushing. */
 const DEFAULT_BATCH_MAX_AGE_MS = 300;
-/** Hard cap on shutdown draining so a wedged webhook retry can't block exit. */
+/** Hard cap on shutdown draining duration so a wedged webhook retry can't block exit. */
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
@@ -48,14 +58,18 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly batcher: ChunkBatcher;
   private readonly http: WebhookClient;
   private readonly idleTimeoutMs: number;
+  private readonly heartbeatIntervalMs: number;
   private readonly onShutdown: () => void;
   private readonly log: NonNullable<WebhookAgentRunnerOptions["logger"]>;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private activeUserMessageId: string | null = null;
   private shuttingDown = false;
 
   constructor(private readonly opts: WebhookAgentRunnerOptions<S>) {
     this.idleTimeoutMs = opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    this.heartbeatIntervalMs =
+      opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.onShutdown = opts.onShutdown ?? (() => process.exit(0));
     this.log = opts.logger ?? (() => {});
 
@@ -80,6 +94,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     });
 
     this.installSignalHandlers();
+    this.startHeartbeatInterval();
   }
 
   /**
@@ -124,12 +139,17 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
+    this.log("debug", "shutting down.");
     this.cancelIdleTimer();
+    this.cancelHeartbeatInterval();
 
     // Aborting the current streamText causes the harness to emit a terminal
     // abort chunk into the batcher (forcing a flush), so the DO finalizes
     // the turn through the normal terminal-chunk path.
-    this.harness.cancelTurn();
+    const canceled = this.harness.cancelTurn();
+    if (canceled) {
+      this.log("debug", "cancelled in-flight turn");
+    }
 
     const drain = (async () => {
       await this.harness.shutdown();
@@ -140,6 +160,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     });
     await Promise.race([drain, deadline]);
 
+    this.log("debug", "shutdown complete");
     this.onShutdown();
   }
 
@@ -155,14 +176,20 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         process.stdout.write(encodeAgentOutput(output) + "\n");
         return;
       case "ready":
-      case "debug":
       case "error":
       case "sessionId":
-      case "heartbeat":
         this.log("debug", "emit event -> /events", { ...output });
         // Process-level events go straight to /events, one POST per event.
         // Fire-and-forget — the WebhookClient handles retries internally.
         void this.http.post("/events", { event: output });
+        return;
+      case "heartbeat":
+        // write directly to stdout to keep process alive.
+        process.stdout.write(encodeAgentOutput(output) + "\n");
+        this.log("debug", "emit heartbeat -> stdout");
+        return;
+      case "debug":
+        this.log("debug", output.message);
         return;
       default: {
         const exhaustiveCheck: never = output;
@@ -229,5 +256,23 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
+  }
+
+  private startHeartbeatInterval(): void {
+    this.emitHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      this.emitHeartbeat();
+    }, this.heartbeatIntervalMs);
+  }
+
+  private cancelHeartbeatInterval(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  private emitHeartbeat(): void {
+    this.handleEmit({ type: "heartbeat" });
   }
 }

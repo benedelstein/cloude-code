@@ -437,4 +437,39 @@ describe("SpriteAgentProcessManager", () => {
     expect(mockState.createSession).toHaveBeenCalledOnce();
     expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
   });
+
+  it("returns a spawn failure when sprite setup file writes fail", async () => {
+    mockState.getCredentialSnapshot.mockResolvedValue({
+      ok: true,
+      value: {
+        envVars: {},
+        files: [
+          {
+            path: "/home/sprite/.codex/auth.json",
+            contents: "{}",
+            mode: "0600",
+          },
+        ],
+      },
+    });
+    mockState.writeFile.mockRejectedValue(
+      new SpritesError("Failed to write file /home/sprite/.codex/auth.json: 503", 503),
+    );
+
+    const serverState = createServerState();
+    const { manager } = createManager(serverState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-4", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SPAWN_FAILED");
+      expect(result.error.message).toBe(
+        "Failed to write file /home/sprite/.codex/auth.json: 503",
+      );
+    }
+    expect(mockState.createSession).not.toHaveBeenCalled();
+  });
 });

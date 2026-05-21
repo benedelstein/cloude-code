@@ -726,6 +726,22 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
 
       await this.ensureReady();
 
+      if (
+        this.serverState.activeUserMessageId &&
+        !this.serverState.agentProcessId &&
+        !this.state.pendingUserMessage
+      ) {
+        const staleUserMessageId = this.serverState.activeUserMessageId;
+        this.logger.warn(
+          "Clearing active turn with no agent process before chat dispatch",
+          { fields: { userMessageId: staleUserMessageId } },
+        );
+        this.turnCoordinator.handleTurnSpawnFailed(
+          staleUserMessageId,
+          "Previous agent turn did not start",
+        );
+      }
+
       if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
         // TODO: message queuing
         this.sendMessage(

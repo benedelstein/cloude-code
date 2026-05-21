@@ -227,15 +227,23 @@ export class SessionChatDispatchService {
     // the spawn returns.
     this.turnCoordinator.beginTurn(args.userMessageId);
 
-    const spawnResult = await this.processManager.dispatchMessage({
-      userMessage: {
-        id: args.userMessageId,
-        content: args.content,
-        attachmentIds: args.attachmentIds,
-      },
-      model: args.model,
-      agentMode: args.agentMode,
-    });
+    let spawnResult;
+    try {
+      spawnResult = await this.processManager.dispatchMessage({
+        userMessage: {
+          id: args.userMessageId,
+          content: args.content,
+          attachmentIds: args.attachmentIds,
+        },
+        model: args.model,
+        agentMode: args.agentMode,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return failure(
+        chatDispatchError("DISPATCH_FAILED", message, { cause: message }),
+      );
+    }
     if (!spawnResult.ok) {
       return failure(spawnResult.error);
     }
