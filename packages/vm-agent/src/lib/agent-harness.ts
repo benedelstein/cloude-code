@@ -96,10 +96,12 @@ interface QueueEntry {
   model?: string;
   agentMode?: AgentMode;
   turnKey?: string;
+  abortController: AbortController;
 }
 
 const SHUTDOWN_POISON: QueueEntry = Object.freeze({
   message: { content: "__SHUTDOWN__" },
+  abortController: new AbortController(),
 }) as QueueEntry;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -139,6 +141,7 @@ export function startAgentHarness<S extends AgentSettings>(
       model: overrides?.model,
       agentMode: overrides?.agentMode,
       turnKey,
+      abortController: new AbortController(),
     };
     if (messageResolver) {
       // already awaiting a message, resolve the current promise
@@ -164,35 +167,27 @@ export function startAgentHarness<S extends AgentSettings>(
 
   let stopped = false;
   let loopDone: Promise<void> | null = null;
-  let currentAbortController: AbortController | null = null;
-  let currentTurnKey: string | null = null;
-  const turnKeysCanceledBeforeStreamStart = new Set<string>();
+  let currentEntry: QueueEntry | null = null;
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
 
   function cancel(turnKey?: string): boolean {
     if (!turnKey) {
-      currentAbortController?.abort();
-      return currentAbortController !== null;
+      currentEntry?.abortController.abort();
+      return currentEntry !== null;
     }
 
     const pendingIndex = pendingMessages.findIndex(
       (entry) => entry.turnKey === turnKey,
     );
     if (pendingIndex !== -1) {
+      pendingMessages[pendingIndex]!.abortController.abort();
       pendingMessages.splice(pendingIndex, 1);
       return true;
     }
 
-    if (currentTurnKey !== turnKey) return false;
-
-    if (currentAbortController) {
-      currentAbortController.abort();
-    } else {
-      // The loop has claimed this turn, but streamText has not created its
-      // AbortController yet. Mark it so the loop skips before starting work.
-      turnKeysCanceledBeforeStreamStart.add(turnKey);
-    }
+    if (currentEntry?.turnKey !== turnKey) return false;
+    currentEntry.abortController.abort();
     return true;
   }
 
@@ -220,8 +215,6 @@ export function startAgentHarness<S extends AgentSettings>(
       emit({ type: "debug", message: `Agent mode updated to: ${entry.agentMode}` });
     }
 
-    currentAbortController = new AbortController();
-
     const userContentParts: UserContent = [];
     if (message.content) {
       userContentParts.push({ type: "text", text: message.content });
@@ -246,7 +239,7 @@ export function startAgentHarness<S extends AgentSettings>(
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],
-        abortSignal: currentAbortController.signal,
+        abortSignal: entry.abortController.signal,
         ...extras,
       });
 
@@ -266,7 +259,6 @@ export function startAgentHarness<S extends AgentSettings>(
       }
     } finally {
       clearInterval(heartbeatInterval);
-      currentAbortController = null;
     }
     return { finishReason, aborted };
   }
@@ -321,18 +313,15 @@ export function startAgentHarness<S extends AgentSettings>(
       const entry = await consumeUserMessageQueue();
       if (stopped || entry === SHUTDOWN_POISON) break;
 
-      currentTurnKey = entry.turnKey ?? null;
+      currentEntry = entry;
 
       try {
         const ready = await ensureSetup();
         if (!ready) continue;
 
-        if (
-          currentTurnKey &&
-          turnKeysCanceledBeforeStreamStart.delete(currentTurnKey)
-        ) {
-          // A cancel arrived while setup was running, before streamText began.
-          // Treat it as an aborted turn and continue to the next queued item.
+        if (entry.abortController.signal.aborted) {
+          // A scoped cancel may arrive after the loop claims the turn but
+          // before streamText starts. Skip the model call in that case.
           await onTurnEnd?.({ finishReason: "abort", aborted: true });
           continue;
         }
@@ -349,10 +338,7 @@ export function startAgentHarness<S extends AgentSettings>(
         emit({ type: "error", error: String(error) });
         await onTurnEnd?.({ aborted: false });
       } finally {
-        if (currentTurnKey) {
-          turnKeysCanceledBeforeStreamStart.delete(currentTurnKey);
-        }
-        currentTurnKey = null;
+        currentEntry = null;
       }
     }
   }
