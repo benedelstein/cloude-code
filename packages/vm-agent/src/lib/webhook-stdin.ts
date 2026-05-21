@@ -33,10 +33,6 @@ export function handleWebhookStdinLine(
     const input = decodeAgentInput(line);
     switch (input.type) {
       case "chat":
-        if (!input.userMessageId) {
-          log("warn", "stdin chat input missing userMessageId; dropping turn");
-          return;
-        }
         runner.queueStdinMessage(input.userMessageId, input.message, {
           model: input.model,
           agentMode: input.agentMode,

@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { randomUUID } from "crypto";
 import { createInterface } from "readline";
 import { parseArgs } from "util";
 import { AgentOutput, CLAUDE_PROVIDER, encodeAgentInput, MessageAccumulator, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID, UIMessageChunk } from "@repo/shared";
@@ -122,7 +123,7 @@ userInput.on("line", (line) => {
     console.log(`\n[rotate] model: ${nextModel}`);
   }
 
-  const message = encodeAgentInput({ type: "chat", message: { content: line }, model: nextModel });
+  const message = encodeAgentInput({ type: "chat", userMessageId: randomUUID().toString(), message: { content: line }, model: nextModel });
   turnStart = Date.now();
   log("send", line);
   agent.stdin!.write(message + "\n");

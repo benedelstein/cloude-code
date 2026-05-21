@@ -71,7 +71,7 @@ rl.on("line", (rawLine) => {
       case "chat":
         handle.queueMessage(
           input.message,
-          input.userMessageId ?? crypto.randomUUID(),
+          input.userMessageId,
           {
             model: input.model,
             agentMode: input.agentMode,

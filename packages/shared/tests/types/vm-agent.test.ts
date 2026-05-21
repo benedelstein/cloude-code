@@ -15,12 +15,17 @@ import {
 
 describe("vm-agent schemas", () => {
   it("parses all input variants", () => {
-    expect(AgentInput.parse({ type: "chat", message: { content: "hello" } }).type).toBe("chat");
+    expect(AgentInput.parse({
+      type: "chat",
+      userMessageId: "user-message-1",
+      message: { content: "hello" },
+    }).type).toBe("chat");
     expect(AgentInput.parse({ type: "cancel", userMessageId: "user-message-1" }).type).toBe("cancel");
   });
 
   it("rejects invalid chat input", () => {
     expect(() => AgentInput.parse({ type: "chat", message: {} })).toThrow();
+    expect(() => AgentInput.parse({ type: "chat", message: { content: "hello" } })).toThrow();
   });
 
   it("limits input messages to five attachments", () => {
@@ -88,7 +93,11 @@ describe("vm-agent schemas", () => {
   });
 
   it("roundtrips encode/decode", () => {
-    const input = { type: "chat", message: { content: "ping" } } as const;
+    const input = {
+      type: "chat",
+      userMessageId: "user-message-1",
+      message: { content: "ping" },
+    } as const;
     expect(decodeAgentInput(encodeAgentInput(input))).toEqual(input);
 
     const output = { type: "debug", message: "pong" } as const;

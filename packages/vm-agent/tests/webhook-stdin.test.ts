@@ -34,7 +34,7 @@ describe("handleWebhookStdinLine", () => {
     expect(runner.cancelTurn).not.toHaveBeenCalled();
   });
 
-  it("drops chat inputs without a user message id", () => {
+  it("rejects chat inputs without a user message id", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
       cancelTurn: vi.fn(),
@@ -42,16 +42,13 @@ describe("handleWebhookStdinLine", () => {
     const logger = createLogger();
 
     handleWebhookStdinLine(
-      encodeAgentInput({ type: "chat", message: { content: "missing id" } }),
+      JSON.stringify({ type: "chat", message: { content: "missing id" } }),
       runner,
       logger,
     );
 
     expect(runner.queueStdinMessage).not.toHaveBeenCalled();
-    expect(logger).toHaveBeenCalledWith(
-      "warn",
-      "stdin chat input missing userMessageId; dropping turn",
-    );
+    expect(logger).toHaveBeenCalledWith("warn", expect.stringContaining("Invalid stdin input"));
   });
 
   it("forwards cancel inputs to the runner", () => {

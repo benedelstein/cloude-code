@@ -32,12 +32,8 @@ export type AgentInputMessage = z.infer<typeof AgentInputMessage>;
 export const AgentChatInput = z.object({
   type: z.literal("chat"),
   message: AgentInputMessage,
-  /**
-   * Identifier of the user message this turn belongs to. Required in the
-   * webhook flow so the vm-agent can tag outbound chunks; optional on the
-   * legacy stdio path where the DO tracks this server-side.
-   */
-  userMessageId: z.string().optional(),
+  /** Identifier of the user message this turn belongs to. */
+  userMessageId: z.string().min(1),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch agent mode before processing the message. */
