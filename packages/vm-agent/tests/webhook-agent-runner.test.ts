@@ -211,6 +211,9 @@ describe("WebhookAgentRunner", () => {
   it("emits process heartbeats while active and idle", async () => {
     const log = vi.fn();
     const releaseStream = createDeferred();
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
 
     globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
 
@@ -240,25 +243,20 @@ describe("WebhookAgentRunner", () => {
     await waitFor(() => mockState.streamText.mock.calls.length === 1);
 
     await waitFor(() =>
-      log.mock.calls.some(
-        ([level, message, meta]) =>
-          level === "debug" &&
-          message === "emit event -> /events" &&
-          meta?.type === "heartbeat",
+      stdoutWrite.mock.calls.some(([chunk]) =>
+        String(chunk).includes('"type":"heartbeat"'),
       ),
     );
-    const activeHeartbeatCount = log.mock.calls.filter(
-      ([, message, meta]) =>
-        message === "emit event -> /events" && meta?.type === "heartbeat",
+    const activeHeartbeatCount = stdoutWrite.mock.calls.filter(([chunk]) =>
+      String(chunk).includes('"type":"heartbeat"'),
     ).length;
 
     releaseStream.resolve();
 
     await waitFor(
       () =>
-        log.mock.calls.filter(
-          ([, message, meta]) =>
-            message === "emit event -> /events" && meta?.type === "heartbeat",
+        stdoutWrite.mock.calls.filter(([chunk]) =>
+          String(chunk).includes('"type":"heartbeat"'),
         ).length > activeHeartbeatCount,
     );
 
