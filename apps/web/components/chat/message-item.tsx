@@ -254,7 +254,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                       )}
                     >
                       <div className="overflow-hidden min-h-0">
-                        <div className="border-l border-border pl-1.5 space-y-0.5 mb-4">
+                        <div className="space-y-0.5 mb-4">
                           <WorkItems
                             items={renderItems.slice(0, collapsedPrefixLength)}
                             isStreaming={!!isStreaming}

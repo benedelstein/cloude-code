@@ -47,7 +47,7 @@ export function GenericGroupPart({ actions }: GenericGroupPartProps) {
       icon={<Wrench className="w-3.5 h-3.5" />}
       summary={`Tools (${actions.length})`}
       detail={
-        <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
+        <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-muted">
           {actions.map((action, index) => (
             <li key={index}>{action.toolName}</li>
           ))}

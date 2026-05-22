@@ -32,7 +32,7 @@ function BashOutput({ action }: { action: BashAction }) {
   return (
     <>
       {action.output !== undefined && action.output.length > 0 && (
-        <pre className="max-h-72 overflow-auto rounded bg-muted/70 text-foreground-muted px-2 py-1 font-mono text-xs whitespace-pre-wrap break-words">
+        <pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground-muted whitespace-pre-wrap break-words">
           {action.output}
         </pre>
       )}
@@ -54,7 +54,7 @@ export function BashGroupPart({ actions }: BashGroupPartProps) {
       icon={<PromptIcon />}
       summary={`Ran ${actions.length} commands`}
       detail={
-        <div className="my-1 space-y-1">
+        <div className="my-1 space-y-1 pl-3">
           {actions.map((action, index) => (
             <ExpandableSummary
               key={index}

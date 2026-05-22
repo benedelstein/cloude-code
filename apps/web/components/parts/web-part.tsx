@@ -44,7 +44,7 @@ export function WebGroupPart({ actions }: WebGroupPartProps) {
       icon={<Globe className="w-3.5 h-3.5" />}
       summary={`Web requests (${actions.length})`}
       detail={
-        <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
+        <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-muted">
           {actions.map((action, index) => (
             <li key={index}>
               {action.kind === "fetch"

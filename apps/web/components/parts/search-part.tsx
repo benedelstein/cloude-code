@@ -39,7 +39,7 @@ export function SearchGroupPart({ actions }: SearchGroupPartProps) {
       icon={<Search className="w-3.5 h-3.5" />}
       summary={`Searched ${total} patterns`}
       detail={
-        <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
+        <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-muted">
           {actions.flatMap((action) => action.patterns).map((p, index) => (
             <li key={`${p}-${index}`}>{p}</li>
           ))}
