@@ -20,13 +20,19 @@ function part(over: Partial<DynamicToolUIPart> & {
 describe("claudeToolNormalizer", () => {
   it("Read maps to read with single path", () => {
     const result = normalizeToolPart(
-      part({ toolName: "Read", input: { file_path: "/x/y.ts" } }),
+      part({
+        toolName: "Read",
+        input: { file_path: "/x/y.ts", offset: 1, limit: 147 },
+        output: "hello",
+      }),
       "claude-code",
     );
     expect(result).toHaveLength(1);
     expect(result[0]!.kind).toBe("read");
     if (result[0]!.kind === "read") {
       expect(result[0]!.payload.paths).toEqual(["/x/y.ts"]);
+      expect(result[0]!.payload.lineRange).toEqual({ start: 1, end: 147 });
+      expect(result[0]!.payload.content).toBe("hello");
     }
   });
 

@@ -48,22 +48,24 @@ export function TodoToolPart({ part }: TodoToolPartProps) {
       summary={summary}
       detail={
         todos.length > 0 ? (
-          <ul className="my-1 space-y-0.5 text-xs">
-            {todos.map((todo, index) => {
-              const status = todoStatus(todo);
-              const content = todoContent(todo);
-              return (
-                <li key={index} className="flex items-baseline gap-2">
-                  <span className="text-foreground-muted">
-                    {status === "completed" ? "✓" : status === "in_progress" ? "→" : "•"}
-                  </span>
-                  <span className={clsx(status === "completed" && "text-foreground-muted line-through")}>
-                    {content}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="my-1 rounded-md border border-border bg-background-secondary px-3 py-2">
+            <ul className="space-y-1 text-xs">
+              {todos.map((todo, index) => {
+                const status = todoStatus(todo);
+                const content = todoContent(todo);
+                return (
+                  <li key={index} className="flex items-baseline gap-2">
+                    <span className="text-foreground-muted">
+                      {status === "completed" ? "✓" : status === "in_progress" ? "→" : "•"}
+                    </span>
+                    <span className={clsx(status === "completed" && "text-foreground-muted line-through")}>
+                      {content}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         ) : undefined
       }
     />

@@ -33,14 +33,38 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function asPositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    return undefined;
+  }
+  return value;
+}
+
+function readLineRange(input: Record<string, unknown>): { start: number; end?: number } | undefined {
+  const offset = asPositiveInteger(input.offset);
+  const limit = asPositiveInteger(input.limit);
+  if (offset === undefined && limit === undefined) return undefined;
+
+  const start = offset ?? 1;
+  return {
+    start,
+    end: limit === undefined ? undefined : start + limit - 1,
+  };
+}
+
 const handlers: Record<string, (part: DynamicToolUIPart) => NormalizedToolAction[]> = {
   Read: (part) => {
     const input = getInput(part);
+    const output = getOutput(part);
     const filePath = asString(input.file_path);
     return [{
       kind: "read",
       ...ctx(part),
-      payload: { paths: filePath ? [filePath] : [] },
+      payload: {
+        paths: filePath ? [filePath] : [],
+        lineRange: readLineRange(input),
+        content: typeof output === "string" ? output : undefined,
+      },
     }];
   },
 

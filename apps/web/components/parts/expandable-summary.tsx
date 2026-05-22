@@ -15,6 +15,7 @@ interface ExpandableSummaryProps {
   defaultExpanded?: boolean;
   /** Disables the expand chevron when no detail is provided. */
   disabled?: boolean;
+  variant?: "tool" | "plain";
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export function ExpandableSummary({
   detail,
   defaultExpanded = false,
   disabled,
+  variant = "tool",
   className,
 }: ExpandableSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -35,35 +37,54 @@ export function ExpandableSummary({
         type="button"
         onClick={() => canExpand && setExpanded((value) => !value)}
         className={clsx(
-          "w-fit max-w-full flex items-center gap-2 px-2 py-1 rounded text-left text-sm",
-          canExpand
-            ? clsx("cursor-pointer", expanded ? "bg-muted/70" : "hover:bg-muted/55")
-            : "cursor-default",
+          "group w-fit max-w-full flex items-center gap-2 py-1 text-left transition-colors",
+          variant === "tool" && clsx(
+            "text-[13px]",
+            canExpand && expanded
+              ? "text-foreground"
+              : "text-foreground-muted hover:text-foreground",
+          ),
+          variant === "plain" && clsx(
+            "text-[13px] transition-colors",
+            canExpand && expanded
+              ? "text-foreground"
+              : "text-foreground-muted",
+          ),
+          canExpand && "cursor-pointer",
+          !canExpand && "cursor-default",
+          canExpand && variant === "plain" && "hover:text-foreground",
         )}
         aria-expanded={canExpand ? expanded : undefined}
         disabled={!canExpand}
       >
         {icon && (
-          <span className="shrink-0 w-4 h-4 flex items-center justify-center text-foreground-muted">
+          <span className="shrink-0 w-4 h-4 flex items-center justify-center text-current">
             {icon}
           </span>
         )}
         <span className="min-w-0 truncate">{summary}</span>
         {status && (
-          <span className="shrink-0 text-xs text-foreground-muted">{status}</span>
+          <span className="shrink-0 text-xs text-current">{status}</span>
         )}
         {canExpand && (
           <ChevronRight
             className={clsx(
-              "w-3.5 h-3.5 shrink-0 text-foreground-muted transition-transform",
-              expanded && "rotate-90",
+              "w-3.5 h-3.5 shrink-0 text-current transition-transform",
+              expanded ? "rotate-90" : "hidden group-hover:block",
             )}
           />
         )}
       </button>
-      {canExpand && expanded && (
-        <div className="mt-1 mb-2 text-sm min-w-0 overflow-hidden">
-          {detail}
+      {canExpand && (
+        <div
+          className={clsx(
+            "grid transition-[grid-template-rows] duration-200 ease-out",
+            expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          )}
+        >
+          <div className="overflow-hidden min-h-0">
+            <div className={clsx("text-sm min-w-0", expanded && "mt-1 mb-2")}>{detail}</div>
+          </div>
         </div>
       )}
     </div>

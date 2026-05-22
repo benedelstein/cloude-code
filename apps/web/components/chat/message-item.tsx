@@ -247,15 +247,22 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                       endedAt={endedAt}
                       isStreaming={false}
                     />
-                    {workExpanded && (
-                      <div className="space-y-0.5">
-                        <WorkItems
-                          items={renderItems.slice(0, collapsedPrefixLength)}
-                          isStreaming={!!isStreaming}
-                          isUser={isUser}
-                        />
+                    <div
+                      className={clsx(
+                        "grid transition-[grid-template-rows] duration-200 ease-out",
+                        workExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                      )}
+                    >
+                      <div className="overflow-hidden min-h-0">
+                        <div className="border-l border-border pl-1.5 space-y-0.5 mb-4">
+                          <WorkItems
+                            items={renderItems.slice(0, collapsedPrefixLength)}
+                            isStreaming={!!isStreaming}
+                            isUser={isUser}
+                          />
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </>
                 )}
 
@@ -335,11 +342,11 @@ function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStreaming }:
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-muted hover:text-foreground transition-colors text-left rounded cursor-pointer"
+      className="group flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-muted hover:text-foreground transition-colors text-left rounded cursor-pointer"
       aria-expanded={expanded}
     >
       <span>{label}</span>
-      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded && "rotate-90")} />
+      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded ? "rotate-90" : "hidden group-hover:block")} />
     </button>
   );
 }
@@ -347,26 +354,40 @@ function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStreaming }:
 function WorkItems({ items, isStreaming, isUser }: { items: RenderItem[]; isStreaming: boolean; isUser: boolean }) {
   return (
     <>
-      {items.map((item) => {
-        switch (item.kind) {
-          case "text":
-            return <TextPart key={item.key} text={item.text} isUser={isUser} />;
-          case "reasoning":
-            return <ReasoningPart key={item.key} part={item.part} isStreaming={isStreaming} />;
-          case "todo":
-            return <TodoToolPart key={item.key} part={item.part as unknown as Parameters<typeof TodoToolPart>[0]["part"]} />;
-          case "plan":
-            return <ExitPlanModePart key={item.key} part={item.part as unknown as Parameters<typeof ExitPlanModePart>[0]["part"]} />;
-          case "action-item":
-            return <ActionItemRenderer key={item.key} item={item.item} />;
-          default: {
-            const exhaustive: never = item;
-            throw new Error(`Unhandled work item: ${(exhaustive as { kind: string }).kind}`);
-          }
-        }
+      {items.map((item, index) => {
+        const previous = items[index - 1];
+        const isToolItem = item.kind === "action-item" || item.kind === "todo" || item.kind === "plan";
+        const previousIsToolItem = previous?.kind === "action-item" || previous?.kind === "todo" || previous?.kind === "plan";
+        const needsBoundarySpacing = (item.kind === "text" && previousIsToolItem)
+          || (isToolItem && previous?.kind === "text");
+
+        return (
+          <div key={item.key} className={clsx(needsBoundarySpacing && "mt-4")}>
+            <WorkItemRenderer item={item} isStreaming={isStreaming} isUser={isUser} />
+          </div>
+        );
       })}
     </>
   );
+}
+
+function WorkItemRenderer({ item, isStreaming, isUser }: { item: RenderItem; isStreaming: boolean; isUser: boolean }) {
+  switch (item.kind) {
+    case "text":
+      return <TextPart text={item.text} isUser={isUser} />;
+    case "reasoning":
+      return <ReasoningPart part={item.part} isStreaming={isStreaming} />;
+    case "todo":
+      return <TodoToolPart part={item.part as unknown as Parameters<typeof TodoToolPart>[0]["part"]} />;
+    case "plan":
+      return <ExitPlanModePart part={item.part as unknown as Parameters<typeof ExitPlanModePart>[0]["part"]} />;
+    case "action-item":
+      return <ActionItemRenderer item={item.item} />;
+    default: {
+      const exhaustive: never = item;
+      throw new Error(`Unhandled work item: ${(exhaustive as { kind: string }).kind}`);
+    }
+  }
 }
 
 function ActionItemRenderer({ item }: { item: ActionItem }) {

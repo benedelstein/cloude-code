@@ -20,16 +20,36 @@ interface EditPartProps {
 
 export function EditPart({ action }: EditPartProps) {
   const name = basename(action.path) || "(unknown)";
+  const parsed = useMemo(() => parseDiff(action.diff), [action.diff]);
   return (
     <ExpandableSummary
       icon={<Pencil className="w-3.5 h-3.5" />}
-      summary={<>Edited <span className="font-mono text-foreground-muted">{name}</span></>}
+      summary={
+        <>
+          Edited <span className="font-mono text-current">{name}</span>
+          {action.diff && (
+            <>
+              {" "}
+              <DiffStat added={parsed.added} removed={parsed.removed} />
+            </>
+          )}
+        </>
+      }
       detail={
         action.diff
-          ? <DiffView diff={action.diff} filename={name} />
+          ? <DiffView parsed={parsed} filename={name} />
           : <span className="text-xs text-foreground-muted">(no diff yet)</span>
       }
     />
+  );
+}
+
+function DiffStat({ added, removed }: { added: number; removed: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs">
+      <span className="font-semibold text-green-700 dark:text-green-300">+{added}</span>
+      <span className="font-semibold text-red-700 dark:text-red-300">-{removed}</span>
+    </span>
   );
 }
 
@@ -92,26 +112,25 @@ function parseDiff(diff: string): ParsedDiff {
 }
 
 interface DiffViewProps {
-  diff: string;
+  parsed: ParsedDiff;
   filename?: string;
 }
 
-function DiffView({ diff, filename }: DiffViewProps) {
-  const parsed = useMemo(() => parseDiff(diff), [diff]);
+function DiffView({ parsed, filename }: DiffViewProps) {
   const [expanded, setExpanded] = useState(false);
   const isTruncated = !expanded && parsed.lines.length > MAX_VISIBLE_LINES;
   const visible = isTruncated ? parsed.lines.slice(0, MAX_VISIBLE_LINES) : parsed.lines;
   const remaining = parsed.lines.length - MAX_VISIBLE_LINES;
 
   return (
-    <div className="my-1 rounded-md border border-border overflow-hidden bg-background-secondary text-xs">
+    <div className="my-1 rounded-md border border-border overflow-hidden bg-background text-xs">
       {(filename || parsed.added || parsed.removed) && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/30">
           <span className="font-mono text-foreground-muted truncate">{filename ?? ""}</span>
           <span className="shrink-0 font-mono text-foreground-muted">
-            <span className="text-green-600 dark:text-green-400">+{parsed.added}</span>
+            <span className="font-semibold text-green-700 dark:text-green-300">+{parsed.added}</span>
             {" "}
-            <span className="text-red-600 dark:text-red-400">-{parsed.removed}</span>
+            <span className="font-semibold text-red-700 dark:text-red-300">-{parsed.removed}</span>
           </span>
         </div>
       )}
@@ -142,19 +161,19 @@ function DiffRow({ line }: { line: DiffLine }) {
     );
   }
   const bgClass = line.kind === "added"
-    ? "bg-green-500/10"
+    ? "bg-green-100/90 dark:bg-green-950/50"
     : line.kind === "removed"
-      ? "bg-red-500/10"
+      ? "bg-red-100/90 dark:bg-red-950/50"
       : "";
   const stripeClass = line.kind === "added"
-    ? "bg-green-500/70"
+    ? "bg-green-600"
     : line.kind === "removed"
-      ? "bg-red-500/70"
+      ? "bg-red-600"
       : "bg-transparent";
   const textClass = line.kind === "added"
-    ? "text-green-800 dark:text-green-300"
+    ? "text-green-950 dark:text-green-200"
     : line.kind === "removed"
-      ? "text-red-800 dark:text-red-300"
+      ? "text-red-950 dark:text-red-200"
       : "text-foreground";
 
   return (

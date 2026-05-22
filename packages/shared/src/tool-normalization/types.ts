@@ -14,6 +14,13 @@ export type ToolKind =
 export interface ReadAction {
   /** One or more file paths read in this action. */
   paths: string[];
+  /** 1-indexed line range requested by the read tool when it was scoped. */
+  lineRange?: {
+    start: number;
+    end?: number;
+  };
+  /** File contents returned by the read tool when available. */
+  content?: string;
 }
 
 export interface EditAction {

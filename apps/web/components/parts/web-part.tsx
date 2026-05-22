@@ -19,8 +19,8 @@ interface WebPartProps {
 
 export function WebPart({ action }: WebPartProps) {
   const summary = action.kind === "fetch"
-    ? <>Fetched <span className="font-mono text-foreground-muted">{hostname(action.url) || "(no url)"}</span></>
-    : <>Web search <span className="font-mono text-foreground-muted">&quot;{action.query ?? ""}&quot;</span></>;
+    ? <>Fetched <span className="font-mono text-current">{hostname(action.url) || "(no url)"}</span></>
+    : <>Web search <span className="font-mono text-current">&quot;{action.query ?? ""}&quot;</span></>;
   return (
     <ExpandableSummary
       icon={<Globe className="w-3.5 h-3.5" />}

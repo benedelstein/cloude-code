@@ -10,16 +10,19 @@ interface SearchPartProps {
 
 export function SearchPart({ action }: SearchPartProps) {
   const pattern = action.patterns[0] ?? "(no pattern)";
+  const extraPatterns = action.patterns.slice(1);
   return (
     <ExpandableSummary
       icon={<Search className="w-3.5 h-3.5" />}
-      summary={<>Searched <span className="font-mono text-foreground-muted">&quot;{pattern}&quot;</span></>}
+      summary={<>Searched <span className="font-mono text-current">&quot;{pattern}&quot;</span></>}
       detail={
-        <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
-          {action.patterns.map((p, index) => (
-            <li key={`${p}-${index}`}>{p}</li>
-          ))}
-        </ul>
+        extraPatterns.length > 0 ? (
+          <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
+            {extraPatterns.map((p, index) => (
+              <li key={`${p}-${index}`}>{p}</li>
+            ))}
+          </ul>
+        ) : undefined
       }
     />
   );
