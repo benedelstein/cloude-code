@@ -183,9 +183,17 @@ export async function createSession(
   });
 }
 
-export async function listSessions(repoId?: number): Promise<ListSessionsResponse> {
+/**
+ * Returns sessions for the current user. The API now groups sessions by repo;
+ * this wrapper flattens the response to the legacy `{ sessions: [...] }`
+ * shape so the current flat sidebar keeps working. Will be removed when the
+ * sidebar UI is updated to render repo groups.
+ */
+export async function listSessions(repoId?: number): Promise<{ sessions: SessionSummary[] }> {
   const params = repoId ? `?repoId=${repoId}` : "";
-  return apiFetch(`/sessions${params}`);
+  const response = await apiFetch<ListSessionsResponse>(`/sessions${params}`);
+  const sessions = response.groups.flatMap((group) => group.sessions);
+  return { sessions };
 }
 
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {

@@ -93,23 +93,51 @@ export class SessionsService {
   }
 
   /**
-   * Lists non-archived sessions for a user.
+   * Lists the user's non-archived sessions grouped by repo for the sidebar.
+   *
+   * Default mode (no `repoId`): returns a page of repo groups ordered by most
+   * recent activity, each containing up to `sessionLimit` sessions and a
+   * `nextSessionCursor` for loading more sessions within that repo.
+   *
+   * Single-repo mode (`repoId` provided): returns a single-group response
+   * with sessions for that one repo, paginated via `sessionCursor`. Used by
+   * the "load more in this repo" path. Returns an empty `groups` array if
+   * the repo has no non-archived sessions for this user.
+   *
    * @param params.userId - Authenticated user id.
-   * @param params.repoId - Optional GitHub repo id filter.
-   * @param params.limit - Optional page size.
-   * @param params.cursor - Optional pagination cursor.
-   * @returns Paginated session summaries.
+   * @param params.repoId - Optional repo filter; switches to single-repo mode.
+   * @param params.repoCursor - Repo-page cursor (default mode only).
+   * @param params.sessionCursor - Session-page cursor for the given `repoId`.
+   * @param params.repoLimit - Repos per page (default 10).
+   * @param params.sessionLimit - Sessions per repo group (default 5).
    */
   async listSessions(params: {
     userId: string;
     repoId?: number;
-    limit?: number;
-    cursor?: string;
+    repoCursor?: string;
+    sessionCursor?: string;
+    repoLimit?: number;
+    sessionLimit?: number;
   }): Promise<ListSessionsResponse> {
-    return this.sessionsRepository.listByUser(params.userId, {
-      repoId: params.repoId,
-      limit: params.limit,
-      cursor: params.cursor,
+    if (params.repoId !== undefined) {
+      const group = await this.sessionsRepository.listSessionsForRepo(
+        params.userId,
+        params.repoId,
+        {
+          sessionCursor: params.sessionCursor,
+          sessionLimit: params.sessionLimit,
+        },
+      );
+      return {
+        groups: group ? [group] : [],
+        nextRepoCursor: null,
+      };
+    }
+
+    return this.sessionsRepository.listGroupedByUser(params.userId, {
+      repoCursor: params.repoCursor,
+      repoLimit: params.repoLimit,
+      sessionLimit: params.sessionLimit,
     });
   }
 

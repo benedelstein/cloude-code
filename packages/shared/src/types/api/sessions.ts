@@ -60,10 +60,21 @@ export const UpdateSessionTitleResponse = z.object({
 });
 export type UpdateSessionTitleResponse = z.infer<typeof UpdateSessionTitleResponse>;
 
-/** Paginated response for GET /sessions */
-export const ListSessionsResponse = z.object({
+/** One repo's group of sessions in the sidebar response. */
+export const SessionRepoGroup = z.object({
+  repoId: z.number(),
+  repoFullName: z.string(),
   sessions: z.array(SessionSummary),
-  cursor: z.string().nullable(),
+  /** Cursor to fetch the next page of sessions within this repo, or null if none. */
+  nextSessionCursor: z.string().nullable(),
+});
+export type SessionRepoGroup = z.infer<typeof SessionRepoGroup>;
+
+/** Paginated response for GET /sessions — sessions grouped by repo. */
+export const ListSessionsResponse = z.object({
+  groups: z.array(SessionRepoGroup),
+  /** Cursor to fetch the next page of repo groups, or null if none. */
+  nextRepoCursor: z.string().nullable(),
 });
 export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
 
