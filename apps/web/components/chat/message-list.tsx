@@ -184,7 +184,7 @@ export function MessageList({
         </div>
       )}
       {!showError && !showLoading && !showEmpty && (
-        <div className="max-w-4xl mx-auto px-8 space-y-4">
+        <div className="max-w-4xl mx-auto px-8 space-y-2">
           {allMessages.map((message) => (
             <MessageItem
               key={message.id}
