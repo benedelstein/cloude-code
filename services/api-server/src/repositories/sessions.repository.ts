@@ -4,6 +4,12 @@ import type {
   SessionSummary,
 } from "@repo/shared";
 import { fromSqliteDatetime } from "@/lib/utils/utils";
+import {
+  decodeRepoCursor,
+  decodeSessionCursor,
+  encodeRepoCursor,
+  encodeSessionCursor,
+} from "./sessions.cursors";
 
 export interface CreateSessionParams {
   id: string;
@@ -36,56 +42,6 @@ export interface SessionAccessRow {
   repoFullName: string;
   accessBlockedAt: string | null;
   accessBlockReason: SessionAccessBlockReason | null;
-}
-
-interface RepoCursor {
-  /** SQLite datetime string ("YYYY-MM-DD HH:MM:SS") for direct comparison. */
-  maxUpdatedAt: string;
-  repoId: number;
-}
-
-interface SessionCursor {
-  /** SQLite datetime string ("YYYY-MM-DD HH:MM:SS") for direct comparison. */
-  updatedAt: string;
-  sessionId: string;
-}
-
-// Cursors are opaque to clients: base64 of "<sqlite_ts>|<id>". The pipe is
-// safe because SQLite datetimes never contain "|" and we control id formats.
-function encodeRepoCursor(cursor: RepoCursor): string {
-  return btoa(`${cursor.maxUpdatedAt}|${cursor.repoId}`);
-}
-
-function decodeRepoCursor(cursor: string): RepoCursor | null {
-  try {
-    const decoded = atob(cursor);
-    const pipeIndex = decoded.lastIndexOf("|");
-    if (pipeIndex < 0) return null;
-    const maxUpdatedAt = decoded.slice(0, pipeIndex);
-    const repoId = Number.parseInt(decoded.slice(pipeIndex + 1), 10);
-    if (!maxUpdatedAt || !Number.isFinite(repoId)) return null;
-    return { maxUpdatedAt, repoId };
-  } catch {
-    return null;
-  }
-}
-
-function encodeSessionCursor(cursor: SessionCursor): string {
-  return btoa(`${cursor.updatedAt}|${cursor.sessionId}`);
-}
-
-function decodeSessionCursor(cursor: string): SessionCursor | null {
-  try {
-    const decoded = atob(cursor);
-    const pipeIndex = decoded.lastIndexOf("|");
-    if (pipeIndex < 0) return null;
-    const updatedAt = decoded.slice(0, pipeIndex);
-    const sessionId = decoded.slice(pipeIndex + 1);
-    if (!updatedAt || !sessionId) return null;
-    return { updatedAt, sessionId };
-  } catch {
-    return null;
-  }
 }
 
 function rowToSummary(row: SessionRow): SessionSummary {
