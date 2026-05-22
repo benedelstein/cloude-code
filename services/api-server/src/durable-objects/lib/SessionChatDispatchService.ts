@@ -304,7 +304,17 @@ export class SessionChatDispatchService {
       connectionId ? [connectionId] : undefined,
     );
 
-    this.handleSentMessageSideEffects(sessionId, message, attachmentIds);
+    // Fire-and-forget: history sync is best-effort and must not block the
+    // sync ack to the client. Surface failures via the logger; missing history
+    // is recoverable but a silent unhandled rejection is not.
+    this.handleSentMessageSideEffects(sessionId, message, attachmentIds).catch(
+      (error: unknown) => {
+        this.logger.error("handleSentMessageSideEffects failed", {
+          fields: { messageId: message.id },
+          error,
+        });
+      },
+    );
   }
 
   private async handleSentMessageSideEffects(

@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { UIMessageSchema } from "@repo/shared";
 import type { Migration, SqlFn, Repository } from "./types";
 
 /**
@@ -73,10 +74,17 @@ export class MessageRepository implements Repository {
   }
 
   private rowToStoredMessage(row: MessageRow): StoredMessage {
+    const jsonParsed = JSON.parse(row.message);
+    const validated = UIMessageSchema.safeParse(jsonParsed);
+    if (!validated.success) {
+      throw new Error(
+        `Invalid UIMessage in database (id=${row.id}): ${validated.error.message}`,
+      );
+    }
     return {
       sessionId: row.session_id,
       createdAt: row.created_at,
-      message: JSON.parse(row.message) as UIMessage,
+      message: validated.data as UIMessage,
     };
   }
 }

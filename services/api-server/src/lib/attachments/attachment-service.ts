@@ -157,21 +157,29 @@ export class AttachmentService {
       return true;
     }
 
+    // Pipeline one UPDATE per id via db.batch so each row's WHERE-clause match can be
+    // inspected individually. A single bulk UPDATE would not tell us which ids failed
+    // ownership / unbound checks.
+    const statement = this.database.prepare(
+      `UPDATE attachments
+         SET session_id = ?, bound_at = datetime('now')
+         WHERE id = ? AND uploader_user_id = ? AND session_id IS NULL`,
+    );
+    const statements = attachmentIds.map((attachmentId) =>
+      statement.bind(sessionId, attachmentId, uploaderUserId),
+    );
+    const results = await this.database.batch(statements);
+
     const boundAttachmentIds: string[] = [];
-    for (const attachmentId of attachmentIds) {
-      const result = await this.database
-        .prepare(
-          `UPDATE attachments
-           SET session_id = ?, bound_at = datetime('now')
-           WHERE id = ? AND uploader_user_id = ? AND session_id IS NULL`,
-        )
-        .bind(sessionId, attachmentId, uploaderUserId)
-        .run();
-      if ((result.meta?.changes ?? 0) !== 1) {
-        await this.unbindFromSession(boundAttachmentIds, uploaderUserId, sessionId);
-        return false;
+    for (let i = 0; i < results.length; i++) {
+      if ((results[i]?.meta?.changes ?? 0) === 1) {
+        boundAttachmentIds.push(attachmentIds[i]!);
       }
-      boundAttachmentIds.push(attachmentId);
+    }
+
+    if (boundAttachmentIds.length !== attachmentIds.length) {
+      await this.unbindFromSession(boundAttachmentIds, uploaderUserId, sessionId);
+      return false;
     }
     return true;
   }
@@ -184,16 +192,15 @@ export class AttachmentService {
     if (attachmentIds.length === 0) {
       return;
     }
-    for (const attachmentId of attachmentIds) {
-      await this.database
-        .prepare(
-          `UPDATE attachments
-           SET session_id = NULL, bound_at = NULL
-           WHERE id = ? AND uploader_user_id = ? AND session_id = ?`,
-        )
-        .bind(attachmentId, uploaderUserId, sessionId)
-        .run();
-    }
+    const placeholders = attachmentIds.map(() => "?").join(", ");
+    await this.database
+      .prepare(
+        `UPDATE attachments
+         SET session_id = NULL, bound_at = NULL
+         WHERE uploader_user_id = ? AND session_id = ? AND id IN (${placeholders})`,
+      )
+      .bind(uploaderUserId, sessionId, ...attachmentIds)
+      .run();
   }
 
   async listGcTasks(limit: number, maxRetries: number): Promise<AttachmentGcTask[]> {

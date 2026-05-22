@@ -59,12 +59,18 @@ export class WebhookClient {
           elapsedMs: Date.now() - startedAt,
         });
         if (res.ok) return;
-        if (res.status < 500 && res.status !== 429) { // TODO: ISNT 429 RETRYABLE? just need to get the retry-after...
+        if (res.status < 500 && res.status !== 429) {
           this.log("warn", "webhook post received non-retryable status", {
             path,
             status: res.status,
           });
           return;
+        }
+        // For 429/5xx, honor a Retry-After header if present (capped at maxDelayMs
+        // so a misbehaving server can't stall the loop).
+        const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"));
+        if (retryAfterMs !== null) {
+          delay = Math.min(retryAfterMs, this.maxDelayMs);
         }
         this.log("debug", "webhook post failed, will retry", {
           path,
@@ -90,4 +96,24 @@ export class WebhookClient {
       delay = Math.min(delay * 2, this.maxDelayMs);
     }
   }
+}
+
+/**
+ * Parses an HTTP Retry-After header value (RFC 7231 §7.1.3) into milliseconds.
+ * Supports both delta-seconds and HTTP-date forms. Returns null for missing or
+ * unparseable values, or when the date is in the past.
+ */
+function parseRetryAfterMs(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.floor(seconds * 1000);
+  }
+  const epochMs = Date.parse(trimmed);
+  if (!Number.isNaN(epochMs)) {
+    const deltaMs = epochMs - Date.now();
+    return deltaMs > 0 ? deltaMs : 0;
+  }
+  return null;
 }
