@@ -1,181 +1,120 @@
 # Turn Workflow (Server Side)
 
-How a single conversation turn is executed end-to-end across the `SessionAgentDO`, the `SessionTurnWorkflow`, and the `AgentProcessRunner`. Covers RPC surface, state machine, chunk serialization, and crash recovery.
+How one user turn moves from the browser to the Sprite VM and back. The current path is webhook-based: the Durable Object dispatches work to a vm-agent process on the sprite, and the vm-agent posts chunks/events back to the Worker.
 
 ## Components
 
-- `**SessionAgentDO**` (`services/api-server/src/durable-objects/session-agent-do.ts`) — source of truth. Owns SQLite (`messages`, `pending_message_chunks`, `server_state`), WebSocket connections, and the public RPC surface that the workflow calls back into.
-- `**AgentWorkflowCoordinator**` (`services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts`) — DO-side orchestration. Holds the in-memory `MessageAccumulator`, dispatches turns to the workflow, reconciles state on DO restart. The DO's workflow RPC methods delegate directly into this class.
-- `**SessionTurnWorkflow**` (`services/api-server/src/workflows/SessionTurnWorkflow.ts`) — Cloudflare Agents workflow. One live instance per session at a time, identified by a fresh `crypto.randomUUID()` minted on create (not derived from `sessionId`). Infinite loop parked on `step.waitForEvent("message_available")`. Each turn runs inside `step.do("turn:{id}", { retries: { limit: 0 } }, ...)` so a failed turn surfaces as an explicit abort rather than a silent retry. On workflow error the instance id is dropped and the next dispatch mints a new one — we never reuse a dead workflow.
-- `**AgentProcessRunner**` (`services/api-server/src/workflows/AgentProcessRunner.ts`) — per-turn helper created inside the workflow step. Attaches to the Sprite VM, spawns `vm-agent`, pipes the user message in via stdin, parses NDJSON out of stdout, and forwards chunks back to the DO via RPC.
+- `SessionAgentDO` (`services/api-server/src/durable-objects/session-agent-do.ts`) - source of truth for session state, SQLite repositories, WebSocket clients, and webhook RPC handlers.
+- `SessionChatDispatchService` (`services/api-server/src/durable-objects/lib/SessionChatDispatchService.ts`) - validates chat payloads, persists the user message, registers the active turn, and asks the process manager to dispatch it.
+- `SpriteAgentProcessManager` (`services/api-server/src/durable-objects/lib/SpriteAgentProcessManager.ts`) - owns vm-agent process reuse, fresh process spawn, credential sync, cancel, and kill.
+- `AgentTurnCoordinator` (`services/api-server/src/durable-objects/lib/AgentTurnCoordinator.ts`) - owns turn state, WAL replay, chunk accumulation, derived state updates, terminal-chunk finalization, and client broadcasts.
+- `WebhookAgentRunner` (`packages/vm-agent/src/webhook-agent-runner.ts`) - runs inside the Sprite VM, drives the shared agent harness, batches stream chunks, and posts webhook payloads.
 
-## Request Diagram
+## Turn Path
 
-```
-┌──────────────────┐                                  ┌─────────────────────────┐                         ┌──────────────┐
-│  SessionAgentDO  │                                  │   SessionTurnWorkflow   │                         │  Sprite VM   │
-│  (SQLite + WS)   │                                  │   (AgentProcessRunner)  │                         │  (vm-agent)  │
-└────────┬─────────┘                                  └────────────┬────────────┘                         └──────┬───────┘
-         │                                                         │                                             │
-         │  1. client WS: ChatMessageEvent                         │                                             │
-         │ ─────────────────────────────────┐                      │                                             │
-         │                                  │                      │                                             │
-         │  2. messageRepository.create(userMessage)               │                                             │
-         │     serverState.activeUserMessageId = id                │                                             │
-         │                                                         │                                             │
-         │  3a. NEW workflow: runWorkflow({ sessionId,             │                                             │
-         │      spriteName, initialTurn }) ───────────────────────▶│                                             │
-         │      (initialTurn baked into params, no event needed)   │                                             │
-         │                                                         │                                             │
-         │  3b. EXISTING workflow:                                 │                                             │
-         │      sendWorkflowEvent("message_available", turn) ─────▶│ step.waitForEvent resolves                  │
-         │                                                         │                                             │
-         │                                                         │ 4. step.do("turn:{id}", retries: 0)         │
-         │                                                         │                                             │
-         │◀── 5. RPC: prepareWorkflowTurn(id, { model, agentMode })│                                             │
-         │    returns { userId, settings, agentMode,               │                                             │
-         │              agentSessionId }                           │                                             │
-         │                                                         │                                             │
-         │                                                         │ 6. attach Sprite, write agent.js,           │
-         │                                                         │    createSession("bun run agent.js") ──────▶│
-         │                                                         │    wait for session_info                    │
-         │                                                         │                                             │
-         │◀── 7. RPC: onWorkflowTurnStarted(id, agentProcessId) ───│                                             │
-         │    serverState.activeAgentProcessId = pid               │                                             │
-         │                                                         │                                             │
-         │                                                         │ 8. stdin: encodeAgentInput({ type:"chat",   │
-         │                                                         │    message, model?, agentMode? }) ─────────▶│
-         │                                                         │                                             │
-         │                                                         │ 9. stdout NDJSON (one AgentOutput/line) ◀───│
-         │                                                         │    serialized via stdoutProcessingPromise   │
-         │                                                         │                                             │
-         │◀── 10a. RPC: onWorkflowAgentSessionId(id, sessionId) ───│ (emitted once per turn)                     │
-         │                                                         │                                             │
-         │◀── 10b. RPC: onWorkflowChunk(id, sequence, chunk) ──────│ (per UIMessageChunk)                        │
-         │    • broadcast { type:"agent.chunk", chunk } to WS      │                                             │
-         │    • pendingChunkRepository.append(chunk)   ← WAL       │                                             │
-         │    • messageAccumulator.process(chunk)                  │                                             │
-         │    • on finishedMessage:                                │                                             │
-         │        messageRepository.create(assistantMsg)           │                                             │
-         │        pendingChunkRepository.clear()                   │                                             │
-         │        broadcast { type:"agent.finish", message }       │                                             │
-         │                                                         │                                             │
-         │          (repeat 10b until a terminal chunk)            │                                             │
-         │                                                         │                                             │
-         │                                                         │ 11. terminal chunk (finish|abort) ◀─────────│
-         │                                                         │     turnResultDeferred.resolve()            │
-         │                                                         │                                             │
-         │◀── 12. RPC: onWorkflowTurnFinished(id, { finishReason })│                                             │
-         │    clear activeUserMessageId / activeAgentProcessId     │                                             │
-         │    status = synthesizeStatus()                          │                                             │
-         │                                                         │                                             │
-         │                                                         │ 13. loop → step.waitForEvent               │
+```text
+Client WS
+  -> SessionAgentDO.handleChatMessage
+  -> SessionChatDispatchService.dispatchChatMessage
+  -> MessageRepository.create(user message)
+  -> AgentTurnCoordinator.beginTurn(userMessageId)
+  -> SpriteAgentProcessManager.dispatchMessage
+     -> try existing vm-agent process via stdin + stdin_ack
+     -> otherwise write credentials, agent script, and initial message file
+     -> spawn bun agent-webhook.js in a detachable Sprite session
+  -> AgentTurnCoordinator.attachProcessId(processId)
+
+vm-agent
+  -> WebhookAgentRunner queues turn into agent-harness
+  -> stream chunks enter ChunkBatcher
+  -> POST /internal/session/:sessionId/chunks
+  -> POST /internal/session/:sessionId/events for ready/error/sessionId
+
+Webhook routes
+  -> verify bearer token from SecretRepository
+  -> DO.handleWebhookChunks / DO.handleWebhookEvent
+  -> AgentTurnCoordinator
+  -> WebSocket broadcast to clients
 ```
 
-Failure path: runner returns `failure(err)` or step throws → workflow calls `onWorkflowTurnFailed(id, err)` → `commitAbortedMessage` flushes the partial message, clears WAL, broadcasts `agent.finish` + `operation.error`.
+## Server State
 
-## RPC Surface
-
-The DO exposes these methods; `SessionTurnWorkflow` and `AgentProcessRunner` invoke them via the Agents SDK RPC binding.
-
-
-| Method                                    | Caller             | Purpose                                                                                                                                                          |
-| ----------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prepareWorkflowTurn(id, overrides)`      | workflow (pre-run) | Validate session readiness, snapshot provider settings, mark turn active. Returns `Result<PreparedWorkflowTurn, WorkflowTurnFailure>`.                           |
-| `onWorkflowTurnStarted(id, pid)`          | runner             | Record Sprite process id on `serverState.activeAgentProcessId`.                                                                                                  |
-| `onWorkflowAgentSessionId(id, sessionId)` | runner             | Persist provider session id for resume on reconnect.                                                                                                             |
-| `onWorkflowChunk(id, sequence, chunk)`    | runner             | Broadcast + WAL append + accumulate. `sequence` is emitted but currently unused server-side (ordering is guaranteed by `stdoutProcessingPromise` in the runner). |
-| `onWorkflowTurnFinished(id, result)`      | workflow           | Clear active turn state after clean terminal chunk.                                                                                                              |
-| `onWorkflowTurnFailed(id, error)`         | workflow           | Abort path: commit partial message, clear state, broadcast `operation.error`.                                                                                    |
-| `onWorkflowComplete(name, id, result)`    | Agents SDK         | Workflow finished its run loop (unexpected — loop is infinite).                                                                                                  |
-| `onWorkflowError(name, id, error)`        | Agents SDK         | Workflow itself errored; commit partial, clear `instanceId`.                                                                                                     |
-
-
-All callback RPCs funnel through `isStaleRpc(id)` — RPCs for a non-active `userMessageId` are dropped.
-
-## Turn State Machine
-
-Tracked in `ServerState.workflowState`:
+Active turn fields live in `server_state`:
 
 ```ts
 {
-  instanceId: string | null,          // durable workflow instance
-  activeUserMessageId: string | null, // null ⇒ idle
-  activeAgentProcessId: number | null // Sprite pid
+  activeUserMessageId: string | null;
+  agentProcessId: number | null;
+  agentSessionId: string | null;
 }
 ```
 
+Only one user turn may be active per session. A second `chat.message` while `activeUserMessageId` or `pendingUserMessage` is set is rejected with `CHAT_MESSAGE_FAILED`.
 
-| State          | Condition                                                                                                                                                                                                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Idle**       | `activeUserMessageId === null`. Workflow parked on `waitForEvent`. DO rejects new chat messages only if a turn is already active (same guard in `handleChatMessage` at [session-agent-do.ts:999](../services/api-server/src/durable-objects/session-agent-do.ts:999)). |
-| **Dispatched** | User `UIMessage` persisted, `activeUserMessageId` set, workflow created (with `initialTurn`) or event sent.                                                                                                                                                            |
-| **Started**    | `onWorkflowTurnStarted` received; Sprite pid recorded.                                                                                                                                                                                                                 |
-| **Streaming**  | Chunks flowing via `onWorkflowChunk`. WAL is filling; accumulator rebuilding a `UIMessage` in memory.                                                                                                                                                                  |
-| **Terminal**   | `isTerminalChunk` (`finish` | `abort`) seen → `onWorkflowTurnFinished` → state cleared.                                                                                                                                                                                |
+## Dispatch
 
+`SessionChatDispatchService` persists the user `UIMessage` before spawning so the session history is durable even if process startup fails. It calls `AgentTurnCoordinator.beginTurn()` before process dispatch so webhooks racing in from a fast vm-agent are not treated as stale.
 
-Only one turn may be active per session. Concurrent `ChatMessageEvent`s are rejected with `CHAT_MESSAGE_FAILED` ("Agent is already handling a message"). Message queueing is not yet implemented.
+`SpriteAgentProcessManager` prefers warm reuse:
 
-## Chunk Handling & Ordering
+1. Attach to `serverState.agentProcessId`.
+2. Write an encoded `{ type: "chat" }` line to stdin.
+3. Wait for a typed `stdin_ack` for that `userMessageId`.
+4. If attach fails before writing, fall back to a fresh spawn.
+5. If writing happened but the ack never arrives, fence the uncertain process before deciding whether a new spawn is safe.
 
-1. `vm-agent` writes `AgentOutput` NDJSON to stdout.
-2. `AgentProcessRunner.onStdout` chains handlers through `stdoutProcessingPromise` ([AgentProcessRunner.ts:213](../services/api-server/src/workflows/AgentProcessRunner.ts:213)) so that `await onChunk(...)` for chunk N completes before chunk N+1's RPC is issued. This is the real ordering guarantee — the `sequence` argument is carried but not used for reordering at the DO.
-3. Each `UIMessageChunk` reaching the coordinator is processed in `handleStreamChunk` ([AgentWorkflowCoordinator.ts:686](../services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts:686)):
-  1. Broadcast `agent.chunk` to WS subscribers (clients see chunks before durability is confirmed).
-  2. `pendingChunkRepository.append(chunk)` — SQLite WAL.
-  3. `messageAccumulator.process(chunk)` — derive parts, update todos/plan via `applyDerivedStateFromParts`.
-  4. If accumulator emits a `finishedMessage`: persist via `messageRepository.create`, clear WAL, broadcast `agent.finish`, reset accumulator.
+Fresh spawn writes the webhook bundle to `~/.cloude/agent-webhook.js`, stages the initial message under `~/.cloude/turns/`, passes `DO_WEBHOOK_URL` and `DO_WEBHOOK_TOKEN`, and captures the Sprite process id from the setup session.
 
-Terminal chunk types: `finish`, `abort` ([AgentProcessRunner.ts:167](../services/api-server/src/workflows/AgentProcessRunner.ts:167)).
+## Webhooks
 
-## Workflow Dispatch Details
+Internal routes in `services/api-server/src/routes/internal.routes.ts` authenticate with a per-session bearer token stored as `webhook_token` in `SecretRepository`.
 
-`dispatchTurn` ([AgentWorkflowCoordinator.ts:525](../services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts:525)) serializes create/send via `workflowDispatchPromise` so concurrent requests can't race.
+- `POST /internal/session/:sessionId/chunks` accepts `{ userMessageId, chunks: [{ sequence, chunk }] }`.
+- `POST /internal/session/:sessionId/events` accepts `{ event }` for non-stream agent events such as `ready`, `error`, and `sessionId`.
 
-- **No live workflow** (first turn, or previous workflow errored and cleared `instanceId`): `ensureWorkflowRunning` mints `crypto.randomUUID()`, calls `runWorkflow(SESSION_TURN_WORKFLOW, { sessionId, spriteName, initialTurn }, { id: <uuid>, agentBinding: "SESSION_AGENT" })`, and persists the id to `workflowState.instanceId`. The workflow picks up `initialTurn` directly from params and runs it immediately — **no separate event is sent**. This avoids a race where the event fires before the workflow is subscribed.
-- **Live workflow**: `sendWorkflowEvent(instanceId, { type: "message_available", payload: turn })`.
-- **Send failure recovery**: if `sendWorkflowEvent` throws, the existing workflow is dead or its event KV is corrupt. `instanceId` is cleared and `ensureWorkflowRunning` is called again — it mints a new UUID and creates a fresh instance with the current turn as `initialTurn`. We never `restartWorkflow` (CF replays the original params, which would re-fire a stale turn) and never reuse the old id (CF retains errored instances, collision would be guaranteed).
+The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` responses with bounded exponential backoff. Non-retryable failures are logged and dropped; DO reconciliation handles missed tail state where possible.
 
-## Cancel Path
+## Chunk Handling
 
-`cancelActiveTurn` ([AgentWorkflowCoordinator.ts:596](../services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts:596)):
+`AgentTurnCoordinator.handleChunks()` is the ordered ingestion point.
 
-1. **Soft cancel** — `sendCancelSignal`: attach to the Sprite exec session by pid, write `encodeAgentInput({ type: "cancel" })` to stdin, close. Lets `vm-agent` emit an `abort` chunk cleanly.
-2. **Hard cancel fallback** — `stopManagedProcesses`: `WorkersSpriteClient.killSession(pid, "SIGINT")`. On 404 (session already gone), treat as success and call `commitAbortedMessage` locally.
+1. Drop stale chunks if `userMessageId` does not match `activeUserMessageId`.
+2. Detect sequence gaps using `lastSeenChunkSequence`.
+3. Insert each chunk into `PendingChunkRepository` with a unique sequence for retry dedupe.
+4. Feed fresh chunks into `MessageAccumulator`.
+5. Apply derived todos/plan metadata with `applyDerivedStateFromParts`.
+6. Broadcast batched `agent.chunks`.
+7. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, and broadcast `agent.finish`.
 
-## Crash Recovery
+The DO broadcasts chunk batches rather than individual chunks. The client protocol still receives WebSocket messages from the DO, not direct sprite traffic.
 
-**WAL invariant**: a non-empty `pending_message_chunks` table implies an active turn exists. The DO's construction path and every RPC entrypoint call `ensureRehydratedState()` ([AgentWorkflowCoordinator.ts:149](../services/api-server/src/durable-objects/lib/AgentWorkflowCoordinator.ts:149)) once per lifetime:
+## Cancel
 
-1. Load all WAL chunks, replay through `messageAccumulator.process` — derived state (todos, plan) is re-applied.
-2. If `workflowState.activeUserMessageId` is set, spawn `reconcileActiveTurn`:
-  - Call `getWorkflowStatus(id)`.
-  - `queued`/`running`/`waiting`/`paused`/`waitingForPause` → workflow is alive; it will drive RPCs to completion. No action.
-  - `complete`/`errored`/`terminated`/`unknown` → workflow is dead. `commitAbortedMessage` (forceAbort accumulator, persist partial `UIMessage`, clear WAL, broadcast `agent.finish`), clear `instanceId`, then clear active turn state. The next dispatch mints a fresh UUID and creates a new workflow.
+`SessionAgentDO.cancelActiveTurnAndClearState()` delegates to `SpriteAgentProcessManager.cancelActiveTurn()`.
 
-Because the workflow's turn step is `retries: { limit: 0 }`, a crashed step never silently re-runs — it either completes via RPC or bubbles up to `onWorkflowError`, which itself calls `commitAbortedMessage` to preserve the invariant.
+- Graceful path: attach to the active process, write `{ type: "cancel", userMessageId }`, and wait for `cancel_ack`. The process can be reused if it acknowledges.
+- Fenced path: if graceful cancel fails, terminate the Sprite exec session with `SIGTERM` and clear the process id.
+- DO cleanup: if the process was not preserved, `AgentTurnCoordinator.markTurnCanceled()` persists any partial assistant message as aborted and clears active turn state.
 
-## Failure Modes & Where They're Handled
+## Recovery
 
+The WAL invariant is: pending chunks imply an active or recently active turn. On DO startup, `AgentTurnCoordinator.ensureRehydratedState()`:
 
-| Failure                                            | Where caught                                                      | Effect                                                                                               |
-| -------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Session not initialized / not ready                | `prepareTurn`                                                     | `workflowTurnFailure("SESSION_NOT_INITIALIZED" | "SESSION_NOT_READY")` → `onWorkflowTurnFailed` path |
-| Invalid model override                             | `validateAndApplyModelSwitch` in DO                               | `workflowTurnFailure("INVALID_MODEL")` returned before dispatch                                      |
-| Attachment missing                                 | DO `getBoundAttachmentRecords` or runner `AgentAttachmentService` | `ATTACHMENTS_NOT_FOUND` / `ATTACHMENTS_RESOLUTION_FAILED`                                            |
-| Provider auth missing / expired                    | runner `loadCredentialSnapshot`                                   | `PROVIDER_AUTH_REQUIRED` → DO sets `providerConnection.requiresReauth = true`                        |
-| `vm-agent` fails to emit `session_info` within 10s | `waitForTurnStart`                                                | `TURN_DID_NOT_START`                                                                                 |
-| `vm-agent` exits before terminal chunk             | runner `onExit`                                                   | `TURN_EXITED` (with exit code)                                                                       |
-| Unparseable NDJSON from stdout                     | `handleAgentStdout`                                               | Logged loudly, line dropped (can desync client stream)                                               |
-| Workflow `sendEvent` fails                         | `dispatchTurn`                                                    | clear `instanceId`, create a fresh workflow with this turn as `initialTurn`                          |
-| Workflow itself errors                             | Agents SDK → `onWorkflowError`                                    | commit partial, clear `instanceId` (next dispatch creates fresh)                                     |
+1. Replays `pending_message_chunks` into `MessageAccumulator`.
+2. Re-applies derived todos/plan state.
+3. Restores `lastSeenChunkSequence`.
+4. If an active process id exists, attempts to attach to that Sprite process.
+5. If the process is gone, commits the partial assistant message as aborted and clears active turn state.
 
+Duplicate webhook batches are deduped by the WAL sequence constraint. Missing chunks abort the active turn, surface `CHAT_MESSAGE_FAILED`, and terminate the active process.
 
 ## Related Files
 
-- Turn types / failure codes: [services/api-server/src/workflows/types.ts](../services/api-server/src/workflows/types.ts)
-- WAL table: [services/api-server/src/durable-objects/repositories/pending-chunk-repository.ts](../services/api-server/src/durable-objects/repositories/pending-chunk-repository.ts)
-- Server state: [services/api-server/src/durable-objects/repositories/server-state-repository.ts](../services/api-server/src/durable-objects/repositories/server-state-repository.ts)
-- Accumulator / derived state: `MessageAccumulator` in `@repo/shared`, `applyDerivedStateFromParts` in [services/api-server/src/durable-objects/session-agent-derived-state.ts](../services/api-server/src/durable-objects/session-agent-derived-state.ts)
-
+- Webhook routes: [internal.routes.ts](../services/api-server/src/routes/internal.routes.ts)
+- DO entrypoint: [session-agent-do.ts](../services/api-server/src/durable-objects/session-agent-do.ts)
+- Dispatch service: [SessionChatDispatchService.ts](../services/api-server/src/durable-objects/lib/SessionChatDispatchService.ts)
+- Turn coordinator: [AgentTurnCoordinator.ts](../services/api-server/src/durable-objects/lib/AgentTurnCoordinator.ts)
+- Process manager: [SpriteAgentProcessManager.ts](../services/api-server/src/durable-objects/lib/SpriteAgentProcessManager.ts)
+- VM webhook runner: [webhook-agent-runner.ts](../packages/vm-agent/src/webhook-agent-runner.ts)
+- WAL table: [pending-chunk-repository.ts](../services/api-server/src/durable-objects/repositories/pending-chunk-repository.ts)
+- Server state: [server-state-repository.ts](../services/api-server/src/durable-objects/repositories/server-state-repository.ts)

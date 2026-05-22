@@ -113,7 +113,7 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 | `services/api-server/src/lib/auth/preview-origin.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
 | `services/api-server/src/lib/github/github-app.ts` | GitHub App OAuth helpers |
 | `services/api-server/src/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
-| `services/api-server/src/lib/crypto.ts` | Token encryption/decryption |
+| `services/api-server/src/lib/utils/crypto.ts` | Token encryption/decryption |
 | `apps/web/app/api/auth/finalize/route.ts` | Exchanges code for session token, sets cookie, posts opener |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
 | `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout, popup management) |
@@ -128,10 +128,10 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 
 Even after you create a session on a repo you have access to, you may lose access to it if the installation is deleted, you lose access to the repo, or the repo is removed from the installation. We handle this like so:
 
-- Routes to get a session, post messages, get a websocket token, etc. all check for access to the repo using `repo-session-accesss.ts`
-  a. If we don't know the repo's installation_id, we have to look it up using `github-app.ts#findInstallationForRepoId`. This first checks D1 `installation_repos` table, then falls back to the github api.
+- Routes to create/get a session, mint a websocket token, connect a websocket, and send `chat.message` all check for access to the repo using `services/api-server/src/lib/user-session/session-repo-access.ts`.
+  a. If we don't know the repo's installation_id, we have to look it up using `github-app.ts#findInstallationForRepoId`. This first checks D1 `github_installation_repos`, then falls back to the GitHub API.
   b. Check the `github_user_repo_access_cache` for this (user_id, repo_id, installation_id) (5 minute TTL)
-  c. If no cache value, look up the repo using github the github api (the same route we use to fetch user-accessible repos). This path is slow, since we have to enumerate a user's repos, which is also why we cache it.
+  c. If no cache value exists, look up the repo using the GitHub API (the same route we use to fetch user-accessible repos). This path is slow, since we have to enumerate a user's repos, which is also why we cache it.
 
 We use a D1 table `github_user_repo_access_cache` to cache user access to a repo within an installation. The cache TTL is 5 minutes.
 Values are put to the cache when a user creates a session, or calls get /repos to list the repos they have access to.

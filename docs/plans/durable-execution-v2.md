@@ -1,5 +1,15 @@
 # Plan: Durable Execution v2
 
+Status: implemented with some naming and behavior drift. The current source of truth for the live turn path is `docs/turn-workflow.md`.
+
+Known differences from this plan:
+
+- `AgentWorkflowCoordinator` became `AgentTurnCoordinator`.
+- The vm-agent uses `src/index-webhook.ts` and an initial-message file for fresh spawns.
+- `SpriteAgentProcessManager` now attempts warm process reuse via stdin ack before spawning fresh.
+- The DO broadcasts batched `agent.chunks` messages to clients.
+- Graceful cancel uses stdin `cancel_ack`; failed graceful cancel fences with `SIGTERM`.
+
 ## Context
 
 The agent process running on the sprite needs to be able to run for minutes, possibly hours at a time without failing.
@@ -653,4 +663,3 @@ Notable tradeoffs:
 - **New failure mode**: sprite-side persistent DO unreachability (DO account suspended, DNS broken). We bound buffer at ~500 chunks, then drop. Consider surfacing this as a user-visible error on reconnect.
 - **Security**: webhook routes must reject any request whose bearer token does not match the stored DO secret. Rate-limit by sessionId at the route layer to prevent a compromised token from being used to fire arbitrary volumes of fake chunks.
 - **Out of scope**: changing the client protocol. The DO still broadcasts individual `agent.chunk` messages to connected websocket clients — webhook batching is invisible to the client.
-
