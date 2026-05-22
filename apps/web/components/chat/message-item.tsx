@@ -186,8 +186,8 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
     (part) => isTextUIPart(part) && (part as { state?: string }).state !== "streaming",
   );
   const isSettled = !isStreaming;
-  // Collapse everything before the LAST text item when settled. Final text
-  // stays visible; earlier text and all work parts hide behind the header.
+  // Collapse work before the LAST text item when settled. Final text stays
+  // visible; earlier text only collapses when mixed with actual work items.
   const collapsedPrefixLength = (() => {
     if (!isSettled || isAborted || !hasFinalText) return 0;
     let lastTextIndex = -1;
@@ -197,7 +197,13 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
         break;
       }
     }
-    return lastTextIndex > 0 ? lastTextIndex : 0;
+    if (lastTextIndex <= 0) return 0;
+
+    const hasWorkBeforeFinalText = renderItems
+      .slice(0, lastTextIndex)
+      .some((item) => item.kind !== "text");
+
+    return hasWorkBeforeFinalText ? lastTextIndex : 0;
   })();
   const showCollapsedTurn = collapsedPrefixLength > 0;
 

@@ -70,8 +70,8 @@ export function BranchBar({
   if (!pushedBranch) return null;
 
   return (
-    <div className="shrink-0 rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
-      <div className="px-4 py-2 flex items-center justify-between gap-3">
+    <div className="min-w-0 shrink-0 overflow-hidden rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
+      <div className="px-4 py-2 flex min-w-0 items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-foreground-muted min-w-0">
           <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
           <span className="text-foreground font-medium">main</span>
@@ -79,10 +79,10 @@ export function BranchBar({
           <button
             type="button"
             onClick={() => void copyBranchName()}
-            className="inline-flex items-center gap-1.5 text-foreground font-medium truncate rounded px-1 -mx-1 hover:bg-foreground/10 transition-colors cursor-pointer"
+            className="inline-flex min-w-0 items-center gap-1.5 text-foreground font-medium truncate rounded px-1 -mx-1 hover:bg-foreground/10 transition-colors cursor-pointer"
             title={copied ? "Copied!" : "Click to copy branch name"}
           >
-            {pushedBranch}
+            <span className="truncate">{pushedBranch}</span>
             {copied ? (
               <Check className="h-3 w-3 shrink-0 text-accent" />
             ) : (

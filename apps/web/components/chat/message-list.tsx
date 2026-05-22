@@ -22,6 +22,7 @@ interface MessageListProps {
   userAvatarUrl?: string | null;
   providerId?: ProviderId | null;
   rightInset?: string;
+  isRightInsetResizing?: boolean;
   onHasNewMessages?: (hasNew: boolean) => void;
   scrollToBottomRef?: React.RefObject<(() => void) | null>;
 }
@@ -37,6 +38,7 @@ export function MessageList({
   userAvatarUrl,
   providerId,
   rightInset = "0rem",
+  isRightInsetResizing = false,
   onHasNewMessages,
   scrollToBottomRef,
 }: MessageListProps) {
@@ -148,7 +150,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-y-auto pt-20 pb-64 transition-[padding] duration-200 ease-linear"
+      className={`h-full overflow-y-auto pt-20 pb-64 ${isRightInsetResizing ? "" : "transition-[padding] duration-200 ease-linear"}`}
       style={{ paddingRight: rightInset }}
     >
       {showError && (

@@ -4,11 +4,12 @@ This file provides guidance to ai agents when working with code in this reposito
 
 ## Project Overview
 
-cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) that are connected to an API server via WebSockets. Users connect to the API serve and create a session to make changes in a repository. The session gets its own Durable Object, which provisions a Sprite VM, clones the repository, and runs an agent process on the vm and communicates with the API server. 
+cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) and coordinates via Cloudflare durable objects (DOs) on an API server. 
+Users connect to the API server and create a session to make changes in a repository. Each session gets its own Durable Object, which provisions a Sprite VM, clones the repository, and runs an agent process on the vm and communicates with the API server. 
 
-The Durable Object is the source of truth and coordinator for the session. It stores all messages in its sqlite db, handles comms with a long-lived Workflow for the agent execution, and communicates with clients.
+The Durable Object is the source of truth and coordinator for the session. It stores all messages in its sqlite db.
 
-The workflow `SessionTurnWorkflow` is a long-lived workflow that communicates with the agent process running on the vm and forwards data back to the DO.
+The VM owns the execution runtime for its workflows, and the DO dispatches messages from users to the vm. The vm runs independently, and submits its output back to the DO via webhook http requests. This is done because DOs are not designed to be long-lived servers, and the VM owns its own execution context, and cannot rely on a stable websocket connection to the DO. Webhooks are simple and reliable, because incoming http requests are guaranteed to wake the DO.
 
 ## Build & Development Commands
 
@@ -16,7 +17,6 @@ The workflow `SessionTurnWorkflow` is a long-lived workflow that communicates wi
 
 - Use `pnpm` for all package-manager commands.
 - If `pnpm` is not available on `PATH`, use `corepack pnpm`.
-- Do not install `pnpm` globally.
 
 ```bash
 # Install dependencies
@@ -39,8 +39,7 @@ pnpm clean
 ### Validating your work.
 
 NOTE: After making changes, always make sure to build, lint, and typecheck the repo.
-NOTE: You have access to the /screenshot skill to test visual changes on the web app. If you make visual changes, check your work by using /screenshot with a localhost url.
-        If you need to know which session url to use, you could look one up from the local d1 db or ask the user.
+NOTE: You have access to local browser tools to validate your visual changes. Use them.
 NOTE: If you are tasked with committing to git, prefer concise messages. 
 
 ### Package-specific commands
