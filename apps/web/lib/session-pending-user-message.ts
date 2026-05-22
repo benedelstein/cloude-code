@@ -48,6 +48,7 @@ export function buildOptimisticUserMessage({
     id: crypto.randomUUID(),
     role: "user",
     parts,
+    metadata: { createdAt: new Date().toISOString() },
   };
 }
 

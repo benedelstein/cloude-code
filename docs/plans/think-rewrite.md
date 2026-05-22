@@ -1,8 +1,10 @@
 # Plan: Think-Based Rewrite
 
+Status: exploratory plan, not current architecture. The live system no longer uses `SessionTurnWorkflow` / `AgentProcessRunner`; current turn execution is Sprite vm-agent plus DO webhooks. See `docs/turn-workflow.md`.
+
 ## Context
 
-The current architecture uses a Durable Object as the session control plane, a Workflow for durable turn execution, and a Sprite VM as the persistent execution environment. The Sprite holds the real repository checkout and runs a provider-native coding agent (Claude Code or Codex) inside that checkout.
+At the time this plan was written, the architecture used a Durable Object as the session control plane, a Workflow for durable turn execution, and a Sprite VM as the persistent execution environment. The Sprite held the real repository checkout and ran a provider-native coding agent (Claude Code or Codex) inside that checkout.
 
 This works well for full development context, but it couples most agent capabilities to the VM from the start. Project Think offers a different shape: the Durable Object owns the run loop and persistence, while execution capabilities are decomposed into explicit tool layers such as workspace tools, codemode, browser, and sandbox.
 

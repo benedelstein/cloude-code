@@ -5,24 +5,17 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import type { PlanAction } from "@repo/shared";
 
 const COLLAPSED_LINE_LIMIT = 15;
 
 interface ExitPlanModePartProps {
-  part: {
-    type: string;
-    toolName?: string;
-    args?: unknown;
-    input?: unknown;
-    state?: string;
-  };
+  action: PlanAction;
 }
 
-export function ExitPlanModePart({ part }: ExitPlanModePartProps) {
+export function ExitPlanModePart({ action }: ExitPlanModePartProps) {
   const [expanded, setExpanded] = useState(false);
-
-  const input = (part.args ?? part.input) as { plan?: string } | undefined;
-  const plan = input?.plan ?? "";
+  const plan = action.plan;
 
   const lines = plan.split("\n");
   const isTruncatable = lines.length > COLLAPSED_LINE_LIMIT;

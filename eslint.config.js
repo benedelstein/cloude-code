@@ -32,6 +32,14 @@ export default tseslint.config(
           allowTemplateLiterals: true,
         },
       ],
+      "max-lines": [
+        "error",
+        {
+          max: 1000,
+          skipBlankLines: false,
+          skipComments: false,
+        },
+      ],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-expressions": [
         "error",

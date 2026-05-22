@@ -4,7 +4,12 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useSt
 import { createPortal } from "react-dom";
 
 const RIGHT_SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-export const APP_RIGHT_SIDEBAR_WIDTH = "18rem";
+const RIGHT_SIDEBAR_WIDTH_STORAGE_KEY = "right_sidebar_width_px";
+const RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE = "--app-right-sidebar-width";
+export const APP_RIGHT_SIDEBAR_MIN_WIDTH_PX = 240;
+export const APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
+export const APP_RIGHT_SIDEBAR_MAX_WIDTH_PX = 880;
+export const APP_RIGHT_SIDEBAR_CSS_WIDTH = `var(${RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE}, ${APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX}px)`;
 export const APP_RIGHT_SIDEBAR_BUTTON_GUTTER = "3rem";
 
 const AppRightSidebarSlotContext = createContext<HTMLDivElement | null>(null);
@@ -14,9 +19,14 @@ interface AppRightSidebarControls {
   enabled: boolean;
   open: boolean;
   mobileOpen: boolean;
+  widthPx: number;
+  isResizing: boolean;
   setEnabled: (enabled: boolean) => void;
   setOpen: (open: boolean) => void;
   setMobileOpen: (open: boolean) => void;
+  setWidthPx: (widthPx: number, options?: { persist?: boolean }) => void;
+  setPreviewWidthPx: (widthPx: number) => void;
+  setIsResizing: (isResizing: boolean) => void;
 }
 
 const AppRightSidebarControlsContext = createContext<AppRightSidebarControls | null>(null);
@@ -38,24 +48,61 @@ export function AppRightSidebarProvider({
   const [enabled, setEnabled] = useState(defaultEnabled);
   const [open, setOpenState] = useState(defaultOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [widthPx, setWidthPxState] = useState(APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX);
+  const [isResizing, setIsResizing] = useState(false);
 
   useLayoutEffect(() => {
     setEnabled(defaultEnabled);
   }, [defaultEnabled]);
+
+  useLayoutEffect(() => {
+    setRightSidebarCssWidth(widthPx);
+  }, [widthPx]);
+
+  useLayoutEffect(() => {
+    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!storedWidth) {
+      return;
+    }
+
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    if (Number.isFinite(parsedWidth)) {
+      const clampedWidth = clampRightSidebarWidth(parsedWidth);
+      setWidthPxState(clampedWidth);
+      setRightSidebarCssWidth(clampedWidth);
+    }
+  }, []);
 
   const setOpen = useCallback((nextOpen: boolean) => {
     setOpenState(nextOpen);
     document.cookie = `${cookieName}=${nextOpen}; path=/; max-age=${RIGHT_SIDEBAR_COOKIE_MAX_AGE}`;
   }, [cookieName]);
 
+  const setWidthPx = useCallback((nextWidthPx: number, options: { persist?: boolean } = {}) => {
+    const clampedWidth = clampRightSidebarWidth(nextWidthPx);
+    setWidthPxState(clampedWidth);
+    if (options.persist !== false) {
+      window.localStorage.setItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY, String(clampedWidth));
+    }
+  }, []);
+
+  const setPreviewWidthPx = useCallback((nextWidthPx: number) => {
+    setRightSidebarCssWidth(nextWidthPx);
+  }, []);
+
   const controls = useMemo<AppRightSidebarControls>(() => ({
     enabled,
     open,
     mobileOpen,
+    widthPx,
+    isResizing,
     setEnabled,
     setOpen,
     setMobileOpen,
-  }), [enabled, mobileOpen, open, setOpen]);
+    setWidthPx,
+    setPreviewWidthPx,
+    setIsResizing,
+  }), [enabled, isResizing, mobileOpen, open, setOpen, setPreviewWidthPx, setWidthPx, widthPx]);
 
   return (
     <AppRightSidebarControlsContext.Provider value={controls}>
@@ -95,4 +142,18 @@ export function AppRightSidebarPortal({ children }: { children: ReactNode }) {
   }
 
   return createPortal(children, slotNode);
+}
+
+function clampRightSidebarWidth(widthPx: number): number {
+  return Math.min(
+    APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
+    Math.max(APP_RIGHT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
+  );
+}
+
+function setRightSidebarCssWidth(widthPx: number) {
+  document.documentElement.style.setProperty(
+    RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE,
+    `${clampRightSidebarWidth(widthPx)}px`,
+  );
 }

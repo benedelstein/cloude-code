@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildOptimisticUserMessage,
   consumeInitialPendingUserMessage,
@@ -7,6 +7,12 @@ import {
 import type { AttachmentDescriptor } from "@repo/shared";
 import type { UIMessage } from "ai";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 describe("buildOptimisticUserMessage", () => {
   it("returns null when the message has no content or attachments", () => {
     expect(buildOptimisticUserMessage({ content: "   " })).toBeNull();
@@ -14,6 +20,8 @@ describe("buildOptimisticUserMessage", () => {
 
   it("trims text and maps attachments into file parts", () => {
     vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("message-1");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-22T06:48:52.008Z"));
 
     const attachments = [{
       filename: "notes.txt",
@@ -27,6 +35,7 @@ describe("buildOptimisticUserMessage", () => {
     })).toEqual({
       id: "message-1",
       role: "user",
+      metadata: { createdAt: "2026-05-22T06:48:52.008Z" },
       parts: [
         { type: "text", text: "hello world" },
         {

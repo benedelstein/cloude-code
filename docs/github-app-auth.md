@@ -11,24 +11,23 @@ cloude-code uses a GitHub App for repository access instead of a shared personal
 ```
 1. Admin installs the GitHub App on an org/user account
 2. GitHub sends installation webhooks → stored in D1
-3. Client creates session: POST /sessions { repoId: "acme/app" }
-4. API resolves repoId → installation → access token (cached in D1)
+3. Client creates session: POST /sessions { repoId: 123456789 }
+4. API resolves numeric repo id → installation → access token (cached in D1)
 5. Token passed to Durable Object → used for git clone + credential helper
 6. Token refreshed automatically on session reattach (after hibernation)
 ```
 
 ### Token Resolution
 
-When a session is created, `GitHubAppService.getTokenForRepo(repoId)` does:
+When a session is created, repo access is checked by `assertCreateSessionRepoAccess(...)`. GitHub App token minting for clone/push uses `GitHubAppService`:
 
-1. Parse `owner/repo` from `repoId`
-2. Look up installation in D1 by `account_login` (the owner)
-3. If `repository_selection = "selected"`, verify the specific repo is in `github_installation_repos`
-4. Check D1 token cache (valid if expires > now + 5 minutes)
-5. On cache miss, generate a new token via `octokit App.getInstallationOctokit()`
-6. Cache the token in D1 and return it
+1. Resolve the numeric repo id to an installation with `findInstallationForRepoId(...)`.
+2. Verify the current user can access the repo through that installation.
+3. Check D1 token cache (valid if expires > now + 5 minutes).
+4. On cache miss, generate a new token via `octokit App.getInstallationOctokit()`.
+5. Cache the token in D1 and return it.
 
-If no installation is found in D1, falls back to `apps.getRepoInstallation()` API call.
+If no installation is found in D1, the code falls back to GitHub API installation lookup and records the result.
 
 ### Git Authentication on the VM
 
@@ -46,7 +45,8 @@ The token is used in two ways on the Sprite VM:
 
 | File | Purpose |
 |------|---------|
-| `services/api-server/src/lib/github/github-app.ts` | `GitHubAppService` — token resolution, installation lookup, webhook handlers |
+| `services/api-server/src/lib/github/github-app.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
+| `services/api-server/src/lib/user-session/session-repo-access.ts` | Session repo access checks for create/read/connect/chat paths |
 | `services/api-server/src/lib/github/index.ts` | Barrel export |
 | `services/api-server/src/routes/webhooks.routes.ts` | `POST /webhooks/github` — receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |

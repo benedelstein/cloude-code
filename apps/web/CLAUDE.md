@@ -1,1 +1,1 @@
-See agents.md
+AGENTS.md

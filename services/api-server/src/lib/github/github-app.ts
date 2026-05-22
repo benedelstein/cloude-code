@@ -1,13 +1,8 @@
 import { App, Octokit } from "octokit";
-import type {
-  EmitterWebhookEvent,
-  EmitterWebhookEventName,
-} from "@octokit/webhooks";
 import {
   failure,
   success,
   type Logger,
-  type Result,
 } from "@repo/shared";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 import type { Env } from "@/types";
@@ -22,87 +17,30 @@ import { GitHubUserRepoListingSyncRepository } from "@/repositories/github-user-
 import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
-
-type WebhookPayload<T extends EmitterWebhookEventName> =
-  EmitterWebhookEvent<T>["payload"];
+import type {
+  CreatePullRequestInput,
+  GitHubAppResult,
+  GitHubCompareData,
+  GitHubRepositoryData,
+  GithubOAuthTokenResult,
+  PullRequestData,
+  RefreshedToken,
+  WebhookPayload,
+} from "./github-app.types";
+export type {
+  CreatePullRequestInput,
+  GitHubAppErrorCode,
+  GitHubAppResult,
+  GitHubAppServiceError,
+  GitHubCompareData,
+  GitHubRepositoryData,
+  GithubOAuthTokenResult,
+  GithubOAuthUser,
+  PullRequestData,
+  RefreshedToken,
+} from "./github-app.types";
 
 const USER_REPO_ACCESS_CACHE_TTL_MS = 5 * 60 * 1000;
-
-export interface GithubOAuthUser {
-  id: number;
-  login: string;
-  name: string | null;
-  avatarUrl: string;
-}
-
-export interface GithubOAuthTokenResult {
-  accessToken: string;
-  refreshToken: string | undefined;
-  refreshTokenExpiresAt: string | undefined;
-  expiresAt: string | undefined;
-  user: GithubOAuthUser;
-}
-
-export interface RefreshedToken {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-  refreshTokenExpiresAt: string;
-}
-
-export interface GitHubCompareData {
-  aheadBy: number;
-  totalCommits: number;
-  files: Array<{
-    filename: string;
-    status: string;
-    additions: number;
-    deletions: number;
-  }>;
-  commits: Array<{
-    sha: string;
-    message: string;
-    authorName: string | null;
-  }>;
-}
-
-export interface CreatePullRequestInput {
-  title: string;
-  body: string;
-  head: string;
-  base: string;
-}
-
-export interface PullRequestData {
-  number: number;
-  url: string;
-  state: "open" | "closed";
-  merged: boolean;
-}
-
-export interface GitHubRepositoryData {
-  id: number;
-  fullName: string;
-  owner: string;
-  name: string;
-  defaultBranch?: string;
-  private?: boolean;
-  description?: string | null;
-}
-
-export type GitHubAppErrorCode =
-  | "INSTALLATION_NOT_FOUND"
-  | "REPO_NOT_ACCESSIBLE"
-  | "INVALID_REPO"
-  | "GITHUB_API_ERROR"
-  | "GITHUB_AUTH_ERROR";
-
-export type GitHubAppServiceError = {
-  code: GitHubAppErrorCode;
-  message: string;
-};
-
-export type GitHubAppResult<T> = Result<T, GitHubAppServiceError>;
 
 export class GitHubAppService {
   private readonly app: App;

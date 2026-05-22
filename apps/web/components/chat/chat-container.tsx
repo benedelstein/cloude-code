@@ -5,7 +5,7 @@ import { Pencil, Loader2, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
 import {
-  APP_RIGHT_SIDEBAR_WIDTH,
+  APP_RIGHT_SIDEBAR_CSS_WIDTH,
   useAppRightSidebar,
 } from "@/components/layout/app-right-sidebar-context";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -56,7 +56,11 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     sendMessage,
     stop,
   } = useSession();
-  const { enabled: isRightSidebarEnabled, open: isRightSidebarOpen } = useAppRightSidebar();
+  const {
+    enabled: isRightSidebarEnabled,
+    open: isRightSidebarOpen,
+    isResizing: isRightSidebarResizing,
+  } = useAppRightSidebar();
   const isMobile = useIsMobile();
 
   const { user } = useAuth();
@@ -70,7 +74,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
   const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
-    ? APP_RIGHT_SIDEBAR_WIDTH
+    ? APP_RIGHT_SIDEBAR_CSS_WIDTH
     : "0rem";
 
   const displayTitle = sessionTitle ?? repoFullName ?? "Untitled session";
@@ -207,7 +211,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
+          providerId={selectedProvider}
           rightInset={rightSidebarInset}
+          isRightInsetResizing={isRightSidebarResizing}
           onHasNewMessages={setShowScrollToBottom}
           scrollToBottomRef={scrollToBottomRef}
         />
@@ -216,10 +222,10 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       {/* Branch Bar + Input - floating at bottom */}
       <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
         <div
-          className="pt-8 transition-[padding] duration-200 ease-linear"
+          className={`pt-8 ${isRightSidebarResizing ? "" : "transition-[padding] duration-200 ease-linear"}`}
           style={{ paddingRight: rightSidebarInset }}
         >
-          <div className="max-w-4xl mx-auto px-4 pb-2" style={{ background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)" }}>
+          <div className="max-w-4xl min-w-0 mx-auto px-4 pb-2" style={{ background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)" }}>
             <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
               className: "mb-2 flex justify-center",
             })}>

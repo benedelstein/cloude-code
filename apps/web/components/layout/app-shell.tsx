@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -23,7 +24,9 @@ import {
   AppRightSidebarProvider,
   AppRightSidebarSlot,
   APP_RIGHT_SIDEBAR_BUTTON_GUTTER,
-  APP_RIGHT_SIDEBAR_WIDTH,
+  APP_RIGHT_SIDEBAR_CSS_WIDTH,
+  APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
+  APP_RIGHT_SIDEBAR_MIN_WIDTH_PX,
   useAppRightSidebar,
 } from "@/components/layout/app-right-sidebar-context";
 import {
@@ -68,12 +71,23 @@ export function AppShell({
 
 function AppShellLayout({ children }: { children: React.ReactNode }) {
   const { open: isLeftSidebarOpen, toggleSidebar, isMobile } = useSidebar();
-  const { enabled, open, mobileOpen, setOpen, setMobileOpen } =
+  const {
+    enabled,
+    open,
+    mobileOpen,
+    widthPx,
+    isResizing: isRightSidebarResizing,
+    setOpen,
+    setMobileOpen,
+    setWidthPx,
+    setPreviewWidthPx,
+    setIsResizing: setIsRightSidebarResizing,
+  } =
     useAppRightSidebar();
   const isRightSidebarOpen = enabled && (isMobile ? mobileOpen : open);
   const headerMaxWidth = "56rem";
   const desktopRightSidebarReserve =
-    enabled && !isMobile && open ? APP_RIGHT_SIDEBAR_WIDTH : "0rem";
+    enabled && !isMobile && open ? APP_RIGHT_SIDEBAR_CSS_WIDTH : "0rem";
   const leftHeaderOverlayReserve =
     isMobile || !isLeftSidebarOpen ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER : "0rem";
   const rightHeaderOverlayReserve =
@@ -165,14 +179,17 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         <div className="sticky top-0 z-10 h-0">
           <div className="pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
             <div
-              className="max-w-4xl px-4 h-full flex items-center transition-[margin] duration-200 ease-linear"
+              className={cn(
+                "max-w-4xl min-w-0 px-4 h-full flex items-center",
+                !isRightSidebarResizing && "transition-[margin] duration-200 ease-linear",
+              )}
               style={{
                 marginLeft: `max(${leftHeaderOverlayReserve}, ${centeredHeaderMargin})`,
                 marginRight: `calc(${desktopRightSidebarReserve} + max(${rightHeaderOverlayReserve}, ${centeredHeaderMargin}))`,
               }}
             >
               <div
-                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}
+                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} min-w-0 flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}
               >
                 <AppHeaderSlot />
               </div>
@@ -191,17 +208,108 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         cookieName="right_sidebar_state"
         keyboardShortcut={enabled ? { code: "Digit0", altKey: true } : null}
         layout="contents"
+        style={{ "--sidebar-width": APP_RIGHT_SIDEBAR_CSS_WIDTH } as CSSProperties}
       >
         <Sidebar
           side="right"
           collapsible="offcanvas"
           variant="floating"
           reserveSpace={false}
-          className="[&_[data-sidebar=sidebar]]:bg-sidebar"
+          className={cn(
+            "[&_[data-sidebar=sidebar]]:relative [&_[data-sidebar=sidebar]]:bg-sidebar",
+            isRightSidebarResizing && "transition-none duration-0",
+          )}
         >
+          <RightSidebarResizeHandle
+            widthPx={widthPx}
+            onWidthChange={setWidthPx}
+            onPreviewWidthChange={setPreviewWidthPx}
+            onResizeStateChange={setIsRightSidebarResizing}
+          />
           <AppRightSidebarSlot />
         </Sidebar>
       </SidebarProvider>
     </>
+  );
+}
+
+function RightSidebarResizeHandle({
+  widthPx,
+  onWidthChange,
+  onPreviewWidthChange,
+  onResizeStateChange,
+}: {
+  widthPx: number;
+  onWidthChange: (widthPx: number, options?: { persist?: boolean }) => void;
+  onPreviewWidthChange: (widthPx: number) => void;
+  onResizeStateChange: (isResizing: boolean) => void;
+}) {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const startClientX = event.clientX;
+    const startWidthPx = widthPx;
+    let nextWidthPx = startWidthPx;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    onResizeStateChange(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      nextWidthPx = startWidthPx + startClientX - moveEvent.clientX;
+      onPreviewWidthChange(nextWidthPx);
+    };
+
+    const stopResizing = () => {
+      onWidthChange(nextWidthPx);
+      onResizeStateChange(false);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label="Resize right sidebar"
+      title="Resize right sidebar"
+      onPointerDown={handlePointerDown}
+      onKeyDown={(event) => {
+        switch (event.key) {
+          case "ArrowLeft":
+            event.preventDefault();
+            onWidthChange(widthPx + 16);
+            break;
+          case "ArrowRight":
+            event.preventDefault();
+            onWidthChange(widthPx - 16);
+            break;
+          case "Home":
+            event.preventDefault();
+            onWidthChange(APP_RIGHT_SIDEBAR_MIN_WIDTH_PX);
+            break;
+          case "End":
+            event.preventDefault();
+            onWidthChange(APP_RIGHT_SIDEBAR_MAX_WIDTH_PX);
+            break;
+          default:
+            break;
+        }
+      }}
+      className="absolute left-0 top-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize! touch-none md:block after:absolute after:inset-y-2 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-sidebar-border focus-visible:outline-none focus-visible:after:bg-sidebar-ring"
+    />
   );
 }

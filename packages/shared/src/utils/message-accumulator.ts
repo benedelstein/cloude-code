@@ -13,6 +13,13 @@ type MutableDynamicToolUIPart = Omit<DynamicToolUIPart, "state" | "input" | "out
   input?: unknown;
   output?: unknown;
   errorText?: string;
+  startedAt?: number;
+  endedAt?: number;
+};
+
+type MutableReasoningUIPart = ReasoningUIPart & {
+  startedAt?: number;
+  endedAt?: number;
 };
 
 export interface ProcessChunkResult {
@@ -36,19 +43,23 @@ export interface ProcessChunkResult {
  * deltas and terminal chunks arrive. This mirrors the AI SDK's
  * processUIMessageStream and preserves the order in which parts began
  * streaming, even when a later part finishes before an earlier one.
+ *
+ * Timing: stamps message-level `startedAt`/`endedAt` on `metadata`, plus
+ * per-reasoning-part and per-tool-part `startedAt`/`endedAt` for live and
+ * historical duration displays.
  */
 export class MessageAccumulator {
   private readonly logger: Logger;
   private messageId: string | undefined = undefined;
   private parts: MessageParts = [];
-  private metadata: unknown = undefined;
+  private metadata: Record<string, unknown> | undefined = undefined;
   private finished = false;
   private pendingChunks: UIMessageChunk[] = [];
 
   // Active in-progress parts, keyed by their stream id. Values are the same
   // references stored in `parts`, so mutations here update the array too.
   private activeTextParts = new Map<string, TextUIPart>();
-  private activeReasoningParts = new Map<string, ReasoningUIPart>();
+  private activeReasoningParts = new Map<string, MutableReasoningUIPart>();
 
   // Active tool calls, keyed by toolCallId. Holds the part reference plus
   // input-text accumulation used only as a repair path if `tool-input-available`
@@ -70,6 +81,7 @@ export class MessageAccumulator {
    * @returns message completion state plus any parts fully materialized by this chunk
    */
   process(chunk: UIMessageChunk): ProcessChunkResult {
+    this.stampMessageStartedIfNeeded();
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 
@@ -113,7 +125,12 @@ export class MessageAccumulator {
       }
 
       case "reasoning-start": {
-        const reasoningPart: ReasoningUIPart = { type: "reasoning", text: "", state: "streaming" };
+        const reasoningPart: MutableReasoningUIPart = {
+          type: "reasoning",
+          text: "",
+          state: "streaming",
+          startedAt: Date.now(),
+        };
         this.activeReasoningParts.set(chunk.id, reasoningPart);
         this.parts.push(reasoningPart);
         break;
@@ -135,6 +152,7 @@ export class MessageAccumulator {
         const reasoningPart = this.activeReasoningParts.get(chunk.id);
         if (reasoningPart) {
           reasoningPart.state = "done";
+          reasoningPart.endedAt = Date.now();
           this.activeReasoningParts.delete(chunk.id);
           completedParts.push(reasoningPart);
         }
@@ -150,6 +168,7 @@ export class MessageAccumulator {
           input: undefined,
           title: chunk.title,
           providerExecuted: chunk.providerExecuted,
+          startedAt: Date.now(),
         };
         this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
         this.parts.push(toolPart as DynamicToolUIPart);
@@ -173,6 +192,7 @@ export class MessageAccumulator {
         if (existing) {
           existing.part.input = chunk.input;
           existing.part.state = "input-available";
+          // startedAt was already set by tool-input-start
         } else {
           // No prior tool-input-start — fall back to inserting the part now.
           const toolPart: MutableDynamicToolUIPart = {
@@ -183,6 +203,7 @@ export class MessageAccumulator {
             input: chunk.input,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
+            startedAt: Date.now(),
           };
           this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
           this.parts.push(toolPart as DynamicToolUIPart);
@@ -195,6 +216,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.output = chunk.output;
           toolCall.part.state = "output-available";
+          toolCall.part.endedAt = Date.now();
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -206,6 +228,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.errorText = chunk.errorText;
           toolCall.part.state = "output-error";
+          toolCall.part.endedAt = Date.now();
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -260,7 +283,7 @@ export class MessageAccumulator {
 
       case "finish":
         completedParts.push(...this.finalizePendingParts());
-        this.metadata = chunk.messageMetadata;
+        this.mergeMetadataOnTerminate(chunk.messageMetadata as Record<string, unknown> | undefined);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
@@ -269,17 +292,48 @@ export class MessageAccumulator {
 
       case "abort":
         completedParts.push(...this.finalizePendingParts());
-        this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
+        this.mergeMetadataOnTerminate({ aborted: true });
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "error":
         completedParts.push(...this.finalizePendingParts());
+        this.mergeMetadataOnTerminate(undefined);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
+      
+      default: {
+        const _exhaustiveCheck = null as never;
+        this.logger.warn(`Unhandled chunk type: ${_exhaustiveCheck}`);
+      }
     }
 
     return { completedParts };
+  }
+
+  /**
+   * Stamp `metadata.startedAt` on the very first chunk we see, so even streams
+   * that begin with `text-start` (no explicit `start` chunk) still get a
+   * message-level start timestamp.
+   */
+  private stampMessageStartedIfNeeded(): void {
+    if (this.metadata?.startedAt === undefined) {
+      this.metadata = { ...(this.metadata ?? {}), startedAt: Date.now() };
+    }
+  }
+
+  /**
+   * Shallow-merge provider `messageMetadata` into existing metadata, preserving
+   * any existing `startedAt` and stamping `endedAt = Date.now()`.
+   */
+  private mergeMetadataOnTerminate(incoming: Record<string, unknown> | undefined): void {
+    const existing = this.metadata ?? {};
+    const merged: Record<string, unknown> = { ...existing, ...(incoming ?? {}) };
+    if (existing.startedAt !== undefined) {
+      merged.startedAt = existing.startedAt;
+    }
+    merged.endedAt = Date.now();
+    this.metadata = merged;
   }
 
   /**
@@ -289,6 +343,7 @@ export class MessageAccumulator {
    */
   private finalizePendingParts(): MessagePart[] {
     const completedParts: MessagePart[] = [];
+    const now = Date.now();
 
     for (const [, textPart] of this.activeTextParts) {
       textPart.state = "done";
@@ -298,6 +353,9 @@ export class MessageAccumulator {
 
     for (const [, reasoningPart] of this.activeReasoningParts) {
       reasoningPart.state = "done";
+      if (reasoningPart.endedAt === undefined) {
+        reasoningPart.endedAt = now;
+      }
       completedParts.push(reasoningPart);
     }
     this.activeReasoningParts.clear();
@@ -310,6 +368,9 @@ export class MessageAccumulator {
         } catch {
           toolCall.part.input = toolCall.inputText;
         }
+      }
+      if (toolCall.part.endedAt === undefined) {
+        toolCall.part.endedAt = now;
       }
       completedParts.push(toolCall.part as DynamicToolUIPart);
     }
@@ -362,7 +423,7 @@ export class MessageAccumulator {
       this.messageId = crypto.randomUUID();
     }
     this.finalizePendingParts();
-    this.metadata = { ...((this.metadata as Record<string, unknown>) ?? {}), aborted: true };
+    this.mergeMetadataOnTerminate({ aborted: true });
     this.finished = true;
     return this.getMessage();
   }
