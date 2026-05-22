@@ -42,15 +42,20 @@ export const listSessionsRoute = createRoute({
   path: "/",
   request: {
     query: z.object({
+      // When set, return only the single matching repo group, paginated by
+      // `sessionCursor`. Otherwise return a page of repo groups, paginated by
+      // `repoCursor`.
       repoId: z.coerce.number().optional(),
-      limit: z.coerce.number().optional(),
-      cursor: z.string().optional(),
+      repoCursor: z.string().optional(),
+      sessionCursor: z.string().optional(),
+      repoLimit: z.coerce.number().int().min(1).max(50).optional(),
+      sessionLimit: z.coerce.number().int().min(1).max(50).optional(),
     }),
   },
   responses: {
     200: {
       content: { "application/json": { schema: ListSessionsResponse } },
-      description: "Paginated list of sessions",
+      description: "Sessions grouped by repo, paginated",
     },
   },
 });

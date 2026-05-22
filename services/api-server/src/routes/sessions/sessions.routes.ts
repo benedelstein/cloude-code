@@ -25,20 +25,23 @@ export const sessionsRoutes = new OpenAPIHono<{
 
 sessionsRoutes.use("*", authMiddleware);
 
-// List sessions for the current user
+// List sessions for the current user, grouped by repo for the sidebar.
 sessionsRoutes.openapi(listSessionsRoute, async (c) => {
   const user = c.get("user");
-  const { repoId, limit, cursor } = c.req.valid("query");
+  const { repoId, repoCursor, sessionCursor, repoLimit, sessionLimit } =
+    c.req.valid("query");
   const sessionsService = new SessionsService(c.env);
 
-  const sessions = await sessionsService.listSessions({
+  const response = await sessionsService.listSessions({
     userId: user.id,
     repoId,
-    limit,
-    cursor: cursor ?? undefined,
+    repoCursor,
+    sessionCursor,
+    repoLimit,
+    sessionLimit,
   });
 
-  return c.json(sessions, 200);
+  return c.json(response, 200);
 });
 
 // Create a new session

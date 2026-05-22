@@ -1,5 +1,15 @@
-import type { SessionAccessBlockReason, SessionSummary } from "@repo/shared";
-import { fromSqliteDatetime, toSqliteDatetime } from "@/lib/utils/utils";
+import type {
+  SessionAccessBlockReason,
+  SessionRepoGroup,
+  SessionSummary,
+} from "@repo/shared";
+import { fromSqliteDatetime } from "@/lib/utils/utils";
+import {
+  decodeRepoCursor,
+  decodeSessionCursor,
+  encodeRepoCursor,
+  encodeSessionCursor,
+} from "./sessions.cursors";
 
 export interface CreateSessionParams {
   id: string;
@@ -123,32 +133,187 @@ export class SessionsRepository {
       .run();
   }
 
-  async listByUser(
+  /**
+   * Lists the user's non-archived sessions grouped by repository.
+   *
+   * Repos are ordered by their most recently updated session. Within each
+   * group, sessions are also ordered by `updated_at` DESC. Each group includes
+   * up to `sessionLimit` sessions and a per-repo `nextSessionCursor` to load
+   * more sessions for that repo via {@link listSessionsForRepo}.
+   *
+   * Pagination of the repo list uses a keyset cursor on
+   * `(MAX(updated_at), repo_id)` to keep ordering stable when multiple repos
+   * share the same most-recent timestamp.
+   *
+   * @returns Page of repo groups and an optional cursor for the next page.
+   */
+  async listGroupedByUser(
     userId: string,
-    options: { repoId?: number; limit?: number; cursor?: string } = {},
-  ): Promise<{ sessions: SessionSummary[]; cursor: string | null }> {
-    const limit = Math.min(options.limit ?? 20, 50);
+    options: {
+      repoCursor?: string;
+      repoLimit?: number;
+      sessionLimit?: number;
+    } = {},
+  ): Promise<{ groups: SessionRepoGroup[]; nextRepoCursor: string | null }> {
+    const repoLimit = Math.min(options.repoLimit ?? 10, 50);
+    const sessionLimit = Math.min(options.sessionLimit ?? 5, 50);
 
-    let query: string;
-    const bindings: (string | number)[] = [userId];
-    // Cursor is the ISO-with-Z form sent to clients; convert back to SQLite's
-    // "YYYY-MM-DD HH:MM:SS" format so lexical comparison against updated_at works.
-    const cursorForQuery = options.cursor
-      ? toSqliteDatetime(new Date(options.cursor))
+    const decodedRepoCursor = options.repoCursor
+      ? decodeRepoCursor(options.repoCursor)
       : null;
 
-    if (options.repoId && cursorForQuery) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.repoId, cursorForQuery, limit + 1);
-    } else if (options.repoId) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND repo_id = ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(options.repoId, limit + 1);
-    } else if (cursorForQuery) {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(cursorForQuery, limit + 1);
+    // Step 1: page of repos, ordered by most recent activity.
+    // Keyset filter uses lexicographic comparison: prefer rows with strictly
+    // older max_updated_at, and break ties by smaller repo_id.
+    let repoQuery: string;
+    const repoBindings: (string | number)[] = [userId];
+    if (decodedRepoCursor) {
+      repoQuery = `
+        SELECT repo_id, MAX(updated_at) AS max_updated_at
+        FROM sessions
+        WHERE user_id = ? AND archived = 0
+        GROUP BY repo_id
+        HAVING max_updated_at < ?
+           OR (max_updated_at = ? AND repo_id < ?)
+        ORDER BY max_updated_at DESC, repo_id DESC
+        LIMIT ?
+      `;
+      repoBindings.push(
+        decodedRepoCursor.maxUpdatedAt,
+        decodedRepoCursor.maxUpdatedAt,
+        decodedRepoCursor.repoId,
+        repoLimit + 1,
+      );
     } else {
-      query = `SELECT * FROM sessions WHERE user_id = ? AND archived = 0 ORDER BY updated_at DESC LIMIT ?`;
-      bindings.push(limit + 1);
+      repoQuery = `
+        SELECT repo_id, MAX(updated_at) AS max_updated_at
+        FROM sessions
+        WHERE user_id = ? AND archived = 0
+        GROUP BY repo_id
+        ORDER BY max_updated_at DESC, repo_id DESC
+        LIMIT ?
+      `;
+      repoBindings.push(repoLimit + 1);
+    }
+
+    const repoResult = await this.database
+      .prepare(repoQuery)
+      .bind(...repoBindings)
+      .all<{ repo_id: number; max_updated_at: string }>();
+
+    const repoRows = repoResult.results;
+    const hasMoreRepos = repoRows.length > repoLimit;
+    const pagedRepoRows = repoRows.slice(0, repoLimit);
+
+    if (pagedRepoRows.length === 0) {
+      return { groups: [], nextRepoCursor: null };
+    }
+
+    // Step 2: top-N sessions per repo for the paged repo set. Window function
+    // limits per-group rows in a single round-trip; fetch sessionLimit + 1 to
+    // detect "has more" within each group.
+    const repoIds = pagedRepoRows.map((row) => row.repo_id);
+    const placeholders = repoIds.map(() => "?").join(", ");
+    const sessionQuery = `
+      SELECT * FROM (
+        SELECT *,
+               ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY updated_at DESC, id DESC) AS rn
+        FROM sessions
+        WHERE user_id = ? AND archived = 0 AND repo_id IN (${placeholders})
+      )
+      WHERE rn <= ?
+      ORDER BY repo_id, rn
+    `;
+    const sessionResult = await this.database
+      .prepare(sessionQuery)
+      .bind(userId, ...repoIds, sessionLimit + 1)
+      .all<SessionRow & { rn: number }>();
+
+    // Bucket session rows by repo_id, preserving the rn order from SQL.
+    const sessionsByRepo = new Map<number, SessionRow[]>();
+    for (const row of sessionResult.results) {
+      const bucket = sessionsByRepo.get(row.repo_id) ?? [];
+      bucket.push(row);
+      sessionsByRepo.set(row.repo_id, bucket);
+    }
+
+    const groups: SessionRepoGroup[] = pagedRepoRows.map((repoRow) => {
+      const repoSessions = sessionsByRepo.get(repoRow.repo_id) ?? [];
+      const hasMoreSessions = repoSessions.length > sessionLimit;
+      const visibleRows = repoSessions.slice(0, sessionLimit);
+      const summaries = visibleRows.map(rowToSummary);
+      // Most-recent session row's repo_full_name reflects the latest known
+      // name for this repo (handles renames as messages flow through).
+      const repoFullName =
+        visibleRows[0]?.repo_full_name ?? "";
+      const lastVisible = visibleRows[visibleRows.length - 1];
+      const nextSessionCursor =
+        hasMoreSessions && lastVisible
+          ? encodeSessionCursor({
+              updatedAt: lastVisible.updated_at,
+              sessionId: lastVisible.id,
+            })
+          : null;
+      return {
+        repoId: repoRow.repo_id,
+        repoFullName,
+        sessions: summaries,
+        nextSessionCursor,
+      };
+    });
+
+    const lastRepo = pagedRepoRows[pagedRepoRows.length - 1];
+    const nextRepoCursor =
+      hasMoreRepos && lastRepo
+        ? encodeRepoCursor({
+            maxUpdatedAt: lastRepo.max_updated_at,
+            repoId: lastRepo.repo_id,
+          })
+        : null;
+
+    return { groups, nextRepoCursor };
+  }
+
+  /**
+   * Lists a single repo's non-archived sessions, paginated by an opaque
+   * session cursor. Returns the result wrapped as a single-group response so
+   * callers can treat it uniformly with {@link listGroupedByUser}.
+   */
+  async listSessionsForRepo(
+    userId: string,
+    repoId: number,
+    options: { sessionCursor?: string; sessionLimit?: number } = {},
+  ): Promise<SessionRepoGroup | null> {
+    const sessionLimit = Math.min(options.sessionLimit ?? 5, 50);
+    const decoded = options.sessionCursor
+      ? decodeSessionCursor(options.sessionCursor)
+      : null;
+
+    let query: string;
+    const bindings: (string | number)[] = [userId, repoId];
+    if (decoded) {
+      query = `
+        SELECT * FROM sessions
+        WHERE user_id = ? AND repo_id = ? AND archived = 0
+          AND (updated_at < ?
+            OR (updated_at = ? AND id < ?))
+        ORDER BY updated_at DESC, id DESC
+        LIMIT ?
+      `;
+      bindings.push(
+        decoded.updatedAt,
+        decoded.updatedAt,
+        decoded.sessionId,
+        sessionLimit + 1,
+      );
+    } else {
+      query = `
+        SELECT * FROM sessions
+        WHERE user_id = ? AND repo_id = ? AND archived = 0
+        ORDER BY updated_at DESC, id DESC
+        LIMIT ?
+      `;
+      bindings.push(sessionLimit + 1);
     }
 
     const result = await this.database
@@ -157,13 +322,28 @@ export class SessionsRepository {
       .all<SessionRow>();
 
     const rows = result.results;
-    const hasMore = rows.length > limit;
-    const sessions = rows.slice(0, limit).map(rowToSummary);
-    const nextCursor = hasMore
-      ? (sessions[sessions.length - 1]?.updatedAt ?? null)
-      : null;
+    if (rows.length === 0) {
+      return null;
+    }
 
-    return { sessions, cursor: nextCursor };
+    const hasMore = rows.length > sessionLimit;
+    const visibleRows = rows.slice(0, sessionLimit);
+    const summaries = visibleRows.map(rowToSummary);
+    const lastVisible = visibleRows[visibleRows.length - 1];
+    const nextSessionCursor =
+      hasMore && lastVisible
+        ? encodeSessionCursor({
+            updatedAt: lastVisible.updated_at,
+            sessionId: lastVisible.id,
+          })
+        : null;
+
+    return {
+      repoId,
+      repoFullName: visibleRows[0]?.repo_full_name ?? "",
+      sessions: summaries,
+      nextSessionCursor,
+    };
   }
 
   async getById(sessionId: string): Promise<SessionSummary | null> {
