@@ -2,7 +2,7 @@
 
 import { ListChecks } from "lucide-react";
 import clsx from "clsx";
-import { isProviderTodoToolName } from "@repo/shared";
+import type { TodoAction } from "@repo/shared";
 import { ExpandableSummary } from "./expandable-summary";
 
 interface TodoItem {
@@ -16,25 +16,11 @@ interface TodoItem {
 }
 
 interface TodoToolPartProps {
-  part: {
-    type: string;
-    toolName?: string;
-    args?: unknown;
-    input?: unknown;
-    state?: string;
-  };
+  action: TodoAction;
 }
 
-/**
- * Returns true when the part represents a provider todo-update tool.
- */
-export function isTodoToolName(toolName: string): boolean {
-  return isProviderTodoToolName(toolName);
-}
-
-export function TodoToolPart({ part }: TodoToolPartProps) {
-  const input = (part.args ?? part.input) as { todos?: unknown; plan?: unknown; steps?: unknown } | undefined;
-  const rawTodos = input?.todos ?? input?.plan ?? input?.steps ?? [];
+export function TodoToolPart({ action }: TodoToolPartProps) {
+  const rawTodos = action.todos;
   const todos: TodoItem[] = Array.isArray(rawTodos) ? (rawTodos as TodoItem[]) : [];
   const total = todos.length;
   const completed = todos.filter((todo) => isCompleted(todo)).length;

@@ -32,6 +32,26 @@ function edit(callId: string, path: string): NormalizedToolAction {
   };
 }
 
+function todo(callId: string): NormalizedToolAction {
+  return {
+    kind: "todo",
+    toolName: "TodoWrite",
+    toolCallId: callId,
+    state: "output-available",
+    payload: { todos: [] },
+  };
+}
+
+function plan(callId: string): NormalizedToolAction {
+  return {
+    kind: "plan",
+    toolName: "ExitPlanMode",
+    toolCallId: callId,
+    state: "output-available",
+    payload: { plan: "## Plan" },
+  };
+}
+
 describe("groupActions", () => {
   it("groups three consecutive reads", () => {
     const result = groupActions([
@@ -75,5 +95,14 @@ describe("groupActions", () => {
   it("a singleton groupable action is unwrapped to a single", () => {
     const result = groupActions([read("c1", "/a"), bash("c2", "ls")]);
     expect(result[0]!.type).toBe("single");
+  });
+
+  it("keeps todo and plan actions standalone", () => {
+    const result = groupActions([
+      todo("c1"),
+      plan("c2"),
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result.every((item) => item.type === "single")).toBe(true);
   });
 });

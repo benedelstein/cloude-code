@@ -1,4 +1,6 @@
-import type { DynamicToolUIPart } from "ai";
+import type { DynamicToolUIPart, ToolUIPart, UITools } from "ai";
+
+export type NormalizableToolUIPart = DynamicToolUIPart | ToolUIPart<UITools>;
 
 export type ToolKind =
   | "read"
@@ -68,6 +70,7 @@ export interface OtherAction {
   output?: unknown;
 }
 
+/** Provider-agnostic tool payloads */
 export type NormalizedToolPayload =
   | { kind: "read"; payload: ReadAction }
   | { kind: "edit"; payload: EditAction }
@@ -82,16 +85,16 @@ export type NormalizedToolPayload =
 export type NormalizedToolAction = NormalizedToolPayload & {
   toolName: string;
   toolCallId: string;
-  state: DynamicToolUIPart["state"];
+  state: NormalizableToolUIPart["state"];
   errorText?: string;
 };
 
 export interface ToolPartNormalizer {
   /**
-   * Map an assembled DynamicToolUIPart from this provider into one or more actions.
-   * MUST be pure and side-effect-free. For tool names this provider does not
+   * Map an assembled tool UI part from this provider into one or more actions.
+   * pure and side-effect-free. For tool names this provider does not
    * recognize, return a single `kind: "other"` action via the shared fallback —
    * never throw.
    */
-  normalize(part: DynamicToolUIPart): NormalizedToolAction[];
+  normalize(part: NormalizableToolUIPart): NormalizedToolAction[];
 }

@@ -2,32 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { UIMessage } from "ai";
-import type { DynamicToolUIPart } from "ai";
-import { isTextUIPart, isReasoningUIPart, isToolUIPart } from "ai";
-import { Check, ChevronRight, Copy, User } from "lucide-react";
+import { getToolName } from "ai";
+import { isTextUIPart, isToolUIPart } from "ai";
+import { User } from "lucide-react";
 import clsx from "clsx";
 import { createPortal } from "react-dom";
 import {
-  isProviderTodoToolName,
   normalizeToolPart,
   type NormalizedToolAction,
   type ProviderId,
 } from "@repo/shared";
-import { TextPart } from "@/components/parts/text-part";
-import { ExitPlanModePart } from "@/components/parts/exit-plan-mode-part";
-import { BashPart } from "@/components/parts/bash-part";
-import { ReasoningPart } from "@/components/parts/reasoning-part";
-import { TodoToolPart } from "@/components/parts/todo-write-part";
-import { ReadPart } from "@/components/parts/read-part";
-import { EditPart } from "@/components/parts/edit-part";
-import { WritePart } from "@/components/parts/write-part";
-import { SearchPart } from "@/components/parts/search-part";
-import { WebPart } from "@/components/parts/web-part";
-import { GenericToolPart } from "@/components/parts/generic-tool-part";
-import { GroupedToolPart } from "@/components/parts/grouped-tool-part";
-import { groupActions, type ActionItem } from "@/components/parts/group-actions";
-import { humanizeDuration } from "@/lib/duration";
-import { useNow } from "@/lib/use-now";
+import { groupActions } from "@/components/parts/group-actions";
+import {
+  AttachmentPreviewRow,
+  isImageFilePart,
+} from "@/components/chat/message-attachments";
+import { MessageHoverActions } from "@/components/chat/message-hover-actions";
+import { TurnWorkHeader } from "@/components/chat/message-turn-work-header";
+import { WorkItems, type RenderItem } from "@/components/chat/message-work-items";
 
 interface MessageItemProps {
   message: UIMessage;
@@ -35,31 +27,6 @@ interface MessageItemProps {
   userAvatarUrl?: string | null;
   providerId?: ProviderId | null;
 }
-
-type ImageFilePart = { type: "file"; url: string; mediaType?: string; filename?: string };
-
-function isImageFilePart(part: unknown): part is ImageFilePart {
-  if (!part || typeof part !== "object") return false;
-  const candidate = part as { type?: unknown; url?: unknown; mediaType?: unknown };
-  return candidate.type === "file"
-    && typeof candidate.url === "string"
-    && (typeof candidate.mediaType === "string" ? candidate.mediaType.startsWith("image/") : true);
-}
-
-function resolveAttachmentUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
-  if (url.startsWith("/api/")) return url;
-  if (url.startsWith("/")) return `/api${url}`;
-  return `/api/${url}`;
-}
-
-type RenderItem =
-  | { kind: "text"; key: string; text: string }
-  | { kind: "reasoning"; key: string; part: { text?: string; startedAt?: number; endedAt?: number } }
-  | { kind: "todo"; key: string; part: DynamicToolUIPart }
-  | { kind: "plan"; key: string; part: DynamicToolUIPart }
-  | { kind: "action-item"; key: string; item: ActionItem };
 
 export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }: MessageItemProps) {
   const isUser = message.role === "user";
@@ -117,65 +84,88 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
       pendingActionItems = null;
     };
 
-    parts.forEach((part, index) => {
-      if (isImageFilePart(part)) return;
-      if (!part || typeof part !== "object" || !("type" in part)) return;
-      if (part.type === "step-start") return;
-
-      if (isTextUIPart(part)) {
-        flushActions();
-        items.push({
-          kind: "text",
-          key: `${message.id}-text-${index}`,
-          text: part.text,
-        });
-        return;
-      }
-
-      if (isReasoningUIPart(part)) {
-        flushActions();
-        items.push({
-          kind: "reasoning",
-          key: `${message.id}-reasoning-${index}`,
-          part: part as { text?: string; startedAt?: number; endedAt?: number },
-        });
-        return;
-      }
-
-      if (isToolUIPart(part) || (typeof part.type === "string" && part.type.startsWith("tool-"))) {
-        const toolPart = part as DynamicToolUIPart;
-        const toolName = (toolPart as { toolName?: string }).toolName
-          ?? toolPart.type.replace(/^tool-/, "");
-        if (isProviderTodoToolName(toolName)) {
-          flushActions();
-          items.push({ kind: "todo", key: `${message.id}-todo-${index}`, part: toolPart });
-          return;
-        }
-        if (toolName === "ExitPlanMode") {
-          flushActions();
-          items.push({ kind: "plan", key: `${message.id}-plan-${index}`, part: toolPart });
-          return;
-        }
-        if (!providerId) {
-          pendingActionItems = pendingActionItems ?? { keyBase: `${message.id}-actions-${index}`, actions: [] };
-          pendingActionItems.actions.push({
-            kind: "other",
+    const appendToolActions = (part: Parameters<typeof normalizeToolPart>[0], index: number) => {
+      const toolName = getToolName(part);
+      if (!providerId) {
+        pendingActionItems = pendingActionItems ?? { keyBase: `${message.id}-actions-${index}`, actions: [] };
+        pendingActionItems.actions.push({
+          kind: "other",
+          toolName,
+          toolCallId: part.toolCallId,
+          state: part.state,
+          payload: {
             toolName,
-            toolCallId: toolPart.toolCallId,
-            state: toolPart.state,
-            payload: {
-              toolName,
-              input: (toolPart as { input?: unknown }).input,
-              output: (toolPart as { output?: unknown }).output,
-            },
+            input: (part as { input?: unknown }).input,
+            output: (part as { output?: unknown }).output,
+          },
+        });
+        return;
+      }
+      const actions = normalizeToolPart(part, providerId);
+      pendingActionItems = pendingActionItems ?? { keyBase: `${message.id}-actions-${index}`, actions: [] };
+      pendingActionItems.actions.push(...actions);
+    };
+
+    parts.forEach((part, index) => {
+      if (!part || typeof part !== "object" || !("type" in part)) return;
+
+      switch (part.type) {
+        case "text":
+          flushActions();
+          items.push({
+            kind: "text",
+            key: `${message.id}-text-${index}`,
+            text: part.text,
           });
           return;
+
+        case "reasoning":
+          flushActions();
+          items.push({
+            kind: "reasoning",
+            key: `${message.id}-reasoning-${index}`,
+            part: part as { text?: string; startedAt?: number; endedAt?: number },
+          });
+          return;
+
+        case "dynamic-tool":
+          appendToolActions(part, index);
+          return;
+
+        case "file":
+          if (isImageFilePart(part)) {
+            // Image files render through AttachmentPreviewRow outside renderItems.
+            return;
+          }
+          // Non-image files are preserved in the message but do not have a chat
+          // renderer yet. Keep them as an explicit boundary for tool grouping.
+          flushActions();
+          return;
+
+        case "source-url":
+        case "source-document":
+          // Source citations are preserved in storage; this chat surface does
+          // not render citation rows yet.
+          flushActions();
+          return;
+
+        case "step-start":
+          return;
+
+        default:
+          if (isToolUIPart(part)) {
+            appendToolActions(part, index);
+            return;
+          }
+          if (typeof part.type === "string" && part.type.startsWith("data-")) {
+            // App-defined data parts need per-type renderers before they can be
+            // shown meaningfully. Avoid dropping pending tool grouping across
+            // them.
+            flushActions();
+            return;
+          }
+          return;
         }
-        const actions = normalizeToolPart(toolPart, providerId);
-        pendingActionItems = pendingActionItems ?? { keyBase: `${message.id}-actions-${index}`, actions: [] };
-        pendingActionItems.actions.push(...actions);
-        return;
-      }
     });
 
     flushActions();
@@ -359,197 +349,4 @@ function getMessageText(message: UIMessage): string {
     .map((part) => part.text.trim())
     .filter((text) => text.length > 0)
     .join("\n\n");
-}
-
-function formatMessageTime(date: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function AttachmentPreviewRow({
-  imageParts,
-  messageId,
-  alignRight,
-  onExpand,
-}: {
-  imageParts: Array<{ part: ImageFilePart; index: number }>;
-  messageId: string;
-  alignRight: boolean;
-  onExpand: (url: string) => void;
-}) {
-  if (imageParts.length === 0) return null;
-
-  return (
-    <div
-      className={clsx(
-        "mb-1 flex items-end gap-2 overflow-x-auto pb-0.5",
-        alignRight ? "justify-end" : "justify-start",
-      )}
-    >
-      {imageParts.map(({ part, index }) => {
-        const imageUrl = resolveAttachmentUrl(part.url);
-        return (
-          <button
-            key={`${messageId}-image-${index}`}
-            type="button"
-            onClick={() => onExpand(imageUrl)}
-            className="block w-32 shrink-0 cursor-zoom-in"
-            aria-label="Open image preview"
-          >
-            <img
-              src={imageUrl}
-              alt={part.filename ?? "Uploaded image"}
-              className="h-auto w-full rounded-md border border-border object-contain shadow-sm"
-            />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function MessageHoverActions({
-  isUser,
-  createdAt,
-  canCopy,
-  copied,
-  onCopy,
-}: {
-  isUser: boolean;
-  createdAt: Date | null;
-  canCopy: boolean;
-  copied: boolean;
-  onCopy: () => void;
-}) {
-  if (!createdAt && !canCopy) return null;
-
-  return (
-    <div
-      className={clsx(
-        "mt-1 flex items-center gap-2 text-xs text-foreground-tertiary opacity-0 transition-opacity group-hover/message:opacity-100",
-        isUser ? "justify-end" : "justify-start",
-      )}
-    >
-      {createdAt && <span>{formatMessageTime(createdAt)}</span>}
-      {canCopy && (
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground-muted"
-          title={copied ? "Copied" : "Copy message"}
-          aria-label={copied ? "Message copied" : "Copy message"}
-        >
-          {copied
-            ? <Check className="h-3.5 w-3.5" />
-            : <Copy className="h-3.5 w-3.5" />}
-        </button>
-      )}
-    </div>
-  );
-}
-
-interface TurnWorkHeaderProps {
-  expanded: boolean;
-  onToggle: () => void;
-  startedAt: number | undefined;
-  endedAt: number | undefined;
-  isStreaming: boolean;
-}
-
-function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStreaming }: TurnWorkHeaderProps) {
-  const tickIntervalMs = isStreaming && startedAt !== undefined && endedAt === undefined
-    ? 1000
-    : 60_000;
-  const now = useNow(tickIntervalMs);
-
-  let label = "Worked";
-  if (startedAt !== undefined && endedAt !== undefined) {
-    label = `Worked for ${humanizeDuration(endedAt - startedAt)}`;
-  } else if (startedAt !== undefined && isStreaming) {
-    label = `Working for ${humanizeDuration(now - startedAt)}`;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="group flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-muted hover:text-foreground transition-colors text-left rounded cursor-pointer"
-      aria-expanded={expanded}
-    >
-      <span>{label}</span>
-      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded ? "rotate-90" : "hidden group-hover:block")} />
-    </button>
-  );
-}
-
-function WorkItems({ items, isStreaming, isUser }: { items: RenderItem[]; isStreaming: boolean; isUser: boolean }) {
-  return (
-    <>
-      {items.map((item, index) => {
-        const previous = items[index - 1];
-        const isToolItem = item.kind === "action-item" || item.kind === "todo" || item.kind === "plan";
-        const previousIsToolItem = previous?.kind === "action-item" || previous?.kind === "todo" || previous?.kind === "plan";
-        const needsBoundarySpacing = (item.kind === "text" && previousIsToolItem)
-          || (isToolItem && previous?.kind === "text");
-
-        return (
-          <div key={item.key} className={clsx(needsBoundarySpacing && "mt-4")}>
-            <WorkItemRenderer item={item} isStreaming={isStreaming} isUser={isUser} />
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function WorkItemRenderer({ item, isStreaming, isUser }: { item: RenderItem; isStreaming: boolean; isUser: boolean }) {
-  switch (item.kind) {
-    case "text":
-      return <TextPart text={item.text} isUser={isUser} />;
-    case "reasoning":
-      return <ReasoningPart part={item.part} isStreaming={isStreaming} />;
-    case "todo":
-      return <TodoToolPart part={item.part as unknown as Parameters<typeof TodoToolPart>[0]["part"]} />;
-    case "plan":
-      return <ExitPlanModePart part={item.part as unknown as Parameters<typeof ExitPlanModePart>[0]["part"]} />;
-    case "action-item":
-      return <ActionItemRenderer item={item.item} />;
-    default: {
-      const exhaustive: never = item;
-      throw new Error(`Unhandled work item: ${(exhaustive as { kind: string }).kind}`);
-    }
-  }
-}
-
-function ActionItemRenderer({ item }: { item: ActionItem }) {
-  if (item.type === "group") {
-    return <GroupedToolPart group={item} />;
-  }
-  const { action } = item;
-  switch (action.kind) {
-    case "read":
-      return <ReadPart action={action.payload} />;
-    case "edit":
-      return <EditPart action={action.payload} />;
-    case "write":
-      return <WritePart action={action.payload} />;
-    case "bash":
-      return <BashPart action={action.payload} />;
-    case "search":
-      return <SearchPart action={action.payload} />;
-    case "web":
-      return <WebPart action={action.payload} />;
-    case "other":
-      return <GenericToolPart action={action.payload} />;
-    case "todo":
-    case "plan":
-      // todo/plan are extracted upstream; this branch is unreachable in practice.
-      return null;
-    default: {
-      const exhaustive: never = action;
-      throw new Error(`Unhandled action kind: ${(exhaustive as { kind: string }).kind}`);
-    }
-  }
 }

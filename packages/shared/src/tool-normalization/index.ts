@@ -1,8 +1,7 @@
-import type { DynamicToolUIPart } from "ai";
 import type { ProviderId } from "../types/providers";
 import { claudeToolNormalizer } from "./providers/claude";
 import { codexToolNormalizer } from "./providers/codex";
-import type { NormalizedToolAction, ToolPartNormalizer } from "./types";
+import type { NormalizableToolUIPart, NormalizedToolAction, ToolPartNormalizer } from "./types";
 
 export * from "./types";
 export { fallbackOtherAction } from "./fallback";
@@ -30,7 +29,7 @@ export function getToolNormalizer(providerId: ProviderId): ToolPartNormalizer {
  * Pure and stateless; safe to call on every render.
  */
 export function normalizeToolPart(
-  part: DynamicToolUIPart,
+  part: NormalizableToolUIPart,
   providerId: ProviderId,
 ): NormalizedToolAction[] {
   return getToolNormalizer(providerId).normalize(part);

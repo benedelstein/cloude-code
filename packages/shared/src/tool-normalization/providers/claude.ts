@@ -1,7 +1,7 @@
-import type { DynamicToolUIPart } from "ai";
-import type { NormalizedToolAction, ToolPartNormalizer } from "../types";
+import type { NormalizableToolUIPart, NormalizedToolAction, ToolPartNormalizer } from "../types";
 import { fallbackOtherAction } from "../fallback";
 import { lineDiff } from "../utils/diff";
+import { toolPartName } from "../utils/tool-part";
 
 interface PartContext {
   state: NormalizedToolAction["state"];
@@ -10,22 +10,22 @@ interface PartContext {
   toolName: string;
 }
 
-function ctx(part: DynamicToolUIPart): PartContext {
+function ctx(part: NormalizableToolUIPart): PartContext {
   const errorText = "errorText" in part ? (part as { errorText?: string }).errorText : undefined;
   return {
     state: part.state,
     errorText,
     toolCallId: part.toolCallId,
-    toolName: part.toolName,
+    toolName: toolPartName(part),
   };
 }
 
-function getInput(part: DynamicToolUIPart): Record<string, unknown> {
+function getInput(part: NormalizableToolUIPart): Record<string, unknown> {
   const value = "input" in part ? (part as { input?: unknown }).input : undefined;
   return (value && typeof value === "object" ? (value as Record<string, unknown>) : {});
 }
 
-function getOutput(part: DynamicToolUIPart): unknown {
+function getOutput(part: NormalizableToolUIPart): unknown {
   return "output" in part ? (part as { output?: unknown }).output : undefined;
 }
 
@@ -52,7 +52,7 @@ function readLineRange(input: Record<string, unknown>): { start: number; end?: n
   };
 }
 
-const handlers: Record<string, (part: DynamicToolUIPart) => NormalizedToolAction[]> = {
+const handlers: Record<string, (part: NormalizableToolUIPart) => NormalizedToolAction[]> = {
   Read: (part) => {
     const input = getInput(part);
     const output = getOutput(part);
@@ -190,7 +190,7 @@ const handlers: Record<string, (part: DynamicToolUIPart) => NormalizedToolAction
 
 export const claudeToolNormalizer: ToolPartNormalizer = {
   normalize(part) {
-    const handler = handlers[part.toolName];
+    const handler = handlers[toolPartName(part)];
     return handler ? handler(part) : [fallbackOtherAction(part)];
   },
 };

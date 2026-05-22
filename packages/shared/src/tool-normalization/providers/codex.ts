@@ -1,23 +1,23 @@
-import type { DynamicToolUIPart } from "ai";
-import type { NormalizedToolAction, ToolPartNormalizer } from "../types";
+import type { NormalizableToolUIPart, NormalizedToolAction, ToolPartNormalizer } from "../types";
 import { fallbackOtherAction } from "../fallback";
+import { toolPartName } from "../utils/tool-part";
 
-function ctx(part: DynamicToolUIPart) {
+function ctx(part: NormalizableToolUIPart) {
   const errorText = "errorText" in part ? (part as { errorText?: string }).errorText : undefined;
   return {
     state: part.state,
     errorText,
     toolCallId: part.toolCallId,
-    toolName: part.toolName,
+    toolName: toolPartName(part),
   };
 }
 
-function getInput(part: DynamicToolUIPart): Record<string, unknown> {
+function getInput(part: NormalizableToolUIPart): Record<string, unknown> {
   const value = "input" in part ? (part as { input?: unknown }).input : undefined;
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function getOutput(part: DynamicToolUIPart): unknown {
+function getOutput(part: NormalizableToolUIPart): unknown {
   return "output" in part ? (part as { output?: unknown }).output : undefined;
 }
 
@@ -75,8 +75,9 @@ export const codexToolNormalizer: ToolPartNormalizer = {
     const input = getInput(part);
     const inputType = asString(input.type);
     const context = ctx(part);
+    const name = toolPartName(part);
 
-    if (part.toolName === "exec" || inputType === "commandExecution") {
+    if (name === "exec" || inputType === "commandExecution") {
       const output = getOutput(part);
       const aggregatedOutput = output && typeof output === "object"
         ? (output as { aggregatedOutput?: unknown }).aggregatedOutput
@@ -95,7 +96,7 @@ export const codexToolNormalizer: ToolPartNormalizer = {
       }];
     }
 
-    if (part.toolName === "patch" || inputType === "fileChange") {
+    if (name === "patch" || inputType === "fileChange") {
       const changes = Array.isArray(input.changes) ? (input.changes as CodexChange[]) : [];
       if (changes.length === 0) {
         return [fallbackOtherAction(part)];
@@ -103,7 +104,7 @@ export const codexToolNormalizer: ToolPartNormalizer = {
       return changes.flatMap((change) => changeToActions(change, context));
     }
 
-    if (part.toolName === "update_plan") {
+    if (name === "update_plan") {
       const plan = input.plan ?? input.steps;
       return [{
         kind: "todo",

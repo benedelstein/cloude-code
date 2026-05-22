@@ -301,6 +301,11 @@ export class MessageAccumulator {
         this.mergeMetadataOnTerminate(undefined);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
+      
+      default: {
+        const _exhaustiveCheck = null as never;
+        this.logger.warn(`Unhandled chunk type: ${_exhaustiveCheck}`);
+      }
     }
 
     return { completedParts };
