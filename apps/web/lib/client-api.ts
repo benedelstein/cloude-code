@@ -13,6 +13,7 @@ import type {
   SessionInfoResponse,
   SessionPlanResponse,
   ListSessionsResponse,
+  SessionRepoGroup,
   SessionSummary,
   UpdateSessionTitleResponse,
   PullRequestResponse,
@@ -36,7 +37,15 @@ import type {
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
-export type { UserInfo, Repo, SessionSummary, PullRequestResponse, PullRequestStatusResponse };
+export type {
+  UserInfo,
+  Repo,
+  SessionSummary,
+  SessionRepoGroup,
+  ListSessionsResponse,
+  PullRequestResponse,
+  PullRequestStatusResponse,
+};
 
 // WebSocket URL still uses direct API URL (not proxied)
 export const WS_API_URL =
@@ -184,16 +193,28 @@ export async function createSession(
 }
 
 /**
- * Returns sessions for the current user. The API now groups sessions by repo;
- * this wrapper flattens the response to the legacy `{ sessions: [...] }`
- * shape so the current flat sidebar keeps working. Will be removed when the
- * sidebar UI is updated to render repo groups.
+ * Lists the current user's sessions, grouped by repo for the sidebar.
+ *
+ * - Default: paginated repo groups, each with up to `sessionLimit` sessions.
+ *   Use `repoCursor` to fetch the next page of repo groups.
+ * - With `repoId`: returns a single-group response for that one repo,
+ *   paginated by `sessionCursor` (for "load more in this repo").
  */
-export async function listSessions(repoId?: number): Promise<{ sessions: SessionSummary[] }> {
-  const params = repoId ? `?repoId=${repoId}` : "";
-  const response = await apiFetch<ListSessionsResponse>(`/sessions${params}`);
-  const sessions = response.groups.flatMap((group) => group.sessions);
-  return { sessions };
+export async function listSessions(opts?: {
+  repoId?: number;
+  repoCursor?: string;
+  sessionCursor?: string;
+  repoLimit?: number;
+  sessionLimit?: number;
+}): Promise<ListSessionsResponse> {
+  const params = new URLSearchParams();
+  if (opts?.repoId !== undefined) params.set("repoId", String(opts.repoId));
+  if (opts?.repoCursor) params.set("repoCursor", opts.repoCursor);
+  if (opts?.sessionCursor) params.set("sessionCursor", opts.sessionCursor);
+  if (opts?.repoLimit !== undefined) params.set("repoLimit", String(opts.repoLimit));
+  if (opts?.sessionLimit !== undefined) params.set("sessionLimit", String(opts.sessionLimit));
+  const query = params.toString();
+  return apiFetch<ListSessionsResponse>(`/sessions${query ? `?${query}` : ""}`);
 }
 
 export async function getSession(sessionId: string): Promise<SessionInfoResponse> {
