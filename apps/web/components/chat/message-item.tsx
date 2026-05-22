@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { UIMessage } from "ai";
 import type { DynamicToolUIPart } from "ai";
 import { isTextUIPart, isReasoningUIPart, isToolUIPart } from "ai";
-import { ChevronRight, User } from "lucide-react";
+import { Check, ChevronRight, Copy, User } from "lucide-react";
 import clsx from "clsx";
 import { createPortal } from "react-dom";
 import {
@@ -68,6 +68,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -202,80 +203,90 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
 
   const startedAt = typeof metadata.startedAt === "number" ? metadata.startedAt : undefined;
   const endedAt = typeof metadata.endedAt === "number" ? metadata.endedAt : undefined;
+  const createdAt = messageCreatedAt(message);
+  const copyText = getMessageText(message);
+  const copyMessageText = async () => {
+    if (!copyText || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(copyText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+  const userImageParts = isUser ? imageParts : [];
+  const bubbleImageParts = isUser ? [] : imageParts;
+  const hasBubbleContent = !isUser || bubbleImageParts.length > 0 || renderItems.length > 0;
 
   return (
     <>
-      <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div className={clsx("group/message flex", isUser ? "justify-end" : "justify-start")}>
         <div className={clsx("order-1", isUser ? "max-w-[85%]" : "w-[85%]")}>
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <div
-                className={clsx(
-                  "rounded-md min-w-0 overflow-hidden",
-                  isUser && "px-3 py-2 bg-accent-subtle text-accent-foreground",
-                )}
-              >
-                {imageParts.length > 0 && (
-                  <div className="mb-2 flex items-end gap-2 overflow-x-auto pb-1 justify-end">
-                    {imageParts.map(({ part, index }) => {
-                      const key = `${message.id}-image-${index}`;
-                      const imageUrl = resolveAttachmentUrl(part.url);
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setExpandedImageUrl(imageUrl)}
-                          className="block w-32 shrink-0 cursor-zoom-in"
-                        >
-                          <img
-                            src={imageUrl}
-                            alt={part.filename ?? "Uploaded image"}
-                            className="h-auto w-full rounded-md border border-border object-contain shadow-sm"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <AttachmentPreviewRow
+                imageParts={userImageParts}
+                messageId={message.id}
+                alignRight={isUser}
+                onExpand={setExpandedImageUrl}
+              />
+              {hasBubbleContent && (
+                <div
+                  className={clsx(
+                    "rounded-md min-w-0 overflow-hidden",
+                    isUser && "px-3 py-2 bg-accent-subtle text-accent-foreground",
+                  )}
+                >
+                  <AttachmentPreviewRow
+                    imageParts={bubbleImageParts}
+                    messageId={message.id}
+                    alignRight={isUser}
+                    onExpand={setExpandedImageUrl}
+                  />
 
-                {!isUser && showCollapsedTurn && (
-                  <>
-                    <TurnWorkHeader
-                      expanded={workExpanded}
-                      onToggle={() => setWorkExpanded((v) => !v)}
-                      startedAt={startedAt}
-                      endedAt={endedAt}
-                      isStreaming={false}
-                    />
-                    <div
-                      className={clsx(
-                        "grid transition-[grid-template-rows] duration-200 ease-out",
-                        workExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                      )}
-                    >
-                      <div className="overflow-hidden min-h-0">
-                        <div className="space-y-0.5 mb-4">
-                          <WorkItems
-                            items={renderItems.slice(0, collapsedPrefixLength)}
-                            isStreaming={!!isStreaming}
-                            isUser={isUser}
-                          />
+                  {!isUser && showCollapsedTurn && (
+                    <>
+                      <TurnWorkHeader
+                        expanded={workExpanded}
+                        onToggle={() => setWorkExpanded((v) => !v)}
+                        startedAt={startedAt}
+                        endedAt={endedAt}
+                        isStreaming={false}
+                      />
+                      <div
+                        className={clsx(
+                          "grid transition-[grid-template-rows] duration-200 ease-out",
+                          workExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                        )}
+                      >
+                        <div className="overflow-hidden min-h-0">
+                          <div className="space-y-0.5 mb-4">
+                            <WorkItems
+                              items={renderItems.slice(0, collapsedPrefixLength)}
+                              isStreaming={!!isStreaming}
+                              isUser={isUser}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
-                <WorkItems
-                  items={renderItems.slice(collapsedPrefixLength)}
-                  isStreaming={!!isStreaming}
-                  isUser={isUser}
-                />
-              </div>
+                  <WorkItems
+                    items={renderItems.slice(collapsedPrefixLength)}
+                    isStreaming={!!isStreaming}
+                    isUser={isUser}
+                  />
+                </div>
+              )}
 
               {isAborted && (
                 <p className="mt-1.5 text-xs text-foreground-muted italic">Interrupted</p>
               )}
+              <MessageHoverActions
+                isUser={isUser}
+                createdAt={createdAt}
+                canCopy={copyText.length > 0}
+                copied={copied}
+                onCopy={() => void copyMessageText()}
+              />
             </div>
 
             {isUser && (
@@ -314,6 +325,122 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
         document.body,
       )}
     </>
+  );
+}
+
+function messageCreatedAt(message: UIMessage): Date | null {
+  const metadata = message.metadata && typeof message.metadata === "object"
+    ? message.metadata as Record<string, unknown>
+    : {};
+  const rawCreatedAt = metadata.createdAt;
+  if (typeof rawCreatedAt === "string") {
+    const date = new Date(rawCreatedAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const rawStartedAt = metadata.startedAt;
+  if (typeof rawStartedAt === "number") {
+    const date = new Date(rawStartedAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  return null;
+}
+
+function getMessageText(message: UIMessage): string {
+  return message.parts
+    .filter(isTextUIPart)
+    .map((part) => part.text.trim())
+    .filter((text) => text.length > 0)
+    .join("\n\n");
+}
+
+function formatMessageTime(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function AttachmentPreviewRow({
+  imageParts,
+  messageId,
+  alignRight,
+  onExpand,
+}: {
+  imageParts: Array<{ part: ImageFilePart; index: number }>;
+  messageId: string;
+  alignRight: boolean;
+  onExpand: (url: string) => void;
+}) {
+  if (imageParts.length === 0) return null;
+
+  return (
+    <div
+      className={clsx(
+        "mb-1 flex items-end gap-2 overflow-x-auto pb-0.5",
+        alignRight ? "justify-end" : "justify-start",
+      )}
+    >
+      {imageParts.map(({ part, index }) => {
+        const imageUrl = resolveAttachmentUrl(part.url);
+        return (
+          <button
+            key={`${messageId}-image-${index}`}
+            type="button"
+            onClick={() => onExpand(imageUrl)}
+            className="block w-32 shrink-0 cursor-zoom-in"
+            aria-label="Open image preview"
+          >
+            <img
+              src={imageUrl}
+              alt={part.filename ?? "Uploaded image"}
+              className="h-auto w-full rounded-md border border-border object-contain shadow-sm"
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MessageHoverActions({
+  isUser,
+  createdAt,
+  canCopy,
+  copied,
+  onCopy,
+}: {
+  isUser: boolean;
+  createdAt: Date | null;
+  canCopy: boolean;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  if (!createdAt && !canCopy) return null;
+
+  return (
+    <div
+      className={clsx(
+        "mt-1 flex items-center gap-2 text-xs text-foreground-tertiary opacity-0 transition-opacity group-hover/message:opacity-100",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
+      {createdAt && <span>{formatMessageTime(createdAt)}</span>}
+      {canCopy && (
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground-muted"
+          title={copied ? "Copied" : "Copy message"}
+          aria-label={copied ? "Message copied" : "Copy message"}
+        >
+          {copied
+            ? <Check className="h-3.5 w-3.5" />
+            : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -32,7 +32,7 @@ function BashOutput({ action }: { action: BashAction }) {
   return (
     <>
       {action.output !== undefined && action.output.length > 0 && (
-        <pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground-muted whitespace-pre-wrap break-words">
+        <pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground-muted whitespace-pre-wrap wrap-break-word">
           {action.output}
         </pre>
       )}

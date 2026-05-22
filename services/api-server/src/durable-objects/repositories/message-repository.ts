@@ -39,8 +39,9 @@ export class MessageRepository implements Repository {
    * Store a UIMessage.
    */
   create(sessionId: string, message: UIMessage): StoredMessage {
-    const messageJson = JSON.stringify(message);
     const createdAt = new Date().toISOString();
+    const messageWithCreatedAt = withCreatedAtMetadata(message, createdAt);
+    const messageJson = JSON.stringify(messageWithCreatedAt);
 
     this.sql`
       INSERT INTO messages (id, session_id, message, created_at)
@@ -50,7 +51,7 @@ export class MessageRepository implements Repository {
     return {
       sessionId,
       createdAt,
-      message,
+      message: messageWithCreatedAt,
     };
   }
 
@@ -76,7 +77,20 @@ export class MessageRepository implements Repository {
     return {
       sessionId: row.session_id,
       createdAt: row.created_at,
-      message: JSON.parse(row.message) as UIMessage,
+      message: withCreatedAtMetadata(JSON.parse(row.message) as UIMessage, row.created_at),
     };
   }
+}
+
+function withCreatedAtMetadata(message: UIMessage, createdAt: string): UIMessage {
+  const metadata = message.metadata && typeof message.metadata === "object"
+    ? message.metadata as Record<string, unknown>
+    : {};
+  return {
+    ...message,
+    metadata: {
+      ...metadata,
+      createdAt: typeof metadata.createdAt === "string" ? metadata.createdAt : createdAt,
+    },
+  };
 }
