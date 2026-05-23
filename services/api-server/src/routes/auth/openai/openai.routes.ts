@@ -1,17 +1,17 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import type {
   AuthUser,
 } from "@/middleware/auth.middleware";
-import { OpenAICodexAuthService } from "@/lib/providers/openai-codex-auth-service";
+import { OpenAICodexAuthService } from "@/lib/ai-providers/openai-codex-auth-service";
 import {
   postOpenAIDeviceStartRoute,
   getOpenAIDeviceAttemptRoute,
   getOpenAIStatusRoute,
   postOpenAIDisconnectRoute,
 } from "./schemas";
-import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
+import { requestSessionProviderConnectionRefresh } from "@/lib/sessions/session-provider-connection";
 
 export const openaiAuthRoutes = new OpenAPIHono<{
   Bindings: Env;

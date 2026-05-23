@@ -24,7 +24,7 @@ import {
 import { migrateAll } from "./repositories/schema-manager";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
 import { ensureValidInstallationToken } from "./session-agent-github-token";
-import { createLogger, initializeLogger } from "@/lib/logger";
+import { createLogger, initializeLogger } from "@/lib/observability/logger";
 import type { UIMessageChunk } from "ai";
 // DISABLED: editor feature imports — security issue (sprite URL set to public)
 // import {
@@ -43,7 +43,7 @@ import type {
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
-import { buildUserUiMessage } from "@/lib/create-user-message";
+import { buildUserUiMessage } from "@/lib/sessions/create-user-message";
 import { timingSafeCompare } from "@/lib/utils/crypto";
 import {
   assertSessionRepoAccess,

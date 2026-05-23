@@ -3,7 +3,7 @@ import type { Env } from "@/types";
 import type { SpritesCoordinator} from "@/lib/sprites";
 import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
-import { configureGitRemote } from "@/lib/git-setup";
+import { configureGitRemote } from "@/lib/github/git-setup";
 import { GitHubAppService } from "@/lib/github/github-app";
 import type { ServerState } from "../repositories/server-state-repository";
 

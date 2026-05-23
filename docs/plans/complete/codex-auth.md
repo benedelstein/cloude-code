@@ -2,7 +2,7 @@
 
 Status: implemented with current file-name drift. Provider metadata now lives
 under `packages/shared/src/types/providers/`; provider auth dispatch is in
-`services/api-server/src/lib/providers/provider-auth-service.ts`; Sprite
+`services/api-server/src/lib/ai-providers/provider-auth-service.ts`; Sprite
 credential sync is in `provider-credential-adapter.ts`; and the DO uses
 `SpriteAgentProcessManager`, not the older `agent-process-manager.ts` name.
 Legacy `claude_tokens` and `openai_tokens` tables still exist, but current
@@ -483,7 +483,7 @@ This keeps auth initiation/completion payloads provider-specific while still let
 Example route hookup:
 
 ```ts
-// services/api-server/src/lib/providers/runtime-registry.ts
+// services/api-server/src/lib/ai-providers/runtime-registry.ts
 export function getProviderCredentialService(
   providerId: ProviderId,
   env: Env,

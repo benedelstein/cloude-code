@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import type { Env } from "@/types";
 
 export const webhooksRoutes = new Hono<{ Bindings: Env }>();

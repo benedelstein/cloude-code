@@ -6,7 +6,7 @@ import {
   SessionInfoMessageSchema,
   SpriteServerMessageSchema,
 } from "./types";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 
 type NewExecSessionConfig = {
   mode: "exec";

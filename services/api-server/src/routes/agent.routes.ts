@@ -2,12 +2,12 @@ import { Hono } from "hono";
 import { getAgentByName } from "agents";
 import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { verifySessionWebSocketToken } from "@/lib/session-websocket-token";
-import { createLogger } from "@/lib/logger";
+import { verifySessionWebSocketToken } from "@/lib/sessions/session-websocket-token";
+import { createLogger } from "@/lib/observability/logger";
 import {
   assertSessionRepoAccess,
 } from "@/lib/user-session/session-repo-access";
-import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
+import { requestSessionAccessBlockedCleanup } from "@/lib/sessions/session-access-block";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();
 const logger = createLogger("agent.routes.ts");

@@ -4,7 +4,7 @@ import { AgentChunksWebhookBody, AgentEventsWebhookBody } from "@repo/shared";
 import type { UIMessageChunk } from "ai";
 import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 
 /**
  * Internal webhook routes called by the vm-agent process running on the

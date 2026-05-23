@@ -24,7 +24,7 @@ import {
   getProviderCredentialAdapter,
   type AuthCredentialSnapshot,
   type ProviderCredentialError,
-} from "@/lib/providers/provider-credential-adapter";
+} from "@/lib/ai-providers/provider-credential-adapter";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,

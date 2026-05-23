@@ -30,17 +30,17 @@ import type {
   SessionAgentRpcError,
 } from "@/types/session-agent";
 import { AttachmentService } from "@/lib/attachments/attachment-service";
-import { generateSessionTitle } from "@/lib/generate-session-title";
+import { generateSessionTitle } from "@/lib/sessions/generate-session-title";
 import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import { SessionsRepository } from "@/repositories/sessions.repository";
 import {
   createPullRequestForSession,
   getPullRequestStatusForSession,
   SessionPullRequestServiceError,
-} from "@/lib/session-pull-request-service";
-import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
-import { mintSessionWebSocketToken } from "@/lib/session-websocket-token";
+} from "@/lib/sessions/session-pull-request-service";
+import { requestSessionAccessBlockedCleanup } from "@/lib/sessions/session-access-block";
+import { mintSessionWebSocketToken } from "@/lib/sessions/session-websocket-token";
 import {
   assertSessionRepoAccess,
   assertUserRepoAccess,

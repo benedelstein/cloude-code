@@ -41,7 +41,7 @@ vi.mock("@/lib/sprites", () => {
   return { WorkersSpriteClient, SpritesError };
 });
 
-vi.mock("@/lib/providers/provider-credential-adapter", () => ({
+vi.mock("@/lib/ai-providers/provider-credential-adapter", () => ({
   getProviderCredentialAdapter: () => ({
     getCredentialSnapshot: mockState.getCredentialSnapshot,
   }),

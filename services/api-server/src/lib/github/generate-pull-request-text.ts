@@ -2,7 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { dedent } from "@repo/shared";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 
 const MAX_TITLE_CHARS = 120;
 const MAX_BODY_CHARS = 6000;

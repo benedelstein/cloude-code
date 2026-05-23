@@ -153,7 +153,7 @@ const layers: Layer[] = [
   {
     id: "api:do-lib",
     description: "Durable Object helper services.",
-    files: ["services/api-server/src/lib/git-proxy.ts"],
+    files: ["services/api-server/src/lib/github/git-proxy.ts"],
     prefixes: ["services/api-server/src/durable-objects/lib/"],
   },
   {
@@ -417,7 +417,7 @@ const exceptions = [
     reason: "temporary type-only dependency on GitHubRepositoryData until GitHub DTOs move to api:types",
   },
   {
-    from: "services/api-server/src/lib/session-pull-request-service.ts",
+    from: "services/api-server/src/lib/sessions/session-pull-request-service.ts",
     to: "services/api-server/src/durable-objects/session-agent-do.ts",
     reason: "service accepts a typed Durable Object stub for session PR creation",
   },
@@ -701,11 +701,31 @@ function printViolations(violations: BoundaryViolation[]): void {
   }
 }
 
+function checkApiServerLibRoot(): string[] {
+  const libRoot = toAbsolutePath("services/api-server/src/lib");
+
+  return readdirSync(libRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && sourceExtensions.has(path.extname(entry.name)))
+    .map((entry) => `services/api-server/src/lib/${entry.name}`)
+    .sort();
+}
+
 const violations = checkBoundaries();
+const apiServerRootLibFiles = checkApiServerLibRoot();
 
 if (violations.length > 0) {
   printViolations(violations);
   process.exitCode = 1;
 } else {
   console.log("Import boundary check passed.");
+}
+
+if (apiServerRootLibFiles.length > 0) {
+  console.error("API server lib files must live under a domain or provider folder:");
+  for (const file of apiServerRootLibFiles) {
+    console.error(`  ${file}`);
+  }
+  process.exitCode = 1;
+} else {
+  console.log("API server lib root check passed.");
 }

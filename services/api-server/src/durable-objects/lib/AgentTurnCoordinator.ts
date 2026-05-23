@@ -8,7 +8,7 @@ import type {
 import type { Env } from "@/types";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { MessageAccumulator } from "@repo/shared";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import { applyDerivedStateFromParts } from "../session-agent-derived-state";
 import type { MessageRepository } from "../repositories/message-repository";
 import type { PendingChunkRepository } from "../repositories/pending-chunk-repository";

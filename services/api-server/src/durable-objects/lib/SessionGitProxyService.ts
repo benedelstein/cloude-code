@@ -6,7 +6,7 @@ import type {
   SessionRepoAccessError,
   SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
-import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
+import { handleGitProxy, type GitProxyContext } from "@/lib/github/git-proxy";
 
 export interface SessionGitProxyServiceDeps {
   logger: Logger;

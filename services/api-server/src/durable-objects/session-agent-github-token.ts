@@ -1,5 +1,5 @@
 import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import type { Env } from "@/types";
 import type { SecretRepository } from "./repositories/secret-repository";
 

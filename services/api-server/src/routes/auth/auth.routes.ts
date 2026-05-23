@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Octokit } from "octokit";
 import type { Env } from "@/types";
 import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import { encrypt } from "@/lib/utils/crypto";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";

@@ -6,7 +6,7 @@ import {
   listingRowToRepo,
 } from "@/repositories/github-user-repo-access-cache-repository";
 import { GitHubUserRepoListingSyncRepository } from "@/repositories/github-user-repo-listing-sync-repository";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import type { Env } from "@/types";
 
 const logger = createLogger("repos.service.ts");

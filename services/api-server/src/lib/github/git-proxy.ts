@@ -1,7 +1,7 @@
 import type { Env } from "@/types";
 import type { SecretRepository } from "@/durable-objects/repositories/secret-repository";
 import { ensureValidInstallationToken } from "@/durable-objects/session-agent-github-token";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 
 export interface GitProxyContext {
   gitProxySecret: string | null;

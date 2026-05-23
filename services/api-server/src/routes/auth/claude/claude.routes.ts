@@ -1,10 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import {
   ClaudeOAuthError,
   ClaudeOAuthService,
-} from "@/lib/providers/claude-oauth-service";
+} from "@/lib/ai-providers/claude-oauth-service";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   getClaudeAuthRoute,
@@ -12,7 +12,7 @@ import {
   getClaudeStatusRoute,
   postClaudeDisconnectRoute,
 } from "./schemas";
-import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
+import { requestSessionProviderConnectionRefresh } from "@/lib/sessions/session-provider-connection";
 
 export const claudeAuthRoutes = new OpenAPIHono<{
   Bindings: Env;

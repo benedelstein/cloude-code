@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { dedent } from "@repo/shared";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 
 const DEFAULT_SESSION_TITLE = "Unknown request";
 const MAX_TITLE_WORDS = 6;

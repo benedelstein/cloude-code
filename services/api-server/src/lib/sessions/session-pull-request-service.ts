@@ -10,9 +10,9 @@ import type {
 import {
   fallbackPullRequestTitle,
   generatePullRequestText,
-} from "@/lib/generate-pull-request-text";
+} from "@/lib/github/generate-pull-request-text";
 import type { GitHubAppService, GitHubCompareData } from "@/lib/github";
-import { createLogger } from "./logger";
+import { createLogger } from "@/lib/observability/logger";
 
 const logger = createLogger("session-pull-request-service.ts");
 

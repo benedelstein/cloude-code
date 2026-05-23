@@ -47,7 +47,7 @@ This pass is intentionally narrow. It focuses on workflow lifecycle and chunk st
 ```ts
 import { AgentWorkflow } from "agents/workflows";
 import type { AgentWorkflowEvent, AgentWorkflowStep } from "agents/workflows";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import { AgentProcessRunner } from "@/workflows/AgentProcessRunner";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import type { WorkflowTurnPayload } from "@/workflows/types";

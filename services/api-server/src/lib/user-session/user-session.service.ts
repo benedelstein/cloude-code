@@ -1,6 +1,6 @@
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import type { Env } from "@/types";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 

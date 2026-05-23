@@ -2,7 +2,7 @@ import {
   GitHubAppService,
   type GitHubAppErrorCode,
 } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/observability/logger";
 import { SessionsRepository } from "@/repositories/sessions.repository";
 import { UserSessionService } from "@/lib/user-session/user-session.service";
 import type { Env } from "@/types";

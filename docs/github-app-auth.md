@@ -48,7 +48,7 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRem
 | `services/api-server/src/lib/github/github-app.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
 | `services/api-server/src/lib/user-session/session-repo-access.ts` | Session repo access checks for create/read/connect/chat paths |
 | `services/api-server/src/durable-objects/lib/SessionProvisionService.ts` | Sprite provisioning, read-only clone, git remote setup |
-| `services/api-server/src/lib/git-setup.ts` | Configures `origin`, push URL, git identity, and git-proxy auth header |
+| `services/api-server/src/lib/github/git-setup.ts` | Configures `origin`, push URL, git identity, and git-proxy auth header |
 | `services/api-server/src/durable-objects/lib/SessionGitProxyService.ts` | Session-scoped git proxy auth/access wrapper |
 | `services/api-server/src/routes/webhooks.routes.ts` | `POST /webhooks/github` — receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |
