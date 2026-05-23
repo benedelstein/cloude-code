@@ -1,7 +1,8 @@
 /**
  * Codex CLI provider for the agent harness.
  */
-import { CodexAppServerSettings, createCodexAppServer } from "ai-sdk-provider-codex-cli";
+import type { CodexAppServerSettings} from "ai-sdk-provider-codex-cli";
+import { createCodexAppServer } from "ai-sdk-provider-codex-cli";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -71,7 +72,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
     emit({ type: "debug", message: `Codex app-server provider initialized (model: ${modelId})` });
 
     const onSessionId = (sid: string | undefined) => {
-      if (!sid || sid === agentSessionId) return;
+      if (!sid || sid === agentSessionId) { return; }
       agentSessionId = sid;
       emit({ type: "debug", message: `Codex session ID: ${sid}` });
       emit({ type: "sessionId", sessionId: sid });

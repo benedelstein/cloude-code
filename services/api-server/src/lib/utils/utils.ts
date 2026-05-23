@@ -14,8 +14,8 @@ export function toSqliteDatetime(date: Date): string {
 export function fromSqliteDatetime(value: string): string;
 export function fromSqliteDatetime(value: string | null): string | null;
 export function fromSqliteDatetime(value: string | null): string | null {
-  if (value === null) return null;
-  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)) return value;
+  if (value === null) { return null; }
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)) { return value; }
   return value.replace(" ", "T") + "Z";
 }
 

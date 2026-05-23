@@ -1,5 +1,5 @@
 import { AttachmentService } from "@/lib/attachments/attachment-service";
-import { AttachmentRecord } from "@/types/attachments";
+import type { AttachmentRecord } from "@/types/attachments";
 import { arrayBufferToBase64 } from "@/lib/utils/utils";
 import {
   type AgentInputAttachment,
@@ -9,7 +9,7 @@ import {
   failure,
   success,
 } from "@repo/shared";
-import { Env } from "@/types";
+import type { Env } from "@/types";
 
 const ATTACHMENT_RESOLUTION_DOMAIN = "attachment_resolution";
 

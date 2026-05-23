@@ -9,7 +9,7 @@ import { homedir } from "os";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
 import type { AgentMode, AgentSettings, ClaudeModel } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
-import { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
+import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 
 type ClaudeSettings = Extract<AgentSettings, { provider: "claude-code" }>;
 
@@ -103,7 +103,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     const modelId = settings.model;
 
     const onSessionId = (sid: string | undefined) => {
-      if (!sid || sid === agentSessionId) return;
+      if (!sid || sid === agentSessionId) { return; }
       agentSessionId = sid;
       emit({ type: "debug", message: `Claude session ID: ${sid}` });
       emit({ type: "sessionId", sessionId: sid });

@@ -110,7 +110,7 @@ export function ChatInput({
 
   const submitMessage = () => {
     if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
-      return;
+      { return; }
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
@@ -193,7 +193,7 @@ export function ChatInput({
           handle={signinHandle}
           open={showSigninPanel}
           onOpenChange={(open) => {
-            if (!open) setManuallyOpenedSigninPanel(false);
+            if (!open) { setManuallyOpenedSigninPanel(false); }
           }}
         />
       )}

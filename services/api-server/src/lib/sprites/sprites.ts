@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { Session, SpritesClient } from "@fly/sprites";
+import type { Session} from "@fly/sprites";
+import { SpritesClient } from "@fly/sprites";
 import { createLogger } from "@/lib/logger";
 
 // =============================================================================

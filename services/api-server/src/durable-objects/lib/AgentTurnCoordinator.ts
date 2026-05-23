@@ -1,9 +1,9 @@
-import {
-  type AgentEvent,
-  type ClientState,
-  type Logger,
-  type ServerMessage,
-  type SessionStatus,
+import type {
+  AgentEvent,
+  ClientState,
+  Logger,
+  ServerMessage,
+  SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -96,10 +96,10 @@ export class AgentTurnCoordinator {
    * commits the partial as aborted in the background.
    */
   ensureRehydratedState(): void {
-    if (this.hasEnsuredRehydratedState) return;
+    if (this.hasEnsuredRehydratedState) { return; }
     const serverState = this.getServerState();
     const sessionId = serverState.sessionId;
-    if (!sessionId) return;
+    if (!sessionId) { return; }
 
     const orphanedChunks = this.pendingChunkRepository.getAll();
     if (orphanedChunks.length > 0) {
@@ -190,7 +190,7 @@ export class AgentTurnCoordinator {
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
   ): Promise<void> {
     this.ensureRehydratedState();
-    if (this.isStaleRpc(userMessageId)) return;
+    if (this.isStaleRpc(userMessageId)) { return; }
     if (this.getServerState().activeUserMessageId === null) {
       // No active turn (clean finish, abort, or gap already cleared state).
       // Drop late chunks silently so retries of a terminated batch can't
@@ -297,7 +297,7 @@ export class AgentTurnCoordinator {
    * spawn a turn. Marks the user message aborted and surfaces the error.
    */
   handleTurnSpawnFailed(userMessageId: string, errorMessage: string): void {
-    if (this.isStaleRpc(userMessageId)) return;
+    if (this.isStaleRpc(userMessageId)) { return; }
     this.logger.error("Turn spawn failed", {
       fields: { userMessageId },
       error: errorMessage,
@@ -329,7 +329,7 @@ export class AgentTurnCoordinator {
   private async reconcileActiveTurn(): Promise<void> {
     const serverState = this.getServerState();
     const { agentProcessId, spriteName } = serverState;
-    if (!agentProcessId || !spriteName) return;
+    if (!agentProcessId || !spriteName) { return; }
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -390,7 +390,7 @@ export class AgentTurnCoordinator {
       this.messageAccumulator.getMessageId(),
     );
 
-    if (!finishedMessage) return { ended: false };
+    if (!finishedMessage) { return { ended: false }; }
 
     this.logger.debug(`finished message: ${finishedMessage.id}`);
     const stored = this.messageRepository.create(
@@ -415,7 +415,7 @@ export class AgentTurnCoordinator {
 
   /** Emits buffered chunks as a single agent.chunks */
   private flushBufferedChunks(buffered: UIMessageChunk[]): void {
-    if (buffered.length === 0) return;
+    if (buffered.length === 0) { return; }
     this.broadcastMessage({ type: "agent.chunks", chunks: buffered });
   }
 
@@ -450,7 +450,7 @@ export class AgentTurnCoordinator {
   markTurnCanceled(
     options: { preserveAgentProcessId?: boolean } = {},
   ): void {
-    if (!this.getServerState().activeUserMessageId) return;
+    if (!this.getServerState().activeUserMessageId) { return; }
     this.commitAbortedMessage(options);
     this.updatePartialState({ status: this.synthesizeStatus() });
   }

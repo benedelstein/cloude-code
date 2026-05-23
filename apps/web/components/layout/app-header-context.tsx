@@ -25,6 +25,6 @@ export function AppHeaderSlot() {
 
 export function AppHeaderPortal({ children }: { children: ReactNode }) {
   const slotNode = useContext(AppHeaderSlotContext);
-  if (!slotNode) return null;
+  if (!slotNode) { return null; }
   return createPortal(children, slotNode);
 }

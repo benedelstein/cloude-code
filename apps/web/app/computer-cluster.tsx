@@ -141,10 +141,10 @@ function step(bodies: Body[], cursor: { x: number; y: number } | null) {
     }
 
     for (const b of bodies) {
-      if (b.x - b.r < 0) b.x = b.r;
-      if (b.x + b.r > W) b.x = W - b.r;
-      if (b.y - b.r < 0) b.y = b.r;
-      if (b.y + b.r > H) b.y = H - b.r;
+      if (b.x - b.r < 0) { b.x = b.r; }
+      if (b.x + b.r > W) { b.x = W - b.r; }
+      if (b.y - b.r < 0) { b.y = b.r; }
+      if (b.y + b.r > H) { b.y = H - b.r; }
     }
   }
 }
@@ -168,8 +168,8 @@ export function ComputerCluster() {
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!container) { return; }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { return; }
 
     const bodies = bodiesRef.current;
     const nodes = nodeRefs.current;
@@ -194,8 +194,8 @@ export function ComputerCluster() {
     };
 
     const start = () => {
-      if (raf !== 0) return;
-      if (!visible || !tabVisible) return;
+      if (raf !== 0) { return; }
+      if (!visible || !tabVisible) { return; }
       raf = requestAnimationFrame(loop);
     };
 
@@ -209,7 +209,7 @@ export function ComputerCluster() {
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (!entry) return;
+        if (!entry) { return; }
         visible = entry.isIntersecting;
         if (visible) {
           console.log("ComputerCluster: onscreen, resuming");
@@ -225,8 +225,8 @@ export function ComputerCluster() {
 
     const handleVisibility = () => {
       tabVisible = document.visibilityState === "visible";
-      if (tabVisible) start();
-      else stop();
+      if (tabVisible) { start(); }
+      else { stop(); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
 

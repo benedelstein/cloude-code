@@ -46,7 +46,7 @@ export function useSessionTitle(sessionId: string): string | null {
   const title = useMemo(() => {
     for (const group of groups) {
       const session = group.sessions.find((s) => s.id === sessionId);
-      if (session) return session.title ?? null;
+      if (session) { return session.title ?? null; }
     }
     return null;
   }, [groups, sessionId]);
@@ -78,7 +78,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
   }, [fetchInitial]);
 
   const loadMoreRepos = useCallback(async () => {
-    if (!nextRepoCursor || loadingMoreRepos) return;
+    if (!nextRepoCursor || loadingMoreRepos) { return; }
     setLoadingMoreRepos(true);
     try {
       const data = await listSessions({ repoCursor: nextRepoCursor });
@@ -98,9 +98,9 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
 
   const loadMoreSessionsForRepo = useCallback(
     async (repoId: number) => {
-      if (loadingMoreSessionsByRepo[repoId]) return;
+      if (loadingMoreSessionsByRepo[repoId]) { return; }
       const group = groups.find((g) => g.repoId === repoId);
-      if (!group || !group.nextSessionCursor) return;
+      if (!group || !group.nextSessionCursor) { return; }
       setLoadingMoreSessionsByRepo((prev) => ({ ...prev, [repoId]: true }));
       try {
         const data = await listSessions({
@@ -108,10 +108,10 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
           sessionCursor: group.nextSessionCursor,
         });
         const incomingGroup = data.groups[0];
-        if (!incomingGroup) return;
+        if (!incomingGroup) { return; }
         setGroups((prev) =>
           prev.map((g) => {
-            if (g.repoId !== repoId) return g;
+            if (g.repoId !== repoId) { return g; }
             const existingIds = new Set(g.sessions.map((s) => s.id));
             const appended = incomingGroup.sessions.filter(
               (s) => !existingIds.has(s.id),

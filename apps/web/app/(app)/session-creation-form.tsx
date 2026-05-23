@@ -258,7 +258,7 @@ export function SessionCreationForm() {
     (async () => {
       try {
         const data = await listBranches(repoId, {});
-        if (stale) return;
+        if (stale) { return; }
         const nextBranches = mergeBranches([], data.branches, defaultBranchName);
         writeCache(cacheKey, { ...data, branches: nextBranches });
         setBranches(nextBranches);
@@ -267,18 +267,18 @@ export function SessionCreationForm() {
         setSelectedBranch((currentBranch) => {
           if (currentBranch) {
             const stillExists = nextBranches.find((branch) => branch.name === currentBranch);
-            if (stillExists) return currentBranch;
+            if (stillExists) { return currentBranch; }
           }
           const defaultBranch = nextBranches.find((branch) => branch.default);
           return defaultBranch?.name ?? nextBranches[0]?.name ?? defaultBranchName;
         });
       } catch {
-        if (stale) return;
+        if (stale) { return; }
         if (!cached) {
           setSelectedBranch(defaultBranchName);
         }
       } finally {
-        if (!stale) setBranchesLoading(false);
+        if (!stale) { setBranchesLoading(false); }
       }
     })();
 
@@ -367,8 +367,8 @@ export function SessionCreationForm() {
           const lastRepo = lastRepoId
             ? data.repos.find((r) => r.id === Number(lastRepoId))
             : undefined;
-          if (lastRepo) return lastRepo;
-          if (data.repos.length === 1 && !data.cursor) return data.repos[0];
+          if (lastRepo) { return lastRepo; }
+          if (data.repos.length === 1 && !data.cursor) { return data.repos[0]; }
           return null;
         });
       } catch (err) {
@@ -397,16 +397,16 @@ export function SessionCreationForm() {
     const timer = setTimeout(async () => {
       try {
         const data = await searchRepos(trimmedQuery);
-        if (stale) return;
+        if (stale) { return; }
         setRepoSearchResults(data.repos);
       } catch (error) {
-        if (stale) return;
+        if (stale) { return; }
         toast.error("Repo search failed", {
           description: error instanceof Error ? error.message : "Unknown error",
         });
         setRepoSearchResults([]);
       } finally {
-        if (!stale) setRepoSearchLoading(false);
+        if (!stale) { setRepoSearchLoading(false); }
       }
     }, 200);
 
@@ -494,7 +494,7 @@ export function SessionCreationForm() {
 
   const submitMessage = async () => {
     const trimmedMessage = message.trim();
-    if (!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) return;
+    if (!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) { return; }
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;

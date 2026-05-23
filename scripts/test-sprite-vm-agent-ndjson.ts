@@ -75,7 +75,7 @@ async function writeFile(path: string, content: string, mode?: string): Promise<
   const url = new URL(`${SPRITES_API_URL}/v1/sprites/${spriteName}/fs/write`);
   url.searchParams.set("path", path);
   url.searchParams.set("mkdir", "true");
-  if (mode) url.searchParams.set("mode", mode);
+  if (mode) { url.searchParams.set("mode", mode); }
 
   const response = await fetch(url.toString(), {
     method: "PUT",
@@ -101,7 +101,7 @@ const env: Record<string, string> = {
 };
 for (const key of ["CLAUDE_CREDENTIALS_JSON", "CODEX_AUTH_JSON", "ANTHROPIC_API_KEY"] as const) {
   const value = process.env[key];
-  if (value) env[key] = value;
+  if (value) { env[key] = value; }
 }
 if (provider === "openai-codex" && !env.CODEX_AUTH_JSON) {
   const codexAuthPath = resolve(homedir(), ".codex/auth.json");
@@ -156,7 +156,7 @@ ws.addEventListener("open", () => {
 });
 
 ws.addEventListener("message", (event) => {
-  if (typeof event.data !== "string") return;
+  if (typeof event.data !== "string") { return; }
   try {
     const message = JSON.parse(event.data) as { type?: string; session_id?: number };
     if (message.type === "session_info") {

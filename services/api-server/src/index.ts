@@ -16,7 +16,7 @@ import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
 import { initializeLogger } from "./lib/logger";
 import { requestLoggerMiddleware } from "./middleware/request-logger.middleware";
-import { LogLevel } from "@repo/shared";
+import type { LogLevel } from "@repo/shared";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
 

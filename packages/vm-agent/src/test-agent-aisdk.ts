@@ -2,7 +2,8 @@ import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { createInterface } from "readline";
 import { parseArgs } from "util";
-import { AgentOutput, CLAUDE_PROVIDER, encodeAgentInput, MessageAccumulator, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID, UIMessageChunk } from "@repo/shared";
+import type { UIMessageChunk } from "@repo/shared";
+import { AgentOutput, CLAUDE_PROVIDER, encodeAgentInput, MessageAccumulator, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } from "@repo/shared";
 
 const { values } = parseArgs({
   options: {

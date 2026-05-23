@@ -137,7 +137,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
    * step is a no-op when no turn is active.
    */
   async shutdown(): Promise<void> {
-    if (this.shuttingDown) return;
+    if (this.shuttingDown) { return; }
     this.shuttingDown = true;
     this.log("debug", "shutting down.");
     this.cancelIdleTimer();
@@ -231,7 +231,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     if (this.activeUserMessageId === endedUserMessageId) {
       this.activeUserMessageId = null;
     }
-    if (!this.shuttingDown) this.startIdleTimer();
+    if (!this.shuttingDown) { this.startIdleTimer(); }
   }
 
   private installSignalHandlers(): void {

@@ -43,7 +43,7 @@ function asPositiveInteger(value: unknown): number | undefined {
 function readLineRange(input: Record<string, unknown>): { start: number; end?: number } | undefined {
   const offset = asPositiveInteger(input.offset);
   const limit = asPositiveInteger(input.limit);
-  if (offset === undefined && limit === undefined) return undefined;
+  if (offset === undefined && limit === undefined) { return undefined; }
 
   const start = offset ?? 1;
   return {

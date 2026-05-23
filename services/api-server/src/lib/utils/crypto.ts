@@ -60,7 +60,7 @@ export async function decrypt(
  * `crypto.timingSafeEqual`, so we roll our own.
  */
 export function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+  if (a.length !== b.length) { return false; }
   let mismatch = 0;
   for (let i = 0; i < a.length; i++) {
     mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);

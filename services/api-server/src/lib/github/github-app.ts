@@ -331,7 +331,7 @@ export class GitHubAppService {
   async getRepoNameById(repoId: number, userAccessToken: string): Promise<string> {
     const installationRepo = await this.installationRepository.findInstallationRepoById(repoId);
 
-    if (installationRepo) return installationRepo.repoName;
+    if (installationRepo) { return installationRepo.repoName; }
 
     // Fallback: query GitHub API using an app-level request
     const octokit = new Octokit({ auth: userAccessToken });
@@ -351,7 +351,7 @@ export class GitHubAppService {
   private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {
     const installationRepo = await this.installationRepository.findRepo(installationId, `${owner}/${repo}`);
 
-    if (installationRepo) return installationRepo.repoId;
+    if (installationRepo) { return installationRepo.repoId; }
 
     // Fallback: query GitHub API
     const octokit = await this.app.getInstallationOctokit(installationId);
@@ -945,7 +945,7 @@ export class GitHubAppService {
       );
     } else if (previousRepositorySelection === "selected" && repositorySelection === "all") {
       await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
-    } else if (previousRepositorySelection === null || (previousRepositorySelection == repositorySelection)) {
+    } else if (previousRepositorySelection === null || previousRepositorySelection === repositorySelection) {
       await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
         installationId,
         repoIds,

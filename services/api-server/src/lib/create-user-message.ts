@@ -1,6 +1,6 @@
-import { UIMessage } from "ai";
-import { AttachmentService } from "./attachments/attachment-service";
-import { AttachmentRecord } from "@/types/attachments";
+import type { UIMessage } from "ai";
+import type { AttachmentService } from "./attachments/attachment-service";
+import type { AttachmentRecord } from "@/types/attachments";
 import { createUserUiMessage } from "./utils/uimessage-utils";
 import { createLogger } from "./logger";
 

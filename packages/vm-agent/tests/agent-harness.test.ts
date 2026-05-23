@@ -22,7 +22,7 @@ async function pollOutputs(
   attempts = 20,
 ): Promise<AgentOutput[]> {
   for (let attempt = 0; attempt < attempts; attempt++) {
-    if (predicate(outputs)) return outputs;
+    if (predicate(outputs)) { return outputs; }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error("Timed out waiting for expected harness output");
@@ -189,7 +189,7 @@ describe("startAgentHarness", () => {
         });
         const err = new Error("aborted");
         err.name = "AbortError";
-        if (false as boolean) yield { type: "finish", finishReason: "stop" };
+        if (false as boolean) { yield { type: "finish", finishReason: "stop" }; }
         throw err;
       },
     }));

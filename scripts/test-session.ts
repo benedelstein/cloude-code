@@ -83,7 +83,7 @@ function setupRepl(ws: WebSocket) {
 
   rl.on("line", (line) => {
     const input = line.trim();
-    if (!input) return;
+    if (!input) { return; }
 
     if (input === "/quit") {
       ws.close();

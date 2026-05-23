@@ -5,7 +5,7 @@ import type { WebAction } from "@repo/shared";
 import { ExpandableSummary } from "./expandable-summary";
 
 function hostname(url: string | undefined): string {
-  if (!url) return "";
+  if (!url) { return ""; }
   try {
     return new URL(url).hostname;
   } catch {

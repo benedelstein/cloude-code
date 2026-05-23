@@ -11,17 +11,17 @@ function basename(path: string): string {
 
 function displayPath(path: string): string {
   const spriteWorkspacePrefix = "/home/sprite/workspace/";
-  if (!path.startsWith(spriteWorkspacePrefix)) return path;
+  if (!path.startsWith(spriteWorkspacePrefix)) { return path; }
 
   const pathInWorkspace = path.slice(spriteWorkspacePrefix.length);
   const slashIndex = pathInWorkspace.indexOf("/");
-  if (slashIndex === -1) return pathInWorkspace;
+  if (slashIndex === -1) { return pathInWorkspace; }
   return pathInWorkspace.slice(slashIndex + 1);
 }
 
 function lineRangeLabel(action: ReadAction): string | undefined {
-  if (!action.lineRange) return undefined;
-  if (action.lineRange.end === undefined) return `L${action.lineRange.start}+`;
+  if (!action.lineRange) { return undefined; }
+  if (action.lineRange.end === undefined) { return `L${action.lineRange.start}+`; }
   return `L${action.lineRange.start}-${action.lineRange.end}`;
 }
 
@@ -60,7 +60,7 @@ function ReadDetail({ action, paths }: { action: ReadAction; paths: string[] }) 
     );
   }
 
-  if (paths.length === 0) return null;
+  if (paths.length === 0) { return null; }
 
   return (
     <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">

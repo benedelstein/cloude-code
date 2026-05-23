@@ -1,6 +1,7 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import { SpritesCoordinator, WorkersSpriteClient } from "@/lib/sprites";
+import type { SpritesCoordinator} from "@/lib/sprites";
+import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { configureGitRemote } from "@/lib/git-setup";
 import { GitHubAppService } from "@/lib/github/github-app";
@@ -68,7 +69,7 @@ export class SessionProvisionService {
    * concurrently — all callers share one in-flight promise.
    */
   ensureProvisioned(): Promise<void> {
-    if (this.ensureProvisionedPromise) return this.ensureProvisionedPromise;
+    if (this.ensureProvisionedPromise) { return this.ensureProvisionedPromise; }
     this.ensureProvisionedPromise = this.provision().finally(() => {
       this.ensureProvisionedPromise = null;
     });

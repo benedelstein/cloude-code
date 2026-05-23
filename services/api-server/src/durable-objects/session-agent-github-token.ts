@@ -17,7 +17,7 @@ export interface GitHubTokenContext {
  * Returns the (possibly refreshed) token and persists it to the secret repository.
  */
 export async function ensureValidInstallationToken(context: GitHubTokenContext): Promise<string | null> {
-  if (!context.repoFullName) return context.githubInstallationToken;
+  if (!context.repoFullName) { return context.githubInstallationToken; }
 
   // GitHubAppService handles caching with a 5-minute buffer before expiry
   const github = new GitHubAppService(context.env, logger);

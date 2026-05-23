@@ -4,20 +4,21 @@
  * hooks are injected by the caller, so the same harness drives the legacy
  * stdio runner and the new webhook runner.
  */
+import type {
+  StreamTextOnErrorCallback} from "ai";
 import {
   type LanguageModel,
-  StreamTextOnErrorCallback,
   type StreamTextOnStepFinishCallback,
   type ToolSet,
   type UserContent,
   streamText,
 } from "ai";
 import { readFileSync } from "fs";
-import {
-  type AgentMode,
-  type AgentInputMessage,
-  type AgentOutput,
-  type AgentSettings,
+import type {
+  AgentMode,
+  AgentInputMessage,
+  AgentOutput,
+  AgentSettings,
 } from "@repo/shared";
 
 export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
@@ -125,7 +126,7 @@ export function startAgentHarness<S extends AgentSettings>(
     turnId: string,
     overrides?: { model?: string; agentMode?: AgentMode },
   ): void {
-    if (stopped) return;
+    if (stopped) { return; }
     const entry: QueueEntry = {
       message,
       model: overrides?.model,
@@ -176,7 +177,7 @@ export function startAgentHarness<S extends AgentSettings>(
       return true;
     }
 
-    if (currentEntry?.turnId !== turnId) return false;
+    if (currentEntry?.turnId !== turnId) { return false; }
     currentEntry.abortController.abort();
     return true;
   }
@@ -189,12 +190,12 @@ export function startAgentHarness<S extends AgentSettings>(
       messageResolver = null;
       resolve(SHUTDOWN_POISON);
     }
-    if (loopDone) await loopDone;
+    if (loopDone) { await loopDone; }
   }
 
   async function processMessage(entry: QueueEntry): Promise<AgentTurnEndResult> {
     const { message } = entry;
-    if (!setupResult) return { aborted: false };
+    if (!setupResult) { return { aborted: false }; }
 
     if (entry.model) {
       setupResult.modelId = entry.model as S["model"];
@@ -248,7 +249,7 @@ export function startAgentHarness<S extends AgentSettings>(
   }
 
   async function ensureSetup(): Promise<boolean> {
-    if (setupResult) return true;
+    if (setupResult) { return true; }
 
     let spriteContext = "";
     try {
@@ -295,13 +296,13 @@ export function startAgentHarness<S extends AgentSettings>(
   async function runLoop(): Promise<void> {
     while (!stopped) {
       const entry = await consumeUserMessageQueue();
-      if (stopped || entry === SHUTDOWN_POISON) break;
+      if (stopped || entry === SHUTDOWN_POISON) { break; }
 
       currentEntry = entry;
 
       try {
         const ready = await ensureSetup();
-        if (!ready) continue;
+        if (!ready) { continue; }
 
         if (entry.abortController.signal.aborted) {
           // A scoped cancel may arrive after the loop claims the turn but

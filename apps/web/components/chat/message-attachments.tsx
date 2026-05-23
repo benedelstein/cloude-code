@@ -5,7 +5,7 @@ import clsx from "clsx";
 export type ImageFilePart = { type: "file"; url: string; mediaType?: string; filename?: string };
 
 export function isImageFilePart(part: unknown): part is ImageFilePart {
-  if (!part || typeof part !== "object") return false;
+  if (!part || typeof part !== "object") { return false; }
   const candidate = part as { type?: unknown; url?: unknown; mediaType?: unknown };
   return candidate.type === "file"
     && typeof candidate.url === "string"
@@ -13,10 +13,10 @@ export function isImageFilePart(part: unknown): part is ImageFilePart {
 }
 
 function resolveAttachmentUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
-  if (url.startsWith("/api/")) return url;
-  if (url.startsWith("/")) return `/api${url}`;
+  if (url.startsWith("http://") || url.startsWith("https://")) { return url; }
+  if (url.startsWith("data:") || url.startsWith("blob:")) { return url; }
+  if (url.startsWith("/api/")) { return url; }
+  if (url.startsWith("/")) { return `/api${url}`; }
   return `/api/${url}`;
 }
 
@@ -31,7 +31,7 @@ export function AttachmentPreviewRow({
   alignRight: boolean;
   onExpand: (url: string) => void;
 }) {
-  if (imageParts.length === 0) return null;
+  if (imageParts.length === 0) { return null; }
 
   return (
     <div

@@ -7,11 +7,6 @@ import {
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
-  SessionInfoResponse,
-  SessionPlanResponse,
-  SessionStatus,
-  LogLevel,
-  ChatMessageEvent,
   AgentSettings,
   failure,
   success,
@@ -54,7 +49,14 @@ import {
   assertSessionRepoAccess,
   type SessionRepoAccessResult,
 } from "@/lib/user-session/session-repo-access";
-import type { AgentEvent } from "@repo/shared";
+import type {
+  AgentEvent,
+  SessionInfoResponse,
+  SessionPlanResponse,
+  SessionStatus,
+  LogLevel,
+  ChatMessageEvent,
+} from "@repo/shared";
 import { AgentTurnCoordinator } from "./lib/AgentTurnCoordinator";
 import { SpriteAgentProcessManager } from "./lib/SpriteAgentProcessManager";
 import { SessionProvisionService } from "./lib/SessionProvisionService";
@@ -72,6 +74,13 @@ interface InitRequest {
   branch?: string;
   initialMessage?: string;
   initialAttachmentIds?: string[];
+}
+
+interface AgentStateInternalAccess {
+  _setStateInternal(
+    state: ClientState,
+    source: Connection | "server",
+  ): unknown;
 }
 
 export class SessionAgentDO extends Agent<Env, ClientState> {
@@ -247,8 +256,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     // The Agents SDK allows clients to overwrite state via { type: "cf_agent_state" } WebSocket messages.
     // There is no validation hook before the write, so we intercept at _setStateInternal.
     // When source is a Connection (client), we reject the update entirely.
-    const superSetStateInternal = (this as any)._setStateInternal.bind(this);
-    (this as any)._setStateInternal = (
+    const stateInternalAccess = this as unknown as AgentStateInternalAccess;
+    const superSetStateInternal = stateInternalAccess._setStateInternal.bind(this);
+    stateInternalAccess._setStateInternal = (
       state: ClientState,
       source: Connection | "server",
     ) => {
@@ -279,9 +289,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
    * on restart and after each provisioning step.
    */
   private synthesizeStatus(): SessionStatus {
-    if (!this.serverState.initialized) return "initializing";
-    if (!this.serverState.spriteName) return "provisioning";
-    if (!this.serverState.repoCloned) return "cloning";
+    if (!this.serverState.initialized) { return "initializing"; }
+    if (!this.serverState.spriteName) { return "provisioning"; }
+    if (!this.serverState.repoCloned) { return "cloning"; }
     return "ready";
   }
 
@@ -309,7 +319,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       return false;
     }
     const ok = timingSafeCompare(expected, token);
-    if (!ok) this.logger.warn("verifyWebhookToken: token mismatch");
+    if (!ok) { this.logger.warn("verifyWebhookToken: token mismatch"); }
     return ok;
   }
 

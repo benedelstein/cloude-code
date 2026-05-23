@@ -58,7 +58,7 @@ function buildPath(fromTokens: Token[], progress: number): string {
     }
     const a = RECT_TOKENS[i];
     const b = CLOUD_TOKENS[i];
-    if (a.kind !== "num" || b.kind !== "num") continue;
+    if (a.kind !== "num" || b.kind !== "num") { continue; }
     const v = a.value + (b.value - a.value) * progress;
     parts.push(v.toFixed(3));
   }
@@ -95,7 +95,7 @@ export function CloudButton({
 
   useEffect(() => {
     return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); }
     };
   }, []);
 
@@ -114,12 +114,12 @@ export function CloudButton({
 
     const start = progressRef.current;
     const delta = target - start;
-    if (delta === 0) return;
+    if (delta === 0) { return; }
     const startTime = performance.now();
     // duration scales with remaining distance so partial reverses feel right
     const duration = MORPH_MS * Math.max(0.4, Math.abs(delta));
 
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); }
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - startTime) / duration);
@@ -181,11 +181,11 @@ export function CloudButton({
   // on touch as "first-tap previews hover" and can withhold the synthetic
   // click, but pointerdown is a press and doesn't trigger that heuristic.
   const handleHoverEnter = (e: PointerEvent) => {
-    if (e.pointerType === "touch") return;
+    if (e.pointerType === "touch") { return; }
     animateTo(1);
   };
   const handlePointerDown = (e: PointerEvent) => {
-    if (e.pointerType !== "touch") return;
+    if (e.pointerType !== "touch") { return; }
     animateTo(1);
   };
   // Reverse for any input: hover-out for mouse/pen, finger lift / drag-off

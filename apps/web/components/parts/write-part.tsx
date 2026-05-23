@@ -5,7 +5,7 @@ import type { WriteAction } from "@repo/shared";
 import { ExpandableSummary } from "./expandable-summary";
 
 function basename(path: string): string {
-  if (!path) return "";
+  if (!path) { return ""; }
   const parts = path.split("/");
   return parts[parts.length - 1] ?? path;
 }

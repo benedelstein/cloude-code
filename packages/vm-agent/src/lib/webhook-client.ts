@@ -58,7 +58,7 @@ export class WebhookClient {
           status: res.status,
           elapsedMs: Date.now() - startedAt,
         });
-        if (res.ok) return;
+        if (res.ok) { return; }
         if (res.status < 500 && res.status !== 429) { // TODO: ISNT 429 RETRYABLE? just need to get the retry-after...
           this.log("warn", "webhook post received non-retryable status", {
             path,

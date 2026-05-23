@@ -1,8 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
 import { createLogger } from "@/lib/logger";
-import {
-  type AuthUser,
+import type {
+  AuthUser,
 } from "@/middleware/auth.middleware";
 import { OpenAICodexAuthService } from "@/lib/providers/openai-codex-auth-service";
 import {

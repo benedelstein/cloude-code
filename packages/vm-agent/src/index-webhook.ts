@@ -10,9 +10,10 @@ import {
   AgentSettings,
   type AgentMode,
 } from "@repo/shared";
-import { type AgentProviderConfig } from "./lib/agent-harness";
+import type { AgentProviderConfig } from "./lib/agent-harness";
 import { loadInitialMessageFromFile } from "./lib/webhook-initial-message";
-import { handleWebhookStdinLine, WebhookStdinLogger } from "./lib/webhook-stdin";
+import type { WebhookStdinLogger } from "./lib/webhook-stdin";
+import { handleWebhookStdinLine } from "./lib/webhook-stdin";
 import { claudeCodeProvider } from "./providers/claude-code";
 import { codexProvider } from "./providers/codex";
 import { WebhookAgentRunner } from "./webhook-agent-runner";
@@ -80,8 +81,8 @@ const initialMessage = loadInitialMessage();
 
 const webhookUrl = process.env.DO_WEBHOOK_URL;
 const webhookToken = process.env.DO_WEBHOOK_TOKEN;
-if (!webhookUrl) throw new Error("Missing DO_WEBHOOK_URL env var");
-if (!webhookToken) throw new Error("Missing DO_WEBHOOK_TOKEN env var");
+if (!webhookUrl) { throw new Error("Missing DO_WEBHOOK_URL env var"); }
+if (!webhookToken) { throw new Error("Missing DO_WEBHOOK_TOKEN env var"); }
 
 const args = {
   sessionId: typeof values.sessionId === "string" ? values.sessionId : undefined,

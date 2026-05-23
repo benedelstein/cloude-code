@@ -380,7 +380,7 @@ export class MessageAccumulator {
   }
 
   private getMessage(): UIMessage | null {
-    if (!this.finished) return null;
+    if (!this.finished) { return null; }
 
     return {
       // typically the id will be null until the end. the harnesses do not declare an id in their start chunks (afaict)

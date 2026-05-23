@@ -387,7 +387,7 @@ export class GitHubUserRepoAccessCacheRepository {
 }
 
 function encodePrivateFlag(value: boolean | undefined): number | null {
-  if (value === undefined) return null;
+  if (value === undefined) { return null; }
   return value ? 1 : 0;
 }
 
@@ -406,7 +406,7 @@ export function listingRowToRepo(row: GitHubUserRepoListingRow): Repo | null {
   let name = row.name;
   if (!owner || !name) {
     const [parsedOwner, parsedName] = fullName.split("/");
-    if (!parsedOwner || !parsedName) return null;
+    if (!parsedOwner || !parsedName) { return null; }
     owner = parsedOwner;
     name = parsedName;
   }

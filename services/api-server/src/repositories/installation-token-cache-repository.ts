@@ -22,7 +22,7 @@ export class InstallationTokenCacheRepository {
       .bind(installationId, cacheKey)
       .first<TokenCacheRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       token: row.token,

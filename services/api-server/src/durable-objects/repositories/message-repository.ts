@@ -58,7 +58,7 @@ export class MessageRepository implements Repository {
   getById(id: string): StoredMessage | null {
     const rows = this.sql<MessageRow>`SELECT * FROM messages WHERE id = ${id}`;
     const row = rows[0];
-    if (!row) return null;
+    if (!row) { return null; }
     return this.rowToStoredMessage(row);
   }
 

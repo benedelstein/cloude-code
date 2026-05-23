@@ -32,6 +32,9 @@ export default tseslint.config(
           allowTemplateLiterals: true,
         },
       ],
+      "block-spacing": ["error", "always"],
+      "curly": ["error", "all"],
+      "eqeqeq": ["error", "always"],
       "max-lines": [
         "error",
         {
@@ -40,7 +43,9 @@ export default tseslint.config(
           skipComments: false,
         },
       ],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/consistent-type-imports": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-import-type-side-effects": "error",
       "@typescript-eslint/no-unused-expressions": [
         "error",
         { allowTaggedTemplates: true },

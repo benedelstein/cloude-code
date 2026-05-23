@@ -1,8 +1,9 @@
-import {
+import type {
   AttachSessionOptions,
   NewExecSessionOptions,
+  SpriteServerMessage} from "./types";
+import {
   SessionInfoMessageSchema,
-  SpriteServerMessage,
   SpriteServerMessageSchema,
 } from "./types";
 import { createLogger } from "@/lib/logger";
@@ -201,7 +202,7 @@ export class SpriteWebsocketSession {
 
       const messageHandler = (event: MessageEvent) => {
         // Binary messages before session_info are historical output - ignore until TTY mode is known
-        if (typeof event.data !== "string") return;
+        if (typeof event.data !== "string") { return; }
         try {
           const message: unknown = JSON.parse(event.data);
           const result = SessionInfoMessageSchema.safeParse(message);
@@ -610,7 +611,7 @@ export class SpriteWebsocketSession {
   }
 
   resize(cols: number, rows: number): void {
-    if (!this.ttyMode) throw new Error("Resize only supported in TTY mode");
+    if (!this.ttyMode) { throw new Error("Resize only supported in TTY mode"); }
 
     this.getOpenWebSocket().send(
       JSON.stringify({ type: "resize", cols, rows }),

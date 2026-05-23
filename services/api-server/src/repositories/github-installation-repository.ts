@@ -74,7 +74,7 @@ export class GitHubInstallationRepository {
       .bind(login)
       .first<GitHubInstallationWithRepoRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       id: row.id,
@@ -95,7 +95,7 @@ export class GitHubInstallationRepository {
       .bind(installationId)
       .first<GitHubInstallationWithRepoRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       id: row.id,
@@ -121,7 +121,7 @@ export class GitHubInstallationRepository {
       .bind(repoId)
       .first<GitHubInstallationWithRepoRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       id: row.id,
@@ -137,7 +137,7 @@ export class GitHubInstallationRepository {
       .bind(installationId, repoName)
       .first<GitHubInstallationRepoRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       installationId: row.installation_id,
@@ -154,7 +154,7 @@ export class GitHubInstallationRepository {
       .bind(repoId)
       .first<GitHubInstallationRepoRow>();
 
-    if (!row) return null;
+    if (!row) { return null; }
 
     return {
       installationId: row.installation_id,
@@ -213,7 +213,7 @@ export class GitHubInstallationRepository {
     installationId: number,
     repos: GitHubInstallationRepoInput[],
   ): Promise<void> {
-    if (repos.length === 0) return;
+    if (repos.length === 0) { return; }
 
     const batch = repos.map((repo) =>
       this.database.prepare(
@@ -256,7 +256,7 @@ export class GitHubInstallationRepository {
   }
 
   async removeRepos(installationId: number, repoIds: number[]): Promise<void> {
-    if (repoIds.length === 0) return;
+    if (repoIds.length === 0) { return; }
 
     const batch = repoIds.map((repoId) =>
       this.database.prepare(

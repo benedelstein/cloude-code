@@ -74,7 +74,7 @@ function todoContent(todo: TodoItem): string {
 
 function todoStatus(todo: TodoItem): string {
   const status = asString(todo.status) || asString(todo.state);
-  if (status === "done") return "completed";
+  if (status === "done") { return "completed"; }
   return status;
 }
 

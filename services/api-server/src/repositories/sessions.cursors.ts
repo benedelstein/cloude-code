@@ -37,10 +37,10 @@ export function decodeRepoCursor(cursor: string): RepoCursor | null {
     return null;
   }
   const pipeIndex = decoded.lastIndexOf("|");
-  if (pipeIndex < 0) return null;
+  if (pipeIndex < 0) { return null; }
   const maxUpdatedAt = decoded.slice(0, pipeIndex);
   const repoId = Number.parseInt(decoded.slice(pipeIndex + 1), 10);
-  if (!maxUpdatedAt || !Number.isFinite(repoId)) return null;
+  if (!maxUpdatedAt || !Number.isFinite(repoId)) { return null; }
   return { maxUpdatedAt, repoId };
 }
 
@@ -61,9 +61,9 @@ export function decodeSessionCursor(cursor: string): SessionCursor | null {
     return null;
   }
   const pipeIndex = decoded.lastIndexOf("|");
-  if (pipeIndex < 0) return null;
+  if (pipeIndex < 0) { return null; }
   const updatedAt = decoded.slice(0, pipeIndex);
   const sessionId = decoded.slice(pipeIndex + 1);
-  if (!updatedAt || !sessionId) return null;
+  if (!updatedAt || !sessionId) { return null; }
   return { updatedAt, sessionId };
 }

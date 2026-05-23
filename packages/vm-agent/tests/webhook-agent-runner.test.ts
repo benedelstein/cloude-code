@@ -29,7 +29,7 @@ async function waitFor(
   attempts = 50,
 ): Promise<void> {
   for (let attempt = 0; attempt < attempts; attempt++) {
-    if (predicate()) return;
+    if (predicate()) { return; }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error("Timed out waiting for expected condition");

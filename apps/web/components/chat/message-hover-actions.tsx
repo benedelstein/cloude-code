@@ -23,7 +23,7 @@ export function MessageHoverActions({
   copied: boolean;
   onCopy: () => void;
 }) {
-  if (!createdAt && !canCopy) return null;
+  if (!createdAt && !canCopy) { return null; }
 
   return (
     <div

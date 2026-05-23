@@ -9,7 +9,7 @@ import { ExpandableSummary } from "./expandable-summary";
 const MAX_VISIBLE_LINES = 200;
 
 function basename(path: string): string {
-  if (!path) return "";
+  if (!path) { return ""; }
   const parts = path.split("/");
   return parts[parts.length - 1] ?? path;
 }

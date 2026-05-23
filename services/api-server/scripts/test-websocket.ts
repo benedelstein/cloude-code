@@ -29,7 +29,7 @@ type SessionInfoMessage = {
 // --------------------------
 // MARK: - API IMPLEMENTATION USING WS
 
-let sessionId: number | null = null;
+const sessionId: number | null = null;
 
 // const ws = new WebSocket(url, {
 //   headers: {

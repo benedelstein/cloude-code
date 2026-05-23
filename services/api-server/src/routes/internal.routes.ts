@@ -21,7 +21,7 @@ export const internalRoutes = new Hono<{ Bindings: Env }>();
 const logger = createLogger("internal.routes.ts");
 
 function parseBearerToken(auth: string | undefined): string | null {
-  if (!auth) return null;
+  if (!auth) { return null; }
   const match = auth.match(/^Bearer\s+(.+)$/i);
   return match ? match[1]!.trim() : null;
 }
