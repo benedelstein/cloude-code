@@ -70,10 +70,9 @@ export class AgentAttachmentService {
     );
 
     if (attachmentRecords.length !== attachmentIds.length) {
-      this.logger.error(
-        "Some attachments not found: " +
-          attachmentIds.join(", "),
-      );
+      this.logger.error("Some attachments not found", {
+        fields: { attachmentIds },
+      });
       return failure(attachmentResolutionError(
         "ATTACHMENTS_NOT_FOUND",
         "Some attachments not found.",

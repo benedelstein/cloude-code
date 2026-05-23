@@ -65,9 +65,13 @@ export class SpritesCoordinator {
       : undefined;
     const d0 = Date.now();
     const sprite = await this.spritesClient.createSprite(request.name, config);
-    logger.info(
-      `created sprite ${sprite.name} ${sprite.id} in ${Date.now() - d0}ms`,
-    );
+    logger.info("Created sprite", {
+      fields: {
+        spriteName: sprite.name,
+        spriteId: sprite.id ?? null,
+        durationMs: Date.now() - d0,
+      },
+    });
     return SpriteResponse.parse({
       id: sprite.id,
       name: sprite.name,

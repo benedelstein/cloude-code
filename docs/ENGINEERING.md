@@ -30,7 +30,7 @@ Treat `ARCHITECTURE.md` as a short, stable codemap. It should answer where major
 
 ## Linting
 
-`pnpm lint` runs package ESLint checks through Turbo and then runs `pnpm lint:boundaries`.
+`pnpm lint` runs package ESLint checks through Turbo, then runs `pnpm lint:boundaries` and `pnpm lint:logging`.
 
 The repo-wide ESLint config enforces:
 
@@ -106,12 +106,16 @@ Do not validate loosely and keep passing `unknown`, raw JSON, or casted values t
 The app-wide logger is available as `Logger` in `packages/shared/src/logging/index.ts`.
 
 - Scope loggers to the module they are in.
-- Use string interpolation for simple messages.
-- Use structured `fields` when values are useful for filtering or debugging.
+- Use static message strings.
+- Put identifiers, counts, durations, statuses, provider names, and other dynamic values in structured `fields`.
+- Pass thrown or caught errors through the top-level `error` param.
+- Do not call `console.*` from production source except in logger sinks.
+- `pnpm lint:logging` enforces static logger messages, structured logger params, and the production `console.*` ban.
 
 ```typescript
-logger.info(`received chunk ${sequence}, expected ${expected}`);
+logger.info("Received chunk", { fields: { sequence, expected } });
 logger.warn("Invalid webhook body", { fields: { sessionId, issues } });
+logger.error("Failed to refresh GitHub token", { fields: { userId }, error });
 ```
 
 ## TypeScript Style

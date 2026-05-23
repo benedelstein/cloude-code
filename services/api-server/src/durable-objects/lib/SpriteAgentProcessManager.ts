@@ -518,7 +518,9 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
-      this.logger.debug(`Attached to existing vm-agent process ${args.processId}, waiting for stdin ack`);
+      this.logger.debug("Attached to existing vm-agent process; waiting for stdin ack", {
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
       // wait for the agent process to explicitly acknowledge the message write
       const stdinAck = this.waitForAck(
         session,
@@ -810,7 +812,9 @@ export class SpriteAgentProcessManager {
     session.onServerMessage((message: SpriteServerMessage) => {
       if (message.type === "session_info" && processId === null) {
         processId = message.session_id;
-        this.logger.debug(`captured agent process id: ${processId}`);
+        this.logger.debug("Captured agent process id", {
+          fields: { processId },
+        });
         resolveProcessId(processId);
       }
     });

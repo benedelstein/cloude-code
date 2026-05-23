@@ -20,7 +20,9 @@ attachmentsRoutes.use("*", authMiddleware);
 
 attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   const user = c.get("user");
-  logger.info(`uploading attachments for user ${user.id}`);
+  logger.info("Uploading attachments for user", {
+    fields: { userId: user.id },
+  });
   const formData = await c.req.raw.formData();
   const sessionIdRaw = formData.get("sessionId");
   const parsedSessionId = sessionIdRaw
@@ -60,7 +62,9 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   const attachmentService = new AttachmentService(c.env.DB);
   const created = [];
   try {
-    logger.info(`uploading ${files.length} attachments to session ${sessionId}`);
+    logger.info("Uploading attachments to session", {
+      fields: { fileCount: files.length, sessionId: sessionId ?? null },
+    });
     for (const file of files) {
       if (!file.type.startsWith("image/")) {
         return c.json(
@@ -81,7 +85,9 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
       await c.env.ATTACHMENTS_BUCKET.put(objectKey, file.stream(), {
         httpMetadata: { contentType: file.type },
       });
-      logger.debug(`uploaded attachment ${attachmentId} for session ${sessionId}`);
+      logger.debug("Uploaded attachment for session", {
+        fields: { attachmentId, sessionId: sessionId ?? null },
+      });
 
       const record = await attachmentService.create({
         id: attachmentId,

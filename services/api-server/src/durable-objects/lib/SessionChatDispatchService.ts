@@ -191,7 +191,9 @@ export class SessionChatDispatchService {
     const sessionId = serverState.sessionId;
     if (!sessionId) { return; }
 
-    this.logger.debug(`dispatching pending message: ${pendingMessage.message.id}`);
+    this.logger.debug("Dispatching pending message", {
+      fields: { messageId: pendingMessage.message.id },
+    });
     const { message: userMessage, attachmentIds } = pendingMessage;
     const content = getUserMessageTextContent(userMessage);
 

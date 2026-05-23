@@ -59,7 +59,9 @@ agentRoutes.all("/session/:sessionId", async (c) => {
     }
 
     if (accessResult.error.status === 503) {
-      logger.warn(`${sessionId} session access check temporarily unavailable: ${accessResult.error.code}`);
+      logger.warn("Session access check temporarily unavailable", {
+        fields: { sessionId, code: accessResult.error.code },
+      });
       return c.json(
         {
           error: accessResult.error.message,
@@ -69,7 +71,9 @@ agentRoutes.all("/session/:sessionId", async (c) => {
       );
     }
 
-    logger.log(`${sessionId} session access denied: ${accessResult.error.code}`);
+    logger.log("Session access denied", {
+      fields: { sessionId, code: accessResult.error.code },
+    });
     return c.json({ error: "Session not found" }, 404);
   }
 

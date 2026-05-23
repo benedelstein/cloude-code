@@ -75,7 +75,9 @@ export class WorkersSpriteClient {
 
     if (!response.ok) {
       const text = await response.text();
-      logger.error(`Exec failed: ${text}`);
+      logger.error("Exec failed", {
+        fields: { responseBody: text },
+      });
       throw new SpritesError(
         `Exec failed: ${response.status}`,
         response.status,

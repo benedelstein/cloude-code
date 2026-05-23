@@ -25,9 +25,9 @@ export async function buildUserUiMessage(
       attachmentIds,
     );
     if (attachmentRecords.length !== attachmentIds.length) {
-      logger.warn(
-        `Some pending attachments missing during init: ${attachmentIds.join(", ")}`,
-      );
+      logger.warn("Some pending attachments missing during init", {
+        fields: { attachmentIds },
+      });
     }
   }
 

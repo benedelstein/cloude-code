@@ -164,7 +164,12 @@ async function resolveAccessibleRepoForRecovery(params: {
   if (!installationResult.ok) {
     return failure(mapGitHubAppErrorToUserRepoAccessError(installationResult.error));
   }
-  logger.info(`found installation for repo ${params.repoId} in ${installationResult.value.id}`);
+  logger.info("Found installation for repo", {
+    fields: {
+      repoId: params.repoId,
+      installationId: installationResult.value.id,
+    },
+  });
 
   return getUserAccessibleRepoForInstallation({
     env: params.env,

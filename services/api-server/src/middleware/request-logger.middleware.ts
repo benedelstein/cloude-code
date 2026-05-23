@@ -1,31 +1,27 @@
 import type { MiddlewareHandler } from "hono";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("request-logger.middleware.ts");
 
 function getSafeUrl(requestUrl: string): string {
   const url = new URL(requestUrl);
   return `${url.origin}${url.pathname}`;
 }
 
-function formatTimestamp(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  }).format(date);
-}
-
 function logRequestLine(method: string, safeUrl: string, status: number): void {
-  const line = `${method} ${safeUrl} - ${status} @ ${formatTimestamp(new Date())}`;
+  const fields = { method, url: safeUrl, status };
 
   if (status >= 500) {
-    console.error(line);
+    logger.error("Request completed", { fields });
     return;
   }
 
   if (status >= 400) {
-    console.warn(line);
+    logger.warn("Request completed", { fields });
     return;
   }
 
-  console.log(line);
+  logger.info("Request completed", { fields });
 }
 
 export const requestLoggerMiddleware: MiddlewareHandler = async (c, next) => {

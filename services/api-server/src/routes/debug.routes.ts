@@ -60,7 +60,9 @@ debugRoutes.post("/sprites-exec-ws", async (c) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown websocket exec error";
-    logger.error(`Debug websocket exec failed: ${message}`);
+    logger.error("Debug websocket exec failed", {
+      fields: { message },
+    });
 
     return c.json(
       {

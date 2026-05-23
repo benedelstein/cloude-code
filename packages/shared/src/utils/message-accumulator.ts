@@ -88,7 +88,7 @@ export class MessageAccumulator {
     switch (chunk.type) {
       case "start":
         if (this.messageId && chunk.messageId && this.messageId !== chunk.messageId) {
-          this.logger.warn(`[chunk-trace] start chunk with mismatched messageId`, {
+          this.logger.warn("[chunk-trace] start chunk with mismatched messageId", {
             fields: { chunkMessageId: chunk.messageId ?? "undefined", currentMessageId: this.messageId },
           });
         }
@@ -107,7 +107,7 @@ export class MessageAccumulator {
         if (textPart) {
           textPart.text += chunk.delta;
         } else {
-          this.logger.warn(`[chunk-trace] text-delta received for unknown id`, {
+          this.logger.warn("[chunk-trace] text-delta received for unknown id", {
             fields: { chunkId: chunk.id, activeIds: [...this.activeTextParts.keys()] },
           });
         }
@@ -141,7 +141,7 @@ export class MessageAccumulator {
         if (reasoningPart) {
           reasoningPart.text += chunk.delta;
         } else {
-          this.logger.warn(`[chunk-trace] reasoning-delta for unknown id`, {
+          this.logger.warn("[chunk-trace] reasoning-delta for unknown id", {
             fields: { chunkId: chunk.id, activeIds: [...this.activeReasoningParts.keys()] },
           });
         }
@@ -180,7 +180,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.inputText += chunk.inputTextDelta;
         } else {
-          this.logger.warn(`[chunk-trace] tool-input-delta for unknown toolCallId`, {
+          this.logger.warn("[chunk-trace] tool-input-delta for unknown toolCallId", {
             fields: { toolCallId: chunk.toolCallId, knownToolCallIds: [...this.toolCalls.keys()] },
           });
         }
@@ -304,7 +304,9 @@ export class MessageAccumulator {
       
       default: {
         const _exhaustiveCheck = null as never;
-        this.logger.warn(`Unhandled chunk type: ${_exhaustiveCheck}`);
+        this.logger.warn("Unhandled chunk type", {
+          fields: { chunkType: String(_exhaustiveCheck) },
+        });
       }
     }
 

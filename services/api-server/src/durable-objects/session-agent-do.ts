@@ -235,7 +235,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
     });
 
-    this.logger.info(`constructed agent DO for session ${this.serverState.sessionId}`);
+    this.logger.info("Constructed agent DO", {
+      fields: { sessionId: this.serverState.sessionId },
+    });
   }
 
   async onStart(): Promise<void> {
@@ -372,7 +374,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   // ============================================
 
   onConnect(connection: Connection): void {
-    this.logger.debug(`client connected: ${connection.id}`);
+    this.logger.debug("Client connected", {
+      fields: { connectionId: connection.id },
+    });
     this.turnCoordinator.ensureRehydratedState();
 
     // Send initial connection state
