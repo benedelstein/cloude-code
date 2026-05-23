@@ -1,5 +1,11 @@
 # Session Access Hardening - Design Document
 
+Status: implemented with naming drift. The current guard is
+`assertSessionRepoAccess(...)` in
+`services/api-server/src/lib/user-session/session-repo-access.ts`, and blocked
+sessions use `access_blocked_at` / `access_block_reason` columns rather than
+the `revoked_at` / `revoked_reason` names in this original plan.
+
 ## Goal
 
 Prevent users from continuing to use a hosted session after they lose GitHub access to the underlying repo, while keeping latency acceptable.
@@ -7,7 +13,7 @@ Prevent users from continuing to use a hosted session after they lose GitHub acc
 ## Current State
 
 - Session creation already verifies repo access using the GitHub App user-access path.
-- Existing sessions do not re-check that access later.
+- Existing sessions now re-check access on guarded HTTP routes, websocket-token mint, websocket connect, `chat.message`, and git-proxy requests.
 - The expensive part of the current check is only on cache miss/expiry; the fast path is the existing `github_user_repo_access_cache`.
 
 ## Design
@@ -25,8 +31,8 @@ Persist these on the session record:
 
 - `repoId`
 - `installationId`
-- `revoked_at` (nullable)
-- `revoked_reason` (nullable, optional)
+- `access_blocked_at` (nullable)
+- `access_block_reason` (nullable, optional)
 
 These IDs are stable and allow direct cached lookups without name-based resolution.
 
@@ -54,11 +60,11 @@ The guard should:
 
 - load the session row from D1
 - verify the session belongs to the user
-- read `repoId`, `installationId`, `revoked_at`, and `revoked_reason`
-- fail fast if the session is already revoked
+- read `repoId`, `installationId`, `access_blocked_at`, and `access_block_reason`
+- use the recovery path when access is already blocked or the installation id is missing
 - call `GitHubAppService.getUserAccessibleInstallationRepoById(...)`
-- if GitHub explicitly denies repo access, mark the session revoked and return a stable `403` error such as `REPO_ACCESS_REVOKED`
-- if the system cannot currently obtain a GitHub user access token for the check, return a temporary auth-required error instead and do not revoke the session
+- if GitHub explicitly denies repo access, mark the session access-blocked and return a stable `403` error such as `REPO_ACCESS_BLOCKED`
+- if the system cannot currently obtain a GitHub user access token for the check, return a temporary auth-required error instead and do not mark the session access-blocked
 
 Use it from only these entrypoints:
 
@@ -78,79 +84,76 @@ This gives coverage with minimal surface area:
 
 This avoids spreading the check across every individual route. The existing helper `getAuthorizedSessionAgent(...)` should become the HTTP entrypoint for the centralized guard rather than adding a new check in each route handler.
 
-Do **not** guard websocket-token mint in this pass.
-
-Specifically, leave `POST /sessions/:sessionId/websocket-token` in `services/api-server/src/routes/sessions/sessions.routes.ts` on its current ownership-only check. The access revocation boundary for websocket clients in this pass is websocket connect plus later `chat.message`, not token mint.
+`POST /sessions/:sessionId/websocket-token` is now guarded. `SessionsService.createSessionWebSocketToken(...)` calls `assertSessionRepoAccess(...)` before minting a token, and `services/api-server/src/routes/agent.routes.ts` repeats the same access check at websocket upgrade.
 
 For already-open websockets:
 
-- enforce revocation on the next `chat.message`
+- enforce access blocking on the next `chat.message`
 - rely on the existing 5-minute cache window for freshness
 - do not force a live GitHub call on every send unless the cache is stale
 
 ### Revocation behavior
 
-On first detected revoked access:
+On first detected lost access:
 
-- mark the session revoked
-- return/emit `REPO_ACCESS_REVOKED`
+- mark the session access-blocked
+- return/emit `REPO_ACCESS_BLOCKED`
 - block all further session reads/writes
 - terminate the Sprite
 
 This is a hard-lock model, not read-only fallback.
 
-Concretely, "mark the session revoked" means:
+Concretely, "mark the session access-blocked" now means:
 
-- add `revoked_at` and `revoked_reason` columns to the `sessions` row in D1
-- add a repository/service method that performs one durable update on that row, for example setting `revoked_at = datetime('now')`, `revoked_reason = 'REPO_ACCESS_REVOKED'`, and `updated_at = datetime('now')`
-- call that update exactly once on the first explicit repo-access denial from GitHub; later detections should be idempotent and leave the existing revocation timestamp intact
+- use the `access_blocked_at` and `access_block_reason` columns on the `sessions` row in D1
+- call repository methods such as `blockSessionForAccessCheckDenied(...)`, `blockSessionsForDeletedInstallation(...)`, `blockSessionsForRemovedRepos(...)`, or `clearAccessBlockAndUpdateBinding(...)`
+- call that update on explicit repo-access denial from GitHub; repeated denials should preserve the existing block reason where appropriate
 
-Do not mark the session revoked for temporary auth problems such as:
+Do not mark the session access-blocked for temporary auth problems such as:
 
 - no active GitHub auth session available to source a user token
 - expired or invalid user OAuth state that can be fixed by logging in again
 
 Those cases should fail closed for the current request, but the session should remain recoverable after the user re-authenticates.
 
-After a session has been marked revoked:
+After a session has been marked access-blocked:
 
-- every future guard call fails fast on `revoked_at IS NOT NULL` before making any GitHub call
+- every future guard call enters the recovery path when `access_blocked_at IS NOT NULL`, so access can be restored if GitHub confirms the user and installation are valid again
 - session HTTP routes fail because `getAuthorizedSessionAgent(...)` now runs the guard
 - websocket connect fails in `agent.routes.ts`
 - an already-open websocket fails on the next guarded `chat.message`
-- the DO `/git-proxy/`* handler returns `403 REPO_ACCESS_REVOKED` and does not forward the git operation to GitHub
+- the DO `/git-proxy/`* handler returns `403 REPO_ACCESS_BLOCKED` and does not forward the git operation to GitHub
 
 This is what prevents further access in practice:
 
-- the D1 session row is the durable source of truth for revocation, so once `revoked_at` is set all guarded entrypoints fail immediately
-- websocket-token mint is intentionally left ownership-only in this pass, but any minted token becomes unusable because websocket connect is still guard-protected
-- the DO still checks on `chat.message`, so an already-connected client cannot continue using the session after revocation is detected
-- the agent's git push path is still blocked even if the agent keeps running briefly, because push is configured to go through the Worker/DO git proxy and that proxy now checks the same revoked state before forwarding
-- Sprite termination is best-effort cleanup after revocation is marked; the durable lock is the `revoked_at` check, not successful Sprite deletion
+- the D1 session row is the durable source of truth for access-blocked state, so guarded entrypoints deny access while recovery checks still fail
+- websocket-token mint is guarded directly by `SessionsService.createSessionWebSocketToken(...)`, and websocket connect is still guard-protected
+- the DO still checks on `chat.message`, so an already-connected client cannot continue using the session after lost access is detected
+- the agent's git push path is still blocked even if the agent keeps running briefly, because push is configured to go through the Worker/DO git proxy and that proxy now checks the same access-blocked state before forwarding
+- Sprite termination is best-effort cleanup after access is blocked; the durable lock is the `access_blocked_at` check, not successful Sprite deletion
 
 Recommended implementation detail:
 
-- have the core guard return a structured result that distinguishes `not_found`, `revoked`, and `revoked_now`
-- also distinguish a temporary `github_auth_required` case that does not persist revocation
-- for `revoked_now`, first persist revocation on the session row, then trigger Sprite deletion, then return the stable authorization failure
-- for `revoked`, skip all external work and just return the same stable authorization failure
-- for `github_auth_required`, return a temporary auth failure and skip revocation writes
+- have the core guard return a structured result that distinguishes `SESSION_NOT_FOUND`, `REPO_ACCESS_BLOCKED`, `GITHUB_AUTH_REQUIRED`, `GITHUB_API_ERROR`, and `INVALID_REPO`
+- for first detected lost access, persist the access block on the session row, request Sprite cleanup, then return the stable authorization failure
+- for an already-blocked session, use the recovery path and clear the block if GitHub confirms access again
+- for `GITHUB_AUTH_REQUIRED`, return a temporary auth failure and skip access-block writes
 
-It is reasonable for the DO to also mirror revocation in memory after it observes a revoked result. That is only an optimization for the current DO instance, not a source of truth. The durable source of truth should remain the D1 session row so that revocation survives DO restarts and applies consistently across HTTP routes, websocket connect, and future DO instances.
+It is reasonable for the DO to also mirror access-blocked state in memory after it observes a blocked result. That is only an optimization for the current DO instance, not a source of truth. The durable source of truth should remain the D1 session row so that blocked access survives DO restarts and applies consistently across HTTP routes, websocket connect, and future DO instances.
 
-### Agent still running after revocation
+### Agent still running after access is blocked
 
-Revocation must still hold even if the agent process continues running for a short period after access is revoked.
+The access block must still hold even if the agent process continues running for a short period after access is lost.
 
 The important case is git push:
 
 - the agent's push remote is already configured to use the Worker git-proxy URL for `origin --push`
 - that means any later `git push` from the sprite still flows through the session DO
-- once the session is marked revoked, the DO `/git-proxy/*` entrypoint must reject the request before forwarding it to GitHub
+- once the session is marked access-blocked, the DO `/git-proxy/*` entrypoint must reject the request before forwarding it to GitHub
 
 This means the system does not rely on immediate Sprite deletion for correctness. Sprite deletion is cleanup. The real enforcement is:
 
-- D1 `revoked_at` for durable state
+- D1 `access_blocked_at` for durable state
 - DO `chat.message` guard for interactive use
 - DO `/git-proxy/*` guard for background git activity from the agent
 
@@ -163,11 +166,11 @@ Keep repo transport on the installation-token model and fix authorization at the
 ## Test Plan
 
 - Create a session, remove the user's repo access, and verify access still works until the 5-minute cache expires.
-- After cache expiry, verify REST session reads fail with `403 REPO_ACCESS_REVOKED`.
-- Verify websocket connect is denied after revocation.
-- Verify an already-open websocket is blocked on the next `chat.message` after revocation is detected.
-- Verify the Sprite is deleted on first revoked-access detection.
-- Verify git proxy push is blocked for revoked sessions.
+- After cache expiry, verify REST session reads fail with `403 REPO_ACCESS_BLOCKED`.
+- Verify websocket-token mint and websocket connect are denied after access is blocked.
+- Verify an already-open websocket is blocked on the next `chat.message` after lost access is detected.
+- Verify the Sprite cleanup path is requested on first blocked-access detection.
+- Verify git proxy push is blocked for access-blocked sessions.
 - Verify `codex-cli` without OpenAI OAuth fails with `OPENAI_AUTH_REQUIRED`.
 - Verify `codex-cli` with per-user OpenAI OAuth still works.
 - Run `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
@@ -178,4 +181,3 @@ Keep repo transport on the installation-token model and fix authorization at the
 - No idle cleanup or archive-time Sprite deletion in this pass.
 - Re-use the current 5-minute repo-access cache TTL.
 - Existing open sockets are cut off on the next guarded send, not instantly at the moment GitHub access changes.
-

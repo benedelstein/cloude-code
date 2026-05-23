@@ -1,5 +1,11 @@
 # Plan: OpenAI OAuth Flow for Codex Provider
 
+Status: superseded. The current OpenAI Codex integration uses
+`OpenAICodexAuthService` with OpenAI Codex auth/device flows, stores credentials
+in `user_provider_credentials`, and syncs `~/.codex/auth.json` through
+`getProviderCredentialAdapter(...)` before launching `packages/vm-agent/src/index-webhook.ts`.
+The direct `@ai-sdk/openai` / `index-openai.ts` plan below is not the current runtime.
+
 ## Overview
 
 Implement OAuth 2.0 PKCE flow against OpenAI's auth server so users can connect their

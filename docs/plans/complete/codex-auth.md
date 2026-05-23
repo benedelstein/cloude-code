@@ -1,5 +1,14 @@
 # Multi-provider Auth and Model Routing Design
 
+Status: implemented with current file-name drift. Provider metadata now lives
+under `packages/shared/src/types/providers/`; provider auth dispatch is in
+`services/api-server/src/lib/providers/provider-auth-service.ts`; Sprite
+credential sync is in `provider-credential-adapter.ts`; and the DO uses
+`SpriteAgentProcessManager`, not the older `agent-process-manager.ts` name.
+Legacy `claude_tokens` and `openai_tokens` tables still exist, but current
+Claude/OpenAI Codex auth services store active credentials in
+`user_provider_credentials`.
+
 ## Goal
 
 Allow users to connect multiple LLM providers and choose models from whichever connected provider they want to use.
