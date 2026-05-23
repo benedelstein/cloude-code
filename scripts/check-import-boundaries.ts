@@ -242,12 +242,7 @@ const allowedImports = defineAllowedImports({
     "shared:entry",
   ],
   "shared:tests": [
-    "shared:types",
-    "shared:logging",
-    "shared:utils",
-    "shared:tool-normalization",
-    "shared:entry",
-    "shared:tests",
+    "shared:*",
   ],
 
   "vm-agent:lib": [
@@ -269,12 +264,8 @@ const allowedImports = defineAllowedImports({
     "vm-agent:runtime",
   ],
   "vm-agent:tests": [
-    "shared:entry",
-    "shared:types",
-    "vm-agent:lib",
-    "vm-agent:providers",
-    "vm-agent:runtime",
-    "vm-agent:tests",
+    "shared:*",
+    "vm-agent:*",
   ],
   "vm-agent:bundle": [
     "vm-agent:bundle",
@@ -366,19 +357,8 @@ const allowedImports = defineAllowedImports({
     "api:do-runtime",
   ],
   "api:tests": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:lib",
-    "api:middleware",
-    "api:do-repositories",
-    "api:do-lib",
-    "api:do-runtime",
-    "api:routes",
-    "api:entry",
-    "api:tests",
+    "shared:*",
+    "api:*",
     "vm-agent:bundle",
   ],
 
@@ -418,14 +398,8 @@ const allowedImports = defineAllowedImports({
     "web:app",
   ],
   "web:tests": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-    "web:lib",
-    "web:hooks",
-    "web:components",
-    "web:app",
-    "web:tests",
+    "shared:*",
+    "web:*",
   ],
 
   "scripts:root": [
@@ -648,7 +622,25 @@ function getLayer(filePath: string): Layer | null {
 }
 
 function isAllowed(sourceLayer: Layer, targetLayer: Layer): boolean {
-  return allowedImports.get(sourceLayer.id)?.has(targetLayer.id) ?? false;
+  const allowedTargets = allowedImports.get(sourceLayer.id);
+  if (!allowedTargets) {
+    return false;
+  }
+
+  for (const allowedTarget of allowedTargets) {
+    if (allowedTarget === targetLayer.id) {
+      return true;
+    }
+
+    if (allowedTarget.endsWith(":*")) {
+      const namespace = allowedTarget.slice(0, -1);
+      if (targetLayer.id.startsWith(namespace)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function isException(sourceFile: string, targetFile: string): boolean {

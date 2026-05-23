@@ -34,6 +34,12 @@ The repo-wide ESLint config enforces:
 - No `any`.
 - No unused variables except intentionally `_`-prefixed values.
 - Maximum file length of 1000 lines.
+- Naming conventions for symbols:
+  - Variables and imports use `camelCase`, `PascalCase`, or `UPPER_CASE`.
+  - Functions use `camelCase`, with `PascalCase` allowed for React components and `UPPER_CASE` allowed for Next.js route handlers like `GET`.
+  - Parameters use `camelCase`, with `PascalCase` allowed when passing component references.
+  - Types, interfaces, classes, and enums use `PascalCase`.
+  - Object properties, object methods, and type properties are exempt so API payloads, database fields, and external protocol names can keep their source shape.
 
 When a lint rule exposes existing drift, prefer the mechanical fix over weakening the rule. If a rule is wrong for a specific case, add a narrow local disable with a reason rather than lowering the repo-wide standard.
 
@@ -46,7 +52,7 @@ The checker parses every TS/TSX file, resolves imports to repo paths, classifies
 The checker has three intentionally editable sections:
 
 - `layers` classifies files by exact file path or directory prefix.
-- `allowedImports` defines the permitted dependency graph.
+- `allowedImports` defines the permitted dependency graph. Use exact layer ids for production code. Namespace wildcards like `shared:*` are supported for broad surfaces such as tests.
 - `exceptions` records deliberate one-off edges with a rationale.
 
 Use this workflow when adding a rule:
