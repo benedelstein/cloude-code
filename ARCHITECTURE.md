@@ -1,5 +1,7 @@
 # Architecture
 
+This file is the repo codemap: it should explain where major things live, which boundaries matter, and which invariants should not be broken. Keep detailed behavior in focused docs or inline code comments.
+
 cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) and coordinates sessions through Cloudflare Durable Objects on the API server.
 
 Users connect to the API server and create a session to make changes in a repository. Each session gets its own Durable Object, which provisions a Sprite VM, clones the repository, runs an agent process on the VM, and communicates with the API server.
@@ -22,6 +24,29 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 - `packages/vm-agent/src/index-ndjson.ts` - Legacy vm-agent NDJSON entrypoint.
 - `packages/vm-agent/src/lib/agent-harness.ts` - Shared AI SDK harness used by both entrypoints.
 - `packages/shared/src/types/websocket-api.ts` - WebSocket message schemas.
+
+## Architectural Invariants
+
+- The Durable Object is the session authority. It owns session lifecycle, message state, client WebSocket handling, and VM coordination.
+- The Sprite VM owns the execution runtime. It runs the agent process and submits output back to the Durable Object through authenticated webhooks.
+- Browser clients cannot mutate Durable Object server state directly. Client messages go through typed API or WebSocket messages and are validated before handling.
+- Cross-package contracts live in `packages/shared`. Server, VM, and web packages should not duplicate shared DTOs or protocol types.
+- Web code must not import server or VM runtime code. Server and VM code must not import web UI code.
+- External inputs are parsed at the boundary before entering internal services. This includes HTTP bodies, WebSocket payloads, webhooks, provider responses, database rows, environment variables, and secrets.
+
+## Boundaries
+
+- **Web client to API server** - `apps/web` talks to the API through HTTP routes and WebSocket messages. Shared protocol types come from `@repo/shared`.
+- **API routes to Durable Objects** - Hono routes authenticate, parse, and route requests. `SessionAgentDO` coordinates session state and execution.
+- **Durable Object to Sprite VM** - The Durable Object starts VM work and receives VM output through webhook routes. Do not reintroduce long-lived Durable Object ownership of VM stdout as the main execution path.
+- **Package import graph** - Import direction is enforced by `scripts/check-import-boundaries.ts`, which runs as part of `pnpm lint`.
+
+## Cross-Cutting Concerns
+
+- **Validation** - Zod schemas in `packages/shared` define cross-package payloads. Internal services should receive parsed values, not raw JSON or loosely cast inputs.
+- **Logging** - Use the shared `Logger` interface and API-server `createLogger` helper. Keep structured values in `fields` instead of interpolating identifiers into log messages.
+- **Authentication and repo access** - GitHub App auth, user tokens, provider credentials, and session repo authorization are server-side concerns. Web code should call API surfaces instead of importing auth logic.
+- **Turn execution** - `docs/turn-workflow.md` contains the more detailed turn lifecycle. Keep this file limited to stable ownership and boundary facts.
 
 ## Tech Stack
 

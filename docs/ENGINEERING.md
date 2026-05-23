@@ -19,6 +19,15 @@ This document is the source of truth for repo-wide coding style and engineering 
 - If adding a dependency to multiple packages, prefer the shared catalog in `pnpm-workspace.yaml`.
 - Put types used by multiple packages in `packages/shared` instead of duplicating interfaces.
 
+## Architecture Docs
+
+Treat `ARCHITECTURE.md` as a short, stable codemap. It should answer where major responsibilities live, what boundaries matter, and which invariants are easy to break by accident.
+
+- Keep detailed designs, migration plans, and volatile implementation notes in focused docs under `docs/`.
+- Name important modules, files, and types, but avoid turning `ARCHITECTURE.md` into a synchronized file listing.
+- Add or update architectural invariants when a change alters package direction, session ownership, VM ownership, webhook flow, or external-system boundaries.
+- Prefer explicit boundary statements over implied absences. For example, say that web code must not import server runtime code.
+
 ## Linting
 
 `pnpm lint` runs package ESLint checks through Turbo and then runs `pnpm lint:boundaries`.
