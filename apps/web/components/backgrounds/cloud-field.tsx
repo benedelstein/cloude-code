@@ -85,8 +85,8 @@ export function CloudField() {
     };
 
     const start = () => {
-      if (rafId !== null) return;
-      if (!visible || !tabVisible) return;
+      if (rafId !== null) { return; }
+      if (!visible || !tabVisible) { return; }
       rafId = requestAnimationFrame(tick);
     };
 
@@ -115,10 +115,10 @@ export function CloudField() {
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (!entry) return;
+        if (!entry) { return; }
         visible = entry.isIntersecting;
-        if (visible) start();
-        else stop();
+        if (visible) { start(); }
+        else { stop(); }
       },
       { threshold: 0 },
     );
@@ -126,8 +126,8 @@ export function CloudField() {
 
     const handleVisibility = () => {
       tabVisible = document.visibilityState === "visible";
-      if (tabVisible) start();
-      else stop();
+      if (tabVisible) { start(); }
+      else { stop(); }
     };
     document.addEventListener("visibilitychange", handleVisibility);
 

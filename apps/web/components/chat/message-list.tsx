@@ -61,7 +61,7 @@ export function MessageList({
 
   const isNearBottom = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return true;
+    if (!container) { return true; }
     // pb-64 (256px) on the scroll container sits behind the floating input,
     // so the user appears at the bottom well before scrollTop reaches the end.
     const threshold = 200;
@@ -79,7 +79,7 @@ export function MessageList({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
 
     const handleScroll = () => {
       const nearBottom = isNearBottom();

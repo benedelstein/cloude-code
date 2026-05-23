@@ -88,9 +88,15 @@ export class ReposService {
       ? rows[rows.length - 1]?.repo_full_name ?? null
       : null;
 
-    logger.info(
-      `got ${repos.length} repos for user ${params.userId} - limit ${limit} - cursor ${params.cursor ?? "start"} - next cursor ${nextCursor}`,
-    );
+    logger.info("Listed repos for user", {
+      fields: {
+        userId: params.userId,
+        repoCount: repos.length,
+        limit,
+        cursor: params.cursor ?? "start",
+        nextCursor,
+      },
+    });
 
     return success({
       repos,
@@ -142,9 +148,13 @@ export class ReposService {
     );
     const repos = rowsToRepos(rows);
 
-    logger.info(
-      `repo search for user ${params.userId} - query "${trimmedQuery}" - matches ${repos.length}`,
-    );
+    logger.info("Searched repos for user", {
+      fields: {
+        userId: params.userId,
+        query: trimmedQuery,
+        matchCount: repos.length,
+      },
+    });
     return success({ repos });
   }
 
@@ -184,7 +194,15 @@ export class ReposService {
       default: branch.name === repo.default_branch,
     }));
     const nextCursor = getNextPageCursor(response.headers.link);
-    logger.info(`got ${branches.length} branches for repo ${repo.name} - limit ${limit} - page ${page} - next cursor ${nextCursor}`);
+    logger.info("Listed branches for repo", {
+      fields: {
+        repoName: repo.name,
+        branchCount: branches.length,
+        limit,
+        page,
+        nextCursor,
+      },
+    });
 
     return success({
       branches,
@@ -247,9 +265,9 @@ export class ReposService {
       STALE_CLAIM_AFTER_MS,
     );
     if (!claimed) {
-      logger.info(
-        `background sync skipped for user ${params.userId} - another sync in flight`,
-      );
+      logger.info("Background repo listing sync skipped because another sync is in flight", {
+        fields: { userId: params.userId },
+      });
       return;
     }
 
@@ -263,17 +281,20 @@ export class ReposService {
           // still held. Release it explicitly so the next request can retry
           // without waiting for the stale-claim window.
           await this.listingSyncRepository.releaseSyncClaim(params.userId);
-          logger.error(
-            `Background repo listing sync failed for user ${params.userId}: ${result.error.message}`,
-          );
+          logger.error("Background repo listing sync failed", {
+            fields: {
+              userId: params.userId,
+              errorMessage: result.error.message,
+            },
+          });
         }
         // Success path: setSyncedAt inside fullSync already cleared sync_started_at.
       }).catch(async (error) => {
         await this.listingSyncRepository.releaseSyncClaim(params.userId);
-        logger.error(
-          `Background repo listing sync threw for user ${params.userId}`,
-          { error },
-        );
+        logger.error("Background repo listing sync threw", {
+          fields: { userId: params.userId },
+          error,
+        });
       }),
     );
   }
@@ -299,10 +320,10 @@ export class ReposService {
       );
       installations = allInstallations.map((installation) => ({ id: installation.id }));
     } catch (error) {
-      logger.error(
-        `Failed to list installations for user ${params.userId}`,
-        { error },
-      );
+      logger.error("Failed to list installations for user", {
+        fields: { userId: params.userId },
+        error,
+      });
       return failure({
         domain: "repos",
         status: 400,
@@ -338,10 +359,13 @@ export class ReposService {
           description: repository.description,
         }));
       } catch (error) {
-        logger.error(
-          `Failed to list repos for installation ${installation.id} (user ${params.userId})`,
-          { error },
-        );
+        logger.error("Failed to list repos for installation", {
+          fields: {
+            userId: params.userId,
+            installationId: installation.id,
+          },
+          error,
+        });
         allSucceeded = false;
         continue;
       }
@@ -374,9 +398,15 @@ export class ReposService {
       new Date().toISOString(),
     );
 
-    logger.info(
-      `full repo sync for user ${params.userId}: ${totalRepoCount} repos across ${installations.length} installations in ${Date.now() - startedAt}ms (allSucceeded=${allSucceeded})`,
-    );
+    logger.info("Full repo sync completed", {
+      fields: {
+        userId: params.userId,
+        totalRepoCount,
+        installationCount: installations.length,
+        durationMs: Date.now() - startedAt,
+        allSucceeded,
+      },
+    });
     return success(undefined);
   }
 }

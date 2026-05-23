@@ -1,4 +1,4 @@
-import { AttachmentRecord } from "@/types/attachments";
+import type { AttachmentRecord } from "@/types/attachments";
 import type { AttachmentDescriptor } from "@repo/shared";
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;

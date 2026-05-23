@@ -1,8 +1,9 @@
 import { SpriteWebsocketSession } from "./SpriteWebsocketSession";
-import {
+import type {
   AttachSessionOptions,
   ExecResult,
-  NewExecSessionOptions,
+  NewExecSessionOptions} from "./types";
+import {
   SpritesError,
 } from "./types";
 import { createLogger } from "@/lib/logger";
@@ -74,7 +75,9 @@ export class WorkersSpriteClient {
 
     if (!response.ok) {
       const text = await response.text();
-      logger.error(`Exec failed: ${text}`);
+      logger.error("Exec failed", {
+        fields: { responseBody: text },
+      });
       throw new SpritesError(
         `Exec failed: ${response.status}`,
         response.status,
@@ -104,7 +107,7 @@ export class WorkersSpriteClient {
 
       // Find the end of this chunk (next newline or end of buffer)
       let end = buffer.indexOf(0x0a, i + 1);
-      if (end === -1) end = buffer.length;
+      if (end === -1) { end = buffer.length; }
       const chunk = decoder.decode(buffer.subarray(i + 1, end));
 
       if (marker === 0x01) {

@@ -410,7 +410,7 @@ export function SessionSidebar() {
       <AlertDialog
         open={deleteDialogSessionId !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteDialogSessionId(null);
+          if (!open) { setDeleteDialogSessionId(null); }
         }}
       >
         <AlertDialogContent

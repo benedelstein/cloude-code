@@ -1,6 +1,6 @@
-import { UIMessage } from "ai";
-import { AttachmentService } from "./attachments/attachment-service";
-import { AttachmentRecord } from "@/types/attachments";
+import type { UIMessage } from "ai";
+import type { AttachmentService } from "./attachments/attachment-service";
+import type { AttachmentRecord } from "@/types/attachments";
 import { createUserUiMessage } from "./utils/uimessage-utils";
 import { createLogger } from "./logger";
 
@@ -25,9 +25,9 @@ export async function buildUserUiMessage(
       attachmentIds,
     );
     if (attachmentRecords.length !== attachmentIds.length) {
-      logger.warn(
-        `Some pending attachments missing during init: ${attachmentIds.join(", ")}`,
-      );
+      logger.warn("Some pending attachments missing during init", {
+        fields: { attachmentIds },
+      });
     }
   }
 

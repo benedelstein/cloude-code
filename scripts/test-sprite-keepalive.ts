@@ -158,8 +158,8 @@ switch (commandArg) {
     console.error(`Unsupported command: ${commandArg}`);
     process.exit(1);
 }
-if (tty) url.searchParams.set("tty", "true");
-if (detachable) url.searchParams.set("detachable", "true");
+if (tty) { url.searchParams.set("tty", "true"); }
+if (detachable) { url.searchParams.set("detachable", "true"); }
 // SDK behavior: always enable stdin. Without this the sprite may not
 // register the session as fully attached.
 url.searchParams.set("stdin", "true");

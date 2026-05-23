@@ -228,7 +228,7 @@ export class SpriteAgentProcessManager {
    * or spawn twice.
    */
   async dispatchMessage(input: DispatchMessageInput): Promise<DispatchMessageResult> {
-    if (this.startMutex) return this.startMutex;
+    if (this.startMutex) { return this.startMutex; }
 
     const spawn = (async (): Promise<DispatchMessageResult> => {
       try {
@@ -297,7 +297,7 @@ export class SpriteAgentProcessManager {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) return;
+    if (!processId || !spriteName) { return; }
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -312,7 +312,7 @@ export class SpriteAgentProcessManager {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) return;
+    if (!processId || !spriteName) { return; }
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -335,7 +335,7 @@ export class SpriteAgentProcessManager {
    */
   ensureWebhookToken(): string {
     const existing = this.secretRepository.get("webhook_token");
-    if (existing) return existing;
+    if (existing) { return existing; }
     const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
     this.secretRepository.set("webhook_token", token);
     return token;
@@ -509,7 +509,7 @@ export class SpriteAgentProcessManager {
       agentMode: AgentMode | undefined;
     },
   ): Promise<ExistingProcessDispatchResult> {
-    if (!args.processId) return { status: "fallback" };
+    if (!args.processId) { return { status: "fallback" }; }
 
     const session = sprite.attachSession(String(args.processId), {
       idleTimeoutMs: 10_000,
@@ -518,7 +518,9 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
-      this.logger.debug(`Attached to existing vm-agent process ${args.processId}, waiting for stdin ack`);
+      this.logger.debug("Attached to existing vm-agent process; waiting for stdin ack", {
+        fields: { processId: args.processId, userMessageId: args.userMessageId },
+      });
       // wait for the agent process to explicitly acknowledge the message write
       const stdinAck = this.waitForAck(
         session,
@@ -645,11 +647,11 @@ export class SpriteAgentProcessManager {
 
       const cleanup = () => {
         clearTimeout(timeout);
-        for (const dispose of disposers) dispose();
+        for (const dispose of disposers) { dispose(); }
       };
 
       const settle = (fn: () => void) => {
-        if (settled) return;
+        if (settled) { return; }
         settled = true;
         cleanup();
         fn();
@@ -657,12 +659,12 @@ export class SpriteAgentProcessManager {
 
       const processLine = (line: string) => {
         const trimmedLine = line.replace(/\r$/, "");
-        if (!trimmedLine) return;
+        if (!trimmedLine) { return; }
 
         try {
           const output = decodeAgentOutput(trimmedLine);
           if (output.type === expectedType) {
-            if (output.userMessageId === userMessageId) settle(resolve);
+            if (output.userMessageId === userMessageId) { settle(resolve); }
             return;
           }
         } catch {
@@ -683,7 +685,7 @@ export class SpriteAgentProcessManager {
         session.onStdout((chunk) => {
           const parsed = consumeLines(buffer, chunk);
           buffer = parsed.remainder;
-          for (const line of parsed.lines) processLine(line);
+          for (const line of parsed.lines) { processLine(line); }
         }),
       );
       disposers.push(
@@ -810,7 +812,9 @@ export class SpriteAgentProcessManager {
     session.onServerMessage((message: SpriteServerMessage) => {
       if (message.type === "session_info" && processId === null) {
         processId = message.session_id;
-        this.logger.debug(`captured agent process id: ${processId}`);
+        this.logger.debug("Captured agent process id", {
+          fields: { processId },
+        });
         resolveProcessId(processId);
       }
     });

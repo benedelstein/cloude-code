@@ -61,13 +61,13 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
     if (editorUrl && !editorLink) {
       openEditor(sessionId)
         .then((result) => setEditorLink(`${result.url}?tkn=${result.token}`))
-        .catch(() => {/* will fetch on click instead */});
+        .catch(() => { /* will fetch on click instead */ });
     }
   }, [editorUrl, editorLink, sessionId]);
 
   async function handleClick(event: React.MouseEvent) {
     // If we already have the link, let the <a> handle it natively
-    if (editorLink) return;
+    if (editorLink) { return; }
 
     event.preventDefault();
     setLoading(true);

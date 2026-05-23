@@ -42,9 +42,9 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   }, []);
 
   useEffect(() => {
-    if (!expandedImageUrl) return undefined;
+    if (!expandedImageUrl) { return undefined; }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpandedImageUrl(null);
+      if (event.key === "Escape") { setExpandedImageUrl(null); }
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -107,7 +107,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
     };
 
     parts.forEach((part, index) => {
-      if (!part || typeof part !== "object" || !("type" in part)) return;
+      if (!part || typeof part !== "object" || !("type" in part)) { return; }
 
       switch (part.type) {
         case "text":
@@ -179,7 +179,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   // Collapse work before the LAST text item when settled. Final text stays
   // visible; earlier text only collapses when mixed with actual work items.
   const collapsedPrefixLength = (() => {
-    if (!isSettled || isAborted || !hasFinalText) return 0;
+    if (!isSettled || isAborted || !hasFinalText) { return 0; }
     let lastTextIndex = -1;
     for (let i = renderItems.length - 1; i >= 0; i--) {
       if (renderItems[i]!.kind === "text") {
@@ -187,7 +187,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
         break;
       }
     }
-    if (lastTextIndex <= 0) return 0;
+    if (lastTextIndex <= 0) { return 0; }
 
     const hasWorkBeforeFinalText = renderItems
       .slice(0, lastTextIndex)
@@ -202,7 +202,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const createdAt = messageCreatedAt(message);
   const copyText = getMessageText(message);
   const copyMessageText = async () => {
-    if (!copyText || !navigator.clipboard) return;
+    if (!copyText || !navigator.clipboard) { return; }
     await navigator.clipboard.writeText(copyText);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
@@ -307,7 +307,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
           tabIndex={0}
           onClick={() => setExpandedImageUrl(null)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") setExpandedImageUrl(null);
+            if (event.key === "Enter" || event.key === " ") { setExpandedImageUrl(null); }
           }}
           className="fixed inset-0 z-9999 flex items-center justify-center bg-black p-4 cursor-zoom-out"
           aria-label="Close image preview"
@@ -331,13 +331,13 @@ function messageCreatedAt(message: UIMessage): Date | null {
   const rawCreatedAt = metadata.createdAt;
   if (typeof rawCreatedAt === "string") {
     const date = new Date(rawCreatedAt);
-    if (!Number.isNaN(date.getTime())) return date;
+    if (!Number.isNaN(date.getTime())) { return date; }
   }
 
   const rawStartedAt = metadata.startedAt;
   if (typeof rawStartedAt === "number") {
     const date = new Date(rawStartedAt);
-    if (!Number.isNaN(date.getTime())) return date;
+    if (!Number.isNaN(date.getTime())) { return date; }
   }
 
   return null;

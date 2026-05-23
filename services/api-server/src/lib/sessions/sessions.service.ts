@@ -368,7 +368,9 @@ export class SessionsService {
       }
     }
 
-    logger.log(`creating session websocket token for ${params.sessionId}`);
+    logger.log("Creating session websocket token", {
+      fields: { sessionId: params.sessionId },
+    });
     const webSocketToken = await mintSessionWebSocketToken(
       this.env.WEBSOCKET_TOKEN_SIGNING_KEY,
       {
@@ -376,7 +378,9 @@ export class SessionsService {
         userId: params.userId,
       },
     );
-    logger.log(`created session websocket token for ${params.sessionId}`);
+    logger.log("Created session websocket token", {
+      fields: { sessionId: params.sessionId },
+    });
 
     return success(webSocketToken);
   }

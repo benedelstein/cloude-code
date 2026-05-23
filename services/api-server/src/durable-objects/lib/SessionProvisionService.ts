@@ -1,6 +1,7 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import { SpritesCoordinator, WorkersSpriteClient } from "@/lib/sprites";
+import type { SpritesCoordinator} from "@/lib/sprites";
+import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { configureGitRemote } from "@/lib/git-setup";
 import { GitHubAppService } from "@/lib/github/github-app";
@@ -68,7 +69,7 @@ export class SessionProvisionService {
    * concurrently — all callers share one in-flight promise.
    */
   ensureProvisioned(): Promise<void> {
-    if (this.ensureProvisionedPromise) return this.ensureProvisionedPromise;
+    if (this.ensureProvisionedPromise) { return this.ensureProvisionedPromise; }
     this.ensureProvisionedPromise = this.provision().finally(() => {
       this.ensureProvisionedPromise = null;
     });
@@ -80,9 +81,9 @@ export class SessionProvisionService {
       const serverState = this.getServerState();
       if (!serverState.spriteName) {
         this.updatePartialState({ status: this.synthesizeStatus() });
-        this.logger.debug(
-          `Provisioning sprite for session ${serverState.sessionId}`,
-        );
+        this.logger.debug("Provisioning sprite for session", {
+          fields: { sessionId: serverState.sessionId },
+        });
 
         const spriteResponse = await this.spritesCoordinator.createSprite({
           name: serverState.sessionId!,
@@ -151,11 +152,13 @@ export class SessionProvisionService {
       {},
     );
     if (isCloned.stdout.includes("exists")) {
-      this.logger.info(
-        `Repo ${repoFullName} already cloned on sprite ${spriteName}`,
-      );
+      this.logger.info("Repo already cloned on sprite", {
+        fields: { repoFullName, spriteName },
+      });
     } else {
-      this.logger.info(`Cloning repo ${repoFullName} on sprite ${spriteName}`);
+      this.logger.info("Cloning repo on sprite", {
+        fields: { repoFullName, spriteName },
+      });
       await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
       // Fetch a read-only token scoped to contents:read for the initial clone
@@ -176,9 +179,13 @@ export class SessionProvisionService {
         `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
         {},
       );
-      this.logger.info(
-        `Clone completed in ${((Date.now() - cloneStart) / 1000).toFixed(1)}s: exitCode=${cloneResult.exitCode}, stderr=${cloneResult.stderr.slice(0, 500)}`,
-      );
+      this.logger.info("Clone completed", {
+        fields: {
+          durationSeconds: Number(((Date.now() - cloneStart) / 1000).toFixed(1)),
+          exitCode: cloneResult.exitCode,
+          stderr: cloneResult.stderr.slice(0, 500),
+        },
+      });
       if (cloneResult.exitCode !== 0) {
         throw new Error(
           `Clone failed (exit ${cloneResult.exitCode}): ${cloneResult.stderr}`,
@@ -193,9 +200,12 @@ export class SessionProvisionService {
     );
     const actualBaseBranch = branchResult.stdout.trim() || "main";
     if (actualBaseBranch !== clientState.baseBranch && clientState.baseBranch) {
-      this.logger.warn(
-        `Base branch ${clientState.baseBranch} does not match actual base branch ${actualBaseBranch}`,
-      );
+      this.logger.warn("Base branch does not match actual base branch", {
+        fields: {
+          configuredBaseBranch: clientState.baseBranch,
+          actualBaseBranch,
+        },
+      });
     }
     this.updatePartialState({ baseBranch: actualBaseBranch });
 

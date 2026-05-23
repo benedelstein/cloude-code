@@ -1,8 +1,9 @@
-import {
+import type {
   AttachSessionOptions,
   NewExecSessionOptions,
+  SpriteServerMessage} from "./types";
+import {
   SessionInfoMessageSchema,
-  SpriteServerMessage,
   SpriteServerMessageSchema,
 } from "./types";
 import { createLogger } from "@/lib/logger";
@@ -121,9 +122,9 @@ export class SpriteWebsocketSession {
     const ws = response.webSocket;
     if (!ws) {
       const body = await response.text();
-      logger.error(
-        `WebSocket upgrade failed. Status: ${response.status}, Body: ${body}`,
-      );
+      logger.error("WebSocket upgrade failed", {
+        fields: { status: response.status, body },
+      });
       throw new Error(
         `Server didn't accept WebSocket connection: ${response.status} - ${body}`,
       );
@@ -201,15 +202,15 @@ export class SpriteWebsocketSession {
 
       const messageHandler = (event: MessageEvent) => {
         // Binary messages before session_info are historical output - ignore until TTY mode is known
-        if (typeof event.data !== "string") return;
+        if (typeof event.data !== "string") { return; }
         try {
           const message: unknown = JSON.parse(event.data);
           const result = SessionInfoMessageSchema.safeParse(message);
           if (result.success) {
             cleanup();
-            logger.info(
-              `Process info received: ${result.data.tty ? "TTY mode true" : "non-TTY mode"}`,
-            );
+            logger.info("Process info received", {
+              fields: { tty: result.data.tty },
+            });
             this.ttyMode = result.data.tty;
             this.dispatchServerMessage(result.data);
             resolve();
@@ -318,7 +319,9 @@ export class SpriteWebsocketSession {
     }
 
     this.idleTimeout = setTimeout(() => {
-      logger.error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
+      logger.error("WebSocket idle timeout", {
+        fields: { idleTimeoutMs },
+      });
       this.finalizeTransportFailure(
         new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`),
         { closeCode: WEBSOCKET_CLOSED_GOING_AWAY_CODE },
@@ -450,9 +453,12 @@ export class SpriteWebsocketSession {
   private dispatchServerMessage(msg: unknown): void {
     const result = SpriteServerMessageSchema.safeParse(msg);
     if (!result.success) {
-      logger.warn(
-        `[SpriteWebsocketSession] Unknown server message: ${JSON.stringify(msg)} ${JSON.stringify(result.error.format())}`,
-      );
+      logger.warn("[SpriteWebsocketSession] Unknown server message", {
+        fields: {
+          message: JSON.stringify(msg),
+          issues: JSON.stringify(result.error.format()),
+        },
+      });
       return;
     }
 
@@ -460,7 +466,7 @@ export class SpriteWebsocketSession {
     this.serverMessageHandlers.forEach((h) => h(parsed));
 
     if (parsed.type === "exit") {
-      logger.debug(`Received exit message`);
+      logger.debug("Received exit message");
       this.finalizeExit(parsed.exit_code);
     }
   }
@@ -469,14 +475,19 @@ export class SpriteWebsocketSession {
     if (this.done) {
       // the sprite may send an exit message both via ExitMessage json and a binary frame - `done` makes this idempotent.
       if (this.exitCode !== null && this.exitCode !== exitCode) {
-        logger.warn(
-          `Ignoring duplicate exit code ${exitCode}; already recorded ${this.exitCode}`,
-        );
+        logger.warn("Ignoring duplicate exit code", {
+          fields: {
+            exitCode,
+            recordedExitCode: this.exitCode,
+          },
+        });
       }
       return;
     }
 
-    logger.debug(`Finalizing exit with code ${exitCode}`);
+    logger.debug("Finalizing exit", {
+      fields: { exitCode },
+    });
     this.done = true;
     this.exitCode = exitCode;
     this.clearIdleTimeout();
@@ -610,7 +621,7 @@ export class SpriteWebsocketSession {
   }
 
   resize(cols: number, rows: number): void {
-    if (!this.ttyMode) throw new Error("Resize only supported in TTY mode");
+    if (!this.ttyMode) { throw new Error("Resize only supported in TTY mode"); }
 
     this.getOpenWebSocket().send(
       JSON.stringify({ type: "resize", cols, rows }),

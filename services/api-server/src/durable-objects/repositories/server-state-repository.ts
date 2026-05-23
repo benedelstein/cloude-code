@@ -53,7 +53,7 @@ export class ServerStateRepository implements Repository {
 
   get(): ServerState {
     const rows = this.sql<{ state: string }>`SELECT state FROM server_state WHERE id = 'state'`;
-    if (!rows[0]?.state) return defaultServerState();
+    if (!rows[0]?.state) { return defaultServerState(); }
     // Merge on defaults so older persisted states without newer fields stay valid.
     return { ...defaultServerState(), ...JSON.parse(rows[0].state) } as ServerState;
   }

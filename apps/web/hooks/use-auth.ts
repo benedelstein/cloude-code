@@ -136,7 +136,7 @@ export function useAuth() {
 
     // Listen for the popup to signal auth completion
     const handleMessage = (event: MessageEvent<unknown>) => {
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== window.location.origin) { return; }
 
       const parsedMessage = GitHubAuthPopupMessage.safeParse(event.data);
       if (!parsedMessage.success) {

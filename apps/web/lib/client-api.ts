@@ -208,11 +208,11 @@ export async function listSessions(opts?: {
   sessionLimit?: number;
 }): Promise<ListSessionsResponse> {
   const params = new URLSearchParams();
-  if (opts?.repoId !== undefined) params.set("repoId", String(opts.repoId));
-  if (opts?.repoCursor) params.set("repoCursor", opts.repoCursor);
-  if (opts?.sessionCursor) params.set("sessionCursor", opts.sessionCursor);
-  if (opts?.repoLimit !== undefined) params.set("repoLimit", String(opts.repoLimit));
-  if (opts?.sessionLimit !== undefined) params.set("sessionLimit", String(opts.sessionLimit));
+  if (opts?.repoId !== undefined) { params.set("repoId", String(opts.repoId)); }
+  if (opts?.repoCursor) { params.set("repoCursor", opts.repoCursor); }
+  if (opts?.sessionCursor) { params.set("sessionCursor", opts.sessionCursor); }
+  if (opts?.repoLimit !== undefined) { params.set("repoLimit", String(opts.repoLimit)); }
+  if (opts?.sessionLimit !== undefined) { params.set("sessionLimit", String(opts.sessionLimit)); }
   const query = params.toString();
   return apiFetch<ListSessionsResponse>(`/sessions${query ? `?${query}` : ""}`);
 }

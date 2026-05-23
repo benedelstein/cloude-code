@@ -88,7 +88,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   }, [isEditingTitle, sessionTitle]);
 
   useEffect(() => {
-    if (!isEditingTitle) return;
+    if (!isEditingTitle) { return; }
     titleInputRef.current?.focus();
     titleInputRef.current?.select();
   }, [isEditingTitle]);

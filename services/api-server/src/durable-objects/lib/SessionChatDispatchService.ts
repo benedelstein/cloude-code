@@ -135,7 +135,7 @@ export class SessionChatDispatchService {
     let modelOverride: string | undefined;
     if (payload.model && payload.model !== clientState.agentSettings.model) {
       const modelResult = this.validateAndApplyModelSwitch(payload.model);
-      if (!modelResult.ok) return failure(modelResult.error);
+      if (!modelResult.ok) { return failure(modelResult.error); }
       modelOverride = modelResult.value;
     }
 
@@ -187,11 +187,13 @@ export class SessionChatDispatchService {
     const clientState = this.getClientState();
     const serverState = this.getServerState();
     const pendingMessage = clientState.pendingUserMessage;
-    if (!pendingMessage || serverState.activeUserMessageId) return;
+    if (!pendingMessage || serverState.activeUserMessageId) { return; }
     const sessionId = serverState.sessionId;
-    if (!sessionId) return;
+    if (!sessionId) { return; }
 
-    this.logger.debug(`dispatching pending message: ${pendingMessage.message.id}`);
+    this.logger.debug("Dispatching pending message", {
+      fields: { messageId: pendingMessage.message.id },
+    });
     const { message: userMessage, attachmentIds } = pendingMessage;
     const content = getUserMessageTextContent(userMessage);
 
@@ -285,7 +287,7 @@ export class SessionChatDispatchService {
     sessionId: string,
     attachmentIds: string[],
   ): Promise<AttachmentRecord[]> {
-    if (attachmentIds.length === 0) return [];
+    if (attachmentIds.length === 0) { return []; }
     return this.attachmentService.getByIdsBoundToSession(sessionId, attachmentIds);
   }
 
@@ -295,9 +297,9 @@ export class SessionChatDispatchService {
     connectionId?: string,
   ): void {
     const sessionId = this.getServerState().sessionId;
-    if (!sessionId) return;
+    if (!sessionId) { return; }
     const existing = this.messageRepository.getById(message.id);
-    if (existing) return;
+    if (existing) { return; }
     const stored = this.messageRepository.create(sessionId, message);
     this.broadcastMessage(
       { type: "user.message", message: stored.message },
@@ -332,7 +334,7 @@ export class SessionChatDispatchService {
     content: string | undefined,
     attachments: AttachmentRecord[],
   ): string {
-    if (content) return content;
+    if (content) { return content; }
     if (attachments.length === 1) {
       return `Uploaded image: ${attachments[0]!.filename}`;
     }

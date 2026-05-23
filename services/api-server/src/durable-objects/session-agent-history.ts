@@ -32,7 +32,9 @@ export async function updateSessionHistoryData(params: {
 
     if (userMessages.length === 1) {
       const title = await generateSessionTitle(anthropicApiKey, messageContent);
-      logger.info(`Generated session title: ${title} for session ${sessionId}`);
+      logger.info("Generated session title", {
+        fields: { sessionId, title },
+      });
       await sessionsRepository.updateTitle(sessionId, title);
     }
   } catch (error) {

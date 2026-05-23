@@ -39,9 +39,9 @@ authRoutes.openapi(getGithubRoute, async (c) => {
 
   const originResult = validateRedirectOrigin(redirectOrigin, c.env);
   if (!originResult.ok) {
-    logger.warn(
-      `Rejecting GitHub OAuth start: ${originResult.error.message}`,
-    );
+    logger.warn("Rejecting GitHub OAuth start", {
+      fields: { reason: originResult.error.message },
+    });
     return c.json({ error: originResult.error.message }, 400);
   }
 
@@ -93,17 +93,17 @@ authRoutes.get("/callback", async (c) => {
   const oauthStateRepository = new OauthStateRepository(c.env.DB);
   const storedOrigin = await oauthStateRepository.peekRedirectOrigin(state);
   if (!storedOrigin) {
-    logger.warn(
-      `OAuth callback failed: unknown or expired state ${state.slice(0, 8)}`,
-    );
+    logger.warn("OAuth callback failed due to unknown or expired state", {
+      fields: { statePrefix: state.slice(0, 8) },
+    });
     return c.text("Invalid or expired sign-in session. Try again.", 400);
   }
 
   const originResult = validateRedirectOrigin(storedOrigin, c.env);
   if (!originResult.ok) {
-    logger.error(
-      `OAuth callback rejected stored origin: ${originResult.error.message}`,
-    );
+    logger.error("OAuth callback rejected stored origin", {
+      fields: { reason: originResult.error.message },
+    });
     return c.text(originResult.error.message, 400);
   }
 

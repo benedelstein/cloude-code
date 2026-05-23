@@ -32,7 +32,7 @@ const PAIRS: [number, number][] = [
 function useTime(): number {
   const [t, setT] = useState(0);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { return; }
     let raf = 0;
     const start = performance.now();
     const loop = (now: number) => {

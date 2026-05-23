@@ -1,5 +1,5 @@
-import { AttachmentRecord } from "@/types/attachments";
-import { UIMessage } from "ai";
+import type { AttachmentRecord } from "@/types/attachments";
+import type { UIMessage } from "ai";
 
 /**
  * Builds a UIMessage from user content suitable for storing in the database.

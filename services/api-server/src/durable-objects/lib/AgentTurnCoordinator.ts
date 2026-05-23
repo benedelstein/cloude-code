@@ -1,9 +1,9 @@
-import {
-  type AgentEvent,
-  type ClientState,
-  type Logger,
-  type ServerMessage,
-  type SessionStatus,
+import type {
+  AgentEvent,
+  ClientState,
+  Logger,
+  ServerMessage,
+  SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -96,10 +96,10 @@ export class AgentTurnCoordinator {
    * commits the partial as aborted in the background.
    */
   ensureRehydratedState(): void {
-    if (this.hasEnsuredRehydratedState) return;
+    if (this.hasEnsuredRehydratedState) { return; }
     const serverState = this.getServerState();
     const sessionId = serverState.sessionId;
-    if (!sessionId) return;
+    if (!sessionId) { return; }
 
     const orphanedChunks = this.pendingChunkRepository.getAll();
     if (orphanedChunks.length > 0) {
@@ -190,14 +190,14 @@ export class AgentTurnCoordinator {
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
   ): Promise<void> {
     this.ensureRehydratedState();
-    if (this.isStaleRpc(userMessageId)) return;
+    if (this.isStaleRpc(userMessageId)) { return; }
     if (this.getServerState().activeUserMessageId === null) {
       // No active turn (clean finish, abort, or gap already cleared state).
       // Drop late chunks silently so retries of a terminated batch can't
       // restart accumulation against cleared state.
-      this.logger.debug(
-        `ignoring ${chunks.length} chunks for ${userMessageId}: no active turn`,
-      );
+      this.logger.debug("Ignoring chunks with no active turn", {
+        fields: { chunkCount: chunks.length, userMessageId },
+      });
       return;
     }
 
@@ -211,27 +211,33 @@ export class AgentTurnCoordinator {
       if (this.lastSeenChunkSequence !== null) {
         const expected = this.lastSeenChunkSequence + 1;
         if (sequence > expected) {
-          this.logger.error(
-            `chunk stream gap for ${userMessageId}: expected ${expected}, received ${sequence}`,
-          );
+          this.logger.error("Chunk stream gap", {
+            fields: { userMessageId, expected, sequence },
+          });
           this.flushBufferedChunks(buffered);
           await this.handleStreamGap(expected, sequence);
           return;
         }
         if (sequence < expected) {
           // WAL unique check should catch this so fall through
-          this.logger.warn(`Chunk is lower than expected. Expected ${expected}, received ${sequence}`);
+          this.logger.warn("Chunk is lower than expected", {
+            fields: { expected, sequence },
+          });
         }
       } else {
         if (sequence !== 0) {
-          this.logger.warn(`Nonzero first chunk received: ${sequence}`);
+          this.logger.warn("Nonzero first chunk received", {
+            fields: { sequence },
+          });
         }
       }
       // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
       // means this chunk was already applied by a prior batch (retry).
       const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence);
       if (!inserted) {
-        this.logger.warn(`dropping duplicate chunk (WAL conflict) ${sequence}`);
+        this.logger.warn("Dropping duplicate chunk from WAL conflict", {
+          fields: { sequence },
+        });
         continue;
       }
       buffered.push(chunk);
@@ -260,7 +266,9 @@ export class AgentTurnCoordinator {
         this.updatePartialState({ status: this.synthesizeStatus() });
         break;
       case "error":
-        this.logger.error(`vm-agent error: ${event.error}`);
+        this.logger.error("vm-agent error", {
+          fields: { errorMessage: event.error },
+        });
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
         this.clearActiveTurnState();
@@ -275,14 +283,19 @@ export class AgentTurnCoordinator {
         });
         break;
       case "sessionId":
-        this.logger.info(`Storing agent session ID: ${event.sessionId}`);
+        this.logger.info("Storing agent session ID", {
+          fields: { agentSessionId: event.sessionId },
+        });
         if (
           serverState.agentSessionId &&
           serverState.agentSessionId !== event.sessionId
         ) {
-          this.logger.warn(
-            `Agent session ID mismatch: ${serverState.agentSessionId} !== ${event.sessionId}`,
-          );
+          this.logger.warn("Agent session ID mismatch", {
+            fields: {
+              currentAgentSessionId: serverState.agentSessionId,
+              incomingAgentSessionId: event.sessionId,
+            },
+          });
         }
         this.updateServerState({ agentSessionId: event.sessionId });
         break;
@@ -297,7 +310,7 @@ export class AgentTurnCoordinator {
    * spawn a turn. Marks the user message aborted and surfaces the error.
    */
   handleTurnSpawnFailed(userMessageId: string, errorMessage: string): void {
-    if (this.isStaleRpc(userMessageId)) return;
+    if (this.isStaleRpc(userMessageId)) { return; }
     this.logger.error("Turn spawn failed", {
       fields: { userMessageId },
       error: errorMessage,
@@ -329,7 +342,7 @@ export class AgentTurnCoordinator {
   private async reconcileActiveTurn(): Promise<void> {
     const serverState = this.getServerState();
     const { agentProcessId, spriteName } = serverState;
-    if (!agentProcessId || !spriteName) return;
+    if (!agentProcessId || !spriteName) { return; }
 
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -390,9 +403,11 @@ export class AgentTurnCoordinator {
       this.messageAccumulator.getMessageId(),
     );
 
-    if (!finishedMessage) return { ended: false };
+    if (!finishedMessage) { return { ended: false }; }
 
-    this.logger.debug(`finished message: ${finishedMessage.id}`);
+    this.logger.debug("Finished message", {
+      fields: { messageId: finishedMessage.id },
+    });
     const stored = this.messageRepository.create(
       serverState.sessionId!,
       finishedMessage,
@@ -415,7 +430,7 @@ export class AgentTurnCoordinator {
 
   /** Emits buffered chunks as a single agent.chunks */
   private flushBufferedChunks(buffered: UIMessageChunk[]): void {
-    if (buffered.length === 0) return;
+    if (buffered.length === 0) { return; }
     this.broadcastMessage({ type: "agent.chunks", chunks: buffered });
   }
 
@@ -450,7 +465,7 @@ export class AgentTurnCoordinator {
   markTurnCanceled(
     options: { preserveAgentProcessId?: boolean } = {},
   ): void {
-    if (!this.getServerState().activeUserMessageId) return;
+    if (!this.getServerState().activeUserMessageId) { return; }
     this.commitAbortedMessage(options);
     this.updatePartialState({ status: this.synthesizeStatus() });
   }

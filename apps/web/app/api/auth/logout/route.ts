@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { clearSessionCookie, getSessionTokenFromRequest } from "@/lib/session";
 import { serverLogout } from "@/lib/server-api";
 

@@ -114,7 +114,9 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
     const editorUrl = spriteInfo.url;
     context.setEditorUrl(editorUrl);
 
-    logger.info(`Editor ready at ${editorUrl}`);
+    logger.info("Editor ready", {
+      fields: { editorUrl },
+    });
     // Broadcast to all WS clients so other tabs/windows can open the editor too
     context.broadcastEditorReady(editorUrl, token);
 

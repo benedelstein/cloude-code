@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest} from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;

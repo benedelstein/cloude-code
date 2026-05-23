@@ -16,7 +16,7 @@ export function ProviderSigninPanelOpenAIFlow({
   const [copied, setCopied] = useState(false);
 
   const copyCode = async () => {
-    if (!handle.userCode) return;
+    if (!handle.userCode) { return; }
     await navigator.clipboard.writeText(handle.userCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

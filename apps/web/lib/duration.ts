@@ -5,7 +5,7 @@
  *  - "1h 3m" for an hour or more
  */
 export function humanizeDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return "0s";
+  if (!Number.isFinite(ms) || ms < 0) { return "0s"; }
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   if (totalSeconds < 60) {
     return `${totalSeconds}s`;

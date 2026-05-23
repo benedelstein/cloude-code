@@ -69,7 +69,7 @@ export function useClaudeAuth(options: UseClaudeAuthOptions = {}) {
   }, []);
 
   const submitCode = useCallback(async () => {
-    if (!pendingState || !code.trim()) return;
+    if (!pendingState || !code.trim()) { return; }
     setSubmittingCode(true);
     setError(null);
     try {

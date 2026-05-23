@@ -36,7 +36,7 @@ export function migrateAll(
       rows.length > 0 ? Math.max(...rows.map((row) => row.version)) : -1;
 
     repo.migrations.forEach((step, index) => {
-      if (index <= maxApplied) return;
+      if (index <= maxApplied) { return; }
       storage.transactionSync(() => {
         step(sql);
         sql`

@@ -50,7 +50,7 @@ export class ChunkBatcher {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (this.buffer.length === 0) return this.flushChain;
+    if (this.buffer.length === 0) { return this.flushChain; }
     const batch = this.buffer;
     this.buffer = [];
     this.flushChain = this.flushChain

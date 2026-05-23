@@ -3,7 +3,8 @@
 
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { Sprite, SpritesClient } from "@fly/sprites";
+import type { Sprite} from "@fly/sprites";
+import { SpritesClient } from "@fly/sprites";
 import { SpritesCoordinator, WorkersSpriteClient } from "../src/lib/sprites";
 
 const SPRITES_API_KEY = process.env.SPRITES_API_KEY!;

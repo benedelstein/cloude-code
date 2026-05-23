@@ -1,4 +1,4 @@
-import { WorkersSpriteClient } from "@/lib/sprites/WorkersSpriteClient";
+import type { WorkersSpriteClient } from "@/lib/sprites/WorkersSpriteClient";
 import { dedent } from "@repo/shared";
 
 export interface GitSetupOptions {

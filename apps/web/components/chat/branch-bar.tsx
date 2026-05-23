@@ -27,7 +27,7 @@ export function BranchBar({
   const [copied, setCopied] = useState(false);
 
   const copyBranchName = useCallback(async () => {
-    if (!pushedBranch) return;
+    if (!pushedBranch) { return; }
     await navigator.clipboard.writeText(pushedBranch);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -35,7 +35,7 @@ export function BranchBar({
 
   // Poll PR status when PR exists and is open
   useEffect(() => {
-    if (!url || state !== "open") return;
+    if (!url || state !== "open") { return; }
 
     const pollStatus = async () => {
       try {
@@ -67,7 +67,7 @@ export function BranchBar({
     }
   }, [sessionId]);
 
-  if (!pushedBranch) return null;
+  if (!pushedBranch) { return null; }
 
   return (
     <div className="min-w-0 shrink-0 overflow-hidden rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">

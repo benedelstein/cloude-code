@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
+import type { SessionInfoResponse } from "@repo/shared";
 import type {
   HandleGetMessagesResult,
   HandleGetSessionResult,
@@ -74,7 +75,7 @@ function buildPullRequestContextMessages(messages: UIMessage[]): string[] {
     .filter((message): message is string => Boolean(message));
 }
 
-async function getSessionInfo(sessionStub: SessionAgentStub): Promise<import("@repo/shared").SessionInfoResponse> {
+async function getSessionInfo(sessionStub: SessionAgentStub): Promise<SessionInfoResponse> {
   const result = (await sessionStub.handleGetSession()) as HandleGetSessionResult;
   if (!result.ok) {
     throw new SessionPullRequestServiceError(

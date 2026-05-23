@@ -17,8 +17,8 @@ export function formatRelativeTime(dateString: string): string {
     (startOfToday.getTime() - startOfDateDay.getTime()) / (24 * 60 * 60 * 1000)
   );
 
-  if (diffDays === 0) return timeStr;
-  if (diffDays === 1) return "Yesterday";
+  if (diffDays === 0) { return timeStr; }
+  if (diffDays === 1) { return "Yesterday"; }
   return date.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",

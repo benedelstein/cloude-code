@@ -10,7 +10,7 @@ interface CacheEntry<T> {
 export function readCache<T>(key: string): CacheEntry<T> | null {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return null;
+    if (!raw) { return null; }
     const parsed: CacheEntry<T> = JSON.parse(raw);
     if (!parsed || typeof parsed.timestamp !== "number" || !("data" in parsed)) {
       return null;

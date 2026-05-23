@@ -331,7 +331,7 @@ export class GitHubAppService {
   async getRepoNameById(repoId: number, userAccessToken: string): Promise<string> {
     const installationRepo = await this.installationRepository.findInstallationRepoById(repoId);
 
-    if (installationRepo) return installationRepo.repoName;
+    if (installationRepo) { return installationRepo.repoName; }
 
     // Fallback: query GitHub API using an app-level request
     const octokit = new Octokit({ auth: userAccessToken });
@@ -351,7 +351,7 @@ export class GitHubAppService {
   private async getNumericRepoId(installationId: number, owner: string, repo: string): Promise<number> {
     const installationRepo = await this.installationRepository.findRepo(installationId, `${owner}/${repo}`);
 
-    if (installationRepo) return installationRepo.repoId;
+    if (installationRepo) { return installationRepo.repoId; }
 
     // Fallback: query GitHub API
     const octokit = await this.app.getInstallationOctokit(installationId);
@@ -602,11 +602,11 @@ export class GitHubAppService {
           message: `Repository ${owner}/${repo} is not accessible via the GitHub App installation`,
         });
       }
-      this.logger.log(`found installation for ${owner}/${repo} in d1 in ${new Date().getTime() - d1.getTime()}ms`);
+      this.logger.log("Found installation in D1", { fields: { owner, repo, durationMs: new Date().getTime() - d1.getTime() } });
       return success(installation);
     }
 
-    this.logger.log(`installation/repo not found in d1 or not scoped to this repo, trying api for ${owner}/${repo}`);
+    this.logger.log("Installation repo not found in D1 or not scoped; trying GitHub API", { fields: { owner, repo } });
 
     // Fallback: query GitHub API directly
     try {
@@ -615,15 +615,13 @@ export class GitHubAppService {
         repo,
       });
 
-      this.logger.log(`found installation for ${owner}/${repo} in api in ${new Date().getTime() - d1.getTime()}ms`);
+      this.logger.log("Found installation in GitHub API", { fields: { owner, repo, durationMs: new Date().getTime() - d1.getTime() } });
       return success({
         id: data.id,
         repositorySelection: (data.repository_selection ?? "all") as RepositorySelection,
       });
     } catch (error) {
-      this.logger.error(`Failed to get repository installation for ${owner}/${repo}`, {
-        error,
-      });
+      this.logger.error("Failed to get repository installation", { fields: { owner, repo }, error });
 
       if (
         typeof error === "object" &&
@@ -668,7 +666,7 @@ export class GitHubAppService {
       const repo = repoData.name;
       const repoFullName = repoData.full_name;
 
-      this.logger.log(`installation/repo not found in d1 or not scoped, trying api for ${repoFullName}`);
+      this.logger.log("Installation repo not found in D1 or not scoped; trying GitHub API", { fields: { repoFullName } });
       return this.findInstallationForRepo(owner, repo);
     } catch (error) {
       if (
@@ -677,7 +675,7 @@ export class GitHubAppService {
         "status" in error &&
         error.status === 404
       ) {
-        this.logger.warn(`Received 404 from github api for repo ${repoId}`);
+        this.logger.warn("Received 404 from GitHub API for repo", { fields: { repoId } });
         return failure({
           code: "REPO_NOT_ACCESSIBLE",
           message: `Repository ${repoId} is not accessible to the authenticated user.`,
@@ -717,7 +715,7 @@ export class GitHubAppService {
     message: string,
     error: unknown,
   ): GitHubAppResult<T> {
-    this.logger.error(message, { error });
+    this.logger.error("GitHub API failure", { fields: { message }, error });
     return failure({
       code: "GITHUB_API_ERROR",
       message,
@@ -777,7 +775,7 @@ export class GitHubAppService {
     payload: string;
   }): Promise<void> {
     this.registerWebhookHandlers();
-    this.logger.info(`github webhook received: ${params.id} - ${params.name}`);
+    this.logger.info("GitHub webhook received", { fields: { id: params.id, name: params.name } });
 
     await this.app.webhooks.verifyAndReceive({
       id: params.id,
@@ -829,15 +827,11 @@ export class GitHubAppService {
     const installation = payload.installation;
     const account = installation.account;
     if (!account || !("login" in account)) {
-      this.logger.error(
-        `github installation created: ${installation.id} - ${installation.target_type} - no account`,
-      );
+      this.logger.error("GitHub installation created without account", { fields: { installationId: installation.id, targetType: installation.target_type } });
       return;
     }
 
-    this.logger.info(
-      `github installation created: ${installation.id}\ntarget_type:${installation.target_type}`,
-    );
+    this.logger.info("GitHub installation created", { fields: { installationId: installation.id, targetType: installation.target_type } });
     await this.installationRepository.upsert({
       id: installation.id,
       appId: installation.app_id,
@@ -852,15 +846,13 @@ export class GitHubAppService {
 
     // Insert selected repos if any
     if (payload.repositories && payload.repositories.length > 0) {
-      this.logger.info(
-        `installation ${installation.id} has ${payload.repositories.length} repositories`,
-      );
+      this.logger.info("Installation has repositories", { fields: { installationId: installation.id, repositoryCount: payload.repositories.length } });
       await this.installationRepository.addRepos(
         installation.id,
         payload.repositories.map((repo) => ({ id: repo.id, fullName: repo.full_name })),
       );
     } else {
-      this.logger.info(`installation ${installation.id} has no repositories specified`);
+      this.logger.info("Installation has no repositories specified", { fields: { installationId: installation.id } });
     }
   }
 
@@ -868,7 +860,7 @@ export class GitHubAppService {
     payload: WebhookPayload<"installation.deleted">,
   ): Promise<void> {
     const installationId = payload.installation.id;
-    this.logger.info(`github installation deleted: ${installationId}`);
+    this.logger.info("GitHub installation deleted", { fields: { installationId } });
     // Clear listing-sync markers BEFORE access-cache rows are deleted, so the
     // sub-select can still find affected users.
     await this.userRepoListingSyncRepository.clearForInstallation(installationId);
@@ -884,7 +876,7 @@ export class GitHubAppService {
     payload: WebhookPayload<"installation.suspend">,
   ): Promise<void> {
     const installationId = payload.installation.id;
-    this.logger.info(`github installation suspended: ${installationId}`);
+    this.logger.info("GitHub installation suspended", { fields: { installationId } });
     await this.installationRepository.setSuspended(installationId, true);
     await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
@@ -898,7 +890,7 @@ export class GitHubAppService {
     payload: WebhookPayload<"installation.unsuspend">,
   ): Promise<void> {
     const installationId = payload.installation.id;
-    this.logger.info(`github installation unsuspended: ${installationId}`);
+    this.logger.info("GitHub installation unsuspended", { fields: { installationId } });
     await this.installationRepository.setSuspended(installationId, false);
     await this.userRepoListingSyncRepository.clearForInstallation(installationId);
     await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
@@ -915,9 +907,7 @@ export class GitHubAppService {
     const existingInstallation = await this.installationRepository.findById(installationId);
     const previousRepositorySelection = existingInstallation?.repositorySelection ?? null;
 
-    this.logger.info(
-      `github installation repositories added: ${installationId} - ${repos.length} repos. ${previousRepositorySelection} -> ${repositorySelection}`,
-    );
+    this.logger.info("GitHub installation repositories added", { fields: { installationId, repositoryCount: repos.length, previousRepositorySelection, repositorySelection } });
 
     await this.installationRepository.setRepositorySelectionAndAddRepos(
       installationId,
@@ -945,7 +935,7 @@ export class GitHubAppService {
       );
     } else if (previousRepositorySelection === "selected" && repositorySelection === "all") {
       await this.userRepoAccessCacheRepository.deleteByInstallationId(installationId);
-    } else if (previousRepositorySelection === null || (previousRepositorySelection == repositorySelection)) {
+    } else if (previousRepositorySelection === null || previousRepositorySelection === repositorySelection) {
       await this.userRepoAccessCacheRepository.deleteByInstallationIdAndRepoIds(
         installationId,
         repoIds,
@@ -957,7 +947,7 @@ export class GitHubAppService {
     payload: WebhookPayload<"github_app_authorization.revoked">,
   ): Promise<void> {
     const githubUserId = payload.sender.id;
-    this.logger.info(`github user authorization revoked: ${githubUserId}`);
+    this.logger.info("GitHub user authorization revoked", { fields: { githubUserId } });
     // Revoke all sessions and the refresh token. The GitHub access token is
     // already invalid, so we must not attempt to use it again.
     await this.userSessionRepository.revokeAllSessionsByGithubId(githubUserId);
