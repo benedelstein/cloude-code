@@ -1,5 +1,11 @@
 # Durable Agent Execution
 
+Status: obsolete; superseded by Durable Execution v2 and the current webhook
+turn path in `docs/turn-workflow.md`. The live system does not use
+`SessionTurnWorkflow` or `AgentProcessRunner`; `SessionAgentDO` dispatches to
+`SpriteAgentProcessManager`, and `WebhookAgentRunner` posts chunks/events back
+through `/internal/session/:sessionId/*` webhook routes.
+
 We need agent responses to survive long runtimes and sparse output, while still persisting every streamed chunk.
 
 Currently, the `SessionAgentDO` owns the live Sprite WebSocket for the vm-agent. That works well for real-time fanout and state coordination, but it is the wrong place to own a long-running outbound socket: the DO can become inactive while a response is still running, which breaks the socket and loses chunk delivery. A user should be able to send a message and have the agent continue running even if they disconnect.

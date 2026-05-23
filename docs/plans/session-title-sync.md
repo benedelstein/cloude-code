@@ -1,5 +1,11 @@
 # Make Creation the Single Source of Truth for Initial Titles
 
+Status: proposed, not current behavior. The creation path does generate and
+persist an initial title in `SessionsService.createSession(...)`, but the DO
+still calls `updateSessionHistoryData(...)` from
+`SessionChatDispatchService.handleSentMessageSideEffects(...)`; that helper
+generates a title when the first persisted user message is observed.
+
 ## Summary
 
 - Do not make DO init block on title generation.
@@ -7,7 +13,7 @@
 - Do not add a custom websocket title message for this case.
 - Make `sessions.service.createSession()` the only place that auto-generates the initial title, since creation already returns `title` and the web app already seeds local session list state from that response.
 
-## Key Changes
+## Target Changes
 
 - Remove first-message title generation from [session-agent-history.ts](/Users/ben/code/cloude-code/services/api-server/src/durable-objects/session-agent-history.ts).
 - Keep `updateSessionHistoryData()` responsible only for durable history metadata like `lastMessageAt`; it should not mutate `sessions.title`.

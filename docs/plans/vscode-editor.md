@@ -1,5 +1,10 @@
 # VS Code Editor Feature - Design Document
 
+Status: disabled. The live `SessionAgentDO.openEditor()` and
+`closeEditor()` methods currently return `EDITOR_DISABLED` because the old
+implementation in `session-agent-editor.ts` still calls `setUrlAuth("public")`.
+The Worker/TCP-proxy fix below is the target design, not implemented behavior.
+
 ## Goal
 
 Allow users to open a VS Code editor (openvscode-server) on the session's Sprite VM, giving them direct visibility into the workspace while the agent is running.
