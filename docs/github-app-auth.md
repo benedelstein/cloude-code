@@ -33,9 +33,9 @@ If no installation is found in D1, the code falls back to GitHub API installatio
 
 Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRemote(...)`:
 
-- **Clone**: the API server mints a read-only installation token with `getReadOnlyTokenForRepo(...)` and runs clone with an `http.extraHeader`:
+- **Clone**: the API server mints a read-only installation token with `getReadOnlyTokenForRepo(...)`, base64-encodes `x-access-token:<TOKEN>`, and runs clone with an `http.extraHeader`:
   ```
-  git -c http.extraHeader="Authorization: Basic <x-access-token:TOKEN>" clone ...
+  git -c http.extraHeader="Authorization: Basic <base64(x-access-token:TOKEN)>" clone ...
   ```
 - **Push/fetch after clone**: `origin` is reset to the public GitHub URL for reads, and `origin --push` is set to `WORKER_URL/git-proxy/:sessionId/github.com/owner/repo.git`. The proxy authenticates Sprite requests with a per-session bearer secret and forwards to GitHub with a fresh or cached installation token from `ensureValidInstallationToken(...)`.
 
