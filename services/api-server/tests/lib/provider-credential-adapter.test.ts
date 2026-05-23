@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { success, type Logger } from "@repo/shared";
-import { OpenAICodexAuthService } from "../../src/lib/ai-providers/openai-codex-auth-service";
-import { getProviderCredentialAdapter } from "../../src/lib/ai-providers/provider-credential-adapter";
+import { OpenAICodexAuthService } from "../../src/lib/ai-auth/openai-codex-auth-service";
+import { getProviderCredentialAdapter } from "../../src/lib/providers/ai-credential-provider";
 import type { Env } from "../../src/types";
 
 function createLogger(): Logger {

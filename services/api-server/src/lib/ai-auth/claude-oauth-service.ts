@@ -1,7 +1,7 @@
 import type { Logger } from "@repo/shared";
 import { type Result, success, failure } from "@repo/shared";
 import { encrypt, readStoredCredentialJson } from "@/lib/utils/crypto";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import {
   UserProviderCredentialRepository,
   type UserProviderCredentialRecord,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "@repo/shared";
 import { decrypt, encrypt, readStoredCredentialJson } from "../../src/lib/utils/crypto";
-import { OpenAICodexAuthService } from "../../src/lib/ai-providers/openai-codex-auth-service";
+import { OpenAICodexAuthService } from "../../src/lib/ai-auth/openai-codex-auth-service";
 import type { Env } from "../../src/types";
 
 function createLogger(): Logger {

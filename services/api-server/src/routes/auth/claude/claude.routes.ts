@@ -1,10 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import {
   ClaudeOAuthError,
-  ClaudeOAuthService,
-} from "@/lib/ai-providers/claude-oauth-service";
+  getClaudeOAuthProvider,
+} from "@/lib/providers/ai-auth-provider";
 import type { AuthUser } from "@/middleware/auth.middleware";
 import {
   getClaudeAuthRoute,
@@ -21,7 +21,7 @@ export const claudeAuthRoutes = new OpenAPIHono<{
 const logger = createLogger("claude.routes.ts");
 
 claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
-  const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
+  const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
   const authUrl = await claudeOAuthService.createAuthorizationUrl();
   return c.json(authUrl, 200);
 });
@@ -29,7 +29,7 @@ claudeAuthRoutes.openapi(getClaudeAuthRoute, async (c) => {
 claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const { code, state, sessionId } = c.req.valid("json");
   const user = c.get("user");
-  const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
+  const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
 
   if (!code || !state) {
     return c.json({ error: "Missing code or state" }, 400);
@@ -57,14 +57,14 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
 
 claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
   const user = c.get("user");
-  const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
+  const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
   const status = await claudeOAuthService.getConnectionStatus(user.id);
   return c.json(status, 200);
 });
 
 claudeAuthRoutes.openapi(postClaudeDisconnectRoute, async (c) => {
   const user = c.get("user");
-  const claudeOAuthService = new ClaudeOAuthService(c.env, logger);
+  const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
   await claudeOAuthService.disconnect(user.id);
   return c.json({ ok: true as const }, 200);
 });

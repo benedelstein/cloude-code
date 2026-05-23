@@ -17,7 +17,7 @@ vi.mock("@repo/vm-agent/dist/vm-agent-webhook.bundle.js", () => ({
   default: "// mocked vm-agent bundle",
 }));
 
-vi.mock("@/lib/sprites", () => {
+vi.mock("@/lib/providers/sprite-provider", () => {
   class SpritesError extends Error {
     constructor(
       message: string,
@@ -41,7 +41,7 @@ vi.mock("@/lib/sprites", () => {
   return { WorkersSpriteClient, SpritesError };
 });
 
-vi.mock("@/lib/ai-providers/provider-credential-adapter", () => ({
+vi.mock("@/lib/providers/ai-credential-provider", () => ({
   getProviderCredentialAdapter: () => ({
     getCredentialSnapshot: mockState.getCredentialSnapshot,
   }),

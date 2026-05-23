@@ -6,7 +6,7 @@ import type {
 import {
   SpritesError,
 } from "./types";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 export interface NetworkPolicyRule {
   domain: string;

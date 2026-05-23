@@ -1,6 +1,6 @@
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import type { Env } from "@/types";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import { getAgentByName } from "agents";
 
 const logger = createLogger("session-access-block.ts");

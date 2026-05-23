@@ -3,10 +3,10 @@ import { getAgentByName } from "agents";
 import type { Env } from "@/types";
 import type { SessionAgentDO } from "@/durable-objects/session-agent-do";
 import { verifySessionWebSocketToken } from "@/lib/sessions/session-websocket-token";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import {
   assertSessionRepoAccess,
-} from "@/lib/user-session/session-repo-access";
+} from "@/lib/providers/repo-access-provider";
 import { requestSessionAccessBlockedCleanup } from "@/lib/sessions/session-access-block";
 
 export const agentRoutes = new Hono<{ Bindings: Env }>();

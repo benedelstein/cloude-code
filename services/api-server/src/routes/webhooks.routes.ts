@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/observability/logger";
+import { GitHubProvider } from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 import type { Env } from "@/types";
 
 export const webhooksRoutes = new Hono<{ Bindings: Env }>();
@@ -15,7 +15,7 @@ webhooksRoutes.post("/github", async (c) => {
     return c.json({ error: "Missing required GitHub webhook headers" }, 400);
   }
 
-  const githubService = new GitHubAppService(c.env, logger);
+  const githubService = new GitHubProvider(c.env, logger);
 
   try {
     await githubService.handleWebhook({

@@ -1,6 +1,6 @@
 import { decrypt, encrypt } from "@/lib/utils/crypto";
-import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/observability/logger";
+import { GitHubProvider } from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 import type { Env } from "@/types";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
 
@@ -112,7 +112,7 @@ export class UserSessionService {
     }
 
     try {
-      const github = new GitHubAppService(this.env, logger);
+      const github = new GitHubProvider(this.env, logger);
       const decryptedRefreshToken = await decrypt(
         credentials.encryptedRefreshToken,
         this.env.TOKEN_ENCRYPTION_KEY,

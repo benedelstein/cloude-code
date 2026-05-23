@@ -1,8 +1,10 @@
 import type { Logger, ProviderId } from "@repo/shared";
-import { ClaudeOAuthService } from "./claude-oauth-service";
-import { OpenAICodexAuthService } from "./openai-codex-auth-service";
+import { ClaudeOAuthService } from "@/lib/ai-auth/claude-oauth-service";
+import { OpenAICodexAuthService } from "@/lib/ai-auth/openai-codex-auth-service";
 import type { Env } from "@/types";
-import type { ProviderConnectionStatus } from "./connection-status";
+import type { ProviderConnectionStatus } from "@/lib/ai-auth/connection-status";
+
+export { ClaudeOAuthError } from "@/lib/ai-auth/claude-oauth-service";
 
 export interface ProviderAuthService<TCredentials> {
   getConnectionStatus(_userId: string): Promise<ProviderConnectionStatus>;
@@ -35,3 +37,13 @@ export function getProviderAuthService(
   }
 }
 
+export function getClaudeOAuthProvider(env: Env, logger: Logger): ClaudeOAuthService {
+  return new ClaudeOAuthService(env, logger);
+}
+
+export function getOpenAICodexAuthProvider(
+  env: Env,
+  logger: Logger,
+): OpenAICodexAuthService {
+  return new OpenAICodexAuthService(env, logger);
+}

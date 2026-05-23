@@ -1,8 +1,8 @@
 import {
-  GitHubAppService,
+  GitHubProvider,
   type GitHubAppErrorCode,
-} from "@/lib/github";
-import { createLogger } from "@/lib/observability/logger";
+} from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 import { SessionsRepository } from "@/repositories/sessions.repository";
 import { UserSessionService } from "@/lib/user-session/user-session.service";
 import type { Env } from "@/types";
@@ -130,7 +130,7 @@ async function getUserAccessibleRepoForInstallation(params: {
   githubAccessToken: string;
   installationId: number;
 }): Promise<UserRepoAccessResult> {
-  const github = new GitHubAppService(params.env, logger);
+  const github = new GitHubProvider(params.env, logger);
 
   const repositoryResult = await github.getUserAccessibleInstallationRepoById(
     params.userId,
@@ -156,7 +156,7 @@ async function resolveAccessibleRepoForRecovery(params: {
   repoId: number;
   githubAccessToken: string;
 }): Promise<UserRepoAccessResult> {
-  const github = new GitHubAppService(params.env, logger);
+  const github = new GitHubProvider(params.env, logger);
   const installationResult = await github.findInstallationForRepoId(
     params.repoId,
     params.githubAccessToken,

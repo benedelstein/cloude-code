@@ -1,5 +1,5 @@
-import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/observability/logger";
+import { GitHubProvider } from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 import type { Env } from "@/types";
 import type { SecretRepository } from "./repositories/secret-repository";
 
@@ -19,8 +19,8 @@ export interface GitHubTokenContext {
 export async function ensureValidInstallationToken(context: GitHubTokenContext): Promise<string | null> {
   if (!context.repoFullName) { return context.githubInstallationToken; }
 
-  // GitHubAppService handles caching with a 5-minute buffer before expiry
-  const github = new GitHubAppService(context.env, logger);
+  // GitHubProvider handles caching with a 5-minute buffer before expiry.
+  const github = new GitHubProvider(context.env, logger);
   const tokenResult = await github.getInstallationTokenForRepo(context.repoFullName);
   if (!tokenResult.ok) {
     throw new Error(tokenResult.error.message);

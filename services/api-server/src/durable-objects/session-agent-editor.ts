@@ -1,5 +1,5 @@
-import { WorkersSpriteClient } from "@/lib/sprites";
-import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
+import { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
+import { buildNetworkPolicy } from "@/lib/providers/sprite-provider";
 import type { Logger } from "@repo/shared";
 import type { Env } from "@/types";
 import type { SecretRepository } from "./repositories/secret-repository";

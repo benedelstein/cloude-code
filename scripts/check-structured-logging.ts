@@ -38,7 +38,7 @@ const consoleAllowedFiles = new Set([
 
 const loggerImplementationFiles = new Set([
   "packages/shared/src/logging/index.ts",
-  "services/api-server/src/lib/observability/logger.ts",
+  "services/api-server/src/lib/providers/observability-provider.ts",
 ]);
 
 const sourceExtensions = new Set([".ts", ".tsx", ".mts", ".cts"]);

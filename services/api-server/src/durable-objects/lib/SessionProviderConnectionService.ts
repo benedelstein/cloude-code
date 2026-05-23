@@ -1,6 +1,6 @@
 import type { ClientState, Logger } from "@repo/shared";
 import type { Env } from "@/types";
-import { getProviderAuthService } from "@/lib/ai-providers/provider-auth-service";
+import { getProviderAuthService } from "@/lib/providers/ai-auth-provider";
 import type { ServerState } from "../repositories/server-state-repository";
 
 export interface SessionProviderConnectionServiceDeps {

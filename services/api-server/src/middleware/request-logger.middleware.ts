@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 const logger = createLogger("request-logger.middleware.ts");
 

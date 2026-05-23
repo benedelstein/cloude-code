@@ -8,13 +8,13 @@ import type {
 import type { Env } from "@/types";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { MessageAccumulator } from "@repo/shared";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import { applyDerivedStateFromParts } from "../session-agent-derived-state";
 import type { MessageRepository } from "../repositories/message-repository";
 import type { PendingChunkRepository } from "../repositories/pending-chunk-repository";
 import type { LatestPlanRepository } from "../repositories/latest-plan-repository";
 import type { ServerState } from "../repositories/server-state-repository";
-import { SpritesError, WorkersSpriteClient } from "@/lib/sprites";
+import { SpritesError, WorkersSpriteClient } from "@/lib/providers/sprite-provider";
 
 /**
  * Dependencies injected from the SessionAgentDO into the coordinator.

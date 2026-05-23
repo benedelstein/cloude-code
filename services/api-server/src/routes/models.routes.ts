@@ -3,8 +3,8 @@ import {
   type AuthUser,
   authMiddleware,
 } from "@/middleware/auth.middleware";
-import { createLogger } from "@/lib/observability/logger";
-import { getProviderAuthService } from "@/lib/ai-providers/provider-auth-service";
+import { createLogger } from "@/lib/providers/observability-provider";
+import { getProviderAuthService } from "@/lib/providers/ai-auth-provider";
 import type { Env } from "@/types";
 import {
   ModelsResponse,

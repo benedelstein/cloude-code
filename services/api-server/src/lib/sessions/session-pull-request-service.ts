@@ -10,9 +10,9 @@ import type {
 import {
   fallbackPullRequestTitle,
   generatePullRequestText,
-} from "@/lib/github/generate-pull-request-text";
-import type { GitHubAppService, GitHubCompareData } from "@/lib/github";
-import { createLogger } from "@/lib/observability/logger";
+} from "@/lib/sessions/generate-pull-request-text";
+import type { GitHubCompareData, GitHubProvider } from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 const logger = createLogger("session-pull-request-service.ts");
 
@@ -102,7 +102,7 @@ async function getSessionMessages(sessionStub: SessionAgentStub): Promise<UIMess
 
 export async function createPullRequestForSession(params: {
   sessionStub: SessionAgentStub;
-  github: GitHubAppService;
+  github: GitHubProvider;
   anthropicApiKey: string;
 }): Promise<{
   url: string;
@@ -221,7 +221,7 @@ export async function createPullRequestForSession(params: {
 
 export async function getPullRequestStatusForSession(params: {
   sessionStub: SessionAgentStub;
-  githubService: GitHubAppService;
+  githubService: GitHubProvider;
 }): Promise<{
   url: string;
   number: number;

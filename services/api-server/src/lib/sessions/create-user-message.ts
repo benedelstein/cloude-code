@@ -1,15 +1,15 @@
 import type { UIMessage } from "ai";
-import type { AttachmentService } from "@/lib/attachments/attachment-service";
+import type { SessionAttachmentProvider } from "@/lib/providers/attachment-provider";
 import type { AttachmentRecord } from "@/types/attachments";
 import { createUserUiMessage } from "@/lib/utils/uimessage-utils";
-import { createLogger } from "@/lib/observability/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 export async function buildUserUiMessage(
   sessionId: string,
   initialMessage: string | undefined,
   attachmentIds: string[],
   context: {
-    attachmentService: AttachmentService;
+    attachmentService: SessionAttachmentProvider;
   },
 ): Promise<UIMessage | null> {
   const logger = createLogger("buildUserUiMessage");
