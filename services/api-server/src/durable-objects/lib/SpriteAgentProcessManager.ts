@@ -19,7 +19,6 @@ import {
   type SpriteServerMessage,
   type SpriteWebsocketSession,
 } from "@/lib/sprites";
-import { ensureSpriteStartupToolchain } from "@/lib/sprites/startup-toolchain";
 import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle.js";
 import {
   getProviderCredentialAdapter,
@@ -160,7 +159,6 @@ export interface SpriteAgentProcessManagerDeps {
   secretRepository: SecretRepository;
   getServerState: () => ServerState;
   updateAgentProcessId: (agentProcessId: number | null) => void;
-  updateServerState: (partial: Partial<ServerState>) => void;
   getClientState: () => ClientState;
 }
 
@@ -206,7 +204,6 @@ export class SpriteAgentProcessManager {
   private readonly secretRepository: SecretRepository;
   private readonly getServerState: () => ServerState;
   private readonly updateAgentProcessId: SpriteAgentProcessManagerDeps["updateAgentProcessId"];
-  private readonly updateServerState: SpriteAgentProcessManagerDeps["updateServerState"];
   private readonly getClientState: () => ClientState;
   private readonly attachmentService: AgentAttachmentService;
 
@@ -219,7 +216,6 @@ export class SpriteAgentProcessManager {
     this.secretRepository = deps.secretRepository;
     this.getServerState = deps.getServerState;
     this.updateAgentProcessId = deps.updateAgentProcessId;
-    this.updateServerState = deps.updateServerState;
     this.getClientState = deps.getClientState;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
   }
@@ -416,14 +412,6 @@ export class SpriteAgentProcessManager {
       return failure(credentialResult.error);
     }
     const credentialSnapshot = credentialResult.value;
-
-    const startupToolchainResult = await this.ensureStartupToolchain(
-      sprite,
-      settings.provider,
-    );
-    if (!startupToolchainResult.ok) {
-      return failure(startupToolchainResult.error);
-    }
 
     let session: SpriteWebsocketSession | null = null;
     try {
@@ -727,41 +715,6 @@ export class SpriteAgentProcessManager {
       return failure(mapProviderCredentialError(snapshot.error));
     }
     return success(snapshot.value);
-  }
-
-  private async ensureStartupToolchain(
-    sprite: WorkersSpriteClient,
-    providerId: AgentSettings["provider"],
-  ): Promise<Result<true, Extract<SpriteAgentProcessManagerError, { code: "SPAWN_FAILED" }>>> {
-    const serverState = this.getServerState();
-    const result = await ensureSpriteStartupToolchain({
-      providerId,
-      sprite,
-      checkpoint: serverState.startupToolchain.providers[providerId] ?? null,
-      env: this.env,
-      logger: this.logger,
-    });
-    if (!result.ok) {
-      return failure(managerError("SPAWN_FAILED", result.error.message, {
-        provider: providerId,
-        checkId: result.error.checkId,
-        requiredVersion: result.error.requiredVersion,
-        installedVersion: result.error.installedVersion,
-        binaryPath: result.error.binaryPath,
-        exitCode: result.error.exitCode,
-        cause: result.error.cause ?? result.error.stderr ?? result.error.stdout,
-      }));
-    }
-
-    this.updateServerState({
-      startupToolchain: {
-        providers: {
-          ...serverState.startupToolchain.providers,
-          [providerId]: result.value,
-        },
-      },
-    });
-    return success(true);
   }
 
   private async writeCredentialFiles(

@@ -1,6 +1,6 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import type { SpritesCoordinator} from "@/lib/sprites";
+import type { SpritesCoordinator } from "@/lib/sprites";
 import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
 import { ensureSpriteStartupToolchain } from "@/lib/sprites/startup-toolchain";
@@ -144,8 +144,7 @@ export class SessionProvisionService {
     const result = await ensureSpriteStartupToolchain({
       providerId,
       sprite,
-      checkpoint: serverState.startupToolchain.providers[providerId] ?? null,
-      env: this.env,
+      checkpoint: serverState.startupToolchain,
       logger: this.logger,
     });
     if (!result.ok) {
@@ -153,12 +152,7 @@ export class SessionProvisionService {
     }
 
     this.updateServerState({
-      startupToolchain: {
-        providers: {
-          ...serverState.startupToolchain.providers,
-          [providerId]: result.value,
-        },
-      },
+      startupToolchain: result.value,
     });
   }
 

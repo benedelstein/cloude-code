@@ -2,19 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Logger } from "@repo/shared";
-import { MIN_CODEX_CLI_VERSION } from "@repo/shared";
 import type { WorkersSpriteClient } from "../../src/lib/sprites";
 import { DEFAULT_NETWORK_POLICY } from "../../src/lib/sprites/network-policy";
 import {
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
   buildStartupToolchainContractHash,
   ensureSpriteStartupToolchain,
-  getProviderStartupToolchain,
+  getProviderStartupToolchainChecks,
   isVersionAtLeast,
   parseSemanticVersion,
 } from "../../src/lib/sprites/startup-toolchain";
-import { OpenAICodexStartupToolchain } from "../../src/lib/sprites/startup-toolchain/providers/openai-codex";
-import type { Env } from "../../src/types";
+import { getOpenAICodexStartupToolchainChecks } from "../../src/lib/sprites/startup-toolchain/providers/openai-codex";
+
+const MIN_CODEX_CLI_VERSION = "0.130.0";
 
 function createLogger(): Logger {
   return {
@@ -58,36 +58,34 @@ describe("startup toolchain versions", () => {
   });
 });
 
-describe("startup toolchain provider dispatch", () => {
-  it("returns provider implementations through exhaustive dispatch", () => {
-    expect(getProviderStartupToolchain("openai-codex", {
-      env: {} as Env,
+describe("startup toolchain dispatch", () => {
+  it("returns provider checks through exhaustive dispatch", () => {
+    expect(getProviderStartupToolchainChecks("openai-codex", {
       logger: createLogger(),
-    }).getContract().provider).toBe("openai-codex");
-    expect(getProviderStartupToolchain("claude-code", {
-      env: {} as Env,
+    }).map((check) => check.id)).toEqual(["openai-codex.cli"]);
+    expect(getProviderStartupToolchainChecks("claude-code", {
       logger: createLogger(),
-    }).getContract().provider).toBe("claude-code");
+    })).toEqual([]);
   });
 
-  it("skips execution when the provider checkpoint contract is current", async () => {
-    const toolchain = getProviderStartupToolchain("openai-codex", {
-      env: {} as Env,
+  it("skips execution when the startup checkpoint contract is current", async () => {
+    const checks = getProviderStartupToolchainChecks("openai-codex", {
       logger: createLogger(),
     });
-    const contractHash = await buildStartupToolchainContractHash(toolchain);
+    const contractHash = await buildStartupToolchainContractHash(
+      "openai-codex",
+      checks,
+    );
     const sprite = createSprite([]);
 
     const result = await ensureSpriteStartupToolchain({
       providerId: "openai-codex",
       sprite,
       checkpoint: {
-        provider: "openai-codex",
         contractHash,
         checkedAt: 1,
         results: [],
       },
-      env: {} as Env,
       logger: createLogger(),
     });
 
@@ -97,14 +95,14 @@ describe("startup toolchain provider dispatch", () => {
 
   it("changes the contract hash when the provider contract changes", async () => {
     const codexHash = await buildStartupToolchainContractHash(
-      getProviderStartupToolchain("openai-codex", {
-        env: {} as Env,
+      "openai-codex",
+      getProviderStartupToolchainChecks("openai-codex", {
         logger: createLogger(),
       }),
     );
     const claudeHash = await buildStartupToolchainContractHash(
-      getProviderStartupToolchain("claude-code", {
-        env: {} as Env,
+      "claude-code",
+      getProviderStartupToolchainChecks("claude-code", {
         logger: createLogger(),
       }),
     );
@@ -128,24 +126,21 @@ describe("startup toolchain provider dispatch", () => {
   });
 });
 
-describe("OpenAICodexStartupToolchain", () => {
+describe("OpenAI Codex startup check", () => {
   it("records already-current when Codex satisfies the minimum version", async () => {
     const sprite = createSprite([{
       stdout: "path=/home/sprite/.local/bin/codex\nversion=codex-cli 0.130.0\n",
       exitCode: 0,
     }]);
-    const toolchain = new OpenAICodexStartupToolchain(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
-    const result = await toolchain.ensureReady({
-      sprite,
-      contractHash: "contract",
-    });
+    const result = await check!.ensureReady({ sprite });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
     }
-    expect(result.value.results[0]).toMatchObject({
+    expect(result.value).toMatchObject({
       id: "openai-codex.cli",
       status: "already-current",
       requiredVersion: MIN_CODEX_CLI_VERSION,
@@ -163,18 +158,15 @@ describe("OpenAICodexStartupToolchain", () => {
         exitCode: 0,
       },
     ]);
-    const toolchain = new OpenAICodexStartupToolchain(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
-    const result = await toolchain.ensureReady({
-      sprite,
-      contractHash: "contract",
-    });
+    const result = await check!.ensureReady({ sprite });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
     }
-    expect(result.value.results[0]).toMatchObject({
+    expect(result.value).toMatchObject({
       status: "updated",
       previousVersion: null,
       version: "0.130.0",
@@ -194,18 +186,15 @@ describe("OpenAICodexStartupToolchain", () => {
         exitCode: 0,
       },
     ]);
-    const toolchain = new OpenAICodexStartupToolchain(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
-    const result = await toolchain.ensureReady({
-      sprite,
-      contractHash: "contract",
-    });
+    const result = await check!.ensureReady({ sprite });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
     }
-    expect(result.value.results[0]).toMatchObject({
+    expect(result.value).toMatchObject({
       status: "updated",
       previousVersion: "0.100.0",
       version: "0.130.0",
@@ -224,12 +213,9 @@ describe("OpenAICodexStartupToolchain", () => {
         exitCode: 0,
       },
     ]);
-    const toolchain = new OpenAICodexStartupToolchain(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
-    const result = await toolchain.ensureReady({
-      sprite,
-      contractHash: "contract",
-    });
+    const result = await check!.ensureReady({ sprite });
 
     expect(result.ok).toBe(false);
     if (result.ok) {

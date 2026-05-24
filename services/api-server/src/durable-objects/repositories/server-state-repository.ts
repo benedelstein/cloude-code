@@ -1,5 +1,5 @@
 import type { Migration, SqlFn, Repository } from "./types";
-import type { StartupToolchainState } from "@/types/startup-toolchain";
+import type { StartupToolchainCheckpoint } from "@/types/startup-toolchain";
 
 /**
  * Durable server-only session state — never synced to clients.
@@ -23,7 +23,7 @@ export type ServerState = {
   /** User message id currently being handled by the agent, or null if idle. */
   activeUserMessageId: string | null;
   /** Provider runtime toolchain checkpoints for this Sprite. */
-  startupToolchain: StartupToolchainState;
+  startupToolchain: StartupToolchainCheckpoint | null;
 };
 
 function defaultServerState(): ServerState {
@@ -36,7 +36,7 @@ function defaultServerState(): ServerState {
     agentSessionId: null,
     agentProcessId: null,
     activeUserMessageId: null,
-    startupToolchain: { providers: {} },
+    startupToolchain: null,
   };
 }
 

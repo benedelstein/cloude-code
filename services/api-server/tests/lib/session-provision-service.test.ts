@@ -74,7 +74,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: null,
     agentProcessId: null,
     activeUserMessageId: null,
-    startupToolchain: { providers: {} },
+    startupToolchain: null,
     ...overrides,
   };
 }
@@ -123,7 +123,6 @@ describe("SessionProvisionService startup toolchain", () => {
       return {
         ok: true,
         value: {
-          provider: "openai-codex",
           contractHash: "hash-1",
           checkedAt: 1,
           results: [],
@@ -172,14 +171,9 @@ describe("SessionProvisionService startup toolchain", () => {
     ]);
     expect(updateServerState).toHaveBeenCalledWith({
       startupToolchain: {
-        providers: {
-          "openai-codex": {
-            provider: "openai-codex",
-            contractHash: "hash-1",
-            checkedAt: 1,
-            results: [],
-          },
-        },
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
       },
     });
   });

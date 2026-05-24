@@ -1,17 +1,17 @@
 import type { Logger, ProviderId, Result } from "@repo/shared";
 import { failure, success } from "@repo/shared";
-import type { Env } from "@/types";
 import type { WorkersSpriteClient } from "@/lib/sprites";
 import { sha256 } from "@/lib/utils/crypto";
 import type {
-  StartupToolchainProviderCheckpoint,
+  StartupToolchainCheckpoint,
 } from "@/types/startup-toolchain";
-import { ClaudeStartupToolchain } from "./providers/claude";
-import { OpenAICodexStartupToolchain } from "./providers/openai-codex";
+import { getCommonStartupToolchainChecks } from "./checks/common";
+import { getClaudeStartupToolchainChecks } from "./providers/claude";
+import { getOpenAICodexStartupToolchainChecks } from "./providers/openai-codex";
 import type {
-  ProviderStartupToolchain,
-  ProviderStartupToolchainDeps,
-  ProviderStartupToolchainError,
+  StartupToolchainCheck,
+  StartupToolchainDeps,
+  StartupToolchainError,
 } from "./types";
 
 export * from "./types";
@@ -21,15 +21,15 @@ export {
   OPENAI_CODEX_STARTUP_CHECK_ID,
 } from "./providers/openai-codex";
 
-export function getProviderStartupToolchain(
+export function getProviderStartupToolchainChecks(
   providerId: ProviderId,
-  deps: ProviderStartupToolchainDeps,
-): ProviderStartupToolchain {
+  deps: StartupToolchainDeps,
+): StartupToolchainCheck[] {
   switch (providerId) {
     case "claude-code":
-      return new ClaudeStartupToolchain();
+      return getClaudeStartupToolchainChecks();
     case "openai-codex":
-      return new OpenAICodexStartupToolchain(deps.logger);
+      return getOpenAICodexStartupToolchainChecks(deps.logger);
     default: {
       const exhaustiveCheck: never = providerId;
       throw new Error(`Unhandled provider: ${exhaustiveCheck}`);
@@ -38,39 +38,58 @@ export function getProviderStartupToolchain(
 }
 
 export async function buildStartupToolchainContractHash(
-  toolchain: ProviderStartupToolchain,
+  providerId: ProviderId,
+  checks: StartupToolchainCheck[],
 ): Promise<string> {
-  return sha256(JSON.stringify(toolchain.getContract()));
+  return sha256(JSON.stringify({
+    providerId,
+    checks: checks.map((check) => check.contract),
+  }));
 }
 
 export async function ensureSpriteStartupToolchain(args: {
   providerId: ProviderId;
   sprite: WorkersSpriteClient;
-  checkpoint: StartupToolchainProviderCheckpoint | null;
-  env: Env;
+  checkpoint: StartupToolchainCheckpoint | null;
   logger: Logger;
-}): Promise<Result<StartupToolchainProviderCheckpoint, ProviderStartupToolchainError>> {
-  const toolchain = getProviderStartupToolchain(args.providerId, {
-    env: args.env,
-    logger: args.logger,
-  });
-  const contractHash = await buildStartupToolchainContractHash(toolchain);
+}): Promise<Result<StartupToolchainCheckpoint, StartupToolchainError>> {
+  const checks = [
+    ...getCommonStartupToolchainChecks(),
+    ...getProviderStartupToolchainChecks(args.providerId, {
+      logger: args.logger,
+    }),
+  ];
+  const contractHash = await buildStartupToolchainContractHash(
+    args.providerId,
+    checks,
+  );
   if (args.checkpoint?.contractHash === contractHash) {
     args.logger.debug("Startup toolchain checkpoint is current", {
-      fields: {
-        provider: args.providerId,
-        contractHash,
-      },
+      fields: { contractHash, provider: args.providerId },
     });
     return success(args.checkpoint);
   }
 
-  const result = await toolchain.ensureReady({
-    sprite: args.sprite,
-    contractHash,
-  });
-  if (!result.ok) {
-    return failure(result.error);
+  const results = [];
+  for (const check of checks) {
+    const result = await check.ensureReady({ sprite: args.sprite });
+    if (!result.ok) {
+      return failure(result.error);
+    }
+    results.push(result.value);
   }
-  return success(result.value);
+
+  args.logger.info("Startup toolchain checks completed", {
+    fields: {
+      provider: args.providerId,
+      contractHash,
+      checkCount: checks.length,
+    },
+  });
+
+  return success({
+    contractHash,
+    checkedAt: Date.now(),
+    results,
+  });
 }

@@ -8,7 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
-import { MIN_CODEX_CLI_VERSION, type AgentMode, type AgentSettings } from "@repo/shared";
+import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
@@ -58,7 +58,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
 
     const provider = createCodexAppServer({
       defaultSettings: {
-        minCodexVersion: MIN_CODEX_CLI_VERSION,
+        minCodexVersion: process.env.CODEX_MIN_VERSION ?? "0.130.0",
         autoApprove: true,
         sandboxPolicy: getSandboxPolicy(initialAgentMode),
         personality: "pragmatic",

@@ -4,29 +4,16 @@ import type {
   ProviderId,
   Result,
 } from "@repo/shared";
-import type { Env } from "@/types";
 import type { WorkersSpriteClient } from "@/lib/sprites";
-import type {
-  StartupToolchainProviderCheckpoint,
-} from "@/types/startup-toolchain";
+import type { StartupToolchainCheckResult } from "@/types/startup-toolchain";
 
 export const STARTUP_TOOLCHAIN_DOMAIN = "startup_toolchain";
 
-export interface ProviderStartupToolchainContract {
-  provider: ProviderId;
-  checks: Array<{
-    id: string;
-    minimumVersion?: string;
-    repairScript?: string;
-    verifierVersion: string;
-  }>;
-}
-
-export type ProviderStartupToolchainError = DomainError<
+export type StartupToolchainError = DomainError<
   typeof STARTUP_TOOLCHAIN_DOMAIN,
   "CHECK_FAILED",
   {
-    provider: ProviderId;
+    provider?: ProviderId;
     checkId: string;
     requiredVersion?: string;
     installedVersion?: string | null;
@@ -38,19 +25,18 @@ export type ProviderStartupToolchainError = DomainError<
   }
 >;
 
-export interface ProviderStartupToolchainInput {
+export interface StartupToolchainCheckInput {
   sprite: WorkersSpriteClient;
-  contractHash: string;
 }
 
-export interface ProviderStartupToolchain {
-  getContract(): ProviderStartupToolchainContract;
+export interface StartupToolchainCheck {
+  id: string;
+  contract: Record<string, unknown>;
   ensureReady(
-    _input: ProviderStartupToolchainInput,
-  ): Promise<Result<StartupToolchainProviderCheckpoint, ProviderStartupToolchainError>>;
+    _input: StartupToolchainCheckInput,
+  ): Promise<Result<StartupToolchainCheckResult, StartupToolchainError>>;
 }
 
-export interface ProviderStartupToolchainDeps {
-  env: Env;
+export interface StartupToolchainDeps {
   logger: Logger;
 }

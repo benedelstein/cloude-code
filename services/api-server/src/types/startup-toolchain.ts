@@ -1,9 +1,6 @@
-import type { ProviderId } from "@repo/shared";
-
 export type StartupToolchainCheckStatus =
   | "already-current"
-  | "updated"
-  | "no-checks";
+  | "updated";
 
 export interface StartupToolchainCheckResult {
   id: string;
@@ -14,17 +11,8 @@ export interface StartupToolchainCheckResult {
   binaryPath?: string | null;
 }
 
-export interface StartupToolchainProviderCheckpoint {
-  provider: ProviderId;
+export interface StartupToolchainCheckpoint {
   contractHash: string;
   checkedAt: number;
   results: StartupToolchainCheckResult[];
-}
-
-export type StartupToolchainProviderCheckpoints = Partial<
-  Record<ProviderId, StartupToolchainProviderCheckpoint>
->;
-
-export interface StartupToolchainState {
-  providers: StartupToolchainProviderCheckpoints;
 }
