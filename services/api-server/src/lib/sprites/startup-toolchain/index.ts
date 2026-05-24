@@ -15,7 +15,6 @@ import type {
 } from "./types";
 
 export * from "./types";
-export * from "./version";
 export {
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
   OPENAI_CODEX_STARTUP_CHECK_ID,

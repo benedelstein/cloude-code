@@ -1,14 +1,9 @@
-export type StartupToolchainCheckStatus =
-  | "already-current"
-  | "updated";
+export type StartupToolchainCheckStatus = "ready";
 
 export interface StartupToolchainCheckResult {
   id: string;
   status: StartupToolchainCheckStatus;
   requiredVersion?: string;
-  previousVersion?: string | null;
-  version?: string | null;
-  binaryPath?: string | null;
 }
 
 export interface StartupToolchainCheckpoint {

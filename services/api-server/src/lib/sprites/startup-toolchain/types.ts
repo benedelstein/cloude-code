@@ -16,8 +16,6 @@ export type StartupToolchainError = DomainError<
     provider?: ProviderId;
     checkId: string;
     requiredVersion?: string;
-    installedVersion?: string | null;
-    binaryPath?: string | null;
     stdout?: string;
     stderr?: string;
     exitCode?: number;

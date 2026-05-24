@@ -35,7 +35,7 @@ This should deliberately mirror two existing provider patterns:
 - `services/api-server/src/lib/providers/provider-credential-adapter.ts`: API-server-owned provider adapters can depend on `Env`, `Logger`, service clients, and durable state, and return typed `Result` failures instead of throwing for expected provider/setup failures.
 - `packages/shared/src/tool-normalization/index.ts`: provider-specific implementations live in per-provider files, callers use one public dispatch function, and a `switch (providerId)` with a `never` default makes missing providers a type error.
 
-Provider modules own their internal implementation details, including version parsing, repair commands, and post-repair verification. `SessionProvisionService` only calls the runner and persists the returned checkpoint.
+Provider modules own their internal implementation details, including their readiness script and verification behavior. `SessionProvisionService` only calls the runner and persists the returned checkpoint.
 
 Alternative considered: keep the logic in `packages/vm-agent`. Rejected because the vm-agent can fail before it can repair the dependency it needs, and because CLI repair is Sprite environment setup rather than per-turn agent logic.
 
@@ -53,7 +53,7 @@ Add a `startupToolchain` field to `ServerState`, for example:
 startupToolchain: {
   contractHash: string;
   checkedAt: number;
-  results: Array<{ id: string; status: "already-current" | "updated" }>;
+  results: Array<{ id: string; status: "ready" }>;
 } | null;
 ```
 
@@ -61,7 +61,7 @@ The contract hash includes the selected provider and all common/provider-specifi
 
 Alternative considered: use a boolean `toolchainChecked`. Rejected because it cannot force rerun when the required minimum version or script changes.
 
-### Codex check owns command detection and repair
+### Codex check owns one readiness script
 
 Each check has stable metadata that contributes to the startup contract:
 - stable `id`
@@ -69,7 +69,7 @@ Each check has stable metadata that contributes to the startup contract:
 - repair script identity/content
 - verification strategy version
 
-The OpenAI Codex check should:
+The OpenAI Codex check should run one provider-owned bash script that:
 - resolve the active `codex` binary with `command -v codex`
 - parse `codex --version` output such as `codex-cli 0.124.0`
 - compare against the Codex check's internal minimum version
@@ -77,7 +77,7 @@ The OpenAI Codex check should:
 - update `PATH` for the current shell if the installer writes into `$HOME/.local/bin` or a similar user-local bin directory
 - verify `codex --version` after repair and fail if the version remains below the minimum
 
-Keep the Codex minimum version inside the Codex startup check module. The vm-agent may keep its own defensive runtime guard, but the Sprite repair decision belongs to the startup check.
+Keep the Codex minimum version inside the Codex startup check module. TypeScript should execute the script and record success/failure; it should not duplicate the script's version parsing or repair branching. The vm-agent may keep its own defensive runtime guard, but the Sprite repair decision belongs to the startup check.
 
 Claude should still have an explicit provider implementation even if it initially returns an empty check list. That is the same "provider owns its case" discipline used by tool normalization: adding a provider is handled in the provider module and the central exhaustive switch, not by scattering conditionals into provisioning.
 
@@ -89,12 +89,12 @@ The existing default policy already allows `chatgpt.com`, `openai.com`, and npm 
 
 ### Surface failures as provisioning failures
 
-Startup check failures should throw from provisioning and map to the existing `lastError`/session status path with the failed check id and sanitized command output. Logs should use static messages with structured fields for provider, check id, installed version, required version, and status.
+Startup check failures should throw from provisioning and map to the existing `lastError`/session status path with the failed check id and sanitized command output. Logs should use static messages with structured fields for provider, check id, required version, and status.
 
 ## Risks / Trade-offs
 
 - Official installer behavior changes → Keep the script body centralized, include a contract hash, and verify the binary/version after every repair.
-- The installed binary lands outside non-interactive `PATH` → The check should explicitly export known user-local bin directories during inspect/repair/verify and record the resolved binary path.
+- The installed binary lands outside non-interactive `PATH` → The script should explicitly export known user-local bin directories before checking and after install.
 - Network policy blocks a future download host → Tests should assert all script hosts are present in `DEFAULT_NETWORK_POLICY`; failures remain explicit provisioning errors.
 - Running repair during provisioning increases startup latency after contract bumps → The checkpoint avoids steady-state cost, and contract-bump repair is preferable to a late provider failure.
 - Version parsing misses a new CLI output format → The parser should be unit-tested against current `codex --version` output and fail closed with a clear provisioning error.

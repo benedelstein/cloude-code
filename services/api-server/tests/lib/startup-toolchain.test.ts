@@ -9,8 +9,6 @@ import {
   buildStartupToolchainContractHash,
   ensureSpriteStartupToolchain,
   getProviderStartupToolchainChecks,
-  isVersionAtLeast,
-  parseSemanticVersion,
 } from "../../src/lib/sprites/startup-toolchain";
 import { getOpenAICodexStartupToolchainChecks } from "../../src/lib/sprites/startup-toolchain/providers/openai-codex";
 
@@ -40,23 +38,6 @@ function createSprite(results: Array<{ stdout: string; stderr?: string; exitCode
     }),
   } as unknown as WorkersSpriteClient;
 }
-
-describe("startup toolchain versions", () => {
-  it("parses semantic versions from CLI output", () => {
-    expect(parseSemanticVersion("codex-cli 0.130.0")).toEqual({
-      major: 0,
-      minor: 130,
-      patch: 0,
-    });
-    expect(parseSemanticVersion("not a version")).toBeNull();
-  });
-
-  it("compares versions against a minimum", () => {
-    expect(isVersionAtLeast("0.130.0", "0.130.0")).toBe(true);
-    expect(isVersionAtLeast("0.131.0", "0.130.0")).toBe(true);
-    expect(isVersionAtLeast("0.129.9", "0.130.0")).toBe(false);
-  });
-});
 
 describe("startup toolchain dispatch", () => {
   it("returns provider checks through exhaustive dispatch", () => {
@@ -127,9 +108,9 @@ describe("startup toolchain dispatch", () => {
 });
 
 describe("OpenAI Codex startup check", () => {
-  it("records already-current when Codex satisfies the minimum version", async () => {
+  it("runs one Codex startup bash script", async () => {
     const sprite = createSprite([{
-      stdout: "path=/home/sprite/.local/bin/codex\nversion=codex-cli 0.130.0\n",
+      stdout: "codex is current: 0.130.0\n",
       exitCode: 0,
     }]);
     const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
@@ -142,22 +123,23 @@ describe("OpenAI Codex startup check", () => {
     }
     expect(result.value).toMatchObject({
       id: "openai-codex.cli",
-      status: "already-current",
+      status: "ready",
       requiredVersion: MIN_CODEX_CLI_VERSION,
-      version: "0.130.0",
     });
     expect(sprite.execHttp).toHaveBeenCalledOnce();
+    expect(sprite.execHttp).toHaveBeenCalledWith(
+      expect.stringContaining("bash -lc"),
+    );
+    expect(sprite.execHttp).toHaveBeenCalledWith(
+      expect.stringContaining(`min_version="${MIN_CODEX_CLI_VERSION}"`),
+    );
   });
 
-  it("repairs a missing Codex CLI and verifies the installed version", async () => {
-    const sprite = createSprite([
-      { stdout: "", exitCode: 127 },
-      { stdout: "installed\n", exitCode: 0 },
-      {
-        stdout: "path=/home/sprite/.local/bin/codex\nversion=codex-cli 0.130.0\n",
-        exitCode: 0,
-      },
-    ]);
+  it("keeps checking, install, and verification in the same script", async () => {
+    const sprite = createSprite([{
+      stdout: "codex is ready: 0.130.0\n",
+      exitCode: 0,
+    }]);
     const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
     const result = await check!.ensureReady({ sprite });
@@ -166,53 +148,20 @@ describe("OpenAI Codex startup check", () => {
     if (!result.ok) {
       return;
     }
-    expect(result.value).toMatchObject({
-      status: "updated",
-      previousVersion: null,
-      version: "0.130.0",
-    });
-    expect(sprite.execHttp).toHaveBeenCalledTimes(3);
+    expect(sprite.execHttp).toHaveBeenCalledOnce();
+    const command = vi.mocked(sprite.execHttp).mock.calls[0]?.[0] as string;
+    expect(command).toContain("read_codex_version()");
+    expect(command).toContain("version_at_least()");
+    expect(command).toContain(`curl -fsSL "$install_url" | sh`);
+    expect(command).toContain("codex is ready");
   });
 
-  it("repairs a stale Codex CLI and records the previous version", async () => {
-    const sprite = createSprite([
-      {
-        stdout: "path=/usr/local/bin/codex\nversion=codex-cli 0.100.0\n",
-        exitCode: 0,
-      },
-      { stdout: "installed\n", exitCode: 0 },
-      {
-        stdout: "path=/home/sprite/.local/bin/codex\nversion=codex-cli 0.130.0\n",
-        exitCode: 0,
-      },
-    ]);
-    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
-
-    const result = await check!.ensureReady({ sprite });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    expect(result.value).toMatchObject({
-      status: "updated",
-      previousVersion: "0.100.0",
-      version: "0.130.0",
-    });
-  });
-
-  it("fails when repair still leaves Codex below the minimum", async () => {
-    const sprite = createSprite([
-      {
-        stdout: "path=/usr/local/bin/codex\nversion=codex-cli 0.100.0\n",
-        exitCode: 0,
-      },
-      { stdout: "installed\n", exitCode: 0 },
-      {
-        stdout: "path=/usr/local/bin/codex\nversion=codex-cli 0.100.0\n",
-        exitCode: 0,
-      },
-    ]);
+  it("fails when the startup script fails", async () => {
+    const sprite = createSprite([{
+      stdout: "codex is stale: 0.100.0 < 0.130.0\n",
+      stderr: "codex version 0.100.0 is below required 0.130.0 after install\n",
+      exitCode: 1,
+    }]);
     const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
 
     const result = await check!.ensureReady({ sprite });
@@ -226,7 +175,7 @@ describe("OpenAI Codex startup check", () => {
       provider: "openai-codex",
       checkId: "openai-codex.cli",
       requiredVersion: MIN_CODEX_CLI_VERSION,
-      installedVersion: "0.100.0",
+      exitCode: 1,
     });
   });
 });

@@ -38,19 +38,19 @@ The OpenAI Codex startup check SHALL verify that `codex` resolves on the Sprite 
 
 #### Scenario: Codex CLI is already current
 - **WHEN** `codex --version` reports a version greater than or equal to the configured minimum
-- **THEN** the Codex check records an `already-current` result and does not run the repair script
+- **THEN** the Codex startup script exits successfully without running the install script
 
 #### Scenario: Codex CLI is missing
 - **WHEN** `codex` cannot be resolved on the Sprite
-- **THEN** the Codex check runs the approved install script and verifies that `codex --version` now satisfies the configured minimum
+- **THEN** the Codex startup script runs the approved install script and verifies that `codex --version` now satisfies the configured minimum
 
 #### Scenario: Codex CLI is too old
 - **WHEN** `codex --version` reports a version lower than the configured minimum
-- **THEN** the Codex check runs the approved update script and verifies that `codex --version` now satisfies the configured minimum
+- **THEN** the Codex startup script runs the approved update script and verifies that `codex --version` now satisfies the configured minimum
 
 #### Scenario: Codex repair does not reach minimum
 - **WHEN** the repair script exits successfully but the verified Codex CLI version remains lower than the configured minimum
-- **THEN** the check fails and reports the resolved binary path, installed version, and required version in structured error details
+- **THEN** the check fails and reports the required version and sanitized script output in structured error details
 
 ### Requirement: Startup toolchain checkpoints are contract-versioned
 
@@ -70,11 +70,11 @@ The API server SHALL persist startup toolchain check results in server-only sess
 
 ### Requirement: Startup check command output is logged safely
 
-Startup toolchain checks SHALL log static messages with structured fields for provider id, check id, required version, installed version, resolved binary path, contract hash, and result status. Logs and session-facing errors MUST NOT include secrets, provider credentials, auth JSON, or full environment dumps.
+Startup toolchain checks SHALL log static messages with structured fields for provider id, check id, required version, contract hash, and result status. Logs and session-facing errors MUST NOT include secrets, provider credentials, auth JSON, or full environment dumps.
 
 #### Scenario: Successful update log
 - **WHEN** the Codex check updates an old CLI successfully
-- **THEN** the logs include provider id, check id, previous version, new version, required version, and `updated` status
+- **THEN** the logs include provider id, check id, required version, and `ready` status
 
 #### Scenario: Failed update error
 - **WHEN** the Codex update script fails

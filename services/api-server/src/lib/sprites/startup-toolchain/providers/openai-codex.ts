@@ -1,9 +1,6 @@
 import type { Logger } from "@repo/shared";
-import type { WorkersSpriteClient } from "@/lib/sprites";
-import type { ExecResult } from "@/lib/sprites/types";
 import type {
   StartupToolchainCheck,
-  StartupToolchainError,
   StartupToolchainCheckInput,
 } from "../types";
 import {
@@ -13,60 +10,84 @@ import {
   success,
   truncateCommandOutput,
 } from "../common";
-import { isVersionAtLeast, parseSemanticVersion } from "../version";
 
 const CODEX_CHECK_ID = "openai-codex.cli";
 const MIN_CODEX_CLI_VERSION = "0.130.0";
 const CODEX_INSTALL_SCRIPT_URL = "https://chatgpt.com/codex/install.sh";
-const CODEX_REPAIR_SCRIPT = `curl -fsSL ${CODEX_INSTALL_SCRIPT_URL} | sh`;
-const CODEX_PATH_PREFIX = "$HOME/.local/bin:$HOME/bin:/usr/local/bin";
-const CODEX_VERIFIER_VERSION = "1";
+const CODEX_SCRIPT_VERSION = "2";
+
+const CODEX_STARTUP_SCRIPT = `
+set -euo pipefail
+
+min_version="${MIN_CODEX_CLI_VERSION}"
+install_url="${CODEX_INSTALL_SCRIPT_URL}"
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH"
+
+read_codex_version() {
+  if ! command -v codex >/dev/null 2>&1; then
+    return 1
+  fi
+  codex --version 2>&1 | grep -Eo '[0-9]+\\.[0-9]+\\.[0-9]+' | head -n 1
+}
+
+version_at_least() {
+  local version="$1"
+  local minimum="$2"
+  local v_major v_minor v_patch m_major m_minor m_patch
+  IFS=. read -r v_major v_minor v_patch <<< "$version"
+  IFS=. read -r m_major m_minor m_patch <<< "$minimum"
+
+  if (( v_major != m_major )); then
+    (( v_major > m_major ))
+    return
+  fi
+  if (( v_minor != m_minor )); then
+    (( v_minor > m_minor ))
+    return
+  fi
+  (( v_patch >= m_patch ))
+}
+
+current_version="$(read_codex_version || true)"
+if [[ -n "$current_version" ]] && version_at_least "$current_version" "$min_version"; then
+  echo "codex is current: $current_version"
+  exit 0
+fi
+
+if [[ -n "$current_version" ]]; then
+  echo "codex is stale: $current_version < $min_version"
+else
+  echo "codex is missing"
+fi
+
+curl -fsSL "$install_url" | sh
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH"
+
+new_version="$(read_codex_version || true)"
+if [[ -z "$new_version" ]]; then
+  echo "codex install did not produce a readable codex --version" >&2
+  exit 1
+fi
+
+if ! version_at_least "$new_version" "$min_version"; then
+  echo "codex version $new_version is below required $min_version after install" >&2
+  exit 1
+fi
+
+echo "codex is ready: $new_version"
+`.trim();
 
 const CODEX_CONTRACT = {
   provider: "openai-codex",
   id: CODEX_CHECK_ID,
   minimumVersion: MIN_CODEX_CLI_VERSION,
-  repairScript: CODEX_REPAIR_SCRIPT,
-  verifierVersion: CODEX_VERIFIER_VERSION,
+  installScriptUrl: CODEX_INSTALL_SCRIPT_URL,
+  scriptVersion: CODEX_SCRIPT_VERSION,
+  script: CODEX_STARTUP_SCRIPT,
 } satisfies Record<string, unknown>;
 
-interface CodexCliState {
-  binaryPath: string | null;
-  version: string | null;
-  result: ExecResult;
-}
-
-function withCodexPath(command: string): string {
-  return `export PATH="${CODEX_PATH_PREFIX}:$PATH"; ${command}`;
-}
-
-function parseCodexVersion(output: string): string | null {
-  const version = parseSemanticVersion(output);
-  return version ? `${version.major}.${version.minor}.${version.patch}` : null;
-}
-
-async function inspectCodexCli(sprite: WorkersSpriteClient): Promise<CodexCliState> {
-  const result = await sprite.execHttp(withCodexPath(
-    "binary=$(command -v codex 2>/dev/null || true); "
-      + "if [ -z \"$binary\" ]; then exit 127; fi; "
-      + "version=$(codex --version 2>&1); "
-      + "status=$?; "
-      + "printf 'path=%s\\nversion=%s\\n' \"$binary\" \"$version\"; "
-      + "exit $status",
-  ));
-  const binaryPath = result.stdout.match(/^path=(.+)$/m)?.[1] ?? null;
-  const versionOutput = result.stdout.match(/^version=(.+)$/m)?.[1] ?? "";
-  return {
-    binaryPath,
-    version: parseCodexVersion(versionOutput),
-    result,
-  };
-}
-
-function failedInspection(
-  state: CodexCliState,
-): boolean {
-  return state.result.exitCode !== 0 || !state.binaryPath || !state.version;
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 class CodexCliCheck implements StartupToolchainCheck {
@@ -81,107 +102,45 @@ class CodexCliCheck implements StartupToolchainCheck {
   async ensureReady(
     input: StartupToolchainCheckInput,
   ) {
-    const before = await inspectCodexCli(input.sprite);
-    if (
-      !failedInspection(before)
-      && before.version
-      && isVersionAtLeast(before.version, MIN_CODEX_CLI_VERSION)
-    ) {
-      this.logger.info("Startup toolchain check already current", {
+    const result = await input.sprite.execHttp(
+      `bash -lc ${shellQuote(CODEX_STARTUP_SCRIPT)}`,
+    );
+    if (result.exitCode !== 0) {
+      this.logger.warn("Startup toolchain check failed", {
         fields: {
           provider: "openai-codex",
           checkId: CODEX_CHECK_ID,
           requiredVersion: MIN_CODEX_CLI_VERSION,
-          installedVersion: before.version,
-          binaryPath: before.binaryPath,
-          status: "already-current",
+          stdout: truncateCommandOutput(result.stdout) ?? null,
+          stderr: truncateCommandOutput(result.stderr) ?? null,
+          exitCode: result.exitCode,
         },
       });
-      return success({
-        id: CODEX_CHECK_ID,
-        status: "already-current" as const,
-        requiredVersion: MIN_CODEX_CLI_VERSION,
-        previousVersion: before.version,
-        version: before.version,
-        binaryPath: before.binaryPath,
-      });
-    }
-
-    const repairResult = await input.sprite.execHttp(withCodexPath(CODEX_REPAIR_SCRIPT));
-    if (repairResult.exitCode !== 0) {
-      return failure(this.repairError(
-        "Codex CLI repair script failed.",
-        before,
-        repairResult,
+      return failure(startupToolchainError(
+        CODEX_CHECK_ID,
+        "Codex CLI startup script failed.",
+        {
+          provider: "openai-codex",
+          requiredVersion: MIN_CODEX_CLI_VERSION,
+          ...execResultErrorFields(result),
+        },
       ));
     }
 
-    const after = await inspectCodexCli(input.sprite);
-    if (
-      failedInspection(after)
-      || !after.version
-      || !isVersionAtLeast(after.version, MIN_CODEX_CLI_VERSION)
-    ) {
-      return failure(this.repairError(
-        "Codex CLI did not satisfy the required version after repair.",
-        after,
-        after.result,
-        before.version,
-      ));
-    }
-
-    this.logger.info("Startup toolchain check updated CLI", {
+    this.logger.info("Startup toolchain check completed", {
       fields: {
         provider: "openai-codex",
         checkId: CODEX_CHECK_ID,
         requiredVersion: MIN_CODEX_CLI_VERSION,
-        previousVersion: before.version,
-        installedVersion: after.version,
-        binaryPath: after.binaryPath,
-        status: "updated",
+        status: "ready",
       },
     });
 
     return success({
       id: CODEX_CHECK_ID,
-      status: "updated" as const,
+      status: "ready" as const,
       requiredVersion: MIN_CODEX_CLI_VERSION,
-      previousVersion: before.version,
-      version: after.version,
-      binaryPath: after.binaryPath,
     });
-  }
-
-  private repairError(
-    message: string,
-    state: CodexCliState,
-    result: ExecResult,
-    previousVersion: string | null = state.version,
-  ): StartupToolchainError {
-    this.logger.warn("Startup toolchain check failed", {
-      fields: {
-        provider: "openai-codex",
-        checkId: CODEX_CHECK_ID,
-        requiredVersion: MIN_CODEX_CLI_VERSION,
-        installedVersion: state.version,
-        previousVersion,
-        binaryPath: state.binaryPath,
-        stdout: truncateCommandOutput(result.stdout) ?? null,
-        stderr: truncateCommandOutput(result.stderr) ?? null,
-        exitCode: result.exitCode,
-      },
-    });
-    return startupToolchainError(
-      CODEX_CHECK_ID,
-      message,
-      {
-        provider: "openai-codex",
-        requiredVersion: MIN_CODEX_CLI_VERSION,
-        installedVersion: state.version,
-        binaryPath: state.binaryPath,
-        ...execResultErrorFields(result),
-      },
-    );
   }
 }
 
