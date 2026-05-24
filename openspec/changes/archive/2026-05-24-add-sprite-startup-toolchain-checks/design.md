@@ -77,7 +77,7 @@ The OpenAI Codex check should run one provider-owned bash script that:
 - update `PATH` for the current shell if the installer writes into `$HOME/.local/bin` or a similar user-local bin directory
 - verify `codex --version` after repair and fail if the version remains below the minimum
 
-Keep the Codex minimum version inside the Codex startup check module. TypeScript should execute the script and record success/failure; it should not duplicate the script's version parsing or repair branching. The vm-agent may keep its own defensive runtime guard, but the Sprite repair decision belongs to the startup check.
+Keep the default Codex minimum version inside the Codex startup check module. If `CODEX_MIN_VERSION` is configured, provisioning should pass that runtime override into the startup check and include it in the check contract. TypeScript should execute the script and record success/failure; it should not duplicate the script's version parsing or repair branching. The vm-agent may keep its own defensive runtime guard, but both gates must use the same effective minimum.
 
 Claude should still have an explicit provider implementation even if it initially returns an empty check list. That is the same "provider owns its case" discipline used by tool normalization: adding a provider is handled in the provider module and the central exhaustive switch, not by scattering conditionals into provisioning.
 

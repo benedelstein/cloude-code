@@ -58,7 +58,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
 
     const provider = createCodexAppServer({
       defaultSettings: {
-        minCodexVersion: process.env.CODEX_MIN_VERSION ?? "0.130.0",
+        minCodexVersion: process.env.CODEX_MIN_VERSION?.trim() || "0.130.0",
         autoApprove: true,
         sandboxPolicy: getSandboxPolicy(initialAgentMode),
         personality: "pragmatic",

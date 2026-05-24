@@ -117,7 +117,10 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
   } as ServerState;
 }
 
-function createManager(serverState: ServerState) {
+function createManager(
+  serverState: ServerState,
+  envOverrides: Partial<Env> = {},
+) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
   });
@@ -126,6 +129,7 @@ function createManager(serverState: ServerState) {
       SPRITES_API_KEY: "sprites-key",
       SPRITES_API_URL: "https://api.sprites.test",
       WORKER_URL: "https://worker.test",
+      ...envOverrides,
     } as Env,
     logger: createLogger(),
     secretRepository: {
@@ -437,6 +441,43 @@ describe("SpriteAgentProcessManager", () => {
     expect(updateAgentProcessId).toHaveBeenCalledWith(null);
     expect(mockState.createSession).toHaveBeenCalledOnce();
     expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
+  });
+
+  it("passes CODEX_MIN_VERSION to fresh vm-agent processes when configured", async () => {
+    const spawnSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn(),
+      onServerMessage: vi.fn((handler) => {
+        handler({ type: "session_info", session_id: 84, tty: true });
+        return vi.fn();
+      }),
+    };
+    mockState.attachSession.mockReturnValue({
+      start: vi.fn().mockRejectedValue(new SpritesError("not found", 404)),
+      close: vi.fn(),
+    });
+    mockState.createSession.mockReturnValue(spawnSession);
+
+    const serverState = createServerState({ agentProcessId: 42 });
+    const { manager } = createManager(serverState, {
+      CODEX_MIN_VERSION: "0.140.0",
+    });
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockState.createSession).toHaveBeenCalledOnce();
+    expect(mockState.createSession).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          CODEX_MIN_VERSION: "0.140.0",
+        }),
+      }),
+    );
   });
 
   it("returns a spawn failure when sprite setup file writes fail", async () => {

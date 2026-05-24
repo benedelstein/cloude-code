@@ -6,7 +6,6 @@ import type { WorkersSpriteClient } from "../../src/lib/sprites";
 import { DEFAULT_NETWORK_POLICY } from "../../src/lib/sprites/network-policy";
 import {
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
-  buildStartupToolchainContractHash,
   ensureSpriteStartupToolchain,
   getProviderStartupToolchainChecks,
 } from "../../src/lib/sprites/startup-toolchain";
@@ -50,45 +49,56 @@ describe("startup toolchain dispatch", () => {
   });
 
   it("skips execution when the startup checkpoint contract is current", async () => {
-    const checks = getProviderStartupToolchainChecks("openai-codex", {
-      logger: createLogger(),
-    });
-    const contractHash = await buildStartupToolchainContractHash(
-      "openai-codex",
-      checks,
-    );
-    const sprite = createSprite([]);
-
-    const result = await ensureSpriteStartupToolchain({
+    const logger = createLogger();
+    const firstSprite = createSprite([{ stdout: "codex is ready: 0.130.0\n", exitCode: 0 }]);
+    const firstResult = await ensureSpriteStartupToolchain({
       providerId: "openai-codex",
-      sprite,
-      checkpoint: {
-        contractHash,
-        checkedAt: 1,
-        results: [],
-      },
-      logger: createLogger(),
+      sprite: firstSprite,
+      checkpoint: null,
+      logger,
+    });
+    expect(firstResult.ok).toBe(true);
+    if (!firstResult.ok) {
+      return;
+    }
+
+    const secondSprite = createSprite([]);
+    const secondResult = await ensureSpriteStartupToolchain({
+      providerId: "openai-codex",
+      sprite: secondSprite,
+      checkpoint: firstResult.value,
+      logger,
     });
 
-    expect(result.ok).toBe(true);
-    expect(sprite.execHttp).not.toHaveBeenCalled();
+    expect(secondResult.ok).toBe(true);
+    expect(secondSprite.execHttp).not.toHaveBeenCalled();
   });
 
-  it("changes the contract hash when the provider contract changes", async () => {
-    const codexHash = await buildStartupToolchainContractHash(
-      "openai-codex",
-      getProviderStartupToolchainChecks("openai-codex", {
-        logger: createLogger(),
-      }),
-    );
-    const claudeHash = await buildStartupToolchainContractHash(
-      "claude-code",
-      getProviderStartupToolchainChecks("claude-code", {
-        logger: createLogger(),
-      }),
-    );
+  it("reruns checks when the Codex minimum version override changes", async () => {
+    const logger = createLogger();
+    const firstSprite = createSprite([{ stdout: "codex is ready: 0.130.0\n", exitCode: 0 }]);
+    const firstResult = await ensureSpriteStartupToolchain({
+      providerId: "openai-codex",
+      sprite: firstSprite,
+      checkpoint: null,
+      logger,
+    });
+    expect(firstResult.ok).toBe(true);
+    if (!firstResult.ok) {
+      return;
+    }
 
-    expect(codexHash).not.toBe(claudeHash);
+    const secondSprite = createSprite([{ stdout: "codex is ready: 0.140.0\n", exitCode: 0 }]);
+    const secondResult = await ensureSpriteStartupToolchain({
+      providerId: "openai-codex",
+      sprite: secondSprite,
+      checkpoint: firstResult.value,
+      logger,
+      codexMinVersion: "0.140.0",
+    });
+
+    expect(secondResult.ok).toBe(true);
+    expect(secondSprite.execHttp).toHaveBeenCalledOnce();
   });
 
   it("keeps provisioning and spawn call sites provider-agnostic", () => {
@@ -113,7 +123,9 @@ describe("OpenAI Codex startup check", () => {
       stdout: "codex is current: 0.130.0\n",
       exitCode: 0,
     }]);
-    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks({
+      logger: createLogger(),
+    });
 
     const result = await check!.ensureReady({ sprite });
 
@@ -140,7 +152,9 @@ describe("OpenAI Codex startup check", () => {
       stdout: "codex is ready: 0.130.0\n",
       exitCode: 0,
     }]);
-    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks({
+      logger: createLogger(),
+    });
 
     const result = await check!.ensureReady({ sprite });
 
@@ -156,13 +170,38 @@ describe("OpenAI Codex startup check", () => {
     expect(command).toContain("codex is ready");
   });
 
+  it("uses CODEX_MIN_VERSION when provided", async () => {
+    const sprite = createSprite([{
+      stdout: "codex is ready: 0.140.0\n",
+      exitCode: 0,
+    }]);
+    const [check] = getOpenAICodexStartupToolchainChecks({
+      logger: createLogger(),
+      codexMinVersion: "0.140.0",
+    });
+
+    const result = await check!.ensureReady({ sprite });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value.requiredVersion).toBe("0.140.0");
+    expect(check!.contract.minimumVersion).toBe("0.140.0");
+    expect(sprite.execHttp).toHaveBeenCalledWith(
+      expect.stringContaining('min_version="0.140.0"'),
+    );
+  });
+
   it("fails when the startup script fails", async () => {
     const sprite = createSprite([{
       stdout: "codex is stale: 0.100.0 < 0.130.0\n",
       stderr: "codex version 0.100.0 is below required 0.130.0 after install\n",
       exitCode: 1,
     }]);
-    const [check] = getOpenAICodexStartupToolchainChecks(createLogger());
+    const [check] = getOpenAICodexStartupToolchainChecks({
+      logger: createLogger(),
+    });
 
     const result = await check!.ensureReady({ sprite });
 

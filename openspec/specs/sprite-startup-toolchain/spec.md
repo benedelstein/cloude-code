@@ -40,9 +40,15 @@ Provider-specific toolchain checks SHALL live behind a common API-server check p
 
 The OpenAI Codex startup check SHALL verify that `codex` resolves on the Sprite and that `codex --version` is greater than or equal to the service-defined minimum Codex CLI version. If `codex` is missing or below the minimum, the check SHALL run the approved Codex install/update script for Linux/macOS and then verify the installed version again.
 
+If `CODEX_MIN_VERSION` is configured for the API server/vm-agent runtime, the startup check SHALL use that value as the effective minimum version and include it in the startup toolchain contract.
+
 #### Scenario: Codex CLI is already current
 - **WHEN** `codex --version` reports a version greater than or equal to the configured minimum
 - **THEN** the Codex startup script exits successfully without running the install script
+
+#### Scenario: Codex minimum version is overridden
+- **WHEN** `CODEX_MIN_VERSION` is configured higher than the default minimum
+- **THEN** Sprite provisioning and vm-agent startup enforce that same higher minimum version
 
 #### Scenario: Codex CLI is missing
 - **WHEN** `codex` cannot be resolved on the Sprite

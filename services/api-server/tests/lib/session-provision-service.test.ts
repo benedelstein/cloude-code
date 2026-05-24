@@ -79,7 +79,11 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
   };
 }
 
-function createService(serverState: ServerState, clientState: ClientState) {
+function createService(
+  serverState: ServerState,
+  clientState: ClientState,
+  envOverrides: Partial<Env> = {},
+) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
   });
@@ -97,6 +101,7 @@ function createService(serverState: ServerState, clientState: ClientState) {
       SPRITES_API_KEY: "sprites-key",
       SPRITES_API_URL: "https://api.sprites.test",
       WORKER_URL: "https://worker.test",
+      ...envOverrides,
     } as Env,
     spritesCoordinator: spritesCoordinator as never,
     getServerState: () => serverState,
@@ -176,6 +181,28 @@ describe("SessionProvisionService startup toolchain", () => {
         results: [],
       },
     });
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexMinVersion: undefined,
+      }),
+    );
+  });
+
+  it("passes CODEX_MIN_VERSION to startup toolchain checks", async () => {
+    const serverState = createServerState();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      { CODEX_MIN_VERSION: "0.140.0" },
+    );
+
+    await service.ensureProvisioned();
+
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexMinVersion: "0.140.0",
+      }),
+    );
   });
 
   it("blocks clone when startup toolchain fails", async () => {

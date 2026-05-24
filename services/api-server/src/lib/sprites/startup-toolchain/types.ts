@@ -37,4 +37,5 @@ export interface StartupToolchainCheck {
 
 export interface StartupToolchainDeps {
   logger: Logger;
+  codexMinVersion?: string;
 }

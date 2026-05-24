@@ -28,7 +28,10 @@ export function getProviderStartupToolchainChecks(
     case "claude-code":
       return getClaudeStartupToolchainChecks();
     case "openai-codex":
-      return getOpenAICodexStartupToolchainChecks(deps.logger);
+      return getOpenAICodexStartupToolchainChecks({
+        logger: deps.logger,
+        codexMinVersion: deps.codexMinVersion,
+      });
     default: {
       const exhaustiveCheck: never = providerId;
       throw new Error(`Unhandled provider: ${exhaustiveCheck}`);
@@ -36,7 +39,7 @@ export function getProviderStartupToolchainChecks(
   }
 }
 
-export async function buildStartupToolchainContractHash(
+async function buildStartupToolchainContractHash(
   providerId: ProviderId,
   checks: StartupToolchainCheck[],
 ): Promise<string> {
@@ -51,11 +54,13 @@ export async function ensureSpriteStartupToolchain(args: {
   sprite: WorkersSpriteClient;
   checkpoint: StartupToolchainCheckpoint | null;
   logger: Logger;
+  codexMinVersion?: string;
 }): Promise<Result<StartupToolchainCheckpoint, StartupToolchainError>> {
   const checks = [
     ...getCommonStartupToolchainChecks(),
     ...getProviderStartupToolchainChecks(args.providerId, {
       logger: args.logger,
+      codexMinVersion: args.codexMinVersion,
     }),
   ];
   const contractHash = await buildStartupToolchainContractHash(

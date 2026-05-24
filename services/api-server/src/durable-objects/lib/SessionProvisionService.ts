@@ -146,6 +146,7 @@ export class SessionProvisionService {
       sprite,
       checkpoint: serverState.startupToolchain,
       logger: this.logger,
+      codexMinVersion: this.env.CODEX_MIN_VERSION,
     });
     if (!result.ok) {
       throw new Error(result.error.message);

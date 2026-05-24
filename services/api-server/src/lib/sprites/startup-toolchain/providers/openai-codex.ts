@@ -12,14 +12,19 @@ import {
 } from "../common";
 
 const CODEX_CHECK_ID = "openai-codex.cli";
-const MIN_CODEX_CLI_VERSION = "0.130.0";
+const DEFAULT_CODEX_CLI_VERSION = "0.130.0";
 const CODEX_INSTALL_SCRIPT_URL = "https://chatgpt.com/codex/install.sh";
 const CODEX_SCRIPT_VERSION = "2";
 
-const CODEX_STARTUP_SCRIPT = `
+function getEffectiveCodexMinVersion(codexMinVersion: string | undefined): string {
+  return codexMinVersion?.trim() || DEFAULT_CODEX_CLI_VERSION;
+}
+
+function buildCodexStartupScript(minCodexVersion: string): string {
+  return `
 set -euo pipefail
 
-min_version="${MIN_CODEX_CLI_VERSION}"
+min_version="${minCodexVersion}"
 install_url="${CODEX_INSTALL_SCRIPT_URL}"
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH"
 
@@ -76,15 +81,7 @@ fi
 
 echo "codex is ready: $new_version"
 `.trim();
-
-const CODEX_CONTRACT = {
-  provider: "openai-codex",
-  id: CODEX_CHECK_ID,
-  minimumVersion: MIN_CODEX_CLI_VERSION,
-  installScriptUrl: CODEX_INSTALL_SCRIPT_URL,
-  scriptVersion: CODEX_SCRIPT_VERSION,
-  script: CODEX_STARTUP_SCRIPT,
-} satisfies Record<string, unknown>;
+}
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -92,25 +89,37 @@ function shellQuote(value: string): string {
 
 class CodexCliCheck implements StartupToolchainCheck {
   readonly id = CODEX_CHECK_ID;
-  readonly contract = CODEX_CONTRACT;
+  readonly contract: Record<string, unknown>;
   private readonly logger: Logger;
+  private readonly minCodexVersion: string;
+  private readonly startupScript: string;
 
-  constructor(logger: Logger) {
-    this.logger = logger.scope("openai-codex-startup-toolchain");
+  constructor(args: { logger: Logger; codexMinVersion?: string }) {
+    this.minCodexVersion = getEffectiveCodexMinVersion(args.codexMinVersion);
+    this.startupScript = buildCodexStartupScript(this.minCodexVersion);
+    this.contract = {
+      provider: "openai-codex",
+      id: CODEX_CHECK_ID,
+      minimumVersion: this.minCodexVersion,
+      installScriptUrl: CODEX_INSTALL_SCRIPT_URL,
+      scriptVersion: CODEX_SCRIPT_VERSION,
+      script: this.startupScript,
+    };
+    this.logger = args.logger.scope("openai-codex-startup-toolchain");
   }
 
   async ensureReady(
     input: StartupToolchainCheckInput,
   ) {
     const result = await input.sprite.execHttp(
-      `bash -lc ${shellQuote(CODEX_STARTUP_SCRIPT)}`,
+      `bash -lc ${shellQuote(this.startupScript)}`,
     );
     if (result.exitCode !== 0) {
       this.logger.warn("Startup toolchain check failed", {
         fields: {
           provider: "openai-codex",
           checkId: CODEX_CHECK_ID,
-          requiredVersion: MIN_CODEX_CLI_VERSION,
+          requiredVersion: this.minCodexVersion,
           stdout: truncateCommandOutput(result.stdout) ?? null,
           stderr: truncateCommandOutput(result.stderr) ?? null,
           exitCode: result.exitCode,
@@ -121,7 +130,7 @@ class CodexCliCheck implements StartupToolchainCheck {
         "Codex CLI startup script failed.",
         {
           provider: "openai-codex",
-          requiredVersion: MIN_CODEX_CLI_VERSION,
+          requiredVersion: this.minCodexVersion,
           ...execResultErrorFields(result),
         },
       ));
@@ -131,7 +140,7 @@ class CodexCliCheck implements StartupToolchainCheck {
       fields: {
         provider: "openai-codex",
         checkId: CODEX_CHECK_ID,
-        requiredVersion: MIN_CODEX_CLI_VERSION,
+        requiredVersion: this.minCodexVersion,
         status: "ready",
       },
     });
@@ -139,15 +148,15 @@ class CodexCliCheck implements StartupToolchainCheck {
     return success({
       id: CODEX_CHECK_ID,
       status: "ready" as const,
-      requiredVersion: MIN_CODEX_CLI_VERSION,
+      requiredVersion: this.minCodexVersion,
     });
   }
 }
 
 export function getOpenAICodexStartupToolchainChecks(
-  logger: Logger,
+  args: { logger: Logger; codexMinVersion?: string },
 ): StartupToolchainCheck[] {
-  return [new CodexCliCheck(logger)];
+  return [new CodexCliCheck(args)];
 }
 
 export const OPENAI_CODEX_INSTALL_SCRIPT_URL = CODEX_INSTALL_SCRIPT_URL;
