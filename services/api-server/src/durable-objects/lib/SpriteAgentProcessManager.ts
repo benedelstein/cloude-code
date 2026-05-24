@@ -18,13 +18,13 @@ import {
   WorkersSpriteClient,
   type SpriteServerMessage,
   type SpriteWebsocketSession,
-} from "@/lib/sprites";
+} from "@/lib/providers/sprite-provider";
 import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle.js";
 import {
   getProviderCredentialAdapter,
   type AuthCredentialSnapshot,
   type ProviderCredentialError,
-} from "@/lib/providers/provider-credential-adapter";
+} from "@/lib/providers/ai-credential-provider";
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,

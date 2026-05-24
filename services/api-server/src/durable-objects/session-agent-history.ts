@@ -1,6 +1,6 @@
 import type { Logger } from "@repo/shared";
 import { SessionsRepository } from "@/repositories/sessions.repository";
-import { generateSessionTitle } from "@/lib/generate-session-title";
+import { generateSessionTitle } from "@/lib/sessions/generate-session-title";
 import type { MessageRepository } from "./repositories/message-repository";
 
 export async function updateSessionHistoryData(params: {

@@ -29,22 +29,22 @@ import type {
   HandleOpenEditorResult,
   SessionAgentRpcError,
 } from "@/types/session-agent";
-import { AttachmentService } from "@/lib/attachments/attachment-service";
-import { generateSessionTitle } from "@/lib/generate-session-title";
-import { GitHubAppService } from "@/lib/github";
-import { createLogger } from "@/lib/logger";
+import { AttachmentProvider, type SessionAttachmentProvider } from "@/lib/providers/attachment-provider";
+import { generateSessionTitle } from "@/lib/sessions/generate-session-title";
+import { GitHubProvider } from "@/lib/providers/github-provider";
+import { createLogger } from "@/lib/providers/observability-provider";
 import { SessionsRepository } from "@/repositories/sessions.repository";
 import {
   createPullRequestForSession,
   getPullRequestStatusForSession,
   SessionPullRequestServiceError,
-} from "@/lib/session-pull-request-service";
-import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
-import { mintSessionWebSocketToken } from "@/lib/session-websocket-token";
+} from "@/lib/sessions/session-pull-request-service";
+import { requestSessionAccessBlockedCleanup } from "@/lib/sessions/session-access-block";
+import { mintSessionWebSocketToken } from "@/lib/sessions/session-websocket-token";
 import {
   assertSessionRepoAccess,
   assertUserRepoAccess,
-} from "@/lib/user-session/session-repo-access";
+} from "@/lib/providers/repo-access-provider";
 import type { Env } from "@/types";
 import { toSqliteDatetime } from "@/lib/utils/utils";
 
@@ -84,12 +84,12 @@ class SessionInitializationError extends Error {
 export class SessionsService {
   private readonly env: Env;
   private readonly sessionsRepository: SessionsRepository;
-  private readonly attachmentService: AttachmentService;
+  private readonly attachmentService: SessionAttachmentProvider;
 
   constructor(env: Env) {
     this.env = env;
     this.sessionsRepository = new SessionsRepository(env.DB);
-    this.attachmentService = new AttachmentService(env.DB);
+    this.attachmentService = new AttachmentProvider(env.DB);
   }
 
   /**
@@ -473,7 +473,7 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const github = new GitHubAppService(this.env, logger);
+    const github = new GitHubProvider(this.env, logger);
     try {
       const pullRequest = await createPullRequestForSession({
         sessionStub: authorizedSessionAgent.value,
@@ -530,7 +530,7 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const github = new GitHubAppService(this.env, logger);
+    const github = new GitHubProvider(this.env, logger);
     try {
       const pullRequestStatus = await getPullRequestStatusForSession({
         sessionStub: authorizedSessionAgent.value,

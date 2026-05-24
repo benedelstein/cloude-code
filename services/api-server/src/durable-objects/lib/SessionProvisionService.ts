@@ -1,11 +1,11 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import type { SpritesCoordinator } from "@/lib/sprites";
-import { WorkersSpriteClient } from "@/lib/sprites";
-import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
-import { ensureSpriteStartupToolchain } from "@/lib/sprites/startup-toolchain";
-import { configureGitRemote } from "@/lib/git-setup";
-import { GitHubAppService } from "@/lib/github/github-app";
+import { ensureSpriteStartupToolchain } from "@/lib/providers/startup-toolchain";
+import type { SpritesCoordinator } from "@/lib/providers/sprite-provider";
+import { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
+import { buildNetworkPolicy } from "@/lib/providers/sprite-provider";
+import { configureGitRemote } from "@/lib/providers/sprite-provider";
+import { GitHubProvider } from "@/lib/providers/github-provider";
 import type { ServerState } from "../repositories/server-state-repository";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -141,6 +141,15 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
+    this.logger.info("Ensuring startup toolchain", {
+      fields: {
+        sessionId: serverState.sessionId,
+        spriteName,
+        provider: providerId,
+        checkpointPresent: serverState.startupToolchain !== null,
+      },
+    });
+
     const result = await ensureSpriteStartupToolchain({
       providerId,
       sprite,
@@ -149,11 +158,29 @@ export class SessionProvisionService {
       codexMinVersion: this.env.CODEX_MIN_VERSION,
     });
     if (!result.ok) {
+      this.logger.warn("Startup toolchain failed", {
+        fields: {
+          sessionId: serverState.sessionId,
+          spriteName,
+          provider: providerId,
+          checkId: result.error.checkId,
+          code: result.error.code,
+        },
+      });
       throw new Error(result.error.message);
     }
 
     this.updateServerState({
       startupToolchain: result.value,
+    });
+    this.logger.info("Startup toolchain ready", {
+      fields: {
+        sessionId: serverState.sessionId,
+        spriteName,
+        provider: providerId,
+        contractHash: result.value.contractHash,
+        checkCount: result.value.results.length,
+      },
     });
   }
 
@@ -193,7 +220,7 @@ export class SessionProvisionService {
       await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
       // Fetch a read-only token scoped to contents:read for the initial clone
-      const github = new GitHubAppService(this.env, this.logger);
+      const github = new GitHubProvider(this.env, this.logger);
       const cloneTokenResult = await github.getReadOnlyTokenForRepo(repoFullName);
       if (!cloneTokenResult.ok) {
         throw new Error(cloneTokenResult.error.message);

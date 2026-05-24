@@ -13,7 +13,7 @@ const mockState = vi.hoisted(() => ({
   getReadOnlyTokenForRepo: vi.fn(),
 }));
 
-vi.mock("@/lib/sprites", () => {
+vi.mock("@/lib/providers/sprite-provider", () => {
   class WorkersSpriteClient {
     public name: string;
     constructor(name: string) {
@@ -22,19 +22,19 @@ vi.mock("@/lib/sprites", () => {
     setNetworkPolicy = mockState.setNetworkPolicy;
     execHttp = mockState.execHttp;
   }
-  return { WorkersSpriteClient };
+  return {
+    WorkersSpriteClient,
+    buildNetworkPolicy: (rules: unknown[]) => rules,
+    configureGitRemote: mockState.configureGitRemote,
+  };
 });
 
-vi.mock("@/lib/sprites/startup-toolchain", () => ({
+vi.mock("@/lib/providers/startup-toolchain", () => ({
   ensureSpriteStartupToolchain: mockState.ensureSpriteStartupToolchain,
 }));
 
-vi.mock("@/lib/git-setup", () => ({
-  configureGitRemote: mockState.configureGitRemote,
-}));
-
-vi.mock("@/lib/github/github-app", () => ({
-  GitHubAppService: class {
+vi.mock("@/lib/providers/github-provider", () => ({
+  GitHubProvider: class {
     getReadOnlyTokenForRepo = mockState.getReadOnlyTokenForRepo;
   },
 }));

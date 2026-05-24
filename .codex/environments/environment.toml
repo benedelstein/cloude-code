@@ -3,7 +3,10 @@ version = 1
 name = "cloude-code"
 
 [setup]
-script = "printf \"ello\""
+script = '''
+pnpm install
+pnpm build
+'''
 
 [[actions]]
 name = "Lint"

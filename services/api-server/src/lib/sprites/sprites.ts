@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Session} from "@fly/sprites";
 import { SpritesClient } from "@fly/sprites";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 // =============================================================================
 // Zod Schemas

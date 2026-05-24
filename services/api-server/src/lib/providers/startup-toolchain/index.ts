@@ -1,6 +1,6 @@
 import type { Logger, ProviderId, Result } from "@repo/shared";
 import { failure, success } from "@repo/shared";
-import type { WorkersSpriteClient } from "@/lib/sprites";
+import type { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
 import { sha256 } from "@/lib/utils/crypto";
 import type {
   StartupToolchainCheckpoint,
@@ -68,16 +68,35 @@ export async function ensureSpriteStartupToolchain(args: {
     checks,
   );
   if (args.checkpoint?.contractHash === contractHash) {
-    args.logger.debug("Startup toolchain checkpoint is current", {
-      fields: { contractHash, provider: args.providerId },
+    args.logger.info("Startup toolchain checkpoint is current", {
+      fields: {
+        provider: args.providerId,
+        contractHash,
+        checkCount: checks.length,
+      },
     });
     return success(args.checkpoint);
   }
 
   const results = [];
   for (const check of checks) {
+    args.logger.info("Running startup toolchain check", {
+      fields: {
+        provider: args.providerId,
+        contractHash,
+        checkId: check.id,
+      },
+    });
     const result = await check.ensureReady({ sprite: args.sprite });
     if (!result.ok) {
+      args.logger.warn("Startup toolchain check returned failure", {
+        fields: {
+          provider: args.providerId,
+          contractHash,
+          checkId: check.id,
+          code: result.error.code,
+        },
+      });
       return failure(result.error);
     }
     results.push(result.value);

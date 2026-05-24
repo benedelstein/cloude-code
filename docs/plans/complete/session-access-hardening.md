@@ -2,7 +2,7 @@
 
 Status: implemented with naming drift. The current guard is
 `assertSessionRepoAccess(...)` in
-`services/api-server/src/lib/user-session/session-repo-access.ts`, and blocked
+`services/api-server/src/lib/providers/repo-access-provider.ts`, and blocked
 sessions use `access_blocked_at` / `access_block_reason` columns rather than
 the `revoked_at` / `revoked_reason` names in this original plan.
 

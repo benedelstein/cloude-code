@@ -23,7 +23,7 @@ The Sprite already supports remote command execution through `WorkersSpriteClien
 
 ### Add a small Sprite startup toolchain runner in the API server
 
-Create a server-side module under `services/api-server/src/lib/sprites/startup-toolchain/` with:
+Create a server-side module under `services/api-server/src/lib/providers/startup-toolchain/` with:
 - `StartupToolchainCheck`: a simple check protocol with `id`, `contract`, and `ensureReady(...)`.
 - `getCommonStartupToolchainChecks()`: provider-agnostic checks that run before provider checks.
 - `getProviderStartupToolchainChecks(providerId, deps)`: exhaustive `switch` returning provider-specific checks.

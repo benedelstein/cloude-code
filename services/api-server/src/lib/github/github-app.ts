@@ -16,7 +16,7 @@ import { GitHubUserRepoAccessCacheRepository } from "@/repositories/github-user-
 import { GitHubUserRepoListingSyncRepository } from "@/repositories/github-user-repo-listing-sync-repository";
 import { InstallationTokenCacheRepository } from "@/repositories/installation-token-cache-repository";
 import { UserSessionRepository } from "@/repositories/user-session-repository";
-import { requestSessionAccessBlockedCleanup } from "@/lib/session-access-block";
+import { requestSessionAccessBlockedCleanup } from "@/lib/sessions/session-access-block";
 import type {
   CreatePullRequestInput,
   GitHubAppResult,

@@ -5,8 +5,8 @@ import type { ServerState } from "../repositories/server-state-repository";
 import type {
   SessionRepoAccessError,
   SessionRepoAccessResult,
-} from "@/lib/user-session/session-repo-access";
-import { handleGitProxy, type GitProxyContext } from "@/lib/git-proxy";
+} from "@/lib/providers/repo-access-provider";
+import { handleGitProxy, type GitProxyContext } from "@/lib/github/git-proxy";
 
 export interface SessionGitProxyServiceDeps {
   logger: Logger;

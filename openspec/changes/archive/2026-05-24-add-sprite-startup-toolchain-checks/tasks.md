@@ -6,7 +6,7 @@
 
 ## 2. Startup Toolchain Service
 
-- [x] 2.1 Add `services/api-server/src/lib/sprites/startup-toolchain/` with the common check interface, contract hash builder, and runner.
+- [x] 2.1 Add `services/api-server/src/lib/providers/startup-toolchain/` with the common check interface, contract hash builder, and runner.
 - [x] 2.2 Define a simple `StartupToolchainCheck` protocol returning typed `Result` values for expected setup failures.
 - [x] 2.3 Add provider-agnostic check support plus exhaustive `ProviderId` switching for per-provider checks.
 - [x] 2.4 Implement the OpenAI Codex provider as one bash startup script that checks `codex`, repairs with the approved install/update script when missing or stale, updates `PATH`, and verifies the post-repair version.

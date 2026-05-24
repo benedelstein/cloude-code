@@ -22,7 +22,7 @@ Sprite VMs can start with preinstalled provider CLIs that are too old for the se
 
 - `services/api-server/src/durable-objects/lib/SessionProvisionService.ts`: run startup checks as an idempotent provisioning step.
 - `services/api-server/src/durable-objects/repositories/server-state-repository.ts`: store the startup toolchain checkpoint/contract version.
-- `services/api-server/src/lib/sprites/startup-toolchain/`: add the startup check runner and provider check modules.
+- `services/api-server/src/lib/providers/startup-toolchain/`: add the startup check runner and provider check modules.
 - `services/api-server/src/lib/sprites/network-policy.ts`: ensure the update script's download hosts are allowed.
 - `packages/shared/src/types/providers/`: reuse `ProviderId`/agent settings to select provider-specific checks.
 - `packages/vm-agent/src/providers/codex.ts`: keep the runtime `minCodexVersion` as a defensive guard, but do not rely on it as the first repair point.

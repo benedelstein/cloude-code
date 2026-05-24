@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Logger } from "@repo/shared";
-import type { WorkersSpriteClient } from "../../src/lib/sprites";
+import type { WorkersSpriteClient } from "../../src/lib/providers/sprite-provider";
 import { DEFAULT_NETWORK_POLICY } from "../../src/lib/sprites/network-policy";
 import {
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
   ensureSpriteStartupToolchain,
   getProviderStartupToolchainChecks,
-} from "../../src/lib/sprites/startup-toolchain";
-import { getOpenAICodexStartupToolchainChecks } from "../../src/lib/sprites/startup-toolchain/providers/openai-codex";
+} from "../../src/lib/providers/startup-toolchain";
+import { getOpenAICodexStartupToolchainChecks } from "../../src/lib/providers/startup-toolchain/providers/openai-codex";
 
 const MIN_CODEX_CLI_VERSION = "0.130.0";
 

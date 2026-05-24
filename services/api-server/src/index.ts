@@ -14,8 +14,8 @@ import { modelsRoutes } from "./routes/models.routes";
 import { internalRoutes } from "./routes/internal.routes";
 import type { Env } from "./types";
 import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
-import { initializeLogger } from "./lib/logger";
-import { requestLoggerMiddleware } from "./middleware/request-logger.middleware";
+import { initializeLogger } from "./lib/providers/observability-provider";
+// import { requestLoggerMiddleware } from "./middleware/request-logger.middleware";
 import type { LogLevel } from "@repo/shared";
 
 export { SessionAgentDO } from "./durable-objects/session-agent-do";
@@ -30,7 +30,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.use("*", requestLoggerMiddleware); // instead of default cf logger
+// app.use("*", requestLoggerMiddleware); // instead of default cf logger
 
 app.use(
   "*",

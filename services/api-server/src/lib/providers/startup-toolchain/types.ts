@@ -4,7 +4,7 @@ import type {
   ProviderId,
   Result,
 } from "@repo/shared";
-import type { WorkersSpriteClient } from "@/lib/sprites";
+import type { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
 import type { StartupToolchainCheckResult } from "@/types/startup-toolchain";
 
 export const STARTUP_TOOLCHAIN_DOMAIN = "startup_toolchain";

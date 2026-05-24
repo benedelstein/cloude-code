@@ -1,4 +1,4 @@
-import { SpritesCoordinator } from "@/lib/sprites";
+import { SpritesCoordinator } from "@/lib/providers/sprite-provider";
 import {
   type ClientState,
   type AgentMode,
@@ -22,9 +22,9 @@ import {
   type ServerState,
 } from "./repositories/server-state-repository";
 import { migrateAll } from "./repositories/schema-manager";
-import { AttachmentService } from "@/lib/attachments/attachment-service";
+import { AttachmentProvider, type SessionAttachmentProvider } from "@/lib/providers/attachment-provider";
 import { ensureValidInstallationToken } from "./session-agent-github-token";
-import { createLogger, initializeLogger } from "@/lib/logger";
+import { createLogger, initializeLogger } from "@/lib/providers/observability-provider";
 import type { UIMessageChunk } from "ai";
 // DISABLED: editor feature imports — security issue (sprite URL set to public)
 // import {
@@ -43,12 +43,12 @@ import type {
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/types/session-agent";
-import { buildUserUiMessage } from "@/lib/create-user-message";
+import { buildUserUiMessage } from "@/lib/sessions/create-user-message";
 import { timingSafeCompare } from "@/lib/utils/crypto";
 import {
   assertSessionRepoAccess,
   type SessionRepoAccessResult,
-} from "@/lib/user-session/session-repo-access";
+} from "@/lib/providers/repo-access-provider";
 import type {
   AgentEvent,
   SessionInfoResponse,
@@ -91,7 +91,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly serverStateRepository: ServerStateRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
-  private readonly attachmentService: AttachmentService;
+  private readonly attachmentService: SessionAttachmentProvider;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
@@ -143,7 +143,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
-    this.attachmentService = new AttachmentService(this.env.DB);
+    this.attachmentService = new AttachmentProvider(this.env.DB);
 
     migrateAll(sql, ctx.storage, [
       this.messageRepository,
@@ -568,7 +568,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       data.initialMessage,
       pendingAttachmentIds,
       {
-        attachmentService: new AttachmentService(this.env.DB),
+        attachmentService: new AttachmentProvider(this.env.DB),
       },
     );
     // Mark initialized in ServerState
