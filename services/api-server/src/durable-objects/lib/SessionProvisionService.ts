@@ -1,6 +1,7 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import type { SpritesCoordinator} from "@/lib/providers/sprite-provider";
+import { ensureSpriteStartupToolchain } from "@/lib/providers/startup-toolchain";
+import type { SpritesCoordinator } from "@/lib/providers/sprite-provider";
 import { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
 import { buildNetworkPolicy } from "@/lib/providers/sprite-provider";
 import { configureGitRemote } from "@/lib/providers/sprite-provider";
@@ -105,9 +106,14 @@ export class SessionProvisionService {
         this.updatePartialState({ status: this.synthesizeStatus() });
       }
 
+      const spriteName = this.getServerState().spriteName;
+      if (spriteName) {
+        await this.ensureStartupToolchain(spriteName);
+      }
+
       if (!this.getServerState().repoCloned) {
         this.updatePartialState({ status: this.synthesizeStatus() });
-        await this.cloneRepo(this.getServerState().spriteName!);
+        await this.cloneRepo(spriteName!);
         this.updateServerState({ repoCloned: true });
         this.updatePartialState({
           status: this.synthesizeStatus(),
@@ -124,6 +130,58 @@ export class SessionProvisionService {
       });
       throw error;
     }
+  }
+
+  private async ensureStartupToolchain(spriteName: string): Promise<void> {
+    const providerId = this.getClientState().agentSettings.provider;
+    const serverState = this.getServerState();
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    this.logger.info("Ensuring startup toolchain", {
+      fields: {
+        sessionId: serverState.sessionId,
+        spriteName,
+        provider: providerId,
+        checkpointPresent: serverState.startupToolchain !== null,
+      },
+    });
+
+    const result = await ensureSpriteStartupToolchain({
+      providerId,
+      sprite,
+      checkpoint: serverState.startupToolchain,
+      logger: this.logger,
+      codexMinVersion: this.env.CODEX_MIN_VERSION,
+    });
+    if (!result.ok) {
+      this.logger.warn("Startup toolchain failed", {
+        fields: {
+          sessionId: serverState.sessionId,
+          spriteName,
+          provider: providerId,
+          checkId: result.error.checkId,
+          code: result.error.code,
+        },
+      });
+      throw new Error(result.error.message);
+    }
+
+    this.updateServerState({
+      startupToolchain: result.value,
+    });
+    this.logger.info("Startup toolchain ready", {
+      fields: {
+        sessionId: serverState.sessionId,
+        spriteName,
+        provider: providerId,
+        contractHash: result.value.contractHash,
+        checkCount: result.value.results.length,
+      },
+    });
   }
 
   /**
