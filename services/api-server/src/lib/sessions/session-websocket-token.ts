@@ -1,6 +1,6 @@
 import { decodeBase64Url, encodeBase64Url } from "@repo/shared";
 import { z } from "zod";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 const TOKEN_TYPE = "session-websocket";
 const TOKEN_TTL_MS = 5 * 60 * 1000;

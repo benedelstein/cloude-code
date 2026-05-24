@@ -141,8 +141,53 @@ const layers: Layer[] = [
     prefixes: ["services/api-server/src/durable-objects/repositories/"],
   },
   {
+    id: "api:providers",
+    description: "API-server cross-cutting provider interfaces and adapters.",
+    prefixes: ["services/api-server/src/lib/providers/"],
+  },
+  {
+    id: "api:auth",
+    description: "API-server auth helpers.",
+    prefixes: ["services/api-server/src/lib/auth/"],
+  },
+  {
+    id: "api:github",
+    description: "API-server GitHub integration implementation.",
+    prefixes: ["services/api-server/src/lib/github/"],
+  },
+  {
+    id: "api:sprites",
+    description: "API-server Sprite integration implementation.",
+    prefixes: ["services/api-server/src/lib/sprites/"],
+  },
+  {
+    id: "api:ai-auth",
+    description: "API-server AI provider auth implementation.",
+    prefixes: ["services/api-server/src/lib/ai-auth/"],
+  },
+  {
+    id: "api:attachments",
+    description: "API-server attachment domain service.",
+    prefixes: ["services/api-server/src/lib/attachments/"],
+  },
+  {
+    id: "api:sessions",
+    description: "API-server sessions domain service.",
+    prefixes: ["services/api-server/src/lib/sessions/"],
+  },
+  {
+    id: "api:repos",
+    description: "API-server repos domain service.",
+    prefixes: ["services/api-server/src/lib/repos/"],
+  },
+  {
+    id: "api:user-session",
+    description: "API-server user-session domain service.",
+    prefixes: ["services/api-server/src/lib/user-session/"],
+  },
+  {
     id: "api:lib",
-    description: "API-server service and integration logic.",
+    description: "API-server service and integration logic not yet assigned to a domain layer.",
     prefixes: ["services/api-server/src/lib/"],
   },
   {
@@ -153,7 +198,7 @@ const layers: Layer[] = [
   {
     id: "api:do-lib",
     description: "Durable Object helper services.",
-    files: ["services/api-server/src/lib/git-proxy.ts"],
+    files: ["services/api-server/src/lib/github/git-proxy.ts"],
     prefixes: ["services/api-server/src/durable-objects/lib/"],
   },
   {
@@ -295,12 +340,96 @@ const allowedImports = defineAllowedImports({
     "api:types",
     "api:do-repositories",
   ],
+  "api:providers": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:do-runtime",
+    "api:github",
+    "api:sprites",
+    "api:ai-auth",
+    "api:attachments",
+    "api:user-session",
+    "api:providers",
+  ],
+  "api:auth": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:auth",
+  ],
+  "api:github": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:sessions",
+    "api:providers",
+    "api:github",
+  ],
+  "api:sprites": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:providers",
+    "api:sprites",
+  ],
+  "api:ai-auth": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:auth",
+    "api:providers",
+    "api:ai-auth",
+  ],
+  "api:attachments": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:repositories",
+    "api:attachments",
+  ],
+  "api:sessions": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:providers",
+    "api:sessions",
+    "api:do-runtime",
+  ],
+  "api:repos": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:providers",
+    "api:repos",
+  ],
+  "api:user-session": [
+    "shared:entry",
+    "shared:types",
+    "api:types",
+    "api:utils",
+    "api:repositories",
+    "api:providers",
+    "api:user-session",
+  ],
   "api:lib": [
     "shared:entry",
     "shared:types",
     "api:types",
     "api:utils",
     "api:repositories",
+    "api:providers",
     "api:lib",
     "api:do-runtime",
   ],
@@ -311,6 +440,12 @@ const allowedImports = defineAllowedImports({
     "api:utils",
     "api:repositories",
     "api:lib",
+    "api:providers",
+    "api:auth",
+    "api:sessions",
+    "api:repos",
+    "api:user-session",
+    "api:attachments",
     "api:middleware",
   ],
   "api:do-lib": [
@@ -319,6 +454,10 @@ const allowedImports = defineAllowedImports({
     "api:types",
     "api:utils",
     "api:lib",
+    "api:providers",
+    "api:sessions",
+    "api:user-session",
+    "api:attachments",
     "api:do-repositories",
     "api:do-lib",
     "api:do-runtime",
@@ -331,6 +470,10 @@ const allowedImports = defineAllowedImports({
     "api:utils",
     "api:repositories",
     "api:lib",
+    "api:providers",
+    "api:sessions",
+    "api:user-session",
+    "api:attachments",
     "api:do-repositories",
     "api:do-lib",
     "api:do-runtime",
@@ -342,6 +485,12 @@ const allowedImports = defineAllowedImports({
     "api:utils",
     "api:repositories",
     "api:lib",
+    "api:providers",
+    "api:auth",
+    "api:sessions",
+    "api:repos",
+    "api:user-session",
+    "api:attachments",
     "api:middleware",
     "api:do-runtime",
     "api:routes",
@@ -352,6 +501,12 @@ const allowedImports = defineAllowedImports({
     "api:types",
     "api:utils",
     "api:lib",
+    "api:providers",
+    "api:auth",
+    "api:sessions",
+    "api:repos",
+    "api:user-session",
+    "api:attachments",
     "api:middleware",
     "api:routes",
     "api:do-runtime",
@@ -417,7 +572,7 @@ const exceptions = [
     reason: "temporary type-only dependency on GitHubRepositoryData until GitHub DTOs move to api:types",
   },
   {
-    from: "services/api-server/src/lib/session-pull-request-service.ts",
+    from: "services/api-server/src/lib/sessions/session-pull-request-service.ts",
     to: "services/api-server/src/durable-objects/session-agent-do.ts",
     reason: "service accepts a typed Durable Object stub for session PR creation",
   },
@@ -701,11 +856,31 @@ function printViolations(violations: BoundaryViolation[]): void {
   }
 }
 
+function checkApiServerLibRoot(): string[] {
+  const libRoot = toAbsolutePath("services/api-server/src/lib");
+
+  return readdirSync(libRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && sourceExtensions.has(path.extname(entry.name)))
+    .map((entry) => `services/api-server/src/lib/${entry.name}`)
+    .sort();
+}
+
 const violations = checkBoundaries();
+const apiServerRootLibFiles = checkApiServerLibRoot();
 
 if (violations.length > 0) {
   printViolations(violations);
   process.exitCode = 1;
 } else {
   console.log("Import boundary check passed.");
+}
+
+if (apiServerRootLibFiles.length > 0) {
+  console.error("API server lib files must live under a domain or provider folder:");
+  for (const file of apiServerRootLibFiles) {
+    console.error(`  ${file}`);
+  }
+  process.exitCode = 1;
+} else {
+  console.log("API server lib root check passed.");
 }

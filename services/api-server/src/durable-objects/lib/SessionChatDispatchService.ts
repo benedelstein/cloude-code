@@ -14,7 +14,7 @@ import {
 } from "@repo/shared";
 import type { Env } from "@/types";
 import type { UIMessage } from "ai";
-import type { AttachmentService } from "@/lib/attachments/attachment-service";
+import type { SessionAttachmentProvider } from "@/lib/providers/attachment-provider";
 import type { AttachmentRecord } from "@/types/attachments";
 import { createUserUiMessage, getUserMessageTextContent } from "@/lib/utils/uimessage-utils";
 import { updateSessionHistoryData } from "../session-agent-history";
@@ -61,7 +61,7 @@ export interface SessionChatDispatchServiceDeps {
   logger: Logger;
   env: Env;
   messageRepository: MessageRepository;
-  attachmentService: AttachmentService;
+  attachmentService: SessionAttachmentProvider;
   turnCoordinator: AgentTurnCoordinator;
   processManager: SpriteAgentProcessManager;
 
@@ -82,7 +82,7 @@ export class SessionChatDispatchService {
   private readonly logger: Logger;
   private readonly env: Env;
   private readonly messageRepository: MessageRepository;
-  private readonly attachmentService: AttachmentService;
+  private readonly attachmentService: SessionAttachmentProvider;
   private readonly turnCoordinator: AgentTurnCoordinator;
   private readonly processManager: SpriteAgentProcessManager;
   private readonly getServerState: () => ServerState;

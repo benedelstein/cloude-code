@@ -8,7 +8,7 @@ import {
   getAttachmentContentRoute,
   deleteAttachmentRoute,
 } from "./schema";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 
 export const attachmentsRoutes = new OpenAPIHono<{
   Bindings: Env;

@@ -1,10 +1,10 @@
 import type { ClientState, Logger, SessionStatus } from "@repo/shared";
 import type { Env } from "@/types";
-import type { SpritesCoordinator} from "@/lib/sprites";
-import { WorkersSpriteClient } from "@/lib/sprites";
-import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
-import { configureGitRemote } from "@/lib/git-setup";
-import { GitHubAppService } from "@/lib/github/github-app";
+import type { SpritesCoordinator} from "@/lib/providers/sprite-provider";
+import { WorkersSpriteClient } from "@/lib/providers/sprite-provider";
+import { buildNetworkPolicy } from "@/lib/providers/sprite-provider";
+import { configureGitRemote } from "@/lib/providers/sprite-provider";
+import { GitHubProvider } from "@/lib/providers/github-provider";
 import type { ServerState } from "../repositories/server-state-repository";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -162,7 +162,7 @@ export class SessionProvisionService {
       await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
       // Fetch a read-only token scoped to contents:read for the initial clone
-      const github = new GitHubAppService(this.env, this.logger);
+      const github = new GitHubProvider(this.env, this.logger);
       const cloneTokenResult = await github.getReadOnlyTokenForRepo(repoFullName);
       if (!cloneTokenResult.ok) {
         throw new Error(cloneTokenResult.error.message);

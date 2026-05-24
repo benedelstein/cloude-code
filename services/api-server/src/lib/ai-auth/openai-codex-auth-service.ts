@@ -1,7 +1,7 @@
 import type { AuthMethod, Logger, DomainError } from "@repo/shared";
 import { type Result, success, failure } from "@repo/shared";
 import { decrypt, encrypt, readStoredCredentialJson } from "@/lib/utils/crypto";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import { ProviderAuthAttemptRepository } from "@/repositories/provider-auth-attempt-repository";
 import { UserProviderCredentialRepository } from "@/repositories/user-provider-credential-repository";
 import type { Env } from "@/types";

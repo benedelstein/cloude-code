@@ -1,10 +1,10 @@
 import type { Logger, ProviderId, DomainError, Result} from "@repo/shared";
 import { success, failure } from "@repo/shared";
-import { ClaudeOAuthService } from "./claude-oauth-service";
+import { ClaudeOAuthService } from "@/lib/ai-auth/claude-oauth-service";
 import { sha256 } from "@/lib/utils/crypto";
-import { OpenAICodexAuthService } from "./openai-codex-auth-service";
+import { OpenAICodexAuthService } from "@/lib/ai-auth/openai-codex-auth-service";
 import type { Env } from "@/types";
-import type { ProviderConnectionStatus } from "./connection-status";
+import type { ProviderConnectionStatus } from "@/lib/ai-auth/connection-status";
 
 const PROVIDER_CREDENTIAL_DOMAIN = "provider_credential";
 const OPENAI_AUTH_CLAIM_KEY = "https://api.openai.com/auth";

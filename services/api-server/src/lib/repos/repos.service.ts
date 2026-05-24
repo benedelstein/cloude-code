@@ -1,12 +1,11 @@
 import { type Branch, failure, type ListBranchesResponse, type ListReposResponse, type Result, type SearchReposResponse, success, type Repo } from "@repo/shared";
-import { Octokit } from "octokit";
-import { GitHubAppService, type GitHubRepositoryData } from "@/lib/github";
+import { GitHubProvider, type GitHubRepositoryData } from "@/lib/providers/github-provider";
 import {
   GitHubUserRepoAccessCacheRepository,
   listingRowToRepo,
 } from "@/repositories/github-user-repo-access-cache-repository";
 import { GitHubUserRepoListingSyncRepository } from "@/repositories/github-user-repo-listing-sync-repository";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import type { Env } from "@/types";
 
 const logger = createLogger("repos.service.ts");
@@ -66,7 +65,7 @@ export class ReposService {
     cursor?: string;
   }): Promise<ReposServiceResult<ListReposResponse>> {
     const limit = clampLimit(params.limit, DEFAULT_REPO_PAGE_SIZE);
-    const github = new GitHubAppService(this.env, logger);
+    const github = new GitHubProvider(this.env, logger);
 
     const ensured = await this.ensureFreshListing({
       userId: params.userId,
@@ -129,7 +128,7 @@ export class ReposService {
       DEFAULT_REPO_SEARCH_LIMIT,
       MAX_REPO_SEARCH_LIMIT,
     );
-    const github = new GitHubAppService(this.env, logger);
+    const github = new GitHubProvider(this.env, logger);
 
     const ensured = await this.ensureFreshListing({
       userId: params.userId,
@@ -176,37 +175,28 @@ export class ReposService {
       });
     }
 
-    const octokit = new Octokit({ auth: params.githubAccessToken });
     const limit = clampLimit(params.limit, DEFAULT_BRANCH_PAGE_SIZE);
-
-    const { data: repo } = await octokit.request("GET /repositories/{repository_id}", {
-      repository_id: params.repoId,
-    });
-
-    const response = await octokit.rest.repos.listBranches({
-      owner: repo.owner.login,
-      repo: repo.name,
-      per_page: limit,
+    const github = new GitHubProvider(this.env, logger);
+    const branchList = await github.listBranchesForRepo({
+      accessToken: params.githubAccessToken,
+      repoId: params.repoId,
+      limit,
       page,
     });
-    const branches: Branch[] = response.data.map((branch) => ({
-      name: branch.name,
-      default: branch.name === repo.default_branch,
-    }));
-    const nextCursor = getNextPageCursor(response.headers.link);
+    const branches: Branch[] = branchList.branches;
     logger.info("Listed branches for repo", {
       fields: {
-        repoName: repo.name,
+        repoName: branchList.repoName,
         branchCount: branches.length,
         limit,
         page,
-        nextCursor,
+        nextCursor: branchList.nextCursor,
       },
     });
 
     return success({
       branches,
-      cursor: nextCursor,
+      cursor: branchList.nextCursor,
     });
   }
 
@@ -220,7 +210,7 @@ export class ReposService {
     userId: string;
     githubAccessToken: string;
     executionCtx: ExecutionContext;
-    github: GitHubAppService;
+    github: GitHubProvider;
   }): Promise<ReposServiceResult<void>> {
     const syncedAt = await this.listingSyncRepository.getSyncedAt(params.userId);
 
@@ -309,16 +299,14 @@ export class ReposService {
     userId: string;
     githubAccessToken: string;
   }): Promise<ReposServiceResult<void>> {
-    const octokit = new Octokit({ auth: params.githubAccessToken });
     const startedAt = Date.now();
 
     let installations: Array<{ id: number }>;
     try {
-      const allInstallations = await octokit.paginate(
-        octokit.rest.apps.listInstallationsForAuthenticatedUser,
-        { per_page: 100 },
+      const github = new GitHubProvider(this.env, logger);
+      installations = await github.listInstallationsForAuthenticatedUser(
+        params.githubAccessToken,
       );
-      installations = allInstallations.map((installation) => ({ id: installation.id }));
     } catch (error) {
       logger.error("Failed to list installations for user", {
         fields: { userId: params.userId },
@@ -342,22 +330,11 @@ export class ReposService {
     for (const installation of installations) {
       let installationRepos: GitHubRepositoryData[];
       try {
-        const repositories = await octokit.paginate(
-          octokit.rest.apps.listInstallationReposForAuthenticatedUser,
-          {
-            installation_id: installation.id,
-            per_page: 100,
-          },
-        );
-        installationRepos = repositories.map((repository) => ({
-          id: repository.id,
-          fullName: repository.full_name,
-          owner: repository.owner.login,
-          name: repository.name,
-          defaultBranch: repository.default_branch,
-          private: repository.private,
-          description: repository.description,
-        }));
+        const github = new GitHubProvider(this.env, logger);
+        installationRepos = await github.listInstallationReposForAuthenticatedUser({
+          accessToken: params.githubAccessToken,
+          installationId: installation.id,
+        });
       } catch (error) {
         logger.error("Failed to list repos for installation", {
           fields: {
@@ -444,21 +421,4 @@ function parseBranchPage(cursor?: string): number | null {
   }
 
   return page;
-}
-
-function getNextPageCursor(linkHeader?: string): string | null {
-  if (!linkHeader) {
-    return null;
-  }
-
-  for (const segment of linkHeader.split(",")) {
-    if (!segment.includes('rel="next"')) {
-      continue;
-    }
-
-    const nextPageMatch = segment.match(/[?&]page=(\d+)/);
-    return nextPageMatch?.[1] ?? null;
-  }
-
-  return null;
 }

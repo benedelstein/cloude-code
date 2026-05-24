@@ -1,14 +1,14 @@
 import type { Logger } from "@repo/shared";
 import { type Result, success, failure } from "@repo/shared";
 import { encrypt, readStoredCredentialJson } from "@/lib/utils/crypto";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import {
   UserProviderCredentialRepository,
   type UserProviderCredentialRecord,
 } from "@/repositories/user-provider-credential-repository";
 import { OauthStateRepository } from "@/repositories/oauth-state-repository";
 import type { Env } from "@/types";
-import { computeCodeChallenge, generateCodeVerifier } from "@/lib/pkce";
+import { computeCodeChallenge, generateCodeVerifier } from "@/lib/auth/pkce";
 
 const CLAUDE_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const CLAUDE_PROVIDER_ID = "claude-code";

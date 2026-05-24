@@ -1,17 +1,17 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "@/types";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/providers/observability-provider";
 import type {
   AuthUser,
 } from "@/middleware/auth.middleware";
-import { OpenAICodexAuthService } from "@/lib/providers/openai-codex-auth-service";
+import { getOpenAICodexAuthProvider } from "@/lib/providers/ai-auth-provider";
 import {
   postOpenAIDeviceStartRoute,
   getOpenAIDeviceAttemptRoute,
   getOpenAIStatusRoute,
   postOpenAIDisconnectRoute,
 } from "./schemas";
-import { requestSessionProviderConnectionRefresh } from "@/lib/session-provider-connection";
+import { requestSessionProviderConnectionRefresh } from "@/lib/sessions/session-provider-connection";
 
 export const openaiAuthRoutes = new OpenAPIHono<{
   Bindings: Env;
@@ -24,7 +24,7 @@ const logger = createLogger("openai.routes.ts");
  */
 openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
   const user = c.get("user");
-  const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
+  const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
 
   const result = await openAICodexAuthService.startDeviceAuthorization(user.id);
   if (!result.ok) {
@@ -49,7 +49,7 @@ openaiAuthRoutes.openapi(getOpenAIDeviceAttemptRoute, async (c) => {
   const user = c.get("user");
   const { attemptId } = c.req.valid("param");
   const { sessionId } = c.req.valid("query");
-  const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
+  const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
   const result = await openAICodexAuthService.pollDeviceAuthorization(user.id, attemptId);
   if (result.status === "completed" && sessionId) {
     await requestSessionProviderConnectionRefresh(c.env, sessionId, logger);
@@ -62,7 +62,7 @@ openaiAuthRoutes.openapi(getOpenAIDeviceAttemptRoute, async (c) => {
  */
 openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
   const user = c.get("user");
-  const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
+  const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
   const status = await openAICodexAuthService.getConnectionStatus(user.id);
   return c.json(status, 200);
 });
@@ -72,7 +72,7 @@ openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
  */
 openaiAuthRoutes.openapi(postOpenAIDisconnectRoute, async (c) => {
   const user = c.get("user");
-  const openAICodexAuthService = new OpenAICodexAuthService(c.env, logger);
+  const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
   await openAICodexAuthService.disconnect(user.id);
   return c.json({ ok: true as const }, 200);
 });
