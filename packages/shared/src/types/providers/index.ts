@@ -4,6 +4,7 @@ import { AgentSettingsCodex, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } f
 
 export * from "./claude";
 export * from "./openai-codex";
+export * from "./codex-cli";
 
 export const AuthMethod = z.enum(["oauth"]);
 export type AuthMethod = z.infer<typeof AuthMethod>;

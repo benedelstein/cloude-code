@@ -3,6 +3,7 @@ import type { Env } from "@/types";
 import type { SpritesCoordinator} from "@/lib/sprites";
 import { WorkersSpriteClient } from "@/lib/sprites";
 import { buildNetworkPolicy } from "@/lib/sprites/network-policy";
+import { ensureSpriteStartupToolchain } from "@/lib/sprites/startup-toolchain";
 import { configureGitRemote } from "@/lib/git-setup";
 import { GitHubAppService } from "@/lib/github/github-app";
 import type { ServerState } from "../repositories/server-state-repository";
@@ -105,9 +106,14 @@ export class SessionProvisionService {
         this.updatePartialState({ status: this.synthesizeStatus() });
       }
 
+      const spriteName = this.getServerState().spriteName;
+      if (spriteName) {
+        await this.ensureStartupToolchain(spriteName);
+      }
+
       if (!this.getServerState().repoCloned) {
         this.updatePartialState({ status: this.synthesizeStatus() });
-        await this.cloneRepo(this.getServerState().spriteName!);
+        await this.cloneRepo(spriteName!);
         this.updateServerState({ repoCloned: true });
         this.updatePartialState({
           status: this.synthesizeStatus(),
@@ -124,6 +130,36 @@ export class SessionProvisionService {
       });
       throw error;
     }
+  }
+
+  private async ensureStartupToolchain(spriteName: string): Promise<void> {
+    const providerId = this.getClientState().agentSettings.provider;
+    const serverState = this.getServerState();
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    const result = await ensureSpriteStartupToolchain({
+      providerId,
+      sprite,
+      checkpoint: serverState.startupToolchain.providers[providerId] ?? null,
+      env: this.env,
+      logger: this.logger,
+    });
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    this.updateServerState({
+      startupToolchain: {
+        providers: {
+          ...serverState.startupToolchain.providers,
+          [providerId]: result.value,
+        },
+      },
+    });
   }
 
   /**

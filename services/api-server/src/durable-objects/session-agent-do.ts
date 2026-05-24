@@ -181,6 +181,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       secretRepository: this.secretRepository,
       getServerState: () => this.serverState,
       updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
+      updateServerState: (partial) => this.updateServerState(partial),
       getClientState: () => this.state,
     });
 

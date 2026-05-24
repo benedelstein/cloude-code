@@ -11,6 +11,7 @@ const mockState = vi.hoisted(() => ({
   killSession: vi.fn(),
   getCredentialSnapshot: vi.fn(),
   resolveAttachments: vi.fn(),
+  ensureSpriteStartupToolchain: vi.fn(),
 }));
 
 vi.mock("@repo/vm-agent/dist/vm-agent-webhook.bundle.js", () => ({
@@ -45,6 +46,10 @@ vi.mock("@/lib/providers/provider-credential-adapter", () => ({
   getProviderCredentialAdapter: () => ({
     getCredentialSnapshot: mockState.getCredentialSnapshot,
   }),
+}));
+
+vi.mock("@/lib/sprites/startup-toolchain", () => ({
+  ensureSpriteStartupToolchain: mockState.ensureSpriteStartupToolchain,
 }));
 
 vi.mock("../../src/durable-objects/lib/agent-attachment-service", () => ({
@@ -111,6 +116,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: "provider-session-1",
     agentProcessId: null,
     activeUserMessageId: null,
+    startupToolchain: { providers: {} },
     webhookToken: null,
     ...overrides,
   } as ServerState;
@@ -119,6 +125,9 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
 function createManager(serverState: ServerState) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
+  });
+  const updateServerState = vi.fn((partial: Partial<ServerState>) => {
+    Object.assign(serverState, partial);
   });
   const manager = new SpriteAgentProcessManager({
     env: {
@@ -134,10 +143,11 @@ function createManager(serverState: ServerState) {
     } as never,
     getServerState: () => serverState,
     updateAgentProcessId,
+    updateServerState,
     getClientState: createClientState,
   });
 
-  return { manager, updateAgentProcessId };
+  return { manager, updateAgentProcessId, updateServerState };
 }
 
 describe("SpriteAgentProcessManager", () => {
@@ -151,6 +161,15 @@ describe("SpriteAgentProcessManager", () => {
     mockState.resolveAttachments.mockResolvedValue({
       ok: true,
       value: { agentAttachments: [] },
+    });
+    mockState.ensureSpriteStartupToolchain.mockResolvedValue({
+      ok: true,
+      value: {
+        provider: "openai-codex",
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
     });
     mockState.execHttp.mockResolvedValue({ stdout: "", stderr: "", exitCode: 1 });
     mockState.writeFile.mockResolvedValue(undefined);
@@ -280,6 +299,7 @@ describe("SpriteAgentProcessManager", () => {
     );
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
+    expect(mockState.ensureSpriteStartupToolchain).not.toHaveBeenCalled();
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
   });
 
@@ -327,6 +347,7 @@ describe("SpriteAgentProcessManager", () => {
     );
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
+    expect(mockState.ensureSpriteStartupToolchain).not.toHaveBeenCalled();
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
   });
 
@@ -367,6 +388,7 @@ describe("SpriteAgentProcessManager", () => {
     expect(updateAgentProcessId).toHaveBeenCalledWith(null);
     expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
     expect(mockState.createSession).toHaveBeenCalledOnce();
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
     expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
   });
 
@@ -435,7 +457,78 @@ describe("SpriteAgentProcessManager", () => {
     expect(result.ok).toBe(true);
     expect(updateAgentProcessId).toHaveBeenCalledWith(null);
     expect(mockState.createSession).toHaveBeenCalledOnce();
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
     expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
+  });
+
+  it("runs startup toolchain checks before spawning a fresh process", async () => {
+    const spawnSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn(),
+      onServerMessage: vi.fn((handler) => {
+        handler({ type: "session_info", session_id: 84, tty: true });
+        return vi.fn();
+      }),
+    };
+    mockState.createSession.mockReturnValue(spawnSession);
+
+    const serverState = createServerState();
+    const { manager, updateServerState } = createManager(serverState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-4", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledWith({
+      providerId: "openai-codex",
+      sprite: expect.anything(),
+      checkpoint: null,
+      env: expect.anything(),
+      logger: expect.anything(),
+    });
+    expect(updateServerState).toHaveBeenCalledWith({
+      startupToolchain: {
+        providers: {
+          "openai-codex": {
+            provider: "openai-codex",
+            contractHash: "hash-1",
+            checkedAt: 1,
+            results: [],
+          },
+        },
+      },
+    });
+    expect(mockState.createSession).toHaveBeenCalledOnce();
+  });
+
+  it("does not spawn when startup toolchain checks fail", async () => {
+    mockState.ensureSpriteStartupToolchain.mockResolvedValue({
+      ok: false,
+      error: {
+        domain: "startup_toolchain",
+        code: "CHECK_FAILED",
+        message: "Codex CLI repair script failed.",
+        provider: "openai-codex",
+        checkId: "openai-codex.cli",
+        requiredVersion: "0.130.0",
+        installedVersion: "0.100.0",
+      },
+    });
+
+    const serverState = createServerState();
+    const { manager } = createManager(serverState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-4", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SPAWN_FAILED");
+      expect(result.error.message).toBe("Codex CLI repair script failed.");
+    }
+    expect(mockState.createSession).not.toHaveBeenCalled();
   });
 
   it("returns a spawn failure when sprite setup file writes fail", async () => {
