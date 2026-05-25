@@ -226,8 +226,8 @@ export function ChatInput({
           className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
-      <div className="flex items-center justify-end px-3 pb-2">
-        <div className="mr-auto flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2 px-3 pb-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ImageAttachButton
             onFiles={addFiles}
             disabled={disabled || isAuthBlocking}
@@ -240,17 +240,19 @@ export function ChatInput({
             />
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
           {selectedProvider && selectedModel && onProviderModelChange && (
-            <ProviderModelSelector
-              selectedProvider={selectedProvider}
-              selectedModel={selectedModel}
-              providerAuthHandles={providerAuthHandles}
-              onSelect={onProviderModelChange}
-              onConnect={() => setManuallyOpenedSigninPanel(true)}
-              allowedProviderIds={[selectedProvider]}
-              disabled={disabled || isAuthBlocking}
-            />
+            <div className="min-w-[8rem] max-w-[18rem] shrink">
+              <ProviderModelSelector
+                selectedProvider={selectedProvider}
+                selectedModel={selectedModel}
+                providerAuthHandles={providerAuthHandles}
+                onSelect={onProviderModelChange}
+                onConnect={() => setManuallyOpenedSigninPanel(true)}
+                allowedProviderIds={[selectedProvider]}
+                disabled={disabled || isAuthBlocking}
+              />
+            </div>
           )}
           <SendButton
             isStreaming={isStreaming}

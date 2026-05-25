@@ -13,6 +13,7 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
   PanelRightClose,
+  type LucideIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SessionSidebar } from "@/components/sidebar/session-sidebar";
@@ -54,6 +55,12 @@ const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "left_sidebar_width_px";
 const LEFT_SIDEBAR_MIN_WIDTH_PX = 240;
 const LEFT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
 const LEFT_SIDEBAR_MAX_WIDTH_PX = 420;
+const FLOATING_SIDEBAR_PADDING_PX = 4;
+const SIDEBAR_HEADER_HEIGHT_PX = 56;
+const FLOATING_SIDEBAR_TOGGLE_SIZE_PX = 28;
+const FLOATING_SIDEBAR_TOGGLE_TOP_PX =
+  FLOATING_SIDEBAR_PADDING_PX
+  + (SIDEBAR_HEADER_HEIGHT_PX - FLOATING_SIDEBAR_TOGGLE_SIZE_PX) / 2;
 
 export function AppShell({
   children,
@@ -63,23 +70,14 @@ export function AppShell({
   const pathname = usePathname();
   const isSessionPage = pathname.startsWith("/session/");
   const [leftSidebarWidthPx, setLeftSidebarWidthPxState] = useState(
-    LEFT_SIDEBAR_DEFAULT_WIDTH_PX,
+    getStoredLeftSidebarWidth,
   );
   const [isLeftSidebarResizing, setIsLeftSidebarResizing] = useState(false);
+  const [sidebarLayoutReady, setSidebarLayoutReady] = useState(false);
   const leftSidebarProviderRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
-    const storedWidth = window.localStorage.getItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!storedWidth) {
-      return;
-    }
-
-    const parsedWidth = Number.parseInt(storedWidth, 10);
-    if (Number.isFinite(parsedWidth)) {
-      const clampedWidth = clampLeftSidebarWidth(parsedWidth);
-      setLeftSidebarWidthPxState(clampedWidth);
-      setLeftSidebarCssWidth(leftSidebarProviderRef.current, clampedWidth);
-    }
+    setSidebarLayoutReady(true);
   }, []);
 
   const setLeftSidebarWidthPx = useCallback(
@@ -104,7 +102,8 @@ export function AppShell({
       keyboardShortcut={{ code: "Digit0", shiftKey: false }}
       className={cn(
         "relative min-h-0! h-svh bg-background-secondary",
-        isLeftSidebarResizing && "[&_[data-sidebar=gap]]:transition-none [&_[data-sidebar=gap]]:duration-0",
+        (!sidebarLayoutReady || isLeftSidebarResizing)
+          && "[&_[data-sidebar=gap]]:transition-none [&_[data-sidebar=gap]]:duration-0",
       )}
       style={{ "--sidebar-width": `${leftSidebarWidthPx}px` } as CSSProperties}
     >
@@ -115,6 +114,7 @@ export function AppShell({
         >
           <AppShellLayout
             leftSidebarWidthPx={leftSidebarWidthPx}
+            sidebarLayoutReady={sidebarLayoutReady}
             isLeftSidebarResizing={isLeftSidebarResizing}
             onLeftSidebarWidthChange={setLeftSidebarWidthPx}
             onLeftSidebarPreviewWidthChange={(nextWidthPx) =>
@@ -132,6 +132,7 @@ export function AppShell({
 function AppShellLayout({
   children,
   leftSidebarWidthPx,
+  sidebarLayoutReady,
   isLeftSidebarResizing,
   onLeftSidebarWidthChange,
   onLeftSidebarPreviewWidthChange,
@@ -139,6 +140,7 @@ function AppShellLayout({
 }: {
   children: React.ReactNode;
   leftSidebarWidthPx: number;
+  sidebarLayoutReady: boolean;
   isLeftSidebarResizing: boolean;
   onLeftSidebarWidthChange: (
     widthPx: number,
@@ -174,88 +176,49 @@ function AppShellLayout({
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 top-0 z-20 h-0">
-        <div
-          className={`absolute left-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
-                onClick={toggleSidebar}
-              >
-                {isLeftSidebarOpen ? (
-                  <PanelLeftClose className="h-4 w-4" />
-                ) : (
-                  <PanelLeftOpen className="h-4 w-4" />
-                )}
-                <span className="sr-only">
-                  {isLeftSidebarOpen
-                    ? "Collapse left sidebar"
-                    : "Open left sidebar"}
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {isLeftSidebarOpen
-                ? "Collapse left sidebar (⌘0)"
-                : "Open left sidebar (⌘0)"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+        <FloatingSidebarToggle
+          side="left"
+          isOpen={isLeftSidebarOpen}
+          openIcon={PanelLeftOpen}
+          closeIcon={PanelLeftClose}
+          openLabel="Open left sidebar"
+          closeLabel="Collapse left sidebar"
+          openTooltip="Open left sidebar (⌘0)"
+          closeTooltip="Collapse left sidebar (⌘0)"
+          onClick={toggleSidebar}
+        />
 
-        <div
+        <FloatingSidebarToggle
+          side="right"
+          isOpen={isRightSidebarOpen}
+          openIcon={PanelRightOpen}
+          closeIcon={PanelRightClose}
+          openLabel="Open right sidebar"
+          closeLabel="Collapse right sidebar"
+          openTooltip="Open right sidebar (⌘⌥0)"
+          closeTooltip="Collapse right sidebar (⌘⌥0)"
+          onClick={() => {
+            if (isMobile) {
+              setMobileOpen(!mobileOpen);
+              return;
+            }
+
+            setOpen(!open);
+          }}
           className={cn(
-            `absolute right-5 top-2 flex ${SIDEBAR_HEADER_HEIGHT_CLASS} items-center`,
             getFadeScaleVisibilityClasses(enabled, {
               durationClass: "duration-120",
             }),
           )}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="pointer-events-auto h-7 w-7 border border-border bg-background shadow-shadow shadow-lg"
-                onClick={() => {
-                  if (isMobile) {
-                    setMobileOpen(!mobileOpen);
-                    return;
-                  }
-
-                  setOpen(!open);
-                }}
-              >
-                {isRightSidebarOpen ? (
-                  <PanelRightClose className="h-4 w-4" />
-                ) : (
-                  <PanelRightOpen className="h-4 w-4" />
-                )}
-                <span className="sr-only">
-                  {isRightSidebarOpen
-                    ? "Collapse right sidebar"
-                    : "Open right sidebar"}
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              {isRightSidebarOpen
-                ? "Collapse right sidebar (⌘⌥0)"
-                : "Open right sidebar (⌘⌥0)"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+        />
       </div>
 
       <SessionSidebar
         className={cn(
           "[&_[data-sidebar=sidebar]]:relative",
           "p-1",
-          isLeftSidebarResizing && "transition-none duration-0",
+          (!sidebarLayoutReady || isLeftSidebarResizing)
+            && "transition-none duration-0",
         )}
         resizeHandle={
           <LeftSidebarResizeHandle
@@ -268,11 +231,18 @@ function AppShellLayout({
       />
       <SidebarInset className="overflow-hidden bg-background-secondary">
         <div className="sticky top-0 z-10 h-0">
-          <div className="pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
+          <div
+            className="pt-1 pb-8 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0"
+            style={{
+              background: "linear-gradient(to bottom, var(--background-secondary) 0, var(--background-secondary) 60px, transparent 100%)",
+            }}
+          >
             <div
               className={cn(
                 "max-w-4xl min-w-0 px-4 h-full flex items-center",
-                !isRightSidebarResizing && "transition-[margin] duration-200 ease-linear",
+                sidebarLayoutReady
+                  && !isRightSidebarResizing
+                  && "transition-[margin] duration-200 ease-linear",
               )}
               style={{
                 marginLeft: `max(${leftHeaderOverlayReserve}, ${centeredHeaderMargin})`,
@@ -309,7 +279,8 @@ function AppShellLayout({
           className={cn(
             "[&_[data-sidebar=sidebar]]:relative [&_[data-sidebar=sidebar]]:bg-sidebar",
             "p-1",
-            isRightSidebarResizing && "transition-none duration-0",
+            (!sidebarLayoutReady || isRightSidebarResizing)
+              && "transition-none duration-0",
           )}
         >
           <RightSidebarResizeHandle
@@ -322,6 +293,63 @@ function AppShellLayout({
         </Sidebar>
       </SidebarProvider>
     </>
+  );
+}
+
+function FloatingSidebarToggle({
+  side,
+  isOpen,
+  openIcon: OpenIcon,
+  closeIcon: CloseIcon,
+  openLabel,
+  closeLabel,
+  openTooltip,
+  closeTooltip,
+  onClick,
+  className,
+}: {
+  side: "left" | "right";
+  isOpen: boolean;
+  openIcon: LucideIcon;
+  closeIcon: LucideIcon;
+  openLabel: string;
+  closeLabel: string;
+  openTooltip: string;
+  closeTooltip: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  const Icon = isOpen ? CloseIcon : OpenIcon;
+  const label = isOpen ? closeLabel : openLabel;
+  const tooltip = isOpen ? closeTooltip : openTooltip;
+
+  return (
+    <div
+      className={cn(
+        "absolute flex",
+        side === "left" ? "left-5" : "right-5",
+        className,
+      )}
+      style={{ top: FLOATING_SIDEBAR_TOGGLE_TOP_PX }}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="pointer-events-auto h-7 w-7 text-foreground-secondary hover:bg-transparent hover:text-foreground"
+            onClick={onClick}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="sr-only">{label}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side={side === "left" ? "right" : "left"}>
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -411,6 +439,26 @@ function clampLeftSidebarWidth(widthPx: number): number {
     LEFT_SIDEBAR_MAX_WIDTH_PX,
     Math.max(LEFT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
   );
+}
+
+function getStoredLeftSidebarWidth(): number {
+  if (typeof window === "undefined") {
+    return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
+  }
+
+  try {
+    const storedWidth = window.localStorage.getItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!storedWidth) {
+      return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
+    }
+
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    return Number.isFinite(parsedWidth)
+      ? clampLeftSidebarWidth(parsedWidth)
+      : LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
+  } catch {
+    return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
+  }
 }
 
 function setLeftSidebarCssWidth(
