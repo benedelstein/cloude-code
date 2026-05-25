@@ -140,7 +140,7 @@ function SessionRow({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               showOnHover
-              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-border! hover:bg-[#c9d1db]!"
+              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-border! hover:bg-sidebar-border!"
             >
               <MoreHorizontal className="h-3 w-3" />
             </SidebarMenuAction>
@@ -219,8 +219,10 @@ function RepoGroupBlock({
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
-      {!isCollapsed && (
-        <>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
           <SidebarMenu>
             {group.sessions.map((session) => (
               <SessionRow
@@ -255,8 +257,8 @@ function RepoGroupBlock({
               )}
             </button>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

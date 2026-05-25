@@ -205,12 +205,17 @@ describe("SessionSidebar", () => {
     renderSidebar();
 
     expect(screen.getByText("Open PR")).toBeTruthy();
+    const repoToggle = screen.getByRole("button", { name: "repo" });
+    const animatedRegion = screen.getByText("Open PR")
+      .closest("[class*='grid-rows']");
 
-    fireEvent.click(screen.getByRole("button", { name: "repo" }));
-    expect(screen.queryByText("Open PR")).toBeNull();
+    expect(animatedRegion?.className).toContain("grid-rows-[1fr]");
 
-    fireEvent.click(screen.getByRole("button", { name: "repo" }));
-    expect(screen.getByText("Open PR")).toBeTruthy();
+    fireEvent.click(repoToggle);
+    expect(animatedRegion?.className).toContain("grid-rows-[0fr]");
+
+    fireEvent.click(repoToggle);
+    expect(animatedRegion?.className).toContain("grid-rows-[1fr]");
 
     fireEvent.click(screen.getByRole("button", { name: "New session in repo" }));
     expect(mocks.push).toHaveBeenCalledWith(
