@@ -217,7 +217,7 @@ function RepoGroupBlock({
             className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
           />
         </button>
-        <Tooltip>
+        <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <button
               type="button"
