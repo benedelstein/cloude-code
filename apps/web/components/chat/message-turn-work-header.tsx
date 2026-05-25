@@ -30,7 +30,7 @@ export function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStrea
     <button
       type="button"
       onClick={onToggle}
-      className="group flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-muted hover:text-foreground transition-colors text-left rounded cursor-pointer"
+      className="group flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-secondary hover:text-foreground transition-colors text-left rounded cursor-pointer"
       aria-expanded={expanded}
     >
       <span>{label}</span>

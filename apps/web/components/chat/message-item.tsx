@@ -274,7 +274,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
               )}
 
               {isAborted && (
-                <p className="mt-1.5 text-xs text-foreground-muted italic">Interrupted</p>
+                <p className="mt-1.5 text-xs text-foreground-secondary italic">Interrupted</p>
               )}
               <MessageHoverActions
                 isUser={isUser}

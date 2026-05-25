@@ -163,7 +163,7 @@ export function MessageList({
       )}
       {showLoading && (
         <div className="h-full flex items-center justify-center p-4">
-          <div className="flex items-center gap-2 text-foreground-muted text-sm">
+          <div className="flex items-center gap-2 text-foreground-secondary text-sm">
             {/* TODO: USE SKELETON */}
             <LoadingSpinner className="h-4 w-4" />
             Loading messages...
@@ -177,7 +177,7 @@ export function MessageList({
               <MessageCircle className="w-8 h-8 text-accent" />
             </div>
             <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
-            <p className="text-foreground-muted text-sm">
+            <p className="text-foreground-secondary text-sm">
               Send a message to begin working with the agent on your repository.
             </p>
           </div>
@@ -212,7 +212,7 @@ export function MessageList({
 function TypingIndicator() {
   const dotClass = "w-1.5 h-1.5 bg-accent rounded-full animate-pulse";
   return (
-    <div className="flex items-center text-sm gap-1.5 px-2 py-1 w-fit text-foreground-muted">
+    <div className="flex items-center text-sm gap-1.5 px-2 py-1 w-fit text-foreground-secondary">
       Working
       <div className="flex items-center gap-1 translate-y-[1.5px]">
         <span className={dotClass} />
@@ -279,7 +279,7 @@ function BlockedSessionState({
         <h3 className="mt-4 text-base font-semibold text-foreground">
           Error connecting to session
         </h3>
-        <p className="mt-2 max-w-md text-sm leading-6 text-foreground-muted">
+        <p className="mt-2 max-w-md text-sm leading-6 text-foreground-secondary">
           {message}
         </p>
         {errorCode === "REPO_ACCESS_BLOCKED" && installUrl && (

@@ -1,6 +1,13 @@
 "use client";
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -43,6 +50,11 @@ interface AppShellProps {
   defaultRightSidebarOpen?: boolean;
 }
 
+const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "left_sidebar_width_px";
+const LEFT_SIDEBAR_MIN_WIDTH_PX = 240;
+const LEFT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
+const LEFT_SIDEBAR_MAX_WIDTH_PX = 420;
+
 export function AppShell({
   children,
   defaultSidebarOpen,
@@ -50,26 +62,91 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const isSessionPage = pathname.startsWith("/session/");
+  const [leftSidebarWidthPx, setLeftSidebarWidthPxState] = useState(
+    LEFT_SIDEBAR_DEFAULT_WIDTH_PX,
+  );
+  const [isLeftSidebarResizing, setIsLeftSidebarResizing] = useState(false);
+  const leftSidebarProviderRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const storedWidth = window.localStorage.getItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!storedWidth) {
+      return;
+    }
+
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    if (Number.isFinite(parsedWidth)) {
+      const clampedWidth = clampLeftSidebarWidth(parsedWidth);
+      setLeftSidebarWidthPxState(clampedWidth);
+      setLeftSidebarCssWidth(leftSidebarProviderRef.current, clampedWidth);
+    }
+  }, []);
+
+  const setLeftSidebarWidthPx = useCallback(
+    (nextWidthPx: number, options: { persist?: boolean } = {}) => {
+      const clampedWidth = clampLeftSidebarWidth(nextWidthPx);
+      setLeftSidebarWidthPxState(clampedWidth);
+      setLeftSidebarCssWidth(leftSidebarProviderRef.current, clampedWidth);
+      if (options.persist !== false) {
+        window.localStorage.setItem(
+          LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
+          String(clampedWidth),
+        );
+      }
+    },
+    [],
+  );
 
   return (
     <SidebarProvider
+      ref={leftSidebarProviderRef}
       defaultOpen={defaultSidebarOpen}
       keyboardShortcut={{ code: "Digit0", shiftKey: false }}
-      className="relative min-h-0! h-svh bg-background-secondary"
+      className={cn(
+        "relative min-h-0! h-svh bg-background-secondary",
+        isLeftSidebarResizing && "[&_[data-sidebar=gap]]:transition-none [&_[data-sidebar=gap]]:duration-0",
+      )}
+      style={{ "--sidebar-width": `${leftSidebarWidthPx}px` } as CSSProperties}
     >
       <AppHeaderProvider>
         <AppRightSidebarProvider
           defaultOpen={defaultRightSidebarOpen}
           defaultEnabled={isSessionPage}
         >
-          <AppShellLayout>{children}</AppShellLayout>
+          <AppShellLayout
+            leftSidebarWidthPx={leftSidebarWidthPx}
+            isLeftSidebarResizing={isLeftSidebarResizing}
+            onLeftSidebarWidthChange={setLeftSidebarWidthPx}
+            onLeftSidebarPreviewWidthChange={(nextWidthPx) =>
+              setLeftSidebarCssWidth(leftSidebarProviderRef.current, nextWidthPx)}
+            onLeftSidebarResizeStateChange={setIsLeftSidebarResizing}
+          >
+            {children}
+          </AppShellLayout>
         </AppRightSidebarProvider>
       </AppHeaderProvider>
     </SidebarProvider>
   );
 }
 
-function AppShellLayout({ children }: { children: React.ReactNode }) {
+function AppShellLayout({
+  children,
+  leftSidebarWidthPx,
+  isLeftSidebarResizing,
+  onLeftSidebarWidthChange,
+  onLeftSidebarPreviewWidthChange,
+  onLeftSidebarResizeStateChange,
+}: {
+  children: React.ReactNode;
+  leftSidebarWidthPx: number;
+  isLeftSidebarResizing: boolean;
+  onLeftSidebarWidthChange: (
+    widthPx: number,
+    options?: { persist?: boolean },
+  ) => void;
+  onLeftSidebarPreviewWidthChange: (widthPx: number) => void;
+  onLeftSidebarResizeStateChange: (isResizing: boolean) => void;
+}) {
   const { open: isLeftSidebarOpen, toggleSidebar, isMobile } = useSidebar();
   const {
     enabled,
@@ -174,7 +251,20 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <SessionSidebar />
+      <SessionSidebar
+        className={cn(
+          "[&_[data-sidebar=sidebar]]:relative",
+          isLeftSidebarResizing && "transition-none duration-0",
+        )}
+        resizeHandle={
+          <LeftSidebarResizeHandle
+            widthPx={leftSidebarWidthPx}
+            onWidthChange={onLeftSidebarWidthChange}
+            onPreviewWidthChange={onLeftSidebarPreviewWidthChange}
+            onResizeStateChange={onLeftSidebarResizeStateChange}
+          />
+        }
+      />
       <SidebarInset className="overflow-hidden bg-background-secondary">
         <div className="sticky top-0 z-10 h-0">
           <div className="pt-2 pb-2 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0">
@@ -230,6 +320,104 @@ function AppShellLayout({ children }: { children: React.ReactNode }) {
         </Sidebar>
       </SidebarProvider>
     </>
+  );
+}
+
+function LeftSidebarResizeHandle({
+  widthPx,
+  onWidthChange,
+  onPreviewWidthChange,
+  onResizeStateChange,
+}: {
+  widthPx: number;
+  onWidthChange: (widthPx: number, options?: { persist?: boolean }) => void;
+  onPreviewWidthChange: (widthPx: number) => void;
+  onResizeStateChange: (isResizing: boolean) => void;
+}) {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const startClientX = event.clientX;
+    const startWidthPx = widthPx;
+    let nextWidthPx = startWidthPx;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    onResizeStateChange(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      nextWidthPx = startWidthPx + moveEvent.clientX - startClientX;
+      onPreviewWidthChange(nextWidthPx);
+    };
+
+    const stopResizing = () => {
+      onWidthChange(nextWidthPx);
+      onResizeStateChange(false);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label="Resize left sidebar"
+      title="Resize left sidebar"
+      onPointerDown={handlePointerDown}
+      onKeyDown={(event) => {
+        switch (event.key) {
+          case "ArrowLeft":
+            event.preventDefault();
+            onWidthChange(widthPx - 16);
+            break;
+          case "ArrowRight":
+            event.preventDefault();
+            onWidthChange(widthPx + 16);
+            break;
+          case "Home":
+            event.preventDefault();
+            onWidthChange(LEFT_SIDEBAR_MIN_WIDTH_PX);
+            break;
+          case "End":
+            event.preventDefault();
+            onWidthChange(LEFT_SIDEBAR_MAX_WIDTH_PX);
+            break;
+          default:
+            break;
+        }
+      }}
+      className="absolute right-0 top-0 z-20 hidden h-full w-3 translate-x-1/2 cursor-col-resize! touch-none md:block after:absolute after:inset-y-2 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-sidebar-border focus-visible:outline-none focus-visible:after:bg-sidebar-ring"
+    />
+  );
+}
+
+function clampLeftSidebarWidth(widthPx: number): number {
+  return Math.min(
+    LEFT_SIDEBAR_MAX_WIDTH_PX,
+    Math.max(LEFT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
+  );
+}
+
+function setLeftSidebarCssWidth(
+  sidebarRoot: HTMLDivElement | null,
+  widthPx: number,
+) {
+  sidebarRoot?.style.setProperty(
+    "--sidebar-width",
+    `${clampLeftSidebarWidth(widthPx)}px`,
   );
 }
 

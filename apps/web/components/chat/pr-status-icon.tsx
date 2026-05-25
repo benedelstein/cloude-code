@@ -1,7 +1,19 @@
-import { GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react";
+import {
+  createLucideIcon,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+} from "lucide-react";
 import type { PullRequestState } from "@repo/shared";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+const GitBranch = createLucideIcon("GitBranch", [
+  ["line", { x1: "6", x2: "6", y1: "3", y2: "15", key: "1o40i7" }],
+  ["circle", { cx: "18", cy: "6", r: "3", key: "1r07d4" }],
+  ["circle", { cx: "6", cy: "18", r: "3", key: "fqmcym" }],
+  ["path", { d: "M18 9a9 9 0 0 1-9 9", key: "n2h4wq" }],
+]);
 
 export function PrStatusIcon({
   pullRequestUrl,
@@ -66,7 +78,7 @@ export function PrStatusIcon({
             aria-label="Open pull request"
             className={cn(
               baseClassName,
-              "text-green-500",
+              "text-green-600",
               variant === "framed" && "rounded bg-green-500/15 p-1",
             )}
           >
@@ -84,7 +96,7 @@ export function PrStatusIcon({
       aria-label="Pushed branch"
       className={cn(
         baseClassName,
-        "text-foreground-muted",
+        "text-foreground-tertiary",
         variant === "framed" && "rounded bg-foreground/10 p-1",
       )}
     >

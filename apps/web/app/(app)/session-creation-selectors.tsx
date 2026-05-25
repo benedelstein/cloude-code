@@ -174,7 +174,7 @@ export function RepoSelector({
             )}
             <CommandGroup>
               {searching && repos.length === 0 && (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-secondary">
                   <LoadingSpinner className="h-3.5 w-3.5" />
                   <span>Searching...</span>
                 </div>
@@ -197,7 +197,7 @@ export function RepoSelector({
                 </CommandItem>
               ))}
               {!isSearchMode && loadingMore && (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-secondary">
                   <LoadingSpinner className="h-3.5 w-3.5" />
                   <span>Loading more repos...</span>
                 </div>
@@ -210,7 +210,7 @@ export function RepoSelector({
                 href={installUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex flex-col items-start gap-1 rounded-sm px-2 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
+                className="group flex flex-col items-start gap-1 rounded-sm px-2 py-1.5 text-xs text-foreground-secondary hover:bg-muted hover:text-foreground transition-colors"
               >
                 Don&apos;t see your repo?
                 <div className="flex items-center gap-1 font-medium text-foreground group-hover:underline">
@@ -331,7 +331,7 @@ export function BranchSelector({
                           className={
                             selectedBranch === branch.name
                               ? "text-[10px]"
-                              : "text-[10px] text-foreground-muted"
+                              : "text-[10px] text-foreground-secondary"
                           }
                         >
                           default
@@ -345,7 +345,7 @@ export function BranchSelector({
                 </CommandItem>
               ))}
               {loadingMore && (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-muted">
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-foreground-secondary">
                   <LoadingSpinner className="h-3.5 w-3.5" />
                   <span>Loading more branches...</span>
                 </div>

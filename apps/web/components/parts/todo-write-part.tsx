@@ -41,10 +41,10 @@ export function TodoToolPart({ action }: TodoToolPartProps) {
                 const content = todoContent(todo);
                 return (
                   <li key={index} className="flex items-baseline gap-2">
-                    <span className="text-foreground-muted">
+                    <span className="text-foreground-secondary">
                       {status === "completed" ? "✓" : status === "in_progress" ? "→" : "•"}
                     </span>
-                    <span className={clsx(status === "completed" && "text-foreground-muted line-through")}>
+                    <span className={clsx(status === "completed" && "text-foreground-secondary line-through")}>
                       {content}
                     </span>
                   </li>

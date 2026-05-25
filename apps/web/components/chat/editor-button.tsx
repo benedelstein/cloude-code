@@ -98,7 +98,7 @@ export function EditorButton({ sessionId, editorUrl, disabled }: EditorButtonPro
           className={`${buttonBaseClassName} ${
             editorLink
               ? "border-success/30 text-success hover:bg-success/10"
-              : "border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground"
+              : "border-border text-foreground-secondary hover:bg-accent-subtle hover:text-foreground"
           } ${disabled || loading ? "opacity-50 pointer-events-none" : ""}`}
         >
           {loading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <VSCodeIcon />}
@@ -118,7 +118,7 @@ export function BrowserButton() {
         <button
           type="button"
           aria-label="Open browser"
-          className={`${buttonBaseClassName} border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground cursor-pointer`}
+          className={`${buttonBaseClassName} border-border text-foreground-secondary hover:bg-accent-subtle hover:text-foreground cursor-pointer`}
         >
           <Globe className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
@@ -174,7 +174,7 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
           <button
             type="button"
             disabled={isBusy}
-            className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm border border-border text-foreground-muted hover:bg-accent-subtle hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
+            className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm border border-border text-foreground-secondary hover:bg-accent-subtle hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
             aria-label="Session actions"
           >
             <span className="flex items-center justify-center gap-[3px]" aria-hidden="true">

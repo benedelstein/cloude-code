@@ -17,7 +17,7 @@ export function GenericToolPart({ action }: GenericToolPartProps) {
         <div className="my-1 space-y-2 text-xs">
           {action.input !== undefined && (
             <div>
-              <div className="mb-1 text-foreground-muted">Input</div>
+              <div className="mb-1 text-foreground-secondary">Input</div>
               <pre className="rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap wrap-break-word">
                 {safeStringify(action.input)}
               </pre>
@@ -25,7 +25,7 @@ export function GenericToolPart({ action }: GenericToolPartProps) {
           )}
           {action.output !== undefined && (
             <div>
-              <div className="mb-1 text-foreground-muted">Output</div>
+              <div className="mb-1 text-foreground-secondary">Output</div>
               <pre className="max-h-60 overflow-auto rounded bg-background/40 px-2 py-1 font-mono whitespace-pre-wrap wrap-break-word">
                 {safeStringify(action.output)}
               </pre>
@@ -47,7 +47,7 @@ export function GenericGroupPart({ actions }: GenericGroupPartProps) {
       icon={<Wrench className="w-3.5 h-3.5" />}
       summary={`Tools (${actions.length})`}
       detail={
-        <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-muted">
+        <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-secondary">
           {actions.map((action, index) => (
             <li key={index}>{action.toolName}</li>
           ))}

@@ -18,8 +18,8 @@ export function ProviderSigninPanelClaudeFlow({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-foreground-muted">{description}</p>
-      <ol className="space-y-1 text-xs text-foreground-muted list-decimal list-inside">
+      <p className="text-xs text-foreground-secondary">{description}</p>
+      <ol className="space-y-1 text-xs text-foreground-secondary list-decimal list-inside">
         <li>Click the button below and authorize Claude in a new tab.</li>
         <li>Copy the code from Claude and paste it here to finish.</li>
       </ol>
@@ -39,7 +39,7 @@ export function ProviderSigninPanelClaudeFlow({
       )}
       {handle.awaitingCode && (
         <div className="space-y-3">
-          <label className="block text-xs text-foreground-muted">
+          <label className="block text-xs text-foreground-secondary">
             Paste the code from Claude:
           </label>
           <input

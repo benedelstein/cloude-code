@@ -5,6 +5,10 @@ const DAY_MS = 24 * HOUR_MS;
 const WEEK_MS = 7 * DAY_MS;
 const MONTH_MS = 30 * DAY_MS;
 
+export function repoDisplayName(repoFullName: string): string {
+  return repoFullName.split("/")[1] || repoFullName;
+}
+
 export function formatCompactRelativeTime(
   dateString: string,
   nowMs = Date.now(),
@@ -14,7 +18,8 @@ export function formatCompactRelativeTime(
 
   const diffMs = Math.max(0, nowMs - dateMs);
   if (diffMs < MINUTE_MS) {
-    return `${Math.floor(diffMs / SECOND_MS)}s`;
+    const seconds = Math.floor(diffMs / SECOND_MS);
+    return seconds === 0 ? "now" : `${seconds}s`;
   }
   if (diffMs < HOUR_MS) {
     return `${Math.floor(diffMs / MINUTE_MS)}m`;

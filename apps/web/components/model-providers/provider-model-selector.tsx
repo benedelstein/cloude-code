@@ -87,7 +87,7 @@ export function ProviderModelSelector({
               className="h-3 w-3 shrink-0"
             />
           )}
-          <span className={cn("truncate", !hasSelection && "text-foreground-muted text-bold")}>
+          <span className={cn("truncate", !hasSelection && "text-foreground-secondary text-bold")}>
             {displayLabel}
           </span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />

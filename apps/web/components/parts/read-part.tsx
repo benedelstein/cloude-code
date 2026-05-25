@@ -63,7 +63,7 @@ function ReadDetail({ action, paths }: { action: ReadAction; paths: string[] }) 
   if (paths.length === 0) { return null; }
 
   return (
-    <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-muted">
+    <ul className="my-1 space-y-0.5 font-mono text-xs text-foreground-secondary">
       {paths.map((path) => (
         <li key={path}>{path}</li>
       ))}
@@ -84,11 +84,11 @@ function ReadContent({
     <div className="my-1 rounded-md border border-border overflow-hidden bg-background text-xs">
       {(filename || rangeLabel) && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/30">
-          <span className="font-mono text-foreground-muted truncate">
+          <span className="font-mono text-foreground-secondary truncate">
             {filename ?? ""}
           </span>
           {rangeLabel && (
-            <span className="shrink-0 font-mono text-foreground-muted">
+            <span className="shrink-0 font-mono text-foreground-secondary">
               {rangeLabel}
             </span>
           )}

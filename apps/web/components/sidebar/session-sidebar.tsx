@@ -1,16 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
-  Archive,
   ChevronRight,
-  Trash2,
   LogOut,
   ChevronsUpDown,
-  MoreHorizontal,
-  Edit,
+  CirclePlus,
   FolderGit2,
   Plus,
 } from "lucide-react";
@@ -18,13 +15,12 @@ import {
   deleteSession,
   archiveSession,
   type SessionRepoGroup,
-  type SessionSummary,
 } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { useNow } from "@/lib/use-now";
-import { PrStatusIcon } from "@/components/chat/pr-status-icon";
-import { formatCompactRelativeTime } from "./utils";
+import { repoDisplayName } from "./utils";
+import { SessionRow } from "./session-row";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -36,7 +32,6 @@ import {
   SIDEBAR_HEADER_HEIGHT_CLASS,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
@@ -64,111 +59,7 @@ import Link from "next/link";
 
 const SESSION_LOADING_SKELETON_COUNT = 3;
 const SHOW_MORE_BUTTON_CLASSES =
-  "w-full text-left px-2 py-1.5 text-xs text-foreground-muted hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer transition-colors disabled:cursor-default disabled:opacity-60";
-
-function repoDisplayName(repoFullName: string): string {
-  return repoFullName.split("/")[1] || repoFullName;
-}
-
-interface SessionRowProps {
-  session: SessionSummary;
-  isActive: boolean;
-  isActionLoading: boolean;
-  nowMs: number;
-  onCloseMobileSidebar: () => void;
-  onArchive: (sessionId: string) => void;
-  onRequestDelete: (sessionId: string) => void;
-}
-
-function SessionStatusSlot({ session }: { session: SessionSummary }) {
-  if (session.workingState === "responding") {
-    return (
-      <span role="status" aria-label="Responding">
-        <LoadingSpinner className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
-      </span>
-    );
-  }
-
-  if (session.pullRequest || session.pushedBranch) {
-    return (
-      <PrStatusIcon
-        pullRequestUrl={session.pullRequest?.url ?? null}
-        pullRequestState={session.pullRequest?.state ?? null}
-        variant="plain"
-      />
-    );
-  }
-
-  return <span aria-hidden="true" className="block h-5 w-5" />;
-}
-
-function SessionRow({
-  session,
-  isActive,
-  isActionLoading,
-  nowMs,
-  onCloseMobileSidebar,
-  onArchive,
-  onRequestDelete,
-}: SessionRowProps) {
-  const displayTitle =
-    session.title || repoDisplayName(session.repoFullName) || session.id.slice(0, 8);
-  const timestamp = session.lastMessageAt || session.updatedAt;
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={isActive}
-        className="cursor-pointer h-auto min-h-8 py-1 group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground group-focus-within/menu-item:bg-sidebar-accent group-focus-within/menu-item:text-sidebar-accent-foreground"
-      >
-        <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
-          <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
-            <span className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center">
-              <SessionStatusSlot session={session} />
-            </span>
-            <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-hover/menu-item:pr-9 group-focus-within/menu-item:col-end-4 group-focus-within/menu-item:pr-9">
-              {displayTitle}
-            </span>
-            <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-muted transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
-              {formatCompactRelativeTime(timestamp, nowMs)}
-            </span>
-          </div>
-        </Link>
-      </SidebarMenuButton>
-      {isActionLoading ? (
-        <SidebarMenuAction className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1">
-          <LoadingSpinner className="h-3 w-3 shrink-0" />
-        </SidebarMenuAction>
-      ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction
-              showOnHover
-              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-control-background! hover:bg-control-background!"
-            >
-              <MoreHorizontal className="h-3 w-3" />
-            </SidebarMenuAction>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={() => onArchive(session.id)}>
-              <Archive className="h-4 w-4" />
-              Archive
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => onRequestDelete(session.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </SidebarMenuItem>
-  );
-}
+  "w-full text-left px-2 py-1.5 text-xs text-foreground-secondary hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer transition-colors disabled:cursor-default disabled:opacity-60";
 
 interface RepoGroupBlockProps {
   group: SessionRepoGroup;
@@ -203,26 +94,30 @@ function RepoGroupBlock({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="group/repo flex h-8 w-full items-center gap-1 rounded-md px-2 text-xs font-medium text-foreground-muted transition-colors hover:bg-sidebar-accent hover:text-foreground">
+      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:bg-sidebar-accent hover:text-foreground">
         <button
           type="button"
-          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+          className="col-start-1 col-end-3 grid h-full min-w-0 cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-1.5 text-left"
           aria-expanded={!isCollapsed}
           onClick={() => onToggleCollapsed(group.repoId)}
         >
-          <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="min-w-0 truncate">{repoName}</span>
-          <ChevronRight
-            aria-hidden="true"
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
-          />
+          <span className="flex h-5 w-5 items-center justify-center">
+            <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate">{repoName}</span>
+            <ChevronRight
+              aria-hidden="true"
+              className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+            />
+          </span>
         </button>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <button
               type="button"
               aria-label={`New session in ${repoName}`}
-              className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-control-background hover:text-foreground"
+              className="col-start-3 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center justify-self-end rounded text-foreground-secondary hover:bg-control-background hover:text-foreground"
               onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -298,7 +193,12 @@ function SessionListSkeleton() {
   );
 }
 
-export function SessionSidebar() {
+interface SessionSidebarProps {
+  className?: string;
+  resizeHandle?: ReactNode;
+}
+
+export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps) {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -379,7 +279,8 @@ export function SessionSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="offcanvas" variant="floating">
+      <Sidebar collapsible="offcanvas" variant="floating" className={className}>
+        {resizeHandle}
         <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right border-b border-sidebar-border p-0`}>
           <div className="flex flex-row items-center justify-end h-full">
             {/* <div className="flex h-8 w-8 text-2xl">☁️</div> */}
@@ -396,7 +297,7 @@ export function SessionSidebar() {
                   tooltip="New session"
                 >
                   <Link href="/dashboard" onClick={closeMobileSidebar}>
-                    <Edit className="h-4 w-4" />
+                    <CirclePlus className="h-4 w-4" />
                     <span>New session</span>
                   </Link>
                 </SidebarMenuButton>
@@ -408,7 +309,7 @@ export function SessionSidebar() {
               {sessionsLoading ? (
                 <SessionListSkeleton />
               ) : groups.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-foreground-muted">
+                <p className="px-2 py-6 text-center text-xs text-foreground-secondary">
                   No sessions yet
                 </p>
               ) : (
@@ -480,7 +381,7 @@ export function SessionSidebar() {
                         {user?.login ?? "User"}
                       </span>
                     ) : null}
-                    <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-muted" />
+                    <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-secondary" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-48">

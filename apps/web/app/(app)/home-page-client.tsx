@@ -11,7 +11,7 @@ export function HomePageClient() {
           <h1 className="text-2xl font-semibold mb-1 text-center">
             What do you want to build?
           </h1>
-          {/* <p className="text-sm text-foreground-muted mb-8 text-center">
+          {/* <p className="text-sm text-foreground-secondary mb-8 text-center">
           Pick a repo and describe the task.
         </p> */}
         </div>

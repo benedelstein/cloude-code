@@ -7,10 +7,10 @@
 :root {
   /* Base palette */
   --background: #ffffff;
-  --background-secondary: #f8fafc;
-  --foreground: #0f172a;
-  --foreground-muted: #64748b;
-  --foreground-tertiary: #acacac;
+  --background-secondary: #FCFCFC;
+  --foreground: #17181A;
+  --foreground-secondary: #64748B;
+  --foreground-tertiary: #939393;
   --border: #d6dadf;
   --dark-blue: #050C56;
   --border-strong: #84a9d4;
@@ -21,7 +21,7 @@
   --danger: #ef4444;
   --warning: #f59e0b;
   --success: #22c55e;
-  --muted: #f1f5f9;
+  --muted: #F2F2F2;
   --plan: #8b5cf6;
   --plan-subtle: rgba(139, 92, 246, 0.12);
   --plan-subtle-strong: rgba(139, 92, 246, 0.18);
@@ -36,7 +36,7 @@
   --primary-foreground: var(--accent-foreground);
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --muted-foreground: var(--foreground-muted);
+  --muted-foreground: var(--foreground-secondary);
   --destructive: var(--danger);
   --destructive-foreground: var(--accent-foreground);
   --card: var(--background);
@@ -46,10 +46,10 @@
 
   /* Sidebar */
   --sidebar: var(--background);
-  --sidebar-foreground: #334155;
+  --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--foreground);
   --sidebar-primary-foreground: var(--accent-foreground);
-  --sidebar-accent: #F2F2F2;
+  --sidebar-accent: var(--muted);
   --sidebar-accent-foreground: var(--foreground);
   --control-background: #D9D9D9;
   --sidebar-border: var(--border);
@@ -133,7 +133,7 @@ a {
   --color-background: var(--background);
   --color-background-secondary: var(--background-secondary);
   --color-foreground: var(--foreground);
-  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-secondary: var(--foreground-secondary);
   --color-foreground-tertiary: var(--foreground-tertiary);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);

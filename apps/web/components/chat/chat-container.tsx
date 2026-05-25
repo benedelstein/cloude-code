@@ -185,9 +185,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 className="h-7 max-w-full min-w-[2ch] shrink truncate rounded-md border border-transparent bg-transparent px-2 text-sm font-medium cursor-pointer focus:cursor-text focus:border-border focus:bg-background focus:outline-none focus:ring-1 focus:ring-accent/50"
               />
               {isSavingTitle ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-foreground-muted" />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-foreground-secondary" />
               ) : (
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-foreground-muted opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0 pointer-events-none" />
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-foreground-secondary opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0 pointer-events-none" />
               )}
             </div>
           </div>
@@ -234,7 +234,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   <button
                     type="button"
                     onClick={() => scrollToBottomRef.current?.()}
-                    className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
+                    className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-secondary hover:text-foreground transition-colors cursor-pointer"
                   >
                     <ArrowDown className="h-4 w-4" />
                   </button>

@@ -72,7 +72,7 @@ export function BranchBar({
   return (
     <div className="min-w-0 shrink-0 overflow-hidden rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
       <div className="px-4 py-2 flex min-w-0 items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-foreground-muted min-w-0">
+        <div className="flex items-center gap-2 text-sm text-foreground-secondary min-w-0">
           <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
           <span className="text-foreground font-medium">main</span>
           {" \u2190 "}
@@ -86,7 +86,7 @@ export function BranchBar({
             {copied ? (
               <Check className="h-3 w-3 shrink-0 text-accent" />
             ) : (
-              <Copy className="h-3 w-3 shrink-0 text-foreground-muted" />
+              <Copy className="h-3 w-3 shrink-0 text-foreground-secondary" />
             )}
           </button>
         </div>

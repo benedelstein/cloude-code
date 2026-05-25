@@ -17,7 +17,7 @@ export function SessionSidebarSection({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs font-medium text-foreground-muted">{title}</p>
+        <p className="text-xs font-medium text-foreground-secondary">{title}</p>
         {meta ? (
           <div className="text-[12px] text-foreground-tertiary">{meta}</div>
         ) : null}
@@ -42,7 +42,7 @@ export function SessionSidebarCard({
         "rounded-xl p-3",
         variant === "default"
           ? "flex flex-col border border-sidebar-border bg-background-secondary"
-          : "border border-dashed border-border bg-background-secondary text-center text-sm text-foreground-muted flex flex-col items-center justify-center",
+          : "border border-dashed border-border bg-background-secondary text-center text-sm text-foreground-secondary flex flex-col items-center justify-center",
         className,
       )}
     >

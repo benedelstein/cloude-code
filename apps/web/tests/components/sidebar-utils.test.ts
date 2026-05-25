@@ -14,6 +14,10 @@ describe("formatCompactRelativeTime", () => {
   });
 
   it("clamps future timestamps to now", () => {
-    expect(formatCompactRelativeTime("2026-05-24T20:01:00.000Z", NOW)).toBe("0s");
+    expect(formatCompactRelativeTime("2026-05-24T20:01:00.000Z", NOW)).toBe("now");
+  });
+
+  it("formats current timestamps as now", () => {
+    expect(formatCompactRelativeTime("2026-05-24T20:00:00.000Z", NOW)).toBe("now");
   });
 });

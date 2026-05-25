@@ -38,7 +38,7 @@ export function EditPart({ action }: EditPartProps) {
       detail={
         action.diff
           ? <DiffView parsed={parsed} filename={name} />
-          : <span className="text-xs text-foreground-muted">(no diff yet)</span>
+          : <span className="text-xs text-foreground-secondary">(no diff yet)</span>
       }
     />
   );
@@ -126,8 +126,8 @@ function DiffView({ parsed, filename }: DiffViewProps) {
     <div className="my-1 rounded-md border border-border overflow-hidden bg-background text-xs">
       {(filename || parsed.added || parsed.removed) && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/30">
-          <span className="font-mono text-foreground-muted truncate">{filename ?? ""}</span>
-          <span className="shrink-0 font-mono text-foreground-muted">
+          <span className="font-mono text-foreground-secondary truncate">{filename ?? ""}</span>
+          <span className="shrink-0 font-mono text-foreground-secondary">
             <span className="font-semibold text-green-700 dark:text-green-300">+{parsed.added}</span>
             {" "}
             <span className="font-semibold text-red-700 dark:text-red-300">-{parsed.removed}</span>
@@ -143,7 +143,7 @@ function DiffView({ parsed, filename }: DiffViewProps) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="w-full border-t border-border px-3 py-1.5 text-xs text-foreground-muted hover:bg-muted/40 cursor-pointer"
+          className="w-full border-t border-border px-3 py-1.5 text-xs text-foreground-secondary hover:bg-muted/40 cursor-pointer"
         >
           Show {remaining} more lines
         </button>
@@ -155,7 +155,7 @@ function DiffView({ parsed, filename }: DiffViewProps) {
 function DiffRow({ line }: { line: DiffLine }) {
   if (line.kind === "hunk") {
     return (
-      <div className="px-3 py-0.5 bg-muted/20 text-foreground-muted border-y border-border">
+      <div className="px-3 py-0.5 bg-muted/20 text-foreground-secondary border-y border-border">
         {line.text}
       </div>
     );
@@ -179,10 +179,10 @@ function DiffRow({ line }: { line: DiffLine }) {
   return (
     <div className={clsx("flex items-stretch", bgClass)}>
       <span className={clsx("w-0.5 shrink-0", stripeClass)} />
-      <span className="w-10 shrink-0 select-none text-right pr-2 text-foreground-muted/70 tabular-nums">
+      <span className="w-10 shrink-0 select-none text-right pr-2 text-foreground-secondary/70 tabular-nums">
         {line.oldLineNo ?? ""}
       </span>
-      <span className="w-10 shrink-0 select-none text-right pr-3 text-foreground-muted/70 tabular-nums">
+      <span className="w-10 shrink-0 select-none text-right pr-3 text-foreground-secondary/70 tabular-nums">
         {line.newLineNo ?? ""}
       </span>
       <span className={clsx("whitespace-pre flex-1 pr-3", textClass)}>

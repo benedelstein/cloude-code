@@ -50,7 +50,7 @@ export function ProviderSigninPanelOpenAIFlow({
   if (!handle.attemptId) {
     return (
       <div className="space-y-4">
-        <p className="text-xs text-foreground-muted">{description}</p>
+        <p className="text-xs text-foreground-secondary">{description}</p>
         {deviceAuthNotice}
         <div className="mt-4">
           <button
@@ -70,7 +70,7 @@ export function ProviderSigninPanelOpenAIFlow({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-foreground-muted">
+      <p className="text-xs text-foreground-secondary">
         Enter this code on the OpenAI authorization page:
       </p>
       <div className="flex items-center gap-2">
@@ -85,11 +85,11 @@ export function ProviderSigninPanelOpenAIFlow({
           {copied ? (
             <Check className="h-3.5 w-3.5 text-success" />
           ) : (
-            <Copy className="h-3.5 w-3.5 text-foreground-muted" />
+            <Copy className="h-3.5 w-3.5 text-foreground-secondary" />
           )}
         </button>
       </div>
-      <p className="inline-flex items-center gap-2 text-xs text-foreground-muted italic animate-pulse">
+      <p className="inline-flex items-center gap-2 text-xs text-foreground-secondary italic animate-pulse">
         Waiting for authorization...
       </p>
       {handle.error && (

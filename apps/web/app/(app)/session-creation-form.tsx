@@ -710,7 +710,7 @@ export function SessionCreationForm() {
             placeholder="Describe what you want to do..."
             rows={4}
             disabled={isFormInteractionDisabled}
-            className="w-full overflow-y-auto bg-transparent px-4 pb-2 pt-4 text-sm resize-none outline-none placeholder:text-foreground-muted/50 disabled:opacity-50"
+            className="w-full overflow-y-auto bg-transparent px-4 pb-2 pt-4 text-sm resize-none outline-none placeholder:text-foreground-secondary/50 disabled:opacity-50"
           />
 
           <div className="flex items-center justify-between px-3 pb-3">
@@ -754,13 +754,13 @@ export function SessionCreationForm() {
             <button
               type="button"
               onClick={() => void activeHandle?.disconnect()}
-              className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-muted hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+              className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-secondary hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
               Debug: Disconnect {selectedProvider ? PROVIDERS[selectedProvider].displayName : "provider"}
             </button>
           </div>
         )}
-        <p className="text-xs text-foreground-muted/60">
+        <p className="text-xs text-foreground-secondary/60">
           Press Enter to submit, Shift+Enter for new line
         </p>
       </div>

@@ -36,7 +36,7 @@ function AttachmentThumbnail({
       <button
         type="button"
         onClick={onRemove}
-        className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-foreground-muted hover:text-foreground"
+        className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-foreground-secondary hover:text-foreground"
         aria-label={`Remove ${attachment.file.name}`}
       >
         <X className="h-3 w-3" />

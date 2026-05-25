@@ -279,6 +279,7 @@ const Sidebar = React.forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         {reserveSpace && (
           <div
+            data-sidebar="gap"
             className={cn(
               "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
               "group-data-[collapsible=offcanvas]:w-0",

@@ -73,11 +73,11 @@ export function SessionRightSidebar() {
             <p className="truncate text-sm font-medium">Session Context</p>
             {hasHydratedState ? (
               repoFullName ? (
-                <Link href={`https://github.com/${repoFullName}`} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-foreground-muted hover:underline">
+                <Link href={`https://github.com/${repoFullName}`} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-foreground-secondary hover:underline">
                   {repoFullName}
                 </Link>
               ) : (
-                <p className="truncate text-xs text-foreground-muted">Unknown repository</p>
+                <p className="truncate text-xs text-foreground-secondary">Unknown repository</p>
               )
             ) : (
               <Skeleton className="mt-1 h-3 w-32" />
