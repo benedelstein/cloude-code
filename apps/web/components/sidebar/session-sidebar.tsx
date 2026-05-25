@@ -3,7 +3,16 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Archive, Trash2, LogOut, ChevronsUpDown, MoreHorizontal, Edit } from "lucide-react";
+import {
+  Archive,
+  Trash2,
+  LogOut,
+  ChevronsUpDown,
+  MoreHorizontal,
+  Edit,
+  FolderGit2,
+  Plus,
+} from "lucide-react";
 import {
   deleteSession,
   archiveSession,
@@ -24,7 +33,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SIDEBAR_HEADER_HEIGHT_CLASS,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
@@ -160,6 +168,7 @@ function SessionRow({
 interface RepoGroupBlockProps {
   group: SessionRepoGroup;
   activeSessionId: string | undefined;
+  isCollapsed: boolean;
   terminatingSessionId: string | null;
   archivingSessionId: string | null;
   loadingMoreSessions: boolean;
@@ -167,12 +176,15 @@ interface RepoGroupBlockProps {
   onCloseMobileSidebar: () => void;
   onArchive: (sessionId: string) => void;
   onRequestDelete: (sessionId: string) => void;
+  onToggleCollapsed: (repoId: number) => void;
   onLoadMoreSessions: (repoId: number) => void;
+  onNewSessionForRepo: (repoId: number, repoFullName: string) => void;
 }
 
 function RepoGroupBlock({
   group,
   activeSessionId,
+  isCollapsed,
   terminatingSessionId,
   archivingSessionId,
   loadingMoreSessions,
@@ -180,46 +192,70 @@ function RepoGroupBlock({
   onCloseMobileSidebar,
   onArchive,
   onRequestDelete,
+  onToggleCollapsed,
   onLoadMoreSessions,
+  onNewSessionForRepo,
 }: RepoGroupBlockProps) {
+  const repoName = repoDisplayName(group.repoFullName);
+
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="px-2 pt-2 pb-1 text-xs font-medium text-foreground-muted truncate">
-        {repoDisplayName(group.repoFullName)}
-      </div>
-      <SidebarMenu>
-        {group.sessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            isActive={session.id === activeSessionId}
-            isActionLoading={
-              terminatingSessionId === session.id
-              || archivingSessionId === session.id
-            }
-            nowMs={nowMs}
-            onCloseMobileSidebar={onCloseMobileSidebar}
-            onArchive={onArchive}
-            onRequestDelete={onRequestDelete}
-          />
-        ))}
-      </SidebarMenu>
-      {group.nextSessionCursor !== null && (
+      <div className="group/repo flex h-8 w-full items-center gap-1 rounded-md px-2 text-xs font-medium text-foreground-muted transition-colors hover:bg-sidebar-accent hover:text-foreground">
         <button
           type="button"
-          className={SHOW_MORE_BUTTON_CLASSES}
-          onClick={() => onLoadMoreSessions(group.repoId)}
-          disabled={loadingMoreSessions}
+          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+          aria-expanded={!isCollapsed}
+          onClick={() => onToggleCollapsed(group.repoId)}
         >
-          {loadingMoreSessions ? (
-            <span className="flex items-center gap-1.5">
-              <LoadingSpinner className="h-3 w-3" />
-              Loading…
-            </span>
-          ) : (
-            "Show more"
-          )}
+          <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{repoName}</span>
         </button>
+        <button
+          type="button"
+          aria-label={`New session in ${repoName}`}
+          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-sidebar-border hover:text-foreground"
+          onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {!isCollapsed && (
+        <>
+          <SidebarMenu>
+            {group.sessions.map((session) => (
+              <SessionRow
+                key={session.id}
+                session={session}
+                isActive={session.id === activeSessionId}
+                isActionLoading={
+                  terminatingSessionId === session.id
+                  || archivingSessionId === session.id
+                }
+                nowMs={nowMs}
+                onCloseMobileSidebar={onCloseMobileSidebar}
+                onArchive={onArchive}
+                onRequestDelete={onRequestDelete}
+              />
+            ))}
+          </SidebarMenu>
+          {group.nextSessionCursor !== null && (
+            <button
+              type="button"
+              className={SHOW_MORE_BUTTON_CLASSES}
+              onClick={() => onLoadMoreSessions(group.repoId)}
+              disabled={loadingMoreSessions}
+            >
+              {loadingMoreSessions ? (
+                <span className="flex items-center gap-1.5">
+                  <LoadingSpinner className="h-3 w-3" />
+                  Loading…
+                </span>
+              ) : (
+                "Show more"
+              )}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -272,6 +308,7 @@ export function SessionSidebar() {
   const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
   const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null);
   const [deleteDialogSessionId, setDeleteDialogSessionId] = useState<string | null>(null);
+  const [collapsedRepoIds, setCollapsedRepoIds] = useState<Set<number>>(() => new Set());
 
   const navigate = (path: string) => {
     router.push(path);
@@ -280,6 +317,26 @@ export function SessionSidebar() {
 
   const closeMobileSidebar = () => {
     setOpenMobile(false);
+  };
+
+  const toggleRepoCollapsed = (repoId: number) => {
+    setCollapsedRepoIds((current) => {
+      const next = new Set(current);
+      if (next.has(repoId)) {
+        next.delete(repoId);
+      } else {
+        next.add(repoId);
+      }
+      return next;
+    });
+  };
+
+  const newSessionForRepo = (repoId: number, repoFullName: string) => {
+    const params = new URLSearchParams({
+      repoId: String(repoId),
+      repoFullName,
+    });
+    navigate(`/dashboard?${params.toString()}`);
   };
 
   const handleArchiveSession = async (sessionId: string) => {
@@ -340,7 +397,6 @@ export function SessionSidebar() {
             </SidebarMenu>
           </SidebarGroup>
           <SidebarGroup className="pt-0">
-            <SidebarGroupLabel>Sessions</SidebarGroupLabel>
             <SidebarGroupContent>
               {sessionsLoading ? (
                 <SessionListSkeleton />
@@ -355,6 +411,7 @@ export function SessionSidebar() {
                       key={group.repoId}
                       group={group}
                       activeSessionId={activeSessionId}
+                      isCollapsed={collapsedRepoIds.has(group.repoId)}
                       terminatingSessionId={terminatingSessionId}
                       archivingSessionId={archivingSessionId}
                       loadingMoreSessions={
@@ -364,7 +421,9 @@ export function SessionSidebar() {
                       onCloseMobileSidebar={closeMobileSidebar}
                       onArchive={handleArchiveSession}
                       onRequestDelete={setDeleteDialogSessionId}
+                      onToggleCollapsed={toggleRepoCollapsed}
                       onLoadMoreSessions={loadMoreSessionsForRepo}
+                      onNewSessionForRepo={newSessionForRepo}
                     />
                   ))}
                   {nextRepoCursor !== null && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { listRepos, searchRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
@@ -52,8 +52,12 @@ function getFallbackProviderModelSelection(
 
 export function SessionCreationForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addSession } = useSessionList();
   const isDevelopment = process.env.NODE_ENV === "development";
+  const requestedRepoId = Number(searchParams.get("repoId"));
+  const requestedRepoFullName = searchParams.get("repoFullName") ?? null;
+  const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
 
   const [repos, setRepos] = useState<Repo[]>([]);
   const [installUrl, setInstallUrl] = useState<string | null>(null);
@@ -116,6 +120,15 @@ export function SessionCreationForm() {
     }
 
     return Array.from(reposById.values());
+  }
+
+  function findRequestedRepo(repoList: Repo[]): Repo | undefined {
+    if (!hasRequestedRepo) {
+      return undefined;
+    }
+    return repoList.find((repo) =>
+      repo.id === requestedRepoId || repo.fullName === requestedRepoFullName,
+    );
   }
 
   const {
@@ -337,11 +350,14 @@ export function SessionCreationForm() {
       setReposCursor(cached.data.cursor);
       setReposLoading(false);
 
+      const requestedRepo = findRequestedRepo(cached.data.repos);
       const lastRepoId = localStorage.getItem("lastRepoId");
       const lastRepo = lastRepoId
         ? cached.data.repos.find((r) => r.id === Number(lastRepoId))
         : undefined;
-      if (lastRepo) {
+      if (requestedRepo) {
+        setSelectedRepo(requestedRepo);
+      } else if (lastRepo) {
         setSelectedRepo(lastRepo);
       } else if (cached.data.repos.length === 1) {
         setSelectedRepo(cached.data.repos[0]);
@@ -358,6 +374,11 @@ export function SessionCreationForm() {
         setReposCursor(data.cursor);
 
         setSelectedRepo((currentSelected) => {
+          const requestedRepo = findRequestedRepo(data.repos);
+          if (requestedRepo) {
+            return requestedRepo;
+          }
+
           if (currentSelected) {
             const stillLoaded = data.repos.find((repo) => repo.id === currentSelected.id);
             return stillLoaded ?? currentSelected;
@@ -379,7 +400,45 @@ export function SessionCreationForm() {
         setReposLoading(false);
       }
     })();
-  }, []);
+  }, [hasRequestedRepo, requestedRepoFullName, requestedRepoId]);
+
+  useEffect(() => {
+    if (!hasRequestedRepo || !requestedRepoFullName) {
+      return;
+    }
+    if (selectedRepo?.id === requestedRepoId) {
+      return;
+    }
+
+    let stale = false;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchRepos(requestedRepoFullName, { limit: 10 });
+        if (stale) { return; }
+        const requestedRepo = findRequestedRepo(data.repos);
+        if (!requestedRepo) {
+          return;
+        }
+        setRepos((currentRepos) => mergeRepos(currentRepos, [requestedRepo]));
+        setSelectedRepo(requestedRepo);
+      } catch {
+        if (!stale) {
+          setRepoSearchQuery(requestedRepoFullName);
+          setRepoPickerOpen(true);
+        }
+      }
+    }, 0);
+
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [
+    hasRequestedRepo,
+    requestedRepoFullName,
+    requestedRepoId,
+    selectedRepo?.id,
+  ]);
 
   // Debounced server-side repo search. When the input has a value, we hit
   // /repos/search and replace the displayed list with those results. When the

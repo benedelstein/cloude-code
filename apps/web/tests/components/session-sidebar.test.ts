@@ -1,5 +1,12 @@
 import { createElement } from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionRepoGroup, SessionSummary } from "@repo/shared";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -192,5 +199,22 @@ describe("SessionSidebar", () => {
     expect(
       within(openRow as HTMLElement).getByRole("button").className,
     ).toContain("group-hover/menu-item:opacity-100");
+  });
+
+  it("collapses repo groups and starts new sessions with the repo preselected", async () => {
+    renderSidebar();
+
+    expect(screen.getByText("Open PR")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "repo" }));
+    expect(screen.queryByText("Open PR")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "repo" }));
+    expect(screen.getByText("Open PR")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "New session in repo" }));
+    expect(mocks.push).toHaveBeenCalledWith(
+      "/dashboard?repoId=100&repoFullName=acme%2Frepo",
+    );
   });
 });
