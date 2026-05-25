@@ -1,16 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import { useState, type ReactNode } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { usePathname, useRouter, useParams } from "next/navigation";
 import {
   ArrowUpRight,
   ChevronRight,
-  LogOut,
-  ChevronsUpDown,
   CirclePlus,
   FolderGit2,
   Plus,
+  Settings,
 } from "lucide-react";
 import {
   deleteSession,
@@ -37,14 +35,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
@@ -218,8 +208,9 @@ interface SessionSidebarProps {
 }
 
 export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps) {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams();
   const { setOpenMobile } = useSidebar();
   const activeSessionId = params?.sessionId as string | undefined;
@@ -378,49 +369,35 @@ export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps)
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton size="lg" className="cursor-pointer">
-                    {authLoading ? (
-                      <>
-                        <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-                        <Skeleton className="h-4 w-24" />
-                      </>
-                    ) : user?.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.login}
-                        className="h-8 w-8 shrink-0 rounded-full"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
-                    )}
-                    {!authLoading ? (
-                      <span className="truncate text-sm">
-                        {user?.login ?? "User"}
-                      </span>
-                    ) : null}
-                    <ChevronsUpDown className="ml-auto h-4 w-4 text-foreground-secondary" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="start" className="w-48">
-                  {/* add a github logo next to user login */}
-                  <DropdownMenuLabel className="flex items-center gap-2">
-                    <Image
-                      src="/github_logo.svg"
-                      alt="GitHub logo"
-                      width={16}
-                      height={16}
+              <SidebarMenuButton
+                asChild
+                size="lg"
+                isActive={pathname === "/settings"}
+                className="cursor-pointer"
+              >
+                <Link href="/settings" onClick={closeMobileSidebar}>
+                  {authLoading ? (
+                    <>
+                      <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                      <Skeleton className="h-4 w-24" />
+                    </>
+                  ) : user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.login}
+                      className="h-8 w-8 shrink-0 rounded-full"
                     />
-                    <span className="text-sm">{user?.login}</span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout}>
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  ) : (
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
+                  )}
+                  {!authLoading ? (
+                    <span className="truncate text-sm">
+                      {user?.login ?? "User"}
+                    </span>
+                  ) : null}
+                  <Settings className="ml-auto h-4 w-4 text-foreground-muted" />
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
