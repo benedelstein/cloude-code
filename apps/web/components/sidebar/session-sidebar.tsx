@@ -117,7 +117,7 @@ function RepoGroupBlock({
             <button
               type="button"
               aria-label={`New session in ${repoName}`}
-              className="col-start-3 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center justify-self-end rounded text-foreground-secondary hover:bg-control-background hover:text-foreground"
+              className="col-start-3 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center justify-self-end rounded text-foreground-secondary opacity-0 transition-none hover:bg-control-background hover:text-foreground focus-visible:opacity-100 group-hover/repo:opacity-100 group-focus-within/repo:opacity-100"
               onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
             >
               <Plus className="h-3.5 w-3.5" />
