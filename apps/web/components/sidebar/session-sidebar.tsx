@@ -92,6 +92,7 @@ function SessionStatusSlot({ session }: { session: SessionSummary }) {
       <PrStatusIcon
         pullRequestUrl={session.pullRequest?.url ?? null}
         pullRequestState={session.pullRequest?.state ?? null}
+        variant="plain"
       />
     );
   }
