@@ -11,14 +11,14 @@ generates a title when the first persisted user message is observed.
 - Do not make DO init block on title generation.
 - Do not add duplicate client-only title state.
 - Do not add a custom websocket title message for this case.
-- Make `sessions.service.createSession()` the only place that auto-generates the initial title, since creation already returns `title` and the web app already seeds local session list state from that response.
+- Make `SessionsService.createSession()` the only place that auto-generates the initial title, since creation already returns `title` and the web app already seeds local session list state from that response.
 
 ## Target Changes
 
-- Remove first-message title generation from [session-agent-history.ts](/Users/ben/code/cloude-code/services/api-server/src/durable-objects/session-agent-history.ts).
+- Remove first-message title generation from [session-agent-history.ts](../../services/api-server/src/durable-objects/session-agent-history.ts).
 - Keep `updateSessionHistoryData()` responsible only for durable history metadata like `lastMessageAt`; it should not mutate `sessions.title`.
-- Keep initial title generation in [sessions.service.ts](/Users/ben/code/cloude-code/services/api-server/src/lib/sessions/sessions.service.ts) after session creation and before returning the `CreateSessionResponse`.
-- Preserve current web behavior in [session-creation-form.tsx](/Users/ben/code/cloude-code/apps/web/app/(app)/session-creation-form.tsx): use the returned `session.title` to seed `SessionListProvider` immediately.
+- Keep initial title generation in [sessions.service.ts](../../services/api-server/src/lib/sessions/sessions.service.ts) after session creation and before returning the `CreateSessionResponse`.
+- Preserve current web behavior in [session-creation-form.tsx](<../../apps/web/app/(app)/session-creation-form.tsx>): use the returned `session.title` to seed `SessionListProvider` immediately.
 - Treat the D1 `sessions.title` row as the server source of truth; the existing local `updateTitle(...)` path remains only for optimistic manual rename UX.
 
 ## Public Interfaces

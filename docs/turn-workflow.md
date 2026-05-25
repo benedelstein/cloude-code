@@ -46,10 +46,13 @@ Active turn fields live in `server_state`:
   activeUserMessageId: string | null;
   agentProcessId: number | null;
   agentSessionId: string | null;
+  startupToolchain: StartupToolchainCheckpoint | null;
 }
 ```
 
 Only one user turn may be active per session. A second `chat.message` while `activeUserMessageId` or `pendingUserMessage` is set is rejected with `CHAT_MESSAGE_FAILED`.
+
+`SessionProvisionService.ensureProvisioned()` applies the Sprite network policy, runs provider startup toolchain checks with `ensureSpriteStartupToolchain(...)`, stores the checkpoint in `server_state.startupToolchain`, and only then clones the repo. The checkpoint lets later provisioning calls skip current checks until the startup-toolchain contract hash changes.
 
 ## Dispatch
 

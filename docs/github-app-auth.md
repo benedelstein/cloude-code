@@ -27,7 +27,7 @@ When a session is created, repo access is checked by `assertUserRepoAccess(...)`
 4. On cache miss, generate a new token via `octokit App.getInstallationOctokit()`.
 5. Cache the token in D1 and return it.
 
-If no installation is found in D1, the code falls back to GitHub API installation lookup and records the result.
+If no installation is found in D1, the code falls back to GitHub API installation lookup through `GitHubAppService.findInstallationForRepo(...)`. That fallback returns the installation for the current request; installation rows are persisted by GitHub webhook handlers, not by the lookup path.
 
 ### Git Authentication on the VM
 
@@ -67,9 +67,9 @@ The app listens at `POST /webhooks/github` for:
 | Event | Action | Effect |
 |-------|--------|--------|
 | `installation.created` | Upsert installation + selected repos in D1 |
-| `installation.deleted` | Delete installation (CASCADE cleans up repos + cache) |
-| `installation.suspend` | Set `suspended_at` timestamp |
-| `installation.unsuspend` | Clear `suspended_at` |
+| `installation.deleted` | Clear listing-sync markers, delete repo-access cache rows, delete the installation row, and block sessions for that installation |
+| `installation.suspend` | Set `suspended_at`, clear repo/listing caches, and block sessions for that installation |
+| `installation.unsuspend` | Clear `suspended_at` and clear repo/listing caches so access is rechecked |
 | `installation_repositories.added` | Update installation repo rows and invalidate affected repo-access/listing caches |
 | `installation_repositories.removed` | Delete repo rows, invalidate affected caches, and block sessions for removed repos |
 | `github_app_authorization.revoked` | Revoke all auth sessions and stored GitHub credentials for the sender |

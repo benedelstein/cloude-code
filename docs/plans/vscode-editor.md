@@ -1,8 +1,10 @@
 # VS Code Editor Feature - Design Document
 
-Status: disabled. The live `SessionAgentDO.openEditor()` and
-`closeEditor()` methods currently return `EDITOR_DISABLED` because the old
-implementation in `session-agent-editor.ts` still calls `setUrlAuth("public")`.
+Status: disabled. The public `POST /sessions/:sessionId/editor/open` and
+`POST /sessions/:sessionId/editor/close` routes currently return `501 Not
+implemented` in `services/api-server/src/routes/sessions/sessions.routes.ts`.
+The dormant DO methods still return `EDITOR_DISABLED`, and the old
+`session-agent-editor.ts` implementation still calls `setUrlAuth("public")`.
 The Worker/TCP-proxy fix below is the target design, not implemented behavior.
 
 ## Goal

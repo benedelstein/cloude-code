@@ -98,7 +98,7 @@ The token carries `sessionId`, `userId`, and `expiresAt`, signed with `WEBSOCKET
 
 - **Verified only at the WS upgrade.** Once the socket is established, the token is stripped from the URL and never re-checked. The live socket is the auth. A connection opened at t=0 with a 5-minute token will keep working at t=1h.
 - **Short TTL is leak mitigation, not session lifetime control.** Query strings are the leakiest place to put a credential (server access logs, browser history, referrer headers, proxy logs). A ~5-minute expiry caps the blast radius if the URL leaks — an attacker can use a stolen token to open a new socket only within that window. It does **not** expire in-flight connections.
-- **No proactive token refresh on the client.** Because nothing rechecks after upgrade, a periodic timer-based refresh adds churn without adding safety — and in our stack it actually causes duplicate `sync.response` events, since changing the token changes the `usePartySocket` memo key and forces a fresh WS connection. Refresh only happens lazily on socket close if the cached token has already expired (`use-session-websocket-token.ts` / `use-cloudflare-agent.ts`).
+- **No proactive token refresh on the client.** Because nothing rechecks after upgrade, a periodic timer-based refresh adds churn without adding safety — and in our stack it causes extra `sync.response` traffic because changing the token changes the `useAgent(...)` connection options and forces a fresh WS connection. Refresh only happens lazily on socket close if the cached token has already expired (`use-session-websocket-token.ts` / `use-cloudflare-agent.ts`).
 
 ### Keep-alive
 
@@ -137,4 +137,4 @@ We use a D1 table `github_user_repo_access_cache` to cache user access to a repo
 Values are put to the cache when a user creates a session, or calls get /repos to list the repos they have access to.
 
 If a fresh value is found in the cache, we return true in the access check.
-If an installation is deleted, or repo is removed from the installation, we clear the relevant values from the cache.
+If an installation is deleted or suspended, or a repo is removed from the installation, the webhook handlers clear the relevant cache/listing rows and block affected existing sessions.
