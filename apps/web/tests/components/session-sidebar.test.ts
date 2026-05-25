@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ sessionId: "open-pr" }),
+  usePathname: () => "/sessions/open-pr",
   useRouter: () => ({ push: mocks.push }),
 }));
 
