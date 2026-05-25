@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   ArrowUpRight,
@@ -10,26 +11,68 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
+import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { useAuth } from "@/hooks/use-auth";
+import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 
-const FUTURE_CONNECTIONS = [
-  {
-    name: "OpenAI Codex",
-    description: "Model-provider connection status and token controls.",
-    iconSrc: "/openai_logo.svg",
-  },
-  {
-    name: "Claude Code",
-    description: "Claude subscription, auth, and rate-limit details.",
-    iconSrc: "/claude_logo.svg",
-  },
-];
+const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
+  "claude-code": { src: "/claude_logo.svg", alt: "Claude" },
+  "openai-codex": { src: "/openai_logo.svg", alt: "OpenAI" },
+};
 
 export function SettingsPageClient() {
   const { user, loading, logout } = useAuth();
+  const providerAuth = useProviderAuth();
+  const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
+  const [showSigninPanel, setShowSigninPanel] = useState(false);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<ProviderId | null>(null);
   const displayName = user?.name || user?.login || "Your account";
+  const signinPanelHandle = providerAuth.getHandle(signinPanelProvider);
+
+  useEffect(() => {
+    if (!showSigninPanel) {
+      return;
+    }
+
+    if (
+      signinPanelHandle.loading ||
+      !signinPanelHandle.connected ||
+      signinPanelHandle.requiresReauth
+    ) {
+      return;
+    }
+
+    setShowSigninPanel(false);
+  }, [
+    showSigninPanel,
+    signinPanelHandle.connected,
+    signinPanelHandle.loading,
+    signinPanelHandle.requiresReauth,
+  ]);
+
+  const handleProviderConnect = (providerId: ProviderId) => {
+    setSigninPanelProvider(providerId);
+    setShowSigninPanel(true);
+  };
+
+  const handleProviderDisconnect = async (handle: ProviderAuthHandleUnion) => {
+    setDisconnectingProvider(handle.providerId);
+    try {
+      await handle.disconnect();
+      const provider = PROVIDER_LIST.find((item) => item.id === handle.providerId);
+      toast.success(`${provider?.displayName ?? "Provider"} disconnected.`);
+    } catch (error) {
+      toast.error("Failed to disconnect provider", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setDisconnectingProvider(null);
+    }
+  };
 
   return (
     <div className="h-full overflow-y-auto px-4 py-14 md:py-16">
@@ -113,27 +156,31 @@ export function SettingsPageClient() {
           />
         </SettingsSection>
 
+        {!signinPanelHandle.loading && (
+          <ProviderSigninPanel
+            providerId={signinPanelProvider}
+            handle={signinPanelHandle}
+            open={showSigninPanel}
+            onOpenChange={setShowSigninPanel}
+          />
+        )}
+
         <SettingsSection
-          title="Model providers"
-          description="Provider connection management will live here soon."
+          title="Provider connections"
+          description="Manage model-provider authorization for session creation."
         >
-          {FUTURE_CONNECTIONS.map((connection) => (
-            <SettingsRow
-              key={connection.name}
-              icon={
-                <Image
-                  src={connection.iconSrc}
-                  alt={`${connection.name} logo`}
-                  width={20}
-                  height={20}
-                  className="h-5 w-5"
-                />
-              }
-              title={connection.name}
-              description={connection.description}
-              actionLabel="Coming soon"
-            />
-          ))}
+          {PROVIDER_LIST.map((provider) => {
+            const handle = providerAuth.getHandle(provider.id);
+            return (
+              <ProviderConnectionRow
+                key={provider.id}
+                handle={handle}
+                disconnecting={disconnectingProvider === provider.id}
+                onConnect={() => handleProviderConnect(provider.id)}
+                onDisconnect={() => void handleProviderDisconnect(handle)}
+              />
+            );
+          })}
         </SettingsSection>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -172,6 +219,98 @@ function SettingsSection({
         {children}
       </div>
     </section>
+  );
+}
+
+function ProviderConnectionRow({
+  handle,
+  disconnecting,
+  onConnect,
+  onDisconnect,
+}: {
+  handle: ProviderAuthHandleUnion;
+  disconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+}) {
+  const provider = PROVIDER_LIST.find((item) => item.id === handle.providerId);
+  if (!provider) {
+    return null;
+  }
+
+  const icon = PROVIDER_ICONS[handle.providerId];
+  const connected = handle.connected && !handle.requiresReauth;
+  const statusLabel = handle.loading
+    ? "Checking..."
+    : connected
+      ? "Connected"
+      : handle.requiresReauth
+        ? "Reconnect required"
+        : "Not connected";
+  const statusTone = connected
+    ? "success"
+    : handle.requiresReauth
+      ? "warning"
+      : "muted";
+  const buttonLabel = connected
+    ? disconnecting ? "Disconnecting..." : "Disconnect"
+    : handle.requiresReauth ? "Reconnect" : "Connect";
+
+  return (
+    <div className="flex flex-col gap-4 border-b border-border px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-muted">
+          <Image
+            src={icon.src}
+            alt={icon.alt}
+            width={20}
+            height={20}
+            className="h-5 w-5"
+          />
+        </div>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-medium text-foreground">
+            {provider.displayName}
+          </h3>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
+            {handle.error && (
+              <span className="text-xs text-danger">{handle.error}</span>
+            )}
+          </div>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant={connected ? "outline" : "default"}
+        size="sm"
+        className="w-full md:w-auto"
+        disabled={handle.loading || disconnecting}
+        onClick={connected ? onDisconnect : onConnect}
+      >
+        {buttonLabel}
+      </Button>
+    </div>
+  );
+}
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: "muted" | "success" | "warning";
+  children: ReactNode;
+}) {
+  const className = tone === "success"
+    ? "bg-edit-subtle text-edit"
+    : tone === "warning"
+      ? "bg-warning/10 text-warning"
+      : "bg-muted text-foreground-muted";
+
+  return (
+    <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${className}`}>
+      {children}
+    </span>
   );
 }
 
