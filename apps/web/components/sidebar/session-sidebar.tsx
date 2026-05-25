@@ -94,7 +94,7 @@ function RepoGroupBlock({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:bg-sidebar-accent hover:text-foreground">
+      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground">
         <button
           type="button"
           className="col-start-1 col-end-3 grid h-full min-w-0 cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-1.5 text-left"
