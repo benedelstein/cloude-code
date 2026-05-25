@@ -49,6 +49,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -216,14 +217,19 @@ function RepoGroupBlock({
             className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
           />
         </button>
-        <button
-          type="button"
-          aria-label={`New session in ${repoName}`}
-          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-control-background hover:text-foreground"
-          onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={`New session in ${repoName}`}
+              className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-control-background hover:text-foreground"
+              onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>New session in {repoName}</TooltipContent>
+        </Tooltip>
       </div>
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
