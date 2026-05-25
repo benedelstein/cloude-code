@@ -49,7 +49,7 @@
   --sidebar-foreground: #334155;
   --sidebar-primary: var(--foreground);
   --sidebar-primary-foreground: var(--accent-foreground);
-  --sidebar-accent: var(--muted);
+  --sidebar-accent: #F2F2F2;
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--accent);
