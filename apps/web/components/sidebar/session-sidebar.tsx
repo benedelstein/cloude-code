@@ -122,11 +122,13 @@ function SessionRow({
       >
         <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
           <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center">
+            <span className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center">
               <SessionStatusSlot session={session} />
             </span>
-            <span className="truncate text-sm">{displayTitle}</span>
-            <span className="justify-self-end text-xs font-mono text-foreground-muted transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
+            <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-focus-within/menu-item:col-end-4">
+              {displayTitle}
+            </span>
+            <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-muted transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
               {formatCompactRelativeTime(timestamp, nowMs)}
             </span>
           </div>
