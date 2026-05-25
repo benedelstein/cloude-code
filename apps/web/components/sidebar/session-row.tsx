@@ -77,7 +77,7 @@ export function SessionRow({
             <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-hover/menu-item:pr-9 group-focus-within/menu-item:col-end-4 group-focus-within/menu-item:pr-9">
               {displayTitle}
             </span>
-            <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-tertiary transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
+            <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-tertiary group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
               {formatCompactRelativeTime(timestamp, nowMs)}
             </span>
           </div>
