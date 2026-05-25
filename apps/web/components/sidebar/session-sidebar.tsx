@@ -117,7 +117,7 @@ function SessionRow({
       <SidebarMenuButton
         asChild
         isActive={isActive}
-        className="cursor-pointer h-auto min-h-8 py-1"
+        className="cursor-pointer h-auto min-h-8 py-1 group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground group-focus-within/menu-item:bg-sidebar-accent group-focus-within/menu-item:text-sidebar-accent-foreground"
       >
         <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
           <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
@@ -140,7 +140,7 @@ function SessionRow({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               showOnHover
-              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-border! hover:bg-sidebar-border!"
+              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-control-background! hover:bg-sidebar-control-background!"
             >
               <MoreHorizontal className="h-3 w-3" />
             </SidebarMenuAction>
@@ -169,7 +169,6 @@ interface RepoGroupBlockProps {
   group: SessionRepoGroup;
   activeSessionId: string | undefined;
   isCollapsed: boolean;
-  terminatingSessionId: string | null;
   archivingSessionId: string | null;
   loadingMoreSessions: boolean;
   nowMs: number;
@@ -185,7 +184,6 @@ function RepoGroupBlock({
   group,
   activeSessionId,
   isCollapsed,
-  terminatingSessionId,
   archivingSessionId,
   loadingMoreSessions,
   nowMs,
@@ -213,7 +211,7 @@ function RepoGroupBlock({
         <button
           type="button"
           aria-label={`New session in ${repoName}`}
-          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-sidebar-border hover:text-foreground"
+          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-sidebar-control-background hover:text-foreground"
           onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -229,10 +227,7 @@ function RepoGroupBlock({
                 key={session.id}
                 session={session}
                 isActive={session.id === activeSessionId}
-                isActionLoading={
-                  terminatingSessionId === session.id
-                  || archivingSessionId === session.id
-                }
+                isActionLoading={archivingSessionId === session.id}
                 nowMs={nowMs}
                 onCloseMobileSidebar={onCloseMobileSidebar}
                 onArchive={onArchive}
@@ -307,7 +302,6 @@ export function SessionSidebar() {
     loadMoreSessionsForRepo,
   } = useSessionList();
 
-  const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
   const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null);
   const [deleteDialogSessionId, setDeleteDialogSessionId] = useState<string | null>(null);
   const [collapsedRepoIds, setCollapsedRepoIds] = useState<Set<number>>(() => new Set());
@@ -357,18 +351,15 @@ export function SessionSidebar() {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
-    setTerminatingSessionId(sessionId);
     setDeleteDialogSessionId(null);
     if (sessionId === activeSessionId) {
       navigate("/dashboard");
     }
+    removeSession(sessionId);
     try {
       await deleteSession(sessionId);
-      removeSession(sessionId);
     } catch (err) {
       console.error("Failed to delete session:", err);
-    } finally {
-      setTerminatingSessionId(null);
     }
   };
 
@@ -414,7 +405,6 @@ export function SessionSidebar() {
                       group={group}
                       activeSessionId={activeSessionId}
                       isCollapsed={collapsedRepoIds.has(group.repoId)}
-                      terminatingSessionId={terminatingSessionId}
                       archivingSessionId={archivingSessionId}
                       loadingMoreSessions={
                         loadingMoreSessionsByRepo[group.repoId] === true

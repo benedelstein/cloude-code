@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState, type ReactNode } from "react";
 import {
   cleanup,
   fireEvent,
@@ -59,6 +59,21 @@ afterEach(() => {
   cleanup();
 });
 
+function TestSessionListProvider({ children }: { children: ReactNode }) {
+  const [groups, setGroups] = useState(mocks.groups);
+  mocks.groups = groups;
+  mocks.removeSession.mockImplementation((sessionId: string) => {
+    setGroups((currentGroups) =>
+      currentGroups.map((group) => ({
+        ...group,
+        sessions: group.sessions.filter((session) => session.id !== sessionId),
+      })),
+    );
+  });
+
+  return children;
+}
+
 function makeSession(overrides: Partial<SessionSummary>): SessionSummary {
   return {
     id: overrides.id ?? "session-1",
@@ -80,7 +95,11 @@ function renderSidebar() {
     createElement(
       SidebarProvider,
       null,
-      createElement(SessionSidebar),
+      createElement(
+        TestSessionListProvider,
+        null,
+        createElement(SessionSidebar),
+      ),
     ),
   );
 }
@@ -221,5 +240,28 @@ describe("SessionSidebar", () => {
     expect(mocks.push).toHaveBeenCalledWith(
       "/dashboard?repoId=100&repoFullName=acme%2Frepo",
     );
+  });
+
+  it("optimistically removes deleted sessions without showing a row spinner", async () => {
+    mocks.deleteSession.mockReturnValue(new Promise(() => undefined));
+    renderSidebar();
+
+    const openRow = screen.getByText("Open PR").closest("li");
+    expect(openRow).toBeTruthy();
+    const rowMenuTrigger = within(openRow as HTMLElement).getByRole("button");
+    fireEvent.pointerDown(rowMenuTrigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(rowMenuTrigger, { pointerType: "mouse" });
+    fireEvent.click(rowMenuTrigger);
+    fireEvent.keyDown(rowMenuTrigger, { key: "Enter", code: "Enter" });
+    fireEvent.click(await screen.findByText("Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(mocks.removeSession).toHaveBeenCalledWith("open-pr");
+    expect(screen.queryByText("Open PR")).toBeNull();
+    expect(screen.queryByLabelText("Deleting")).toBeNull();
   });
 });
