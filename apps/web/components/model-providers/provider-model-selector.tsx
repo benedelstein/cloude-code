@@ -76,7 +76,7 @@ export function ProviderModelSelector({
         <button
           type="button"
           disabled={disabled}
-          className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50 cursor-pointer"
+          className="flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50 cursor-pointer"
         >
           {hasSelection && (
             <Image

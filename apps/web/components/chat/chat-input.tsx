@@ -242,7 +242,7 @@ export function ChatInput({
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
           {selectedProvider && selectedModel && onProviderModelChange && (
-            <div className="min-w-[8rem] max-w-[18rem] shrink">
+            <div className="min-w-0 max-w-[18rem] shrink">
               <ProviderModelSelector
                 selectedProvider={selectedProvider}
                 selectedModel={selectedModel}
