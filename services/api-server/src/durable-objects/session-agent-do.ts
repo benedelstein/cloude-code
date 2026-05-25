@@ -63,6 +63,8 @@ import { SessionProvisionService } from "./lib/SessionProvisionService";
 import { SessionChatDispatchService } from "./lib/SessionChatDispatchService";
 import { SessionProviderConnectionService } from "./lib/SessionProviderConnectionService";
 import { SessionGitProxyService } from "./lib/SessionGitProxyService";
+import { SessionsRepository } from "@/repositories/sessions.repository";
+import { SessionSummaryPersistence } from "./lib/session-summary-persistence";
 
 interface InitRequest {
   sessionId: string;
@@ -92,6 +94,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly serverStateRepository: ServerStateRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
   private readonly attachmentService: SessionAttachmentProvider;
+  private readonly sessionsRepository: SessionsRepository;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
   /** GitHub App installation access token (in-memory cache, persisted in SQLite) */
@@ -104,6 +107,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly chatDispatchService: SessionChatDispatchService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
+  private readonly sessionSummaryPersistence: SessionSummaryPersistence;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -144,6 +148,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       apiKey: this.env.SPRITES_API_KEY,
     });
     this.attachmentService = new AttachmentProvider(this.env.DB);
+    this.sessionsRepository = new SessionsRepository(this.env.DB);
+    this.sessionSummaryPersistence = new SessionSummaryPersistence({
+      repository: this.sessionsRepository,
+      getSessionId: () => this.serverState.sessionId,
+      logger: this.logger,
+    });
 
     migrateAll(sql, ctx.storage, [
       this.messageRepository,
@@ -173,6 +183,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       broadcastMessage: (msg: ServerMessage) => this.broadcastMessage(msg),
       synthesizeStatus: () => this.synthesizeStatus(),
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
+      updateWorkingState: (state) =>
+        this.sessionSummaryPersistence.persistWorkingState(state),
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -231,6 +243,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       setGitHubInstallationToken: (token) => {
         this.githubInstallationToken = token;
       },
+      updatePushedBranch: (branch) =>
+        this.sessionSummaryPersistence.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
     });
@@ -663,7 +677,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     return failure({ code: "EDITOR_DISABLED", message: "Editor feature is temporarily disabled" });
   }
 
-  setPullRequest(data: SetPullRequestRequest): void {
+  async setPullRequest(data: SetPullRequestRequest): Promise<void> {
     this.updatePartialState({
       pullRequest: {
         url: data.url,
@@ -671,14 +685,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         state: data.state,
       },
     });
+    await this.sessionSummaryPersistence.persistPullRequest(data);
   }
 
-  updatePullRequest(data: UpdatePullRequestRequest): HandleUpdatePullRequestResult {
+  async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
     const pullRequest = this.state.pullRequest;
     if (!pullRequest) {
       return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
     this.updatePartialState({ pullRequest: { ...pullRequest, state: data.state } });
+    await this.sessionSummaryPersistence.persistPullRequestState(data.state);
     return success(undefined);
   }
 

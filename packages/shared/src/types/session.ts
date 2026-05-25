@@ -19,7 +19,11 @@ export const SessionStatus = z.enum([
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
-export type PullRequestState = "open" | "merged" | "closed";
+export const PullRequestState = z.enum(["open", "merged", "closed"]);
+export type PullRequestState = z.infer<typeof PullRequestState>;
+
+export const SessionWorkingState = z.enum(["idle", "responding"]);
+export type SessionWorkingState = z.infer<typeof SessionWorkingState>;
 
 /** Generic provider auth state for the frontend. */
 export type ProviderAuthRequired = {
@@ -141,6 +145,13 @@ export const SessionSummary = z.object({
   repoFullName: z.string(),
   title: z.string().nullable(),
   archived: z.boolean(),
+  workingState: SessionWorkingState,
+  pushedBranch: z.string().nullable(),
+  pullRequest: z.object({
+    url: z.string(),
+    number: z.number(),
+    state: PullRequestState,
+  }).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastMessageAt: z.string().nullable(),

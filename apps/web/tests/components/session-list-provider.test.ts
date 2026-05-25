@@ -33,6 +33,9 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     repoFullName: overrides.repoFullName ?? "acme/repo",
     title: overrides.title ?? "Session title",
     archived: overrides.archived ?? false,
+    workingState: overrides.workingState ?? "idle",
+    pushedBranch: overrides.pushedBranch ?? null,
+    pullRequest: overrides.pullRequest ?? null,
     createdAt: overrides.createdAt ?? "2026-05-22T00:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-05-22T00:00:00.000Z",
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T00:00:00.000Z",
@@ -290,6 +293,53 @@ describe("SessionListProvider", () => {
       });
 
       expect(result.current.groups[0]?.sessions[0]?.title).toBeNull();
+    });
+  });
+
+  describe("updateSessionSidebarState", () => {
+    it("updates status fields for the matching session only", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              repoId: 1,
+              sessions: [
+                makeSession({ id: "a" }),
+                makeSession({ id: "b" }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        result.current.updateSessionSidebarState("a", {
+          workingState: "responding",
+          pushedBranch: "cloude/sidebar-abcd",
+          pullRequest: {
+            url: "https://github.com/acme/repo/pull/7",
+            number: 7,
+            state: "open",
+          },
+        });
+      });
+
+      const sessions = result.current.groups[0]?.sessions ?? [];
+      expect(sessions.find((s) => s.id === "a")).toMatchObject({
+        workingState: "responding",
+        pushedBranch: "cloude/sidebar-abcd",
+        pullRequest: {
+          number: 7,
+          state: "open",
+        },
+      });
+      expect(sessions.find((s) => s.id === "b")).toMatchObject({
+        workingState: "idle",
+        pushedBranch: null,
+        pullRequest: null,
+      });
     });
   });
 

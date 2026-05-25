@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GitPullRequest, GitMerge, GitPullRequestClosed, GitBranch, ExternalLink, Copy, Check } from "lucide-react";
+import { ExternalLink, Copy, Check } from "lucide-react";
 import { createPullRequest, getPullRequestStatus } from "@/lib/client-api";
-import type { ClientState, PullRequestState } from "@repo/shared";
+import type { ClientState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PrStatusIcon } from "@/components/chat/pr-status-icon";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -125,58 +125,5 @@ export function BranchBar({
         </div>
       </div>
     </div>
-  );
-}
-
-function PrStatusIcon({
-  pullRequestUrl,
-  pullRequestState,
-}: {
-  pullRequestUrl: string | null;
-  pullRequestState: PullRequestState | null;
-}) {
-  if (pullRequestState === "merged") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center justify-center shrink-0 rounded bg-purple-500/15 p-1">
-            <GitMerge className="h-3.5 w-3.5 text-purple-500" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Merged</TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  if (pullRequestState === "closed") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center justify-center shrink-0 rounded bg-danger/15 p-1">
-            <GitPullRequestClosed className="h-3.5 w-3.5 text-danger" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Closed</TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  if (pullRequestUrl) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex items-center justify-center shrink-0 rounded bg-green-500/15 p-1">
-            <GitPullRequest className="h-3.5 w-3.5 text-green-500" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Open</TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center justify-center shrink-0 rounded bg-foreground/10 p-1">
-      <GitBranch className="h-3.5 w-3.5 text-foreground-muted" />
-    </span>
   );
 }

@@ -12,7 +12,9 @@ import {
 } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
-import { formatRelativeTime } from "./utils";
+import { useNow } from "@/lib/use-now";
+import { PrStatusIcon } from "@/components/chat/pr-status-icon";
+import { formatCompactRelativeTime } from "./utils";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -62,15 +64,38 @@ interface SessionRowProps {
   session: SessionSummary;
   isActive: boolean;
   isActionLoading: boolean;
+  nowMs: number;
   onCloseMobileSidebar: () => void;
   onArchive: (sessionId: string) => void;
   onRequestDelete: (sessionId: string) => void;
+}
+
+function SessionStatusSlot({ session }: { session: SessionSummary }) {
+  if (session.workingState === "responding") {
+    return (
+      <span role="status" aria-label="Responding">
+        <LoadingSpinner className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
+      </span>
+    );
+  }
+
+  if (session.pullRequest || session.pushedBranch) {
+    return (
+      <PrStatusIcon
+        pullRequestUrl={session.pullRequest?.url ?? null}
+        pullRequestState={session.pullRequest?.state ?? null}
+      />
+    );
+  }
+
+  return <span aria-hidden="true" className="block h-5 w-5" />;
 }
 
 function SessionRow({
   session,
   isActive,
   isActionLoading,
+  nowMs,
   onCloseMobileSidebar,
   onArchive,
   onRequestDelete,
@@ -87,10 +112,13 @@ function SessionRow({
         className="cursor-pointer h-auto min-h-[38px] py-1.5"
       >
         <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <span className="truncate text-sm flex-1">{displayTitle}</span>
-            <span className="text-xs font-mono text-foreground-muted shrink-0">
-              {formatRelativeTime(timestamp)}
+          <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center">
+              <SessionStatusSlot session={session} />
+            </span>
+            <span className="truncate text-sm">{displayTitle}</span>
+            <span className="justify-self-end text-xs font-mono text-foreground-muted transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
+              {formatCompactRelativeTime(timestamp, nowMs)}
             </span>
           </div>
         </Link>
@@ -135,6 +163,7 @@ interface RepoGroupBlockProps {
   terminatingSessionId: string | null;
   archivingSessionId: string | null;
   loadingMoreSessions: boolean;
+  nowMs: number;
   onCloseMobileSidebar: () => void;
   onArchive: (sessionId: string) => void;
   onRequestDelete: (sessionId: string) => void;
@@ -147,6 +176,7 @@ function RepoGroupBlock({
   terminatingSessionId,
   archivingSessionId,
   loadingMoreSessions,
+  nowMs,
   onCloseMobileSidebar,
   onArchive,
   onRequestDelete,
@@ -167,6 +197,7 @@ function RepoGroupBlock({
               terminatingSessionId === session.id
               || archivingSessionId === session.id
             }
+            nowMs={nowMs}
             onCloseMobileSidebar={onCloseMobileSidebar}
             onArchive={onArchive}
             onRequestDelete={onRequestDelete}
@@ -207,9 +238,10 @@ function SessionListSkeleton() {
               isActive={false}
               className="cursor-default h-auto min-h-[38px] py-1.5"
             >
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-3 w-10 shrink-0" />
+              <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 min-w-0" />
+                <Skeleton className="h-3 w-7 justify-self-end" />
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -225,6 +257,7 @@ export function SessionSidebar() {
   const params = useParams();
   const { setOpenMobile } = useSidebar();
   const activeSessionId = params?.sessionId as string | undefined;
+  const nowMs = useNow(15_000);
   const {
     groups,
     loading: sessionsLoading,
@@ -327,6 +360,7 @@ export function SessionSidebar() {
                       loadingMoreSessions={
                         loadingMoreSessionsByRepo[group.repoId] === true
                       }
+                      nowMs={nowMs}
                       onCloseMobileSidebar={closeMobileSidebar}
                       onArchive={handleArchiveSession}
                       onRequestDelete={setDeleteDialogSessionId}

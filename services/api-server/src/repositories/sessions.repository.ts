@@ -1,7 +1,9 @@
 import type {
+  PullRequestState,
   SessionAccessBlockReason,
   SessionRepoGroup,
   SessionSummary,
+  SessionWorkingState,
 } from "@repo/shared";
 import { fromSqliteDatetime } from "@/lib/utils/utils";
 import {
@@ -29,6 +31,11 @@ interface SessionRow {
   archived: number;
   access_blocked_at: string | null;
   access_block_reason: SessionAccessBlockReason | null;
+  working_state: SessionWorkingState;
+  pushed_branch: string | null;
+  pull_request_url: string | null;
+  pull_request_number: number | null;
+  pull_request_state: PullRequestState | null;
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
@@ -45,12 +52,25 @@ export interface SessionAccessRow {
 }
 
 function rowToSummary(row: SessionRow): SessionSummary {
+  const pullRequest = row.pull_request_url
+    && row.pull_request_number !== null
+    && row.pull_request_state
+    ? {
+        url: row.pull_request_url,
+        number: row.pull_request_number,
+        state: row.pull_request_state,
+      }
+    : null;
+
   return {
     id: row.id,
     repoId: row.repo_id,
     repoFullName: row.repo_full_name,
     title: row.title,
     archived: row.archived === 1,
+    workingState: row.working_state,
+    pushedBranch: row.pushed_branch,
+    pullRequest,
     createdAt: fromSqliteDatetime(row.created_at),
     updatedAt: fromSqliteDatetime(row.updated_at),
     lastMessageAt: fromSqliteDatetime(row.last_message_at),
@@ -130,6 +150,91 @@ export class SessionsRepository {
         `UPDATE sessions SET last_message_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
       )
       .bind(sessionId)
+      .run();
+  }
+
+  async updateWorkingState(
+    sessionId: string,
+    workingState: SessionWorkingState,
+  ): Promise<void> {
+    await this.database
+      .prepare(`UPDATE sessions SET working_state = ? WHERE id = ?`)
+      .bind(workingState, sessionId)
+      .run();
+  }
+
+  async updatePushedBranch(
+    sessionId: string,
+    pushedBranch: string,
+  ): Promise<void> {
+    await this.database
+      .prepare(`UPDATE sessions SET pushed_branch = ? WHERE id = ?`)
+      .bind(pushedBranch, sessionId)
+      .run();
+  }
+
+  async setPullRequest(
+    sessionId: string,
+    pullRequest: {
+      url: string;
+      number: number;
+      state: PullRequestState;
+    },
+  ): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+         SET pull_request_url = ?,
+             pull_request_number = ?,
+             pull_request_state = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        pullRequest.url,
+        pullRequest.number,
+        pullRequest.state,
+        sessionId,
+      )
+      .run();
+  }
+
+  async updatePullRequestState(
+    sessionId: string,
+    state: PullRequestState,
+  ): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions SET pull_request_state = ? WHERE id = ? AND pull_request_number IS NOT NULL`,
+      )
+      .bind(state, sessionId)
+      .run();
+  }
+
+  async updatePullRequestFromWebhook(params: {
+    installationId: number;
+    repoId: number;
+    number: number;
+    url: string;
+    state: PullRequestState;
+  }): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+         SET pull_request_url = ?,
+             pull_request_number = ?,
+             pull_request_state = ?
+         WHERE installation_id = ?
+           AND repo_id = ?
+           AND pull_request_number = ?`,
+      )
+      .bind(
+        params.url,
+        params.number,
+        params.state,
+        params.installationId,
+        params.repoId,
+        params.number,
+      )
       .run();
   }
 

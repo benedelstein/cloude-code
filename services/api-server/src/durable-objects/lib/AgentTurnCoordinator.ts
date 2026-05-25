@@ -4,6 +4,7 @@ import type {
   Logger,
   ServerMessage,
   SessionStatus,
+  SessionWorkingState,
 } from "@repo/shared";
 import type { Env } from "@/types";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -35,6 +36,7 @@ export interface AgentTurnCoordinatorDeps {
   broadcastMessage: (message: ServerMessage) => void;
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
+  updateWorkingState: (state: SessionWorkingState) => void;
 }
 
 /**
@@ -59,6 +61,7 @@ export class AgentTurnCoordinator {
   private readonly broadcastMessage: (message: ServerMessage) => void;
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
+  private readonly updateWorkingState: (state: SessionWorkingState) => void;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -88,6 +91,7 @@ export class AgentTurnCoordinator {
     this.broadcastMessage = deps.broadcastMessage;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
+    this.updateWorkingState = deps.updateWorkingState;
   }
 
   /**
@@ -165,6 +169,7 @@ export class AgentTurnCoordinator {
     this.updateServerState({
       activeUserMessageId: userMessageId,
     });
+    this.updateWorkingState("responding");
     this.updatePartialState({
       activeTurn: { userMessageId },
       lastError: null,
@@ -496,6 +501,7 @@ export class AgentTurnCoordinator {
         : null,
     });
     this.updatePartialState({ activeTurn: null });
+    this.updateWorkingState("idle");
     this.lastSeenChunkSequence = null;
   }
 

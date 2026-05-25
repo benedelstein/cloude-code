@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
 import { CreateSessionRequest } from "../../src/types/api/sessions";
+import { SessionSummary } from "../../src/types/session";
 
 describe("session api schemas", () => {
   it("limits create-session initial attachments to five", () => {
@@ -20,6 +21,46 @@ describe("session api schemas", () => {
         { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
         () => attachmentId,
       ),
+    })).toThrow();
+  });
+
+  it("accepts valid sidebar summary state", () => {
+    expect(() => SessionSummary.parse({
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      repoId: 1,
+      repoFullName: "owner/repo",
+      title: "Fix sidebar",
+      archived: false,
+      workingState: "responding",
+      pushedBranch: "cloude/fix-sidebar-abcd",
+      pullRequest: {
+        url: "https://github.com/owner/repo/pull/12",
+        number: 12,
+        state: "open",
+      },
+      createdAt: "2026-05-22T00:00:00.000Z",
+      updatedAt: "2026-05-22T00:00:00.000Z",
+      lastMessageAt: "2026-05-22T00:00:00.000Z",
+    })).not.toThrow();
+  });
+
+  it("rejects invalid sidebar summary states", () => {
+    expect(() => SessionSummary.parse({
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      repoId: 1,
+      repoFullName: "owner/repo",
+      title: "Fix sidebar",
+      archived: false,
+      workingState: "busy",
+      pushedBranch: null,
+      pullRequest: {
+        url: "https://github.com/owner/repo/pull/12",
+        number: 12,
+        state: "draft",
+      },
+      createdAt: "2026-05-22T00:00:00.000Z",
+      updatedAt: "2026-05-22T00:00:00.000Z",
+      lastMessageAt: null,
     })).toThrow();
   });
 });

@@ -25,6 +25,10 @@ interface SessionListContextValue {
   addSession: (session: SessionSummary) => void;
   removeSession: (sessionId: string) => void;
   updateTitle: (sessionId: string, title: string | null) => void;
+  updateSessionSidebarState: (
+    sessionId: string,
+    state: Pick<SessionSummary, "workingState" | "pushedBranch" | "pullRequest">,
+  ) => void;
   loadMoreRepos: () => Promise<void>;
   loadMoreSessionsForRepo: (repoId: number) => Promise<void>;
   refresh: () => void;
@@ -189,6 +193,22 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const updateSessionSidebarState = useCallback((
+    sessionId: string,
+    state: Pick<SessionSummary, "workingState" | "pushedBranch" | "pullRequest">,
+  ) => {
+    setGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        sessions: group.sessions.map((session) =>
+          session.id === sessionId
+            ? { ...session, ...state }
+            : session,
+        ),
+      })),
+    );
+  }, []);
+
   return (
     <SessionListContext.Provider
       value={{
@@ -200,6 +220,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         addSession,
         removeSession,
         updateTitle,
+        updateSessionSidebarState,
         loadMoreRepos,
         loadMoreSessionsForRepo,
         refresh: fetchInitial,
