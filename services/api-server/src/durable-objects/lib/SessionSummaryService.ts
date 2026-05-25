@@ -20,7 +20,7 @@ interface SessionSummaryRepository {
   ): Promise<void>;
 }
 
-export class SessionSummaryPersistence {
+export class SessionSummaryService {
   constructor(
     private readonly params: {
       repository: SessionSummaryRepository;

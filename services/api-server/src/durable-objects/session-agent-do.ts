@@ -64,7 +64,7 @@ import { SessionChatDispatchService } from "./lib/SessionChatDispatchService";
 import { SessionProviderConnectionService } from "./lib/SessionProviderConnectionService";
 import { SessionGitProxyService } from "./lib/SessionGitProxyService";
 import { SessionsRepository } from "@/repositories/sessions.repository";
-import { SessionSummaryPersistence } from "./lib/session-summary-persistence";
+import { SessionSummaryService } from "./lib/SessionSummaryService";
 
 interface InitRequest {
   sessionId: string;
@@ -107,7 +107,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
   private readonly chatDispatchService: SessionChatDispatchService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
-  private readonly sessionSummaryPersistence: SessionSummaryPersistence;
+  private readonly sessionSummaryService: SessionSummaryService;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -149,7 +149,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
     });
     this.attachmentService = new AttachmentProvider(this.env.DB);
     this.sessionsRepository = new SessionsRepository(this.env.DB);
-    this.sessionSummaryPersistence = new SessionSummaryPersistence({
+    this.sessionSummaryService = new SessionSummaryService({
       repository: this.sessionsRepository,
       getSessionId: () => this.serverState.sessionId,
       logger: this.logger,
@@ -184,7 +184,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       synthesizeStatus: () => this.synthesizeStatus(),
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
       updateWorkingState: (state) =>
-        this.sessionSummaryPersistence.persistWorkingState(state),
+        this.sessionSummaryService.persistWorkingState(state),
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -244,7 +244,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         this.githubInstallationToken = token;
       },
       updatePushedBranch: (branch) =>
-        this.sessionSummaryPersistence.persistPushedBranch(branch),
+        this.sessionSummaryService.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
     });
@@ -685,7 +685,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
         state: data.state,
       },
     });
-    await this.sessionSummaryPersistence.persistPullRequest(data);
+    await this.sessionSummaryService.persistPullRequest(data);
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
@@ -694,7 +694,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> {
       return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
     this.updatePartialState({ pullRequest: { ...pullRequest, state: data.state } });
-    await this.sessionSummaryPersistence.persistPullRequestState(data.state);
+    await this.sessionSummaryService.persistPullRequestState(data.state);
     return success(undefined);
   }
 
