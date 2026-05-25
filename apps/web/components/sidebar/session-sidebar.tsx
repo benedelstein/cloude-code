@@ -140,7 +140,7 @@ function SessionRow({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               showOnHover
-              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-control-background! hover:bg-sidebar-control-background!"
+              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-control-background! hover:bg-control-background!"
             >
               <MoreHorizontal className="h-3 w-3" />
             </SidebarMenuAction>
@@ -211,7 +211,7 @@ function RepoGroupBlock({
         <button
           type="button"
           aria-label={`New session in ${repoName}`}
-          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-sidebar-control-background hover:text-foreground"
+          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-muted hover:bg-control-background hover:text-foreground"
           onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
         >
           <Plus className="h-3.5 w-3.5" />
