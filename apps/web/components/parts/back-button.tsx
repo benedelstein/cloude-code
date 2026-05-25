@@ -15,7 +15,7 @@ const BackButton = React.forwardRef<HTMLButtonElement, BackButtonProps>(
       ref={ref}
       type={type}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-md p-2 text-foreground-muted transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:bg-muted focus-visible:text-foreground disabled:pointer-events-none",
+        "inline-flex h-8 w-8 items-center justify-center rounded-md p-2 text-foreground-secondary transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:bg-muted focus-visible:text-foreground disabled:pointer-events-none",
         className
       )}
       aria-label={label}

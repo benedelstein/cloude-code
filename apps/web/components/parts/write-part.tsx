@@ -38,7 +38,7 @@ function WriteContent({ content, filename }: { content: string; filename: string
   return (
     <div className="my-1 rounded-md border border-border overflow-hidden bg-background text-xs">
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/30">
-        <span className="font-mono text-foreground-muted truncate">{filename}</span>
+        <span className="font-mono text-foreground-secondary truncate">{filename}</span>
       </div>
       <pre className="max-h-72 overflow-auto px-3 py-2 font-mono leading-relaxed whitespace-pre">
         {content}

@@ -6,6 +6,7 @@ import {
   useCloudflareAgent,
   type UseCloudflareAgentReturn,
 } from "@/hooks/use-cloudflare-agent";
+import { useSessionList } from "@/components/providers/session-list-provider";
 import { consumeInitialPendingUserMessage } from "@/lib/session-pending-user-message";
 import { useSessionWebSocketToken } from "@/hooks/use-session-websocket-token";
 import type { SessionStatus, SessionWebSocketTokenResponse } from "@repo/shared";
@@ -92,6 +93,21 @@ function SessionProviderWithToken({
       console.error("Session error:", error);
     },
   });
+  const { updateSessionSidebarState } = useSessionList();
+
+  useEffect(() => {
+    updateSessionSidebarState(sessionId, {
+      workingState: session.isResponding ? "responding" : "idle",
+      pushedBranch: session.pushedBranch,
+      pullRequest: session.pullRequestState,
+    });
+  }, [
+    session.isResponding,
+    session.pushedBranch,
+    session.pullRequestState,
+    sessionId,
+    updateSessionSidebarState,
+  ]);
 
   return (
     <SessionContext.Provider value={session}>

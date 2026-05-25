@@ -201,6 +201,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const endedAt = typeof metadata.endedAt === "number" ? metadata.endedAt : undefined;
   const createdAt = messageCreatedAt(message);
   const copyText = getMessageText(message);
+  const canCopyMessage = copyText.length > 0 && (isUser || isSettled);
   const copyMessageText = async () => {
     if (!copyText || !navigator.clipboard) { return; }
     await navigator.clipboard.writeText(copyText);
@@ -274,12 +275,12 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
               )}
 
               {isAborted && (
-                <p className="mt-1.5 text-xs text-foreground-muted italic">Interrupted</p>
+                <p className="mt-1.5 text-xs text-foreground-secondary italic">Interrupted</p>
               )}
               <MessageHoverActions
                 isUser={isUser}
                 createdAt={createdAt}
-                canCopy={copyText.length > 0}
+                canCopy={canCopyMessage}
                 copied={copied}
                 onCopy={() => void copyMessageText()}
               />

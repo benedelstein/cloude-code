@@ -31,7 +31,7 @@ export function ImageAttachButton({ onFiles, disabled }: ImageAttachButtonProps)
             type="button"
             disabled={disabled}
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground-muted hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground-secondary hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ImagePlus className="h-4 w-4" />
           </button>

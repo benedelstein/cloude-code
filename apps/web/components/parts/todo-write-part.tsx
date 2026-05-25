@@ -40,11 +40,11 @@ export function TodoToolPart({ action }: TodoToolPartProps) {
                 const status = todoStatus(todo);
                 const content = todoContent(todo);
                 return (
-                  <li key={index} className="flex items-baseline gap-2">
-                    <span className="text-foreground-muted">
+                  <li key={index} className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-2">
+                    <span className="flex h-4 w-4 items-center justify-center text-foreground-secondary">
                       {status === "completed" ? "✓" : status === "in_progress" ? "→" : "•"}
                     </span>
-                    <span className={clsx(status === "completed" && "text-foreground-muted line-through")}>
+                    <span className={clsx("min-w-0", status === "completed" && "text-foreground-secondary line-through")}>
                       {content}
                     </span>
                   </li>

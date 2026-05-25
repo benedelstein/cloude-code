@@ -1,26 +1,37 @@
-export function formatRelativeTime(dateString: string): string {
-  const now = new Date();
-  const date = new Date(dateString);
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const WEEK_MS = 7 * DAY_MS;
+const MONTH_MS = 30 * DAY_MS;
 
-  const timeStr = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+export function repoDisplayName(repoFullName: string): string {
+  return repoFullName.split("/")[1] || repoFullName;
+}
 
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const startOfDateDay = new Date(date);
-  startOfDateDay.setHours(0, 0, 0, 0);
+export function formatCompactRelativeTime(
+  dateString: string,
+  nowMs = Date.now(),
+): string {
+  const dateMs = new Date(dateString).getTime();
+  if (!Number.isFinite(dateMs)) { return ""; }
 
-  const diffDays = Math.round(
-    (startOfToday.getTime() - startOfDateDay.getTime()) / (24 * 60 * 60 * 1000)
-  );
-
-  if (diffDays === 0) { return timeStr; }
-  if (diffDays === 1) { return "Yesterday"; }
-  return date.toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-  });
+  const diffMs = Math.max(0, nowMs - dateMs);
+  if (diffMs < MINUTE_MS) {
+    const seconds = Math.floor(diffMs / SECOND_MS);
+    return seconds === 0 ? "now" : `${seconds}s`;
+  }
+  if (diffMs < HOUR_MS) {
+    return `${Math.floor(diffMs / MINUTE_MS)}m`;
+  }
+  if (diffMs < DAY_MS) {
+    return `${Math.floor(diffMs / HOUR_MS)}h`;
+  }
+  if (diffMs < WEEK_MS) {
+    return `${Math.floor(diffMs / DAY_MS)}d`;
+  }
+  if (diffMs < MONTH_MS) {
+    return `${Math.floor(diffMs / WEEK_MS)}w`;
+  }
+  return `${Math.floor(diffMs / MONTH_MS)}mo`;
 }

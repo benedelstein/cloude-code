@@ -69,7 +69,7 @@ export function SessionTodoListSection({
             <button
               type="button"
               onClick={() => setIsExpanded((currentValue) => !currentValue)}
-              className="mt-1 text-xs font-medium text-foreground-muted transition-colors hover:text-foreground"
+              className="mt-1 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Show less" : `Show all (${todoItems.length})`}
@@ -147,7 +147,7 @@ function TodoRow({
           {todo.content}
         </p>
         {todo.activeForm ? (
-          <p className="wrap-break-word text-[11px] text-foreground-muted transition-colors duration-200">
+          <p className="wrap-break-word text-[11px] text-foreground-secondary transition-colors duration-200">
             {todo.activeForm}
           </p>
         ) : null}
@@ -179,7 +179,7 @@ function TodoStatusIcon({
       <span
         className={cn(
           TODO_STATUS_ICON_CLASS_NAME,
-          "mt-0.5 border-border bg-background-secondary text-foreground-muted",
+          "mt-0.5 border-border bg-background-secondary text-foreground-secondary",
         )}
       >
         <Loader2 className="h-3 w-3 animate-spin" />

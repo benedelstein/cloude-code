@@ -153,7 +153,7 @@ export function SessionPlanSection({
             <button
               type="button"
               onClick={() => void copyPlan()}
-              className="absolute right-16 top-6 -translate-y-1/2 rounded-md p-2 text-foreground-muted opacity-70 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus:outline-none focus-visible:bg-muted focus-visible:text-foreground"
+              className="absolute right-16 top-6 -translate-y-1/2 rounded-md p-2 text-foreground-secondary opacity-70 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus:outline-none focus-visible:bg-muted focus-visible:text-foreground"
               title={isPlanCopied ? "Copied!" : "Copy plan"}
             >
               {isPlanCopied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
@@ -182,7 +182,7 @@ function PlanMarkdown({
   return (
     <div
       className={cn(
-        "prose prose-sm max-w-none text-foreground-muted",
+        "prose prose-sm max-w-none text-foreground-secondary",
         variant === "preview"
           ? "[&_h1]:mb-3 [&_h1]:text-[15px] [&_h1]:font-semibold [&_h1]:leading-6 [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:leading-6 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:leading-5 [&_ol]:my-3 [&_ol]:pl-5 [&_p]:my-2 [&_p]:text-[13px] [&_p]:leading-6 [&_ul]:my-3 [&_ul]:pl-5"
           : "[&_h1]:text-4xl [&_h1]:leading-tight [&_h2]:text-3xl [&_h2]:leading-tight [&_h3]:text-2xl",

@@ -48,7 +48,7 @@ export function AppRightSidebarProvider({
   const [enabled, setEnabled] = useState(defaultEnabled);
   const [open, setOpenState] = useState(defaultOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [widthPx, setWidthPxState] = useState(APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX);
+  const [widthPx, setWidthPxState] = useState(getStoredRightSidebarWidth);
   const [isResizing, setIsResizing] = useState(false);
 
   useLayoutEffect(() => {
@@ -58,20 +58,6 @@ export function AppRightSidebarProvider({
   useLayoutEffect(() => {
     setRightSidebarCssWidth(widthPx);
   }, [widthPx]);
-
-  useLayoutEffect(() => {
-    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!storedWidth) {
-      return;
-    }
-
-    const parsedWidth = Number.parseInt(storedWidth, 10);
-    if (Number.isFinite(parsedWidth)) {
-      const clampedWidth = clampRightSidebarWidth(parsedWidth);
-      setWidthPxState(clampedWidth);
-      setRightSidebarCssWidth(clampedWidth);
-    }
-  }, []);
 
   const setOpen = useCallback((nextOpen: boolean) => {
     setOpenState(nextOpen);
@@ -149,6 +135,26 @@ function clampRightSidebarWidth(widthPx: number): number {
     APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
     Math.max(APP_RIGHT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
   );
+}
+
+function getStoredRightSidebarWidth(): number {
+  if (typeof window === "undefined") {
+    return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
+  }
+
+  try {
+    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!storedWidth) {
+      return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
+    }
+
+    const parsedWidth = Number.parseInt(storedWidth, 10);
+    return Number.isFinite(parsedWidth)
+      ? clampRightSidebarWidth(parsedWidth)
+      : APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
+  } catch {
+    return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
+  }
 }
 
 function setRightSidebarCssWidth(widthPx: number) {

@@ -42,13 +42,13 @@ export function ExpandableSummary({
             "text-[13px]",
             canExpand && expanded
               ? "text-foreground"
-              : "text-foreground-muted hover:text-foreground",
+              : "text-foreground-secondary hover:text-foreground",
           ),
           variant === "plain" && clsx(
             "text-[13px] transition-colors",
             canExpand && expanded
               ? "text-foreground"
-              : "text-foreground-muted",
+              : "text-foreground-secondary",
           ),
           canExpand && "cursor-pointer",
           !canExpand && "cursor-default",

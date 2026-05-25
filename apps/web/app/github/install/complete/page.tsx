@@ -29,7 +29,7 @@ export default function GithubInstallCompletePage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
-      <p className="text-sm text-foreground-muted">Finishing GitHub setup...</p>
+      <p className="text-sm text-foreground-secondary">Finishing GitHub setup...</p>
     </main>
   );
 }

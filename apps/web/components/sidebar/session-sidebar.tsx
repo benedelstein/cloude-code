@@ -1,17 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { usePathname, useRouter, useParams } from "next/navigation";
-import { Archive, Trash2, MoreHorizontal, Edit, Settings } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronRight,
+  CirclePlus,
+  FolderGit2,
+  Plus,
+  Settings,
+} from "lucide-react";
 import {
   deleteSession,
   archiveSession,
   type SessionRepoGroup,
-  type SessionSummary,
 } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessionList } from "@/components/providers/session-list-provider";
-import { formatRelativeTime } from "./utils";
+import { useNow } from "@/lib/use-now";
+import { repoDisplayName } from "./utils";
+import { SessionRow } from "./session-row";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,21 +29,13 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SIDEBAR_HEADER_HEIGHT_CLASS,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,144 +50,128 @@ import Link from "next/link";
 
 const SESSION_LOADING_SKELETON_COUNT = 3;
 const SHOW_MORE_BUTTON_CLASSES =
-  "w-full text-left px-2 py-1.5 text-xs text-foreground-muted hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer transition-colors disabled:cursor-default disabled:opacity-60";
-
-function repoDisplayName(repoFullName: string): string {
-  return repoFullName.split("/")[1] || repoFullName;
-}
-
-interface SessionRowProps {
-  session: SessionSummary;
-  isActive: boolean;
-  isActionLoading: boolean;
-  onCloseMobileSidebar: () => void;
-  onArchive: (sessionId: string) => void;
-  onRequestDelete: (sessionId: string) => void;
-}
-
-function SessionRow({
-  session,
-  isActive,
-  isActionLoading,
-  onCloseMobileSidebar,
-  onArchive,
-  onRequestDelete,
-}: SessionRowProps) {
-  const displayTitle =
-    session.title || repoDisplayName(session.repoFullName) || session.id.slice(0, 8);
-  const timestamp = session.lastMessageAt || session.updatedAt;
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={isActive}
-        className="cursor-pointer h-auto min-h-[38px] py-1.5"
-      >
-        <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <span className="truncate text-sm flex-1">{displayTitle}</span>
-            <span className="text-xs font-mono text-foreground-muted shrink-0">
-              {formatRelativeTime(timestamp)}
-            </span>
-          </div>
-        </Link>
-      </SidebarMenuButton>
-      {isActionLoading ? (
-        <SidebarMenuAction className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1">
-          <LoadingSpinner className="h-3 w-3 shrink-0" />
-        </SidebarMenuAction>
-      ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction
-              showOnHover
-              className="top-1/2! -translate-y-1/2 aspect-auto! w-auto! px-1.5 py-1 rounded-md bg-sidebar-border! hover:bg-[#c9d1db]!"
-            >
-              <MoreHorizontal className="h-3 w-3" />
-            </SidebarMenuAction>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={() => onArchive(session.id)}>
-              <Archive className="h-4 w-4" />
-              Archive
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => onRequestDelete(session.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </SidebarMenuItem>
-  );
-}
+  "w-full text-left px-2 py-1.5 text-xs text-foreground-secondary hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer transition-colors disabled:cursor-default disabled:opacity-60";
+const REPO_HEADER_ACTION_CLASSES =
+  "flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-secondary opacity-0 transition-none hover:bg-control-background hover:text-foreground focus-visible:opacity-100 group-hover/repo:opacity-100 group-focus-within/repo:opacity-100";
 
 interface RepoGroupBlockProps {
   group: SessionRepoGroup;
   activeSessionId: string | undefined;
-  terminatingSessionId: string | null;
+  isCollapsed: boolean;
   archivingSessionId: string | null;
   loadingMoreSessions: boolean;
+  nowMs: number;
   onCloseMobileSidebar: () => void;
   onArchive: (sessionId: string) => void;
   onRequestDelete: (sessionId: string) => void;
+  onToggleCollapsed: (repoId: number) => void;
   onLoadMoreSessions: (repoId: number) => void;
+  onNewSessionForRepo: (repoId: number, repoFullName: string) => void;
 }
 
 function RepoGroupBlock({
   group,
   activeSessionId,
-  terminatingSessionId,
+  isCollapsed,
   archivingSessionId,
   loadingMoreSessions,
+  nowMs,
   onCloseMobileSidebar,
   onArchive,
   onRequestDelete,
+  onToggleCollapsed,
   onLoadMoreSessions,
+  onNewSessionForRepo,
 }: RepoGroupBlockProps) {
+  const repoName = repoDisplayName(group.repoFullName);
+
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="px-2 pt-2 pb-1 text-xs font-medium text-foreground-muted truncate">
-        {repoDisplayName(group.repoFullName)}
-      </div>
-      <SidebarMenu>
-        {group.sessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            isActive={session.id === activeSessionId}
-            isActionLoading={
-              terminatingSessionId === session.id
-              || archivingSessionId === session.id
-            }
-            onCloseMobileSidebar={onCloseMobileSidebar}
-            onArchive={onArchive}
-            onRequestDelete={onRequestDelete}
-          />
-        ))}
-      </SidebarMenu>
-      {group.nextSessionCursor !== null && (
+      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_3rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground">
         <button
           type="button"
-          className={SHOW_MORE_BUTTON_CLASSES}
-          onClick={() => onLoadMoreSessions(group.repoId)}
-          disabled={loadingMoreSessions}
+          className="col-start-1 col-end-3 grid h-full min-w-0 cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-1.5 text-left"
+          aria-expanded={!isCollapsed}
+          onClick={() => onToggleCollapsed(group.repoId)}
         >
-          {loadingMoreSessions ? (
-            <span className="flex items-center gap-1.5">
-              <LoadingSpinner className="h-3 w-3" />
-              Loading…
-            </span>
-          ) : (
-            "Show more"
-          )}
+          <span className="flex h-5 w-5 items-center justify-center">
+            <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate">{repoName}</span>
+            <ChevronRight
+              aria-hidden="true"
+              className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+            />
+          </span>
         </button>
-      )}
+        <div className="col-start-3 flex items-center justify-end gap-1.5">
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <a
+                href={`https://github.com/${group.repoFullName}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${repoName} on GitHub`}
+                className={REPO_HEADER_ACTION_CLASSES}
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>Open {repoName} on GitHub</TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`New session in ${repoName}`}
+                className={REPO_HEADER_ACTION_CLASSES}
+                onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>New session in {repoName}</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <SidebarMenu>
+            {group.sessions.map((session) => (
+              <SessionRow
+                key={session.id}
+                session={session}
+                isActive={session.id === activeSessionId}
+                isActionLoading={archivingSessionId === session.id}
+                nowMs={nowMs}
+                onCloseMobileSidebar={onCloseMobileSidebar}
+                onArchive={onArchive}
+                onRequestDelete={onRequestDelete}
+              />
+            ))}
+          </SidebarMenu>
+          {group.nextSessionCursor !== null && (
+            <button
+              type="button"
+              className={SHOW_MORE_BUTTON_CLASSES}
+              onClick={() => onLoadMoreSessions(group.repoId)}
+              disabled={loadingMoreSessions}
+            >
+              {loadingMoreSessions ? (
+                <span className="flex items-center gap-1.5">
+                  <LoadingSpinner className="h-3 w-3" />
+                  Loading…
+                </span>
+              ) : (
+                "Show more"
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -203,11 +187,12 @@ function SessionListSkeleton() {
           <SidebarMenuItem key={i}>
             <SidebarMenuButton
               isActive={false}
-              className="cursor-default h-auto min-h-[38px] py-1.5"
+              className="cursor-default h-auto min-h-8 py-1"
             >
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-3 w-10 shrink-0" />
+              <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 min-w-0" />
+                <Skeleton className="h-3 w-7 justify-self-end" />
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -217,13 +202,19 @@ function SessionListSkeleton() {
   );
 }
 
-export function SessionSidebar() {
+interface SessionSidebarProps {
+  className?: string;
+  resizeHandle?: ReactNode;
+}
+
+export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps) {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
   const { setOpenMobile } = useSidebar();
   const activeSessionId = params?.sessionId as string | undefined;
+  const nowMs = useNow(15_000);
   const {
     groups,
     loading: sessionsLoading,
@@ -235,9 +226,9 @@ export function SessionSidebar() {
     loadMoreSessionsForRepo,
   } = useSessionList();
 
-  const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
   const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null);
   const [deleteDialogSessionId, setDeleteDialogSessionId] = useState<string | null>(null);
+  const [collapsedRepoIds, setCollapsedRepoIds] = useState<Set<number>>(() => new Set());
 
   const navigate = (path: string) => {
     router.push(path);
@@ -246,6 +237,26 @@ export function SessionSidebar() {
 
   const closeMobileSidebar = () => {
     setOpenMobile(false);
+  };
+
+  const toggleRepoCollapsed = (repoId: number) => {
+    setCollapsedRepoIds((current) => {
+      const next = new Set(current);
+      if (next.has(repoId)) {
+        next.delete(repoId);
+      } else {
+        next.add(repoId);
+      }
+      return next;
+    });
+  };
+
+  const newSessionForRepo = (repoId: number, repoFullName: string) => {
+    const params = new URLSearchParams({
+      repoId: String(repoId),
+      repoFullName,
+    });
+    navigate(`/dashboard?${params.toString()}`);
   };
 
   const handleArchiveSession = async (sessionId: string) => {
@@ -264,24 +275,22 @@ export function SessionSidebar() {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
-    setTerminatingSessionId(sessionId);
     setDeleteDialogSessionId(null);
     if (sessionId === activeSessionId) {
       navigate("/dashboard");
     }
+    removeSession(sessionId);
     try {
       await deleteSession(sessionId);
-      removeSession(sessionId);
     } catch (err) {
       console.error("Failed to delete session:", err);
-    } finally {
-      setTerminatingSessionId(null);
     }
   };
 
   return (
     <>
-      <Sidebar collapsible="offcanvas" variant="floating">
+      <Sidebar collapsible="offcanvas" variant="floating" className={className}>
+        {resizeHandle}
         <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right border-b border-sidebar-border p-0`}>
           <div className="flex flex-row items-center justify-end h-full">
             {/* <div className="flex h-8 w-8 text-2xl">☁️</div> */}
@@ -298,7 +307,7 @@ export function SessionSidebar() {
                   tooltip="New session"
                 >
                   <Link href="/dashboard" onClick={closeMobileSidebar}>
-                    <Edit className="h-4 w-4" />
+                    <CirclePlus className="h-4 w-4" />
                     <span>New session</span>
                   </Link>
                 </SidebarMenuButton>
@@ -306,12 +315,11 @@ export function SessionSidebar() {
             </SidebarMenu>
           </SidebarGroup>
           <SidebarGroup className="pt-0">
-            <SidebarGroupLabel>Sessions</SidebarGroupLabel>
             <SidebarGroupContent>
               {sessionsLoading ? (
                 <SessionListSkeleton />
               ) : groups.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-foreground-muted">
+                <p className="px-2 py-6 text-center text-xs text-foreground-secondary">
                   No sessions yet
                 </p>
               ) : (
@@ -321,15 +329,18 @@ export function SessionSidebar() {
                       key={group.repoId}
                       group={group}
                       activeSessionId={activeSessionId}
-                      terminatingSessionId={terminatingSessionId}
+                      isCollapsed={collapsedRepoIds.has(group.repoId)}
                       archivingSessionId={archivingSessionId}
                       loadingMoreSessions={
                         loadingMoreSessionsByRepo[group.repoId] === true
                       }
+                      nowMs={nowMs}
                       onCloseMobileSidebar={closeMobileSidebar}
                       onArchive={handleArchiveSession}
                       onRequestDelete={setDeleteDialogSessionId}
+                      onToggleCollapsed={toggleRepoCollapsed}
                       onLoadMoreSessions={loadMoreSessionsForRepo}
+                      onNewSessionForRepo={newSessionForRepo}
                     />
                   ))}
                   {nextRepoCursor !== null && (

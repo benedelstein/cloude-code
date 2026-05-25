@@ -76,7 +76,7 @@ export function ProviderModelSelector({
         <button
           type="button"
           disabled={disabled}
-          className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer"
+          className="flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50 cursor-pointer"
         >
           {hasSelection && (
             <Image
@@ -87,7 +87,7 @@ export function ProviderModelSelector({
               className="h-3 w-3 shrink-0"
             />
           )}
-          <span className={cn("truncate", !hasSelection && "text-foreground-muted text-bold")}>
+          <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary text-bold")}>
             {displayLabel}
           </span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />

@@ -37,7 +37,7 @@ export function MessageHoverActions({
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground-muted"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground-secondary"
           title={copied ? "Copied" : "Copy message"}
           aria-label={copied ? "Message copied" : "Copy message"}
         >

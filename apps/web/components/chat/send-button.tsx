@@ -55,7 +55,7 @@ export function SendButton({
           type="button"
           disabled={isSendDisabled}
           onClick={onTap}
-          className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             isStreaming
               ? "bg-danger text-white hover:bg-danger/90"
               : "bg-accent text-accent-foreground hover:bg-accent-hover"

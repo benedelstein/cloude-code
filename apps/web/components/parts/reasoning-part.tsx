@@ -32,10 +32,10 @@ export function ReasoningPart({ part, isStreaming }: ReasoningPartProps) {
   return (
     <ExpandableSummary
       icon={<Sparkles className="w-3.5 h-3.5" />}
-      summary={<span className="text-foreground-muted italic">{label}</span>}
+      summary={<span className="text-foreground-secondary italic">{label}</span>}
       detail={
         text.length > 0
-          ? <p className="my-1 text-sm text-foreground-muted whitespace-pre-wrap">{text}</p>
+          ? <p className="my-1 text-sm text-foreground-secondary whitespace-pre-wrap">{text}</p>
           : undefined
       }
     />

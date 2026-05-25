@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../attachments";
-import { SessionStatus, AgentMode, AgentSettingsInput, SessionSummary } from "../session";
+import {
+  AgentMode,
+  AgentSettingsInput,
+  PullRequestState,
+  SessionStatus,
+  SessionSummary,
+} from "../session";
 
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({
@@ -11,7 +17,7 @@ export const SessionInfoResponse = z.object({
   pushedBranch: z.string().optional(),
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
-  pullRequestState: z.enum(["open", "merged", "closed"]).optional(),
+  pullRequestState: PullRequestState.optional(),
   editorUrl: z.string().optional(),
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;

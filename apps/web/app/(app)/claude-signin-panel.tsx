@@ -51,10 +51,10 @@ export function ClaudeSigninPanel({
               {title}
             </h2>
           </div>
-          <p className="mt-1 text-xs text-foreground-muted">
+          <p className="mt-1 text-xs text-foreground-secondary">
             {description}
           </p>
-          <ol className="mt-3 space-y-1 text-xs text-foreground-muted list-decimal list-inside">
+          <ol className="mt-3 space-y-1 text-xs text-foreground-secondary list-decimal list-inside">
             <li>
               Click the button below and authorize Claude in a new tab.
             </li>
@@ -78,7 +78,7 @@ export function ClaudeSigninPanel({
           )}
           {claude.awaitingCode && (
             <div className="mt-4">
-              <label className="block text-xs text-foreground-muted mb-2">
+              <label className="block text-xs text-foreground-secondary mb-2">
                 Paste the code from Claude:
               </label>
               <input

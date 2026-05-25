@@ -18,6 +18,7 @@ export interface SessionGitProxyServiceDeps {
   broadcastMessage: (msg: ServerMessage) => void;
   getGitHubInstallationToken: () => string | null;
   setGitHubInstallationToken: (token: string) => void;
+  updatePushedBranch: (branch: string) => void;
   assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   enforceSessionAccessBlocked: () => Promise<void>;
 }
@@ -38,6 +39,7 @@ export class SessionGitProxyService {
   private readonly broadcastMessage: SessionGitProxyServiceDeps["broadcastMessage"];
   private readonly getGitHubInstallationToken: () => string | null;
   private readonly setGitHubInstallationToken: (token: string) => void;
+  private readonly updatePushedBranch: (branch: string) => void;
   private readonly assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   private readonly enforceSessionAccessBlocked: () => Promise<void>;
   /** Shared secret for authenticating sprite → worker git-proxy requests. */
@@ -53,6 +55,7 @@ export class SessionGitProxyService {
     this.broadcastMessage = deps.broadcastMessage;
     this.getGitHubInstallationToken = deps.getGitHubInstallationToken;
     this.setGitHubInstallationToken = deps.setGitHubInstallationToken;
+    this.updatePushedBranch = deps.updatePushedBranch;
     this.assertSessionRepoAccess = deps.assertSessionRepoAccess;
     this.enforceSessionAccessBlocked = deps.enforceSessionAccessBlocked;
     this.gitProxySecret = this.secretRepository.get("git_proxy_secret");
@@ -89,6 +92,7 @@ export class SessionGitProxyService {
       const clientState = this.getClientState();
       if (result.pushedBranch !== clientState.pushedBranch) {
         this.updatePartialState({ pushedBranch: result.pushedBranch });
+        this.updatePushedBranch(result.pushedBranch);
         this.broadcastMessage({
           type: "branch.pushed",
           branch: result.pushedBranch,
