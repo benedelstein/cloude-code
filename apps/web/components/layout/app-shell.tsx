@@ -254,6 +254,7 @@ function AppShellLayout({
       <SessionSidebar
         className={cn(
           "[&_[data-sidebar=sidebar]]:relative",
+          "p-1",
           isLeftSidebarResizing && "transition-none duration-0",
         )}
         resizeHandle={
@@ -307,6 +308,7 @@ function AppShellLayout({
           reserveSpace={false}
           className={cn(
             "[&_[data-sidebar=sidebar]]:relative [&_[data-sidebar=sidebar]]:bg-sidebar",
+            "p-1",
             isRightSidebarResizing && "transition-none duration-0",
           )}
         >
