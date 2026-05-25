@@ -126,7 +126,7 @@ function SessionRow({
             <span className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center">
               <SessionStatusSlot session={session} />
             </span>
-            <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-focus-within/menu-item:col-end-4">
+            <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-hover/menu-item:pr-9 group-focus-within/menu-item:col-end-4 group-focus-within/menu-item:pr-9">
               {displayTitle}
             </span>
             <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-muted transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
