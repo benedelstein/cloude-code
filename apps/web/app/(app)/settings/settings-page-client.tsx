@@ -3,14 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import {
-  ArrowUpRight,
-  CreditCard,
-  Github,
-  LogOut,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { Github, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
 import { Button } from "@/components/ui/button";
@@ -77,23 +70,7 @@ export function SettingsPageClient() {
   return (
     <div className="h-full overflow-y-auto px-4 py-14 md:py-16">
       <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
-        <header className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground-muted">
-            <Sparkles className="h-4 w-4" />
-            Account settings
-          </div>
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Settings
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-foreground-muted">
-              This space is ready for provider connections, billing, account
-              controls, and workspace preferences as they come online.
-            </p>
-          </div>
-        </header>
-
-        <section className="rounded-2xl border border-border bg-background p-5 shadow-shadow shadow-sm">
+        <section className="rounded-2xl border border-border bg-background p-5">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
               {loading ? (
@@ -130,7 +107,7 @@ export function SettingsPageClient() {
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-center md:w-auto"
+              className="w-full justify-center shadow-none md:w-auto"
               onClick={() => void logout()}
             >
               <LogOut className="h-4 w-4" />
@@ -182,19 +159,6 @@ export function SettingsPageClient() {
             );
           })}
         </SettingsSection>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <EmptyStateCard
-            icon={<CreditCard className="h-5 w-5" />}
-            title="Billing"
-            description="Plan details, invoices, and payment methods will appear here."
-          />
-          <EmptyStateCard
-            icon={<ShieldCheck className="h-5 w-5" />}
-            title="Account controls"
-            description="Security, sessions, and workspace preferences are queued up next."
-          />
-        </div>
       </main>
     </div>
   );
@@ -215,7 +179,7 @@ function SettingsSection({
         <h2 className="text-sm font-medium text-foreground">{title}</h2>
         <p className="text-sm text-foreground-muted">{description}</p>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-shadow shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border bg-background">
         {children}
       </div>
     </section>
@@ -284,7 +248,7 @@ function ProviderConnectionRow({
         type="button"
         variant={connected ? "outline" : "default"}
         size="sm"
-        className="w-full md:w-auto"
+        className="w-full shadow-none md:w-auto"
         disabled={handle.loading || disconnecting}
         onClick={connected ? onDisconnect : onConnect}
       >
@@ -348,31 +312,5 @@ function SettingsRow({
         {actionLabel}
       </span>
     </div>
-  );
-}
-
-function EmptyStateCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-dashed border-border bg-background/70 p-5">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-foreground-muted">
-        {icon}
-      </div>
-      <h2 className="text-sm font-medium text-foreground">{title}</h2>
-      <p className="mt-1 text-sm leading-6 text-foreground-muted">
-        {description}
-      </p>
-      <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-foreground-tertiary">
-        Planned
-        <ArrowUpRight className="h-3.5 w-3.5" />
-      </div>
-    </section>
   );
 }
