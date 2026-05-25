@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   Archive,
+  ChevronRight,
   Trash2,
   LogOut,
   ChevronsUpDown,
@@ -209,7 +210,11 @@ function RepoGroupBlock({
           onClick={() => onToggleCollapsed(group.repoId)}
         >
           <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{repoName}</span>
+          <span className="min-w-0 truncate">{repoName}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+          />
         </button>
         <button
           type="button"
