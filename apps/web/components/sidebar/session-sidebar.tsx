@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, type ReactNode } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
+  ArrowUpRight,
   ChevronRight,
   LogOut,
   ChevronsUpDown,
@@ -21,7 +22,6 @@ import { useSessionList } from "@/components/providers/session-list-provider";
 import { useNow } from "@/lib/use-now";
 import { repoDisplayName } from "./utils";
 import { SessionRow } from "./session-row";
-import { GithubIcon } from "@/components/github-icon";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -115,7 +115,7 @@ function RepoGroupBlock({
             />
           </span>
         </button>
-        <div className="col-start-3 flex items-center justify-end gap-0.5">
+        <div className="col-start-3 flex items-center justify-end gap-1.5">
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
               <a
@@ -125,7 +125,7 @@ function RepoGroupBlock({
                 aria-label={`Open ${repoName} on GitHub`}
                 className={REPO_HEADER_ACTION_CLASSES}
               >
-                <GithubIcon className="h-3.5 w-3.5" />
+                <ArrowUpRight className="h-3.5 w-3.5" />
               </a>
             </TooltipTrigger>
             <TooltipContent>Open {repoName} on GitHub</TooltipContent>
