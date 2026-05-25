@@ -21,6 +21,7 @@ import { useSessionList } from "@/components/providers/session-list-provider";
 import { useNow } from "@/lib/use-now";
 import { repoDisplayName } from "./utils";
 import { SessionRow } from "./session-row";
+import { GithubIcon } from "@/components/github-icon";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -60,6 +61,8 @@ import Link from "next/link";
 const SESSION_LOADING_SKELETON_COUNT = 3;
 const SHOW_MORE_BUTTON_CLASSES =
   "w-full text-left px-2 py-1.5 text-xs text-foreground-secondary hover:text-foreground hover:bg-sidebar-accent rounded-md cursor-pointer transition-colors disabled:cursor-default disabled:opacity-60";
+const REPO_HEADER_ACTION_CLASSES =
+  "flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground-secondary opacity-0 transition-none hover:bg-control-background hover:text-foreground focus-visible:opacity-100 group-hover/repo:opacity-100 group-focus-within/repo:opacity-100";
 
 interface RepoGroupBlockProps {
   group: SessionRepoGroup;
@@ -94,7 +97,7 @@ function RepoGroupBlock({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground">
+      <div className="group/repo grid h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_3rem] items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground">
         <button
           type="button"
           className="col-start-1 col-end-3 grid h-full min-w-0 cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-1.5 text-left"
@@ -112,19 +115,35 @@ function RepoGroupBlock({
             />
           </span>
         </button>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={`New session in ${repoName}`}
-              className="col-start-3 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center justify-self-end rounded text-foreground-secondary opacity-0 transition-none hover:bg-control-background hover:text-foreground focus-visible:opacity-100 group-hover/repo:opacity-100 group-focus-within/repo:opacity-100"
-              onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>New session in {repoName}</TooltipContent>
-        </Tooltip>
+        <div className="col-start-3 flex items-center justify-end gap-0.5">
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <a
+                href={`https://github.com/${group.repoFullName}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${repoName} on GitHub`}
+                className={REPO_HEADER_ACTION_CLASSES}
+              >
+                <GithubIcon className="h-3.5 w-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>Open {repoName} on GitHub</TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`New session in ${repoName}`}
+                className={REPO_HEADER_ACTION_CLASSES}
+                onClick={() => onNewSessionForRepo(group.repoId, group.repoFullName)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>New session in {repoName}</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
