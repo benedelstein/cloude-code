@@ -117,7 +117,7 @@ function SessionRow({
       <SidebarMenuButton
         asChild
         isActive={isActive}
-        className="cursor-pointer h-auto min-h-[38px] py-1.5"
+        className="cursor-pointer h-auto min-h-8 py-1"
       >
         <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
           <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
@@ -272,7 +272,7 @@ function SessionListSkeleton() {
           <SidebarMenuItem key={i}>
             <SidebarMenuButton
               isActive={false}
-              className="cursor-default h-auto min-h-[38px] py-1.5"
+              className="cursor-default h-auto min-h-8 py-1"
             >
               <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
                 <Skeleton className="h-4 w-4" />
