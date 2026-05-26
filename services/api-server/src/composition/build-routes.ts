@@ -15,13 +15,10 @@ import { createInternalRoutes } from "@/modules/session-agent/routes/internal.ro
 import { createSessionsRoutes } from "@/modules/sessions/routes/sessions.routes";
 import { SessionsService } from "@/modules/sessions/services/sessions.service";
 import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
-import {
-  assertSessionRepoAccess,
-} from "@/modules/sessions/services/session-repo-access.service";
+import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { isSessionOwnedByUser } from "@/modules/sessions/services/session-access.service";
 import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/services/session-provider-connection.service";
 import { verifySessionWebSocketToken } from "@/modules/sessions/services/session-websocket-token.service";
-import { createDebugRoutes } from "@/modules/sprites/routes/debug.routes";
 import { createWebhooksRoutes } from "@/modules/webhooks/routes/webhooks.routes";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
@@ -65,7 +62,7 @@ export function buildAgentRoutes() {
 }
 
 export function buildAuthRoutes() {
-  return createAuthRoutes({
+  const authRoutes = createAuthRoutes({
     authMiddleware,
     createGitHubClient(env, logger) {
       const github = new GitHubAppService(env, logger);
@@ -77,17 +74,25 @@ export function buildAuthRoutes() {
       };
     },
   });
-}
 
-export function buildClaudeAuthRoutes() {
-  return createClaudeAuthRoutes({
-    authMiddleware,
-    requestSessionProviderConnectionRefresh,
-  });
-}
+  // provider auth routes are prefixed under /auth/ as well.
+  authRoutes.route(
+    "/",
+    createOpenAIAuthRoutes({
+      authMiddleware,
+      requestSessionProviderConnectionRefresh,
+    }),
+  );
 
-export function buildDebugRoutes() {
-  return createDebugRoutes();
+  authRoutes.route(
+    "/",
+    createClaudeAuthRoutes({
+      authMiddleware,
+      requestSessionProviderConnectionRefresh,
+    }),
+  );
+
+  return authRoutes;
 }
 
 export function buildGitProxyRoutes() {
@@ -100,13 +105,6 @@ export function buildInternalRoutes() {
 
 export function buildModelsRoutes() {
   return createModelsRoutes({ authMiddleware });
-}
-
-export function buildOpenAIAuthRoutes() {
-  return createOpenAIAuthRoutes({
-    authMiddleware,
-    requestSessionProviderConnectionRefresh,
-  });
 }
 
 export function buildReposRoutes() {
@@ -124,7 +122,8 @@ export function buildSessionsRoutes() {
         env,
         attachmentProvider: new AttachmentService(env.DB),
         repoAccessProviders: createRepoAccessProviders(env),
-        createPullRequestGitHubProvider: () => createGitHubAppService(env, "sessions.service.ts"),
+        createPullRequestGitHubProvider: () =>
+          createGitHubAppService(env, "sessions.service.ts"),
       }),
   });
 }

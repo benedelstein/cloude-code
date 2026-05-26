@@ -9,7 +9,7 @@ import type {
 } from "../providers/github-webhook.providers";
 import { mapPullRequestWebhookState } from "./pull-request-webhook.service";
 
-export class GitHubWebhookHandlers {
+export class GitHubWebhookService {
   private readonly app: App;
   private readonly installationProvider: GitHubWebhookInstallationProvider;
   private readonly sessionProvider: GitHubWebhookSessionProvider;

@@ -8,7 +8,11 @@ import type {
 import type { MiddlewareHandler } from "hono";
 import type { AuthUser } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
-import { listBranchesRoute, listReposRoute, searchReposRoute } from "./repos.schema";
+import {
+  listBranchesRoute,
+  listReposRoute,
+  searchReposRoute,
+} from "./repos.schema";
 
 type ReposRouteEnv = {
   Bindings: Env;
@@ -20,11 +24,14 @@ export interface ReposRouteDeps {
   createReposService(env: Env): ReposRouteService;
 }
 
-type ReposRouteServiceResult<T> = Result<T, {
-  domain: "repos";
-  status: 400;
-  message: string;
-}>;
+type ReposRouteServiceResult<T> = Result<
+  T,
+  {
+    domain: "repos";
+    status: 400;
+    message: string;
+  }
+>;
 
 export interface ReposRouteService {
   listRepos(params: {
@@ -49,67 +56,69 @@ export interface ReposRouteService {
   }): Promise<ReposRouteServiceResult<ListBranchesResponse>>;
 }
 
-export function createReposRoutes(deps: ReposRouteDeps): OpenAPIHono<ReposRouteEnv> {
-const reposRoutes = new OpenAPIHono<ReposRouteEnv>();
+export function createReposRoutes(
+  deps: ReposRouteDeps,
+): OpenAPIHono<ReposRouteEnv> {
+  const reposRoutes = new OpenAPIHono<ReposRouteEnv>();
 
-reposRoutes.use("*", deps.authMiddleware);
+  reposRoutes.use("*", deps.authMiddleware);
 
-reposRoutes.openapi(listReposRoute, async (c) => {
-  const user = c.get("user");
-  const { limit, cursor } = c.req.valid("query");
-  const reposService = deps.createReposService(c.env);
-  const result = await reposService.listRepos({
-    userId: user.id,
-    githubAccessToken: user.githubAccessToken,
-    executionCtx: c.executionCtx,
-    limit,
-    cursor,
+  reposRoutes.openapi(listReposRoute, async (c) => {
+    const user = c.get("user");
+    const { limit, cursor } = c.req.valid("query");
+    const reposService = deps.createReposService(c.env);
+    const result = await reposService.listRepos({
+      userId: user.id,
+      githubAccessToken: user.githubAccessToken,
+      executionCtx: c.executionCtx,
+      limit,
+      cursor,
+    });
+
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, result.error.status);
+    }
+
+    return c.json(result.value, 200);
   });
 
-  if (!result.ok) {
-    return c.json({ error: result.error.message }, result.error.status);
-  }
+  reposRoutes.openapi(searchReposRoute, async (c) => {
+    const user = c.get("user");
+    const { q, limit } = c.req.valid("query");
+    const reposService = deps.createReposService(c.env);
+    const result = await reposService.searchRepos({
+      userId: user.id,
+      githubAccessToken: user.githubAccessToken,
+      executionCtx: c.executionCtx,
+      query: q,
+      limit,
+    });
 
-  return c.json(result.value, 200);
-});
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, result.error.status);
+    }
 
-reposRoutes.openapi(searchReposRoute, async (c) => {
-  const user = c.get("user");
-  const { q, limit } = c.req.valid("query");
-  const reposService = deps.createReposService(c.env);
-  const result = await reposService.searchRepos({
-    userId: user.id,
-    githubAccessToken: user.githubAccessToken,
-    executionCtx: c.executionCtx,
-    query: q,
-    limit,
+    return c.json(result.value, 200);
   });
 
-  if (!result.ok) {
-    return c.json({ error: result.error.message }, result.error.status);
-  }
+  reposRoutes.openapi(listBranchesRoute, async (c) => {
+    const user = c.get("user");
+    const { repoId } = c.req.valid("param");
+    const { limit, cursor } = c.req.valid("query");
+    const reposService = deps.createReposService(c.env);
+    const result = await reposService.listBranches({
+      githubAccessToken: user.githubAccessToken,
+      repoId,
+      limit,
+      cursor,
+    });
 
-  return c.json(result.value, 200);
-});
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, result.error.status);
+    }
 
-reposRoutes.openapi(listBranchesRoute, async (c) => {
-  const user = c.get("user");
-  const { repoId } = c.req.valid("param");
-  const { limit, cursor } = c.req.valid("query");
-  const reposService = deps.createReposService(c.env);
-  const result = await reposService.listBranches({
-    githubAccessToken: user.githubAccessToken,
-    repoId,
-    limit,
-    cursor,
+    return c.json(result.value, 200);
   });
 
-  if (!result.ok) {
-    return c.json({ error: result.error.message }, result.error.status);
-  }
-
-  return c.json(result.value, 200);
-});
-
-return reposRoutes;
+  return reposRoutes;
 }

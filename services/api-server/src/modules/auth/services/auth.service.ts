@@ -57,6 +57,7 @@ interface GitHubOAuthTokenResult {
   user: GitHubOAuthUser;
 }
 
+/** Contract for github functions needed for auth */
 export interface AuthGitHubClient {
   getAuthUrl(state: string): string;
   getInstallUrl(): string;

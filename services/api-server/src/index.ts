@@ -5,12 +5,9 @@ import {
   buildAgentRoutes,
   buildAttachmentsRoutes,
   buildAuthRoutes,
-  buildClaudeAuthRoutes,
-  buildDebugRoutes,
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
-  buildOpenAIAuthRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
   buildWebhooksRoutes,
@@ -51,13 +48,12 @@ app.get("/health", (c) => {
 });
 
 app.route("/agents", buildAgentRoutes());
+// TODO: Consider moving this under /sessions/:sessionId/git-proxy and rolling
+// it into the sessions route tree. Keep existing active session remotes in mind.
 app.route("/git-proxy", buildGitProxyRoutes());
 app.route("/internal", buildInternalRoutes());
-app.route("/_debug", buildDebugRoutes());
 
 app.route("/auth", buildAuthRoutes());
-app.route("/auth", buildOpenAIAuthRoutes()); // TODO: can these go inside auth routes?
-app.route("/auth", buildClaudeAuthRoutes());
 app.route("/models", buildModelsRoutes());
 
 // Protected routes

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Logger } from "@repo/shared";
-import type { GitHubWebhookHandlers } from "../services/github-webhook-handlers.service";
+import type { GitHubWebhookService } from "../services/github-webhook.service";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 
@@ -8,7 +8,7 @@ export interface WebhooksRouteDeps {
   createGitHubWebhookHandler(params: {
     env: Env;
     logger: Logger;
-  }): GitHubWebhookHandlers;
+  }): GitHubWebhookService;
 }
 
 export function createWebhooksRoutes(deps: WebhooksRouteDeps): Hono<{ Bindings: Env }> {

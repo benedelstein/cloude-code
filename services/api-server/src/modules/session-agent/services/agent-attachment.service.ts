@@ -12,10 +12,13 @@ import type { Env } from "@/shared/types";
 
 const ATTACHMENT_RESOLUTION_DOMAIN = "attachment_resolution";
 
-export type ResolveAttachmentsResult = Result<{
-  agentAttachments: AgentInputAttachment[];
-  attachmentRecords: AttachmentRecord[];
-}, AttachmentResolutionError>;
+export type ResolveAttachmentsResult = Result<
+  {
+    agentAttachments: AgentInputAttachment[];
+    attachmentRecords: AttachmentRecord[];
+  },
+  AttachmentResolutionError
+>;
 
 export type AttachmentResolutionError =
   | DomainError<
@@ -41,10 +44,15 @@ interface AttachmentRow {
   bound_at: string | null;
 }
 
-function attachmentResolutionError<Code extends AttachmentResolutionError["code"]>(
+function attachmentResolutionError<
+  Code extends AttachmentResolutionError["code"],
+>(
   code: Code,
   message: string,
-  details: Omit<Extract<AttachmentResolutionError, { code: Code }>, "domain" | "code" | "message">,
+  details: Omit<
+    Extract<AttachmentResolutionError, { code: Code }>,
+    "domain" | "code" | "message"
+  >,
 ): Extract<AttachmentResolutionError, { code: Code }> {
   return {
     domain: ATTACHMENT_RESOLUTION_DOMAIN,
@@ -69,7 +77,10 @@ export class AgentAttachmentService {
    * @param attachmentReferences - references to attachments to resolve.
    * @returns - resolved attachments as data urls for submitting to the agent.
    */
-  async resolveAttachments(sessionId: string, attachmentIds: string[]): Promise<ResolveAttachmentsResult> {
+  async resolveAttachments(
+    sessionId: string,
+    attachmentIds: string[],
+  ): Promise<ResolveAttachmentsResult> {
     if (attachmentIds.length === 0) {
       return success({ agentAttachments: [], attachmentRecords: [] });
     }
@@ -82,11 +93,13 @@ export class AgentAttachmentService {
       this.logger.error("Some attachments not found", {
         fields: { attachmentIds },
       });
-      return failure(attachmentResolutionError(
-        "ATTACHMENTS_NOT_FOUND",
-        "Some attachments not found.",
-        { attachmentIds },
-      ));
+      return failure(
+        attachmentResolutionError(
+          "ATTACHMENTS_NOT_FOUND",
+          "Some attachments not found.",
+          { attachmentIds },
+        ),
+      );
     }
 
     let agentAttachments: AgentInputAttachment[];
@@ -94,19 +107,21 @@ export class AgentAttachmentService {
       agentAttachments = await this.downloadAttachments(attachmentRecords);
     } catch (error) {
       this.logger.error("Failed to resolve attachments for chat", { error });
-      return failure(attachmentResolutionError(
-        "ATTACHMENTS_RESOLUTION_FAILED",
-        "Failed to resolve attachments for chat.",
-        { attachmentIds },
-      ));
+      return failure(
+        attachmentResolutionError(
+          "ATTACHMENTS_RESOLUTION_FAILED",
+          "Failed to resolve attachments for chat.",
+          { attachmentIds },
+        ),
+      );
     }
     return success({ agentAttachments, attachmentRecords });
   }
 
   /**
    * Converts attachment into data urls for submitting to the agent.
-   * @param attachments 
-   * @returns 
+   * @param attachments
+   * @returns
    */
   async downloadAttachments(
     attachments: AttachmentRecord[],
@@ -138,11 +153,10 @@ export class AgentAttachmentService {
       return [];
     }
     const placeholders = attachmentIds.map(() => "?").join(", ");
-    const rows = await this.env.DB
-      .prepare(
-        `SELECT * FROM attachments
+    const rows = await this.env.DB.prepare(
+      `SELECT * FROM attachments
          WHERE session_id = ? AND id IN (${placeholders})`,
-      )
+    )
       .bind(sessionId, ...attachmentIds)
       .all<AttachmentRow>();
     const byId = new Map(
