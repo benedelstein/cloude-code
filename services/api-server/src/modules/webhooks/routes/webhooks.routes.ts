@@ -5,7 +5,7 @@ import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 
 export interface WebhooksRouteDeps {
-  createGitHubWebhookHandler(params: {
+  createGithubWebhookService(params: {
     env: Env;
     logger: Logger;
   }): GitHubWebhookService;
@@ -24,7 +24,7 @@ export function createWebhooksRoutes(deps: WebhooksRouteDeps): Hono<{ Bindings: 
       return c.json({ error: "Missing required GitHub webhook headers" }, 400);
     }
 
-    const webhookHandlers = deps.createGitHubWebhookHandler({
+    const webhookHandlers = deps.createGithubWebhookService({
       env: c.env,
       logger,
     });

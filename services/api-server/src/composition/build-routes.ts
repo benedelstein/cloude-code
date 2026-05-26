@@ -22,7 +22,7 @@ import { verifySessionWebSocketToken } from "@/modules/sessions/services/session
 import { createWebhooksRoutes } from "@/modules/webhooks/routes/webhooks.routes";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import { createGitHubWebhookHandler } from "./providers/create-github-webhook-handler";
+import { createGithubWebhookService } from "./providers/create-github-webhook-handler";
 
 function createGitHubAppService(env: Env, label: string): GitHubAppService {
   return new GitHubAppService(env, createLogger(label));
@@ -137,6 +137,6 @@ export function buildAttachmentsRoutes() {
 
 export function buildWebhooksRoutes() {
   return createWebhooksRoutes({
-    createGitHubWebhookHandler,
+    createGithubWebhookService,
   });
 }
