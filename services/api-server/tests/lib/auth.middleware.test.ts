@@ -4,7 +4,7 @@ import {
   type AuthenticateSession,
   createAuthMiddleware,
 } from "../../src/modules/auth/middleware/auth.middleware";
-import type { AuthUser } from "../../src/modules/auth/auth.types";
+import type { AuthUser } from "../../src/modules/auth/types/auth.types";
 import type { Env } from "../../src/shared/types";
 
 const testUser: AuthUser = {

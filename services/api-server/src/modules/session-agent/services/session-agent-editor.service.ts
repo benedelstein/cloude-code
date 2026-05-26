@@ -2,7 +2,7 @@ import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSprite
 import { buildNetworkPolicy } from "@/shared/integrations/sprites/network-policy";
 import type { Logger } from "@repo/shared";
 import type { Env } from "@/shared/types";
-import type { SecretRepository } from "./repositories/secret-repository";
+import type { SecretRepository } from "../repositories/secret.repository";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
@@ -25,7 +25,7 @@ export type EditorOpenResult = {
 
 export async function handleEditorOpen(context: EditorContext): Promise<EditorOpenResult> {
   const { env, secretRepository } = context;
-  const logger = context.logger.scope("session-agent-editor.ts");
+  const logger = context.logger.scope("session-agent-editor.service.ts");
 
   if (!context.spriteName) {
     return {
@@ -136,7 +136,7 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
 
 export async function handleEditorClose(context: EditorContext): Promise<EditorOpenResult> {
   const { env, secretRepository } = context;
-  const logger = context.logger.scope("session-agent-editor.ts");
+  const logger = context.logger.scope("session-agent-editor.service.ts");
 
   if (!context.spriteName) {
     return {

@@ -4,7 +4,7 @@ import { ClaudeOAuthService } from "./claude-oauth.service";
 import { sha256 } from "@/shared/utils/crypto";
 import { OpenAICodexAuthService } from "./openai-codex-auth.service";
 import type { Env } from "@/shared/types";
-import type { ProviderConnectionStatus } from "./connection-status";
+import type { ProviderConnectionStatus } from "../types/connection-status.types";
 
 const PROVIDER_CREDENTIAL_DOMAIN = "provider_credential";
 const OPENAI_AUTH_CLAIM_KEY = "https://api.openai.com/auth";

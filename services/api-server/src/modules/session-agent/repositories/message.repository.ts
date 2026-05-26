@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import type { Migration, SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./repository.types";
 
 /**
  * Stored message wraps UIMessage with session metadata.

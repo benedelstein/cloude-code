@@ -34,8 +34,8 @@ import {
   type SessionPullRequestGitHubProvider,
   SessionPullRequestServiceError,
 } from "./session-pull-request.service";
-import { requestSessionAccessBlockedCleanup } from "../session-access-block";
-import { mintSessionWebSocketToken } from "../session-websocket-token";
+import { requestSessionAccessBlockedCleanup } from "./session-access-block.service";
+import { mintSessionWebSocketToken } from "./session-websocket-token.service";
 import {
   assertSessionRepoAccess,
   assertUserRepoAccess,

@@ -5,7 +5,7 @@ import { createLogger } from "@/shared/logging";
 import {
   UserProviderCredentialRepository,
   type UserProviderCredentialRecord,
-} from "../repositories/user-provider-credential-repository";
+} from "../repositories/user-provider-credential.repository";
 import type { Env } from "@/shared/types";
 import {
   computeCodeChallenge,

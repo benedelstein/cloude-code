@@ -4,7 +4,7 @@ import { createLogger } from "@/shared/logging";
 
 const TOKEN_TYPE = "session-websocket";
 const TOKEN_TTL_MS = 5 * 60 * 1000;
-const logger = createLogger("session-websocket-token.ts");
+const logger = createLogger("session-websocket-token.service.ts");
 
 const SessionWebSocketTokenPayloadSchema = z.object({
   type: z.literal(TOKEN_TYPE),

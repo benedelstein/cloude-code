@@ -11,15 +11,15 @@ import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import { encrypt } from "@/shared/utils/crypto";
-import type { AuthUser } from "../auth.types";
+import type { AuthUser } from "../types/auth.types";
 import {
   consumeValidOauthState,
   createOauthState,
   peekOauthRedirectOrigin,
 } from "@/shared/services/oauth-state.service";
-import { UserRepository } from "../repositories/user-repository";
-import { UserSessionRepository } from "../repositories/user-session-repository";
-import { validateRedirectOrigin } from "../utils/preview-origin";
+import { UserRepository } from "../repositories/user.repository";
+import { UserSessionRepository } from "../repositories/user-session.repository";
+import { validateRedirectOrigin } from "../utils/preview-origin.util";
 
 type AuthServiceStatus = 400 | 500;
 

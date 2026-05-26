@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Logger } from "@repo/shared";
-import type { GitHubWebhookHandlers } from "../github-webhook-handlers";
+import type { GitHubWebhookHandlers } from "../services/github-webhook-handlers.service";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 

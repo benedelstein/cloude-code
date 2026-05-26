@@ -1,4 +1,4 @@
-import type { Migration, SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./repository.types";
 
 export type SecretKey =
   | "git_proxy_secret"

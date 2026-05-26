@@ -1,6 +1,6 @@
 import type { ClientState, Logger } from "@repo/shared";
 import type { Env } from "@/shared/types";
-import type { ServerState } from "../repositories/server-state-repository";
+import type { ServerState } from "../repositories/server-state.repository";
 
 export interface ProviderConnectionStatus {
   connected: boolean;

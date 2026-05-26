@@ -10,7 +10,7 @@ import type {
 import {
   fallbackPullRequestTitle,
   generatePullRequestText,
-} from "../generate-pull-request-text";
+} from "./generate-pull-request-text.service";
 import type {
   CreatePullRequestInput,
   GitHubAppResult,

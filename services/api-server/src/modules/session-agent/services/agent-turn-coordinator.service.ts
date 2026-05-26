@@ -10,11 +10,11 @@ import type { Env } from "@/shared/types";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { MessageAccumulator } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
-import { applyDerivedStateFromParts } from "../session-agent-derived-state";
-import type { MessageRepository } from "../repositories/message-repository";
-import type { PendingChunkRepository } from "../repositories/pending-chunk-repository";
-import type { LatestPlanRepository } from "../repositories/latest-plan-repository";
-import type { ServerState } from "../repositories/server-state-repository";
+import { applyDerivedStateFromParts } from "./session-agent-derived-state.service";
+import type { MessageRepository } from "../repositories/message.repository";
+import type { PendingChunkRepository } from "../repositories/pending-chunk.repository";
+import type { LatestPlanRepository } from "../repositories/latest-plan.repository";
+import type { ServerState } from "../repositories/server-state.repository";
 import { SpritesError } from "@/shared/integrations/sprites/types";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
 

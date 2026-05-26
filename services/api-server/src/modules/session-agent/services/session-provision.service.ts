@@ -6,7 +6,7 @@ import { buildNetworkPolicy } from "@/shared/integrations/sprites/network-policy
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
 import { configureGitRemote } from "@/shared/integrations/git/git-setup.service";
 import type { GitHubAppResult } from "@/shared/types/github";
-import type { ServerState } from "../repositories/server-state-repository";
+import type { ServerState } from "../repositories/server-state.repository";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 

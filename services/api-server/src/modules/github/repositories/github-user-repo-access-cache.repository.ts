@@ -1,5 +1,5 @@
 import type { Repo } from "@repo/shared";
-import type { GitHubRepositoryData } from "../github-app";
+import type { GitHubRepositoryData } from "../types/github-app.types";
 
 export interface GitHubUserRepoAccessCacheEntry {
   userId: string;

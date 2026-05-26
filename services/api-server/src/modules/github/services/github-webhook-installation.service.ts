@@ -3,9 +3,9 @@ import {
   type GitHubInstallationRepoInput,
   type RepositorySelection,
   type UpsertInstallationInput,
-} from "../repositories/github-installation-repository";
-import { GitHubUserRepoAccessCacheRepository } from "../repositories/github-user-repo-access-cache-repository";
-import { GitHubUserRepoListingSyncRepository } from "../repositories/github-user-repo-listing-sync-repository";
+} from "../repositories/github-installation.repository";
+import { GitHubUserRepoAccessCacheRepository } from "../repositories/github-user-repo-access-cache.repository";
+import { GitHubUserRepoListingSyncRepository } from "../repositories/github-user-repo-listing-sync.repository";
 
 export class GitHubWebhookInstallationService {
   private readonly installations: GitHubInstallationRepository;

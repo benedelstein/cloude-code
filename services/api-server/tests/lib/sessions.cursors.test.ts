@@ -4,7 +4,7 @@ import {
   decodeSessionCursor,
   encodeRepoCursor,
   encodeSessionCursor,
-} from "../../src/modules/sessions/repositories/sessions.cursors";
+} from "../../src/modules/sessions/repositories/sessions-cursors.repository";
 
 describe("repo cursor", () => {
   it("round-trips through encode/decode", () => {

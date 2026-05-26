@@ -1,7 +1,7 @@
 import type { ClientState, Logger, ServerMessage } from "@repo/shared";
 import type { Env } from "@/shared/types";
-import type { SecretRepository } from "../repositories/secret-repository";
-import type { ServerState } from "../repositories/server-state-repository";
+import type { SecretRepository } from "../repositories/secret.repository";
+import type { ServerState } from "../repositories/server-state.repository";
 import type {
   SessionRepoAccessError,
   SessionRepoAccessResult,

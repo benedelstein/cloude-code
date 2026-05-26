@@ -1,5 +1,5 @@
 import type { Env } from "@/shared/types";
-import { AttachmentService } from "./attachment-service";
+import { AttachmentService } from "./attachment.service";
 
 const ATTACHMENT_GC_BATCH_SIZE = 100;
 const ATTACHMENT_GC_MAX_RETRIES = 20;

@@ -2,7 +2,7 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "@/shared/types";
 import type { AuthUser } from "@/shared/types/auth";
-import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "../services/attachment-service";
+import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "../services/attachment.service";
 import {
   uploadAttachmentRoute,
   getAttachmentContentRoute,

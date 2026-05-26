@@ -2,11 +2,11 @@ import { createClaudeAuthRoutes } from "@/modules/ai-auth/routes/claude.routes";
 import { createModelsRoutes } from "@/modules/ai-auth/routes/models.routes";
 import { createOpenAIAuthRoutes } from "@/modules/ai-auth/routes/openai.routes";
 import { createAttachmentsRoutes } from "@/modules/attachments/routes/attachments.routes";
-import { AttachmentService } from "@/modules/attachments/services/attachment-service";
+import { AttachmentService } from "@/modules/attachments/services/attachment.service";
 import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
-import { GitHubAppService } from "@/modules/github/github-app";
+import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { ReposService } from "@/modules/github/services/repo-listing.service";
 import { createReposRoutes } from "@/modules/repos/routes/repos.routes";
 import { createAgentRoutes } from "@/modules/session-agent/routes/agent.routes";
@@ -14,13 +14,13 @@ import { createGitProxyRoutes } from "@/modules/session-agent/routes/git-proxy.r
 import { createInternalRoutes } from "@/modules/session-agent/routes/internal.routes";
 import { createSessionsRoutes } from "@/modules/sessions/routes/sessions.routes";
 import { SessionsService } from "@/modules/sessions/services/sessions.service";
-import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/session-access-block";
+import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
 import {
   assertSessionRepoAccess,
 } from "@/modules/sessions/services/session-repo-access.service";
 import { isSessionOwnedByUser } from "@/modules/sessions/services/session-access.service";
-import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/session-provider-connection";
-import { verifySessionWebSocketToken } from "@/modules/sessions/session-websocket-token";
+import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/services/session-provider-connection.service";
+import { verifySessionWebSocketToken } from "@/modules/sessions/services/session-websocket-token.service";
 import { createDebugRoutes } from "@/modules/sprites/routes/debug.routes";
 import { createWebhooksRoutes } from "@/modules/webhooks/routes/webhooks.routes";
 import { createLogger } from "@/shared/logging";

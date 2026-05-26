@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import type { ClientState, SessionTodo } from "@repo/shared";
 import { extractDerivedStateFromPart } from "@/shared/utils/session-derived-state";
-import type { LatestPlanRepository } from "./repositories/latest-plan-repository";
+import type { LatestPlanRepository } from "../repositories/latest-plan.repository";
 
 export type DerivedStateContext = {
   sessionId: string;

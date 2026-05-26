@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger, ServerMessage } from "@repo/shared";
 import { GitProxyService } from "../../src/shared/integrations/git/git-proxy.service";
 import type { GitProxyTokenProvider } from "../../src/shared/integrations/git/git.providers";
-import { SessionGitProxyService } from "../../src/modules/session-agent/services/SessionGitProxyService";
-import type { SecretRepository } from "../../src/modules/session-agent/repositories/secret-repository";
-import type { ServerState } from "../../src/modules/session-agent/repositories/server-state-repository";
+import { SessionGitProxyService } from "../../src/modules/session-agent/services/session-git-proxy.service";
+import type { SecretRepository } from "../../src/modules/session-agent/repositories/secret.repository";
+import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import type { Env } from "../../src/shared/types";
 
 function createLogger(): Logger {

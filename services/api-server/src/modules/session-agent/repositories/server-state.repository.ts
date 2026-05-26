@@ -1,4 +1,4 @@
-import type { Migration, SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./repository.types";
 import type { StartupToolchainCheckpoint } from "@/shared/types/startup-toolchain";
 
 /**

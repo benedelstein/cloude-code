@@ -11,15 +11,15 @@ import {
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import { Agent, type Connection } from "agents";
-import { MessageRepository } from "./repositories/message-repository";
-import { PendingChunkRepository } from "./repositories/pending-chunk-repository";
-import { SecretRepository } from "./repositories/secret-repository";
-import { LatestPlanRepository } from "./repositories/latest-plan-repository";
+import { MessageRepository } from "./repositories/message.repository";
+import { PendingChunkRepository } from "./repositories/pending-chunk.repository";
+import { SecretRepository } from "./repositories/secret.repository";
+import { LatestPlanRepository } from "./repositories/latest-plan.repository";
 import {
   ServerStateRepository,
   type ServerState,
-} from "./repositories/server-state-repository";
-import { migrateAll } from "./repositories/schema-manager";
+} from "./repositories/server-state.repository";
+import { migrateAll } from "./repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
 import type { AttachmentRecord } from "@/shared/types/attachments";
 import type { UIMessageChunk } from "ai";
@@ -46,13 +46,13 @@ import type {
   LogLevel,
   ChatMessageEvent,
 } from "@repo/shared";
-import { AgentTurnCoordinator } from "./services/AgentTurnCoordinator";
-import { SpriteAgentProcessManager } from "./services/SpriteAgentProcessManager";
-import { SessionProvisionService } from "./services/SessionProvisionService";
-import { SessionChatDispatchService } from "./services/SessionChatDispatchService";
-import { SessionProviderConnectionService } from "./services/SessionProviderConnectionService";
-import { SessionGitProxyService } from "./services/SessionGitProxyService";
-import { SessionSummaryService } from "./services/SessionSummaryService";
+import { AgentTurnCoordinator } from "./services/agent-turn-coordinator.service";
+import { SpriteAgentProcessManager } from "./services/sprite-agent-process-manager.service";
+import { SessionProvisionService } from "./services/session-provision.service";
+import { SessionChatDispatchService } from "./services/session-chat-dispatch.service";
+import { SessionProviderConnectionService } from "./services/session-provider-connection.service";
+import { SessionGitProxyService } from "./services/session-git-proxy.service";
+import { SessionSummaryService } from "./services/session-summary.service";
 import { getSessionAgentRuntime } from "./session-agent.runtime";
 
 interface AgentStateInternalAccess {

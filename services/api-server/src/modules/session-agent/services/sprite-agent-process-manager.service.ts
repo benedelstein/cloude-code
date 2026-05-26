@@ -23,9 +23,9 @@ import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle
 import {
   AgentAttachmentService,
   type AttachmentResolutionError,
-} from "./agent-attachment-service";
-import type { SecretRepository } from "../repositories/secret-repository";
-import type { ServerState } from "../repositories/server-state-repository";
+} from "./agent-attachment.service";
+import type { SecretRepository } from "../repositories/secret.repository";
+import type { ServerState } from "../repositories/server-state.repository";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";

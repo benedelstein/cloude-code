@@ -1,4 +1,4 @@
-import type { Repository, SqlFn } from "./types";
+import type { Repository, SqlFn } from "./repository.types";
 
 interface AppliedRow {
   version: number;

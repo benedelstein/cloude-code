@@ -1,7 +1,7 @@
 import { App } from "octokit";
 import type { Logger } from "@repo/shared";
 import { GitHubWebhookInstallationService } from "@/modules/github/services/github-webhook-installation.service";
-import { GitHubWebhookHandlers } from "@/modules/webhooks/github-webhook-handlers";
+import { GitHubWebhookHandlers } from "@/modules/webhooks/services/github-webhook-handlers.service";
 import type {
   GitHubWebhookInstallationProvider,
 } from "@/modules/webhooks/providers/github-webhook.providers";

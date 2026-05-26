@@ -1,5 +1,5 @@
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
-import { GitHubAppService } from "@/modules/github/github-app";
+import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import type { GitHubWebhookSessionProvider } from "@/modules/webhooks/providers/github-webhook.providers";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
@@ -9,7 +9,7 @@ import {
   blockSessionsForSuspendedInstallation,
   updatePullRequestFromWebhook,
 } from "@/modules/sessions/services/session-access.service";
-import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/session-access-block";
+import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
 
 export function createGitHubWebhookSessionProvider(
   env: Env,

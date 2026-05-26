@@ -1,5 +1,5 @@
 import type { UIMessageChunk } from "ai";
-import type { Migration, SqlFn, Repository } from "./types";
+import type { Migration, SqlFn, Repository } from "./repository.types";
 
 interface PendingChunkRow {
   sequence: number;

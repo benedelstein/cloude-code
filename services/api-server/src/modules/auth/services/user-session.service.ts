@@ -2,7 +2,7 @@ import { decrypt, encrypt } from "@/shared/utils/crypto";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import type { RefreshedToken } from "@/shared/types/github";
-import { UserSessionRepository } from "../repositories/user-session-repository";
+import { UserSessionRepository } from "../repositories/user-session.repository";
 
 const logger = createLogger("user-session.service.ts");
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "@repo/shared";
-import { GitHubAppService } from "../../src/modules/github/github-app";
+import { GitHubAppService } from "../../src/modules/github/services/github-app.service";
 import type { Env } from "../../src/shared/types";
 
 const octokitState = vi.hoisted(() => ({

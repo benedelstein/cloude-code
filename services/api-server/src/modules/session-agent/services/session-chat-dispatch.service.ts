@@ -16,14 +16,14 @@ import type { Env } from "@/shared/types";
 import type { UIMessage } from "ai";
 import type { AttachmentRecord } from "@/shared/types/attachments";
 import { createUserUiMessage, getUserMessageTextContent } from "@/shared/utils/uimessage-utils";
-import { updateSessionHistoryData } from "../session-agent-history";
-import type { MessageRepository } from "../repositories/message-repository";
-import type { ServerState } from "../repositories/server-state-repository";
-import type { AgentTurnCoordinator } from "./AgentTurnCoordinator";
+import { updateSessionHistoryData } from "./session-agent-history.service";
+import type { MessageRepository } from "../repositories/message.repository";
+import type { ServerState } from "../repositories/server-state.repository";
+import type { AgentTurnCoordinator } from "./agent-turn-coordinator.service";
 import type {
   SpriteAgentProcessManager,
   SpriteAgentProcessManagerError,
-} from "./SpriteAgentProcessManager";
+} from "./sprite-agent-process-manager.service";
 
 const CHAT_DISPATCH_DOMAIN = "chat_dispatch";
 

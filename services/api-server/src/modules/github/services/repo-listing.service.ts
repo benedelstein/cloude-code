@@ -1,10 +1,10 @@
 import { type Branch, failure, type ListBranchesResponse, type ListReposResponse, type Result, type SearchReposResponse, success, type Repo } from "@repo/shared";
-import { GitHubAppService, type GitHubRepositoryData } from "../github-app";
+import { GitHubAppService, type GitHubRepositoryData } from "./github-app.service";
 import {
   GitHubUserRepoAccessCacheRepository,
   listingRowToRepo,
-} from "../repositories/github-user-repo-access-cache-repository";
-import { GitHubUserRepoListingSyncRepository } from "../repositories/github-user-repo-listing-sync-repository";
+} from "../repositories/github-user-repo-access-cache.repository";
+import { GitHubUserRepoListingSyncRepository } from "../repositories/github-user-repo-listing-sync.repository";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 

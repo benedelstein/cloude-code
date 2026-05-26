@@ -11,7 +11,7 @@ import {
   decodeSessionCursor,
   encodeRepoCursor,
   encodeSessionCursor,
-} from "./sessions.cursors";
+} from "./sessions-cursors.repository";
 
 export interface CreateSessionParams {
   id: string;

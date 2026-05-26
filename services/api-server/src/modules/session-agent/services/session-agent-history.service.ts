@@ -1,6 +1,6 @@
 import type { Logger } from "@repo/shared";
 import { generateSessionTitle } from "@/shared/utils/generate-session-title";
-import type { MessageRepository } from "./repositories/message-repository";
+import type { MessageRepository } from "../repositories/message.repository";
 
 export async function updateSessionHistoryData(params: {
   database: D1Database;
@@ -18,7 +18,7 @@ export async function updateSessionHistoryData(params: {
     messageContent,
     messageRepository,
   } = params;
-  const logger = baseLogger.scope("session-agent-history.ts");
+  const logger = baseLogger.scope("session-agent-history.service.ts");
 
   try {
     await database

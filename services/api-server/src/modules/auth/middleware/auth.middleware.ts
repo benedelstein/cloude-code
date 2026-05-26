@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "@/shared/types";
 import { UserSessionService } from "../services/user-session.service";
-import type { AuthUser } from "../auth.types";
+import type { AuthUser } from "../types/auth.types";
 
 type AuthEnv = {
   Bindings: Env;

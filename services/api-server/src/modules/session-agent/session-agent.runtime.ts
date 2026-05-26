@@ -8,8 +8,8 @@ import type {
 import type { Env } from "@/shared/types";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { SessionRepoAccessResult } from "@/shared/types/repo-access";
-import type { ProviderCredentialAdapter } from "./services/SpriteAgentProcessManager";
-import type { ProviderConnectionStatus } from "./services/SessionProviderConnectionService";
+import type { ProviderCredentialAdapter } from "./services/sprite-agent-process-manager.service";
+import type { ProviderConnectionStatus } from "./services/session-provider-connection.service";
 
 export interface SessionSummaryRepository {
   updateWorkingState(

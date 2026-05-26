@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from "hono";
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import type { AuthUser } from "../auth.types";
+import type { AuthUser } from "../types/auth.types";
 import {
   AuthService,
   type AuthGitHubClient,

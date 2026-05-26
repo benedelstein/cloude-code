@@ -3,7 +3,7 @@ import type { Env } from "@/shared/types";
 import { createLogger } from "@/shared/logging";
 import { getAgentByName, type Agent } from "agents";
 
-const logger = createLogger("session-access-block.ts");
+const logger = createLogger("session-access-block.service.ts");
 
 /**
  * Triggers access-block cleanup on a session's durable object.

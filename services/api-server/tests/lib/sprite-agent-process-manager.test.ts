@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSettings, ClientState, Logger } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
-import type { ServerState } from "../../src/modules/session-agent/repositories/server-state-repository";
+import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 
 const mockState = vi.hoisted(() => ({
   attachSession: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock("@/shared/integrations/sprites", () => {
   return { WorkersSpriteClient, SpritesError };
 });
 
-vi.mock("../../src/modules/session-agent/services/agent-attachment-service", () => ({
+vi.mock("../../src/modules/session-agent/services/agent-attachment.service", () => ({
   AgentAttachmentService: class {
     resolveAttachments = mockState.resolveAttachments;
   },
@@ -49,7 +49,7 @@ vi.mock("../../src/modules/session-agent/services/agent-attachment-service", () 
 
 import { encodeAgentInput, encodeAgentOutput } from "@repo/shared";
 import { SpritesError } from "../../src/shared/integrations/sprites/types";
-import { SpriteAgentProcessManager } from "../../src/modules/session-agent/services/SpriteAgentProcessManager";
+import { SpriteAgentProcessManager } from "../../src/modules/session-agent/services/sprite-agent-process-manager.service";
 
 function createLogger(): Logger {
   return {

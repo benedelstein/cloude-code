@@ -2,7 +2,7 @@ import type { Logger, ProviderId } from "@repo/shared";
 import { ClaudeOAuthService } from "./claude-oauth.service";
 import { OpenAICodexAuthService } from "./openai-codex-auth.service";
 import type { Env } from "@/shared/types";
-import type { ProviderConnectionStatus } from "./connection-status";
+import type { ProviderConnectionStatus } from "../types/connection-status.types";
 
 export { ClaudeOAuthError } from "./claude-oauth.service";
 

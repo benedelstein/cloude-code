@@ -1,7 +1,7 @@
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
-import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter";
+import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
-import { GitHubAppService } from "@/modules/github/github-app";
+import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentDO } from "@/modules/session-agent/session-agent.do";

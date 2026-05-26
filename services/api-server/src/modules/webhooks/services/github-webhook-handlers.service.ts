@@ -6,8 +6,8 @@ import type {
   GitHubWebhookInstallationProvider,
   GitHubWebhookRepositorySelection,
   GitHubWebhookSessionProvider,
-} from "./providers/github-webhook.providers";
-import { mapPullRequestWebhookState } from "./pull-request-webhook";
+} from "../providers/github-webhook.providers";
+import { mapPullRequestWebhookState } from "./pull-request-webhook.service";
 
 export class GitHubWebhookHandlers {
   private readonly app: App;

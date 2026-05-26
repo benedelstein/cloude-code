@@ -2,8 +2,8 @@ import type { AuthMethod, Logger, DomainError } from "@repo/shared";
 import { type Result, success, failure } from "@repo/shared";
 import { decrypt, encrypt, readStoredCredentialJson } from "@/shared/utils/crypto";
 import { createLogger } from "@/shared/logging";
-import { ProviderAuthAttemptRepository } from "../repositories/provider-auth-attempt-repository";
-import { UserProviderCredentialRepository } from "../repositories/user-provider-credential-repository";
+import { ProviderAuthAttemptRepository } from "../repositories/provider-auth-attempt.repository";
+import { UserProviderCredentialRepository } from "../repositories/user-provider-credential.repository";
 import type { Env } from "@/shared/types";
 
 const OPENAI_CODEX_PROVIDER_ID = "openai-codex";

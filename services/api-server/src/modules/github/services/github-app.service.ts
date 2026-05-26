@@ -6,13 +6,13 @@ import {
 } from "@repo/shared";
 import { decrypt, encrypt } from "@/shared/utils/crypto";
 import type { Env } from "@/shared/types";
-import { GitHubInstallationRepository } from "./repositories/github-installation-repository";
+import { GitHubInstallationRepository } from "../repositories/github-installation.repository";
 import type {
   GitHubInstallationWithRepo,
   RepositorySelection,
-} from "./repositories/github-installation-repository";
-import { GitHubUserRepoAccessCacheRepository } from "./repositories/github-user-repo-access-cache-repository";
-import { InstallationTokenCacheRepository } from "./repositories/installation-token-cache-repository";
+} from "../repositories/github-installation.repository";
+import { GitHubUserRepoAccessCacheRepository } from "../repositories/github-user-repo-access-cache.repository";
+import { InstallationTokenCacheRepository } from "../repositories/installation-token-cache.repository";
 import type {
   CreatePullRequestInput,
   GitHubAppResult,
@@ -21,7 +21,7 @@ import type {
   GithubOAuthTokenResult,
   PullRequestData,
   RefreshedToken,
-} from "./github-app.types";
+} from "../types/github-app.types";
 export type {
   CreatePullRequestInput,
   GitHubAppErrorCode,
@@ -33,7 +33,7 @@ export type {
   GithubOAuthUser,
   PullRequestData,
   RefreshedToken,
-} from "./github-app.types";
+} from "../types/github-app.types";
 
 const USER_REPO_ACCESS_CACHE_TTL_MS = 5 * 60 * 1000;
 

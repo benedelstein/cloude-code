@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapPullRequestWebhookState } from "../../src/modules/webhooks/pull-request-webhook";
+import { mapPullRequestWebhookState } from "../../src/modules/webhooks/services/pull-request-webhook.service";
 
 describe("mapPullRequestWebhookState", () => {
   it("maps pull_request actions to cached PR states", () => {

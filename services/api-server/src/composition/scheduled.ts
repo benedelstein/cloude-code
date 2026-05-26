@@ -1,4 +1,4 @@
-import { drainAttachmentGcQueue } from "@/modules/attachments/services/attachment-gc-service";
+import { drainAttachmentGcQueue } from "@/modules/attachments/services/attachment-gc.service";
 import type { Env } from "@/shared/types";
 
 export function handleScheduled(

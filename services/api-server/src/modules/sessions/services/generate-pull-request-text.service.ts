@@ -26,7 +26,7 @@ const pullRequestTextSchema = z.object({
   body: z.string().min(1).max(MAX_BODY_CHARS),
 });
 
-const logger = createLogger("generate-pull-request-text.ts");
+const logger = createLogger("generate-pull-request-text.service.ts");
 
 export interface PullRequestDiffFile {
   filename: string;
