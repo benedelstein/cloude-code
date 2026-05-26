@@ -110,14 +110,3 @@ export const ArchiveSessionResponse = z.object({
   archived: z.literal(true),
 });
 export type ArchiveSessionResponse = z.infer<typeof ArchiveSessionResponse>;
-
-export const EditorOpenResponse = z.object({
-  url: z.string(),
-  token: z.string(),
-});
-export type EditorOpenResponse = z.infer<typeof EditorOpenResponse>;
-
-export const EditorCloseResponse = z.object({
-  closed: z.literal(true),
-});
-export type EditorCloseResponse = z.infer<typeof EditorCloseResponse>;

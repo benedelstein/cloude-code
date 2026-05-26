@@ -5,13 +5,6 @@ import ts from "typescript";
 
 type ImportKind = "static import" | "re-export" | "dynamic import" | "import type" | "require";
 
-interface Layer {
-  id: string;
-  description: string;
-  prefixes: string[];
-  files?: string[];
-}
-
 interface ImportEdge {
   sourceFile: string;
   specifier: string;
@@ -20,11 +13,32 @@ interface ImportEdge {
   column: number;
 }
 
+type ApiPrivateKind =
+  | "repository"
+  | "provider"
+  | "route"
+  | "schema"
+  | "service"
+  | "types"
+  | "other";
+
+type ApiArea =
+  | { kind: "entry" }
+  | { kind: "composition" }
+  | { kind: "shared" }
+  | {
+      kind: "module";
+      moduleName: string;
+      isModuleIndex: boolean;
+      privateKind: ApiPrivateKind;
+    }
+  | { kind: "tests" }
+  | { kind: "legacy"; legacyRoot: string };
+
 interface BoundaryViolation {
   edge: ImportEdge;
-  sourceLayer: Layer;
-  targetLayer: Layer;
   targetFile: string;
+  message: string;
 }
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,526 +75,18 @@ const assetExtensions = new Set([
   ".ico",
 ]);
 
-const layers: Layer[] = [
-  {
-    id: "shared:types",
-    description: "Shared DTOs, schemas, provider ids, and protocol types.",
-    prefixes: ["packages/shared/src/types/"],
-  },
-  {
-    id: "shared:logging",
-    description: "Shared logging interfaces and implementations.",
-    prefixes: ["packages/shared/src/logging/"],
-  },
-  {
-    id: "shared:utils",
-    description: "Shared generic utilities.",
-    prefixes: ["packages/shared/src/utils/"],
-  },
-  {
-    id: "shared:tool-normalization",
-    description: "Shared tool-part normalization logic.",
-    prefixes: ["packages/shared/src/tool-normalization/"],
-  },
-  {
-    id: "shared:entry",
-    description: "Shared package public entrypoint.",
-    files: ["packages/shared/src/index.ts"],
-    prefixes: [],
-  },
-  {
-    id: "shared:tests",
-    description: "Shared package tests.",
-    prefixes: ["packages/shared/tests/"],
-  },
-
-  {
-    id: "vm-agent:lib",
-    description: "VM-agent reusable runtime libraries.",
-    prefixes: ["packages/vm-agent/src/lib/"],
-  },
-  {
-    id: "vm-agent:providers",
-    description: "VM-agent provider adapters.",
-    prefixes: ["packages/vm-agent/src/providers/"],
-  },
-  {
-    id: "vm-agent:runtime",
-    description: "VM-agent entrypoints and runtime wiring.",
-    prefixes: ["packages/vm-agent/src/"],
-  },
-  {
-    id: "vm-agent:tests",
-    description: "VM-agent tests.",
-    prefixes: ["packages/vm-agent/tests/"],
-  },
-  {
-    id: "vm-agent:bundle",
-    description: "Built vm-agent bundle artifact consumed by the API server.",
-    prefixes: ["packages/vm-agent/dist/"],
-  },
-
-  {
-    id: "api:types",
-    description: "API-server local types.",
-    prefixes: ["services/api-server/src/types/"],
-  },
-  {
-    id: "api:repositories",
-    description: "API-server D1 repositories.",
-    prefixes: ["services/api-server/src/repositories/"],
-  },
-  {
-    id: "api:utils",
-    description: "API-server generic utility functions.",
-    prefixes: ["services/api-server/src/lib/utils/"],
-  },
-  {
-    id: "api:do-repositories",
-    description: "Durable Object SQLite repositories.",
-    prefixes: ["services/api-server/src/durable-objects/repositories/"],
-  },
-  {
-    id: "api:providers",
-    description: "API-server cross-cutting provider interfaces and adapters.",
-    prefixes: ["services/api-server/src/lib/providers/"],
-  },
-  {
-    id: "api:auth",
-    description: "API-server auth helpers.",
-    prefixes: ["services/api-server/src/lib/auth/"],
-  },
-  {
-    id: "api:github",
-    description: "API-server GitHub integration implementation.",
-    prefixes: ["services/api-server/src/lib/github/"],
-  },
-  {
-    id: "api:sprites",
-    description: "API-server Sprite integration implementation.",
-    prefixes: ["services/api-server/src/lib/sprites/"],
-  },
-  {
-    id: "api:ai-auth",
-    description: "API-server AI provider auth implementation.",
-    prefixes: ["services/api-server/src/lib/ai-auth/"],
-  },
-  {
-    id: "api:attachments",
-    description: "API-server attachment domain service.",
-    prefixes: ["services/api-server/src/lib/attachments/"],
-  },
-  {
-    id: "api:sessions",
-    description: "API-server sessions domain service.",
-    prefixes: ["services/api-server/src/lib/sessions/"],
-  },
-  {
-    id: "api:repos",
-    description: "API-server repos domain service.",
-    prefixes: ["services/api-server/src/lib/repos/"],
-  },
-  {
-    id: "api:user-session",
-    description: "API-server user-session domain service.",
-    prefixes: ["services/api-server/src/lib/user-session/"],
-  },
-  {
-    id: "api:lib",
-    description: "API-server service and integration logic not yet assigned to a domain layer.",
-    prefixes: ["services/api-server/src/lib/"],
-  },
-  {
-    id: "api:middleware",
-    description: "API-server request middleware.",
-    prefixes: ["services/api-server/src/middleware/"],
-  },
-  {
-    id: "api:do-lib",
-    description: "Durable Object helper services.",
-    files: ["services/api-server/src/lib/github/git-proxy.ts"],
-    prefixes: ["services/api-server/src/durable-objects/lib/"],
-  },
-  {
-    id: "api:do-runtime",
-    description: "Durable Object runtime entrypoints and helpers.",
-    prefixes: ["services/api-server/src/durable-objects/"],
-  },
-  {
-    id: "api:routes",
-    description: "API-server HTTP route handlers and route schemas.",
-    prefixes: ["services/api-server/src/routes/"],
-  },
-  {
-    id: "api:entry",
-    description: "API-server worker entrypoint.",
-    files: ["services/api-server/src/index.ts"],
-    prefixes: [],
-  },
-  {
-    id: "api:tests",
-    description: "API-server tests and local scripts.",
-    prefixes: ["services/api-server/tests/", "services/api-server/scripts/"],
-  },
-
-  {
-    id: "web:types",
-    description: "Web-client local types.",
-    prefixes: ["apps/web/types/"],
-  },
-  {
-    id: "web:lib",
-    description: "Web-client reusable logic and API clients.",
-    prefixes: ["apps/web/lib/"],
-  },
-  {
-    id: "web:hooks",
-    description: "Web-client React hooks.",
-    prefixes: ["apps/web/hooks/"],
-  },
-  {
-    id: "web:components",
-    description: "Web-client React components.",
-    prefixes: ["apps/web/components/"],
-  },
-  {
-    id: "web:app",
-    description: "Next.js app routes, pages, layouts, and route handlers.",
-    prefixes: ["apps/web/app/", "apps/web/proxy.ts", "apps/web/next.config.ts"],
-  },
-  {
-    id: "web:tests",
-    description: "Web-client tests.",
-    prefixes: ["apps/web/tests/"],
-  },
-
-  {
-    id: "scripts:root",
-    description: "Repo-local operational scripts.",
-    prefixes: ["scripts/"],
-  },
+const apiLegacyRoots = [
+  "services/api-server/src/routes",
+  "services/api-server/src/lib",
+  "services/api-server/src/repositories",
+  "services/api-server/src/durable-objects",
+  "services/api-server/src/middleware",
+  "services/api-server/src/types",
 ];
 
-const allowedImports = defineAllowedImports({
-  "shared:types": [
-    "shared:types",
-  ],
-  "shared:logging": [
-    "shared:types",
-    "shared:logging",
-  ],
-  "shared:utils": [
-    "shared:types",
-    "shared:logging",
-    "shared:utils",
-  ],
-  "shared:tool-normalization": [
-    "shared:types",
-    "shared:utils",
-    "shared:tool-normalization",
-  ],
-  "shared:entry": [
-    "shared:types",
-    "shared:logging",
-    "shared:utils",
-    "shared:tool-normalization",
-    "shared:entry",
-  ],
-  "shared:tests": [
-    "shared:*",
-  ],
-
-  "vm-agent:lib": [
-    "shared:entry",
-    "shared:types",
-    "vm-agent:lib",
-  ],
-  "vm-agent:providers": [
-    "shared:entry",
-    "shared:types",
-    "vm-agent:lib",
-    "vm-agent:providers",
-  ],
-  "vm-agent:runtime": [
-    "shared:entry",
-    "shared:types",
-    "vm-agent:lib",
-    "vm-agent:providers",
-    "vm-agent:runtime",
-  ],
-  "vm-agent:tests": [
-    "shared:*",
-    "vm-agent:*",
-  ],
-  "vm-agent:bundle": [
-    "vm-agent:bundle",
-  ],
-
-  "api:types": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-  ],
-  "api:repositories": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-  ],
-  "api:utils": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-  ],
-  "api:do-repositories": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:do-repositories",
-  ],
-  "api:providers": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:do-runtime",
-    "api:github",
-    "api:sprites",
-    "api:ai-auth",
-    "api:attachments",
-    "api:user-session",
-    "api:providers",
-  ],
-  "api:auth": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:auth",
-  ],
-  "api:github": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:sessions",
-    "api:providers",
-    "api:github",
-  ],
-  "api:sprites": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:providers",
-    "api:sprites",
-  ],
-  "api:ai-auth": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:auth",
-    "api:providers",
-    "api:ai-auth",
-  ],
-  "api:attachments": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:repositories",
-    "api:attachments",
-  ],
-  "api:sessions": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:providers",
-    "api:sessions",
-    "api:do-runtime",
-  ],
-  "api:repos": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:providers",
-    "api:repos",
-  ],
-  "api:user-session": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:providers",
-    "api:user-session",
-  ],
-  "api:lib": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:providers",
-    "api:lib",
-    "api:do-runtime",
-  ],
-  "api:middleware": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:lib",
-    "api:providers",
-    "api:auth",
-    "api:sessions",
-    "api:repos",
-    "api:user-session",
-    "api:attachments",
-    "api:middleware",
-  ],
-  "api:do-lib": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:lib",
-    "api:providers",
-    "api:sessions",
-    "api:user-session",
-    "api:attachments",
-    "api:do-repositories",
-    "api:do-lib",
-    "api:do-runtime",
-    "vm-agent:bundle",
-  ],
-  "api:do-runtime": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:lib",
-    "api:providers",
-    "api:sessions",
-    "api:user-session",
-    "api:attachments",
-    "api:do-repositories",
-    "api:do-lib",
-    "api:do-runtime",
-  ],
-  "api:routes": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:repositories",
-    "api:lib",
-    "api:providers",
-    "api:auth",
-    "api:sessions",
-    "api:repos",
-    "api:user-session",
-    "api:attachments",
-    "api:middleware",
-    "api:do-runtime",
-    "api:routes",
-  ],
-  "api:entry": [
-    "shared:entry",
-    "shared:types",
-    "api:types",
-    "api:utils",
-    "api:lib",
-    "api:providers",
-    "api:auth",
-    "api:sessions",
-    "api:repos",
-    "api:user-session",
-    "api:attachments",
-    "api:middleware",
-    "api:routes",
-    "api:do-runtime",
-  ],
-  "api:tests": [
-    "shared:*",
-    "api:*",
-    "vm-agent:bundle",
-  ],
-
-  "web:types": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-  ],
-  "web:lib": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-    "web:lib",
-  ],
-  "web:hooks": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-    "web:lib",
-    "web:hooks",
-  ],
-  "web:components": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-    "web:lib",
-    "web:hooks",
-    "web:components",
-  ],
-  "web:app": [
-    "shared:entry",
-    "shared:types",
-    "web:types",
-    "web:lib",
-    "web:hooks",
-    "web:components",
-    "web:app",
-  ],
-  "web:tests": [
-    "shared:*",
-    "web:*",
-  ],
-
-  "scripts:root": [
-    "shared:entry",
-    "shared:types",
-    "scripts:root",
-    "vm-agent:bundle",
-  ],
-});
-
-const exceptions = [
-  {
-    from: "services/api-server/src/repositories/github-user-repo-access-cache-repository.ts",
-    to: "services/api-server/src/lib/github/github-app.ts",
-    reason: "temporary type-only dependency on GitHubRepositoryData until GitHub DTOs move to api:types",
-  },
-  {
-    from: "services/api-server/src/lib/sessions/session-pull-request-service.ts",
-    to: "services/api-server/src/durable-objects/session-agent-do.ts",
-    reason: "service accepts a typed Durable Object stub for session PR creation",
-  },
+const apiLegacyFiles = [
+  "services/api-server/src/types.ts",
 ];
-
-function defineAllowedImports(imports: Record<string, string[]>): Map<string, Set<string>> {
-  return new Map(Object.entries(imports).map(([from, targets]) => [from, new Set(targets)]));
-}
 
 function toRepoPath(filePath: string): string {
   return path.relative(repoRoot, filePath).split(path.sep).join("/");
@@ -601,6 +107,10 @@ function collectSourceFiles(): string[] {
 }
 
 function collectSourceFilesFromDirectory(directory: string, files: string[]): void {
+  if (!existsSync(directory)) {
+    return;
+  }
+
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (ignoredDirectories.has(entry.name)) {
       continue;
@@ -646,9 +156,17 @@ function extractImports(sourceFilePath: string): ImportEdge[] {
 
   function visit(node: ts.Node): void {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      addEdge(node.moduleSpecifier.text, node.moduleSpecifier, "static import");
+      addEdge(
+        node.moduleSpecifier.text,
+        node.moduleSpecifier,
+        node.importClause?.isTypeOnly ? "import type" : "static import",
+      );
     } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      addEdge(node.moduleSpecifier.text, node.moduleSpecifier, "re-export");
+      addEdge(
+        node.moduleSpecifier.text,
+        node.moduleSpecifier,
+        node.isTypeOnly ? "import type" : "re-export",
+      );
     } else if (ts.isCallExpression(node)) {
       const firstArgument = node.arguments[0];
       if (node.expression.kind === ts.SyntaxKind.ImportKeyword && firstArgument && ts.isStringLiteral(firstArgument)) {
@@ -765,80 +283,222 @@ function resolveAsFileOrDirectory(basePath: string): string | null {
   return null;
 }
 
-function getLayer(filePath: string): Layer | null {
+function classifyApiArea(filePath: string): ApiArea | null {
   const repoPath = toRepoPath(filePath);
 
-  const exactFileLayer = layers.find((layer) => layer.files?.includes(repoPath));
-  if (exactFileLayer) {
-    return exactFileLayer;
+  if (!repoPath.startsWith("services/api-server/")) {
+    return null;
   }
 
-  return layers.find((layer) => layer.prefixes.some((prefix) => repoPath.startsWith(prefix))) ?? null;
-}
-
-function isAllowed(sourceLayer: Layer, targetLayer: Layer): boolean {
-  const allowedTargets = allowedImports.get(sourceLayer.id);
-  if (!allowedTargets) {
-    return false;
+  if (repoPath.startsWith("services/api-server/tests/") || repoPath.startsWith("services/api-server/scripts/")) {
+    return { kind: "tests" };
   }
 
-  for (const allowedTarget of allowedTargets) {
-    if (allowedTarget === targetLayer.id) {
-      return true;
-    }
+  if (repoPath === "services/api-server/src/index.ts") {
+    return { kind: "entry" };
+  }
 
-    if (allowedTarget.endsWith(":*")) {
-      const namespace = allowedTarget.slice(0, -1);
-      if (targetLayer.id.startsWith(namespace)) {
-        return true;
-      }
+  if (repoPath.startsWith("services/api-server/src/composition/")) {
+    return { kind: "composition" };
+  }
+
+  for (const legacyFile of apiLegacyFiles) {
+    if (repoPath === legacyFile) {
+      return { kind: "legacy", legacyRoot: legacyFile };
     }
   }
 
-  return false;
+  for (const legacyRoot of apiLegacyRoots) {
+    if (repoPath.startsWith(`${legacyRoot}/`)) {
+      return { kind: "legacy", legacyRoot };
+    }
+  }
+
+  if (repoPath.startsWith("services/api-server/src/shared/")) {
+    return { kind: "shared" };
+  }
+
+  const moduleMatch = repoPath.match(/^services\/api-server\/src\/modules\/([^/]+)\/(.+)$/);
+  if (!moduleMatch) {
+    return null;
+  }
+
+  const moduleName = moduleMatch[1]!;
+  const rest = moduleMatch[2]!;
+  return {
+    kind: "module",
+    moduleName,
+    isModuleIndex: rest === "index.ts",
+    privateKind: classifyApiModulePrivateKind(rest),
+  };
 }
 
-function isException(sourceFile: string, targetFile: string): boolean {
-  const sourceRepoPath = toRepoPath(sourceFile);
-  const targetRepoPath = toRepoPath(targetFile);
+function classifyApiModulePrivateKind(rest: string): ApiPrivateKind {
+  const parts = rest.split("/");
+  const firstPart = parts[0];
+  const basename = parts[parts.length - 1] ?? rest;
 
-  return exceptions.some((exception) => exception.from === sourceRepoPath && exception.to === targetRepoPath);
+  if (firstPart === "repositories") {
+    return "repository";
+  }
+
+  if (basename.endsWith(".types.ts") || firstPart === "types") {
+    return "types";
+  }
+
+  if (basename.endsWith(".providers.ts") || firstPart === "providers") {
+    return "provider";
+  }
+
+  if (firstPart === "routes") {
+    return basename.endsWith(".schema.ts") ? "schema" : "route";
+  }
+
+  if (firstPart === "services" || basename.endsWith(".service.ts")) {
+    return "service";
+  }
+
+  return "other";
+}
+
+function checkApiBoundary(edge: ImportEdge, targetFile: string): string | null {
+  const sourceArea = classifyApiArea(edge.sourceFile);
+  const targetArea = classifyApiArea(targetFile);
+
+  if (!sourceArea && !targetArea) {
+    return null;
+  }
+
+  if (sourceArea?.kind === "tests") {
+    return null;
+  }
+
+  if (sourceArea?.kind === "legacy") {
+    return `API-server source file is still under the legacy ${sourceArea.legacyRoot} layout.`;
+  }
+
+  if (targetArea?.kind === "legacy") {
+    return `Import resolves to legacy API-server layout ${targetArea.legacyRoot}.`;
+  }
+
+  if (sourceArea?.kind === "shared" && targetArea?.kind === "module") {
+    return "API-server shared code must not import modules.";
+  }
+
+  if (sourceArea?.kind === "module" && targetArea?.kind === "module") {
+    return checkModuleBoundary(sourceArea, targetArea, edge, targetFile);
+  }
+
+  if (sourceArea?.kind === "composition" && targetArea?.kind === "module") {
+    if (targetArea.privateKind === "repository") {
+      return "Composition must wire module services/providers, not module repositories.";
+    }
+    return null;
+  }
+
+  if (sourceArea?.kind === "composition" && targetArea?.kind === "shared") {
+    return null;
+  }
+
+  if (sourceArea?.kind === "entry" && targetArea?.kind === "module") {
+    return "API-server entrypoint must import runtime module wiring through composition.";
+  }
+
+  if (sourceArea?.kind === "module" && targetArea?.kind === "entry") {
+    return "API-server modules must not import the worker entrypoint.";
+  }
+
+  return null;
+}
+
+function checkModuleBoundary(
+  sourceArea: Extract<ApiArea, { kind: "module" }>,
+  targetArea: Extract<ApiArea, { kind: "module" }>,
+  edge: ImportEdge,
+  _targetFile: string,
+): string | null {
+  if (sourceArea.moduleName === targetArea.moduleName) {
+    if (edge.specifier.startsWith("@/modules/")) {
+      return "Same-module imports must be relative, not through @/modules.";
+    }
+
+    if (sourceArea.isModuleIndex && edge.kind !== "import type") {
+      return "Module index.ts must not export runtime values.";
+    }
+
+    return null;
+  }
+
+  return "API-server modules must not import other modules. Move shared types/helpers to shared/ or wire runtime dependencies through composition.";
+}
+
+function checkPackageBoundary(sourceFile: string, targetFile: string): string | null {
+  const source = toRepoPath(sourceFile);
+  const target = toRepoPath(targetFile);
+
+  if (source.startsWith("packages/shared/") && !target.startsWith("packages/shared/")) {
+    return "packages/shared must not import app or service packages.";
+  }
+
+  if (source.startsWith("packages/vm-agent/") && target.startsWith("services/api-server/")) {
+    return "packages/vm-agent must not import api-server code.";
+  }
+
+  if (source.startsWith("apps/web/") && target.startsWith("services/api-server/")) {
+    return "apps/web must not import api-server code.";
+  }
+
+  if (source.startsWith("services/api-server/src/") && target.startsWith("apps/web/")) {
+    return "api-server code must not import web-client code.";
+  }
+
+  return null;
 }
 
 function checkBoundaries(): BoundaryViolation[] {
   const violations: BoundaryViolation[] = [];
 
   for (const sourceFile of collectSourceFiles()) {
-    const sourceLayer = getLayer(sourceFile);
-    if (!sourceLayer) {
-      continue;
-    }
-
     for (const edge of extractImports(sourceFile)) {
       const targetFile = resolveImportTarget(sourceFile, edge.specifier);
       if (!targetFile) {
         continue;
       }
 
-      const targetLayer = getLayer(targetFile);
-      if (!targetLayer) {
-        continue;
-      }
+      const message =
+        checkPackageBoundary(sourceFile, targetFile)
+        ?? checkApiBoundary(edge, targetFile);
 
-      if (isAllowed(sourceLayer, targetLayer) || isException(sourceFile, targetFile)) {
-        continue;
+      if (message) {
+        violations.push({
+          edge,
+          targetFile,
+          message,
+        });
       }
-
-      violations.push({
-        edge,
-        sourceLayer,
-        targetLayer,
-        targetFile,
-      });
     }
   }
 
   return violations;
+}
+
+function collectLegacyApiFiles(): string[] {
+  const files: string[] = [];
+
+  for (const legacyFile of apiLegacyFiles) {
+    const absolutePath = toAbsolutePath(legacyFile);
+    if (existsSync(absolutePath) && statSync(absolutePath).isFile()) {
+      files.push(legacyFile);
+    }
+  }
+
+  for (const legacyRoot of apiLegacyRoots) {
+    collectSourceFilesFromDirectory(toAbsolutePath(legacyRoot), files);
+  }
+
+  return files
+    .map((file) => path.isAbsolute(file) ? toRepoPath(file) : file)
+    .sort();
 }
 
 function printViolations(violations: BoundaryViolation[]): void {
@@ -850,23 +510,152 @@ function printViolations(violations: BoundaryViolation[]): void {
 
     console.error(`${sourceRepoPath}:${violation.edge.line}:${violation.edge.column}`);
     console.error(`  ${violation.edge.kind} "${violation.edge.specifier}" resolves to ${targetRepoPath}`);
-    console.error(`  ${violation.sourceLayer.id} (${violation.sourceLayer.description})`);
-    console.error(`  cannot import ${violation.targetLayer.id} (${violation.targetLayer.description})`);
-    console.error("  Move shared contracts downward, add a narrow provider/service interface, or update the boundary table with an explicit rationale.\n");
+    console.error(`  ${violation.message}\n`);
   }
 }
 
-function checkApiServerLibRoot(): string[] {
-  const libRoot = toAbsolutePath("services/api-server/src/lib");
-
-  return readdirSync(libRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && sourceExtensions.has(path.extname(entry.name)))
-    .map((entry) => `services/api-server/src/lib/${entry.name}`)
-    .sort();
+function assertSelfCheck(name: string, condition: boolean): void {
+  if (!condition) {
+    throw new Error(`Import boundary self-check failed: ${name}`);
+  }
 }
 
+function selfCheckEdge(specifier: string, kind: ImportKind = "static import"): ImportEdge {
+  return {
+    sourceFile: toAbsolutePath("services/api-server/src/modules/session-agent/services/example.ts"),
+    specifier,
+    kind,
+    line: 1,
+    column: 1,
+  };
+}
+
+function runRuleSelfChecks(): void {
+  const sourceModule = {
+    kind: "module" as const,
+    moduleName: "session-agent",
+    isModuleIndex: false,
+    privateKind: "service" as const,
+  };
+  const gitIndex = {
+    kind: "module" as const,
+    moduleName: "git",
+    isModuleIndex: true,
+    privateKind: "other" as const,
+  };
+  const gitProvider = {
+    kind: "module" as const,
+    moduleName: "git",
+    isModuleIndex: false,
+    privateKind: "provider" as const,
+  };
+  const gitService = {
+    kind: "module" as const,
+    moduleName: "git",
+    isModuleIndex: false,
+    privateKind: "service" as const,
+  };
+  const sameModuleProvider = {
+    kind: "module" as const,
+    moduleName: "session-agent",
+    isModuleIndex: false,
+    privateKind: "provider" as const,
+  };
+  const moduleIndex = {
+    kind: "module" as const,
+    moduleName: "auth",
+    isModuleIndex: true,
+    privateKind: "other" as const,
+  };
+  const sameModuleRoute = {
+    kind: "module" as const,
+    moduleName: "auth",
+    isModuleIndex: false,
+    privateKind: "route" as const,
+  };
+
+  assertSelfCheck(
+    "rejects cross-module runtime index imports",
+    checkModuleBoundary(
+      sourceModule,
+      gitIndex,
+      selfCheckEdge("@/modules/git"),
+      toAbsolutePath("services/api-server/src/modules/git/index.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "rejects explicit cross-module service imports",
+    checkModuleBoundary(
+      sourceModule,
+      gitService,
+      selfCheckEdge("@/modules/git/services/git-proxy.service"),
+      toAbsolutePath("services/api-server/src/modules/git/services/git-proxy.service.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "rejects cross-module deep provider imports",
+    checkModuleBoundary(
+      sourceModule,
+      gitProvider,
+      selfCheckEdge("@/modules/git/git.providers"),
+      toAbsolutePath("services/api-server/src/modules/git/git.providers.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "rejects cross-module type provider imports",
+    checkModuleBoundary(
+      sourceModule,
+      gitProvider,
+      selfCheckEdge("@/modules/git/git.providers", "import type"),
+      toAbsolutePath("services/api-server/src/modules/git/git.providers.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "allows same-module relative provider imports",
+    checkModuleBoundary(
+      sourceModule,
+      sameModuleProvider,
+      selfCheckEdge("./session-agent.providers"),
+      toAbsolutePath("services/api-server/src/modules/session-agent/session-agent.providers.ts"),
+    ) === null,
+  );
+  assertSelfCheck(
+    "rejects same-module alias imports",
+    checkModuleBoundary(
+      sourceModule,
+      sameModuleProvider,
+      selfCheckEdge("@/modules/session-agent/session-agent.providers"),
+      toAbsolutePath("services/api-server/src/modules/session-agent/session-agent.providers.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "rejects route exports from module public index",
+    checkModuleBoundary(
+      moduleIndex,
+      sameModuleRoute,
+      selfCheckEdge("./routes/auth.routes", "re-export"),
+      toAbsolutePath("services/api-server/src/modules/auth/routes/auth.routes.ts"),
+    ) !== null,
+  );
+  assertSelfCheck(
+    "rejects worker entrypoint direct route imports",
+    checkApiBoundary(
+      {
+        sourceFile: toAbsolutePath("services/api-server/src/index.ts"),
+        specifier: "@/modules/auth/routes/auth.routes",
+        kind: "static import",
+        line: 1,
+        column: 1,
+      },
+      toAbsolutePath("services/api-server/src/modules/auth/routes/auth.routes.ts"),
+    ) !== null,
+  );
+}
+
+runRuleSelfChecks();
+
 const violations = checkBoundaries();
-const apiServerRootLibFiles = checkApiServerLibRoot();
+const legacyApiFiles = collectLegacyApiFiles();
 
 if (violations.length > 0) {
   printViolations(violations);
@@ -875,12 +664,12 @@ if (violations.length > 0) {
   console.log("Import boundary check passed.");
 }
 
-if (apiServerRootLibFiles.length > 0) {
-  console.error("API server lib files must live under a domain or provider folder:");
-  for (const file of apiServerRootLibFiles) {
+if (legacyApiFiles.length > 0) {
+  console.error("API-server files must live under src/modules or src/shared:");
+  for (const file of legacyApiFiles) {
     console.error(`  ${file}`);
   }
   process.exitCode = 1;
 } else {
-  console.log("API server lib root check passed.");
+  console.log("API-server module layout check passed.");
 }

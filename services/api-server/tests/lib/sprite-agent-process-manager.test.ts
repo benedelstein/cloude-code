@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSettings, ClientState, Logger } from "@repo/shared";
-import type { Env } from "../../src/types";
-import type { ServerState } from "../../src/durable-objects/repositories/server-state-repository";
+import type { Env } from "../../src/shared/types";
+import type { ServerState } from "../../src/modules/session-agent/repositories/server-state-repository";
 
 const mockState = vi.hoisted(() => ({
   attachSession: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("@repo/vm-agent/dist/vm-agent-webhook.bundle.js", () => ({
   default: "// mocked vm-agent bundle",
 }));
 
-vi.mock("@/lib/providers/sprite-provider", () => {
+vi.mock("@/shared/integrations/sprites", () => {
   class SpritesError extends Error {
     constructor(
       message: string,
@@ -41,21 +41,15 @@ vi.mock("@/lib/providers/sprite-provider", () => {
   return { WorkersSpriteClient, SpritesError };
 });
 
-vi.mock("@/lib/providers/ai-credential-provider", () => ({
-  getProviderCredentialAdapter: () => ({
-    getCredentialSnapshot: mockState.getCredentialSnapshot,
-  }),
-}));
-
-vi.mock("../../src/durable-objects/lib/agent-attachment-service", () => ({
+vi.mock("../../src/modules/session-agent/services/agent-attachment-service", () => ({
   AgentAttachmentService: class {
     resolveAttachments = mockState.resolveAttachments;
   },
 }));
 
 import { encodeAgentInput, encodeAgentOutput } from "@repo/shared";
-import { SpritesError } from "../../src/lib/sprites";
-import { SpriteAgentProcessManager } from "../../src/durable-objects/lib/SpriteAgentProcessManager";
+import { SpritesError } from "../../src/shared/integrations/sprites/types";
+import { SpriteAgentProcessManager } from "../../src/modules/session-agent/services/SpriteAgentProcessManager";
 
 function createLogger(): Logger {
   return {
@@ -140,6 +134,9 @@ function createManager(
     getServerState: () => serverState,
     updateAgentProcessId,
     getClientState: createClientState,
+    getProviderCredentialAdapter: () => ({
+      getCredentialSnapshot: mockState.getCredentialSnapshot,
+    }),
   });
 
   return { manager, updateAgentProcessId };

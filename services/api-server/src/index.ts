@@ -1,24 +1,27 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { sessionsRoutes } from "./routes/sessions/sessions.routes";
-import { webhooksRoutes } from "./routes/webhooks.routes";
-import { authRoutes } from "./routes/auth/auth.routes";
-import { openaiAuthRoutes } from "./routes/auth/openai/openai.routes";
-import { claudeAuthRoutes } from "./routes/auth/claude/claude.routes";
-import { reposRoutes } from "./routes/repos/repos.routes";
-import { attachmentsRoutes } from "./routes/attachments/attachments.routes";
-import { agentRoutes } from "./routes/agent.routes";
-import { gitProxyRoutes } from "./routes/git-proxy.routes";
-import { debugRoutes } from "./routes/debug.routes";
-import { modelsRoutes } from "./routes/models.routes";
-import { internalRoutes } from "./routes/internal.routes";
-import type { Env } from "./types";
-import { drainAttachmentGcQueue } from "./lib/attachments/attachment-gc-service";
-import { initializeLogger } from "./lib/providers/observability-provider";
-// import { requestLoggerMiddleware } from "./middleware/request-logger.middleware";
 import type { LogLevel } from "@repo/shared";
+import {
+  buildAgentRoutes,
+  buildAttachmentsRoutes,
+  buildAuthRoutes,
+  buildClaudeAuthRoutes,
+  buildDebugRoutes,
+  buildGitProxyRoutes,
+  buildInternalRoutes,
+  buildModelsRoutes,
+  buildOpenAIAuthRoutes,
+  buildReposRoutes,
+  buildSessionsRoutes,
+  buildWebhooksRoutes,
+} from "@/composition/build-routes";
+import { SessionAgentDO } from "@/composition/session-agent";
+import { handleScheduled } from "@/composition/scheduled";
+import type { Env } from "@/shared/types";
+import { initializeLogger } from "@/shared/logging";
+// import { requestLoggerMiddleware } from "@/shared/middleware/request-logger.middleware";
 
-export { SessionAgentDO } from "./durable-objects/session-agent-do";
+export { SessionAgentDO };
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -43,27 +46,26 @@ app.use(
 app.get("/", (c) => {
   return c.json({ name: "cloude-code-api", version: "0.0.1", status: "running" });
 });
-
 app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-app.route("/agents", agentRoutes);
-app.route("/git-proxy", gitProxyRoutes);
-app.route("/internal", internalRoutes);
-app.route("/_debug", debugRoutes);
+app.route("/agents", buildAgentRoutes());
+app.route("/git-proxy", buildGitProxyRoutes());
+app.route("/internal", buildInternalRoutes());
+app.route("/_debug", buildDebugRoutes());
 
-app.route("/auth", authRoutes);
-app.route("/auth", openaiAuthRoutes);
-app.route("/auth", claudeAuthRoutes);
-app.route("/models", modelsRoutes);
+app.route("/auth", buildAuthRoutes());
+app.route("/auth", buildOpenAIAuthRoutes()); // TODO: can these go inside auth routes?
+app.route("/auth", buildClaudeAuthRoutes());
+app.route("/models", buildModelsRoutes());
 
 // Protected routes
-app.route("/repos", reposRoutes);
-app.route("/sessions", sessionsRoutes);
-app.route("/attachments", attachmentsRoutes);
+app.route("/repos", buildReposRoutes());
+app.route("/sessions", buildSessionsRoutes());
+app.route("/attachments", buildAttachmentsRoutes());
 
-app.route("/webhooks", webhooksRoutes);
+app.route("/webhooks", buildWebhooksRoutes());
 
 export default {
   fetch: app.fetch,
@@ -72,6 +74,6 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Promise<void> {
-    ctx.waitUntil(drainAttachmentGcQueue(env));
+    handleScheduled(env, ctx);
   },
 };

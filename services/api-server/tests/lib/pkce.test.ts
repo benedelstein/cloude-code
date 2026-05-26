@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCodeChallenge, generateCodeVerifier } from "../../src/lib/auth/pkce";
+import { computeCodeChallenge, generateCodeVerifier } from "../../src/shared/utils/pkce";
 
 describe("pkce", () => {
   it("creates verifier with expected length and url-safe chars", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt, sha256, readStoredCredentialJson } from "../../src/lib/utils/crypto";
+import { decrypt, encrypt, sha256, readStoredCredentialJson } from "../../src/shared/utils/crypto";
 
 const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 const WRONG_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
