@@ -19,10 +19,22 @@ const assetExtensions = new Set([
 ]);
 
 const workspacePackages = new Map([
-  ["@repo/shared", "packages/shared/src/index.ts"],
-  ["@repo/vm-agent", "packages/vm-agent/src/index-ndjson.ts"],
-  ["@repo/api-server", "services/api-server/src/index.ts"],
-  ["@repo/web", "apps/web"],
+  [
+    "@repo/shared",
+    { root: "packages/shared", entrypoint: "packages/shared/src/index.ts" },
+  ],
+  [
+    "@repo/vm-agent",
+    { root: "packages/vm-agent", entrypoint: "packages/vm-agent/src/index-ndjson.ts" },
+  ],
+  [
+    "@repo/api-server",
+    { root: "services/api-server", entrypoint: "services/api-server/src/index.ts" },
+  ],
+  [
+    "@repo/web",
+    { root: "apps/web", entrypoint: "apps/web/package.json" },
+  ],
 ]);
 
 export function resolveImportTarget(
@@ -67,18 +79,15 @@ function resolveAliasImport(
 }
 
 function resolveWorkspacePackageImport(specifier: string): string | null {
-  for (const [packageName, entrypoint] of workspacePackages) {
+  for (const [packageName, packageInfo] of workspacePackages) {
     if (specifier === packageName) {
-      return toAbsolutePath(entrypoint);
+      return toAbsolutePath(packageInfo.entrypoint);
     }
 
     if (specifier.startsWith(`${packageName}/`)) {
-      const packageRoot = entrypoint.endsWith(".ts")
-        ? path.dirname(entrypoint)
-        : entrypoint;
       const subpath = specifier.slice(packageName.length + 1);
       return resolveAsFileOrDirectory(
-        toAbsolutePath(`${packageRoot}/${subpath}`),
+        toAbsolutePath(`${packageInfo.root}/${subpath}`),
       );
     }
   }
