@@ -171,7 +171,7 @@ export class WorkersSpriteClient {
   }
 
   attachSession(
-    sessionId: string, // todo: make number?
+    sessionId: string,
     options: AttachSessionOptions = {},
   ): SpriteWebsocketSession {
     return new SpriteWebsocketSession(this.name, this.apiKey, this.baseUrl, {
