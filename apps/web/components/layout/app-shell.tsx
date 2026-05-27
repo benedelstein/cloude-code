@@ -3,7 +3,7 @@
 import {
   useCallback,
   useLayoutEffect,
-  useRef,
+  useMemo,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -32,7 +32,6 @@ import {
   AppRightSidebarProvider,
   AppRightSidebarSlot,
   APP_RIGHT_SIDEBAR_BUTTON_GUTTER,
-  APP_RIGHT_SIDEBAR_CSS_WIDTH,
   APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
   APP_RIGHT_SIDEBAR_MIN_WIDTH_PX,
   useAppRightSidebar,
@@ -44,17 +43,24 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { cn, getFadeScaleVisibilityClasses } from "@/lib/utils";
+import {
+  LEFT_SIDEBAR_DEFAULT_WIDTH_PX,
+  LEFT_SIDEBAR_MAX_WIDTH_PX,
+  LEFT_SIDEBAR_MIN_WIDTH_PX,
+  LEFT_SIDEBAR_WIDTH_COOKIE_MAX_AGE,
+  LEFT_SIDEBAR_WIDTH_CSS_VARIABLE,
+  LEFT_SIDEBAR_WIDTH_COOKIE_NAME,
+  clampLeftSidebarWidth,
+} from "@/components/layout/sidebar-width-persistence";
 
 interface AppShellProps {
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
   defaultRightSidebarOpen?: boolean;
+  defaultLeftSidebarWidthPx?: number;
+  defaultRightSidebarWidthPx?: number;
 }
 
-const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "left_sidebar_width_px";
-const LEFT_SIDEBAR_MIN_WIDTH_PX = 240;
-const LEFT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
-const LEFT_SIDEBAR_MAX_WIDTH_PX = 420;
 const FLOATING_SIDEBAR_PADDING_PX = 4;
 const SIDEBAR_HEADER_HEIGHT_PX = 56;
 const FLOATING_SIDEBAR_TOGGLE_SIZE_PX = 28;
@@ -66,30 +72,30 @@ export function AppShell({
   children,
   defaultSidebarOpen,
   defaultRightSidebarOpen,
+  defaultLeftSidebarWidthPx = LEFT_SIDEBAR_DEFAULT_WIDTH_PX,
+  defaultRightSidebarWidthPx,
 }: AppShellProps) {
   const pathname = usePathname();
   const isSessionPage = pathname.startsWith("/session/");
   const [leftSidebarWidthPx, setLeftSidebarWidthPxState] = useState(
-    getStoredLeftSidebarWidth,
+    clampLeftSidebarWidth(defaultLeftSidebarWidthPx),
   );
   const [isLeftSidebarResizing, setIsLeftSidebarResizing] = useState(false);
   const [sidebarLayoutReady, setSidebarLayoutReady] = useState(false);
-  const leftSidebarProviderRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
+    setLeftSidebarCssWidth(leftSidebarWidthPx);
+    persistLeftSidebarWidthCookie(leftSidebarWidthPx);
     setSidebarLayoutReady(true);
-  }, []);
+  }, [leftSidebarWidthPx]);
 
   const setLeftSidebarWidthPx = useCallback(
     (nextWidthPx: number, options: { persist?: boolean } = {}) => {
       const clampedWidth = clampLeftSidebarWidth(nextWidthPx);
       setLeftSidebarWidthPxState(clampedWidth);
-      setLeftSidebarCssWidth(leftSidebarProviderRef.current, clampedWidth);
+      setLeftSidebarCssWidth(clampedWidth);
       if (options.persist !== false) {
-        window.localStorage.setItem(
-          LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
-          String(clampedWidth),
-        );
+        persistLeftSidebarWidthCookie(clampedWidth);
       }
     },
     [],
@@ -97,7 +103,6 @@ export function AppShell({
 
   return (
     <SidebarProvider
-      ref={leftSidebarProviderRef}
       defaultOpen={defaultSidebarOpen}
       keyboardShortcut={{ code: "Digit0", shiftKey: false }}
       className={cn(
@@ -105,12 +110,15 @@ export function AppShell({
         (!sidebarLayoutReady || isLeftSidebarResizing)
           && "[&_[data-sidebar=gap]]:transition-none [&_[data-sidebar=gap]]:duration-0",
       )}
-      style={{ "--sidebar-width": `${leftSidebarWidthPx}px` } as CSSProperties}
+      style={{
+        "--sidebar-width": `var(${LEFT_SIDEBAR_WIDTH_CSS_VARIABLE}, ${leftSidebarWidthPx}px)`,
+      } as CSSProperties}
     >
       <AppHeaderProvider>
         <AppRightSidebarProvider
           defaultOpen={defaultRightSidebarOpen}
           defaultEnabled={isSessionPage}
+          defaultWidthPx={defaultRightSidebarWidthPx}
         >
           <AppShellLayout
             leftSidebarWidthPx={leftSidebarWidthPx}
@@ -118,7 +126,7 @@ export function AppShell({
             isLeftSidebarResizing={isLeftSidebarResizing}
             onLeftSidebarWidthChange={setLeftSidebarWidthPx}
             onLeftSidebarPreviewWidthChange={(nextWidthPx) =>
-              setLeftSidebarCssWidth(leftSidebarProviderRef.current, nextWidthPx)}
+              setLeftSidebarCssWidth(nextWidthPx)}
             onLeftSidebarResizeStateChange={setIsLeftSidebarResizing}
           >
             {children}
@@ -164,9 +172,13 @@ function AppShellLayout({
   } =
     useAppRightSidebar();
   const isRightSidebarOpen = enabled && (isMobile ? mobileOpen : open);
+  const rightSidebarCssWidth = useMemo(
+    () => `var(--app-right-sidebar-width, ${widthPx}px)`,
+    [widthPx],
+  );
   const headerMaxWidth = "56rem";
   const desktopRightSidebarReserve =
-    enabled && !isMobile && open ? APP_RIGHT_SIDEBAR_CSS_WIDTH : "0rem";
+    enabled && !isMobile && open ? rightSidebarCssWidth : "0rem";
   const leftHeaderOverlayReserve =
     isMobile || !isLeftSidebarOpen ? APP_RIGHT_SIDEBAR_BUTTON_GUTTER : "0rem";
   const rightHeaderOverlayReserve =
@@ -269,7 +281,7 @@ function AppShellLayout({
         cookieName="right_sidebar_state"
         keyboardShortcut={enabled ? { code: "Digit0", altKey: true } : null}
         layout="contents"
-        style={{ "--sidebar-width": APP_RIGHT_SIDEBAR_CSS_WIDTH } as CSSProperties}
+        style={{ "--sidebar-width": rightSidebarCssWidth } as CSSProperties}
       >
         <Sidebar
           side="right"
@@ -434,41 +446,15 @@ function LeftSidebarResizeHandle({
   );
 }
 
-function clampLeftSidebarWidth(widthPx: number): number {
-  return Math.min(
-    LEFT_SIDEBAR_MAX_WIDTH_PX,
-    Math.max(LEFT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
-  );
-}
-
-function getStoredLeftSidebarWidth(): number {
-  if (typeof window === "undefined") {
-    return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
-  }
-
-  try {
-    const storedWidth = window.localStorage.getItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!storedWidth) {
-      return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
-    }
-
-    const parsedWidth = Number.parseInt(storedWidth, 10);
-    return Number.isFinite(parsedWidth)
-      ? clampLeftSidebarWidth(parsedWidth)
-      : LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
-  } catch {
-    return LEFT_SIDEBAR_DEFAULT_WIDTH_PX;
-  }
-}
-
-function setLeftSidebarCssWidth(
-  sidebarRoot: HTMLDivElement | null,
-  widthPx: number,
-) {
-  sidebarRoot?.style.setProperty(
-    "--sidebar-width",
+function setLeftSidebarCssWidth(widthPx: number) {
+  document.documentElement.style.setProperty(
+    LEFT_SIDEBAR_WIDTH_CSS_VARIABLE,
     `${clampLeftSidebarWidth(widthPx)}px`,
   );
+}
+
+function persistLeftSidebarWidthCookie(widthPx: number) {
+  document.cookie = `${LEFT_SIDEBAR_WIDTH_COOKIE_NAME}=${clampLeftSidebarWidth(widthPx)}; path=/; max-age=${LEFT_SIDEBAR_WIDTH_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
 
 function RightSidebarResizeHandle({

@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, Loader2, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
-import {
-  APP_RIGHT_SIDEBAR_CSS_WIDTH,
-  useAppRightSidebar,
-} from "@/components/layout/app-right-sidebar-context";
+import { useAppRightSidebar } from "@/components/layout/app-right-sidebar-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
@@ -59,6 +56,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const {
     enabled: isRightSidebarEnabled,
     open: isRightSidebarOpen,
+    widthPx: rightSidebarWidthPx,
     isResizing: isRightSidebarResizing,
   } = useAppRightSidebar();
   const isMobile = useIsMobile();
@@ -74,7 +72,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
   const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
-    ? APP_RIGHT_SIDEBAR_CSS_WIDTH
+    ? `var(--app-right-sidebar-width, ${rightSidebarWidthPx}px)`
     : "0rem";
 
   const displayTitle = sessionTitle ?? repoFullName ?? "Untitled session";
