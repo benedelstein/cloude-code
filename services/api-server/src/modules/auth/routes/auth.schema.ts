@@ -17,7 +17,8 @@ export const getGithubRoute = createRoute({
   request: {
     query: z.object({
       // Optional origin to bounce back to after GitHub redirects to prod.
-      // Must match the prod web origin or the preview allowlist regex.
+      // Must match the configured web origin, a dev loopback origin, or the
+      // preview allowlist regex.
       origin: z.string().optional(),
     }),
   },

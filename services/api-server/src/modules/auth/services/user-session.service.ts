@@ -119,7 +119,7 @@ export class UserSessionService {
       return currentAccessToken;
     }
 
-    // TODO: why does this live in this service? can it be moved to github? 
+    // TODO: why does this live in this service? can it be moved to github?
     return this.refreshGitHubAccessToken(params.userId);
   }
 

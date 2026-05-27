@@ -9,8 +9,9 @@ export type PreviewOriginError = {
 /**
  * Validate that an origin is allowed to receive an OAuth bounce redirect.
  *
- * Accepts the canonical prod web origin (`env.WEB_ORIGIN`) unconditionally.
- * Any other origin must:
+ * Accepts the configured web origin (`env.WEB_ORIGIN`) unconditionally.
+ * In non-production environments, local loopback origins are also accepted for
+ * local OAuth testing. Any other origin must:
  *   1. Parse as a valid `https:` URL with no path, query, or fragment.
  *   2. Match `env.PREVIEW_ORIGIN_ALLOWLIST_REGEX` exactly.
  *
@@ -48,12 +49,6 @@ export function validateRedirectOrigin(
 
   // Origin-only: scheme + host (+ optional port). Path/query/fragment are
   // rejected so callers can't smuggle a redirect path through the regex.
-  if (parsed.protocol !== "https:") {
-    return failure({
-      code: "INVALID_ORIGIN",
-      message: `Origin must use https: ${origin}`,
-    });
-  }
   if (parsed.pathname !== "/" && parsed.pathname !== "") {
     return failure({
       code: "INVALID_ORIGIN",
@@ -69,6 +64,17 @@ export function validateRedirectOrigin(
 
   // Compare against `parsed.origin` to normalize trailing slashes etc.
   const normalized = parsed.origin;
+
+  if (isLocalDevelopmentOrigin(parsed, env)) {
+    return success(normalized);
+  }
+
+  if (parsed.protocol !== "https:") {
+    return failure({
+      code: "INVALID_ORIGIN",
+      message: `Origin must use https: ${origin}`,
+    });
+  }
 
   const allowlistPattern = env.PREVIEW_ORIGIN_ALLOWLIST_REGEX;
   if (!allowlistPattern) {
@@ -96,4 +102,15 @@ export function validateRedirectOrigin(
   }
 
   return success(normalized);
+}
+
+function isLocalDevelopmentOrigin(parsed: URL, env: Env): boolean {
+  if (env.ENVIRONMENT === "production") {
+    return false;
+  }
+
+  return (
+    (parsed.protocol === "http:" || parsed.protocol === "https:")
+    && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)
+  );
 }
