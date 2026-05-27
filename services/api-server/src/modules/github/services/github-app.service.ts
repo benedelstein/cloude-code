@@ -37,6 +37,10 @@ export type {
 
 const USER_REPO_ACCESS_CACHE_TTL_MS = 5 * 60 * 1000;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export interface GitHubInstallationSummary {
   id: number;
 }
@@ -99,7 +103,7 @@ export class GitHubAppService {
     return `https://github.com/apps/${this.appSlug}/installations/new`;
   }
 
-  hasInstallations(accessToken: string): Promise<boolean> {
+  async hasInstallations(accessToken: string): Promise<boolean> {
     const octokit = new Octokit({ auth: accessToken });
     return octokit.request("GET /user/installations", { per_page: 1 })
       .then(({ data }) => data.total_count > 0);
@@ -353,8 +357,62 @@ export class GitHubAppService {
         merged: false,
       });
     } catch (error) {
+      if (this.isPullRequestValidationError(error)) {
+        const existingPullRequest = await this.findOpenPullRequestForBranch(
+          repoFullName,
+          input.base,
+          input.head,
+        );
+        if (existingPullRequest.ok && existingPullRequest.value) {
+          return success(existingPullRequest.value);
+        }
+      }
+
       return this.githubApiFailure(
         `Failed to create pull request for ${repoFullName}.`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Find an open pull request for a branch in the same repository.
+   */
+  async findOpenPullRequestForBranch(
+    repoFullName: string,
+    baseBranch: string,
+    headBranch: string,
+  ): Promise<GitHubAppResult<PullRequestData | null>> {
+    const repoOctokitResult = await this.getRepoOctokit(repoFullName);
+    if (!repoOctokitResult.ok) {
+      return repoOctokitResult;
+    }
+
+    const { owner, repo, octokit } = repoOctokitResult.value;
+
+    try {
+      const { data } = await octokit.rest.pulls.list({
+        owner,
+        repo,
+        state: "open",
+        base: baseBranch,
+        head: `${owner}:${headBranch}`,
+        per_page: 1,
+      });
+      const pullRequest = data[0];
+      if (!pullRequest) {
+        return success(null);
+      }
+
+      return success({
+        number: pullRequest.number,
+        url: pullRequest.html_url,
+        state: pullRequest.state as "open" | "closed",
+        merged: false,
+      });
+    } catch (error) {
+      return this.githubApiFailure(
+        `Failed to find open pull request for ${repoFullName}.`,
         error,
       );
     }
@@ -791,6 +849,10 @@ export class GitHubAppService {
       code: "GITHUB_API_ERROR",
       message,
     });
+  }
+
+  private isPullRequestValidationError(error: unknown): boolean {
+    return isRecord(error) && error.status === 422;
   }
 
   /**

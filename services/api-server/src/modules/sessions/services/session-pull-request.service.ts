@@ -121,6 +121,23 @@ async function getSessionMessages(sessionStub: SessionAgentStub): Promise<UIMess
   }
 }
 
+async function persistPullRequest(
+  sessionStub: SessionAgentStub,
+  pullRequest: PullRequestData,
+): Promise<void> {
+  const setPullRequestBody: SetPullRequestRequest = {
+    url: pullRequest.url,
+    number: pullRequest.number,
+    state: "open",
+  };
+  try {
+    await sessionStub.setPullRequest(setPullRequestBody);
+  } catch (error) {
+    // PR exists on GitHub but state failed to persist in the DO.
+    logger.error("Failed to persist PR state in session after creation", { error });
+  }
+}
+
 export async function createPullRequestForSession(params: {
   sessionStub: SessionAgentStub;
   github: SessionPullRequestGitHubProvider;
@@ -220,18 +237,7 @@ export async function createPullRequestForSession(params: {
   }
   const createdPullRequestValue = createPullRequestResult.value;
 
-  const setPullRequestBody: SetPullRequestRequest = {
-    url: createdPullRequestValue.url,
-    number: createdPullRequestValue.number,
-    state: "open",
-  };
-  try {
-    await sessionStub.setPullRequest(setPullRequestBody);
-  } catch (error) {
-    // PR was created on GitHub but state failed to persist in the DO.
-    // Log the error but still return success — the PR exists on GitHub.
-    logger.error("Failed to persist PR state in session after creation", { error });
-  }
+  await persistPullRequest(sessionStub, createdPullRequestValue);
 
   return {
     url: createdPullRequestValue.url,
