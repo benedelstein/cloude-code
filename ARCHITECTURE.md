@@ -1,10 +1,8 @@
 # Architecture
 
-This file is the repo codemap: it should explain where major things live, which boundaries matter, and which invariants should not be broken. Keep detailed behavior in focused docs or inline code comments.
+cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) and coordinates sessions through Cloudflare Durable Objects on an API server.
 
-cloude-code is a cloud-hosted agent service. It runs agents inside isolated VMs (Fly.io Sprites) and coordinates sessions through Cloudflare Durable Objects on the API server.
-
-Users connect to the API server and create a session to make changes in a repository. Each session gets its own Durable Object, which provisions a Sprite VM, clones the repository, runs an agent process on the VM, and communicates with the API server.
+Users connect to the API server and create a session to make changes in a repository. Each session gets its own Durable Object, which provisions a Sprite VM, clones the repository, runs an agent process on the VM, and communicates with the API server and the client.
 
 The Durable Object is the source of truth and coordinator for the session. It stores all messages in its SQLite database.
 
@@ -14,15 +12,13 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 
 - **@repo/shared** (`packages/shared/`) - Shared types and Zod schemas for data transfer, session state, and vm-agent I/O. All client/server messages are validated through discriminated unions. If a type should be used by multiple packages, put it in shared instead of duplicating the interface.
 - **@repo/vm-agent** (`packages/vm-agent/`) - Runs inside the Sprite VM. Provides a shared AI SDK agent harness with Claude Code and OpenAI Codex providers. The current deployment path uses the webhook entrypoint; the NDJSON entrypoint remains for the legacy stdin/stdout path. Uses Bun runtime.
-- **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. The `SessionAgentDO` Durable Object manages the full session lifecycle.
+- **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. `src/runtime/` contains Worker runtime entrypoints such as the `SessionAgentDO` Durable Object, while `src/modules/` contains route, service, repository, and type code by domain.
 - **@repo/web** (`apps/web/`) - Next.js web client.
 
 ## Key Files
 
 - `services/api-server/src/runtime/session-agent.do.ts` - Core session management, VM lifecycle, WebSocket handling, and webhook RPC handlers.
 - `packages/vm-agent/src/index-webhook.ts` - Current vm-agent webhook entrypoint.
-- `packages/vm-agent/src/index-ndjson.ts` - Legacy vm-agent NDJSON entrypoint.
-- `packages/vm-agent/src/lib/agent-harness.ts` - Shared AI SDK harness used by both entrypoints.
 - `packages/shared/src/types/websocket-api.ts` - WebSocket message schemas.
 
 ## Architectural Invariants
@@ -37,9 +33,12 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 ## Boundaries
 
 - **Web client to API server** - `apps/web` talks to the API through HTTP routes and WebSocket messages. Shared protocol types come from `@repo/shared`.
-- **API routes to Durable Objects** - Hono routes authenticate, parse, and route requests. `SessionAgentDO` coordinates session state and execution.
+- **API routes to Durable Objects** - Hono routes authenticate, parse, and route requests. Session-agent routes depend on the shared `SessionAgentRpc` protocol and Durable Object binding, not the `SessionAgentDO` class. `SessionAgentDO` coordinates session state and execution from `services/api-server/src/runtime/session-agent.do.ts`.
 - **Durable Object to Sprite VM** - The Durable Object starts VM work and receives VM output through webhook routes. Do not reintroduce long-lived Durable Object ownership of VM stdout as the main execution path.
-- **Package import graph** - Import direction is enforced by `scripts/check-import-boundaries.ts`, which runs as part of `pnpm lint`.
+- **Workspace import graph** - Repo-wide package direction is enforced by `scripts/check-workspace-boundaries.ts`. `packages/*` cannot import `apps/*` or `services/*`; `apps/*` cannot import `services/*`; `services/*` cannot import `apps/*`.
+- **API module graph** - API-server module direction is enforced by `services/api-server/scripts/check-module-boundaries.ts` as part of the api-server package lint. Modules can import their own module, `src/shared`, and workspace packages. `src/shared` cannot import modules. Runtime/root API-server code can compose modules and shared code.
+
+See `docs/api-server/structure.md` for the api-server package file map and module structure.
 
 ## Cross-Cutting Concerns
 
@@ -77,4 +76,4 @@ Required secrets for `api-server` are set through `wrangler secret put`:
 - `TOKEN_ENCRYPTION_KEY`
 - `WEBSOCKET_TOKEN_SIGNING_KEY`
 
-Additional environment bindings and non-secret vars live in `services/api-server/src/types.ts` and `services/api-server/wrangler.jsonc`.
+Additional environment bindings and non-secret vars live in `services/api-server/src/shared/types/env.ts` and `services/api-server/wrangler.jsonc`.

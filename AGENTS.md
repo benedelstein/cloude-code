@@ -93,7 +93,6 @@ pnpm build         # tsc --noEmit
 
 ### Warnings and Disclaimers
 - No safety disclaimers unless there is a genuine life-safety or legal risk.
-- No "As an AI, I..." framing.
 
 ### Session Memory
 - Learn user corrections and preferences within the session.

@@ -30,7 +30,9 @@ Treat `ARCHITECTURE.md` as a short, stable codemap. It should answer where major
 
 ## Linting
 
-`pnpm lint` runs package ESLint checks through Turbo, then runs `pnpm lint:boundaries` and `pnpm lint:logging`.
+`pnpm lint` runs package lint checks through Turbo, then runs `pnpm lint:workspace-boundaries` and `pnpm lint:logging`.
+
+Package lint scripts own package-local checks. For example, `@repo/api-server` runs ESLint over `src/`, `tests/`, and `scripts/`, then runs `pnpm lint:module-boundaries`.
 
 The repo-wide ESLint config enforces:
 
@@ -54,25 +56,38 @@ When a lint rule exposes existing drift, prefer the mechanical fix over weakenin
 
 ## Import Boundaries
 
-Import boundaries are enforced by `scripts/check-import-boundaries.ts`, which is run by `pnpm lint`.
+Import boundary checks share parser, resolver, path, and reporting types from `scripts/import-boundaries/`. The root checker and package-local checkers should keep rule logic close to the scope they enforce.
 
-The checker parses every TS/TSX file, resolves imports to repo paths, classifies source and target files into layers, and rejects imports that are not listed in the layer allowlist. This catches package imports and deep relative imports, so crossing a boundary with `../../../../services/...` is still blocked.
+The root workspace checker is `scripts/check-workspace-boundaries.ts`. It parses TS/TSX files across the repo, resolves imports to repo paths, and enforces only workspace-level rules:
 
-The checker has three intentionally editable sections:
+- `packages/*` cannot import `apps/*` or `services/*`.
+- `apps/*` cannot import `services/*`.
+- `services/*` cannot import `apps/*`.
+- Unknown `@repo/*` imports fail with a clear message. Add new workspace packages to `workspacePackages` in `scripts/import-boundaries/import-resolver.ts`.
 
-- `layers` classifies files by exact file path or directory prefix.
-- `allowedImports` defines the permitted dependency graph. Use exact layer ids for production code. Namespace wildcards like `shared:*` are supported for broad surfaces such as tests.
-- `exceptions` records deliberate one-off edges with a rationale.
+Run it directly with `pnpm lint:workspace-boundaries`.
 
-Use this workflow when adding a rule:
+The api-server module checker is `services/api-server/scripts/check-module-boundaries.ts`. It scans `services/api-server/src/**/*.ts` and enforces api-server structure:
 
-1. Add or split a layer in `layers`.
-2. Add the layer's allowed dependency set in `allowedImports`.
-3. Run `pnpm lint:boundaries`.
-4. Move shared contracts downward if the new rule exposes a real cycle or reversed dependency.
-5. Add an exception only for a narrow bridge that should remain unusual.
+- `src/runtime` and other root API-server code can import modules and `src/shared` for composition.
+- `src/shared` cannot import modules.
+- Modules can import their own module, `src/shared`, and workspace packages.
+- Modules cannot import other modules directly. Move cross-module contracts to shared code or compose them from root/runtime code.
+- Same-module imports must point downward: routes -> middleware -> services/providers -> repositories -> utils -> types.
+- Module files outside known layers fail instead of silently becoming an unrestricted layer.
 
-The current boundary checker enforces architectural direction. It does not replace TypeScript's type checker and it does not prove that runtime data is safe. Type safety at scale also requires parsing untrusted data at system boundaries.
+Run it directly with `pnpm --filter @repo/api-server lint:module-boundaries`.
+
+For the package-level api-server file map and structure guide, see `docs/api-server/structure.md`.
+
+Use this workflow when changing boundary rules:
+
+1. Put repo-wide workspace rules in `scripts/check-workspace-boundaries.ts` or helpers under `scripts/import-boundaries/`.
+2. Put api-server module rules in `services/api-server/scripts/check-module-boundaries.ts`.
+3. Run the direct checker for the changed scope.
+4. Run `pnpm lint` so Turbo runs package-local linting before the root workspace and logging checks.
+
+Boundary checkers enforce architectural direction. They do not replace TypeScript's type checker and they do not prove that runtime data is safe. Type safety at scale also requires parsing untrusted data at system boundaries.
 
 ## Boundary Parsing
 
