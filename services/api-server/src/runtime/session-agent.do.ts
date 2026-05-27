@@ -11,15 +11,15 @@ import {
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import { Agent, type Connection } from "agents";
-import { MessageRepository } from "./repositories/message.repository";
-import { PendingChunkRepository } from "./repositories/pending-chunk.repository";
-import { SecretRepository } from "./repositories/secret.repository";
-import { LatestPlanRepository } from "./repositories/latest-plan.repository";
+import { MessageRepository } from "@/modules/session-agent/repositories/message.repository";
+import { PendingChunkRepository } from "@/modules/session-agent/repositories/pending-chunk.repository";
+import { SecretRepository } from "@/modules/session-agent/repositories/secret.repository";
+import { LatestPlanRepository } from "@/modules/session-agent/repositories/latest-plan.repository";
 import {
   ServerStateRepository,
   type ServerState,
-} from "./repositories/server-state.repository";
-import { migrateAll } from "./repositories/schema-manager.repository";
+} from "@/modules/session-agent/repositories/server-state.repository";
+import { migrateAll } from "@/modules/session-agent/repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
 import type { AttachmentRecord } from "@/shared/types/attachments";
 import type { UIMessageChunk } from "ai";
@@ -46,14 +46,19 @@ import type {
   LogLevel,
   ChatMessageEvent,
 } from "@repo/shared";
-import { AgentTurnCoordinator } from "./services/agent-turn-coordinator.service";
-import { SpriteAgentProcessManager } from "./services/sprite-agent-process-manager.service";
-import { SessionProvisionService } from "./services/session-provision.service";
-import { SessionChatDispatchService } from "./services/session-chat-dispatch.service";
-import { SessionProviderConnectionService } from "./services/session-provider-connection.service";
-import { SessionGitProxyService } from "./services/session-git-proxy.service";
-import { SessionSummaryService } from "./services/session-summary.service";
-import { getSessionAgentRuntime } from "./session-agent.runtime";
+import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-turn-coordinator.service";
+import { SpriteAgentProcessManager } from "@/modules/session-agent/services/sprite-agent-process-manager.service";
+import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
+import { SessionChatDispatchService } from "@/modules/session-agent/services/session-chat-dispatch.service";
+import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
+import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
+import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
+import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
+import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
+import { UserSessionService } from "@/modules/auth/services/user-session.service";
+import { GitHubAppService } from "@/modules/github/services/github-app.service";
+import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
+import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -74,6 +79,7 @@ interface AttachmentRow {
   bound_at: string | null;
 }
 
+// TODO: Move to another file.
 class SessionAgentAttachmentProvider {
   constructor(private readonly database: D1Database) {}
 
@@ -173,10 +179,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       apiKey: this.env.SPRITES_API_KEY,
     });
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
-    const runtime = getSessionAgentRuntime();
-    const githubProvider = runtime.createGitHubProvider(this.env, this.logger);
+    const githubAppService = new GitHubAppService(this.env, this.logger);
     this.sessionSummaryService = new SessionSummaryService({
-      repository: runtime.createSessionSummaryRepository(this.env),
+      repository: createSessionSummaryWriter(this.env),
       getSessionId: () => this.serverState.sessionId,
       logger: this.logger,
     });
@@ -216,7 +221,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
       getClientState: () => this.state,
-      getProviderCredentialAdapter: runtime.getProviderCredentialAdapter,
+      getProviderCredentialAdapter,
     });
 
     this.provisionService = new SessionProvisionService({
@@ -229,7 +234,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
-      githubTokenProvider: githubProvider,
+      githubTokenProvider: githubAppService,
     });
 
     this.chatDispatchService = new SessionChatDispatchService({
@@ -252,7 +257,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       getClientState: () => this.state,
       updatePartialState: (partial) => this.updatePartialState(partial),
-      getProviderConnectionStatus: runtime.getProviderConnectionStatus,
+      getProviderConnectionStatus: (provider, userId, env, logger) =>
+        getProviderAuthService(provider, env, logger).getConnectionStatus(userId),
     });
 
     this.gitProxyService = new SessionGitProxyService({
@@ -267,7 +273,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         this.sessionSummaryService.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
-      githubTokenProvider: githubProvider,
+      githubTokenProvider: githubAppService,
     });
 
     this.logger.info("Constructed agent DO", {
@@ -873,10 +879,21 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       };
     }
 
-    return getSessionAgentRuntime().assertSessionRepoAccess({
+    const github = new GitHubAppService(
+      this.env,
+      createLogger("session-agent-do.repo-access"),
+    );
+    return assertSessionRepoAccess({
       env: this.env,
       sessionId,
       userId,
+      providers: {
+        github,
+        userTokens: new UserSessionService({
+          env: this.env,
+          githubTokenRefreshProvider: github,
+        }),
+      },
     });
   }
 

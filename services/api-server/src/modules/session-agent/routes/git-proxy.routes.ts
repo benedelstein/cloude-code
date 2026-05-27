@@ -1,7 +1,6 @@
 import { Hono } from "hono";
-import { getAgentByName } from "agents";
 import type { Env } from "@/shared/types";
-import type { SessionAgentDO } from "../session-agent.do";
+import { getSessionAgentStub } from "./session-agent-stub";
 
 export function createGitProxyRoutes(): Hono<{ Bindings: Env }> {
   const gitProxyRoutes = new Hono<{ Bindings: Env }>();
@@ -10,10 +9,7 @@ export function createGitProxyRoutes(): Hono<{ Bindings: Env }> {
   // The DO handles authentication internally via a shared secret.
   gitProxyRoutes.all("/:sessionId/*", async (c) => {
     const sessionId = c.req.param("sessionId");
-    const stub = await getAgentByName<Env, SessionAgentDO>(
-      c.env.SESSION_AGENT as unknown as DurableObjectNamespace<SessionAgentDO>,
-      sessionId,
-    );
+    const stub = await getSessionAgentStub(c.env, sessionId);
     return stub.handleGitProxy(c.req.raw);
   });
 

@@ -1,4 +1,3 @@
-import { checkApiModuleBoundary } from "./import-boundaries/api-module-boundaries";
 import { extractImports } from "./import-boundaries/import-parser";
 import { resolveImportTarget } from "./import-boundaries/import-resolver";
 import { checkPackageBoundary } from "./import-boundaries/package-boundaries";
@@ -16,9 +15,7 @@ function checkBoundaries(): BoundaryViolation[] {
         continue;
       }
 
-      const message =
-        checkPackageBoundary(edge, targetFile)
-        ?? checkApiModuleBoundary(edge, targetFile);
+      const message = checkPackageBoundary(edge, targetFile);
 
       if (message) {
         violations.push({ edge, targetFile, message });
@@ -26,13 +23,15 @@ function checkBoundaries(): BoundaryViolation[] {
     }
   }
 
-  console.log(`Import boundary check completed in ${Date.now() - startTime}ms, found ${violations.length} violations`);
+  console.log(
+    `Workspace boundary check completed in ${Date.now() - startTime}ms, found ${violations.length} violations`,
+  );
   return violations;
 }
 
 function printViolations(violations: BoundaryViolation[]): void {
   console.error(
-    `Import boundary check failed with ${violations.length} violation${violations.length === 1 ? "" : "s"}.\n`,
+    `Workspace boundary check failed with ${violations.length} violation${violations.length === 1 ? "" : "s"}.\n`,
   );
 
   for (const violation of violations) {

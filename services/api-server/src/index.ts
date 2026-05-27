@@ -12,7 +12,7 @@ import {
   buildSessionsRoutes,
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
-import { SessionAgentDO } from "@/composition/session-agent";
+import { SessionAgentDO } from "@/runtime/session-agent.do";
 import { handleScheduled } from "@/composition/scheduled";
 import type { Env } from "@/shared/types";
 import { initializeLogger } from "@/shared/logging";

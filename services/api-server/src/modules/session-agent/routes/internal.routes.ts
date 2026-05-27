@@ -1,10 +1,12 @@
 import { Hono } from "hono";
-import { getAgentByName } from "agents";
 import { AgentChunksWebhookBody, AgentEventsWebhookBody } from "@repo/shared";
 import type { UIMessageChunk } from "ai";
 import type { Env } from "@/shared/types";
-import type { SessionAgentDO } from "../session-agent.do";
 import { createLogger } from "@/shared/logging";
+import {
+  getSessionAgentStub,
+  type SessionAgentStub,
+} from "./session-agent-stub";
 
 /**
  * Internal webhook routes called by the vm-agent process running on the
@@ -34,17 +36,14 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
     sessionId: string,
     auth: string | undefined,
   ): Promise<
-    | { ok: true; stub: DurableObjectStub<SessionAgentDO> }
+    | { ok: true; stub: SessionAgentStub }
     | { ok: false; status: 401 | 403 | 500; message: string }
   > {
     const token = parseBearerToken(auth);
     if (!token) {
       return { ok: false, status: 401, message: "Missing bearer token" };
     }
-    const stub = await getAgentByName<Env, SessionAgentDO>(
-      env.SESSION_AGENT as unknown as DurableObjectNamespace<SessionAgentDO>,
-      sessionId,
-    );
+    const stub = await getSessionAgentStub(env, sessionId);
     const valid = await stub.verifyWebhookToken(token);
     if (!valid) {
       return { ok: false, status: 403, message: "Invalid webhook token" };

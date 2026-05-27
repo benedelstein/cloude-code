@@ -45,9 +45,13 @@ export function toAbsolutePath(repoPath: string): string {
 }
 
 export function collectSourceFiles(): string[] {
+  return collectSourceFilesFromRoots(sourceRoots);
+}
+
+export function collectSourceFilesFromRoots(roots: string[]): string[] {
   const files: string[] = [];
 
-  for (const sourceRoot of sourceRoots) {
+  for (const sourceRoot of roots) {
     collectSourceFilesFromDirectory(toAbsolutePath(sourceRoot), files);
   }
 

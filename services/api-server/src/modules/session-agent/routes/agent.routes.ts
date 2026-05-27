@@ -1,8 +1,7 @@
 import { Hono } from "hono";
-import { getAgentByName } from "agents";
 import type { Env } from "@/shared/types";
-import type { SessionAgentDO } from "../session-agent.do";
 import { createLogger } from "@/shared/logging";
+import { getSessionAgentStub } from "./session-agent-stub";
 
 interface SessionTokenPayload {
   sessionId: string;
@@ -108,10 +107,7 @@ export function createAgentRoutes(
     }
 
     requestUrl.searchParams.delete("token"); // sanitize token, no longer needed
-    const stub = await getAgentByName<Env, SessionAgentDO>(
-      c.env.SESSION_AGENT as unknown as DurableObjectNamespace<SessionAgentDO>,
-      sessionId,
-    );
+    const stub = await getSessionAgentStub(c.env, sessionId);
     const doRequest = new Request(
       `http://do${requestUrl.pathname}${requestUrl.search}`,
       {

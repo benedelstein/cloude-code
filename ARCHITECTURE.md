@@ -19,7 +19,7 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 
 ## Key Files
 
-- `services/api-server/src/durable-objects/session-agent-do.ts` - Core session management, VM lifecycle, WebSocket handling, and webhook RPC handlers.
+- `services/api-server/src/runtime/session-agent.do.ts` - Core session management, VM lifecycle, WebSocket handling, and webhook RPC handlers.
 - `packages/vm-agent/src/index-webhook.ts` - Current vm-agent webhook entrypoint.
 - `packages/vm-agent/src/index-ndjson.ts` - Legacy vm-agent NDJSON entrypoint.
 - `packages/vm-agent/src/lib/agent-harness.ts` - Shared AI SDK harness used by both entrypoints.
