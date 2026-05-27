@@ -2,15 +2,22 @@
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import {
+  APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX,
+  APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
+  APP_RIGHT_SIDEBAR_MIN_WIDTH_PX,
+  RIGHT_SIDEBAR_WIDTH_COOKIE_MAX_AGE,
+  RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE,
+  RIGHT_SIDEBAR_WIDTH_COOKIE_NAME,
+  clampRightSidebarWidth,
+} from "@/components/layout/sidebar-width-persistence";
 
 const RIGHT_SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const RIGHT_SIDEBAR_WIDTH_STORAGE_KEY = "right_sidebar_width_px";
-const RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE = "--app-right-sidebar-width";
-export const APP_RIGHT_SIDEBAR_MIN_WIDTH_PX = 240;
-export const APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
-export const APP_RIGHT_SIDEBAR_MAX_WIDTH_PX = 880;
-export const APP_RIGHT_SIDEBAR_CSS_WIDTH = `var(${RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE}, ${APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX}px)`;
 export const APP_RIGHT_SIDEBAR_BUTTON_GUTTER = "3rem";
+export {
+  APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
+  APP_RIGHT_SIDEBAR_MIN_WIDTH_PX,
+};
 
 const AppRightSidebarSlotContext = createContext<HTMLDivElement | null>(null);
 const AppRightSidebarSlotSetterContext = createContext<((node: HTMLDivElement | null) => void) | null>(null);
@@ -35,6 +42,7 @@ interface AppRightSidebarProviderProps {
   children: ReactNode;
   defaultOpen?: boolean;
   defaultEnabled?: boolean;
+  defaultWidthPx?: number;
   cookieName?: string;
 }
 
@@ -42,13 +50,16 @@ export function AppRightSidebarProvider({
   children,
   defaultOpen = true,
   defaultEnabled = false,
+  defaultWidthPx = APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX,
   cookieName = "right_sidebar_state",
 }: AppRightSidebarProviderProps) {
   const [slotNode, setSlotNode] = useState<HTMLDivElement | null>(null);
   const [enabled, setEnabled] = useState(defaultEnabled);
   const [open, setOpenState] = useState(defaultOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [widthPx, setWidthPxState] = useState(getStoredRightSidebarWidth);
+  const [widthPx, setWidthPxState] = useState(
+    clampRightSidebarWidth(defaultWidthPx),
+  );
   const [isResizing, setIsResizing] = useState(false);
 
   useLayoutEffect(() => {
@@ -57,6 +68,7 @@ export function AppRightSidebarProvider({
 
   useLayoutEffect(() => {
     setRightSidebarCssWidth(widthPx);
+    persistRightSidebarWidthCookie(widthPx);
   }, [widthPx]);
 
   const setOpen = useCallback((nextOpen: boolean) => {
@@ -67,8 +79,9 @@ export function AppRightSidebarProvider({
   const setWidthPx = useCallback((nextWidthPx: number, options: { persist?: boolean } = {}) => {
     const clampedWidth = clampRightSidebarWidth(nextWidthPx);
     setWidthPxState(clampedWidth);
+    setRightSidebarCssWidth(clampedWidth);
     if (options.persist !== false) {
-      window.localStorage.setItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY, String(clampedWidth));
+      persistRightSidebarWidthCookie(clampedWidth);
     }
   }, []);
 
@@ -130,36 +143,13 @@ export function AppRightSidebarPortal({ children }: { children: ReactNode }) {
   return createPortal(children, slotNode);
 }
 
-function clampRightSidebarWidth(widthPx: number): number {
-  return Math.min(
-    APP_RIGHT_SIDEBAR_MAX_WIDTH_PX,
-    Math.max(APP_RIGHT_SIDEBAR_MIN_WIDTH_PX, Math.round(widthPx)),
-  );
-}
-
-function getStoredRightSidebarWidth(): number {
-  if (typeof window === "undefined") {
-    return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
-  }
-
-  try {
-    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!storedWidth) {
-      return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
-    }
-
-    const parsedWidth = Number.parseInt(storedWidth, 10);
-    return Number.isFinite(parsedWidth)
-      ? clampRightSidebarWidth(parsedWidth)
-      : APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
-  } catch {
-    return APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX;
-  }
-}
-
 function setRightSidebarCssWidth(widthPx: number) {
   document.documentElement.style.setProperty(
     RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE,
     `${clampRightSidebarWidth(widthPx)}px`,
   );
+}
+
+function persistRightSidebarWidthCookie(widthPx: number) {
+  document.cookie = `${RIGHT_SIDEBAR_WIDTH_COOKIE_NAME}=${clampRightSidebarWidth(widthPx)}; path=/; max-age=${RIGHT_SIDEBAR_WIDTH_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
