@@ -31,44 +31,39 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
     return match ? match[1]!.trim() : null;
   }
 
-  async function verifyWebhookAuth(
+  async function getWebhookTarget(
     env: Env,
     sessionId: string,
     auth: string | undefined,
   ): Promise<
-    | { ok: true; stub: SessionAgentStub }
-    | { ok: false; status: 401 | 403 | 500; message: string }
+    | { ok: true; token: string; stub: SessionAgentStub }
+    | { ok: false; status: 401; message: string }
   > {
     const token = parseBearerToken(auth);
     if (!token) {
       return { ok: false, status: 401, message: "Missing bearer token" };
     }
     const stub = await getSessionAgentStub(env, sessionId);
-    const valid = await stub.verifyWebhookToken(token);
-    if (!valid) {
-      return { ok: false, status: 403, message: "Invalid webhook token" };
-    }
-    return { ok: true, stub };
+    return { ok: true, token, stub };
   }
 
   internalRoutes.post("/session/:sessionId/chunks", async (c) => {
     const sessionId = c.req.param("sessionId");
     logger.info("[/chunks] incoming webhook", { fields: { sessionId } });
-    // TODO: why are we doing 2 rpcs here.
-    const authResult = await verifyWebhookAuth(
+    const target = await getWebhookTarget(
       c.env,
       sessionId,
       c.req.header("authorization"),
     );
-    if (!authResult.ok) {
+    if (!target.ok) {
       logger.warn("[/chunks] auth failed", {
         fields: {
           sessionId,
-          status: authResult.status,
-          reason: authResult.message,
+          status: target.status,
+          reason: target.message,
         },
       });
-      return c.json({ error: authResult.message }, authResult.status);
+      return c.json({ error: target.message }, target.status);
     }
 
     let body: unknown;
@@ -121,30 +116,41 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
           .join(","),
       },
     });
-    await authResult.stub.handleWebhookChunks(
+    const accepted = await target.stub.handleWebhookChunks(
+      target.token,
       parsed.data.userMessageId,
       chunks,
     );
+    if (!accepted) {
+      logger.warn("[/chunks] auth failed", {
+        fields: {
+          sessionId,
+          status: 403,
+          reason: "Invalid webhook token",
+        },
+      });
+      return c.json({ error: "Invalid webhook token" }, 403);
+    }
     return new Response(null, { status: 204 });
   });
 
   internalRoutes.post("/session/:sessionId/events", async (c) => {
     const sessionId = c.req.param("sessionId");
     logger.info("[/events] incoming webhook", { fields: { sessionId } });
-    const authResult = await verifyWebhookAuth(
+    const target = await getWebhookTarget(
       c.env,
       sessionId,
       c.req.header("authorization"),
     );
-    if (!authResult.ok) {
+    if (!target.ok) {
       logger.warn("[/events] auth failed", {
         fields: {
           sessionId,
-          status: authResult.status,
-          reason: authResult.message,
+          status: target.status,
+          reason: target.message,
         },
       });
-      return c.json({ error: authResult.message }, authResult.status);
+      return c.json({ error: target.message }, target.status);
     }
 
     let body: unknown;
@@ -184,7 +190,20 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
     logger.info("[/events] forwarding to DO", {
       fields: { sessionId, eventType: parsed.data.event.type },
     });
-    await authResult.stub.handleWebhookEvent(parsed.data.event);
+    const accepted = await target.stub.handleWebhookEvent(
+      target.token,
+      parsed.data.event,
+    );
+    if (!accepted) {
+      logger.warn("[/events] auth failed", {
+        fields: {
+          sessionId,
+          status: 403,
+          reason: "Invalid webhook token",
+        },
+      });
+      return c.json({ error: "Invalid webhook token" }, 403);
+    }
     return new Response(null, { status: 204 });
   });
 

@@ -55,12 +55,12 @@ export type HandleUpdatePullRequestResult = Result<void, Extract<SessionAgentRpc
 export interface SessionAgentRpc {
   refreshProviderConnection(): Promise<void>;
   handleGitProxy(request: Request): Promise<Response>;
-  verifyWebhookToken(token: string): boolean;
   handleWebhookChunks(
+    token: string,
     userMessageId: string,
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
-  ): Promise<void>;
-  handleWebhookEvent(event: AgentEvent): void;
+  ): Promise<boolean>;
+  handleWebhookEvent(token: string, event: AgentEvent): boolean;
   handleInit(request: InitSessionAgentRequest): Promise<HandleInitResult>;
   handleGetSession(): HandleGetSessionResult;
   handleGetMessages(): HandleGetMessagesResult;

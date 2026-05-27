@@ -296,19 +296,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   // Webhook RPC handlers (called from /internal webhook routes)
   // ============================================
 
-  /**
-   * Verifies the bearer token against the per-session webhook secret.
-   * Used by the internal webhook routes before forwarding to chunk/event
-   * handlers. Constant-time compare.
-   */
-  verifyWebhookToken(token: string): boolean {
+  private isWebhookTokenValid(token: string): boolean {
     const expected = this.secretRepository.get("webhook_token");
     if (!expected) {
-      this.logger.warn("verifyWebhookToken: no webhook_token stored for session");
+      this.logger.warn("Webhook auth failed: no webhook token stored");
       return false;
     }
     const ok = timingSafeCompare(expected, token);
-    if (!ok) { this.logger.warn("verifyWebhookToken: token mismatch"); }
+    if (!ok) { this.logger.warn("Webhook auth failed: token mismatch"); }
     return ok;
   }
 
@@ -317,9 +312,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    * a terminal chunk in the batch finalizes the turn.
    */
   async handleWebhookChunks(
+    token: string,
     userMessageId: string,
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    if (!this.isWebhookTokenValid(token)) {
+      return false;
+    }
+
     this.logger.info("handleWebhookChunks", {
       fields: {
         userMessageId,
@@ -329,18 +329,24 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
     this.turnCoordinator.ensureRehydratedState();
     await this.turnCoordinator.handleChunks(userMessageId, chunks);
+    return true;
   }
 
   /**
    * Webhook entry point for non-stream agent events. Dispatches on the
    * AgentEvent discriminator.
    */
-  handleWebhookEvent(event: AgentEvent): void {
+  handleWebhookEvent(token: string, event: AgentEvent): boolean {
+    if (!this.isWebhookTokenValid(token)) {
+      return false;
+    }
+
     this.logger.info("handleWebhookEvent", {
       fields: { eventType: event.type },
     });
     this.turnCoordinator.ensureRehydratedState();
     this.turnCoordinator.handleEvent(event);
+    return true;
   }
 
   // ============================================
