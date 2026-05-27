@@ -108,12 +108,12 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 
 | File | Purpose |
 |------|---------|
-| `services/api-server/src/routes/auth/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, logout |
-| `services/api-server/src/middleware/auth.middleware.ts` | Session validation, token refresh |
-| `services/api-server/src/lib/auth/preview-origin.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
-| `services/api-server/src/lib/github/github-app.ts` | GitHub App OAuth helpers |
-| `services/api-server/src/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
-| `services/api-server/src/lib/utils/crypto.ts` | Token encryption/decryption |
+| `services/api-server/src/modules/auth/routes/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, logout |
+| `services/api-server/src/modules/auth/middleware/auth.middleware.ts` | Session validation, token refresh |
+| `services/api-server/src/modules/auth/utils/preview-origin.util.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
+| `services/api-server/src/modules/github/services/github-app.service.ts` | GitHub App OAuth helpers |
+| `services/api-server/src/shared/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
+| `services/api-server/src/shared/utils/crypto.ts` | Token encryption/decryption |
 | `apps/web/app/api/auth/finalize/route.ts` | Exchanges code for session token, sets cookie, posts opener |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
 | `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout, popup management) |
@@ -128,8 +128,8 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 
 Even after you create a session on a repo you have access to, you may lose access to it if the installation is deleted, you lose access to the repo, or the repo is removed from the installation. We handle this like so:
 
-- Routes to create/get a session, mint a websocket token, connect a websocket, and send `chat.message` all check for access to the repo using `services/api-server/src/lib/providers/repo-access-provider.ts`.
-  a. If we don't know the repo's installation_id, we have to look it up using `github-app.ts#findInstallationForRepoId`. This first checks D1 `github_installation_repos`, then falls back to the GitHub API.
+- Routes to create/get a session, mint a websocket token, connect a websocket, and send `chat.message` all check for access to the repo using `services/api-server/src/modules/sessions/services/session-repo-access.service.ts`.
+  a. If we don't know the repo's installation_id, we have to look it up using `github-app.service.ts#findInstallationForRepoId`. This first checks D1 `github_installation_repos`, then falls back to the GitHub API.
   b. Check the `github_user_repo_access_cache` for this (user_id, repo_id, installation_id) (5 minute TTL)
   c. If no cache value exists, look up the repo using the GitHub API (the same route we use to fetch user-accessible repos). This path is slow, since we have to enumerate a user's repos, which is also why we cache it.
 

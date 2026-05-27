@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
-import { extractDerivedStateFromPart } from "../../src/lib/sessions/session-derived-state";
+import { extractDerivedStateFromPart } from "../../src/shared/utils/session-derived-state";
 
 type MessagePart = UIMessage["parts"][number];
 

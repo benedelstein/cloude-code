@@ -19,7 +19,7 @@ cloude-code uses a GitHub App for repository access instead of a shared personal
 
 ### Token Resolution
 
-When a session is created, repo access is checked by `assertUserRepoAccess(...)` in `services/api-server/src/lib/providers/repo-access-provider.ts`. GitHub App token minting for clone/push goes through `GitHubProvider`, which adapts `GitHubAppService`:
+When a session is created, repo access is checked by `assertUserRepoAccess(...)` in `services/api-server/src/modules/sessions/services/session-repo-access.service.ts`. GitHub App token minting for clone/push goes through `GitHubAppService`:
 
 1. Resolve the numeric repo id to an installation with `findInstallationForRepoId(...)`.
 2. Verify the current user can access the repo through that installation.
@@ -37,7 +37,7 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRem
   ```
   git -c http.extraHeader="Authorization: Basic <base64(x-access-token:TOKEN)>" clone ...
   ```
-- **Push/fetch after clone**: `origin` is reset to the public GitHub URL for reads, and `origin --push` is set to `WORKER_URL/git-proxy/:sessionId/github.com/owner/repo.git`. The proxy authenticates Sprite requests with a per-session bearer secret and forwards to GitHub with a fresh or cached installation token from `ensureValidInstallationToken(...)`.
+- **Push/fetch after clone**: `origin` is reset to the public GitHub URL for reads, and `origin --push` is set to `WORKER_URL/git-proxy/:sessionId/github.com/owner/repo.git`. The proxy authenticates Sprite requests with a per-session bearer secret and forwards to GitHub with a fresh or cached installation token from `getInstallationTokenForRepo(...)`.
 
 ## Architecture
 
@@ -45,12 +45,12 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRem
 
 | File | Purpose |
 |------|---------|
-| `services/api-server/src/lib/github/github-app.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
-| `services/api-server/src/lib/providers/repo-access-provider.ts` | Session repo access checks for create/read/connect/chat paths |
-| `services/api-server/src/durable-objects/lib/SessionProvisionService.ts` | Sprite provisioning, read-only clone, git remote setup |
-| `services/api-server/src/lib/providers/git-setup-provider.ts` | Configures `origin`, push URL, git identity, and git-proxy auth header |
-| `services/api-server/src/durable-objects/lib/SessionGitProxyService.ts` | Session-scoped git proxy auth/access wrapper |
-| `services/api-server/src/routes/webhooks.routes.ts` | `POST /webhooks/github` — receives GitHub webhook events |
+| `services/api-server/src/modules/github/services/github-app.service.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
+| `services/api-server/src/modules/sessions/services/session-repo-access.service.ts` | Session repo access checks for create/read/connect/chat paths |
+| `services/api-server/src/modules/session-agent/services/session-provision.service.ts` | Sprite provisioning, read-only clone, git remote setup |
+| `services/api-server/src/shared/integrations/git/git-setup.service.ts` | Configures `origin`, push URL, git identity, and git-proxy auth header |
+| `services/api-server/src/modules/session-agent/services/session-git-proxy.service.ts` | Session-scoped git proxy auth/access wrapper |
+| `services/api-server/src/modules/webhooks/routes/webhooks.routes.ts` | `POST /webhooks/github` - receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |
 
 ### D1 Tables

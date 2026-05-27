@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionsRepository } from "../../src/repositories/sessions.repository";
+import { SessionsRepository } from "../../src/modules/sessions/repositories/sessions.repository";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;

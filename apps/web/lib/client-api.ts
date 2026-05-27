@@ -18,8 +18,6 @@ import type {
   UpdateSessionTitleResponse,
   PullRequestResponse,
   PullRequestStatusResponse,
-  EditorOpenResponse,
-  EditorCloseResponse,
   GitHubAuthUrlResponse,
   LogoutResponse,
   OpenAIStatusResponse,
@@ -266,14 +264,6 @@ export async function deleteSession(sessionId: string): Promise<DeleteSessionRes
 
 export async function archiveSession(sessionId: string): Promise<ArchiveSessionResponse> {
   return apiFetch(`/sessions/${sessionId}/archive`, { method: "POST" });
-}
-
-export async function openEditor(sessionId: string): Promise<EditorOpenResponse> {
-  return apiFetch(`/sessions/${sessionId}/editor/open`, { method: "POST" });
-}
-
-export async function closeEditor(sessionId: string): Promise<EditorCloseResponse> {
-  return apiFetch(`/sessions/${sessionId}/editor/close`, { method: "POST" });
 }
 
 export async function uploadAttachments(

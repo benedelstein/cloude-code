@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger } from "@repo/shared";
-import type { Env } from "../../src/types";
-import type { ServerState } from "../../src/durable-objects/repositories/server-state-repository";
-import { SessionProvisionService } from "../../src/durable-objects/lib/SessionProvisionService";
+import type { Env } from "../../src/shared/types";
+import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
+import { SessionProvisionService } from "../../src/modules/session-agent/services/session-provision.service";
 
 const mockState = vi.hoisted(() => ({
   events: [] as string[],
@@ -13,7 +13,7 @@ const mockState = vi.hoisted(() => ({
   getReadOnlyTokenForRepo: vi.fn(),
 }));
 
-vi.mock("@/lib/providers/sprite-provider", () => {
+vi.mock("@/shared/integrations/sprites/WorkersSpriteClient", () => {
   class WorkersSpriteClient {
     public name: string;
     constructor(name: string) {
@@ -24,19 +24,19 @@ vi.mock("@/lib/providers/sprite-provider", () => {
   }
   return {
     WorkersSpriteClient,
-    buildNetworkPolicy: (rules: unknown[]) => rules,
-    configureGitRemote: mockState.configureGitRemote,
   };
 });
 
-vi.mock("@/lib/providers/startup-toolchain", () => ({
+vi.mock("@/shared/integrations/sprites/network-policy", () => ({
+  buildNetworkPolicy: (rules: unknown[]) => rules,
+}));
+
+vi.mock("@/shared/integrations/sprites/startup-toolchain", () => ({
   ensureSpriteStartupToolchain: mockState.ensureSpriteStartupToolchain,
 }));
 
-vi.mock("@/lib/providers/github-provider", () => ({
-  GitHubProvider: class {
-    getReadOnlyTokenForRepo = mockState.getReadOnlyTokenForRepo;
-  },
+vi.mock("@/shared/integrations/git/git-setup.service", () => ({
+  configureGitRemote: mockState.configureGitRemote,
 }));
 
 function createLogger(): Logger {
@@ -109,8 +109,10 @@ function createService(
     updateServerState,
     updatePartialState,
     synthesizeStatus: () => "provisioning",
-    refreshGitHubToken: vi.fn(async () => undefined),
     ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
+    githubTokenProvider: {
+      getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
+    },
   });
 
   return { service, updateServerState, spritesCoordinator };

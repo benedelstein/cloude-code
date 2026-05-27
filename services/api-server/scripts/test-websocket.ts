@@ -1,35 +1,12 @@
 #!/usr/bin/env npx tsx
 
 import "dotenv/config";
-import WebSocket from "ws";
 
-const SPRITES_API_KEY = process.env.SPRITES_API_KEY!;
 const SPRITE_NAME = process.argv[2] || "test-1768976896129";
 
 const url = `wss://api.sprites.dev/v1/sprites/${SPRITE_NAME}/exec?cmd=/bin/bash&tty=true&cols=80&rows=24`;
 
 console.error("Connecting to:", url);
-
-type SessionInfoMessage = {
-  type: "session_info";
-  session_id: number;
-  command: string;
-  created: number;
-  tty: boolean;
-  cols: number;
-  rows: number;
-}
-
-
-
-
-
-// --------------------------
-// --------------------------
-// --------------------------
-// MARK: - API IMPLEMENTATION USING WS
-
-const sessionId: number | null = null;
 
 // const ws = new WebSocket(url, {
 //   headers: {
