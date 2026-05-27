@@ -8,7 +8,7 @@ export const RIGHT_SIDEBAR_WIDTH_COOKIE_NAME = "right_sidebar_width_px";
 export const RIGHT_SIDEBAR_WIDTH_CSS_VARIABLE = "--app-right-sidebar-width";
 export const RIGHT_SIDEBAR_WIDTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 export const APP_RIGHT_SIDEBAR_MIN_WIDTH_PX = 240;
-export const APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX = 288;
+export const APP_RIGHT_SIDEBAR_DEFAULT_WIDTH_PX = 360;
 export const APP_RIGHT_SIDEBAR_MAX_WIDTH_PX = 880;
 
 export function clampLeftSidebarWidth(widthPx: number): number {
