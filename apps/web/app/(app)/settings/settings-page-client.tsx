@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Github, LogOut } from "lucide-react";
+import Link from "next/link";
+import { Github, LogOut, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,19 @@ export function SettingsPageClient() {
           />
         </SettingsSection>
 
+        <SettingsSection
+          title="Session setup"
+          description="Reusable configuration for starting sessions."
+        >
+          <SettingsLinkRow
+            icon={<SlidersHorizontal className="h-5 w-5" />}
+            title="Environments"
+            description="Manage repo-specific startup scripts and network access."
+            href="/settings/environments"
+            actionLabel="Manage"
+          />
+        </SettingsSection>
+
         {!signinPanelHandle.loading && (
           <ProviderSigninPanel
             providerId={signinPanelProvider}
@@ -183,6 +197,40 @@ function SettingsSection({
         {children}
       </div>
     </section>
+  );
+}
+
+function SettingsLinkRow({
+  icon,
+  title,
+  description,
+  href,
+  actionLabel,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex flex-col gap-4 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/50 md:flex-row md:items-center md:justify-between"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-muted">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+          <p className="truncate text-sm text-foreground-muted">{description}</p>
+        </div>
+      </div>
+      <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground-muted">
+        {actionLabel}
+      </span>
+    </Link>
   );
 }
 
