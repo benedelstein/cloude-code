@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save, TriangleAlert } from "lucide-react";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,8 +59,18 @@ export function CreateEnvironmentPageClient() {
   const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
   const {
     visibleRepos,
+    installUrl,
     loading: reposLoading,
     cursor: reposCursor,
+    loadingMore: reposLoadingMore,
+    selectedRepo,
+    setSelectedRepo,
+    searchQuery: repoSearchQuery,
+    setSearchQuery: setRepoSearchQuery,
+    searching: repoSearchLoading,
+    isSearchMode: isRepoSearchMode,
+    open: repoPickerOpen,
+    setOpen: setRepoPickerOpen,
     loadMore: loadMoreRepos,
   } = useRepoPicker({
     requestedRepoId: hasRequestedRepo ? requestedRepoId : null,
@@ -71,10 +81,6 @@ export function CreateEnvironmentPageClient() {
     ...INITIAL_FORM,
     repoId: hasRequestedRepo ? String(requestedRepoId) : "",
   }));
-  const selectedRepo = useMemo(() => {
-    const repoId = Number(form.repoId);
-    return repos.find((repo) => repo.id === repoId) ?? null;
-  }, [form.repoId, repos]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -357,7 +363,9 @@ function parseEnvVars(text: string): Record<string, string> {
     }
     const key = line.slice(0, separatorIndex).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid environment variable name: ${key}`);
+      throw new Error(
+        `Invalid environment variable name: ${key}. Use shell-compatible names like API_KEY or _SECRET_1.`,
+      );
     }
     vars[key] = line.slice(separatorIndex + 1);
   }

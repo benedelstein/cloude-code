@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Check, ChevronsUpDown, GitBranch } from "lucide-react";
 import type { Branch } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import { cn } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -72,6 +73,7 @@ export function BranchSelector({
   hasMore,
   loadingMore,
   onLoadMore,
+  triggerClassName,
 }: {
   branches: Branch[];
   selectedBranch: string | null;
@@ -83,6 +85,7 @@ export function BranchSelector({
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
+  triggerClassName?: string;
 }) {
   const commandListRef = useRef<HTMLDivElement | null>(null);
 
@@ -116,7 +119,10 @@ export function BranchSelector({
               <button
                 type="button"
                 disabled={loading || disabled}
-                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-default cursor-pointer min-w-0 max-w-[180px]"
+                className={cn(
+                  "flex h-8 max-w-[180px] min-w-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
+                  triggerClassName,
+                )}
               >
                 <GitBranch className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">

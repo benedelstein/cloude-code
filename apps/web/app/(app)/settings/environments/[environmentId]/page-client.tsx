@@ -352,7 +352,9 @@ function parseEnvVars(text: string): Record<string, string> {
     }
     const key = line.slice(0, separatorIndex).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid environment variable name: ${key}`);
+      throw new Error(
+        `Invalid environment variable name: ${key}. Use shell-compatible names like API_KEY or _SECRET_1.`,
+      );
     }
     vars[key] = line.slice(separatorIndex + 1);
   }

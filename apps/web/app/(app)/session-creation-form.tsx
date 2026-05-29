@@ -470,38 +470,45 @@ export function SessionCreationForm() {
     >
       <InputFrame
         footer={
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <RepoSelector
-              repos={visibleRepos}
-              selectedRepo={selectedRepo}
-              onSelect={setSelectedRepo}
-              loading={reposLoading}
-              disabled={isFormInteractionDisabled}
-              installUrl={installUrl}
-              open={repoPickerOpen}
-              onOpenChange={setRepoPickerOpen}
-              hasMore={reposCursor !== null}
-              loadingMore={reposLoadingMore}
-              onLoadMore={loadMoreRepos}
-              searchQuery={repoSearchQuery}
-              onSearchQueryChange={setRepoSearchQuery}
-              searching={repoSearchLoading}
-              isSearchMode={isRepoSearchMode}
-            />
-            {selectedRepo && (branches.length > 0 || branchesLoading) && (
-              <BranchSelector
-                branches={branches}
-                selectedBranch={selectedBranch}
-                onSelect={setSelectedBranch}
-                loading={branchesLoading}
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="inline-flex min-w-0 flex-wrap items-center gap-0 rounded-md border border-border bg-background px-0.5 py-0.5">
+              <RepoSelector
+                repos={visibleRepos}
+                selectedRepo={selectedRepo}
+                onSelect={setSelectedRepo}
+                loading={reposLoading}
                 disabled={isFormInteractionDisabled}
-                open={branchPickerOpen}
-                onOpenChange={setBranchPickerOpen}
-                hasMore={branchesCursor !== null}
-                loadingMore={branchesLoadingMore}
-                onLoadMore={loadMoreBranches}
+                installUrl={installUrl}
+                open={repoPickerOpen}
+                onOpenChange={setRepoPickerOpen}
+                hasMore={reposCursor !== null}
+                loadingMore={reposLoadingMore}
+                onLoadMore={loadMoreRepos}
+                searchQuery={repoSearchQuery}
+                onSearchQueryChange={setRepoSearchQuery}
+                searching={repoSearchLoading}
+                isSearchMode={isRepoSearchMode}
+                triggerClassName="h-7 border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
-            )}
+              {selectedRepo && (branches.length > 0 || branchesLoading) && (
+                <>
+                  <div className="mx-0.5 self-stretch border-l border-border" />
+                  <BranchSelector
+                    branches={branches}
+                    selectedBranch={selectedBranch}
+                    onSelect={setSelectedBranch}
+                    loading={branchesLoading}
+                    disabled={isFormInteractionDisabled}
+                    open={branchPickerOpen}
+                    onOpenChange={setBranchPickerOpen}
+                    hasMore={branchesCursor !== null}
+                    loadingMore={branchesLoadingMore}
+                    onLoadMore={loadMoreBranches}
+                    triggerClassName="h-7 border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                  />
+                </>
+              )}
+            </div>
             <SessionEnvironmentSelector
               selectedRepo={selectedRepo}
               disabled={isFormInteractionDisabled}
