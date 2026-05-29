@@ -134,6 +134,16 @@ function createManager(
     getServerState: () => serverState,
     updateAgentProcessId,
     getClientState: createClientState,
+    getRuntimeConfig: () => ({
+      sourceEnvironmentId: null,
+      sourceEnvironmentName: null,
+      repoId: 1,
+      network: { mode: "default_plus_extras", extraAllowlist: [] },
+      plainEnvVars: {},
+      startupScript: null,
+      resolvedAt: "2026-05-29T00:00:00.000Z",
+      schemaVersion: 1,
+    }),
     getProviderCredentialAdapter: () => ({
       getCredentialSnapshot: mockState.getCredentialSnapshot,
     }),

@@ -13,6 +13,7 @@ import {
   type UpdateSessionTitleResponse,
   type DeleteSessionResponse,
   type Result,
+  type SessionRuntimeConfigSnapshot,
 } from "@repo/shared";
 import type { UIMessage } from "ai";
 import { getAgentByName, type Agent } from "agents";
@@ -80,7 +81,20 @@ export interface SessionsServiceDeps {
   env: Env;
   attachmentProvider: SessionAttachmentProvider;
   repoAccessProviders: SessionRepoAccessProviders;
+  repoEnvironmentResolver: SessionRepoEnvironmentResolver;
   createPullRequestGitHubProvider(): SessionPullRequestGitHubProvider;
+}
+
+export interface SessionRepoEnvironmentResolver {
+  resolveRuntimeConfig(params: {
+    environmentId: string | undefined;
+    userId: string;
+    repoId: number;
+  }): Promise<Result<SessionRuntimeConfigSnapshot, {
+    status: 400 | 403 | 404 | 409 | 503;
+    message: string;
+    code?: string;
+  }>>;
 }
 
 export class SessionsService {
@@ -88,6 +102,7 @@ export class SessionsService {
   private readonly sessionsRepository: SessionsRepository;
   private readonly attachmentProvider: SessionAttachmentProvider;
   private readonly repoAccessProviders: SessionRepoAccessProviders;
+  private readonly repoEnvironmentResolver: SessionRepoEnvironmentResolver;
   private readonly createPullRequestGitHubProvider: () => SessionPullRequestGitHubProvider;
 
   constructor(deps: SessionsServiceDeps) {
@@ -95,6 +110,7 @@ export class SessionsService {
     this.sessionsRepository = new SessionsRepository(deps.env.DB);
     this.attachmentProvider = deps.attachmentProvider;
     this.repoAccessProviders = deps.repoAccessProviders;
+    this.repoEnvironmentResolver = deps.repoEnvironmentResolver;
     this.createPullRequestGitHubProvider = deps.createPullRequestGitHubProvider;
   }
 
@@ -181,6 +197,20 @@ export class SessionsService {
     }
 
     const sessionId = crypto.randomUUID();
+    const runtimeConfigResult = await this.repoEnvironmentResolver.resolveRuntimeConfig({
+      environmentId: params.request.environmentId,
+      userId: params.userId,
+      repoId: repoAccessResult.value.repoId,
+    });
+    if (!runtimeConfigResult.ok) {
+      return failure(this.buildError({
+        status: runtimeConfigResult.error.status,
+        message: runtimeConfigResult.error.message,
+        code: runtimeConfigResult.error.code,
+      }));
+    }
+    const runtimeConfig = runtimeConfigResult.value;
+
     logger.info("Creating session agent", {
       fields: {
         sessionId,
@@ -198,6 +228,8 @@ export class SessionsService {
       repoId: repoAccessResult.value.repoId,
       installationId: repoAccessResult.value.installationId,
       repoFullName: repoAccessResult.value.repoFullName,
+      sourceEnvironmentId: runtimeConfig.sourceEnvironmentId,
+      sourceEnvironmentName: runtimeConfig.sourceEnvironmentName,
     });
 
     try {
@@ -224,6 +256,7 @@ export class SessionsService {
         settings: params.request.settings,
         agentMode: params.request.agentMode,
         branch: params.request.branch,
+        runtimeConfig,
         initialMessage: params.request.initialMessage,
         initialAttachmentIds: attachmentIds,
       });
@@ -662,6 +695,7 @@ export class SessionsService {
     settings: CreateSessionRequest["settings"];
     agentMode: CreateSessionRequest["agentMode"];
     branch: CreateSessionRequest["branch"];
+    runtimeConfig: SessionRuntimeConfigSnapshot;
     initialMessage: CreateSessionRequest["initialMessage"];
     initialAttachmentIds: string[];
   }): Promise<SessionsServiceResult<void>> {
@@ -674,6 +708,7 @@ export class SessionsService {
         agentSettings: params.settings,
         agentMode: params.agentMode,
         branch: params.branch,
+        runtimeConfig: params.runtimeConfig,
         initialMessage: params.initialMessage,
         initialAttachmentIds: params.initialAttachmentIds,
       },

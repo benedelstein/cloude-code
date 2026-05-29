@@ -24,6 +24,10 @@ export type ServerState = {
   activeUserMessageId: string | null;
   /** Provider runtime toolchain checkpoints for this Sprite. */
   startupToolchain: StartupToolchainCheckpoint | null;
+  /** True after the selected environment startup script has completed or no-op'd. */
+  startupScriptCompleted: boolean;
+  /** True after the selected final network policy has been applied. */
+  finalNetworkPolicyApplied: boolean;
 };
 
 function defaultServerState(): ServerState {
@@ -37,6 +41,8 @@ function defaultServerState(): ServerState {
     agentProcessId: null,
     activeUserMessageId: null,
     startupToolchain: null,
+    startupScriptCompleted: false,
+    finalNetworkPolicyApplied: false,
   };
 }
 

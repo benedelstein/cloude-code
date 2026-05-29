@@ -1,12 +1,21 @@
-import type { ClientState, Logger, SessionStatus } from "@repo/shared";
+import type {
+  ClientState,
+  Logger,
+  SessionRuntimeConfigSnapshot,
+  SessionStatus,
+} from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
-import { buildNetworkPolicy } from "@/shared/integrations/sprites/network-policy";
+import {
+  buildBootstrapNetworkPolicy,
+  buildFinalNetworkPolicy,
+} from "@/shared/integrations/sprites/network-policy";
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
 import { configureGitRemote } from "@/shared/integrations/git/git-setup.service";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
+import { SessionStartupScriptService } from "./session-startup-script.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -21,6 +30,7 @@ export interface SessionProvisionServiceDeps {
 
   getServerState: () => ServerState;
   getClientState: () => ClientState;
+  getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
   updateServerState: (partial: Partial<ServerState>) => void;
   updatePartialState: (partial: Partial<ClientState>) => void;
   synthesizeStatus: () => SessionStatus;
@@ -45,11 +55,13 @@ export class SessionProvisionService {
   private readonly spritesCoordinator: SpritesCoordinator;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
+  private readonly getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
   private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
+  private readonly startupScriptService: SessionStartupScriptService;
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
   private ensureProvisionedPromise: Promise<void> | null = null;
@@ -60,11 +72,13 @@ export class SessionProvisionService {
     this.spritesCoordinator = deps.spritesCoordinator;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
+    this.getRuntimeConfig = deps.getRuntimeConfig;
     this.updateServerState = deps.updateServerState;
     this.updatePartialState = deps.updatePartialState;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
     this.githubTokenProvider = deps.githubTokenProvider;
+    this.startupScriptService = new SessionStartupScriptService(this.logger);
   }
 
   /**
@@ -99,9 +113,7 @@ export class SessionProvisionService {
           this.env.SPRITES_API_URL,
         );
         const workerHostname = new URL(this.env.WORKER_URL).hostname;
-        const networkPolicy = buildNetworkPolicy([
-          { domain: workerHostname, action: "allow" },
-        ]);
+        const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
         await sprite.setNetworkPolicy(networkPolicy);
 
         this.updateServerState({ spriteName: spriteResponse.name });
@@ -121,6 +133,17 @@ export class SessionProvisionService {
           status: this.synthesizeStatus(),
           lastError: null,
         });
+      }
+
+      const provisionedSpriteName = this.getServerState().spriteName;
+      if (provisionedSpriteName && !this.getServerState().startupScriptCompleted) {
+        await this.runStartupScript(provisionedSpriteName);
+        this.updateServerState({ startupScriptCompleted: true });
+      }
+
+      if (provisionedSpriteName && !this.getServerState().finalNetworkPolicyApplied) {
+        await this.applyFinalNetworkPolicy(provisionedSpriteName);
+        this.updateServerState({ finalNetworkPolicyApplied: true });
       }
     } catch (error) {
       const errorMessage =
@@ -267,6 +290,7 @@ export class SessionProvisionService {
     this.updatePartialState({ baseBranch: actualBaseBranch });
 
     const gitProxySecret = this.ensureGitProxySecret();
+    const runtimeConfig = this.getRuntimeConfig();
 
     // Configure remote URLs, git identity, and proxy auth header
     await configureGitRemote(sprite, {
@@ -275,6 +299,40 @@ export class SessionProvisionService {
       cloneUrl,
       proxyBaseUrl,
       gitProxySecret,
+      useProxyForFetch: runtimeConfig.network.mode === "locked",
     });
+  }
+
+  private async runStartupScript(spriteName: string): Promise<void> {
+    const runtimeConfig = this.getRuntimeConfig();
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    await this.startupScriptService.run({
+      sprite,
+      script: runtimeConfig.startupScript,
+      workspaceDir: WORKSPACE_DIR,
+      env: runtimeConfig.plainEnvVars,
+    });
+  }
+
+  private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {
+    const runtimeConfig = this.getRuntimeConfig();
+    const providerId = this.getClientState().agentSettings.provider;
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    const workerHostname = new URL(this.env.WORKER_URL).hostname;
+
+    await sprite.setNetworkPolicy(buildFinalNetworkPolicy({
+      workerHostname,
+      providerId,
+      network: runtimeConfig.network,
+    }));
   }
 }

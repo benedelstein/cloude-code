@@ -7,6 +7,7 @@ export interface GitSetupOptions {
   cloneUrl: string;
   proxyBaseUrl: string;
   gitProxySecret: string;
+  useProxyForFetch?: boolean;
 }
 
 /**
@@ -16,12 +17,20 @@ export async function configureGitRemote(
   sprite: WorkersSpriteClient,
   options: GitSetupOptions,
 ): Promise<void> {
-  const { workspaceDir, githubRemoteUrl, cloneUrl, proxyBaseUrl, gitProxySecret } = options;
+  const {
+    workspaceDir,
+    githubRemoteUrl,
+    cloneUrl,
+    proxyBaseUrl,
+    gitProxySecret,
+    useProxyForFetch = false,
+  } = options;
+  const fetchUrl = useProxyForFetch ? cloneUrl : githubRemoteUrl;
 
   await sprite.execHttp(dedent`
     set -e
     cd ${workspaceDir}
-    git remote set-url origin ${githubRemoteUrl}
+    git remote set-url origin ${fetchUrl}
     git remote set-url --push origin ${cloneUrl}
     git config user.email "agent@cloudecode.dev"
     git config user.name "Cloude Code"

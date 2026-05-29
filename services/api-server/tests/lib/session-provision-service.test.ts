@@ -28,7 +28,8 @@ vi.mock("@/shared/integrations/sprites/WorkersSpriteClient", () => {
 });
 
 vi.mock("@/shared/integrations/sprites/network-policy", () => ({
-  buildNetworkPolicy: (rules: unknown[]) => rules,
+  buildBootstrapNetworkPolicy: () => [{ domain: "bootstrap", action: "allow" }],
+  buildFinalNetworkPolicy: () => [{ domain: "final", action: "allow" }],
 }));
 
 vi.mock("@/shared/integrations/sprites/startup-toolchain", () => ({
@@ -75,6 +76,8 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentProcessId: null,
     activeUserMessageId: null,
     startupToolchain: null,
+    startupScriptCompleted: false,
+    finalNetworkPolicyApplied: false,
     ...overrides,
   };
 }
@@ -106,6 +109,16 @@ function createService(
     spritesCoordinator: spritesCoordinator as never,
     getServerState: () => serverState,
     getClientState: () => clientState,
+    getRuntimeConfig: () => ({
+      sourceEnvironmentId: null,
+      sourceEnvironmentName: null,
+      repoId: 1,
+      network: { mode: "default_plus_extras", extraAllowlist: [] },
+      plainEnvVars: {},
+      startupScript: null,
+      resolvedAt: "2026-05-29T00:00:00.000Z",
+      schemaVersion: 1,
+    }),
     updateServerState,
     updatePartialState,
     synthesizeStatus: () => "provisioning",
@@ -160,7 +173,7 @@ describe("SessionProvisionService startup toolchain", () => {
     mockState.configureGitRemote.mockResolvedValue(undefined);
   });
 
-  it("runs startup toolchain after network policy and before clone", async () => {
+  it("runs startup toolchain after bootstrap network policy and before clone", async () => {
     const serverState = createServerState();
     const { service, updateServerState } = createService(
       serverState,
@@ -175,6 +188,7 @@ describe("SessionProvisionService startup toolchain", () => {
       "startupToolchain",
       "cloneCheck",
       "cloneRepo",
+      "setNetworkPolicy",
     ]);
     expect(updateServerState).toHaveBeenCalledWith({
       startupToolchain: {
@@ -234,5 +248,79 @@ describe("SessionProvisionService startup toolchain", () => {
       "startupToolchain",
     ]);
     expect(mockState.configureGitRemote).not.toHaveBeenCalled();
+  });
+
+  it("runs startup script before applying final network policy", async () => {
+    const serverState = createServerState();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+    );
+    mockState.execHttp.mockImplementation(async (command: string) => {
+      if (command.startsWith("test -d")) {
+        mockState.events.push("cloneCheck");
+        return { stdout: "empty", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git -c")) {
+        mockState.events.push("cloneRepo");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git rev-parse")) {
+        return { stdout: "main", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    const runtimeConfig = {
+      sourceEnvironmentId: null,
+      sourceEnvironmentName: null,
+      repoId: 1,
+      network: { mode: "locked" as const },
+      plainEnvVars: {},
+      startupScript: "pnpm install",
+      resolvedAt: "2026-05-29T00:00:00.000Z",
+      schemaVersion: 1 as const,
+    };
+    const serviceWithScript = new SessionProvisionService({
+      logger: createLogger(),
+      env: {
+        SPRITES_API_KEY: "sprites-key",
+        SPRITES_API_URL: "https://api.sprites.test",
+        WORKER_URL: "https://worker.test",
+      } as Env,
+      spritesCoordinator: {
+        createSprite: vi.fn(async () => {
+          mockState.events.push("createSprite");
+          return { name: "sprite-1", status: "running" };
+        }),
+      } as never,
+      getServerState: () => serverState,
+      getClientState: () => createClientState(),
+      getRuntimeConfig: () => runtimeConfig,
+      updateServerState: (partial) => Object.assign(serverState, partial),
+      updatePartialState: vi.fn(),
+      synthesizeStatus: () => "provisioning",
+      ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
+      githubTokenProvider: {
+        getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
+      },
+    });
+
+    await serviceWithScript.ensureProvisioned();
+
+    expect(mockState.events).toEqual([
+      "createSprite",
+      "setNetworkPolicy",
+      "startupToolchain",
+      "cloneCheck",
+      "cloneRepo",
+      "startupScript",
+      "setNetworkPolicy",
+    ]);
+    expect(service).toBeDefined();
   });
 });

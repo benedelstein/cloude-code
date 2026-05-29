@@ -3,12 +3,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { listRepos, searchRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
+import {
+  listRepos,
+  searchRepos,
+  listBranches,
+  createSession,
+  uploadAttachments,
+  deleteAttachment,
+  type Repo,
+} from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
-import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
+import type {
+  Branch,
+  ListReposResponse,
+  ListBranchesResponse,
+  ProviderId,
+} from "@repo/shared";
 import { PROVIDERS, isProviderModel } from "@repo/shared";
 import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
@@ -28,6 +41,7 @@ import {
   RepoSelector,
   mergeBranches,
 } from "./session-creation-selectors";
+import { SessionEnvironmentSelector } from "./session-environment-selector";
 
 const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
 
@@ -80,6 +94,7 @@ export function SessionCreationForm() {
   const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [showSigninPanel, setShowSigninPanel] = useState(false);
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
   const [isDragging, setIsDragging] = useState(false);
@@ -572,6 +587,7 @@ export function SessionCreationForm() {
         { provider: selectedProvider, model: selectedModel },
         selectedAgentMode,
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
+        selectedEnvironmentId ?? undefined,
       );
 
       addSession({
@@ -685,6 +701,12 @@ export function SessionCreationForm() {
           </div>
         }
       >
+          <SessionEnvironmentSelector
+            selectedRepo={selectedRepo}
+            disabled={isFormInteractionDisabled}
+            selectedEnvironmentId={selectedEnvironmentId}
+            onSelectEnvironment={setSelectedEnvironmentId}
+          />
           {isDragging && (
             <div className="absolute inset-1 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/60 dark:bg-blue-950/40">
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Release to attach image</span>

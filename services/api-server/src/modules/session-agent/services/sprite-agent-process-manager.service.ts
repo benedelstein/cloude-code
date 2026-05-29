@@ -7,6 +7,7 @@ import {
   type DomainError,
   type Logger,
   type Result,
+  type SessionRuntimeConfigSnapshot,
   encodeAgentInput,
   decodeAgentOutput,
   failure,
@@ -172,6 +173,7 @@ export interface SpriteAgentProcessManagerDeps {
   getServerState: () => ServerState;
   updateAgentProcessId: (agentProcessId: number | null) => void;
   getClientState: () => ClientState;
+  getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
   getProviderCredentialAdapter(
     provider: AgentSettings["provider"],
     env: Env,
@@ -222,6 +224,7 @@ export class SpriteAgentProcessManager {
   private readonly getServerState: () => ServerState;
   private readonly updateAgentProcessId: SpriteAgentProcessManagerDeps["updateAgentProcessId"];
   private readonly getClientState: () => ClientState;
+  private readonly getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
   private readonly attachmentService: AgentAttachmentService;
   private readonly getProviderCredentialAdapter: SpriteAgentProcessManagerDeps["getProviderCredentialAdapter"];
 
@@ -235,6 +238,7 @@ export class SpriteAgentProcessManager {
     this.getServerState = deps.getServerState;
     this.updateAgentProcessId = deps.updateAgentProcessId;
     this.getClientState = deps.getClientState;
+    this.getRuntimeConfig = deps.getRuntimeConfig;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
     this.getProviderCredentialAdapter = deps.getProviderCredentialAdapter;
   }
@@ -439,6 +443,7 @@ export class SpriteAgentProcessManager {
 
       const webhookToken = this.ensureWebhookToken();
       const webhookUrl = this.buildWebhookUrl(sessionId);
+      const runtimeConfig = this.getRuntimeConfig();
 
       // write the initial message to a file, messages with attachments are too large for argv
       const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
@@ -490,6 +495,7 @@ export class SpriteAgentProcessManager {
             SESSION_ID: sessionId,
             DO_WEBHOOK_URL: webhookUrl,
             DO_WEBHOOK_TOKEN: webhookToken,
+            ...runtimeConfig.plainEnvVars,
             ...credentialSnapshot.envVars,
             ...(this.env.CODEX_MIN_VERSION
               ? { CODEX_MIN_VERSION: this.env.CODEX_MIN_VERSION }

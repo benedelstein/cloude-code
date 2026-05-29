@@ -1,3 +1,4 @@
+import type { NetworkAccessConfig, ProviderId } from "@repo/shared";
 import type { NetworkPolicyRule } from "./WorkersSpriteClient";
 
 /** Allow rule helper */
@@ -253,4 +254,63 @@ export function buildNetworkPolicy(
   const allowRules = DEFAULT_NETWORK_POLICY.slice(0, -1);
   const denyAll: NetworkPolicyRule = { domain: "*", action: "deny" };
   return [...allowRules, ...extraRules, denyAll];
+}
+
+export function buildBootstrapNetworkPolicy(args: {
+  workerHostname: string;
+}): NetworkPolicyRule[] {
+  return buildNetworkPolicy([allow(args.workerHostname)]);
+}
+
+export function buildFinalNetworkPolicy(args: {
+  workerHostname: string;
+  providerId: ProviderId;
+  network: NetworkAccessConfig;
+}): NetworkPolicyRule[] {
+  switch (args.network.mode) {
+    case "open":
+      return [{ domain: "*", action: "allow" }];
+    case "default_plus_extras":
+      return buildNetworkPolicy([
+        allow(args.workerHostname),
+        ...args.network.extraAllowlist.map(allow),
+      ]);
+    case "locked":
+      return [
+        allow(args.workerHostname),
+        ...getProviderNetworkPolicyRules(args.providerId),
+        { domain: "*", action: "deny" },
+      ];
+    default: {
+      const exhaustiveCheck: never = args.network;
+      throw new Error(`Unhandled network mode: ${exhaustiveCheck}`);
+    }
+  }
+}
+
+export function getProviderNetworkPolicyRules(
+  providerId: ProviderId,
+): NetworkPolicyRule[] {
+  switch (providerId) {
+    case "claude-code":
+      return [
+        allow("api.anthropic.com"),
+        allow("statsig.anthropic.com"),
+        allow("platform.claude.com"),
+        allow("code.claude.com"),
+        allow("claude.ai"),
+      ];
+    case "openai-codex":
+      return [
+        allow("api.openai.com"),
+        allow("openai.com"),
+        allow("auth.openai.com"),
+        allow("chatgpt.com"),
+        allow("chat.com"),
+      ];
+    default: {
+      const exhaustiveCheck: never = providerId;
+      throw new Error(`Unhandled provider: ${exhaustiveCheck}`);
+    }
+  }
 }

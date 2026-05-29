@@ -7,6 +7,8 @@ import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
+import { createRepoEnvironmentsRoutes } from "@/modules/repo-environments/routes/repo-environments.routes";
+import { RepoEnvironmentsService } from "@/modules/repo-environments/services/repo-environments.service";
 import { ReposService } from "@/modules/github/services/repo-listing.service";
 import { createReposRoutes } from "@/modules/repos/routes/repos.routes";
 import { createAgentRoutes } from "@/modules/session-agent/routes/agent.routes";
@@ -15,7 +17,10 @@ import { createInternalRoutes } from "@/modules/session-agent/routes/internal.ro
 import { createSessionsRoutes } from "@/modules/sessions/routes/sessions.routes";
 import { SessionsService } from "@/modules/sessions/services/sessions.service";
 import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
-import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
+import {
+  assertSessionRepoAccess,
+  assertUserRepoAccess,
+} from "@/modules/sessions/services/session-repo-access.service";
 import { isSessionOwnedByUser } from "@/modules/sessions/services/session-access.service";
 import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/services/session-provider-connection.service";
 import { verifySessionWebSocketToken } from "@/modules/sessions/services/session-websocket-token.service";
@@ -114,6 +119,23 @@ export function buildReposRoutes() {
   });
 }
 
+export function buildRepoEnvironmentsRoutes() {
+  return createRepoEnvironmentsRoutes({
+    authMiddleware,
+    createRepoEnvironmentsService: (env) =>
+      new RepoEnvironmentsService({
+        env,
+        accessProvider: {
+          assertUserRepoAccess: (input) =>
+            assertUserRepoAccess({
+              ...input,
+              providers: createRepoAccessProviders(input.env),
+            }),
+        },
+      }),
+  });
+}
+
 export function buildSessionsRoutes() {
   return createSessionsRoutes({
     authMiddleware,
@@ -122,6 +144,16 @@ export function buildSessionsRoutes() {
         env,
         attachmentProvider: new AttachmentService(env.DB),
         repoAccessProviders: createRepoAccessProviders(env),
+        repoEnvironmentResolver: new RepoEnvironmentsService({
+          env,
+          accessProvider: {
+            assertUserRepoAccess: (input) =>
+              assertUserRepoAccess({
+                ...input,
+                providers: createRepoAccessProviders(input.env),
+              }),
+          },
+        }),
         createPullRequestGitHubProvider: () =>
           createGitHubAppService(env, "sessions.service.ts"),
       }),
