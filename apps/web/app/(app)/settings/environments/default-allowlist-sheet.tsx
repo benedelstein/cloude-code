@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ export function DefaultAllowlistSheetTrigger({
   const [domains, setDomains] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function loadDomains(): Promise<void> {
     if (loaded || loading) {
@@ -40,6 +42,15 @@ export function DefaultAllowlistSheetTrigger({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function copyDomains(): Promise<void> {
+    if (domains.length === 0) {
+      return;
+    }
+    await navigator.clipboard.writeText(domains.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -65,12 +76,29 @@ export function DefaultAllowlistSheetTrigger({
         }}
       >
         <SheetContent className="flex w-full flex-col overflow-hidden sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Default allowlist</SheetTitle>
-            <SheetDescription>
-              Domains included when default network access is enabled.
-            </SheetDescription>
-          </SheetHeader>
+          <div className="flex items-start justify-between gap-3">
+            <SheetHeader className="min-w-0 flex-1">
+              <SheetTitle>Default allowlist</SheetTitle>
+              <SheetDescription>
+                Domains included when default network access is enabled.
+              </SheetDescription>
+            </SheetHeader>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 shadow-none"
+              disabled={loading || domains.length === 0}
+              onClick={() => void copyDomains()}
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-success" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {copied ? "Copied" : "Copy all"}
+            </Button>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
             {loading ? (
               <div className="p-4 text-sm text-foreground-muted">
