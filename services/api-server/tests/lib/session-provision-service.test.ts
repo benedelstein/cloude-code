@@ -9,7 +9,6 @@ const mockState = vi.hoisted(() => ({
   setNetworkPolicy: vi.fn(),
   execHttp: vi.fn(),
   ensureSpriteStartupToolchain: vi.fn(),
-  configureGitRemote: vi.fn(),
   getReadOnlyTokenForRepo: vi.fn(),
 }));
 
@@ -34,10 +33,6 @@ vi.mock("@/shared/integrations/sprites/network-policy", () => ({
 
 vi.mock("@/shared/integrations/sprites/startup-toolchain", () => ({
   ensureSpriteStartupToolchain: mockState.ensureSpriteStartupToolchain,
-}));
-
-vi.mock("@/shared/integrations/git/git-setup.service", () => ({
-  configureGitRemote: mockState.configureGitRemote,
 }));
 
 function createLogger(): Logger {
@@ -178,7 +173,6 @@ describe("SessionProvisionService startup toolchain", () => {
       ok: true,
       value: "readonly-token",
     });
-    mockState.configureGitRemote.mockResolvedValue(undefined);
   });
 
   it("runs startup toolchain after bootstrap network policy and before clone", async () => {
@@ -255,7 +249,40 @@ describe("SessionProvisionService startup toolchain", () => {
       "setNetworkPolicy",
       "startupToolchain",
     ]);
-    expect(mockState.configureGitRemote).not.toHaveBeenCalled();
+  });
+
+  it("keeps fetch pointed at GitHub by default", async () => {
+    const serverState = createServerState();
+    const { service } = createService(serverState, createClientState());
+
+    await service.ensureProvisioned();
+
+    const remoteConfigCommand = getRemoteConfigCommand();
+    expect(remoteConfigCommand).toContain(
+      "git remote set-url origin https://github.com/ben/repo.git",
+    );
+    expect(remoteConfigCommand).toContain(
+      "git remote set-url --push origin https://worker.test/git-proxy/session-1/github.com/ben/repo.git",
+    );
+    expect(remoteConfigCommand).toContain(
+      "git config --add \"http.https://worker.test/git-proxy/session-1/.extraHeader\" \"Authorization: Bearer git-proxy-secret\"",
+    );
+  });
+
+  it("uses the git proxy for fetch in locked network mode", async () => {
+    const serverState = createServerState();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createRuntimeConfig({ network: { mode: "locked" } }),
+    );
+
+    await service.ensureProvisioned();
+
+    expect(getRemoteConfigCommand()).toContain(
+      "git remote set-url origin https://worker.test/git-proxy/session-1/github.com/ben/repo.git",
+    );
   });
 
   it("runs startup script before applying final network policy", async () => {
@@ -404,3 +431,10 @@ describe("SessionProvisionService startup toolchain", () => {
     });
   });
 });
+
+function getRemoteConfigCommand(): string {
+  const remoteConfigCall = mockState.execHttp.mock.calls.find(([command]) =>
+    String(command).includes("git remote set-url origin"));
+  expect(remoteConfigCall).toBeDefined();
+  return String(remoteConfigCall?.[0]);
+}

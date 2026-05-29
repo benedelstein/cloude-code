@@ -1,8 +1,9 @@
-import type {
-  ClientState,
-  Logger,
-  SessionRuntimeConfigSnapshot,
-  SessionStatus,
+import {
+  dedent,
+  type ClientState,
+  type Logger,
+  type SessionRuntimeConfigSnapshot,
+  type SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
@@ -12,7 +13,6 @@ import {
   buildFinalNetworkPolicy,
 } from "@/shared/integrations/sprites/network-policy";
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
-import { configureGitRemote } from "@/shared/integrations/git/git-setup.service";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
 import { SessionStartupScriptService } from "./session-startup-script.service";
@@ -297,16 +297,22 @@ export class SessionProvisionService {
 
     const gitProxySecret = this.ensureGitProxySecret();
     const runtimeConfig = this.getRuntimeConfig();
+    const fetchUrl = runtimeConfig.network.mode === "locked"
+      ? cloneUrl
+      : githubRemoteUrl;
 
     // Configure remote URLs, git identity, and proxy auth header
-    await configureGitRemote(sprite, {
-      workspaceDir: WORKSPACE_DIR,
-      githubRemoteUrl,
-      cloneUrl,
-      proxyBaseUrl,
-      gitProxySecret,
-      useProxyForFetch: runtimeConfig.network.mode === "locked",
-    });
+    await sprite.execHttp(dedent`
+      set -e
+      cd ${WORKSPACE_DIR}
+      git remote set-url origin ${fetchUrl}
+      git remote set-url --push origin ${cloneUrl}
+      git config user.email "agent@cloudecode.dev"
+      git config user.name "Cloude Code"
+      git config --unset-all http.extraHeader || true
+      git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true
+      git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${gitProxySecret}"
+    `, {});
   }
 
   private async tryRunStartupScript(spriteName: string): Promise<void> {

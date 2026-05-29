@@ -2,7 +2,7 @@
 
 Session provisioning is coordinated by `SessionAgentDO`, with most provisioning behavior delegated to `SessionProvisionService`. Today the provisioner creates a Sprite, applies the curated default network policy, ensures the provider toolchain, clones the repo, configures git, and then allows chat dispatch to start the agent process.
 
-The current git flow clones directly from GitHub using a one-off read-only installation token. That token is not persisted in git config. After clone, `configureGitRemote` removes extra headers, keeps fetch pointed at direct GitHub, and points push at the cloude-code git proxy. This means private repo fetch/pull after clone is already limited unless a later change routes fetch through the proxy.
+The current git flow clones directly from GitHub using a one-off read-only installation token. That token is not persisted in git config. After clone, `SessionProvisionService.cloneRepo(...)` removes extra headers, keeps fetch pointed at direct GitHub, and points push at the cloude-code git proxy. This means private repo fetch/pull after clone is already limited unless a later change routes fetch through the proxy.
 
 Repo environments add user-selected provisioning config without turning the feature into global environment management. V1 intentionally uses repo scope, assumes repository root as the startup working directory, and excludes secrets.
 
