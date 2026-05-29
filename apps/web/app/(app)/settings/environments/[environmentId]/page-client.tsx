@@ -190,7 +190,7 @@ export function EditEnvironmentPageClient({
 
           <Field
             label="Startup script"
-            description="Runs from the workspace root after clone and before the first agent turn. Use this script to install dependencies or perform any pre-development setup."
+            description="Runs from the workspace root after clone and before the first agent turn. Use this script to install dependencies or perform any pre-development setup.\nNetwork access is enabled when this script runs."
           >
             <textarea
               value={form.startupScript}
@@ -266,9 +266,8 @@ function parseEnvVars(text: string): Record<string, string> {
       throw new Error("Use KEY=value for environment variables");
     }
     const key = line.slice(0, separatorIndex).trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
-      // TODO: SHOULD WE BE SO PRESCRIPTIVE?
-      throw new Error(`Invalid environment variable name: ${key}. Environment variables must be uppercase and use underscores, e.g. MY_VARIABLE=value.`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`Invalid environment variable name: ${key}`);
     }
     vars[key] = line.slice(separatorIndex + 1);
   }

@@ -335,8 +335,8 @@ function parseEnvVars(text: string): Record<string, string> {
       throw new Error("Use KEY=value for plain env vars");
     }
     const key = line.slice(0, separatorIndex).trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid env var name: ${key}`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`Invalid environment variable name: ${key}`);
     }
     vars[key] = line.slice(separatorIndex + 1);
   }

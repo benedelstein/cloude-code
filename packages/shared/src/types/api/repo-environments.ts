@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 export const RepoEnvironmentNetworkMode = z.enum([
-  "open",
   "locked",
-  "default_plus_extras",
+  "default",
+  "custom",
+  "open",
 ]);
 export type RepoEnvironmentNetworkMode = z.infer<typeof RepoEnvironmentNetworkMode>;
 
@@ -21,8 +22,12 @@ export const NetworkAccessConfig = z.discriminatedUnion("mode", [
     mode: z.literal("locked"),
   }),
   z.object({
-    mode: z.literal("default_plus_extras"),
+    mode: z.literal("default"),
+  }),
+  z.object({
+    mode: z.literal("custom"),
     extraAllowlist: z.array(DomainAllowlistEntry).max(100).default([]),
+    includeDefaultAllowlist: z.boolean().default(false),
   }),
 ]);
 export type NetworkAccessConfig = z.infer<typeof NetworkAccessConfig>;
@@ -70,8 +75,7 @@ export type UserRepoEnvironmentResponse = z.infer<typeof UserRepoEnvironmentResp
 export const CreateRepoEnvironmentRequest = z.object({
   name: z.string().trim().min(1).max(80),
   network: NetworkAccessConfig.default({
-    mode: "default_plus_extras",
-    extraAllowlist: [],
+    mode: "default",
   }),
   plainEnvVars: PlainEnvVars,
   startupScript: z.string().max(20000).nullable().optional(),
@@ -115,8 +119,7 @@ export function createDefaultSessionRuntimeConfig(args: {
     sourceEnvironmentName: null,
     repoId: args.repoId,
     network: {
-      mode: "default_plus_extras",
-      extraAllowlist: [],
+      mode: "default",
     },
     plainEnvVars: {},
     startupScript: null,
