@@ -2,7 +2,7 @@ import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 import { getSessionTokenFromRequest } from "@/lib/session";
 
-const publicRoutes = ["/", "/github/install/complete"];
+const publicRoutes = ["/", "/github/install/complete", "/qa-working-indicator"];
 
 // Optimistic auth check — reads cookie only, no DB call.
 // https://nextjs.org/docs/app/guides/authentication#optimistic-checks-with-proxy-optional

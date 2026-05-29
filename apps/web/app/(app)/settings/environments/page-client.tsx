@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowUpRight, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -198,7 +198,7 @@ function RepoLink({
       className={`group/repo inline-flex min-w-0 max-w-full items-center gap-1 text-foreground-secondary transition-colors hover:text-foreground ${className ?? ""}`}
     >
       <span className="truncate group-hover/repo:underline">{repoFullName}</span>
-      <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/repo:opacity-100" />
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/repo:opacity-100" />
     </a>
   );
 }

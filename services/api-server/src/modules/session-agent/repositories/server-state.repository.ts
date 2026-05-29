@@ -24,7 +24,7 @@ export type ServerState = {
   activeUserMessageId: string | null;
   /** Provider runtime toolchain checkpoints for this Sprite. */
   startupToolchain: StartupToolchainCheckpoint | null;
-  /** True after the selected environment startup script has completed or no-op'd. */
+  /** True after the selected environment startup script has completed, failed, or no-op'd. */
   startupScriptCompleted: boolean;
   /** True after the selected final network policy has been applied. */
   finalNetworkPolicyApplied: boolean;

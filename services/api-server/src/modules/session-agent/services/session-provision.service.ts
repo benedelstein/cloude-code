@@ -137,7 +137,7 @@ export class SessionProvisionService {
 
       const provisionedSpriteName = this.getServerState().spriteName;
       if (provisionedSpriteName && !this.getServerState().startupScriptCompleted) {
-        await this.runStartupScript(provisionedSpriteName);
+        await this.tryRunStartupScript(provisionedSpriteName);
         this.updateServerState({ startupScriptCompleted: true });
       }
 
@@ -303,7 +303,7 @@ export class SessionProvisionService {
     });
   }
 
-  private async runStartupScript(spriteName: string): Promise<void> {
+  private async tryRunStartupScript(spriteName: string): Promise<void> {
     const runtimeConfig = this.getRuntimeConfig();
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -311,12 +311,24 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
-    await this.startupScriptService.run({
-      sprite,
-      script: runtimeConfig.startupScript,
-      workspaceDir: WORKSPACE_DIR,
-      env: runtimeConfig.plainEnvVars,
-    });
+    try {
+      await this.startupScriptService.run({
+        sprite,
+        script: runtimeConfig.startupScript,
+        workspaceDir: WORKSPACE_DIR,
+        env: runtimeConfig.plainEnvVars,
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      this.logger.warn("Continuing after session startup script failure", {
+        error,
+        fields: { sessionId: this.getServerState().sessionId },
+      });
+      this.updatePartialState({
+        lastError: errorMessage,
+        status: this.synthesizeStatus(),
+      });
+    }
   }
 
   private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {
@@ -335,4 +347,8 @@ export class SessionProvisionService {
       network: runtimeConfig.network,
     }));
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

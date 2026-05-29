@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger } from "@repo/shared";
+import type { ClientState, Logger, SessionRuntimeConfigSnapshot } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { SessionProvisionService } from "../../src/modules/session-agent/services/session-provision.service";
@@ -82,10 +82,27 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
   };
 }
 
+function createRuntimeConfig(
+  overrides: Partial<SessionRuntimeConfigSnapshot> = {},
+): SessionRuntimeConfigSnapshot {
+  return {
+    sourceEnvironmentId: null,
+    sourceEnvironmentName: null,
+    repoId: 1,
+    network: { mode: "default" },
+    plainEnvVars: {},
+    startupScript: null,
+    resolvedAt: "2026-05-29T00:00:00.000Z",
+    schemaVersion: 1,
+    ...overrides,
+  };
+}
+
 function createService(
   serverState: ServerState,
   clientState: ClientState,
   envOverrides: Partial<Env> = {},
+  runtimeConfig: SessionRuntimeConfigSnapshot = createRuntimeConfig(),
 ) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
@@ -109,16 +126,7 @@ function createService(
     spritesCoordinator: spritesCoordinator as never,
     getServerState: () => serverState,
     getClientState: () => clientState,
-    getRuntimeConfig: () => ({
-      sourceEnvironmentId: null,
-      sourceEnvironmentName: null,
-      repoId: 1,
-      network: { mode: "default" },
-      plainEnvVars: {},
-      startupScript: null,
-      resolvedAt: "2026-05-29T00:00:00.000Z",
-      schemaVersion: 1,
-    }),
+    getRuntimeConfig: () => runtimeConfig,
     updateServerState,
     updatePartialState,
     synthesizeStatus: () => "provisioning",
@@ -322,5 +330,77 @@ describe("SessionProvisionService startup toolchain", () => {
       "setNetworkPolicy",
     ]);
     expect(service).toBeDefined();
+  });
+
+  it("records startup script failure and continues provisioning", async () => {
+    const serverState = createServerState();
+    const updatePartialState = vi.fn();
+    mockState.execHttp.mockImplementation(async (command: string) => {
+      if (command.startsWith("test -d")) {
+        mockState.events.push("cloneCheck");
+        return { stdout: "empty", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git -c")) {
+        mockState.events.push("cloneRepo");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git rev-parse")) {
+        return { stdout: "main", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return {
+          stdout: "",
+          stderr: "bash: line 1: pnpm: command not found",
+          exitCode: 127,
+        };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    const service = new SessionProvisionService({
+      logger: createLogger(),
+      env: {
+        SPRITES_API_KEY: "sprites-key",
+        SPRITES_API_URL: "https://api.sprites.test",
+        WORKER_URL: "https://worker.test",
+      } as Env,
+      spritesCoordinator: {
+        createSprite: vi.fn(async () => {
+          mockState.events.push("createSprite");
+          return { name: "sprite-1", status: "running" };
+        }),
+      } as never,
+      getServerState: () => serverState,
+      getClientState: () => createClientState(),
+      getRuntimeConfig: () => createRuntimeConfig({
+        startupScript: "pnpm install",
+      }),
+      updateServerState: (partial) => Object.assign(serverState, partial),
+      updatePartialState,
+      synthesizeStatus: () => "ready",
+      ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
+      githubTokenProvider: {
+        getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
+      },
+    });
+
+    await service.ensureProvisioned();
+
+    expect(mockState.events).toEqual([
+      "createSprite",
+      "setNetworkPolicy",
+      "startupToolchain",
+      "cloneCheck",
+      "cloneRepo",
+      "startupScript",
+      "setNetworkPolicy",
+    ]);
+    expect(serverState.startupScriptCompleted).toBe(true);
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
+    expect(updatePartialState).toHaveBeenCalledWith({
+      lastError: "Startup script failed (exit 127): bash: line 1: pnpm: command not found",
+      status: "ready",
+    });
   });
 });
