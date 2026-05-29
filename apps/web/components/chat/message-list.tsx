@@ -9,7 +9,7 @@ import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { MessageItem } from "./message-item";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
-import clsx from "clsx";
+import { WorkingCloudIndicator } from "./working-cloud-indicator";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -210,15 +210,14 @@ export function MessageList({
 }
 
 function TypingIndicator() {
-  const dotClass = "w-1.5 h-1.5 bg-accent rounded-full animate-pulse";
   return (
-    <div className="flex items-center text-sm gap-1.5 px-2 py-1 w-fit text-foreground-secondary">
-      Working
-      <div className="flex items-center gap-1 translate-y-[1.5px]">
-        <span className={dotClass} />
-        <span className={clsx([dotClass, "[animation-delay:0.2s]"])} />
-        <span className={clsx([dotClass, "[animation-delay:0.4s]"])} />
-      </div>
+    <div
+      role="status"
+      aria-label="Working"
+      className="flex w-fit items-center gap-2 px-2 py-1 text-sm text-foreground-secondary"
+    >
+      <WorkingCloudIndicator />
+      <span>Working</span>
     </div>
   );
 }
