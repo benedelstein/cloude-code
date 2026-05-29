@@ -37,7 +37,6 @@ export function createRepoEnvironmentsRoutes(
     const { repoId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).list({
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       repoId,
     });
     if (!result.ok) {
@@ -67,7 +66,6 @@ export function createRepoEnvironmentsRoutes(
     const result = await deps.createRepoEnvironmentsService(c.env).get({
       id: environmentId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       repoId,
     });
     if (!result.ok) {
@@ -82,7 +80,6 @@ export function createRepoEnvironmentsRoutes(
     const result = await deps.createRepoEnvironmentsService(c.env).update({
       id: environmentId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       repoId,
       request: c.req.valid("json"),
     });
@@ -98,7 +95,6 @@ export function createRepoEnvironmentsRoutes(
     const result = await deps.createRepoEnvironmentsService(c.env).delete({
       id: environmentId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       repoId,
     });
     if (!result.ok) {
@@ -106,16 +102,6 @@ export function createRepoEnvironmentsRoutes(
     }
     return c.json(result.value, 200);
   });
-
-  return routes;
-}
-
-export function createUserRepoEnvironmentsRoutes(
-  deps: RepoEnvironmentsRouteDeps,
-): OpenAPIHono<RepoEnvironmentsRouteEnv> {
-  const routes = new OpenAPIHono<RepoEnvironmentsRouteEnv>();
-
-  routes.use("*", deps.authMiddleware);
 
   routes.openapi(listUserRepoEnvironmentsRoute, async (c) => {
     const user = c.get("user");

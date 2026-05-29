@@ -15,11 +15,11 @@ import {
 import type { Env } from "@/shared/types";
 import { RepoEnvironmentsRepository } from "../repositories/repo-environments.repository";
 
-type RepoEnvironmentStatus = 400 | 403 | 404 | 409 | 503;
+type RepoEnvironmentsErrorStatus = 400 | 403 | 404 | 409 | 503;
 
 export interface RepoEnvironmentsServiceError {
   domain: "repo_environments";
-  status: RepoEnvironmentStatus;
+  status: RepoEnvironmentsErrorStatus;
   message: string;
   code?: string;
 }
@@ -55,14 +55,8 @@ export class RepoEnvironmentsService {
 
   async list(params: {
     userId: string;
-    githubAccessToken: string;
     repoId: number;
   }): Promise<RepoEnvironmentsServiceResult<ListRepoEnvironmentsResponse>> {
-    const accessResult = await this.assertAccess(params);
-    if (!accessResult.ok) {
-      return accessResult;
-    }
-
     return success({
       environments: await this.repository.listForRepo(params),
     });
@@ -81,14 +75,8 @@ export class RepoEnvironmentsService {
   async get(params: {
     id: string;
     userId: string;
-    githubAccessToken: string;
     repoId: number;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
-    const accessResult = await this.assertAccess(params);
-    if (!accessResult.ok) {
-      return accessResult;
-    }
-
     const environment = await this.repository.getById(params);
     if (!environment) {
       return failure(this.error(404, "Repo environment not found"));
@@ -117,69 +105,63 @@ export class RepoEnvironmentsService {
     if (!accessResult.ok) {
       return accessResult;
     }
-
-    try {
-      const environment = await this.repository.create({
-        id: crypto.randomUUID(),
-        userId: params.userId,
-        repoId: params.repoId,
-        repoFullName: accessResult.value.repoFullName,
-        name: params.request.name,
-        network: params.request.network,
-        plainEnvVars: params.request.plainEnvVars,
-        startupScript: params.request.startupScript ?? null,
-      });
-      return success({ environment });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        return failure(this.error(409, "A repo environment with this name already exists"));
-      }
-      throw error;
+    const existingEnvironment = await this.repository.getByNameForRepo({
+      userId: params.userId,
+      repoId: params.repoId,
+      name: params.request.name,
+    });
+    if (existingEnvironment) {
+      return failure(this.error(409, "A repo environment with this name already exists"));
     }
+
+    const environment = await this.repository.create({
+      id: crypto.randomUUID(),
+      userId: params.userId,
+      repoId: params.repoId,
+      repoFullName: accessResult.value.repoFullName,
+      name: params.request.name,
+      network: params.request.network,
+      plainEnvVars: params.request.plainEnvVars,
+      startupScript: params.request.startupScript ?? null,
+    });
+    return success({ environment });
   }
 
   async update(params: {
     id: string;
     userId: string;
-    githubAccessToken: string;
     repoId: number;
     request: UpdateRepoEnvironmentRequest;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
-    const accessResult = await this.assertAccess(params);
-    if (!accessResult.ok) {
-      return accessResult;
-    }
-
-    try {
-      const environment = await this.repository.update({
-        id: params.id,
+    if (params.request.name !== undefined) {
+      const existingEnvironment = await this.repository.getByNameForRepo({
         userId: params.userId,
         repoId: params.repoId,
-        ...params.request,
+        name: params.request.name,
+        excludeId: params.id,
       });
-      if (!environment) {
-        return failure(this.error(404, "Repo environment not found"));
-      }
-      return success({ environment });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
+      if (existingEnvironment) {
         return failure(this.error(409, "A repo environment with this name already exists"));
       }
-      throw error;
     }
+
+    const environment = await this.repository.update({
+      id: params.id,
+      userId: params.userId,
+      repoId: params.repoId,
+      ...params.request,
+    });
+    if (!environment) {
+      return failure(this.error(404, "Repo environment not found"));
+    }
+    return success({ environment });
   }
 
   async delete(params: {
     id: string;
     userId: string;
-    githubAccessToken: string;
     repoId: number;
   }): Promise<RepoEnvironmentsServiceResult<DeleteRepoEnvironmentResponse>> {
-    const accessResult = await this.assertAccess(params);
-    if (!accessResult.ok) {
-      return accessResult;
-    }
-
     const deleted = await this.repository.delete(params);
     if (!deleted) {
       return failure(this.error(404, "Repo environment not found"));
@@ -236,14 +218,14 @@ export class RepoEnvironmentsService {
       return success(result.value);
     }
     return failure(this.error(
-      result.error.status === 401 ? 403 : result.error.status,
+      mapRepoAccessStatus(result.error.status),
       result.error.message,
       result.error.code,
     ));
   }
 
   private error(
-    status: RepoEnvironmentStatus,
+    status: RepoEnvironmentsErrorStatus,
     message: string,
     code?: string,
   ): RepoEnvironmentsServiceError {
@@ -256,6 +238,8 @@ export class RepoEnvironmentsService {
   }
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Error && error.message.toLowerCase().includes("unique");
+function mapRepoAccessStatus(
+  status: 400 | 401 | 403 | 404 | 503,
+): RepoEnvironmentsErrorStatus {
+  return status === 401 ? 403 : status;
 }

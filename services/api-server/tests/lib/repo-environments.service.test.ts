@@ -41,6 +41,21 @@ function createDatabase(rows: Row[] = []) {
           };
         },
         async first<T>() {
+          if (query.includes("WHERE user_id = ? AND repo_id = ? AND name = ? AND id != ?")) {
+            const [userId, repoId, name, excludeId] = call.bindings;
+            return (rows.find((row) =>
+              row.user_id === userId
+              && row.repo_id === repoId
+              && row.name === name
+              && row.id !== excludeId,
+            ) ?? null) as T | null;
+          }
+          if (query.includes("WHERE user_id = ? AND repo_id = ? AND name = ?")) {
+            const [userId, repoId, name] = call.bindings;
+            return (rows.find((row) =>
+              row.user_id === userId && row.repo_id === repoId && row.name === name,
+            ) ?? null) as T | null;
+          }
           const [id, userId, repoId] = call.bindings;
           if (repoId === undefined) {
             return (rows.find((row) =>
@@ -108,6 +123,41 @@ function createDatabase(rows: Row[] = []) {
             }
             return { meta: { changes: 0 } };
           }
+          if (query.includes("UPDATE repo_environments")) {
+            const [
+              name,
+              networkMode,
+              extraAllowlistJson,
+              includeDefaultAllowlist,
+              plainEnvVarsJson,
+              startupScript,
+              id,
+              userId,
+              repoId,
+            ] = call.bindings as [
+              string,
+              string,
+              string,
+              number,
+              string,
+              string | null,
+              string,
+              string,
+              number,
+            ];
+            const row = rows.find((item) =>
+              item.id === id && item.user_id === userId && item.repo_id === repoId,
+            );
+            if (row) {
+              row.name = name;
+              row.network_mode = networkMode;
+              row.network_extra_allowlist_json = extraAllowlistJson;
+              row.network_include_default_allowlist = includeDefaultAllowlist;
+              row.plain_env_vars_json = plainEnvVarsJson;
+              row.startup_script = startupScript;
+            }
+            return { meta: { changes: row ? 1 : 0 } };
+          }
           return { meta: { changes: 1 } };
         },
       };
@@ -143,7 +193,7 @@ describe("RepoEnvironmentsService", () => {
     vi.useRealTimers();
   });
 
-  it("lists environments only after repo access validation", async () => {
+  it("lists environments scoped to the user and repo", async () => {
     const { database } = createDatabase([
       {
         id: "123e4567-e89b-12d3-a456-426614174000",
@@ -163,15 +213,11 @@ describe("RepoEnvironmentsService", () => {
 
     const result = await service.list({
       userId: "user-1",
-      githubAccessToken: "token",
       repoId: 42,
     });
 
     expect(result.ok && result.value.environments).toHaveLength(1);
-    expect(assertUserRepoAccess).toHaveBeenCalledWith(expect.objectContaining({
-      userId: "user-1",
-      repoId: 42,
-    }));
+    expect(assertUserRepoAccess).not.toHaveBeenCalled();
   });
 
   it("lists all environments for settings without repo access checks", async () => {
@@ -248,10 +294,16 @@ describe("RepoEnvironmentsService", () => {
     const { database } = createDatabase();
     const { service } = createService({ database, accessOk: false });
 
-    await expect(service.list({
+    await expect(service.create({
       userId: "user-1",
       githubAccessToken: "token",
       repoId: 42,
+      request: {
+        name: "Web",
+        network: { mode: "locked" },
+        plainEnvVars: {},
+        startupScript: null,
+      },
     })).resolves.toMatchObject({
       ok: false,
       error: { status: 403 },
@@ -331,5 +383,52 @@ describe("RepoEnvironmentsService", () => {
       ok: false,
       error: { status: 409 },
     });
+  });
+
+  it("rejects duplicate environment names on update", async () => {
+    const { database } = createDatabase([
+      {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        user_id: "user-1",
+        repo_id: 42,
+        repo_full_name: "ben/web",
+        name: "Web",
+        network_mode: "locked",
+        network_extra_allowlist_json: "[]",
+        plain_env_vars_json: "{}",
+        startup_script: null,
+        created_at: "2026-05-29 00:00:00",
+        updated_at: "2026-05-29 00:00:00",
+      },
+      {
+        id: "123e4567-e89b-12d3-a456-426614174111",
+        user_id: "user-1",
+        repo_id: 42,
+        repo_full_name: "ben/web",
+        name: "API",
+        network_mode: "locked",
+        network_extra_allowlist_json: "[]",
+        plain_env_vars_json: "{}",
+        startup_script: null,
+        created_at: "2026-05-29 00:00:00",
+        updated_at: "2026-05-29 00:00:00",
+      },
+    ]);
+    const { service, assertUserRepoAccess } = createService({ database });
+
+    const result = await service.update({
+      id: "123e4567-e89b-12d3-a456-426614174111",
+      userId: "user-1",
+      repoId: 42,
+      request: {
+        name: "Web",
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { status: 409 },
+    });
+    expect(assertUserRepoAccess).not.toHaveBeenCalled();
   });
 });

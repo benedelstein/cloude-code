@@ -7,10 +7,7 @@ import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
-import {
-  createRepoEnvironmentsRoutes,
-  createUserRepoEnvironmentsRoutes,
-} from "@/modules/repo-environments/routes/repo-environments.routes";
+import { createRepoEnvironmentsRoutes } from "@/modules/repo-environments/routes/repo-environments.routes";
 import { RepoEnvironmentsService } from "@/modules/repo-environments/services/repo-environments.service";
 import { ReposService } from "@/modules/github/services/repo-listing.service";
 import { createReposRoutes } from "@/modules/repos/routes/repos.routes";
@@ -124,23 +121,6 @@ export function buildReposRoutes() {
 
 export function buildRepoEnvironmentsRoutes() {
   return createRepoEnvironmentsRoutes({
-    authMiddleware,
-    createRepoEnvironmentsService: (env) =>
-      new RepoEnvironmentsService({
-        env,
-        accessProvider: {
-          assertUserRepoAccess: (input) =>
-            assertUserRepoAccess({
-              ...input,
-              providers: createRepoAccessProviders(input.env),
-            }),
-        },
-      }),
-  });
-}
-
-export function buildUserRepoEnvironmentsRoutes() {
-  return createUserRepoEnvironmentsRoutes({
     authMiddleware,
     createRepoEnvironmentsService: (env) =>
       new RepoEnvironmentsService({

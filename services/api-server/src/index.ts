@@ -11,7 +11,6 @@ import {
   buildRepoEnvironmentsRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
-  buildUserRepoEnvironmentsRoutes,
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
 import { SessionAgentDO } from "@/runtime/session-agent.do";
@@ -60,8 +59,7 @@ app.route("/models", buildModelsRoutes());
 
 // Protected routes
 app.route("/repos", buildReposRoutes());
-app.route("/repos", buildRepoEnvironmentsRoutes());
-app.route("/environments", buildUserRepoEnvironmentsRoutes());
+app.route("/", buildRepoEnvironmentsRoutes());
 app.route("/sessions", buildSessionsRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
 

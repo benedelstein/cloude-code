@@ -492,14 +492,14 @@ export class SpriteAgentProcessManager {
           tty: true,
           detachable: true,
           env: {
-            SESSION_ID: sessionId,
-            DO_WEBHOOK_URL: webhookUrl,
-            DO_WEBHOOK_TOKEN: webhookToken,
             ...runtimeConfig.plainEnvVars,
             ...credentialSnapshot.envVars,
             ...(this.env.CODEX_MIN_VERSION
               ? { CODEX_MIN_VERSION: this.env.CODEX_MIN_VERSION }
               : {}),
+            SESSION_ID: sessionId,
+            DO_WEBHOOK_URL: webhookUrl,
+            DO_WEBHOOK_TOKEN: webhookToken,
           },
           idleTimeoutMs: 45_000,
           // maxRunAfterDisconnect: "0",

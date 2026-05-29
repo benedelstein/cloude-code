@@ -114,6 +114,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
 function createManager(
   serverState: ServerState,
   envOverrides: Partial<Env> = {},
+  runtimePlainEnvVars: Record<string, string> = {},
 ) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
@@ -139,7 +140,7 @@ function createManager(
       sourceEnvironmentName: null,
       repoId: 1,
       network: { mode: "default" },
-      plainEnvVars: {},
+      plainEnvVars: runtimePlainEnvVars,
       startupScript: null,
       resolvedAt: "2026-05-29T00:00:00.000Z",
       schemaVersion: 1,
@@ -482,6 +483,47 @@ describe("SpriteAgentProcessManager", () => {
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_MIN_VERSION: "0.140.0",
+        }),
+      }),
+    );
+  });
+
+  it("preserves control-plane webhook env vars when runtime env vars use reserved names", async () => {
+    const spawnSession = {
+      start: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn(),
+      onServerMessage: vi.fn((handler) => {
+        handler({ type: "session_info", session_id: 84, tty: true });
+        return vi.fn();
+      }),
+    };
+    mockState.attachSession.mockReturnValue({
+      start: vi.fn().mockRejectedValue(new SpritesError("not found", 404)),
+      close: vi.fn(),
+    });
+    mockState.createSession.mockReturnValue(spawnSession);
+
+    const serverState = createServerState({ agentProcessId: 42 });
+    const { manager } = createManager(serverState, {}, {
+      SESSION_ID: "user-session",
+      DO_WEBHOOK_URL: "https://evil.test",
+      DO_WEBHOOK_TOKEN: "user-token",
+    });
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockState.createSession).toHaveBeenCalledOnce();
+    expect(mockState.createSession).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          SESSION_ID: "session-1",
+          DO_WEBHOOK_URL: "https://worker.test/internal/session/session-1",
+          DO_WEBHOOK_TOKEN: "webhook-token",
         }),
       }),
     );

@@ -174,6 +174,31 @@ export class RepoEnvironmentsRepository {
     return row ? rowToEnvironmentSummary(row) : null;
   }
 
+  async getByNameForRepo(params: {
+    userId: string;
+    repoId: number;
+    name: string;
+    excludeId?: string;
+  }): Promise<RepoEnvironment | null> {
+    const row = params.excludeId
+      ? await this.database
+        .prepare(
+          `SELECT * FROM repo_environments
+           WHERE user_id = ? AND repo_id = ? AND name = ? AND id != ?`,
+        )
+        .bind(params.userId, params.repoId, params.name, params.excludeId)
+        .first<RepoEnvironmentRow>()
+      : await this.database
+        .prepare(
+          `SELECT * FROM repo_environments
+           WHERE user_id = ? AND repo_id = ? AND name = ?`,
+        )
+        .bind(params.userId, params.repoId, params.name)
+        .first<RepoEnvironmentRow>();
+
+    return row ? rowToEnvironment(row) : null;
+  }
+
   async create(params: CreateRepoEnvironmentParams): Promise<RepoEnvironment> {
     await this.database
       .prepare(
