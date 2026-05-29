@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,7 @@ export function EnvironmentsPageClient() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className="hidden grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_9rem] border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-muted md:grid">
+          <div className="hidden grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem] border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-muted md:grid">
             <div>Name</div>
             <div>Repo</div>
             <div>Network</div>
@@ -145,7 +145,7 @@ function EnvironmentListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
-          className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_9rem]"
+          className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem]"
         >
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-5 w-44" />
@@ -174,11 +174,14 @@ function EnvironmentRow({
       : "Open";
 
   return (
-    <div className="grid gap-3 border-b border-border px-4 py-4 last:border-b-0 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_9rem] md:items-center">
+    <div className="grid gap-3 border-b border-border px-4 py-4 last:border-b-0 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem] md:items-center">
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-foreground">
+        <Link
+          href={`/settings/environments/${environment.id}`}
+          className="block truncate text-sm font-medium text-foreground hover:underline"
+        >
           {environment.name}
-        </div>
+        </Link>
         <div className="mt-1 text-xs text-foreground-muted md:hidden">
           {environment.repoFullName}
         </div>
@@ -190,7 +193,13 @@ function EnvironmentRow({
       <div className="text-sm text-foreground-secondary">
         {environment.startupScript ? "Yes" : "No"}
       </div>
-      <div className="flex justify-start md:justify-end">
+      <div className="flex justify-start gap-1 md:justify-end">
+        <Button asChild variant="ghost" size="sm" className="text-foreground-secondary shadow-none">
+          <Link href={`/settings/environments/${environment.id}`}>
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Link>
+        </Button>
         <Button
           type="button"
           variant="ghost"
