@@ -295,7 +295,7 @@ function FormSection({
 
 function InternetRiskCallout() {
   return (
-    <div className="flex gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-foreground-secondary">
+    <div className="flex gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-foreground">
       <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
       <span>
         Internet access poses security risks. Limit access to known safe domains when possible.
