@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger, ServerMessage } from "@repo/shared";
 import { GitProxyService } from "../../src/shared/integrations/git/git-proxy.service";
 import type { GitProxyTokenProvider } from "../../src/shared/integrations/git/git.providers";
@@ -26,7 +26,6 @@ function createService(params: {
   repoFullName?: string | null;
   sessionId?: string | null;
   pushedBranch?: string | null;
-  fetchGitHub?: typeof fetch;
 } = {}): GitProxyService {
   return new GitProxyService({
     tokenProvider: params.tokenProvider ?? {
@@ -44,7 +43,6 @@ function createService(params: {
       getPushedBranch: () => params.pushedBranch ?? null,
     },
     logger: createLogger(),
-    fetchGitHub: params.fetchGitHub ?? vi.fn(async () => new Response("ok")),
   });
 }
 
@@ -63,15 +61,25 @@ function createPushBody(branch: string): string {
 }
 
 describe("GitProxyService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("ok")));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("forwards allowed requests using an installation token provider", async () => {
     const fetchGitHub = vi.fn(async () => new Response("ok"));
+    vi.stubGlobal("fetch", fetchGitHub);
     const tokenProvider: GitProxyTokenProvider = {
       getInstallationTokenForRepo: vi.fn(async () => ({
         ok: true,
         value: "provider-token",
       })),
     };
-    const service = createService({ tokenProvider, fetchGitHub });
+    const service = createService({ tokenProvider });
 
     const result = await service.handleRequest(
       createRequest("/git-proxy/abcd-session/github.com/ben/repo.git/info/refs?service=git-upload-pack"),
@@ -141,6 +149,10 @@ describe("SessionGitProxyService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("ok")));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("persists pushed-branch side effects without storing installation tokens in DO secrets", async () => {
