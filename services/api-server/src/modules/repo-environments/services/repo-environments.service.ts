@@ -4,6 +4,7 @@ import {
   type CreateRepoEnvironmentRequest,
   type DeleteRepoEnvironmentResponse,
   type ListRepoEnvironmentsResponse,
+  type ListUserRepoEnvironmentsResponse,
   type RepoEnvironmentResponse,
   type Result,
   type SessionRuntimeConfigSnapshot,
@@ -30,7 +31,7 @@ export interface RepoEnvironmentAccessProvider {
     userId: string;
     repoId: number;
     githubAccessToken: string;
-  }): Promise<Result<unknown, {
+  }): Promise<Result<{ repoFullName: string }, {
     status: 400 | 401 | 403 | 404 | 503;
     message: string;
     code: string;
@@ -63,6 +64,16 @@ export class RepoEnvironmentsService {
 
     return success({
       environments: await this.repository.listForRepo(params),
+    });
+  }
+
+  async listAll(params: {
+    userId: string;
+  }): Promise<RepoEnvironmentsServiceResult<ListUserRepoEnvironmentsResponse>> {
+    return success({
+      environments: await this.repository.listForUser({
+        userId: params.userId,
+      }),
     });
   }
 
@@ -100,6 +111,7 @@ export class RepoEnvironmentsService {
         id: crypto.randomUUID(),
         userId: params.userId,
         repoId: params.repoId,
+        repoFullName: accessResult.value.repoFullName,
         name: params.request.name,
         network: params.request.network,
         plainEnvVars: params.request.plainEnvVars,
@@ -201,7 +213,7 @@ export class RepoEnvironmentsService {
     userId: string;
     repoId: number;
     githubAccessToken: string;
-  }): Promise<RepoEnvironmentsServiceResult<void>> {
+  }): Promise<RepoEnvironmentsServiceResult<{ repoFullName: string }>> {
     const result = await this.accessProvider.assertUserRepoAccess({
       env: this.env,
       userId: params.userId,
@@ -209,7 +221,7 @@ export class RepoEnvironmentsService {
       githubAccessToken: params.githubAccessToken,
     });
     if (result.ok) {
-      return success(undefined);
+      return success(result.value);
     }
     return failure(this.error(
       result.error.status === 401 ? 403 : result.error.status,

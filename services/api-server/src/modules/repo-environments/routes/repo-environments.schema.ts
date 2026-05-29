@@ -3,6 +3,7 @@ import {
   CreateRepoEnvironmentRequest,
   DeleteRepoEnvironmentResponse,
   ListRepoEnvironmentsResponse,
+  ListUserRepoEnvironmentsResponse,
   RepoEnvironmentResponse,
   UpdateRepoEnvironmentRequest,
 } from "@repo/shared";
@@ -35,6 +36,18 @@ const RepoEnvironmentParams = z.object({
 });
 const RepoEnvironmentIdParams = RepoEnvironmentParams.extend({
   environmentId: z.uuid(),
+});
+
+export const listUserRepoEnvironmentsRoute = createRoute({
+  method: "get",
+  path: "/",
+  responses: {
+    200: {
+      content: { "application/json": { schema: ListUserRepoEnvironmentsResponse } },
+      description: "Current user's repo environments",
+    },
+    ...ErrorResponses,
+  },
 });
 
 export const listRepoEnvironmentsRoute = createRoute({

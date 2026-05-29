@@ -45,10 +45,22 @@ export const RepoEnvironment = z.object({
 });
 export type RepoEnvironment = z.infer<typeof RepoEnvironment>;
 
+export const RepoEnvironmentSummary = RepoEnvironment.extend({
+  repoFullName: z.string(),
+});
+export type RepoEnvironmentSummary = z.infer<typeof RepoEnvironmentSummary>;
+
 export const ListRepoEnvironmentsResponse = z.object({
   environments: z.array(RepoEnvironment),
 });
 export type ListRepoEnvironmentsResponse = z.infer<typeof ListRepoEnvironmentsResponse>;
+
+export const ListUserRepoEnvironmentsResponse = z.object({
+  environments: z.array(RepoEnvironmentSummary),
+});
+export type ListUserRepoEnvironmentsResponse = z.infer<
+  typeof ListUserRepoEnvironmentsResponse
+>;
 
 export const CreateRepoEnvironmentRequest = z.object({
   name: z.string().trim().min(1).max(80),

@@ -7,6 +7,7 @@ type Row = {
   id: string;
   user_id: string;
   repo_id: number;
+  repo_full_name: string | null;
   name: string;
   network_mode: NetworkAccessConfig["mode"];
   network_extra_allowlist_json: string;
@@ -27,6 +28,11 @@ function createDatabase(rows: Row[] = []) {
         },
         async all<T>() {
           const [_userId, repoId] = call.bindings;
+          if (repoId === undefined) {
+            return {
+              results: rows.filter((row) => row.user_id === _userId) as T[],
+            };
+          }
           return {
             results: rows.filter((row) =>
               row.user_id === _userId && row.repo_id === repoId,
@@ -45,6 +51,7 @@ function createDatabase(rows: Row[] = []) {
               id,
               userId,
               repoId,
+              repoFullName,
               name,
               networkMode,
               extraAllowlistJson,
@@ -54,6 +61,7 @@ function createDatabase(rows: Row[] = []) {
               string,
               string,
               number,
+              string,
               string,
               NetworkAccessConfig["mode"],
               string,
@@ -69,6 +77,7 @@ function createDatabase(rows: Row[] = []) {
               id,
               user_id: userId,
               repo_id: repoId,
+              repo_full_name: repoFullName,
               name,
               network_mode: networkMode,
               network_extra_allowlist_json: extraAllowlistJson,
@@ -109,7 +118,7 @@ function createService(args: {
           status: 403 as const,
           message: "No access",
         })
-      : success({}),
+      : success({ repoFullName: "ben/example" }),
   );
   return {
     service: new RepoEnvironmentsService({
@@ -131,6 +140,7 @@ describe("RepoEnvironmentsService", () => {
         id: "123e4567-e89b-12d3-a456-426614174000",
         user_id: "user-1",
         repo_id: 42,
+        repo_full_name: "ben/web",
         name: "Web",
         network_mode: "locked",
         network_extra_allowlist_json: "[]",
@@ -155,6 +165,45 @@ describe("RepoEnvironmentsService", () => {
     }));
   });
 
+  it("lists all environments for settings without repo access checks", async () => {
+    const { database } = createDatabase([
+      {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        user_id: "user-1",
+        repo_id: 42,
+        repo_full_name: "ben/web",
+        name: "Web",
+        network_mode: "locked",
+        network_extra_allowlist_json: "[]",
+        plain_env_vars_json: "{}",
+        startup_script: null,
+        created_at: "2026-05-29 00:00:00",
+        updated_at: "2026-05-29 00:00:00",
+      },
+      {
+        id: "123e4567-e89b-12d3-a456-426614174111",
+        user_id: "user-2",
+        repo_id: 43,
+        repo_full_name: "ben/api",
+        name: "API",
+        network_mode: "open",
+        network_extra_allowlist_json: "[]",
+        plain_env_vars_json: "{}",
+        startup_script: null,
+        created_at: "2026-05-29 00:00:00",
+        updated_at: "2026-05-29 00:00:00",
+      },
+    ]);
+    const { service, assertUserRepoAccess } = createService({ database });
+
+    const result = await service.listAll({ userId: "user-1" });
+
+    expect(result.ok && result.value.environments).toMatchObject([
+      { name: "Web", repoFullName: "ben/web" },
+    ]);
+    expect(assertUserRepoAccess).not.toHaveBeenCalled();
+  });
+
   it("rejects requests without repo access", async () => {
     const { database } = createDatabase();
     const { service } = createService({ database, accessOk: false });
@@ -175,6 +224,7 @@ describe("RepoEnvironmentsService", () => {
         id: "123e4567-e89b-12d3-a456-426614174000",
         user_id: "user-1",
         repo_id: 42,
+        repo_full_name: "ben/api",
         name: "API",
         network_mode: "default_plus_extras",
         network_extra_allowlist_json: "[\"api.stripe.com\"]",
@@ -211,6 +261,7 @@ describe("RepoEnvironmentsService", () => {
         id: "123e4567-e89b-12d3-a456-426614174000",
         user_id: "user-1",
         repo_id: 42,
+        repo_full_name: "ben/web",
         name: "Web",
         network_mode: "locked",
         network_extra_allowlist_json: "[]",

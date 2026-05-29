@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateRepoEnvironmentRequest,
+  ListUserRepoEnvironmentsResponse,
   SessionRuntimeConfigSnapshot,
 } from "../../src/types/api/repo-environments";
 
@@ -37,6 +38,24 @@ describe("repo environment schemas", () => {
       startupScript: null,
       resolvedAt: "2026-05-29T00:00:00.000Z",
       schemaVersion: 1,
+    })).not.toThrow();
+  });
+
+  it("validates user environment summaries with repo names", () => {
+    expect(() => ListUserRepoEnvironmentsResponse.parse({
+      environments: [
+        {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          repoId: 42,
+          repoFullName: "ben/web",
+          name: "Web",
+          network: { mode: "locked" },
+          plainEnvVars: {},
+          startupScript: null,
+          createdAt: "2026-05-29T00:00:00.000Z",
+          updatedAt: "2026-05-29T00:00:00.000Z",
+        },
+      ],
     })).not.toThrow();
   });
 });

@@ -37,6 +37,7 @@ repo_environments
   id TEXT PRIMARY KEY
   user_id TEXT NOT NULL
   repo_id INTEGER NOT NULL
+  repo_full_name TEXT
   name TEXT NOT NULL
   network_mode TEXT NOT NULL
   network_extra_allowlist_json TEXT NOT NULL
@@ -46,7 +47,7 @@ repo_environments
   updated_at TEXT NOT NULL
 ```
 
-Repo access validation remains required before listing, reading, creating, updating, deleting, or selecting an environment for a repo.
+Repo access validation remains required before listing by repo, reading, creating, updating, deleting, or selecting an environment for a repo. The settings index can list environments owned by the current user without a per-repo GitHub access check because it does not expose another user's data or mutate repo-scoped state.
 
 Alternative considered: store environments only in Durable Object storage. Rejected because environments are reusable repo configuration and need normal API list/edit surfaces independent of a specific session DO.
 
@@ -167,7 +168,7 @@ It should not contain environment lookup, policy construction, startup script ex
 4. Update session creation to accept an optional environment id, validate repo ownership, resolve a snapshot, store session source reference, and pass the snapshot to the DO.
 5. Add a DO runtime config repository and store the snapshot during initialization.
 6. Refactor provisioning to apply bootstrap policy, run startup script, apply final policy, and then dispatch the agent.
-7. Add UI for selecting and managing repo environments.
+7. Add settings UI for listing and creating environments, plus session creation UI for selecting an existing repo environment.
 8. Validate with repo-level build, lint, typecheck, targeted tests, and browser checks for UI changes.
 
 Rollback is additive: leave nullable session columns unused, keep existing sessions without snapshots on default behavior, and make environment selection optional.

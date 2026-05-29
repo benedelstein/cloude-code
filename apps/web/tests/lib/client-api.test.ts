@@ -6,6 +6,7 @@ import {
   getCurrentUser,
   getSessionPlan,
   listRepoEnvironments,
+  listUserRepoEnvironments,
 } from "@/lib/client-api";
 
 describe("client-api", () => {
@@ -100,6 +101,10 @@ describe("client-api", () => {
         status: 200,
         headers: { "content-type": "application/json" },
       }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ environments: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         environment: {
           id: "123e4567-e89b-12d3-a456-426614174000",
@@ -117,6 +122,7 @@ describe("client-api", () => {
       }));
 
     await listRepoEnvironments(42);
+    await listUserRepoEnvironments();
     await createRepoEnvironment(42, {
       name: "Web",
       network: { mode: "locked" },
@@ -125,6 +131,7 @@ describe("client-api", () => {
     });
 
     expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/repos/42/environments");
-    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/repos/42/environments");
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/environments");
+    expect(vi.mocked(fetch).mock.calls[2]?.[0]).toBe("/api/repos/42/environments");
   });
 });

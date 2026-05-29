@@ -7,6 +7,10 @@ The system SHALL allow authenticated users to create, list, read, update, and de
 - **WHEN** an authenticated user requests repo environments for a repository they can access
 - **THEN** the system returns only environments scoped to that repository
 
+#### Scenario: User lists owned environments in settings
+- **WHEN** an authenticated user opens the environments settings page
+- **THEN** the system returns the user's existing repo environments with repo display names
+
 #### Scenario: User cannot access environments for another repo
 - **WHEN** an authenticated user requests or mutates an environment for a repository they cannot access
 - **THEN** the system rejects the request

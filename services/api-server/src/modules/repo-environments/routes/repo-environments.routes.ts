@@ -8,6 +8,7 @@ import {
   deleteRepoEnvironmentRoute,
   getRepoEnvironmentRoute,
   listRepoEnvironmentsRoute,
+  listUserRepoEnvironmentsRoute,
   updateRepoEnvironmentRoute,
 } from "./repo-environments.schema";
 
@@ -96,6 +97,27 @@ export function createRepoEnvironmentsRoutes(
       userId: user.id,
       githubAccessToken: user.githubAccessToken,
       repoId,
+    });
+    if (!result.ok) {
+      return errorResponse(c, result.error);
+    }
+    return c.json(result.value, 200);
+  });
+
+  return routes;
+}
+
+export function createUserRepoEnvironmentsRoutes(
+  deps: RepoEnvironmentsRouteDeps,
+): OpenAPIHono<RepoEnvironmentsRouteEnv> {
+  const routes = new OpenAPIHono<RepoEnvironmentsRouteEnv>();
+
+  routes.use("*", deps.authMiddleware);
+
+  routes.openapi(listUserRepoEnvironmentsRoute, async (c) => {
+    const user = c.get("user");
+    const result = await deps.createRepoEnvironmentsService(c.env).listAll({
+      userId: user.id,
     });
     if (!result.ok) {
       return errorResponse(c, result.error);

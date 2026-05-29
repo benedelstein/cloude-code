@@ -2,6 +2,7 @@ import type {
   NetworkAccessConfig,
   PlainEnvVars,
   RepoEnvironment,
+  RepoEnvironmentSummary,
 } from "@repo/shared";
 import { fromSqliteDatetime } from "@/shared/utils/utils";
 
@@ -9,6 +10,7 @@ export interface CreateRepoEnvironmentParams {
   id: string;
   userId: string;
   repoId: number;
+  repoFullName: string;
   name: string;
   network: NetworkAccessConfig;
   plainEnvVars: PlainEnvVars;
@@ -29,6 +31,7 @@ interface RepoEnvironmentRow {
   id: string;
   user_id: string;
   repo_id: number;
+  repo_full_name: string | null;
   name: string;
   network_mode: NetworkAccessConfig["mode"];
   network_extra_allowlist_json: string;
@@ -53,6 +56,13 @@ function rowToEnvironment(row: RepoEnvironmentRow): RepoEnvironment {
     startupScript: row.startup_script,
     createdAt: fromSqliteDatetime(row.created_at),
     updatedAt: fromSqliteDatetime(row.updated_at),
+  };
+}
+
+function rowToEnvironmentSummary(row: RepoEnvironmentRow): RepoEnvironmentSummary {
+  return {
+    ...rowToEnvironment(row),
+    repoFullName: row.repo_full_name ?? String(row.repo_id),
   };
 }
 
@@ -85,6 +95,21 @@ export class RepoEnvironmentsRepository {
     return (result.results ?? []).map(rowToEnvironment);
   }
 
+  async listForUser(params: {
+    userId: string;
+  }): Promise<RepoEnvironmentSummary[]> {
+    const result = await this.database
+      .prepare(
+        `SELECT * FROM repo_environments
+         WHERE user_id = ?
+         ORDER BY updated_at DESC, name ASC`,
+      )
+      .bind(params.userId)
+      .all<RepoEnvironmentRow>();
+
+    return (result.results ?? []).map(rowToEnvironmentSummary);
+  }
+
   async getById(params: {
     id: string;
     userId: string;
@@ -105,20 +130,22 @@ export class RepoEnvironmentsRepository {
     await this.database
       .prepare(
         `INSERT INTO repo_environments (
-           id,
-           user_id,
-           repo_id,
-           name,
-           network_mode,
-           network_extra_allowlist_json,
-           plain_env_vars_json,
-           startup_script
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         id,
+         user_id,
+         repo_id,
+         repo_full_name,
+         name,
+         network_mode,
+         network_extra_allowlist_json,
+         plain_env_vars_json,
+         startup_script
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
         params.userId,
         params.repoId,
+        params.repoFullName,
         params.name,
         networkMode(params.network),
         extraAllowlistJson(params.network),

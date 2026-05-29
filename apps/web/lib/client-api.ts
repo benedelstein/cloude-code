@@ -34,6 +34,7 @@ import type {
   ModelsResponse,
   CreateRepoEnvironmentRequest,
   ListRepoEnvironmentsResponse,
+  ListUserRepoEnvironmentsResponse,
   RepoEnvironmentResponse,
   UpdateRepoEnvironmentRequest,
 } from "@repo/shared";
@@ -202,6 +203,10 @@ export async function listRepoEnvironments(
   repoId: number,
 ): Promise<ListRepoEnvironmentsResponse> {
   return apiFetch(`/repos/${repoId}/environments`);
+}
+
+export async function listUserRepoEnvironments(): Promise<ListUserRepoEnvironmentsResponse> {
+  return apiFetch("/environments");
 }
 
 export async function createRepoEnvironment(
