@@ -13,7 +13,7 @@ import {
   listRepos,
   type Repo,
 } from "@/lib/client-api";
-import type { NetworkAccessConfig } from "@repo/shared";
+import { RepoEnvironmentNetworkMode, type NetworkAccessConfig } from "@repo/shared";
 import { SettingsShell } from "../../settings-shell";
 
 type FormState = {
@@ -33,6 +33,12 @@ const INITIAL_FORM: FormState = {
   plainEnvVarsText: "",
   startupScript: "",
 };
+
+const NETWORK_MODE_LABELS = {
+  default_plus_extras: "Default + extras",
+  locked: "No access",
+  open: "Unrestricted",
+} satisfies Record<NetworkAccessConfig["mode"], string>;
 
 export function CreateEnvironmentPageClient() {
   const router = useRouter();
@@ -217,9 +223,11 @@ export function CreateEnvironmentPageClient() {
               disabled={saving}
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none disabled:opacity-50"
             >
-              <option value="default_plus_extras">Default + extras</option>
-              <option value="locked">Locked</option>
-              <option value="open">Open</option>
+              {RepoEnvironmentNetworkMode.options.map((networkMode) => (
+                <option key={networkMode} value={networkMode}>
+                  {NETWORK_MODE_LABELS[networkMode]}
+                </option>
+              ))}
             </select>
           </Field>
 
@@ -245,8 +253,8 @@ export function CreateEnvironmentPageClient() {
           )}
 
           <Field
-            label="Plain environment variables"
-            description="Non-secret values only. Secret storage is intentionally not part of V1."
+            label="Environment variables"
+            description="Environment variables are stored in plaintext. Do not store secrets here."
           >
             <textarea
               value={form.plainEnvVarsText}
@@ -265,7 +273,7 @@ export function CreateEnvironmentPageClient() {
 
           <Field
             label="Startup script"
-            description="Runs from the workspace root after clone and before the first agent turn."
+            description="Runs from the workspace root after clone and before the first agent turn. Use this script to install dependencies or perform any pre-development setup."
           >
             <textarea
               value={form.startupScript}

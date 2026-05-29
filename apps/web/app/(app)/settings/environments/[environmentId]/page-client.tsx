@@ -305,7 +305,8 @@ function parseEnvVars(text: string): Record<string, string> {
     }
     const key = line.slice(0, separatorIndex).trim();
     if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid environment variable name: ${key}`);
+      // TODO: SHOULD WE BE SO PRESCRIPTIVE?
+      throw new Error(`Invalid environment variable name: ${key}. Environment variables must be uppercase and use underscores, e.g. MY_VARIABLE=value.`);
     }
     vars[key] = line.slice(separatorIndex + 1);
   }
