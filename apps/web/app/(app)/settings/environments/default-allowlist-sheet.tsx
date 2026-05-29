@@ -76,29 +76,27 @@ export function DefaultAllowlistSheetTrigger({
         }}
       >
         <SheetContent className="flex w-full flex-col overflow-hidden sm:max-w-xl">
-          <div className="flex items-start justify-between gap-3">
-            <SheetHeader className="min-w-0 flex-1">
-              <SheetTitle>Default allowlist</SheetTitle>
-              <SheetDescription>
-                Domains included when default network access is enabled.
-              </SheetDescription>
-            </SheetHeader>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 shadow-none"
-              disabled={loading || domains.length === 0}
-              onClick={() => void copyDomains()}
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-success" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-              {copied ? "Copied" : "Copy all"}
-            </Button>
-          </div>
+          <SheetHeader className="pr-10">
+            <SheetTitle>Default allowlist</SheetTitle>
+            <SheetDescription>
+              Domains included when default network access is enabled.
+            </SheetDescription>
+          </SheetHeader>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit shadow-none"
+            disabled={loading || domains.length === 0}
+            onClick={() => void copyDomains()}
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-success" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+            {copied ? "Copied" : "Copy all"}
+          </Button>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
             {loading ? (
               <div className="p-4 text-sm text-foreground-muted">
