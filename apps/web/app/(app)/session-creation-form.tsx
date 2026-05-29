@@ -471,7 +471,7 @@ export function SessionCreationForm() {
       <InputFrame
         footer={
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <div className="inline-flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-md border border-border bg-background">
+            <div className="inline-flex h-8 min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-md border border-border bg-background">
               <RepoSelector
                 repos={visibleRepos}
                 selectedRepo={selectedRepo}
@@ -488,7 +488,7 @@ export function SessionCreationForm() {
                 onSearchQueryChange={setRepoSearchQuery}
                 searching={repoSearchLoading}
                 isSearchMode={isRepoSearchMode}
-                triggerClassName="h-8 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
@@ -504,7 +504,7 @@ export function SessionCreationForm() {
                     hasMore={branchesCursor !== null}
                     loadingMore={branchesLoadingMore}
                     onLoadMore={loadMoreBranches}
-                    triggerClassName="h-8 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
                   />
                 </>
               )}

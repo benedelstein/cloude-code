@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getVerifiedSessionToken, verifySession } from "@/lib/auth";
 import {
   getServerUserRepoEnvironment,
@@ -8,6 +9,13 @@ import { EditEnvironmentPageClient } from "./page-client";
 interface EditEnvironmentPageProps {
   params: Promise<{ environmentId: string }>;
 }
+
+export const metadata: Metadata = {
+  title: "Edit Environment",
+  openGraph: {
+    title: "Edit Environment",
+  },
+};
 
 export default async function EditEnvironmentPage({
   params,

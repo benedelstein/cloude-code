@@ -171,7 +171,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
       getClientState: () => this.state,
-      getRuntimeConfig: () => this.runtimeConfigRepository.get(0),
+      getRuntimeConfig: () => this.runtimeConfigRepository.get(),
       getProviderCredentialAdapter,
     });
 
@@ -181,7 +181,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       spritesCoordinator: this.spritesCoordinator,
       getServerState: () => this.serverState,
       getClientState: () => this.state,
-      getRuntimeConfig: () => this.runtimeConfigRepository.get(0),
+      getRuntimeConfig: () => this.runtimeConfigRepository.get(),
       updateServerState: (partial) => this.updateServerState(partial),
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
@@ -540,7 +540,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
 
     const data = request;
-
     const provider = data.agentSettings?.provider ?? "claude-code";
     const maxTokens = data.agentSettings?.maxTokens ?? 8192;
 
@@ -553,7 +552,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (parsed.success) {
       settings = parsed.data;
     } else {
-      // Invalid model — fall back to the provider's default by omitting model
+      this.logger.warn("Invalid agent settings — falling back to provider defaults", {
+        fields: { provider },
+      });
       settings = AgentSettings.parse({ provider, maxTokens });
     }
     const providerConnection = await this.providerConnectionService.resolveState(

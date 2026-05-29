@@ -6,13 +6,22 @@ function allow(domain: string): NetworkPolicyRule {
   return { domain, action: "allow" };
 }
 
+function denyAll(): NetworkPolicyRule {
+  return { domain: "*", action: "deny" };
+}
+
+function appendDenyAll(rules: NetworkPolicyRule[]): NetworkPolicyRule[] {
+  return [...rules, denyAll()];
+}
+
 /**
- * Default network policy for Sprite VMs.
+ * Default network allow rules for Sprite VMs.
  * Based on Claude Code's trusted domain list:
  * https://code.claude.com/docs/en/claude-code-on-the-web#default-allowed-domains
  */
-export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
+const DEFAULT_NETWORK_ALLOW_RULES: NetworkPolicyRule[] = [
   // --- Anthropic Services ---
+  // TODO: maybe filter allowlist by provider?
   allow("api.anthropic.com"),
   allow("statsig.anthropic.com"),
   allow("platform.claude.com"),
@@ -96,7 +105,7 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
   allow("npmjs.org"),
   allow("yarnpkg.com"),
   allow("registry.yarnpkg.com"),
-  
+
   // --- Package Managers: Python ---
   allow("astral.sh"),
   allow("www.astral.sh"),
@@ -242,24 +251,21 @@ export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = [
 
   // --- Model Context Protocol ---
   allow("*.modelcontextprotocol.io"),
-
-  // Deny everything else
-  { domain: "*", action: "deny" },
 ];
 
-/** Build a full policy by prepending extra rules before the default deny-all. */
+export const DEFAULT_NETWORK_POLICY: NetworkPolicyRule[] = appendDenyAll(
+  DEFAULT_NETWORK_ALLOW_RULES,
+);
+
+/** Build a full policy from the default allowlist plus extra rules before the terminal deny-all. */
 export function buildNetworkPolicy(
   extraRules: NetworkPolicyRule[],
 ): NetworkPolicyRule[] {
-  const allowRules = DEFAULT_NETWORK_POLICY.slice(0, -1);
-  const denyAll: NetworkPolicyRule = { domain: "*", action: "deny" };
-  return [...allowRules, ...extraRules, denyAll];
+  return appendDenyAll([...DEFAULT_NETWORK_ALLOW_RULES, ...extraRules]);
 }
 
 export function getDefaultNetworkAllowlistDomains(): string[] {
-  return DEFAULT_NETWORK_POLICY
-    .filter((rule) => rule.action === "allow")
-    .map((rule) => rule.domain);
+  return DEFAULT_NETWORK_ALLOW_RULES.map((rule) => rule.domain);
 }
 
 export function buildBootstrapNetworkPolicy(args: {
@@ -285,18 +291,16 @@ export function buildFinalNetworkPolicy(args: {
       ];
       return args.network.includeDefaultAllowlist
         ? buildNetworkPolicy(customRules)
-        : [
+        : appendDenyAll([
             ...customRules,
             ...getProviderNetworkPolicyRules(args.providerId),
-            { domain: "*", action: "deny" },
-          ];
+          ]);
     }
     case "locked":
-      return [
+      return appendDenyAll([
         allow(args.workerHostname),
         ...getProviderNetworkPolicyRules(args.providerId),
-        { domain: "*", action: "deny" },
-      ];
+      ]);
     default: {
       const exhaustiveCheck: never = args.network;
       throw new Error(`Unhandled network mode: ${exhaustiveCheck}`);

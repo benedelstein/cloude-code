@@ -1,5 +1,4 @@
 import {
-  createDefaultSessionRuntimeConfig,
   SessionRuntimeConfigSnapshot,
   type SessionRuntimeConfigSnapshot as SessionRuntimeConfigSnapshotType,
 } from "@repo/shared";
@@ -20,15 +19,12 @@ export class SessionRuntimeConfigRepository implements Repository {
 
   constructor(private readonly sql: SqlFn) {}
 
-  get(repoId: number): SessionRuntimeConfigSnapshotType {
+  get(): SessionRuntimeConfigSnapshotType {
     const rows = this.sql<{ config: string }>`
       SELECT config FROM session_runtime_config WHERE id = 'config'
     `;
     if (!rows[0]?.config) {
-      return createDefaultSessionRuntimeConfig({
-        repoId,
-        resolvedAt: new Date().toISOString(),
-      });
+      throw new Error("Session runtime config is missing");
     }
 
     return SessionRuntimeConfigSnapshot.parse(JSON.parse(rows[0].config));

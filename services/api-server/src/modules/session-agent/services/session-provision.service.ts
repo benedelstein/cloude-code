@@ -96,7 +96,8 @@ export class SessionProvisionService {
   private async provision(): Promise<void> {
     try {
       const serverState = this.getServerState();
-      if (!serverState.spriteName) {
+      let spriteName = serverState.spriteName;
+      if (!spriteName) {
         this.updatePartialState({ status: this.synthesizeStatus() });
         this.logger.debug("Provisioning sprite for session", {
           fields: { sessionId: serverState.sessionId },
@@ -106,7 +107,7 @@ export class SessionProvisionService {
           name: serverState.sessionId!,
         });
 
-        // Lock down outbound network access to known-good domains
+        // For provisioning, allow network access to known-good domains
         const sprite = new WorkersSpriteClient(
           spriteResponse.name,
           this.env.SPRITES_API_KEY,
@@ -116,15 +117,19 @@ export class SessionProvisionService {
         const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
         await sprite.setNetworkPolicy(networkPolicy);
 
-        this.updateServerState({ spriteName: spriteResponse.name });
+        spriteName = spriteResponse.name;
+        this.updateServerState({ spriteName });
         this.updatePartialState({ status: this.synthesizeStatus() });
       }
 
-      const spriteName = this.getServerState().spriteName;
-      if (spriteName) {
-        await this.ensureStartupToolchain(spriteName);
+      if (!spriteName) {
+        throw new Error("Sprite name is missing");
       }
 
+      // Update environment toolchain packages
+      await this.ensureStartupToolchain(spriteName);
+
+      // Clone Repo
       if (!this.getServerState().repoCloned) {
         this.updatePartialState({ status: this.synthesizeStatus() });
         await this.cloneRepo(spriteName!);
@@ -135,14 +140,13 @@ export class SessionProvisionService {
         });
       }
 
-      const provisionedSpriteName = this.getServerState().spriteName;
-      if (provisionedSpriteName && !this.getServerState().startupScriptCompleted) {
-        await this.tryRunStartupScript(provisionedSpriteName);
+      if (!this.getServerState().startupScriptCompleted) {
+        await this.tryRunStartupScript(spriteName);
         this.updateServerState({ startupScriptCompleted: true });
       }
 
-      if (provisionedSpriteName && !this.getServerState().finalNetworkPolicyApplied) {
-        await this.applyFinalNetworkPolicy(provisionedSpriteName);
+      if (!this.getServerState().finalNetworkPolicyApplied) {
+        await this.applyFinalNetworkPolicy(spriteName);
         this.updateServerState({ finalNetworkPolicyApplied: true });
       }
     } catch (error) {
@@ -279,7 +283,7 @@ export class SessionProvisionService {
       {},
     );
     const actualBaseBranch = branchResult.stdout.trim() || "main";
-    if (actualBaseBranch !== clientState.baseBranch && clientState.baseBranch) {
+    if (clientState.baseBranch && actualBaseBranch !== clientState.baseBranch) {
       this.logger.warn("Base branch does not match actual base branch", {
         fields: {
           configuredBaseBranch: clientState.baseBranch,
@@ -287,7 +291,9 @@ export class SessionProvisionService {
         },
       });
     }
-    this.updatePartialState({ baseBranch: actualBaseBranch });
+    if (actualBaseBranch !== clientState.baseBranch) {
+      this.updatePartialState({ baseBranch: actualBaseBranch });
+    }
 
     const gitProxySecret = this.ensureGitProxySecret();
     const runtimeConfig = this.getRuntimeConfig();

@@ -9,6 +9,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   createRepoEnvironment,
 } from "@/lib/client-api";
 import { RepoEnvironmentNetworkMode, type NetworkAccessConfig } from "@repo/shared";
@@ -159,7 +167,7 @@ export function CreateEnvironmentPageClient() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value }))
                 }
-                placeholder={selectedRepo ? repoDisplayName(selectedRepo.fullName) : "Web app"}
+                placeholder="Enter a name"
                 disabled={saving}
                 required
                 maxLength={80}
@@ -170,31 +178,42 @@ export function CreateEnvironmentPageClient() {
 
           <FormSection title="Network">
             <Field label="Network access">
-              <select
+              <Select
                 value={form.networkMode}
-                onChange={(event) =>
+                onValueChange={(networkMode) =>
                   setForm((current) => ({
                     ...current,
-                    networkMode: event.target.value as NetworkAccessConfig["mode"],
+                    networkMode: networkMode as NetworkAccessConfig["mode"],
                   }))
                 }
                 disabled={saving}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none disabled:opacity-50"
               >
-                {RepoEnvironmentNetworkMode.options.map((networkMode) => (
-                  <option key={networkMode} value={networkMode}>
-                    {NETWORK_MODE_LABELS[networkMode]}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="bg-background shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {RepoEnvironmentNetworkMode.options.map((networkMode) => (
+                      <SelectItem key={networkMode} value={networkMode}>
+                        {NETWORK_MODE_LABELS[networkMode]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
               <span className="text-xs leading-5 text-foreground-muted">
-                {NETWORK_MODE_DESCRIPTIONS[form.networkMode]}
+                {form.networkMode === "default" ? (
+                  <>
+                    Your agent can access the{" "}
+                    <DefaultAllowlistSheetTrigger className="align-baseline">
+                      default allowlist
+                    </DefaultAllowlistSheetTrigger>{" "}
+                    for model providers, source control, common package registries, and development infrastructure.
+                  </>
+                ) : (
+                  NETWORK_MODE_DESCRIPTIONS[form.networkMode]
+                )}
               </span>
-              {form.networkMode === "default" && (
-                <span className="text-xs text-foreground-muted">
-                  <DefaultAllowlistSheetTrigger />
-                </span>
-              )}
             </Field>
 
             {form.networkMode !== "locked" && (
@@ -384,8 +403,4 @@ function buildNetworkConfig(form: FormState): NetworkAccessConfig {
       .map((domain) => domain.trim())
       .filter(Boolean),
   };
-}
-
-function repoDisplayName(repoFullName: string): string {
-  return repoFullName.split("/").pop() ?? repoFullName;
 }

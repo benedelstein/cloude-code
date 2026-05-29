@@ -10,8 +10,19 @@ const caprasimo = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Cloude Code",
+  title: {
+    default: "Cloude Code",
+    template: "%s | Cloude Code",
+  },
   description: "Develop in the cloud.",
+  openGraph: {
+    title: {
+      default: "Cloude Code",
+      template: "%s | Cloude Code",
+    },
+    description: "Develop in the cloud.",
+    siteName: "Cloude Code",
+  },
 };
 
 export const viewport: Viewport = {
