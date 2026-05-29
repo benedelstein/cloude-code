@@ -159,7 +159,7 @@ export function EnvironmentsPageClient() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete environment?</AlertDialogTitle>
               <AlertDialogDescription>
-                This removes {deleteDialogEnvironment?.name ?? "this environment"} from future session setup. Existing sessions using this environment will retain their resolved network, environment variable, and startup settings.
+                This removes "{deleteDialogEnvironment?.name ?? "this environment"}" from future session setup. Existing sessions using this environment will retain their environment settings.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -256,22 +256,21 @@ function EnvironmentRow({
         {environment.startupScript ? "Yes" : "No"}
       </div>
       <div className="flex justify-start gap-1">
-        <Button asChild variant="ghost" size="sm" className="text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
-          <Link href={`/settings/environments/${environment.id}`}>
+        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
+          <Link href={`/settings/environments/${environment.id}`} aria-label={`Edit ${environment.name}`}>
             <Pencil className="h-4 w-4" />
-            Edit
           </Link>
         </Button>
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
+          size="icon"
+          className="h-8 w-8 text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
           disabled={deleting}
           onClick={onDelete}
+          aria-label={deleting ? `Deleting ${environment.name}` : `Delete ${environment.name}`}
         >
           <Trash2 className="h-4 w-4" />
-          {deleting ? "Deleting" : "Delete"}
         </Button>
       </div>
     </div>
