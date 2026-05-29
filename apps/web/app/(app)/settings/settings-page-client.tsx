@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
+import { SettingsShell } from "./settings-shell";
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
   "claude-code": { src: "/claude_logo.svg", alt: "Claude" },
@@ -69,8 +70,8 @@ export function SettingsPageClient() {
   };
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-14 md:py-16">
-      <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+    <SettingsShell>
+      <div className="flex w-full flex-col gap-8">
         <section className="rounded-2xl border border-border bg-background p-5">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
@@ -173,8 +174,8 @@ export function SettingsPageClient() {
             );
           })}
         </SettingsSection>
-      </main>
-    </div>
+      </div>
+    </SettingsShell>
   );
 }
 
