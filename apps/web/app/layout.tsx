@@ -1,11 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Caprasimo } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Sonner } from "@/components/ui/sonner";
 
-const caprasimo = Caprasimo({
-  subsets: ["latin"],
-  weight: "400",
+const caprasimo = localFont({
+  src: "./fonts/caprasimo-latin-400-normal.woff2",
   variable: "--font-caprasimo",
   display: "swap",
 });
