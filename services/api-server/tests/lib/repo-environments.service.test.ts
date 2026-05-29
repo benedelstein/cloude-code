@@ -41,21 +41,6 @@ function createDatabase(rows: Row[] = []) {
           };
         },
         async first<T>() {
-          if (query.includes("WHERE user_id = ? AND repo_id = ? AND name = ? AND id != ?")) {
-            const [userId, repoId, name, excludeId] = call.bindings;
-            return (rows.find((row) =>
-              row.user_id === userId
-              && row.repo_id === repoId
-              && row.name === name
-              && row.id !== excludeId,
-            ) ?? null) as T | null;
-          }
-          if (query.includes("WHERE user_id = ? AND repo_id = ? AND name = ?")) {
-            const [userId, repoId, name] = call.bindings;
-            return (rows.find((row) =>
-              row.user_id === userId && row.repo_id === repoId && row.name === name,
-            ) ?? null) as T | null;
-          }
           const [id, userId, repoId] = call.bindings;
           if (repoId === undefined) {
             return (rows.find((row) =>
@@ -94,7 +79,7 @@ function createDatabase(rows: Row[] = []) {
             if (rows.some((row) =>
               row.user_id === userId && row.repo_id === repoId && row.name === name,
             )) {
-              throw new Error("UNIQUE constraint failed");
+              return { meta: { changes: 0 } };
             }
             rows.push({
               id,
@@ -123,7 +108,7 @@ function createDatabase(rows: Row[] = []) {
             }
             return { meta: { changes: 0 } };
           }
-          if (query.includes("UPDATE repo_environments")) {
+          if (query.includes("UPDATE") && query.includes("repo_environments")) {
             const [
               name,
               networkMode,
@@ -148,6 +133,15 @@ function createDatabase(rows: Row[] = []) {
             const row = rows.find((item) =>
               item.id === id && item.user_id === userId && item.repo_id === repoId,
             );
+            const nameConflict = rows.some((item) =>
+              item.id !== id
+              && item.user_id === userId
+              && item.repo_id === repoId
+              && item.name === name,
+            );
+            if (nameConflict) {
+              return { meta: { changes: 0 } };
+            }
             if (row) {
               row.name = name;
               row.network_mode = networkMode;

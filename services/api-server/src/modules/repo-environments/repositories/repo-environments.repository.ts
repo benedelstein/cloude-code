@@ -28,6 +28,15 @@ export interface UpdateRepoEnvironmentParams {
   startupScript?: string | null;
 }
 
+export type CreateRepoEnvironmentResult =
+  | { type: "created"; environment: RepoEnvironment }
+  | { type: "duplicate_name" };
+
+export type UpdateRepoEnvironmentResult =
+  | { type: "updated"; environment: RepoEnvironment }
+  | { type: "not_found" }
+  | { type: "duplicate_name" };
+
 interface RepoEnvironmentRow {
   id: string;
   user_id: string;
@@ -174,33 +183,8 @@ export class RepoEnvironmentsRepository {
     return row ? rowToEnvironmentSummary(row) : null;
   }
 
-  async getByNameForRepo(params: {
-    userId: string;
-    repoId: number;
-    name: string;
-    excludeId?: string;
-  }): Promise<RepoEnvironment | null> {
-    const row = params.excludeId
-      ? await this.database
-        .prepare(
-          `SELECT * FROM repo_environments
-           WHERE user_id = ? AND repo_id = ? AND name = ? AND id != ?`,
-        )
-        .bind(params.userId, params.repoId, params.name, params.excludeId)
-        .first<RepoEnvironmentRow>()
-      : await this.database
-        .prepare(
-          `SELECT * FROM repo_environments
-           WHERE user_id = ? AND repo_id = ? AND name = ?`,
-        )
-        .bind(params.userId, params.repoId, params.name)
-        .first<RepoEnvironmentRow>();
-
-    return row ? rowToEnvironment(row) : null;
-  }
-
-  async create(params: CreateRepoEnvironmentParams): Promise<RepoEnvironment> {
-    await this.database
+  async create(params: CreateRepoEnvironmentParams): Promise<CreateRepoEnvironmentResult> {
+    const result = await this.database
       .prepare(
         `INSERT INTO repo_environments (
          id,
@@ -213,7 +197,8 @@ export class RepoEnvironmentsRepository {
          network_include_default_allowlist,
          plain_env_vars_json,
          startup_script
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, repo_id, name) DO NOTHING`,
       )
       .bind(
         params.id,
@@ -229,6 +214,10 @@ export class RepoEnvironmentsRepository {
       )
       .run();
 
+    if (result.meta.changes === 0) {
+      return { type: "duplicate_name" };
+    }
+
     const environment = await this.getById({
       id: params.id,
       userId: params.userId,
@@ -237,24 +226,24 @@ export class RepoEnvironmentsRepository {
     if (!environment) {
       throw new Error("Created repo environment could not be read");
     }
-    return environment;
+    return { type: "created", environment };
   }
 
-  async update(params: UpdateRepoEnvironmentParams): Promise<RepoEnvironment | null> {
+  async update(params: UpdateRepoEnvironmentParams): Promise<UpdateRepoEnvironmentResult> {
     const current = await this.getById({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
     });
     if (!current) {
-      return null;
+      return { type: "not_found" };
     }
 
     const nextNetwork = params.network ?? current.network;
     const nextPlainEnvVars = params.plainEnvVars ?? current.plainEnvVars;
-    await this.database
+    const result = await this.database
       .prepare(
-        `UPDATE repo_environments
+        `UPDATE OR IGNORE repo_environments
          SET name = ?,
              network_mode = ?,
              network_extra_allowlist_json = ?,
@@ -279,11 +268,19 @@ export class RepoEnvironmentsRepository {
       )
       .run();
 
-    return this.getById({
+    if (result.meta.changes === 0 && params.name !== undefined && params.name !== current.name) {
+      return { type: "duplicate_name" };
+    }
+
+    const environment = await this.getById({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
     });
+    if (!environment) {
+      throw new Error("Updated repo environment could not be read");
+    }
+    return { type: "updated", environment };
   }
 
   async delete(params: {

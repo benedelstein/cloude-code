@@ -105,16 +105,8 @@ export class RepoEnvironmentsService {
     if (!accessResult.ok) {
       return accessResult;
     }
-    const existingEnvironment = await this.repository.getByNameForRepo({
-      userId: params.userId,
-      repoId: params.repoId,
-      name: params.request.name,
-    });
-    if (existingEnvironment) {
-      return failure(this.error(409, "A repo environment with this name already exists"));
-    }
 
-    const environment = await this.repository.create({
+    const result = await this.repository.create({
       id: crypto.randomUUID(),
       userId: params.userId,
       repoId: params.repoId,
@@ -124,7 +116,16 @@ export class RepoEnvironmentsService {
       plainEnvVars: params.request.plainEnvVars,
       startupScript: params.request.startupScript ?? null,
     });
-    return success({ environment });
+    switch (result.type) {
+      case "created":
+        return success({ environment: result.environment });
+      case "duplicate_name":
+        return failure(this.error(409, "A repo environment with this name already exists"));
+      default: {
+        const exhaustiveCheck: never = result;
+        throw new Error(`Unhandled repo environment create result: ${String(exhaustiveCheck)}`);
+      }
+    }
   }
 
   async update(params: {
@@ -133,28 +134,24 @@ export class RepoEnvironmentsService {
     repoId: number;
     request: UpdateRepoEnvironmentRequest;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
-    if (params.request.name !== undefined) {
-      const existingEnvironment = await this.repository.getByNameForRepo({
-        userId: params.userId,
-        repoId: params.repoId,
-        name: params.request.name,
-        excludeId: params.id,
-      });
-      if (existingEnvironment) {
-        return failure(this.error(409, "A repo environment with this name already exists"));
-      }
-    }
-
-    const environment = await this.repository.update({
+    const result = await this.repository.update({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
       ...params.request,
     });
-    if (!environment) {
-      return failure(this.error(404, "Repo environment not found"));
+    switch (result.type) {
+      case "updated":
+        return success({ environment: result.environment });
+      case "not_found":
+        return failure(this.error(404, "Repo environment not found"));
+      case "duplicate_name":
+        return failure(this.error(409, "A repo environment with this name already exists"));
+      default: {
+        const exhaustiveCheck: never = result;
+        throw new Error(`Unhandled repo environment update result: ${String(exhaustiveCheck)}`);
+      }
     }
-    return success({ environment });
   }
 
   async delete(params: {
