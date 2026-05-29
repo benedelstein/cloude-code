@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronsUpDown, Monitor, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Monitor, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -22,6 +22,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { RepoEnvironment } from "@repo/shared";
+
+function lastEnvironmentStorageKey(repoId: number): string {
+  return `lastEnvironmentId:${repoId}`;
+}
 
 export function SessionEnvironmentSelector({
   selectedRepo,
@@ -53,6 +57,23 @@ export function SessionEnvironmentSelector({
         const data = await listRepoEnvironments(selectedRepo.id);
         if (stale) { return; }
         setEnvironments(data.environments);
+        const storedEnvironmentId = localStorage.getItem(
+          lastEnvironmentStorageKey(selectedRepo.id),
+        );
+        if (!storedEnvironmentId) {
+          onSelectEnvironment(null);
+          return;
+        }
+
+        const storedEnvironment = data.environments.find((environment) =>
+          environment.id === storedEnvironmentId,
+        );
+        if (storedEnvironment) {
+          onSelectEnvironment(storedEnvironment.id);
+        } else {
+          localStorage.removeItem(lastEnvironmentStorageKey(selectedRepo.id));
+          onSelectEnvironment(null);
+        }
       } catch (error) {
         if (!stale) {
           toast.error("Failed to load environments", {
@@ -79,6 +100,14 @@ export function SessionEnvironmentSelector({
   const selectedEnvironment = environments.find((environment) =>
     environment.id === selectedEnvironmentId,
   ) ?? null;
+  const selectEnvironment = (environmentId: string | null) => {
+    if (environmentId) {
+      localStorage.setItem(lastEnvironmentStorageKey(selectedRepo.id), environmentId);
+    } else {
+      localStorage.removeItem(lastEnvironmentStorageKey(selectedRepo.id));
+    }
+    onSelectEnvironment(environmentId);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -92,7 +121,7 @@ export function SessionEnvironmentSelector({
           <span className="truncate">
             {loading
               ? "Loading environments..."
-              : selectedEnvironment?.name ?? "Default environment"}
+              : selectedEnvironment?.name ?? "No environment"}
           </span>
           <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
         </button>
@@ -113,12 +142,12 @@ export function SessionEnvironmentSelector({
               <CommandItem
                 value="default"
                 onSelect={() => {
-                  onSelectEnvironment(null);
+                  selectEnvironment(null);
                   setOpen(false);
                 }}
               >
                 <span className="min-w-0 flex-1 truncate">
-                  Default environment
+                  No environment
                 </span>
                 {selectedEnvironmentId === null && (
                   <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
@@ -129,7 +158,7 @@ export function SessionEnvironmentSelector({
                   key={environment.id}
                   value={environment.name}
                   onSelect={() => {
-                    onSelectEnvironment(environment.id);
+                    selectEnvironment(environment.id);
                     setOpen(false);
                   }}
                 >
@@ -139,6 +168,19 @@ export function SessionEnvironmentSelector({
                   {selectedEnvironmentId === environment.id && (
                     <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
                   )}
+                  <Link
+                    href={`/settings/environments/${environment.id}`}
+                    aria-label={`Edit ${environment.name}`}
+                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-current opacity-70 transition-opacity hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Link>
                 </CommandItem>
               ))}
             </CommandGroup>
