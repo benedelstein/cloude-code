@@ -57,23 +57,28 @@ export function SessionEnvironmentSelector({
         const data = await listRepoEnvironments(selectedRepo.id);
         if (stale) { return; }
         setEnvironments(data.environments);
-        const storedEnvironmentId = localStorage.getItem(
-          lastEnvironmentStorageKey(selectedRepo.id),
-        );
-        if (!storedEnvironmentId) {
+        if (data.environments.length === 0) {
+          localStorage.removeItem(lastEnvironmentStorageKey(selectedRepo.id));
           onSelectEnvironment(null);
           return;
         }
 
-        const storedEnvironment = data.environments.find((environment) =>
-          environment.id === storedEnvironmentId,
+        const storedEnvironmentId = localStorage.getItem(
+          lastEnvironmentStorageKey(selectedRepo.id),
         );
-        if (storedEnvironment) {
-          onSelectEnvironment(storedEnvironment.id);
-        } else {
-          localStorage.removeItem(lastEnvironmentStorageKey(selectedRepo.id));
+        const selectedEnvironment = data.environments.find((environment) =>
+          environment.id === storedEnvironmentId,
+        ) ?? data.environments[0];
+        if (!selectedEnvironment) {
           onSelectEnvironment(null);
+          return;
         }
+
+        localStorage.setItem(
+          lastEnvironmentStorageKey(selectedRepo.id),
+          selectedEnvironment.id,
+        );
+        onSelectEnvironment(selectedEnvironment.id);
       } catch (error) {
         if (!stale) {
           toast.error("Failed to load environments", {
@@ -139,20 +144,22 @@ export function SessionEnvironmentSelector({
               <CommandEmpty>No environments for this repo.</CommandEmpty>
             )}
             <CommandGroup>
-              <CommandItem
-                value="default"
-                onSelect={() => {
-                  selectEnvironment(null);
-                  setOpen(false);
-                }}
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  No environment
-                </span>
-                {selectedEnvironmentId === null && (
-                  <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
-                )}
-              </CommandItem>
+              {environments.length === 0 && (
+                <CommandItem
+                  value="default"
+                  onSelect={() => {
+                    selectEnvironment(null);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    No environment
+                  </span>
+                  {selectedEnvironmentId === null && (
+                    <Check className="ml-auto h-3.5 w-3.5 shrink-0" />
+                  )}
+                </CommandItem>
+              )}
               {environments.map((environment) => (
                 <CommandItem
                   key={environment.id}
