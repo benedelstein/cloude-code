@@ -33,8 +33,9 @@ interface RepoEnvironmentRow {
   repo_id: number;
   repo_full_name: string | null;
   name: string;
-  network_mode: NetworkAccessConfig["mode"];
+  network_mode: string;
   network_extra_allowlist_json: string;
+  network_include_default_allowlist: number | null;
   plain_env_vars_json: string;
   startup_script: string | null;
   created_at: string;
@@ -43,9 +44,11 @@ interface RepoEnvironmentRow {
 
 function rowToEnvironment(row: RepoEnvironmentRow): RepoEnvironment {
   const extraAllowlist = JSON.parse(row.network_extra_allowlist_json) as string[];
-  const network: NetworkAccessConfig = row.network_mode === "default_plus_extras"
-    ? { mode: "default_plus_extras", extraAllowlist }
-    : { mode: row.network_mode };
+  const network = networkFromRow({
+    mode: row.network_mode,
+    extraAllowlist,
+    includeDefaultAllowlist: row.network_include_default_allowlist === 1,
+  });
 
   return {
     id: row.id,
@@ -72,8 +75,39 @@ function networkMode(network: NetworkAccessConfig): string {
 
 function extraAllowlistJson(network: NetworkAccessConfig): string {
   return JSON.stringify(
-    network.mode === "default_plus_extras" ? network.extraAllowlist : [],
+    network.mode === "custom" ? network.extraAllowlist : [],
   );
+}
+
+function includeDefaultAllowlist(network: NetworkAccessConfig): number {
+  return network.mode === "custom" && network.includeDefaultAllowlist ? 1 : 0;
+}
+
+function networkFromRow(params: {
+  mode: string;
+  extraAllowlist: string[];
+  includeDefaultAllowlist: boolean;
+}): NetworkAccessConfig {
+  if (params.mode === "custom") {
+    return {
+      mode: "custom",
+      extraAllowlist: params.extraAllowlist,
+      includeDefaultAllowlist: params.includeDefaultAllowlist,
+    };
+  }
+  if (params.mode === "default_plus_extras") {
+    return params.extraAllowlist.length > 0
+      ? {
+          mode: "custom",
+          extraAllowlist: params.extraAllowlist,
+          includeDefaultAllowlist: true,
+        }
+      : { mode: "default" };
+  }
+  if (params.mode === "default" || params.mode === "locked" || params.mode === "open") {
+    return { mode: params.mode };
+  }
+  throw new Error(`Unknown repo environment network mode: ${params.mode}`);
 }
 
 export class RepoEnvironmentsRepository {
@@ -152,9 +186,10 @@ export class RepoEnvironmentsRepository {
          name,
          network_mode,
          network_extra_allowlist_json,
+         network_include_default_allowlist,
          plain_env_vars_json,
          startup_script
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
@@ -164,6 +199,7 @@ export class RepoEnvironmentsRepository {
         params.name,
         networkMode(params.network),
         extraAllowlistJson(params.network),
+        includeDefaultAllowlist(params.network),
         JSON.stringify(params.plainEnvVars),
         params.startupScript,
       )
@@ -198,6 +234,7 @@ export class RepoEnvironmentsRepository {
          SET name = ?,
              network_mode = ?,
              network_extra_allowlist_json = ?,
+             network_include_default_allowlist = ?,
              plain_env_vars_json = ?,
              startup_script = ?,
              updated_at = datetime('now')
@@ -207,6 +244,7 @@ export class RepoEnvironmentsRepository {
         params.name ?? current.name,
         networkMode(nextNetwork),
         extraAllowlistJson(nextNetwork),
+        includeDefaultAllowlist(nextNetwork),
         JSON.stringify(nextPlainEnvVars),
         params.startupScript !== undefined
           ? params.startupScript

@@ -14,20 +14,49 @@ describe("Sprite network policies", () => {
     expect(policy).toContainEqual({ domain: "github.com", action: "allow" });
   });
 
-  it("uses default policy plus extras for default_plus_extras", () => {
+  it("uses default policy for default mode", () => {
+    const policy = buildFinalNetworkPolicy({
+      workerHostname: "worker.test",
+      providerId: "openai-codex",
+      network: { mode: "default" },
+    });
+
+    expect(policy).toContainEqual({ domain: "worker.test", action: "allow" });
+    expect(policy).toContainEqual({ domain: "github.com", action: "allow" });
+    expect(policy.at(-1)).toEqual({ domain: "*", action: "deny" });
+  });
+
+  it("uses custom policy without default allowlist", () => {
     const policy = buildFinalNetworkPolicy({
       workerHostname: "worker.test",
       providerId: "openai-codex",
       network: {
-        mode: "default_plus_extras",
+        mode: "custom",
+        includeDefaultAllowlist: false,
         extraAllowlist: ["api.stripe.com"],
       },
     });
 
     expect(policy).toContainEqual({ domain: "worker.test", action: "allow" });
     expect(policy).toContainEqual({ domain: "api.stripe.com", action: "allow" });
-    expect(policy).toContainEqual({ domain: "github.com", action: "allow" });
+    expect(policy).toContainEqual({ domain: "api.openai.com", action: "allow" });
+    expect(policy).not.toContainEqual({ domain: "github.com", action: "allow" });
     expect(policy.at(-1)).toEqual({ domain: "*", action: "deny" });
+  });
+
+  it("uses custom policy with default allowlist", () => {
+    const policy = buildFinalNetworkPolicy({
+      workerHostname: "worker.test",
+      providerId: "openai-codex",
+      network: {
+        mode: "custom",
+        includeDefaultAllowlist: true,
+        extraAllowlist: ["api.stripe.com"],
+      },
+    });
+
+    expect(policy).toContainEqual({ domain: "api.stripe.com", action: "allow" });
+    expect(policy).toContainEqual({ domain: "github.com", action: "allow" });
   });
 
   it("locks final policy to worker and provider hosts", () => {

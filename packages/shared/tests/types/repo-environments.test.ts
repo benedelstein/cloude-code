@@ -7,12 +7,13 @@ import {
 } from "../../src/types/api/repo-environments";
 
 describe("repo environment schemas", () => {
-  it("accepts default plus extras with plain env vars and startup script", () => {
+  it("accepts custom access with plain env vars and startup script", () => {
     expect(() => CreateRepoEnvironmentRequest.parse({
       name: "Web",
       network: {
-        mode: "default_plus_extras",
+        mode: "custom",
         extraAllowlist: ["api.stripe.com", "*.vercel.com"],
+        includeDefaultAllowlist: true,
       },
       plainEnvVars: {
         NEXT_PUBLIC_API_URL: "https://example.com",

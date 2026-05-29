@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ExternalLink, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   deleteRepoEnvironment,
   listUserRepoEnvironments,
@@ -14,11 +24,15 @@ import {
 import type { RepoEnvironmentSummary } from "@repo/shared";
 import { SettingsShell } from "../settings-shell";
 
+const ENVIRONMENT_TABLE_GRID_CLASS = "md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem]";
+
 export function EnvironmentsPageClient() {
   const [environments, setEnvironments] = useState<RepoEnvironmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteDialogEnvironment, setDeleteDialogEnvironment] =
+    useState<RepoEnvironmentSummary | null>(null);
 
   useEffect(() => {
     let stale = false;
@@ -104,12 +118,12 @@ export function EnvironmentsPageClient() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className="hidden grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem] border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-muted md:grid">
+          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-muted md:grid`}>
             <div>Name</div>
             <div>Repo</div>
             <div>Network</div>
             <div>Startup</div>
-            <div className="text-right">Actions</div>
+            <div>Actions</div>
           </div>
 
           {loading ? (
@@ -129,13 +143,63 @@ export function EnvironmentsPageClient() {
                 key={environment.id}
                 environment={environment}
                 deleting={deletingId === environment.id}
-                onDelete={() => void handleDelete(environment)}
+                onDelete={() => setDeleteDialogEnvironment(environment)}
               />
             ))
           )}
         </div>
+
+        <AlertDialog
+          open={deleteDialogEnvironment !== null}
+          onOpenChange={(open) => {
+            if (!open) { setDeleteDialogEnvironment(null); }
+          }}
+        >
+          <AlertDialogContent container={typeof document !== "undefined" ? document.body : undefined}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete environment?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes {deleteDialogEnvironment?.name ?? "this environment"} from future session setup. Existing sessions using this environment will retain their resolved network, environment variable, and startup settings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteDialogEnvironment ? deletingId === deleteDialogEnvironment.id : false}
+                onClick={() => {
+                  if (deleteDialogEnvironment) {
+                    void handleDelete(deleteDialogEnvironment);
+                  }
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </SettingsShell>
+  );
+}
+
+function RepoLink({
+  repoFullName,
+  className,
+}: {
+  repoFullName: string;
+  className?: string;
+}) {
+  return (
+    <a
+      href={`https://github.com/${repoFullName}`}
+      target="_blank"
+      rel="noreferrer"
+      className={`group/repo inline-flex min-w-0 max-w-full items-center gap-1 text-foreground-secondary transition-colors hover:text-foreground ${className ?? ""}`}
+    >
+      <span className="truncate group-hover/repo:underline">{repoFullName}</span>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/repo:opacity-100" />
+    </a>
   );
 }
 
@@ -145,7 +209,7 @@ function EnvironmentListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
-          className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem]"
+          className={`grid gap-3 px-4 py-4 ${ENVIRONMENT_TABLE_GRID_CLASS}`}
         >
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-5 w-44" />
@@ -167,14 +231,16 @@ function EnvironmentRow({
   deleting: boolean;
   onDelete: () => void;
 }) {
-  const networkLabel = environment.network.mode === "default_plus_extras"
+  const networkLabel = environment.network.mode === "default"
     ? "Default"
-    : environment.network.mode === "locked"
-      ? "Locked"
-      : "Open";
+    : environment.network.mode === "custom"
+      ? "Custom"
+      : environment.network.mode === "locked"
+        ? "No access"
+        : "Unrestricted";
 
   return (
-    <div className="grid gap-3 border-b border-border px-4 py-4 last:border-b-0 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem] md:items-center">
+    <div className={`grid gap-3 border-b border-border px-4 py-4 last:border-b-0 md:items-center ${ENVIRONMENT_TABLE_GRID_CLASS}`}>
       <div className="min-w-0">
         <Link
           href={`/settings/environments/${environment.id}`}
@@ -182,19 +248,15 @@ function EnvironmentRow({
         >
           {environment.name}
         </Link>
-        <div className="mt-1 text-xs text-foreground-muted md:hidden">
-          {environment.repoFullName}
-        </div>
+        <RepoLink repoFullName={environment.repoFullName} className="mt-1 text-xs md:hidden" />
       </div>
-      <div className="hidden min-w-0 truncate text-sm text-foreground-secondary md:block">
-        {environment.repoFullName}
-      </div>
+      <RepoLink repoFullName={environment.repoFullName} className="hidden text-sm md:inline-flex" />
       <div className="text-sm text-foreground-secondary">{networkLabel}</div>
       <div className="text-sm text-foreground-secondary">
         {environment.startupScript ? "Yes" : "No"}
       </div>
-      <div className="flex justify-start gap-1 md:justify-end">
-        <Button asChild variant="ghost" size="sm" className="text-foreground-secondary shadow-none">
+      <div className="flex justify-start gap-1">
+        <Button asChild variant="ghost" size="sm" className="text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
           <Link href={`/settings/environments/${environment.id}`}>
             <Pencil className="h-4 w-4" />
             Edit
@@ -204,7 +266,7 @@ function EnvironmentRow({
           type="button"
           variant="ghost"
           size="sm"
-          className="text-foreground-secondary shadow-none hover:text-danger"
+          className="text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
           disabled={deleting}
           onClick={onDelete}
         >

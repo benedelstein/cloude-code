@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { success, failure, type NetworkAccessConfig } from "@repo/shared";
+import { success, failure } from "@repo/shared";
 import { RepoEnvironmentsService } from "../../src/modules/repo-environments/services/repo-environments.service";
 import type { Env } from "../../src/shared/types";
 
@@ -9,8 +9,9 @@ type Row = {
   repo_id: number;
   repo_full_name: string | null;
   name: string;
-  network_mode: NetworkAccessConfig["mode"];
+  network_mode: string;
   network_extra_allowlist_json: string;
+  network_include_default_allowlist?: number | null;
   plain_env_vars_json: string;
   startup_script: string | null;
   created_at: string;
@@ -60,6 +61,7 @@ function createDatabase(rows: Row[] = []) {
               name,
               networkMode,
               extraAllowlistJson,
+              includeDefaultAllowlist,
               plainEnvVarsJson,
               startupScript,
             ] = call.bindings as [
@@ -68,8 +70,9 @@ function createDatabase(rows: Row[] = []) {
               number,
               string,
               string,
-              NetworkAccessConfig["mode"],
               string,
+              string,
+              number,
               string,
               string | null,
             ];
@@ -86,6 +89,7 @@ function createDatabase(rows: Row[] = []) {
               name,
               network_mode: networkMode,
               network_extra_allowlist_json: extraAllowlistJson,
+              network_include_default_allowlist: includeDefaultAllowlist,
               plain_env_vars_json: plainEnvVarsJson,
               startup_script: startupScript,
               created_at: "2026-05-29 00:00:00",
@@ -262,8 +266,9 @@ describe("RepoEnvironmentsService", () => {
         repo_id: 42,
         repo_full_name: "ben/api",
         name: "API",
-        network_mode: "default_plus_extras",
+        network_mode: "custom",
         network_extra_allowlist_json: "[\"api.stripe.com\"]",
+        network_include_default_allowlist: 1,
         plain_env_vars_json: "{\"API_BASE\":\"http://localhost:8787\"}",
         startup_script: "pnpm install",
         created_at: "2026-05-29 00:00:00",
@@ -281,8 +286,9 @@ describe("RepoEnvironmentsService", () => {
     expect(result.ok && result.value).toMatchObject({
       sourceEnvironmentName: "API",
       network: {
-        mode: "default_plus_extras",
+        mode: "custom",
         extraAllowlist: ["api.stripe.com"],
+        includeDefaultAllowlist: true,
       },
       plainEnvVars: {
         API_BASE: "http://localhost:8787",

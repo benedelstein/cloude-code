@@ -270,11 +270,21 @@ export function buildFinalNetworkPolicy(args: {
   switch (args.network.mode) {
     case "open":
       return [{ domain: "*", action: "allow" }];
-    case "default_plus_extras":
-      return buildNetworkPolicy([
+    case "default":
+      return buildNetworkPolicy([allow(args.workerHostname)]);
+    case "custom": {
+      const customRules = [
         allow(args.workerHostname),
         ...args.network.extraAllowlist.map(allow),
-      ]);
+      ];
+      return args.network.includeDefaultAllowlist
+        ? buildNetworkPolicy(customRules)
+        : [
+            ...customRules,
+            ...getProviderNetworkPolicyRules(args.providerId),
+            { domain: "*", action: "deny" },
+          ];
+    }
     case "locked":
       return [
         allow(args.workerHostname),

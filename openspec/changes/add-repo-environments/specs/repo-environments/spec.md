@@ -82,16 +82,20 @@ The system SHALL use the curated default Sprite network policy plus required clo
 - **WHEN** setup and startup script execution complete
 - **THEN** the system applies the selected final network policy before starting the agent process
 
-### Requirement: Final network policy supports open, locked, and default plus extras modes
-The system SHALL support `open`, `locked`, and `default_plus_extras` as final network access modes for repo environments.
+### Requirement: Final network policy supports no-access, default, custom, and unrestricted modes
+The system SHALL support `locked`, `default`, `custom`, and `open` as final network access modes for repo environments.
 
-#### Scenario: Default plus extras with no extras
-- **WHEN** an environment uses `default_plus_extras` with an empty extra allowlist
+#### Scenario: Default final policy
+- **WHEN** an environment uses `default`
 - **THEN** the final policy allows the curated default network policy plus required cloude-code control-plane access
 
-#### Scenario: Default plus extras with custom domains
-- **WHEN** an environment uses `default_plus_extras` with extra allowed domains
+#### Scenario: Custom final policy includes default
+- **WHEN** an environment uses `custom` with extra allowed domains and default inclusion enabled
 - **THEN** the final policy allows the curated default policy, required cloude-code control-plane access, and the custom domains
+
+#### Scenario: Custom final policy excludes default
+- **WHEN** an environment uses `custom` with extra allowed domains and default inclusion disabled
+- **THEN** the final policy allows required cloude-code control-plane access, selected provider hosts, and the custom domains while excluding the curated default package/source-control hosts
 
 #### Scenario: Locked final policy
 - **WHEN** an environment uses `locked`

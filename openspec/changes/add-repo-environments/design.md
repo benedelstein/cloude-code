@@ -37,10 +37,11 @@ repo_environments
   id TEXT PRIMARY KEY
   user_id TEXT NOT NULL
   repo_id INTEGER NOT NULL
-  repo_full_name TEXT
+  repo_full_name TEXT NOT NULL
   name TEXT NOT NULL
   network_mode TEXT NOT NULL
   network_extra_allowlist_json TEXT NOT NULL
+  network_include_default_allowlist INTEGER NOT NULL DEFAULT 0
   plain_env_vars_json TEXT NOT NULL
   startup_script TEXT
   created_at TEXT NOT NULL
@@ -79,7 +80,7 @@ The snapshot is passed through `InitSessionAgentRequest` and stored in a new ses
 
 Alternative considered: store the full snapshot JSON on `sessions`. Rejected for V1 to keep central session rows light; D1 stores only the user-facing source reference.
 
-### Network config has three V1 modes
+### Network config has four V1 modes
 
 Use:
 
@@ -87,18 +88,22 @@ Use:
 type NetworkAccessConfig =
   | { mode: "open" }
   | { mode: "locked" }
-  | { mode: "default_plus_extras"; extraAllowlist: string[] };
+  | { mode: "default" }
+  | {
+      mode: "custom";
+      extraAllowlist: string[];
+      includeDefaultAllowlist: boolean;
+    };
 ```
 
-`default_plus_extras` with an empty extra list is the default behavior.
+`default` is the default behavior.
 
 Final policy semantics:
 
 - `open`: allow outbound access after startup.
-- `default_plus_extras`: curated default allowlist plus extra domains and required cloude-code control-plane hosts.
+- `default`: curated default allowlist plus required cloude-code control-plane hosts.
+- `custom`: extra domains plus required cloude-code control-plane and provider hosts; optionally include the curated default allowlist.
 - `locked`: required cloude-code control-plane hosts plus provider-specific model/auth hosts; direct GitHub and package-manager hosts are not included after startup.
-
-Alternative considered: separate `default` and `custom` modes with an "include default" checkbox. Rejected because `default_plus_extras` covers the same behavior with less UI/state branching.
 
 ### Bootstrap policy is always the curated default policy
 
@@ -154,7 +159,7 @@ It should not contain environment lookup, policy construction, startup script ex
 
 ## Risks / Trade-offs
 
-- Locked environments may fail after startup if agent work needs package managers or arbitrary external APIs -> Users must choose `default_plus_extras` or `open` for those workflows; make this clear in UI copy.
+- Locked environments may fail after startup if agent work needs package managers or arbitrary external APIs -> Users must choose `default`, `custom`, or `open` for those workflows; make this clear in UI copy.
 - Running startup scripts under bootstrap default means the script has broader access than locked agent turns -> This is intentional for setup, but logs and UI should distinguish setup access from final agent access.
 - Direct GitHub fetch is currently configured after clone -> Locked mode should route both fetch and push through the git proxy, or explicitly document that locked mode blocks direct fetch after startup.
 - Environment deletion could leave sessions referencing missing source environments -> Existing sessions keep their DO snapshot; session rows keep source name for display.

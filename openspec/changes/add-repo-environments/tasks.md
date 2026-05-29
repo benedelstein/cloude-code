@@ -32,10 +32,10 @@
 
 ## 5. Network Policy Construction
 
-- [x] 5.1 Refactor Sprite network policy helpers to build bootstrap default policy and final policies for `open`, `locked`, and `default_plus_extras`.
+- [x] 5.1 Refactor Sprite network policy helpers to build bootstrap default policy and final policies for `open`, `locked`, `default`, and `custom`.
 - [x] 5.2 Add provider-specific locked host helper with an exhaustive switch for Claude Code and OpenAI Codex providers.
 - [x] 5.3 Include required cloude-code worker/control-plane access in bootstrap and non-open final policies.
-- [x] 5.4 Ensure `default_plus_extras` with an empty extra list matches the current curated default behavior.
+- [x] 5.4 Ensure `default` matches the current curated default behavior and `custom` can include or exclude that default allowlist.
 - [x] 5.5 Add unit tests for each network mode, provider host selection, custom allowlist inclusion, and exhaustive provider behavior.
 
 ## 6. Provisioning And Startup Script Flow

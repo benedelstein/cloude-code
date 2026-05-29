@@ -8,8 +8,9 @@ Sessions currently start with one fixed runtime setup: the API server creates a 
 - Allow each environment to define a startup script that runs from `/home/sprite/workspace` after clone and before the first agent turn.
 - Allow each environment to define non-secret plain environment variables for startup script and agent process execution.
 - Allow each environment to choose one final network mode:
-  - `default_plus_extras`: curated default allowlist plus optional extra domains.
   - `locked`: only cloude-code control-plane access and the selected agent provider's required hosts after startup completes.
+  - `default`: curated default allowlist plus required cloude-code control-plane access.
+  - `custom`: explicit custom domains, with a toggle to include the curated default allowlist.
   - `open`: unrestricted outbound access after startup completes.
 - Use the existing curated default network policy during bootstrap, clone, toolchain setup, and startup script execution for all modes.
 - Resolve the selected environment into an immutable runtime config snapshot at session creation and store that snapshot in Durable Object storage.
