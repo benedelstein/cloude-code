@@ -488,7 +488,7 @@ export function SessionCreationForm() {
                 onSearchQueryChange={setRepoSearchQuery}
                 searching={repoSearchLoading}
                 isSearchMode={isRepoSearchMode}
-                triggerClassName="h-7 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                triggerClassName="h-8 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
@@ -504,7 +504,7 @@ export function SessionCreationForm() {
                     hasMore={branchesCursor !== null}
                     loadingMore={branchesLoadingMore}
                     onLoadMore={loadMoreBranches}
-                    triggerClassName="h-7 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                    triggerClassName="h-8 rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
                   />
                 </>
               )}
