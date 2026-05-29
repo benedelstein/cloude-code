@@ -77,7 +77,7 @@ export class RepoEnvironmentsService {
     userId: string;
     repoId: number;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
-    const environment = await this.repository.getById(params);
+    const environment = await this.repository.getForRepo(params);
     if (!environment) {
       return failure(this.error(404, "Repo environment not found"));
     }
@@ -88,7 +88,7 @@ export class RepoEnvironmentsService {
     id: string;
     userId: string;
   }): Promise<RepoEnvironmentsServiceResult<UserRepoEnvironmentResponse>> {
-    const environment = await this.repository.getByIdForUser(params);
+    const environment = await this.repository.getForUser(params);
     if (!environment) {
       return failure(this.error(404, "Repo environment not found"));
     }
@@ -179,7 +179,7 @@ export class RepoEnvironmentsService {
       }));
     }
 
-    const environment = await this.repository.getById({
+    const environment = await this.repository.getForRepo({
       id: params.environmentId,
       userId: params.userId,
       repoId: params.repoId,

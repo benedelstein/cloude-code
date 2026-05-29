@@ -152,7 +152,7 @@ export class RepoEnvironmentsRepository {
     return (result.results ?? []).map(rowToEnvironmentSummary);
   }
 
-  async getById(params: {
+  async getForRepo(params: {
     id: string;
     userId: string;
     repoId: number;
@@ -168,7 +168,7 @@ export class RepoEnvironmentsRepository {
     return row ? rowToEnvironment(row) : null;
   }
 
-  async getByIdForUser(params: {
+  async getForUser(params: {
     id: string;
     userId: string;
   }): Promise<RepoEnvironmentSummary | null> {
@@ -218,7 +218,7 @@ export class RepoEnvironmentsRepository {
       return { type: "duplicate_name" };
     }
 
-    const environment = await this.getById({
+    const environment = await this.getForRepo({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
@@ -230,7 +230,7 @@ export class RepoEnvironmentsRepository {
   }
 
   async update(params: UpdateRepoEnvironmentParams): Promise<UpdateRepoEnvironmentResult> {
-    const current = await this.getById({
+    const current = await this.getForRepo({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
@@ -272,7 +272,7 @@ export class RepoEnvironmentsRepository {
       return { type: "duplicate_name" };
     }
 
-    const environment = await this.getById({
+    const environment = await this.getForRepo({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
