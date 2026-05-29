@@ -11,6 +11,7 @@ function createSessionStub() {
   const sessionStub = {
     handleGetSession: vi.fn<SessionAgentRpc["handleGetSession"]>().mockReturnValue(success({
       sessionId: "123e4567-e89b-12d3-a456-426614174000",
+      title: null,
       status: "ready",
       repoFullName: "benedelstein/cloude-code",
       baseBranch: "main",

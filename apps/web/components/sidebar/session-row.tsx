@@ -69,7 +69,17 @@ export function SessionRow({
         isActive={isActive}
         className="cursor-pointer h-auto min-h-8 px-1.5 py-1 group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground group-focus-within/menu-item:bg-sidebar-accent group-focus-within/menu-item:text-sidebar-accent-foreground"
       >
-        <Link href={`/session/${session.id}`} onClick={onCloseMobileSidebar}>
+        <Link
+          href={`/session/${session.id}`}
+          onClick={(event) => {
+            if (isActive) {
+              event.preventDefault();
+              return;
+            }
+
+            onCloseMobileSidebar();
+          }}
+        >
           <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
             <span className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center">
               <SessionStatusSlot session={session} />

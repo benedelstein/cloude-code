@@ -1,6 +1,11 @@
 import "server-only";
 
-import type { UserInfo, TokenResponse, LogoutResponse } from "@repo/shared";
+import type {
+  UserInfo,
+  TokenResponse,
+  LogoutResponse,
+  SessionInfoResponse,
+} from "@repo/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -59,6 +64,13 @@ async function serverApiFetch<T>(
 
 export async function getAuthenticatedUser(token: string): Promise<UserInfo> {
   return serverApiFetch("/auth/me", { token });
+}
+
+export async function getSession(
+  sessionId: string,
+  token: string,
+): Promise<SessionInfoResponse> {
+  return serverApiFetch(`/sessions/${sessionId}`, { token });
 }
 
 export async function exchangeGitHubCode(

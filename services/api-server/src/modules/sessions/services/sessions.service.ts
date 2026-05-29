@@ -311,7 +311,12 @@ export class SessionsService {
       return failure(this.mapAgentError(result.error));
     }
 
-    return success(result.value);
+    const session = await this.sessionsRepository.getById(params.sessionId);
+
+    return success({
+      ...result.value,
+      title: session?.title ?? null,
+    });
   }
 
   /**

@@ -11,6 +11,7 @@ import {
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
+  title: z.string().nullable(),
   status: SessionStatus,
   repoFullName: z.string(),
   baseBranch: z.string().optional(),

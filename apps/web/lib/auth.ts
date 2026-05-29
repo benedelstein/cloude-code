@@ -7,6 +7,11 @@ import type { UserInfo } from "@repo/shared";
 import { decryptSessionToken } from "@/lib/session";
 import { getAuthenticatedUser, ServerApiError } from "@/lib/server-api";
 
+export const getSessionToken = cache(async (): Promise<string | null> => {
+  const encryptedToken = (await cookies()).get("session_token")?.value;
+  return decryptSessionToken(encryptedToken);
+});
+
 /**
  * Data access layer for verifying the session token.
  * This runs server-side and calls the API server directly (not through the
@@ -14,8 +19,7 @@ import { getAuthenticatedUser, ServerApiError } from "@/lib/server-api";
  * https://nextjs.org/docs/app/guides/authentication#creating-a-data-access-layer-dal
  */
 export const verifySession = cache(async (): Promise<UserInfo> => {
-  const encryptedToken = (await cookies()).get("session_token")?.value;
-  const sessionToken = await decryptSessionToken(encryptedToken);
+  const sessionToken = await getSessionToken();
 
   if (!sessionToken) {
     redirect("/");

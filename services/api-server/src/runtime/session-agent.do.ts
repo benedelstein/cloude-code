@@ -606,6 +606,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
 
     return success({
       sessionId,
+      title: null,
       status: this.state.status,
       repoFullName: this.state.repoFullName,
       baseBranch: this.state.baseBranch ?? undefined,
