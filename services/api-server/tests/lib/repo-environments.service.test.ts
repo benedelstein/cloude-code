@@ -337,7 +337,7 @@ describe("RepoEnvironmentsService", () => {
     });
   });
 
-  it("resolves immutable runtime config for a selected environment", async () => {
+  it("resolves immutable environment snapshot for a selected environment", async () => {
     const { database } = createDatabase([
       {
         id: "123e4567-e89b-12d3-a456-426614174000",
@@ -356,7 +356,7 @@ describe("RepoEnvironmentsService", () => {
     ]);
     const { service } = createService({ database });
 
-    const result = await service.resolveRuntimeConfig({
+    const result = await service.resolveEnvironmentSnapshot({
       environmentId: "123e4567-e89b-12d3-a456-426614174000",
       userId: "user-1",
       repoId: 42,

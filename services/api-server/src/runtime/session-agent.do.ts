@@ -19,7 +19,7 @@ import {
   ServerStateRepository,
   type ServerState,
 } from "@/modules/session-agent/repositories/server-state.repository";
-import { SessionRuntimeConfigRepository } from "@/modules/session-agent/repositories/session-runtime-config.repository";
+import { SessionEnvironmentSnapshotRepository } from "@/modules/session-agent/repositories/session-environment-snapshot.repository";
 import { migrateAll } from "@/modules/session-agent/repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
 import type { UIMessageChunk } from "ai";
@@ -75,7 +75,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly secretRepository: SecretRepository;
   private readonly latestPlanRepository: LatestPlanRepository;
   private readonly serverStateRepository: ServerStateRepository;
-  private readonly runtimeConfigRepository: SessionRuntimeConfigRepository;
+  private readonly environmentSnapshotRepository: SessionEnvironmentSnapshotRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
   private readonly attachmentService: SessionAgentAttachmentProvider;
   /** In-memory ServerState mirror — written through via updateServerState() */
@@ -122,7 +122,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.secretRepository = new SecretRepository(sql);
     this.latestPlanRepository = new LatestPlanRepository(sql);
     this.serverStateRepository = new ServerStateRepository(sql);
-    this.runtimeConfigRepository = new SessionRuntimeConfigRepository(sql);
+    this.environmentSnapshotRepository = new SessionEnvironmentSnapshotRepository(sql);
     this.pendingChunkRepository = new PendingChunkRepository(sql);
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
@@ -140,7 +140,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       this.secretRepository,
       this.latestPlanRepository,
       this.serverStateRepository,
-      this.runtimeConfigRepository,
+      this.environmentSnapshotRepository,
       this.pendingChunkRepository,
     ]);
 
@@ -171,7 +171,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
       getClientState: () => this.state,
-      getRuntimeConfig: () => this.runtimeConfigRepository.get(),
+      getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       getProviderCredentialAdapter,
     });
 
@@ -181,7 +181,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       spritesCoordinator: this.spritesCoordinator,
       getServerState: () => this.serverState,
       getClientState: () => this.state,
-      getRuntimeConfig: () => this.runtimeConfigRepository.get(),
+      getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       updateServerState: (partial) => this.updateServerState(partial),
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
@@ -577,7 +577,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       sessionId: data.sessionId,
       userId: data.userId,
     });
-    this.runtimeConfigRepository.set(data.runtimeConfig);
+    this.environmentSnapshotRepository.set(data.environmentSnapshot);
 
     // Store the durable initial fields in ClientState
     this.updatePartialState({

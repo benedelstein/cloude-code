@@ -1,5 +1,5 @@
 import {
-  createDefaultSessionRuntimeConfig,
+  createDefaultSessionEnvironmentSnapshot,
   failure,
   type CreateRepoEnvironmentRequest,
   type DeleteRepoEnvironmentResponse,
@@ -7,7 +7,7 @@ import {
   type ListUserRepoEnvironmentsResponse,
   type RepoEnvironmentResponse,
   type Result,
-  type SessionRuntimeConfigSnapshot,
+  type SessionEnvironmentSnapshot,
   type UserRepoEnvironmentResponse,
   success,
   type UpdateRepoEnvironmentRequest,
@@ -16,7 +16,7 @@ import type { Env } from "@/shared/types";
 import { RepoEnvironmentsRepository } from "../repositories/repo-environments.repository";
 
 type RepoEnvironmentsErrorStatus = 400 | 401 | 403 | 404 | 409 | 503;
-type RepoEnvironmentsRuntimeConfigErrorStatus = Exclude<RepoEnvironmentsErrorStatus, 401>;
+type RepoEnvironmentSnapshotErrorStatus = Exclude<RepoEnvironmentsErrorStatus, 401>;
 
 export interface RepoEnvironmentsServiceError<
   Status extends RepoEnvironmentsErrorStatus = RepoEnvironmentsErrorStatus,
@@ -178,17 +178,17 @@ export class RepoEnvironmentsService {
     return success({ deleted: true });
   }
 
-  async resolveRuntimeConfig(params: {
+  async resolveEnvironmentSnapshot(params: {
     environmentId: string | undefined;
     userId: string;
     repoId: number;
   }): Promise<RepoEnvironmentsServiceResult<
-    SessionRuntimeConfigSnapshot,
-    RepoEnvironmentsRuntimeConfigErrorStatus
+    SessionEnvironmentSnapshot,
+    RepoEnvironmentSnapshotErrorStatus
   >> {
     const resolvedAt = new Date().toISOString();
     if (!params.environmentId) {
-      return success(createDefaultSessionRuntimeConfig({
+      return success(createDefaultSessionEnvironmentSnapshot({
         repoId: params.repoId,
         resolvedAt,
       }));

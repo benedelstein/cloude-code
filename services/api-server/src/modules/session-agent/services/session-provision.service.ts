@@ -2,7 +2,7 @@ import {
   dedent,
   type ClientState,
   type Logger,
-  type SessionRuntimeConfigSnapshot,
+  type SessionEnvironmentSnapshot,
   type SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
@@ -30,7 +30,7 @@ export interface SessionProvisionServiceDeps {
 
   getServerState: () => ServerState;
   getClientState: () => ClientState;
-  getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
+  getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   updateServerState: (partial: Partial<ServerState>) => void;
   updatePartialState: (partial: Partial<ClientState>) => void;
   synthesizeStatus: () => SessionStatus;
@@ -55,7 +55,7 @@ export class SessionProvisionService {
   private readonly spritesCoordinator: SpritesCoordinator;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
-  private readonly getRuntimeConfig: () => SessionRuntimeConfigSnapshot;
+  private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
@@ -72,7 +72,7 @@ export class SessionProvisionService {
     this.spritesCoordinator = deps.spritesCoordinator;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
-    this.getRuntimeConfig = deps.getRuntimeConfig;
+    this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.updateServerState = deps.updateServerState;
     this.updatePartialState = deps.updatePartialState;
     this.synthesizeStatus = deps.synthesizeStatus;
@@ -296,8 +296,8 @@ export class SessionProvisionService {
     }
 
     const gitProxySecret = this.ensureGitProxySecret();
-    const runtimeConfig = this.getRuntimeConfig();
-    const fetchUrl = runtimeConfig.network.mode === "locked"
+    const environmentSnapshot = this.getEnvironmentSnapshot();
+    const fetchUrl = environmentSnapshot.network.mode === "locked"
       ? cloneUrl
       : githubRemoteUrl;
 
@@ -316,7 +316,7 @@ export class SessionProvisionService {
   }
 
   private async tryRunStartupScript(spriteName: string): Promise<void> {
-    const runtimeConfig = this.getRuntimeConfig();
+    const environmentSnapshot = this.getEnvironmentSnapshot();
     const sprite = new WorkersSpriteClient(
       spriteName,
       this.env.SPRITES_API_KEY,
@@ -326,9 +326,9 @@ export class SessionProvisionService {
     try {
       await this.startupScriptService.run({
         sprite,
-        script: runtimeConfig.startupScript,
+        script: environmentSnapshot.startupScript,
         workspaceDir: WORKSPACE_DIR,
-        env: runtimeConfig.plainEnvVars,
+        env: environmentSnapshot.plainEnvVars,
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
@@ -344,7 +344,7 @@ export class SessionProvisionService {
   }
 
   private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {
-    const runtimeConfig = this.getRuntimeConfig();
+    const environmentSnapshot = this.getEnvironmentSnapshot();
     const providerId = this.getClientState().agentSettings.provider;
     const sprite = new WorkersSpriteClient(
       spriteName,
@@ -356,7 +356,7 @@ export class SessionProvisionService {
     await sprite.setNetworkPolicy(buildFinalNetworkPolicy({
       workerHostname,
       providerId,
-      network: runtimeConfig.network,
+      network: environmentSnapshot.network,
     }));
   }
 }

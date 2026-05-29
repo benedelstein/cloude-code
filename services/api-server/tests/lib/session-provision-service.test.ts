@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger, SessionRuntimeConfigSnapshot } from "@repo/shared";
+import type { ClientState, Logger, SessionEnvironmentSnapshot } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { SessionProvisionService } from "../../src/modules/session-agent/services/session-provision.service";
@@ -77,9 +77,9 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
   };
 }
 
-function createRuntimeConfig(
-  overrides: Partial<SessionRuntimeConfigSnapshot> = {},
-): SessionRuntimeConfigSnapshot {
+function createEnvironmentSnapshot(
+  overrides: Partial<SessionEnvironmentSnapshot> = {},
+): SessionEnvironmentSnapshot {
   return {
     sourceEnvironmentId: null,
     sourceEnvironmentName: null,
@@ -97,7 +97,7 @@ function createService(
   serverState: ServerState,
   clientState: ClientState,
   envOverrides: Partial<Env> = {},
-  runtimeConfig: SessionRuntimeConfigSnapshot = createRuntimeConfig(),
+  environmentSnapshot: SessionEnvironmentSnapshot = createEnvironmentSnapshot(),
 ) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
@@ -121,7 +121,7 @@ function createService(
     spritesCoordinator: spritesCoordinator as never,
     getServerState: () => serverState,
     getClientState: () => clientState,
-    getRuntimeConfig: () => runtimeConfig,
+    getEnvironmentSnapshot: () => environmentSnapshot,
     updateServerState,
     updatePartialState,
     synthesizeStatus: () => "provisioning",
@@ -275,7 +275,7 @@ describe("SessionProvisionService startup toolchain", () => {
       serverState,
       createClientState(),
       {},
-      createRuntimeConfig({ network: { mode: "locked" } }),
+      createEnvironmentSnapshot({ network: { mode: "locked" } }),
     );
 
     await service.ensureProvisioned();
@@ -310,7 +310,7 @@ describe("SessionProvisionService startup toolchain", () => {
       return { stdout: "", stderr: "", exitCode: 0 };
     });
 
-    const runtimeConfig = {
+    const environmentSnapshot = {
       sourceEnvironmentId: null,
       sourceEnvironmentName: null,
       repoId: 1,
@@ -335,7 +335,7 @@ describe("SessionProvisionService startup toolchain", () => {
       } as never,
       getServerState: () => serverState,
       getClientState: () => createClientState(),
-      getRuntimeConfig: () => runtimeConfig,
+      getEnvironmentSnapshot: () => environmentSnapshot,
       updateServerState: (partial) => Object.assign(serverState, partial),
       updatePartialState: vi.fn(),
       synthesizeStatus: () => "provisioning",
@@ -400,7 +400,7 @@ describe("SessionProvisionService startup toolchain", () => {
       } as never,
       getServerState: () => serverState,
       getClientState: () => createClientState(),
-      getRuntimeConfig: () => createRuntimeConfig({
+      getEnvironmentSnapshot: () => createEnvironmentSnapshot({
         startupScript: "pnpm install",
       }),
       updateServerState: (partial) => Object.assign(serverState, partial),

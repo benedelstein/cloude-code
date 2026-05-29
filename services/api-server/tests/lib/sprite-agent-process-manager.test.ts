@@ -114,7 +114,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
 function createManager(
   serverState: ServerState,
   envOverrides: Partial<Env> = {},
-  runtimePlainEnvVars: Record<string, string> = {},
+  snapshotPlainEnvVars: Record<string, string> = {},
 ) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
@@ -135,12 +135,12 @@ function createManager(
     getServerState: () => serverState,
     updateAgentProcessId,
     getClientState: createClientState,
-    getRuntimeConfig: () => ({
+    getEnvironmentSnapshot: () => ({
       sourceEnvironmentId: null,
       sourceEnvironmentName: null,
       repoId: 1,
       network: { mode: "default" },
-      plainEnvVars: runtimePlainEnvVars,
+      plainEnvVars: snapshotPlainEnvVars,
       startupScript: null,
       resolvedAt: "2026-05-29T00:00:00.000Z",
       schemaVersion: 1,
@@ -488,7 +488,7 @@ describe("SpriteAgentProcessManager", () => {
     );
   });
 
-  it("preserves control-plane webhook env vars when runtime env vars use reserved names", async () => {
+  it("preserves control-plane webhook env vars when snapshot env vars use reserved names", async () => {
     const spawnSession = {
       start: vi.fn().mockResolvedValue(undefined),
       close: vi.fn(),

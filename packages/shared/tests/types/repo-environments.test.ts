@@ -3,7 +3,7 @@ import {
   CreateRepoEnvironmentRequest,
   DefaultNetworkAllowlistResponse,
   ListUserRepoEnvironmentsResponse,
-  SessionRuntimeConfigSnapshot,
+  SessionEnvironmentSnapshot,
   UserRepoEnvironmentResponse,
 } from "../../src/types/api/repo-environments";
 
@@ -38,8 +38,8 @@ describe("repo environment schemas", () => {
     })).toThrow();
   });
 
-  it("validates immutable runtime snapshots", () => {
-    expect(() => SessionRuntimeConfigSnapshot.parse({
+  it("validates immutable environment snapshots", () => {
+    expect(() => SessionEnvironmentSnapshot.parse({
       sourceEnvironmentId: "123e4567-e89b-12d3-a456-426614174000",
       sourceEnvironmentName: "API",
       repoId: 42,

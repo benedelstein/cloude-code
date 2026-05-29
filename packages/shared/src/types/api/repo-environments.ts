@@ -105,7 +105,7 @@ export const DeleteRepoEnvironmentResponse = z.object({
 });
 export type DeleteRepoEnvironmentResponse = z.infer<typeof DeleteRepoEnvironmentResponse>;
 
-export const SessionRuntimeConfigSnapshot = z.object({
+export const SessionEnvironmentSnapshot = z.object({
   sourceEnvironmentId: z.uuid().nullable(),
   sourceEnvironmentName: z.string().nullable(),
   repoId: z.number(),
@@ -115,12 +115,12 @@ export const SessionRuntimeConfigSnapshot = z.object({
   resolvedAt: z.iso.datetime(),
   schemaVersion: z.literal(1),
 });
-export type SessionRuntimeConfigSnapshot = z.infer<typeof SessionRuntimeConfigSnapshot>;
+export type SessionEnvironmentSnapshot = z.infer<typeof SessionEnvironmentSnapshot>;
 
-export function createDefaultSessionRuntimeConfig(args: {
+export function createDefaultSessionEnvironmentSnapshot(args: {
   repoId: number;
   resolvedAt: string;
-}): SessionRuntimeConfigSnapshot {
+}): SessionEnvironmentSnapshot {
   return {
     sourceEnvironmentId: null,
     sourceEnvironmentName: null,

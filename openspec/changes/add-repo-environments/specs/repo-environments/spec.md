@@ -15,7 +15,7 @@ The system SHALL allow authenticated users to create, list, read, update, and de
 - **WHEN** an authenticated user requests or mutates an environment for a repository they cannot access
 - **THEN** the system rejects the request
 
-### Requirement: Repo environments define V1 runtime setup fields
+### Requirement: Repo environments define V1 session setup fields
 The system SHALL store each repo environment with a name, repo id, network access config, plain non-secret environment variables, and optional startup script.
 
 #### Scenario: Environment includes startup script and plain env vars
@@ -31,7 +31,7 @@ The system SHALL allow session creation to optionally select a repo environment 
 
 #### Scenario: Session selects a valid repo environment
 - **WHEN** a user creates a session with a repo id and an environment id belonging to that repo
-- **THEN** the system creates the session and initializes the Durable Object with a resolved runtime config snapshot
+- **THEN** the system creates the session and initializes the Durable Object with a resolved environment snapshot
 
 #### Scenario: Session selects an environment from another repo
 - **WHEN** a user creates a session with an environment id that does not belong to the requested repo
@@ -39,22 +39,22 @@ The system SHALL allow session creation to optionally select a repo environment 
 
 #### Scenario: Session omits environment
 - **WHEN** a user creates a session without an environment id
-- **THEN** the system creates the session with default runtime configuration
+- **THEN** the system creates the session with a default environment snapshot
 
-### Requirement: Session runtime config is immutable after session creation
-The system SHALL resolve the selected repo environment into a server-only runtime config snapshot during session creation and SHALL use that snapshot for the session's provisioning and agent runtime behavior.
+### Requirement: Session environment snapshot is immutable after session creation
+The system SHALL resolve the selected repo environment into a server-only environment snapshot during session creation and SHALL use that snapshot for the session's provisioning and agent behavior.
 
 #### Scenario: Source environment changes after session creation
 - **WHEN** a repo environment is edited after a session has been created from it
-- **THEN** the existing session continues using the runtime config snapshot resolved at session creation
+- **THEN** the existing session continues using the environment snapshot resolved at session creation
 
 #### Scenario: Session stores source reference metadata
 - **WHEN** a session is created from a repo environment
-- **THEN** the central sessions table stores the source environment id and source environment name but not the full runtime config JSON
+- **THEN** the central sessions table stores the source environment id and source environment name but not the full environment snapshot JSON
 
-#### Scenario: Durable Object stores runtime snapshot
+#### Scenario: Durable Object stores environment snapshot
 - **WHEN** the Durable Object initializes the session
-- **THEN** it stores the resolved runtime config snapshot in server-only Durable Object storage
+- **THEN** it stores the resolved environment snapshot in server-only Durable Object storage
 
 ### Requirement: Startup scripts run before the first agent turn
 The system SHALL run the selected environment startup script from `/home/sprite/workspace` after repository clone and git setup, and before the first agent process starts.
@@ -68,7 +68,7 @@ The system SHALL run the selected environment startup script from `/home/sprite/
 - **THEN** provisioning fails, the session records the error, and the first agent turn does not start
 
 #### Scenario: Startup script receives plain env vars
-- **WHEN** a session has plain environment variables in its runtime config snapshot
+- **WHEN** a session has plain environment variables in its environment snapshot
 - **THEN** the system provides those variables to the startup script and agent process
 
 ### Requirement: Bootstrap provisioning uses the curated default network policy
