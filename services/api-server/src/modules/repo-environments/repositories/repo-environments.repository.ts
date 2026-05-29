@@ -1,8 +1,9 @@
-import type {
-  NetworkAccessConfig,
-  PlainEnvVars,
-  RepoEnvironment,
-  RepoEnvironmentSummary,
+import {
+  RepoEnvironmentNetworkMode,
+  type NetworkAccessConfig,
+  type PlainEnvVars,
+  type RepoEnvironment,
+  type RepoEnvironmentSummary,
 } from "@repo/shared";
 import { fromSqliteDatetime } from "@/shared/utils/utils";
 
@@ -88,26 +89,24 @@ function networkFromRow(params: {
   extraAllowlist: string[];
   includeDefaultAllowlist: boolean;
 }): NetworkAccessConfig {
-  if (params.mode === "custom") {
-    return {
-      mode: "custom",
-      extraAllowlist: params.extraAllowlist,
-      includeDefaultAllowlist: params.includeDefaultAllowlist,
-    };
+  const mode = RepoEnvironmentNetworkMode.parse(params.mode);
+
+  switch (mode) {
+    case "custom":
+      return {
+        mode: "custom",
+        extraAllowlist: params.extraAllowlist,
+        includeDefaultAllowlist: params.includeDefaultAllowlist,
+      };
+    case "default":
+    case "locked":
+    case "open":
+      return { mode };
+    default: {
+      const exhaustiveCheck: never = mode;
+      throw new Error(`Unknown repo environment network mode: ${String(exhaustiveCheck)}`);
+    }
   }
-  if (params.mode === "default_plus_extras") {
-    return params.extraAllowlist.length > 0
-      ? {
-          mode: "custom",
-          extraAllowlist: params.extraAllowlist,
-          includeDefaultAllowlist: true,
-        }
-      : { mode: "default" };
-  }
-  if (params.mode === "default" || params.mode === "locked" || params.mode === "open") {
-    return { mode: params.mode };
-  }
-  throw new Error(`Unknown repo environment network mode: ${params.mode}`);
 }
 
 export class RepoEnvironmentsRepository {
