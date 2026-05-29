@@ -16,6 +16,10 @@ const ErrorResponses = {
     content: { "application/json": { schema: ErrorResponse } },
     description: "Invalid repo environment request",
   },
+  401: {
+    content: { "application/json": { schema: ErrorResponse } },
+    description: "GitHub authentication required",
+  },
   403: {
     content: { "application/json": { schema: ErrorResponse } },
     description: "Repo access denied",

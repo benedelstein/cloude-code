@@ -169,12 +169,15 @@ function createDatabase(
 function createService(args: {
   database: D1Database;
   accessOk?: boolean;
+  accessErrorStatus?: 401 | 403;
 }) {
   const assertUserRepoAccess = vi.fn(async () =>
     args.accessOk === false
       ? failure({
-          code: "REPO_NOT_ACCESSIBLE",
-          status: 403 as const,
+          code: args.accessErrorStatus === 401
+            ? "GITHUB_AUTH_ERROR"
+            : "REPO_NOT_ACCESSIBLE",
+          status: args.accessErrorStatus ?? 403,
           message: "No access",
         })
       : success({ repoFullName: "ben/example" }),
@@ -307,6 +310,30 @@ describe("RepoEnvironmentsService", () => {
     })).resolves.toMatchObject({
       ok: false,
       error: { status: 403 },
+    });
+  });
+
+  it("preserves GitHub auth failures when creating environments", async () => {
+    const { database } = createDatabase();
+    const { service } = createService({
+      database,
+      accessOk: false,
+      accessErrorStatus: 401,
+    });
+
+    await expect(service.create({
+      userId: "user-1",
+      githubAccessToken: "token",
+      repoId: 42,
+      request: {
+        name: "Web",
+        network: { mode: "locked" },
+        plainEnvVars: {},
+        startupScript: null,
+      },
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { status: 401 },
     });
   });
 

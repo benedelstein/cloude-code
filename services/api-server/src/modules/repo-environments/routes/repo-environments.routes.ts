@@ -137,7 +137,7 @@ export function createRepoEnvironmentsRoutes(
 function errorResponse(
   c: Parameters<Parameters<OpenAPIHono<RepoEnvironmentsRouteEnv>["openapi"]>[1]>[0],
   error: {
-    status: 400 | 403 | 404 | 409 | 503;
+    status: 400 | 401 | 403 | 404 | 409 | 503;
     message: string;
     code?: string;
   },

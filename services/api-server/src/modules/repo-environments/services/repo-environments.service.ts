@@ -15,16 +15,22 @@ import {
 import type { Env } from "@/shared/types";
 import { RepoEnvironmentsRepository } from "../repositories/repo-environments.repository";
 
-type RepoEnvironmentsErrorStatus = 400 | 403 | 404 | 409 | 503;
+type RepoEnvironmentsErrorStatus = 400 | 401 | 403 | 404 | 409 | 503;
+type RepoEnvironmentsRuntimeConfigErrorStatus = Exclude<RepoEnvironmentsErrorStatus, 401>;
 
-export interface RepoEnvironmentsServiceError {
+export interface RepoEnvironmentsServiceError<
+  Status extends RepoEnvironmentsErrorStatus = RepoEnvironmentsErrorStatus,
+> {
   domain: "repo_environments";
-  status: RepoEnvironmentsErrorStatus;
+  status: Status;
   message: string;
   code?: string;
 }
 
-type RepoEnvironmentsServiceResult<T> = Result<T, RepoEnvironmentsServiceError>;
+type RepoEnvironmentsServiceResult<
+  T,
+  Status extends RepoEnvironmentsErrorStatus = RepoEnvironmentsErrorStatus,
+> = Result<T, RepoEnvironmentsServiceError<Status>>;
 
 export interface RepoEnvironmentAccessProvider {
   assertUserRepoAccess(params: {
@@ -176,7 +182,10 @@ export class RepoEnvironmentsService {
     environmentId: string | undefined;
     userId: string;
     repoId: number;
-  }): Promise<RepoEnvironmentsServiceResult<SessionRuntimeConfigSnapshot>> {
+  }): Promise<RepoEnvironmentsServiceResult<
+    SessionRuntimeConfigSnapshot,
+    RepoEnvironmentsRuntimeConfigErrorStatus
+  >> {
     const resolvedAt = new Date().toISOString();
     if (!params.environmentId) {
       return success(createDefaultSessionRuntimeConfig({
@@ -210,7 +219,10 @@ export class RepoEnvironmentsService {
     userId: string;
     repoId: number;
     githubAccessToken: string;
-  }): Promise<RepoEnvironmentsServiceResult<{ repoFullName: string }>> {
+  }): Promise<RepoEnvironmentsServiceResult<
+    { repoFullName: string },
+    400 | 401 | 403 | 404 | 503
+  >> {
     const result = await this.accessProvider.assertUserRepoAccess({
       env: this.env,
       userId: params.userId,
@@ -221,17 +233,17 @@ export class RepoEnvironmentsService {
       return success(result.value);
     }
     return failure(this.error(
-      mapRepoAccessStatus(result.error.status),
+      result.error.status,
       result.error.message,
       result.error.code,
     ));
   }
 
-  private error(
-    status: RepoEnvironmentsErrorStatus,
+  private error<Status extends RepoEnvironmentsErrorStatus>(
+    status: Status,
     message: string,
     code?: string,
-  ): RepoEnvironmentsServiceError {
+  ): RepoEnvironmentsServiceError<Status> {
     return {
       domain: "repo_environments",
       status,
@@ -239,10 +251,4 @@ export class RepoEnvironmentsService {
       code,
     };
   }
-}
-
-function mapRepoAccessStatus(
-  status: 400 | 401 | 403 | 404 | 503,
-): RepoEnvironmentsErrorStatus {
-  return status === 401 ? 403 : status;
 }
