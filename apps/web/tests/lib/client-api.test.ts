@@ -3,6 +3,7 @@ import {
   createRepoEnvironment,
   createSession,
   deleteSession,
+  getUserRepoEnvironment,
   getCurrentUser,
   getSessionPlan,
   listRepoEnvironments,
@@ -109,6 +110,22 @@ describe("client-api", () => {
         environment: {
           id: "123e4567-e89b-12d3-a456-426614174000",
           repoId: 42,
+          repoFullName: "ben/web",
+          name: "Web",
+          network: { mode: "locked" },
+          plainEnvVars: {},
+          startupScript: null,
+          createdAt: "2026-05-29T00:00:00.000Z",
+          updatedAt: "2026-05-29T00:00:00.000Z",
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        environment: {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          repoId: 42,
           name: "Web",
           network: { mode: "locked" },
           plainEnvVars: {},
@@ -123,6 +140,7 @@ describe("client-api", () => {
 
     await listRepoEnvironments(42);
     await listUserRepoEnvironments();
+    await getUserRepoEnvironment("123e4567-e89b-12d3-a456-426614174000");
     await createRepoEnvironment(42, {
       name: "Web",
       network: { mode: "locked" },
@@ -132,6 +150,9 @@ describe("client-api", () => {
 
     expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/repos/42/environments");
     expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe("/api/environments");
-    expect(vi.mocked(fetch).mock.calls[2]?.[0]).toBe("/api/repos/42/environments");
+    expect(vi.mocked(fetch).mock.calls[2]?.[0]).toBe(
+      "/api/environments/123e4567-e89b-12d3-a456-426614174000",
+    );
+    expect(vi.mocked(fetch).mock.calls[3]?.[0]).toBe("/api/repos/42/environments");
   });
 });

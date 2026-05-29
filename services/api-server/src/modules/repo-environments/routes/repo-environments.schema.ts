@@ -6,6 +6,7 @@ import {
   ListUserRepoEnvironmentsResponse,
   RepoEnvironmentResponse,
   UpdateRepoEnvironmentRequest,
+  UserRepoEnvironmentResponse,
 } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
@@ -37,6 +38,9 @@ const RepoEnvironmentParams = z.object({
 const RepoEnvironmentIdParams = RepoEnvironmentParams.extend({
   environmentId: z.uuid(),
 });
+const UserRepoEnvironmentIdParams = z.object({
+  environmentId: z.uuid(),
+});
 
 export const listUserRepoEnvironmentsRoute = createRoute({
   method: "get",
@@ -45,6 +49,21 @@ export const listUserRepoEnvironmentsRoute = createRoute({
     200: {
       content: { "application/json": { schema: ListUserRepoEnvironmentsResponse } },
       description: "Current user's repo environments",
+    },
+    ...ErrorResponses,
+  },
+});
+
+export const getUserRepoEnvironmentRoute = createRoute({
+  method: "get",
+  path: "/{environmentId}",
+  request: {
+    params: UserRepoEnvironmentIdParams,
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: UserRepoEnvironmentResponse } },
+      description: "Current user's repo environment",
     },
     ...ErrorResponses,
   },

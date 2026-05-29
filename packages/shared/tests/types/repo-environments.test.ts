@@ -3,6 +3,7 @@ import {
   CreateRepoEnvironmentRequest,
   ListUserRepoEnvironmentsResponse,
   SessionRuntimeConfigSnapshot,
+  UserRepoEnvironmentResponse,
 } from "../../src/types/api/repo-environments";
 
 describe("repo environment schemas", () => {
@@ -15,6 +16,7 @@ describe("repo environment schemas", () => {
       },
       plainEnvVars: {
         NEXT_PUBLIC_API_URL: "https://example.com",
+        npm_config_registry: "https://registry.npmjs.org",
       },
       startupScript: "pnpm install",
     })).not.toThrow();
@@ -56,6 +58,22 @@ describe("repo environment schemas", () => {
           updatedAt: "2026-05-29T00:00:00.000Z",
         },
       ],
+    })).not.toThrow();
+  });
+
+  it("validates one user environment response", () => {
+    expect(() => UserRepoEnvironmentResponse.parse({
+      environment: {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        repoId: 42,
+        repoFullName: "ben/web",
+        name: "Web",
+        network: { mode: "locked" },
+        plainEnvVars: {},
+        startupScript: null,
+        createdAt: "2026-05-29T00:00:00.000Z",
+        updatedAt: "2026-05-29T00:00:00.000Z",
+      },
     })).not.toThrow();
   });
 });

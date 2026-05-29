@@ -28,7 +28,7 @@ export const NetworkAccessConfig = z.discriminatedUnion("mode", [
 export type NetworkAccessConfig = z.infer<typeof NetworkAccessConfig>;
 
 export const PlainEnvVars = z.record(
-  z.string().regex(/^[A-Z_][A-Z0-9_]*$/, "Use uppercase shell variable names"),
+  z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Use shell-compatible variable names"),
   z.string().max(5000),
 ).default({});
 export type PlainEnvVars = z.infer<typeof PlainEnvVars>;
@@ -61,6 +61,11 @@ export const ListUserRepoEnvironmentsResponse = z.object({
 export type ListUserRepoEnvironmentsResponse = z.infer<
   typeof ListUserRepoEnvironmentsResponse
 >;
+
+export const UserRepoEnvironmentResponse = z.object({
+  environment: RepoEnvironmentSummary,
+});
+export type UserRepoEnvironmentResponse = z.infer<typeof UserRepoEnvironmentResponse>;
 
 export const CreateRepoEnvironmentRequest = z.object({
   name: z.string().trim().min(1).max(80),

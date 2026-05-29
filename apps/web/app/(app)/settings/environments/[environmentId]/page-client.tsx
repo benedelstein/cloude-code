@@ -4,12 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  listUserRepoEnvironments,
   updateRepoEnvironment,
 } from "@/lib/client-api";
 import {
@@ -34,45 +33,16 @@ const NETWORK_MODE_LABELS = {
 } satisfies Record<NetworkAccessConfig["mode"], string>;
 
 export function EditEnvironmentPageClient({
-  environmentId,
+  initialEnvironment,
 }: {
-  environmentId: string;
+  initialEnvironment: RepoEnvironmentSummary | null;
 }) {
   const router = useRouter();
-  const [environment, setEnvironment] = useState<RepoEnvironmentSummary | null>(null);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [environment] = useState<RepoEnvironmentSummary | null>(initialEnvironment);
+  const [form, setForm] = useState<FormState | null>(
+    initialEnvironment ? formFromEnvironment(initialEnvironment) : null,
+  );
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let stale = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const data = await listUserRepoEnvironments();
-        if (stale) { return; }
-        const selectedEnvironment = data.environments.find((item) =>
-          item.id === environmentId,
-        ) ?? null;
-        setEnvironment(selectedEnvironment);
-        setForm(selectedEnvironment ? formFromEnvironment(selectedEnvironment) : null);
-      } catch (error) {
-        if (!stale) {
-          toast.error("Failed to load environment", {
-            description: error instanceof Error ? error.message : "Unknown error",
-          });
-        }
-      } finally {
-        if (!stale) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      stale = true;
-    };
-  }, [environmentId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -95,14 +65,6 @@ export function EditEnvironmentPageClient({
     } finally {
       setSaving(false);
     }
-  }
-
-  if (loading) {
-    return (
-      <SettingsShell>
-        <div className="text-sm text-foreground-muted">Loading environment...</div>
-      </SettingsShell>
-    );
   }
 
   if (!environment || !form) {

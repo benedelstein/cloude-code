@@ -37,6 +37,7 @@ import type {
   ListUserRepoEnvironmentsResponse,
   RepoEnvironmentResponse,
   UpdateRepoEnvironmentRequest,
+  UserRepoEnvironmentResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -207,6 +208,12 @@ export async function listRepoEnvironments(
 
 export async function listUserRepoEnvironments(): Promise<ListUserRepoEnvironmentsResponse> {
   return apiFetch("/environments");
+}
+
+export async function getUserRepoEnvironment(
+  environmentId: string,
+): Promise<UserRepoEnvironmentResponse> {
+  return apiFetch(`/environments/${environmentId}`);
 }
 
 export async function createRepoEnvironment(

@@ -8,6 +8,7 @@ import {
   type RepoEnvironmentResponse,
   type Result,
   type SessionRuntimeConfigSnapshot,
+  type UserRepoEnvironmentResponse,
   success,
   type UpdateRepoEnvironmentRequest,
 } from "@repo/shared";
@@ -89,6 +90,17 @@ export class RepoEnvironmentsService {
     }
 
     const environment = await this.repository.getById(params);
+    if (!environment) {
+      return failure(this.error(404, "Repo environment not found"));
+    }
+    return success({ environment });
+  }
+
+  async getOwned(params: {
+    id: string;
+    userId: string;
+  }): Promise<RepoEnvironmentsServiceResult<UserRepoEnvironmentResponse>> {
+    const environment = await this.repository.getByIdForUser(params);
     if (!environment) {
       return failure(this.error(404, "Repo environment not found"));
     }

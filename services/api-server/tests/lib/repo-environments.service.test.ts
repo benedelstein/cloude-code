@@ -41,6 +41,11 @@ function createDatabase(rows: Row[] = []) {
         },
         async first<T>() {
           const [id, userId, repoId] = call.bindings;
+          if (repoId === undefined) {
+            return (rows.find((row) =>
+              row.id === id && row.user_id === userId,
+            ) ?? null) as T | null;
+          }
           return (rows.find((row) =>
             row.id === id && row.user_id === userId && row.repo_id === repoId,
           ) ?? null) as T | null;
@@ -201,6 +206,37 @@ describe("RepoEnvironmentsService", () => {
     expect(result.ok && result.value.environments).toMatchObject([
       { name: "Web", repoFullName: "ben/web" },
     ]);
+    expect(assertUserRepoAccess).not.toHaveBeenCalled();
+  });
+
+  it("gets one owned environment for editing without listing all", async () => {
+    const { database } = createDatabase([
+      {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        user_id: "user-1",
+        repo_id: 42,
+        repo_full_name: "ben/web",
+        name: "Web",
+        network_mode: "locked",
+        network_extra_allowlist_json: "[]",
+        plain_env_vars_json: "{}",
+        startup_script: null,
+        created_at: "2026-05-29 00:00:00",
+        updated_at: "2026-05-29 00:00:00",
+      },
+    ]);
+    const { service, assertUserRepoAccess } = createService({ database });
+
+    const result = await service.getOwned({
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      userId: "user-1",
+    });
+
+    expect(result.ok && result.value.environment).toMatchObject({
+      name: "Web",
+      repoId: 42,
+      repoFullName: "ben/web",
+    });
     expect(assertUserRepoAccess).not.toHaveBeenCalled();
   });
 

@@ -7,6 +7,7 @@ import {
   createRepoEnvironmentRoute,
   deleteRepoEnvironmentRoute,
   getRepoEnvironmentRoute,
+  getUserRepoEnvironmentRoute,
   listRepoEnvironmentsRoute,
   listUserRepoEnvironmentsRoute,
   updateRepoEnvironmentRoute,
@@ -117,6 +118,19 @@ export function createUserRepoEnvironmentsRoutes(
   routes.openapi(listUserRepoEnvironmentsRoute, async (c) => {
     const user = c.get("user");
     const result = await deps.createRepoEnvironmentsService(c.env).listAll({
+      userId: user.id,
+    });
+    if (!result.ok) {
+      return errorResponse(c, result.error);
+    }
+    return c.json(result.value, 200);
+  });
+
+  routes.openapi(getUserRepoEnvironmentRoute, async (c) => {
+    const user = c.get("user");
+    const { environmentId } = c.req.valid("param");
+    const result = await deps.createRepoEnvironmentsService(c.env).getOwned({
+      id: environmentId,
       userId: user.id,
     });
     if (!result.ok) {
