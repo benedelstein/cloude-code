@@ -70,7 +70,7 @@ export function EditEnvironmentPageClient({
   if (!environment || !form) {
     return (
       <SettingsShell>
-        <div className="flex max-w-3xl flex-col gap-4">
+        <div className="flex w-full flex-col gap-4">
           <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-foreground-secondary shadow-none hover:bg-transparent hover:text-foreground">
             <Link href="/settings/environments">
               <ArrowLeft className="h-4 w-4" />
@@ -90,7 +90,7 @@ export function EditEnvironmentPageClient({
 
   return (
     <SettingsShell>
-      <form onSubmit={(event) => void handleSubmit(event)} className="flex max-w-3xl flex-col gap-6">
+      <form onSubmit={(event) => void handleSubmit(event)} className="flex w-full flex-col gap-6">
         <div className="flex flex-col gap-4 border-b border-border pb-4">
           <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-foreground-secondary shadow-none hover:bg-transparent hover:text-foreground">
             <Link href="/settings/environments">
