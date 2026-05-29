@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save, TriangleAlert } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createRepoEnvironment,
-  listRepos,
-  type Repo,
 } from "@/lib/client-api";
 import { RepoEnvironmentNetworkMode, type NetworkAccessConfig } from "@repo/shared";
+import { RepoSelector } from "../../../repo-selector";
+import { useRepoPicker } from "../../../use-repo-picker";
 import { SettingsShell } from "../../settings-shell";
 
 type FormState = {
@@ -53,80 +53,27 @@ const NETWORK_MODE_DESCRIPTIONS = {
 export function CreateEnvironmentPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedRepoId = searchParams.get("repoId");
+  const requestedRepoId = Number(searchParams.get("repoId"));
   const requestedRepoFullName = searchParams.get("repoFullName");
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [reposCursor, setReposCursor] = useState<string | null>(null);
-  const [reposLoading, setReposLoading] = useState(true);
+  const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
+  const {
+    visibleRepos,
+    loading: reposLoading,
+    cursor: reposCursor,
+    loadMore: loadMoreRepos,
+  } = useRepoPicker({
+    requestedRepoId: hasRequestedRepo ? requestedRepoId : null,
+    requestedRepoFullName,
+  });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_FORM,
-    repoId: requestedRepoId ?? "",
+    repoId: hasRequestedRepo ? String(requestedRepoId) : "",
   }));
-
-  useEffect(() => {
-    let stale = false;
-    setReposLoading(true);
-    (async () => {
-      try {
-        const data = await listRepos({ limit: 100 });
-        if (stale) { return; }
-        const nextRepos = data.repos;
-        if (
-          requestedRepoId
-          && requestedRepoFullName
-          && !nextRepos.some((repo) => repo.id === Number(requestedRepoId))
-        ) {
-          nextRepos.unshift({
-            id: Number(requestedRepoId),
-            name: repoDisplayName(requestedRepoFullName),
-            fullName: requestedRepoFullName,
-            owner: requestedRepoFullName.split("/")[0] ?? "",
-            private: false,
-            description: null,
-            defaultBranch: "",
-          });
-        }
-        setRepos(nextRepos);
-        setReposCursor(data.cursor);
-      } catch (error) {
-        if (!stale) {
-          toast.error("Failed to load repositories", {
-            description: error instanceof Error ? error.message : "Unknown error",
-          });
-        }
-      } finally {
-        if (!stale) {
-          setReposLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      stale = true;
-    };
-  }, [requestedRepoFullName, requestedRepoId]);
-
   const selectedRepo = useMemo(() => {
     const repoId = Number(form.repoId);
     return repos.find((repo) => repo.id === repoId) ?? null;
   }, [form.repoId, repos]);
-
-  async function loadMoreRepos(): Promise<void> {
-    if (!reposCursor || reposLoading) { return; }
-    setReposLoading(true);
-    try {
-      const data = await listRepos({ cursor: reposCursor, limit: 100 });
-      setRepos((current) => mergeRepos(current, data.repos));
-      setReposCursor(data.cursor);
-    } catch (error) {
-      toast.error("Failed to load more repositories", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setReposLoading(false);
-    }
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -176,36 +123,27 @@ export function CreateEnvironmentPageClient() {
         <section className="rounded-lg border border-border bg-background">
           <FormSection title="Repository">
             <Field label="Repository" description="Environments are scoped to one repository.">
-              <select
-                value={form.repoId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, repoId: event.target.value }))
-                }
-                disabled={reposLoading || saving}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none disabled:opacity-50"
-                required
-              >
-                <option value="">
-                  {reposLoading ? "Loading repositories..." : "Select repository"}
-                </option>
-                {repos.map((repo) => (
-                  <option key={repo.id} value={repo.id}>
-                    {repo.fullName}
-                  </option>
-                ))}
-              </select>
-              {reposCursor && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 shadow-none"
-                  disabled={reposLoading}
-                  onClick={() => void loadMoreRepos()}
-                >
-                  Load more repositories
-                </Button>
-              )}
+              <RepoSelector
+                repos={visibleRepos}
+                selectedRepo={selectedRepo}
+                onSelect={(repo) => {
+                  setSelectedRepo(repo);
+                  setForm((current) => ({ ...current, repoId: String(repo.id) }));
+                }}
+                loading={reposLoading}
+                disabled={saving}
+                installUrl={installUrl}
+                open={repoPickerOpen}
+                onOpenChange={setRepoPickerOpen}
+                hasMore={reposCursor !== null}
+                loadingMore={reposLoadingMore}
+                onLoadMore={loadMoreRepos}
+                searchQuery={repoSearchQuery}
+                onSearchQueryChange={setRepoSearchQuery}
+                searching={repoSearchLoading}
+                isSearchMode={isRepoSearchMode}
+                triggerClassName="h-9 w-full max-w-none justify-start text-sm"
+              />
             </Field>
 
             <Field label="Name">
@@ -430,15 +368,4 @@ function buildNetworkConfig(form: FormState): NetworkAccessConfig {
 
 function repoDisplayName(repoFullName: string): string {
   return repoFullName.split("/").pop() ?? repoFullName;
-}
-
-function mergeRepos(existingRepos: Repo[], incomingRepos: Repo[]): Repo[] {
-  const reposById = new Map<number, Repo>();
-  for (const repo of existingRepos) {
-    reposById.set(repo.id, repo);
-  }
-  for (const repo of incomingRepos) {
-    reposById.set(repo.id, repo);
-  }
-  return Array.from(reposById.values());
 }
