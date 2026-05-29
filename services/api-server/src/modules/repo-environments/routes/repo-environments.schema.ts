@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import {
   CreateRepoEnvironmentRequest,
+  DefaultNetworkAllowlistResponse,
   DeleteRepoEnvironmentResponse,
   ListRepoEnvironmentsResponse,
   ListUserRepoEnvironmentsResponse,
@@ -49,6 +50,18 @@ export const listUserRepoEnvironmentsRoute = createRoute({
     200: {
       content: { "application/json": { schema: ListUserRepoEnvironmentsResponse } },
       description: "Current user's repo environments",
+    },
+    ...ErrorResponses,
+  },
+});
+
+export const getDefaultNetworkAllowlistRoute = createRoute({
+  method: "get",
+  path: "/default-allowlist",
+  responses: {
+    200: {
+      content: { "application/json": { schema: DefaultNetworkAllowlistResponse } },
+      description: "Default network allowlist domains",
     },
     ...ErrorResponses,
   },

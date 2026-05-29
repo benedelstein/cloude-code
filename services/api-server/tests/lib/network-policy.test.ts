@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBootstrapNetworkPolicy,
   buildFinalNetworkPolicy,
+  getDefaultNetworkAllowlistDomains,
   getProviderNetworkPolicyRules,
 } from "../../src/shared/integrations/sprites/network-policy";
 
@@ -12,6 +13,14 @@ describe("Sprite network policies", () => {
     expect(policy).toContainEqual({ domain: "worker.test", action: "allow" });
     expect(policy.at(-1)).toEqual({ domain: "*", action: "deny" });
     expect(policy).toContainEqual({ domain: "github.com", action: "allow" });
+  });
+
+  it("lists default allowlist domains without deny rules", () => {
+    const domains = getDefaultNetworkAllowlistDomains();
+
+    expect(domains).toContain("github.com");
+    expect(domains).toContain("registry.npmjs.org");
+    expect(domains).not.toContain("*");
   });
 
   it("uses default policy for default mode", () => {

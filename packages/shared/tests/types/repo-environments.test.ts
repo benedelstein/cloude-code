@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateRepoEnvironmentRequest,
+  DefaultNetworkAllowlistResponse,
   ListUserRepoEnvironmentsResponse,
   SessionRuntimeConfigSnapshot,
   UserRepoEnvironmentResponse,
@@ -20,6 +21,12 @@ describe("repo environment schemas", () => {
         npm_config_registry: "https://registry.npmjs.org",
       },
       startupScript: "pnpm install",
+    })).not.toThrow();
+  });
+
+  it("validates default network allowlist response", () => {
+    expect(() => DefaultNetworkAllowlistResponse.parse({
+      domains: ["github.com", "registry.npmjs.org"],
     })).not.toThrow();
   });
 

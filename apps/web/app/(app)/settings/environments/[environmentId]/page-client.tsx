@@ -17,6 +17,7 @@ import {
   type RepoEnvironmentSummary,
 } from "@repo/shared";
 import { SettingsShell } from "../../settings-shell";
+import { DefaultAllowlistSheetTrigger } from "../default-allowlist-sheet";
 
 type FormState = {
   name: string;
@@ -161,6 +162,11 @@ export function EditEnvironmentPageClient({
               <span className="text-xs leading-5 text-foreground-muted">
                 {NETWORK_MODE_DESCRIPTIONS[form.networkMode]}
               </span>
+              {form.networkMode === "default" && (
+                <span className="text-xs text-foreground-muted">
+                  <DefaultAllowlistSheetTrigger />
+                </span>
+              )}
             </Field>
 
             {form.networkMode !== "locked" && (
@@ -173,8 +179,14 @@ export function EditEnvironmentPageClient({
                 description="One hostname per line."
               >
                 <div className="mb-2 flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-                  <span className="text-sm text-foreground-secondary">
-                    Include the default allowlist
+                  <span className="grid gap-0.5">
+                    <span className="text-sm text-foreground-secondary">
+                      Include the default allowlist
+                    </span>
+                    <span className="text-xs text-foreground-muted">
+                      Adds common provider, source control, package registry, and development domains.{" "}
+                      <DefaultAllowlistSheetTrigger />
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -302,13 +314,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-2">
+    <div className="grid gap-2">
       <span className="text-sm font-medium text-foreground">{label}</span>
       {children}
       {description && (
         <span className="text-xs text-foreground-muted">{description}</span>
       )}
-    </label>
+    </div>
   );
 }
 

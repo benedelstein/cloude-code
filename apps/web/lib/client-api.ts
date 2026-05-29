@@ -33,6 +33,7 @@ import type {
   UploadAttachmentResponse,
   ModelsResponse,
   CreateRepoEnvironmentRequest,
+  DefaultNetworkAllowlistResponse,
   ListRepoEnvironmentsResponse,
   ListUserRepoEnvironmentsResponse,
   RepoEnvironmentResponse,
@@ -214,6 +215,10 @@ export async function getUserRepoEnvironment(
   environmentId: string,
 ): Promise<UserRepoEnvironmentResponse> {
   return apiFetch(`/environments/${environmentId}`);
+}
+
+export async function getDefaultNetworkAllowlist(): Promise<DefaultNetworkAllowlistResponse> {
+  return apiFetch("/environments/default-allowlist");
 }
 
 export async function createRepoEnvironment(

@@ -256,6 +256,12 @@ export function buildNetworkPolicy(
   return [...allowRules, ...extraRules, denyAll];
 }
 
+export function getDefaultNetworkAllowlistDomains(): string[] {
+  return DEFAULT_NETWORK_POLICY
+    .filter((rule) => rule.action === "allow")
+    .map((rule) => rule.domain);
+}
+
 export function buildBootstrapNetworkPolicy(args: {
   workerHostname: string;
 }): NetworkPolicyRule[] {

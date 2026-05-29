@@ -67,6 +67,13 @@ export type ListUserRepoEnvironmentsResponse = z.infer<
   typeof ListUserRepoEnvironmentsResponse
 >;
 
+export const DefaultNetworkAllowlistResponse = z.object({
+  domains: z.array(z.string()),
+});
+export type DefaultNetworkAllowlistResponse = z.infer<
+  typeof DefaultNetworkAllowlistResponse
+>;
+
 export const UserRepoEnvironmentResponse = z.object({
   environment: RepoEnvironmentSummary,
 });

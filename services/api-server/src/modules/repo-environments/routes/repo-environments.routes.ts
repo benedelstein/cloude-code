@@ -2,10 +2,12 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { AuthUser } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
+import { getDefaultNetworkAllowlistDomains } from "@/shared/integrations/sprites/network-policy";
 import type { RepoEnvironmentsService } from "../services/repo-environments.service";
 import {
   createRepoEnvironmentRoute,
   deleteRepoEnvironmentRoute,
+  getDefaultNetworkAllowlistRoute,
   getRepoEnvironmentRoute,
   getUserRepoEnvironmentRoute,
   listRepoEnvironmentsRoute,
@@ -125,6 +127,10 @@ export function createUserRepoEnvironmentsRoutes(
     }
     return c.json(result.value, 200);
   });
+
+  routes.openapi(getDefaultNetworkAllowlistRoute, (c) =>
+    c.json({ domains: getDefaultNetworkAllowlistDomains() }, 200),
+  );
 
   routes.openapi(getUserRepoEnvironmentRoute, async (c) => {
     const user = c.get("user");

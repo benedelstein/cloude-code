@@ -59,7 +59,7 @@
 - [x] 8.2 Add settings UI at `/settings/environments` for listing existing repo environments.
 - [x] 8.3 Add settings UI at `/settings/environments/create` for creating a repo environment.
 - [x] 8.4 Add session creation UI for selecting an environment or using default runtime configuration.
-- [x] 8.5 Show network mode choices, default allowlist visibility, extra domain entry, plain env vars, and startup script editor.
+- [x] 8.5 Show network mode choices, default allowlist visibility/details, allowed domain entry, plain env vars, and startup script editor.
 - [x] 8.6 Add UI copy that plain env vars are not secrets and that locked mode restricts agent network access after setup.
 - [x] 8.7 Add focused component tests and browser validation for environment selection and management flows.
 

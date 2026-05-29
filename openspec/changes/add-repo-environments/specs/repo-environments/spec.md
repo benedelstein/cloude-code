@@ -105,6 +105,10 @@ The system SHALL support `locked`, `default`, `custom`, and `open` as final netw
 - **WHEN** an environment uses `open`
 - **THEN** the final policy allows unrestricted outbound access after setup completes
 
+#### Scenario: User views default allowlist
+- **WHEN** a user opens the default allowlist details from an environment form
+- **THEN** the system returns and displays the domains included in the curated default allowlist
+
 ### Requirement: Locked network policy is provider-aware
 The system SHALL derive locked-mode provider hosts from the selected agent provider using an exhaustive provider switch.
 

@@ -12,6 +12,7 @@ Sessions currently start with one fixed runtime setup: the API server creates a 
   - `default`: curated default allowlist plus required cloude-code control-plane access.
   - `custom`: explicit custom domains, with a toggle to include the curated default allowlist.
   - `open`: unrestricted outbound access after startup completes.
+- Expose the curated default allowlist through a read-only API and show it from the environment forms.
 - Use the existing curated default network policy during bootstrap, clone, toolchain setup, and startup script execution for all modes.
 - Resolve the selected environment into an immutable runtime config snapshot at session creation and store that snapshot in Durable Object storage.
 - Store only the selected environment reference and display name on the central `sessions` table.

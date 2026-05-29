@@ -105,6 +105,8 @@ Final policy semantics:
 - `custom`: extra domains plus required cloude-code control-plane and provider hosts; optionally include the curated default allowlist.
 - `locked`: required cloude-code control-plane hosts plus provider-specific model/auth hosts; direct GitHub and package-manager hosts are not included after startup.
 
+The curated default allowlist is exposed through a read-only authenticated endpoint so the settings UI can show users the exact domains included before they choose default access or include it in custom access.
+
 ### Bootstrap policy is always the curated default policy
 
 Provisioning uses two policies:
