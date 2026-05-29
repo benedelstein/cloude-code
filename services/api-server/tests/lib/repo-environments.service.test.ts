@@ -18,7 +18,10 @@ type Row = {
   updated_at: string;
 };
 
-function createDatabase(rows: Row[] = []) {
+function createDatabase(
+  rows: Row[] = [],
+  options: { failReadsForIds?: Set<string> } = {},
+) {
   const database = {
     prepare(query: string) {
       const call = { bindings: [] as unknown[] };
@@ -42,6 +45,9 @@ function createDatabase(rows: Row[] = []) {
         },
         async first<T>() {
           const [id, userId, repoId] = call.bindings;
+          if (typeof id === "string" && options.failReadsForIds?.has(id)) {
+            return null;
+          }
           if (repoId === undefined) {
             return (rows.find((row) =>
               row.id === id && row.user_id === userId,
@@ -377,6 +383,38 @@ describe("RepoEnvironmentsService", () => {
       ok: false,
       error: { status: 409 },
     });
+  });
+
+  it("returns an error when a created environment cannot be read back", async () => {
+    const environmentId = "123e4567-e89b-12d3-a456-426614174999";
+    const randomUuid = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValue(environmentId as ReturnType<typeof crypto.randomUUID>);
+    const { database } = createDatabase([], {
+      failReadsForIds: new Set([environmentId]),
+    });
+    const { service } = createService({ database });
+
+    try {
+      const result = await service.create({
+        userId: "user-1",
+        githubAccessToken: "token",
+        repoId: 42,
+        request: {
+          name: "Web",
+          network: { mode: "locked" },
+          plainEnvVars: {},
+          startupScript: null,
+        },
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { status: 503 },
+      });
+    } finally {
+      randomUuid.mockRestore();
+    }
   });
 
   it("rejects duplicate environment names on update", async () => {

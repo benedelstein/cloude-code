@@ -116,13 +116,16 @@ export class RepoEnvironmentsService {
       plainEnvVars: params.request.plainEnvVars,
       startupScript: params.request.startupScript ?? null,
     });
-    switch (result.type) {
-      case "created":
-        return success({ environment: result.environment });
-      case "duplicate_name":
+    if (result.ok) {
+      return success({ environment: result.value });
+    }
+    switch (result.error.code) {
+      case "DUPLICATE_NAME":
         return failure(this.error(409, "A repo environment with this name already exists"));
+      case "READ_FAILED":
+        return failure(this.error(503, "Repo environment could not be read after creation"));
       default: {
-        const exhaustiveCheck: never = result;
+        const exhaustiveCheck: never = result.error;
         throw new Error(`Unhandled repo environment create result: ${String(exhaustiveCheck)}`);
       }
     }
@@ -140,15 +143,18 @@ export class RepoEnvironmentsService {
       repoId: params.repoId,
       ...params.request,
     });
-    switch (result.type) {
-      case "updated":
-        return success({ environment: result.environment });
-      case "not_found":
+    if (result.ok) {
+      return success({ environment: result.value });
+    }
+    switch (result.error.code) {
+      case "NOT_FOUND":
         return failure(this.error(404, "Repo environment not found"));
-      case "duplicate_name":
+      case "DUPLICATE_NAME":
         return failure(this.error(409, "A repo environment with this name already exists"));
+      case "READ_FAILED":
+        return failure(this.error(503, "Repo environment could not be read after update"));
       default: {
-        const exhaustiveCheck: never = result;
+        const exhaustiveCheck: never = result.error;
         throw new Error(`Unhandled repo environment update result: ${String(exhaustiveCheck)}`);
       }
     }

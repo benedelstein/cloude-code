@@ -1,9 +1,12 @@
 import {
+  failure,
   RepoEnvironmentNetworkMode,
+  type Result,
   type NetworkAccessConfig,
   type PlainEnvVars,
   type RepoEnvironment,
   type RepoEnvironmentSummary,
+  success,
 } from "@repo/shared";
 import { fromSqliteDatetime } from "@/shared/utils/utils";
 
@@ -28,14 +31,17 @@ export interface UpdateRepoEnvironmentParams {
   startupScript?: string | null;
 }
 
-export type CreateRepoEnvironmentResult =
-  | { type: "created"; environment: RepoEnvironment }
-  | { type: "duplicate_name" };
+type CreateRepoEnvironmentError =
+  | { code: "DUPLICATE_NAME" }
+  | { code: "READ_FAILED" };
 
-export type UpdateRepoEnvironmentResult =
-  | { type: "updated"; environment: RepoEnvironment }
-  | { type: "not_found" }
-  | { type: "duplicate_name" };
+type UpdateRepoEnvironmentError =
+  | { code: "NOT_FOUND" }
+  | { code: "DUPLICATE_NAME" }
+  | { code: "READ_FAILED" };
+
+export type CreateRepoEnvironmentResult = Result<RepoEnvironment, CreateRepoEnvironmentError>;
+export type UpdateRepoEnvironmentResult = Result<RepoEnvironment, UpdateRepoEnvironmentError>;
 
 interface RepoEnvironmentRow {
   id: string;
@@ -215,7 +221,7 @@ export class RepoEnvironmentsRepository {
       .run();
 
     if (result.meta.changes === 0) {
-      return { type: "duplicate_name" };
+      return failure({ code: "DUPLICATE_NAME" });
     }
 
     const environment = await this.getForRepo({
@@ -224,9 +230,9 @@ export class RepoEnvironmentsRepository {
       repoId: params.repoId,
     });
     if (!environment) {
-      throw new Error("Created repo environment could not be read");
+      return failure({ code: "READ_FAILED" });
     }
-    return { type: "created", environment };
+    return success(environment);
   }
 
   async update(params: UpdateRepoEnvironmentParams): Promise<UpdateRepoEnvironmentResult> {
@@ -236,7 +242,7 @@ export class RepoEnvironmentsRepository {
       repoId: params.repoId,
     });
     if (!current) {
-      return { type: "not_found" };
+      return failure({ code: "NOT_FOUND" });
     }
 
     const nextNetwork = params.network ?? current.network;
@@ -269,7 +275,7 @@ export class RepoEnvironmentsRepository {
       .run();
 
     if (result.meta.changes === 0 && params.name !== undefined && params.name !== current.name) {
-      return { type: "duplicate_name" };
+      return failure({ code: "DUPLICATE_NAME" });
     }
 
     const environment = await this.getForRepo({
@@ -278,9 +284,9 @@ export class RepoEnvironmentsRepository {
       repoId: params.repoId,
     });
     if (!environment) {
-      throw new Error("Updated repo environment could not be read");
+      return failure({ code: "READ_FAILED" });
     }
-    return { type: "updated", environment };
+    return success(environment);
   }
 
   async delete(params: {
