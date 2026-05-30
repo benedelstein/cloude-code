@@ -22,8 +22,8 @@ export function AgentModeToggle({ agentMode, onToggle, disabled }: AgentModeTogg
           onClick={onToggle}
           className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
             isPlan
-              ? "bg-[var(--plan-subtle)] text-[var(--plan)] hover:bg-[var(--plan-subtle-strong)] focus-visible:bg-[var(--plan-subtle-strong)]"
-              : "bg-[var(--edit-subtle)] text-[var(--edit)] hover:bg-[var(--edit-subtle-strong)] focus-visible:bg-[var(--edit-subtle-strong)]"
+              ? "bg-plan-subtle text-plan hover:bg-plan-subtle-strong focus-visible:bg-plan-subtle-strong"
+              : "bg-edit-subtle text-edit hover:bg-edit-subtle-strong focus-visible:bg-edit-subtle-strong"
           }`}
         >
           {isPlan ? (
