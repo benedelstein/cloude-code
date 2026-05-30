@@ -32,7 +32,7 @@
   /* shadcn aliases */
   --popover: var(--background);
   --popover-foreground: var(--foreground);
-  --primary: var(--foreground);
+  --primary: var(--accent);
   --primary-foreground: var(--accent-foreground);
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);

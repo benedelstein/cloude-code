@@ -214,7 +214,7 @@ function TypingIndicator() {
     <div
       role="status"
       aria-label="Working"
-      className="flex w-fit items-center gap-2 px-2 py-1 text-sm text-foreground-secondary"
+      className="flex w-fit items-center gap-2 py-1 text-sm text-foreground-secondary"
     >
       <WorkingCloudIndicator />
       <span>Working</span>

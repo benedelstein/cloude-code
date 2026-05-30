@@ -6,6 +6,7 @@ import type {
   Result,
   SessionInfoResponse,
   SessionPlanResponse,
+  SessionEnvironmentSnapshot,
 } from "@repo/shared";
 import type { UIMessage, UIMessageChunk } from "ai";
 
@@ -17,6 +18,7 @@ export interface InitSessionAgentRequest {
   agentMode?: AgentMode;
   /** Base branch */
   branch?: string;
+  environmentSnapshot: SessionEnvironmentSnapshot;
   initialMessage?: string;
   initialAttachmentIds?: string[];
 }

@@ -32,12 +32,21 @@ import type {
   AgentMode,
   UploadAttachmentResponse,
   ModelsResponse,
+  CreateRepoEnvironmentRequest,
+  DefaultNetworkAllowlistResponse,
+  ListRepoEnvironmentsResponse,
+  ListUserRepoEnvironmentsResponse,
+  RepoEnvironmentResponse,
+  UpdateRepoEnvironmentRequest,
+  UserRepoEnvironmentResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
 export type {
   UserInfo,
   Repo,
+  CreateRepoEnvironmentRequest,
+  UpdateRepoEnvironmentRequest,
   SessionSummary,
   SessionRepoGroup,
   ListSessionsResponse,
@@ -175,6 +184,7 @@ export async function createSession(
   settings?: AgentSettingsInput,
   agentMode?: AgentMode,
   attachmentIds?: string[],
+  environmentId?: string,
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
     method: "POST",
@@ -186,7 +196,60 @@ export async function createSession(
       settings,
       agentMode,
       attachmentIds,
+      environmentId,
     }),
+  });
+}
+
+export async function listRepoEnvironments(
+  repoId: number,
+): Promise<ListRepoEnvironmentsResponse> {
+  return apiFetch(`/repos/${repoId}/environments`);
+}
+
+export async function listUserRepoEnvironments(): Promise<ListUserRepoEnvironmentsResponse> {
+  return apiFetch("/environments");
+}
+
+export async function getUserRepoEnvironment(
+  environmentId: string,
+): Promise<UserRepoEnvironmentResponse> {
+  return apiFetch(`/environments/${environmentId}`);
+}
+
+export async function getDefaultNetworkAllowlist(): Promise<DefaultNetworkAllowlistResponse> {
+  return apiFetch("/environments/default-allowlist");
+}
+
+export async function createRepoEnvironment(
+  repoId: number,
+  request: CreateRepoEnvironmentRequest,
+): Promise<RepoEnvironmentResponse> {
+  return apiFetch(`/repos/${repoId}/environments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function updateRepoEnvironment(
+  repoId: number,
+  environmentId: string,
+  request: UpdateRepoEnvironmentRequest,
+): Promise<RepoEnvironmentResponse> {
+  return apiFetch(`/repos/${repoId}/environments/${environmentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function deleteRepoEnvironment(
+  repoId: number,
+  environmentId: string,
+): Promise<void> {
+  await apiFetch(`/repos/${repoId}/environments/${environmentId}`, {
+    method: "DELETE",
   });
 }
 

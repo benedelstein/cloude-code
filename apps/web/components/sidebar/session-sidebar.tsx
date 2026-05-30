@@ -6,7 +6,9 @@ import {
   ArrowUpRight,
   ChevronRight,
   CirclePlus,
+  Ellipsis,
   FolderGit2,
+  LogOut,
   Plus,
   Settings,
 } from "lucide-react";
@@ -46,6 +48,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 
 const SESSION_LOADING_SKELETON_COUNT = 3;
@@ -208,7 +217,7 @@ interface SessionSidebarProps {
 }
 
 export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
@@ -369,35 +378,80 @@ export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps)
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                size="lg"
-                isActive={pathname === "/settings"}
-                className="cursor-pointer"
-              >
-                <Link href="/settings" onClick={closeMobileSidebar}>
-                  {authLoading ? (
-                    <>
-                      <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-                      <Skeleton className="h-4 w-24" />
-                    </>
-                  ) : user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.login}
-                      className="h-8 w-8 shrink-0 rounded-full"
-                    />
-                  ) : (
-                    <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
-                  )}
-                  {!authLoading ? (
-                    <span className="truncate text-sm">
-                      {user?.login ?? "User"}
-                    </span>
-                  ) : null}
-                  <Settings className="ml-auto h-4 w-4 text-foreground-muted" />
-                </Link>
-              </SidebarMenuButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    size="lg"
+                    isActive={pathname === "/settings"}
+                    className="cursor-pointer"
+                    aria-label="Open account menu"
+                    disabled={authLoading}
+                  >
+                    {authLoading ? (
+                      <>
+                        <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                        <Skeleton className="h-4 w-24" />
+                      </>
+                    ) : user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.login}
+                        className="h-8 w-8 shrink-0 rounded-full"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-sidebar-accent" />
+                    )}
+                    {!authLoading ? (
+                      <span className="truncate text-sm">
+                        {user?.login ?? "User"}
+                      </span>
+                    ) : null}
+                    <Ellipsis className="ml-auto h-4 w-4 text-foreground-muted" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  side="top"
+                  align="start"
+                  className="w-[var(--radix-dropdown-menu-trigger-width)] p-0"
+                >
+                  <div className="flex min-w-0 items-center gap-3 px-3 py-3">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.login}
+                        className="h-10 w-10 shrink-0 rounded-full"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 shrink-0 rounded-full bg-sidebar-accent" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {user?.name || user?.login || "User"}
+                      </p>
+                      <p className="truncate text-xs text-foreground-secondary">
+                        {user?.login ? `@${user.login}` : "Signed in"}
+                      </p>
+                    </div>
+                  </div>
+                  <DropdownMenuItem asChild className="mx-1">
+                    <Link href="/settings" onClick={closeMobileSidebar}>
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="mx-1 mb-1"
+                    onSelect={() => {
+                      closeMobileSidebar();
+                      void logout();
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

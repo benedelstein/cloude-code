@@ -19,6 +19,8 @@ export interface CreateSessionParams {
   repoId: number;
   installationId: number;
   repoFullName: string;
+  sourceEnvironmentId?: string | null;
+  sourceEnvironmentName?: string | null;
 }
 
 interface SessionRow {
@@ -36,6 +38,8 @@ interface SessionRow {
   pull_request_url: string | null;
   pull_request_number: number | null;
   pull_request_state: PullRequestState | null;
+  source_environment_id: string | null;
+  source_environment_name: string | null;
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
@@ -87,7 +91,15 @@ export class SessionsRepository {
   async create(params: CreateSessionParams): Promise<void> {
     await this.database
       .prepare(
-        `INSERT INTO sessions (id, user_id, repo_id, installation_id, repo_full_name) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (
+           id,
+           user_id,
+           repo_id,
+           installation_id,
+           repo_full_name,
+           source_environment_id,
+           source_environment_name
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
@@ -95,6 +107,8 @@ export class SessionsRepository {
         params.repoId,
         params.installationId,
         params.repoFullName,
+        params.sourceEnvironmentId ?? null,
+        params.sourceEnvironmentName ?? null,
       )
       .run();
   }

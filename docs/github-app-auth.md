@@ -31,7 +31,7 @@ If no installation is found in D1, the code falls back to GitHub API installatio
 
 ### Git Authentication on the VM
 
-Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRemote(...)`:
+Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 
 - **Clone**: the API server mints a read-only installation token with `getReadOnlyTokenForRepo(...)`, base64-encodes `x-access-token:<TOKEN>`, and runs clone with an `http.extraHeader`:
   ```
@@ -48,7 +48,6 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)` and `configureGitRem
 | `services/api-server/src/modules/github/services/github-app.service.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
 | `services/api-server/src/modules/sessions/services/session-repo-access.service.ts` | Session repo access checks for create/read/connect/chat paths |
 | `services/api-server/src/modules/session-agent/services/session-provision.service.ts` | Sprite provisioning, read-only clone, git remote setup |
-| `services/api-server/src/shared/integrations/git/git-setup.service.ts` | Configures `origin`, push URL, git identity, and git-proxy auth header |
 | `services/api-server/src/modules/session-agent/services/session-git-proxy.service.ts` | Session-scoped git proxy auth/access wrapper |
 | `services/api-server/src/modules/webhooks/routes/webhooks.routes.ts` | `POST /webhooks/github` - receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |
