@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Check, ChevronsUpDown, GitBranch } from "lucide-react";
+import { Check, ChevronDown, GitBranch } from "lucide-react";
 import type { Branch } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { cn } from "@/lib/utils";
@@ -128,7 +128,7 @@ export function BranchSelector({
                 <span className="truncate">
                   {loading ? "..." : selectedBranch ?? "Select branch"}
                 </span>
-                <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
+                <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>

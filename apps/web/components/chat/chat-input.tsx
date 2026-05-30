@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
-import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
+import { ProviderModelEffortSelector } from "@/components/model-providers/provider-model-effort-selector";
 import type {
   AgentMode,
   MessageAttachmentRef,
@@ -33,7 +33,9 @@ interface ChatInputProps {
   onAgentModeChange?: (mode: AgentMode) => void;
   selectedProvider: ProviderId | null;
   selectedModel: string | null;
+  selectedEffort: string | null;
   onProviderModelChange?: (providerId: ProviderId, modelId: string) => void;
+  onProviderEffortChange?: (providerId: ProviderId, effortId: string) => void;
   providerAuthHandles: ProviderAuthHandleUnion[];
   providerAuthRequired: ProviderAuthRequired;
   operationErrorMessage?: string | null;
@@ -51,7 +53,9 @@ export function ChatInput({
   onAgentModeChange,
   selectedProvider,
   selectedModel,
+  selectedEffort,
   onProviderModelChange,
+  onProviderEffortChange,
   providerAuthHandles,
   providerAuthRequired,
   operationErrorMessage,
@@ -223,7 +227,7 @@ export function ChatInput({
           }
           disabled={disabled || isAuthBlocking}
           rows={1}
-          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none overflow-y-auto bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 px-3 pb-2">
@@ -241,18 +245,19 @@ export function ChatInput({
           )}
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-          {selectedProvider && selectedModel && onProviderModelChange && (
-            <div className="min-w-0 max-w-[18rem] shrink">
-              <ProviderModelSelector
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                providerAuthHandles={providerAuthHandles}
-                onSelect={onProviderModelChange}
-                onConnect={() => setManuallyOpenedSigninPanel(true)}
-                allowedProviderIds={[selectedProvider]}
-                disabled={disabled || isAuthBlocking}
-              />
-            </div>
+          {selectedProvider && selectedModel && selectedEffort && onProviderModelChange && onProviderEffortChange && (
+            <ProviderModelEffortSelector
+              selectedProvider={selectedProvider}
+              selectedModel={selectedModel}
+              selectedEffort={selectedEffort}
+              providerAuthHandles={providerAuthHandles}
+              onModelSelect={onProviderModelChange}
+              onEffortSelect={onProviderEffortChange}
+              onConnect={() => setManuallyOpenedSigninPanel(true)}
+              allowedProviderIds={[selectedProvider]}
+              disabled={disabled || isAuthBlocking}
+              className="gap-0"
+            />
           )}
           <SendButton
             isStreaming={isStreaming}

@@ -7,7 +7,7 @@
  *
  * Usage:
  *   cd packages/vm-agent
- *   bun run src/test-webhook-runner.ts -p claude-code -m opus
+ *   bun run src/test-webhook-runner.ts -p claude-code -m claude-opus-4-8
  *   bun run src/test-webhook-runner.ts -p openai-codex -m gpt-5.3-codex
  *
  * The process exits when the vm-agent exits (either because its idle timer
@@ -40,7 +40,7 @@ const { values, positionals } = parseArgs({
 });
 
 const provider = String(values.provider ?? OPENAI_CODEX_PROVIDER_ID);
-const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : "opus";
+const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : CLAUDE_PROVIDER.defaultModel;
 const model = String(values.model ?? defaultModel);
 const sessionId = values.sessionId ? String(values.sessionId) : undefined;
 const requestedPort = Number(values.port ?? 0);

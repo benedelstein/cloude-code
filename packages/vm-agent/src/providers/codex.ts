@@ -1,13 +1,14 @@
 /**
  * Codex CLI provider for the agent harness.
  */
-import type { CodexAppServerSettings} from "ai-sdk-provider-codex-cli";
+import type { CodexAppServerSettings } from "ai-sdk-provider-codex-cli";
 import { createCodexAppServer } from "ai-sdk-provider-codex-cli";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
+import { OpenAICodexEffort } from "@repo/shared";
 import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
 
@@ -88,6 +89,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       getModel: (id, options: GetModelOptions) => {
         const model = provider(id, {
           sandboxPolicy: getSandboxPolicy(options.agentMode),
+          effort: getCodexEffort(options.effort),
           resume: agentSessionId,
         });
         return withThreadIdInterceptor(model, onSessionId);
@@ -131,4 +133,15 @@ function withThreadIdInterceptor<M extends object>(
 
 const getSandboxPolicy = (agentMode: AgentMode): CodexAppServerSettings["sandboxPolicy"] => {
   return agentMode === "plan" ? "read-only" : "danger-full-access";
+};
+
+const getCodexEffort = (effort: string | undefined) => {
+  if (!effort) { return undefined; }
+
+  const parsedEffort = OpenAICodexEffort.safeParse(effort);
+  if (!parsedEffort.success) {
+    throw new Error(`Invalid Codex effort: ${effort}`);
+  }
+
+  return parsedEffort.data;
 };

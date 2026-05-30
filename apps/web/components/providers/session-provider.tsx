@@ -69,6 +69,8 @@ function createPendingSession(
     setAgentMode: () => {},
     selectedModel: null,
     setSelectedModel: () => {},
+    selectedEffort: null,
+    setSelectedEffort: () => {},
     selectedProvider: null,
     editorUrl: null,
     providerAuthRequired: null,

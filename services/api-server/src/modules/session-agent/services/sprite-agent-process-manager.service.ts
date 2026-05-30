@@ -188,6 +188,7 @@ export interface DispatchMessageInput {
     attachmentIds: string[];
   };
   model?: string;
+  effort?: string;
   agentMode?: AgentMode;
 }
 
@@ -386,8 +387,12 @@ export class SpriteAgentProcessManager {
       return failure(managerError("USER_NOT_FOUND", "Session user id is missing"));
     }
 
-    const settings: AgentSettings = input.model
-      ? ({ ...clientState.agentSettings, model: input.model } as AgentSettings)
+    const settings: AgentSettings = input.model || input.effort
+      ? ({
+          ...clientState.agentSettings,
+          model: input.model ?? clientState.agentSettings.model,
+          effort: input.effort ?? clientState.agentSettings.effort,
+        } as AgentSettings)
       : clientState.agentSettings;
     const agentMode: AgentMode = input.agentMode ?? clientState.agentMode;
 
@@ -419,6 +424,7 @@ export class SpriteAgentProcessManager {
       userMessageId: input.userMessage.id,
       message: agentMessage,
       model: input.model,
+      effort: input.effort,
       agentMode: input.agentMode,
     });
     switch (reuseResult.status) {
@@ -466,6 +472,7 @@ export class SpriteAgentProcessManager {
         userMessageId: input.userMessage.id,
         agentSessionId: serverState.agentSessionId ?? undefined,
         model: input.model,
+        effort: input.effort,
       });
       const logPath = `${VM_AGENT_LOG_DIR}/${sessionId}.log`;
       // Run inside a shell so we can tee stdout/stderr to both the sprite exec
@@ -534,6 +541,7 @@ export class SpriteAgentProcessManager {
       userMessageId: string;
       message: AgentInputMessage;
       model: string | undefined;
+      effort: string | undefined;
       agentMode: AgentMode | undefined;
     },
   ): Promise<ExistingProcessDispatchResult> {
@@ -562,6 +570,7 @@ export class SpriteAgentProcessManager {
           userMessageId: args.userMessageId,
           message: args.message,
           model: args.model,
+          effort: args.effort,
           agentMode: args.agentMode,
         })}\n`,
       );
@@ -797,6 +806,7 @@ export class SpriteAgentProcessManager {
     userMessageId: string;
     agentSessionId: string | undefined;
     model: string | undefined;
+    effort: string | undefined;
   }): string[] {
     const cliArgs = [
       "run",
@@ -815,6 +825,9 @@ export class SpriteAgentProcessManager {
     }
     if (args.model) {
       cliArgs.push("--model", args.model);
+    }
+    if (args.effort) {
+      cliArgs.push("--effort", args.effort);
     }
     return cliArgs;
   }

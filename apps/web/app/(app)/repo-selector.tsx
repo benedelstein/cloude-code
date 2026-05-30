@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Check, ChevronsUpDown } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 import type { Repo } from "@/lib/client-api";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
@@ -109,7 +109,7 @@ export function RepoSelector({
                       ? selectedRepo.fullName
                       : "Select a repo"}
                 </span>
-                <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
+                <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>

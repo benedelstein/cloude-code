@@ -38,6 +38,7 @@ export type StreamTextExtras = {
 
 export type GetModelOptions = {
   agentMode: AgentMode;
+  effort?: string;
 };
 
 export interface SetupResult<ModelId extends string = AgentSettings["model"]> {
@@ -81,7 +82,7 @@ export interface AgentHarnessHandle {
   queueMessage(
     _message: AgentInputMessage,
     _turnId: string,
-    _overrides?: { model?: string; agentMode?: AgentMode },
+    _overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void;
   /** Aborts the in-flight turn, or removes a matching queued turn. */
   cancelTurn(_turnId?: string): boolean;
@@ -95,6 +96,7 @@ export interface AgentHarnessHandle {
 interface QueueEntry {
   message: AgentInputMessage;
   model?: string;
+  effort?: string;
   agentMode?: AgentMode;
   turnId: string;
   abortController: AbortController;
@@ -124,12 +126,13 @@ export function startAgentHarness<S extends AgentSettings>(
   function queueMessage(
     message: AgentInputMessage,
     turnId: string,
-    overrides?: { model?: string; agentMode?: AgentMode },
+    overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void {
     if (stopped) { return; }
     const entry: QueueEntry = {
       message,
       model: overrides?.model,
+      effort: overrides?.effort,
       agentMode: overrides?.agentMode,
       turnId,
       abortController: new AbortController(),
@@ -161,6 +164,7 @@ export function startAgentHarness<S extends AgentSettings>(
   let currentEntry: QueueEntry | null = null;
   let setupResult: SetupResult<S["model"]> | null = null;
   let agentMode: AgentMode = opts.initialAgentMode ?? "edit";
+  let effort: string | undefined = settings.effort;
 
   function cancelTurn(turnId?: string): boolean {
     if (!turnId) {
@@ -201,6 +205,10 @@ export function startAgentHarness<S extends AgentSettings>(
       setupResult.modelId = entry.model as S["model"];
       emit({ type: "debug", message: `Model updated to: ${entry.model}` });
     }
+    if (entry.effort) {
+      effort = entry.effort;
+      emit({ type: "debug", message: `Effort updated to: ${entry.effort}` });
+    }
     if (entry.agentMode) {
       agentMode = entry.agentMode;
       emit({ type: "debug", message: `Agent mode updated to: ${entry.agentMode}` });
@@ -221,8 +229,12 @@ export function startAgentHarness<S extends AgentSettings>(
     let aborted = false;
     try {
       const extras = setupResult.getStreamTextExtras?.() ?? {};
-      const model = setupResult.getModel(setupResult.modelId, { agentMode });
-      emit({ type: "debug", message: `Using model: ${setupResult.modelId}, agentMode: ${agentMode}` });
+      const model = setupResult.getModel(setupResult.modelId, { agentMode, effort });
+      const effortSuffix = effort ? `, effort: ${effort}` : "";
+      emit({
+        type: "debug",
+        message: `Using model: ${setupResult.modelId}, agentMode: ${agentMode}${effortSuffix}`,
+      });
       const result = streamText({
         model,
         messages: [{ role: "user", content: userContentParts }],

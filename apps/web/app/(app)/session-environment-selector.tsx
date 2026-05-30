@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronsUpDown, MonitorCog, Pencil, Plus } from "lucide-react";
+import { Check, ChevronDown, MonitorCog, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import type { RepoEnvironment } from "@repo/shared";
 
 function lastEnvironmentStorageKey(repoId: number): string {
@@ -32,11 +33,13 @@ export function SessionEnvironmentSelector({
   disabled,
   selectedEnvironmentId,
   onSelectEnvironment,
+  triggerClassName,
 }: {
   selectedRepo: Repo | null;
   disabled: boolean;
   selectedEnvironmentId: string | null;
   onSelectEnvironment(environmentId: string | null): void;
+  triggerClassName?: string;
 }) {
   const [environments, setEnvironments] = useState<RepoEnvironment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,7 +123,10 @@ export function SessionEnvironmentSelector({
         <button
           type="button"
           disabled={disabled || loading}
-          className="flex h-8 max-w-[260px] cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50"
+          className={cn(
+            "flex h-8 max-w-[260px] cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
+            triggerClassName,
+          )}
         >
           <MonitorCog className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">
@@ -128,7 +134,7 @@ export function SessionEnvironmentSelector({
               ? "Loading environments..."
               : selectedEnvironment?.name ?? "No environment"}
           </span>
-          <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
+          <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0" align="start">
@@ -178,7 +184,7 @@ export function SessionEnvironmentSelector({
                   <Link
                     href={`/settings/environments/${environment.id}`}
                     aria-label={`Edit ${environment.name}`}
-                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-current opacity-70 transition-opacity hover:opacity-100"
+                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-current opacity-70 transition-colors hover:bg-control-background hover:text-foreground hover:opacity-100 focus-visible:bg-control-background focus-visible:text-foreground focus-visible:opacity-100"
                     onClick={(event) => {
                       event.stopPropagation();
                     }}

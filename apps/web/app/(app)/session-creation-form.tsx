@@ -12,13 +12,13 @@ import {
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
-import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
+import { ProviderModelEffortSelector } from "@/components/model-providers/provider-model-effort-selector";
 import type {
   Branch,
   ListBranchesResponse,
   ProviderId,
 } from "@repo/shared";
-import { PROVIDERS, isProviderModel } from "@repo/shared";
+import { PROVIDERS, isProviderEffort, isProviderModel } from "@repo/shared";
 import { readCache, writeCache, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
@@ -45,6 +45,7 @@ const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
 type StoredProviderModelSelection = {
   providerId: ProviderId;
   modelId: string;
+  effortId: string;
 };
 
 function getFallbackProviderModelSelection(
@@ -55,6 +56,7 @@ function getFallbackProviderModelSelection(
     return {
       providerId: firstConnectedHandle.providerId,
       modelId: PROVIDERS[firstConnectedHandle.providerId].defaultModel,
+      effortId: PROVIDERS[firstConnectedHandle.providerId].defaultEffort,
     };
   }
 
@@ -80,6 +82,7 @@ export function SessionCreationForm() {
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
   const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [showSigninPanel, setShowSigninPanel] = useState(false);
@@ -147,6 +150,12 @@ export function SessionCreationForm() {
     deleteAttachment,
   });
   const isFormInteractionDisabled = submitting;
+  const isSendDisabled =
+    !selectedProvider ||
+    !selectedModel ||
+    !selectedEffort ||
+    !isProviderConnected ||
+    !selectedRepo;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -171,7 +180,9 @@ export function SessionCreationForm() {
     if (
       selectedProvider &&
       selectedModel &&
+      selectedEffort &&
       isProviderModel(selectedProvider, selectedModel) &&
+      isProviderEffort(selectedProvider, selectedEffort) &&
       (activeProviderHandle?.connected ?? false)
     ) {
       return;
@@ -184,6 +195,7 @@ export function SessionCreationForm() {
         const parsed = JSON.parse(rawSelection) as {
           providerId?: string;
           modelId?: string;
+          effortId?: string;
         };
         const parsedProviderHandle = parsed.providerId === "claude-code" || parsed.providerId === "openai-codex"
           ? providerAuth.getHandle(parsed.providerId)
@@ -193,11 +205,13 @@ export function SessionCreationForm() {
           parsed.modelId &&
           (parsed.providerId === "claude-code" || parsed.providerId === "openai-codex") &&
           isProviderModel(parsed.providerId, parsed.modelId) &&
+          (!parsed.effortId || isProviderEffort(parsed.providerId, parsed.effortId)) &&
           (parsedProviderHandle?.connected ?? false)
         ) {
           nextSelection = {
             providerId: parsed.providerId,
             modelId: parsed.modelId,
+            effortId: parsed.effortId ?? PROVIDERS[parsed.providerId].defaultEffort,
           };
         }
       } catch {
@@ -209,12 +223,14 @@ export function SessionCreationForm() {
     if (!resolvedSelection) {
       setSelectedProvider(null);
       setSelectedModel(null);
+      setSelectedEffort(null);
       localStorage.removeItem(LAST_PROVIDER_MODEL_SELECTION_KEY);
       return;
     }
 
     setSelectedProvider(resolvedSelection.providerId);
     setSelectedModel(resolvedSelection.modelId);
+    setSelectedEffort(resolvedSelection.effortId);
     localStorage.setItem(
       LAST_PROVIDER_MODEL_SELECTION_KEY,
       JSON.stringify(resolvedSelection),
@@ -224,6 +240,7 @@ export function SessionCreationForm() {
     providerAuth.isAnyLoading,
     providerAuth.getHandle,
     selectedModel,
+    selectedEffort,
     selectedProvider,
   ]);
 
@@ -361,7 +378,22 @@ export function SessionCreationForm() {
   const handleProviderModelSelect = (providerId: ProviderId, modelId: string) => {
     setSelectedProvider(providerId);
     setSelectedModel(modelId);
-    const selection: StoredProviderModelSelection = { providerId, modelId };
+    const effortId = selectedProvider === providerId && selectedEffort
+      ? selectedEffort
+      : PROVIDERS[providerId].defaultEffort;
+    setSelectedEffort(effortId);
+    const selection: StoredProviderModelSelection = { providerId, modelId, effortId };
+    localStorage.setItem(LAST_PROVIDER_MODEL_SELECTION_KEY, JSON.stringify(selection));
+  };
+
+  const handleProviderEffortSelect = (providerId: ProviderId, effortId: string) => {
+    if (selectedProvider !== providerId || !selectedModel) { return; }
+    setSelectedEffort(effortId);
+    const selection: StoredProviderModelSelection = {
+      providerId,
+      modelId: selectedModel,
+      effortId,
+    };
     localStorage.setItem(LAST_PROVIDER_MODEL_SELECTION_KEY, JSON.stringify(selection));
   };
 
@@ -375,6 +407,7 @@ export function SessionCreationForm() {
     if (
       !selectedProvider
       || !selectedModel
+      || !selectedEffort
       || !isProviderConnected
       || !selectedRepo
       || (!trimmedMessage && attachments.length === 0)
@@ -396,7 +429,7 @@ export function SessionCreationForm() {
         selectedRepo.id,
         trimmedMessage || undefined,
         branchToUse,
-        { provider: selectedProvider, model: selectedModel },
+        { provider: selectedProvider, model: selectedModel, effort: selectedEffort },
         selectedAgentMode,
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
         selectedEnvironmentId ?? undefined,
@@ -500,7 +533,7 @@ export function SessionCreationForm() {
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
-                  <div className="w-px self-stretch bg-border" />
+                  <div className="h-4 w-px shrink-0 bg-border" />
                   <BranchSelector
                     branches={branches}
                     selectedBranch={selectedBranch}
@@ -567,12 +600,14 @@ export function SessionCreationForm() {
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <ProviderModelSelector
+            <div className="flex items-center gap-2">
+              <ProviderModelEffortSelector
                 selectedProvider={selectedProvider}
                 selectedModel={selectedModel}
+                selectedEffort={selectedEffort}
                 providerAuthHandles={providerAuth.handles}
-                onSelect={handleProviderModelSelect}
+                onModelSelect={handleProviderModelSelect}
+                onEffortSelect={handleProviderEffortSelect}
                 onConnect={handleProviderConnect}
                 disabled={isFormInteractionDisabled}
               />
@@ -580,7 +615,7 @@ export function SessionCreationForm() {
                 isStreaming={false}
                 isLoading={submitting || isUploadingAttachments}
                 isUploading={isUploadingAttachments}
-                disabled={!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo}
+                disabled={isSendDisabled}
                 hasPendingOrFailedUploads={hasPendingOrFailedUploads}
                 hasContent={Boolean(message.trim()) || attachments.length > 0}
                 onTap={() => void submitMessage()}

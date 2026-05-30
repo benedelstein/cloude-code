@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { AgentSettingsClaude, CLAUDE_PROVIDER, CLAUDE_PROVIDER_ID } from "./claude";
 import { AgentSettingsCodex, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } from "./openai-codex";
-import type { ProviderDefinition, ProviderModelDefinition, ProviderModelId } from "./shared";
+import type {
+  ProviderDefinition,
+  ProviderEffortDefinition,
+  ProviderEffortId,
+  ProviderModelDefinition,
+  ProviderModelId,
+} from "./shared";
 
 export * from "./claude";
 export * from "./openai-codex";
@@ -44,6 +50,21 @@ export function isProviderModel(providerId: ProviderId, modelId: string): boolea
   return getProviderModelDefinition(providerId, modelId) !== null;
 }
 
+export function getProviderEffortIds(providerId: ProviderId): ProviderEffortId[] {
+  return PROVIDERS[providerId].efforts.map((effort) => effort.id);
+}
+
+export function getProviderEffortDefinition(
+  providerId: ProviderId,
+  effortId: string,
+): ProviderEffortDefinition | null {
+  return PROVIDERS[providerId].efforts.find((effort) => effort.id === effortId) ?? null;
+}
+
+export function isProviderEffort(providerId: ProviderId, effortId: string): boolean {
+  return getProviderEffortDefinition(providerId, effortId) !== null;
+}
+
 export { AgentSettingsClaude, AgentSettingsCodex };
 
 export const AgentSettings = z.discriminatedUnion("provider", [
@@ -51,6 +72,9 @@ export const AgentSettings = z.discriminatedUnion("provider", [
   AgentSettingsClaude,
 ]);
 export type AgentSettings = z.infer<typeof AgentSettings>;
+
+export const DEFAULT_PROVIDER_ID = CLAUDE_PROVIDER_ID;
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = AgentSettings.parse({ provider: DEFAULT_PROVIDER_ID });
 
 // Compile-time check: every ProviderId must have a corresponding AgentSettings variant.
 // Adding a new ProviderId without a matching AgentSettings entry will cause a type error here.

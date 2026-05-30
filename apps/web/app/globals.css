@@ -27,7 +27,7 @@
   --plan-subtle-strong: rgba(139, 92, 246, 0.18);
   --edit: #16a34a;
   --edit-subtle: rgba(22, 163, 74, 0.12);
-  --edit-subtle-strong: rgba(22, 163, 74, 0.18);
+  --edit-subtle-strong: rgba(22, 163, 74, 0.24);
 
   /* shadcn aliases */
   --popover: var(--background);

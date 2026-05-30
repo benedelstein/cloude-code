@@ -49,6 +49,7 @@ const { values } = parseArgs({
     initialMessagePath: { type: "string" },
     userMessageId: { type: "string" },
     model: { type: "string" },
+    effort: { type: "string" },
   },
   strict: false,
 });
@@ -130,6 +131,7 @@ const runner = new WebhookAgentRunner({
 // a harness modelId / agentMode switch before dispatching.
 runner.queueMessage(userMessageId, initialMessage, {
   model: typeof values.model === "string" ? values.model : undefined,
+  effort: typeof values.effort === "string" ? values.effort : undefined,
   agentMode: values.agentMode === "plan" ? "plan" : undefined,
 });
 

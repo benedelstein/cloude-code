@@ -75,6 +75,8 @@ export interface UseCloudflareAgentReturn {
   setAgentMode: (mode: AgentMode) => void;
   selectedModel: string | null;
   setSelectedModel: (model: string) => void;
+  selectedEffort: string | null;
+  setSelectedEffort: (effort: string) => void;
   selectedProvider: ProviderId | null;
   editorUrl: string | null;
   providerAuthRequired: ProviderAuthRequired;
@@ -116,6 +118,7 @@ export function useCloudflareAgent({
   const [providerConnection, setProviderConnection] = useState<ProviderConnectionState | null>(null);
   const [agentMode, setAgentModeState] = useState<AgentMode | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
@@ -334,6 +337,7 @@ export function useCloudflareAgent({
       setAgentModeState((prev) => prev ?? state.agentMode ?? "edit");
       // Initialize selected model from server settings (only if not yet set locally)
       setSelectedModel((prev) => prev ?? state.agentSettings.model);
+      setSelectedEffort((prev) => prev ?? state.agentSettings.effort);
       setSessionStatus(state.status);
       setSessionErrorMessage(state.lastError);
     },
@@ -382,15 +386,25 @@ export function useCloudflareAgent({
 
     // Send via useAgent's connection, include model/agentMode only if they differ from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;
+    const effortToSend = selectedEffort && selectedEffort !== agentSettings?.effort ? selectedEffort : undefined;
     const agentModeToSend = resolvedAgentMode !== serverAgentModeRef.current ? resolvedAgentMode : undefined;
     sendToAgent({
       type: "chat.message",
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,
+      effort: effortToSend,
       agentMode: agentModeToSend,
     });
-  }, [sendToAgent, consumeStream, selectedModel, agentSettings?.model, resolvedAgentMode]);
+  }, [
+    sendToAgent,
+    consumeStream,
+    selectedModel,
+    selectedEffort,
+    agentSettings?.model,
+    agentSettings?.effort,
+    resolvedAgentMode,
+  ]);
 
   const stop = useCallback(() => {
     sendToAgent({ type: "operation.cancel" });
@@ -423,6 +437,8 @@ export function useCloudflareAgent({
     setAgentMode,
     selectedModel,
     setSelectedModel,
+    selectedEffort,
+    setSelectedEffort,
     selectedProvider,
     editorUrl,
     providerAuthRequired,

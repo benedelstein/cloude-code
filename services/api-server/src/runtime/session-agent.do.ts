@@ -6,6 +6,7 @@ import {
   type ClientMessage,
   type ServerMessage,
   AgentSettings,
+  DEFAULT_AGENT_SETTINGS,
   failure,
   success,
 } from "@repo/shared";
@@ -91,7 +92,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   initialState: ClientState = {
     repoFullName: null,
     status: "initializing",
-    agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
+    agentSettings: { ...DEFAULT_AGENT_SETTINGS },
     agentMode: "edit",
     pushedBranch: null,
     pullRequest: null,
@@ -540,13 +541,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
 
     const data = request;
-    const provider = data.agentSettings?.provider ?? "claude-code";
-    const maxTokens = data.agentSettings?.maxTokens ?? 8192;
+    const provider = data.agentSettings?.provider ?? DEFAULT_AGENT_SETTINGS.provider;
+    const maxTokens = data.agentSettings?.maxTokens ?? DEFAULT_AGENT_SETTINGS.maxTokens;
 
     let settings: AgentSettings;
     const parsed = AgentSettings.safeParse({
       provider,
       model: data.agentSettings?.model,
+      effort: data.agentSettings?.effort,
       maxTokens,
     });
     if (parsed.success) {

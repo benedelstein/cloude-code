@@ -16,7 +16,7 @@ const { values } = parseArgs({
 });
 
 const provider = String(values.provider ??  OPENAI_CODEX_PROVIDER_ID);
-const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : "opus";
+const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : CLAUDE_PROVIDER.defaultModel;
 const model = String(values.model ?? defaultModel);
 const sessionId = values.sessionId ? String(values.sessionId) : undefined;
 const rotateModels = values.rotateModels === true;
