@@ -70,10 +70,16 @@ export function ProviderModelSelector({
   const displayLabel = hasSelection
     ? getDisplayLabel(selectedProvider, selectedModel)
     : "Select a model";
-  const providers = allowedProviderIds
+  const availableProviders = allowedProviderIds
     ? PROVIDER_LIST.filter((provider) => allowedProviderIds.includes(provider.id))
     : PROVIDER_LIST;
-  const providerIdsKey = providers.map((provider) => provider.id).join("|");
+  const providers = selectedProvider
+    ? [...availableProviders].sort((leftProvider, rightProvider) => {
+      if (leftProvider.id === selectedProvider) { return -1; }
+      if (rightProvider.id === selectedProvider) { return 1; }
+      return 0;
+    })
+    : availableProviders;
   const isSearching = modelSearch.trim().length > 0;
 
   useEffect(() => {
@@ -82,14 +88,8 @@ export function ProviderModelSelector({
       return;
     }
 
-    setCollapsedProviderIds(new Set(
-      selectedProvider
-        ? providers
-          .filter((provider) => provider.id !== selectedProvider)
-          .map((provider) => provider.id)
-        : [],
-    ));
-  }, [open, providerIdsKey, selectedProvider]);
+    setCollapsedProviderIds(new Set());
+  }, [open]);
 
   const toggleProviderCollapsed = (providerId: ProviderId) => {
     setCollapsedProviderIds((current) => {
