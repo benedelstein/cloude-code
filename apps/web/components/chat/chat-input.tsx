@@ -258,7 +258,7 @@ export function ChatInput({
                 disabled={disabled || isAuthBlocking}
                 triggerClassName="rounded-r-none pr-1.5"
               />
-              <div className="h-3.5 w-px shrink-0 bg-border" />
+              <div className="h-4 w-px shrink-0 bg-border" />
               <ProviderEffortSelector
                 selectedProvider={selectedProvider}
                 selectedEffort={selectedEffort}

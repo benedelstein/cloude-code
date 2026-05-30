@@ -534,7 +534,7 @@ export function SessionCreationForm() {
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
-                  <div className="w-px self-stretch bg-border" />
+                  <div className="h-4 w-px shrink-0 bg-border" />
                   <BranchSelector
                     branches={branches}
                     selectedBranch={selectedBranch}
@@ -550,13 +550,19 @@ export function SessionCreationForm() {
                   />
                 </>
               )}
+              {selectedRepo && (
+                <>
+                  <div className="h-4 w-px shrink-0 bg-border" />
+                  <SessionEnvironmentSelector
+                    selectedRepo={selectedRepo}
+                    disabled={isFormInteractionDisabled}
+                    selectedEnvironmentId={selectedEnvironmentId}
+                    onSelectEnvironment={setSelectedEnvironmentId}
+                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                  />
+                </>
+              )}
             </div>
-            <SessionEnvironmentSelector
-              selectedRepo={selectedRepo}
-              disabled={isFormInteractionDisabled}
-              selectedEnvironmentId={selectedEnvironmentId}
-              onSelectEnvironment={setSelectedEnvironmentId}
-            />
           </div>
         }
       >
@@ -612,7 +618,7 @@ export function SessionCreationForm() {
                   disabled={isFormInteractionDisabled}
                   triggerClassName="rounded-r-none pr-1.5"
                 />
-                <div className="h-3.5 w-px shrink-0 bg-border" />
+                <div className="h-4 w-px shrink-0 bg-border" />
                 <ProviderEffortSelector
                   selectedProvider={selectedProvider}
                   selectedEffort={selectedEffort}
