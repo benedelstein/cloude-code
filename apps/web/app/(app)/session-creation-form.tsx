@@ -530,7 +530,7 @@ export function SessionCreationForm() {
                 onSearchQueryChange={setRepoSearchQuery}
                 searching={repoSearchLoading}
                 isSearchMode={isRepoSearchMode}
-                triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                triggerClassName="my-0.5 h-7 rounded-sm border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
@@ -546,23 +546,17 @@ export function SessionCreationForm() {
                     hasMore={branchesCursor !== null}
                     loadingMore={branchesLoadingMore}
                     onLoadMore={loadMoreBranches}
-                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
-                  />
-                </>
-              )}
-              {selectedRepo && (
-                <>
-                  <div className="h-4 w-px shrink-0 bg-border" />
-                  <SessionEnvironmentSelector
-                    selectedRepo={selectedRepo}
-                    disabled={isFormInteractionDisabled}
-                    selectedEnvironmentId={selectedEnvironmentId}
-                    onSelectEnvironment={setSelectedEnvironmentId}
-                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                    triggerClassName="my-0.5 h-7 rounded-sm border-0 bg-transparent px-2 shadow-none hover:bg-muted"
                   />
                 </>
               )}
             </div>
+            <SessionEnvironmentSelector
+              selectedRepo={selectedRepo}
+              disabled={isFormInteractionDisabled}
+              selectedEnvironmentId={selectedEnvironmentId}
+              onSelectEnvironment={setSelectedEnvironmentId}
+            />
           </div>
         }
       >
@@ -616,7 +610,7 @@ export function SessionCreationForm() {
                   onSelect={handleProviderModelSelect}
                   onConnect={handleProviderConnect}
                   disabled={isFormInteractionDisabled}
-                  triggerClassName="rounded-r-none pr-1.5"
+                  triggerClassName="rounded-sm pr-1.5"
                 />
                 <div className="h-4 w-px shrink-0 bg-border" />
                 <ProviderEffortSelector
@@ -624,7 +618,7 @@ export function SessionCreationForm() {
                   selectedEffort={selectedEffort}
                   onSelect={handleProviderEffortSelect}
                   disabled={isFormInteractionDisabled || !selectedProvider}
-                  triggerClassName="rounded-l-none pl-1.5"
+                  triggerClassName="rounded-sm pl-1.5"
                 />
               </div>
               <SendButton

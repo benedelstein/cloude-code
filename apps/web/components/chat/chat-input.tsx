@@ -256,7 +256,7 @@ export function ChatInput({
                 onConnect={() => setManuallyOpenedSigninPanel(true)}
                 allowedProviderIds={[selectedProvider]}
                 disabled={disabled || isAuthBlocking}
-                triggerClassName="rounded-r-none pr-1.5"
+                triggerClassName="rounded-sm pr-1.5"
               />
               <div className="h-4 w-px shrink-0 bg-border" />
               <ProviderEffortSelector
@@ -264,7 +264,7 @@ export function ChatInput({
                 selectedEffort={selectedEffort}
                 onSelect={onProviderEffortChange}
                 disabled={disabled || isAuthBlocking}
-                triggerClassName="rounded-l-none pl-1.5"
+                triggerClassName="rounded-sm pl-1.5"
               />
             </div>
           )}
