@@ -184,7 +184,7 @@ export function SessionEnvironmentSelector({
                   <Link
                     href={`/settings/environments/${environment.id}`}
                     aria-label={`Edit ${environment.name}`}
-                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-current opacity-70 transition-opacity hover:opacity-100"
+                    className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-current opacity-70 transition-colors hover:bg-control-background hover:text-foreground hover:opacity-100 focus-visible:bg-control-background focus-visible:text-foreground focus-visible:opacity-100"
                     onClick={(event) => {
                       event.stopPropagation();
                     }}
