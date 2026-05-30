@@ -73,6 +73,9 @@ export const AgentSettings = z.discriminatedUnion("provider", [
 ]);
 export type AgentSettings = z.infer<typeof AgentSettings>;
 
+export const DEFAULT_PROVIDER_ID = CLAUDE_PROVIDER_ID;
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = AgentSettings.parse({ provider: DEFAULT_PROVIDER_ID });
+
 // Compile-time check: every ProviderId must have a corresponding AgentSettings variant.
 // Adding a new ProviderId without a matching AgentSettings entry will cause a type error here.
 export declare const _agentSettingsExhaustiveCheck: [AgentSettings["provider"]] extends [ProviderId]

@@ -8,14 +8,6 @@ export const ClaudeModel = z.enum([
   "claude-haiku-4-5",
   "claude-opus-4-7",
   "claude-opus-4-7[1m]",
-  "claude-opus-4-6",
-  "opus",
-  "opus-1m",
-  "sonnet",
-  "haiku",
-  "opus-4-7",
-  "opus-4-7-1m",
-  "opus-4-6",
 ]);
 export type ClaudeModel = z.infer<typeof ClaudeModel>;
 
@@ -29,14 +21,6 @@ export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
   "claude-haiku-4-5": "Claude Haiku 4.5",
   "claude-opus-4-7": "Claude Opus 4.7 [Legacy]",
   "claude-opus-4-7[1m]": "Claude Opus 4.7 (1M context) [Legacy]",
-  "claude-opus-4-6": "Claude Opus 4.6 [Legacy]",
-  opus: "Claude Opus 4.8",
-  "opus-1m": "Claude Opus 4.8 (1M context)",
-  sonnet: "Claude Sonnet 4.6",
-  haiku: "Claude Haiku 4.5",
-  "opus-4-7": "Claude Opus 4.7 [Legacy]",
-  "opus-4-7-1m": "Claude Opus 4.7 (1M context) [Legacy]",
-  "opus-4-6": "Claude Opus 4.6 [Legacy]",
 };
 
 export const CLAUDE_EFFORT_DISPLAY_NAMES: Record<ClaudeEffort, string> = {
@@ -63,7 +47,6 @@ const CLAUDE_MODELS: ProviderModelDefinition<ClaudeModel>[] = [
   { id: "claude-haiku-4-5", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-haiku-4-5"], isDefault: false },
   { id: "claude-opus-4-7", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-opus-4-7"], isDefault: false },
   { id: "claude-opus-4-7[1m]", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-opus-4-7[1m]"], isDefault: false },
-  { id: "claude-opus-4-6", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-opus-4-6"], isDefault: false },
 ];
 
 const CLAUDE_EFFORTS: ProviderEffortDefinition<ClaudeEffort>[] = [

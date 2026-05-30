@@ -8,7 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
 import { ClaudeEffort } from "@repo/shared";
-import type { AgentMode, AgentSettings, ClaudeModel } from "@repo/shared";
+import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
 import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 
@@ -119,7 +119,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
     return {
       modelId,
       getModel: (id, options: GetModelOptions) => {
-        const model = claudeCode(resolveClaudeModelId(id as ClaudeModel), {
+        const model = claudeCode(id, {
           settingSources: ["local", "project", "user"],
           resume: agentSessionId,
           permissionMode: getPermissionMode(options.agentMode),
@@ -172,37 +172,4 @@ const getClaudeEffortEnv = (effort: string | undefined): Record<string, string |
   }
 
   return { CLAUDE_CODE_EFFORT_LEVEL: parsedEffort.data };
-};
-
-const resolveClaudeModelId = (model: ClaudeModel): string => {
-  switch (model) {
-    case "claude-opus-4-8":
-    case "claude-opus-4-8[1m]":
-    case "claude-opus-4-7":
-    case "claude-opus-4-7[1m]":
-    case "claude-opus-4-6":
-      return model;
-    case "claude-sonnet-4-6":
-      return "sonnet";
-    case "claude-haiku-4-5":
-      return "haiku";
-    case "opus":
-      return "claude-opus-4-8";
-    case "opus-1m":
-      return "claude-opus-4-8[1m]";
-    case "sonnet":
-      return "sonnet";
-    case "haiku":
-      return "haiku";
-    case "opus-4-7":
-      return "claude-opus-4-7";
-    case "opus-4-7-1m":
-      return "claude-opus-4-7[1m]";
-    case "opus-4-6":
-      return "claude-opus-4-6";
-    default: {
-      const _exhaustive: never = model;
-      throw new Error(`Unhandled Claude model: ${_exhaustive}`);
-    }
-  }
 };
