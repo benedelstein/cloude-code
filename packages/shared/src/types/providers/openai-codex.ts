@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProviderDefinition, ProviderModelDefinition } from "./shared";
 
 export const OpenAICodexModel = z.enum([
   "gpt-5.5",
@@ -29,47 +30,49 @@ export const AgentSettingsCodex = z.object({
   maxTokens: z.number().default(8192),
 });
 
-export const OPENAI_CODEX_PROVIDER = {
+const OPENAI_CODEX_MODELS: ProviderModelDefinition<OpenAICodexModel>[] = [
+  {
+    id: "gpt-5.5",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.5"],
+    isDefault: true,
+  },
+  {
+    id: "gpt-5.4",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4"],
+    isDefault: false,
+  },
+  {
+    id: "gpt-5.4-mini",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4-mini"],
+    isDefault: false,
+  },
+  {
+    id: "gpt-5.3-codex",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
+    isDefault: true,
+  },
+  // {
+  //   id: "gpt-5.2-codex",
+  //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2-codex"],
+  //   isDefault: false,
+  // },
+  // {
+  //   id: "gpt-5.1-codex-max",
+  //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.1-codex-max"],
+  //   isDefault: false,
+  // },
+  {
+    id: "gpt-5.2",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2"],
+    isDefault: false,
+  },
+];
+
+export const OPENAI_CODEX_PROVIDER: ProviderDefinition<typeof OPENAI_CODEX_PROVIDER_ID, OpenAICodexModel> = {
   id: OPENAI_CODEX_PROVIDER_ID,
   displayName: "OpenAI Codex",
-  defaultModel: "gpt-5.5" as const,
-  authMethods: ["oauth" as const],
+  defaultModel: "gpt-5.5",
+  authMethods: ["oauth"],
   todoToolName: "update_plan",
-  models: [
-    {
-      id: "gpt-5.5" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.5"],
-      isDefault: true,
-    },
-    {
-      id: "gpt-5.4" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4"],
-      isDefault: false,
-    },
-    {
-      id: "gpt-5.4-mini" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4-mini"],
-      isDefault: false,
-    },
-    {
-      id: "gpt-5.3-codex" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
-      isDefault: true,
-    },
-    // {
-    //   id: "gpt-5.2-codex" as const,
-    //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2-codex"],
-    //   isDefault: false,
-    // },
-    // {
-    //   id: "gpt-5.1-codex-max" as const,
-    //   displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.1-codex-max"],
-    //   isDefault: false,
-    // },
-    {
-      id: "gpt-5.2" as const,
-      displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2"],
-      isDefault: false,
-    },
-  ],
+  models: OPENAI_CODEX_MODELS,
 };

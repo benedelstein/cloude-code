@@ -1,41 +1,23 @@
 import { z } from "zod";
 import { AgentSettingsClaude, CLAUDE_PROVIDER, CLAUDE_PROVIDER_ID } from "./claude";
 import { AgentSettingsCodex, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } from "./openai-codex";
+import type { ProviderDefinition, ProviderModelDefinition, ProviderModelId } from "./shared";
 
 export * from "./claude";
 export * from "./openai-codex";
-
-export const AuthMethod = z.enum(["oauth"]);
-export type AuthMethod = z.infer<typeof AuthMethod>;
+export * from "./shared";
 
 export const ProviderId = z.enum([CLAUDE_PROVIDER_ID, OPENAI_CODEX_PROVIDER_ID]);
 export type ProviderId = z.infer<typeof ProviderId>;
 
-export type ProviderModelId = string;
-
-export type ProviderModelDefinition = {
-  id: ProviderModelId;
-  displayName: string;
-  isDefault: boolean;
-};
-
-export type ProviderDefinition = {
-  id: ProviderId;
-  displayName: string;
-  defaultModel: ProviderModelId;
-  authMethods: AuthMethod[];
-  models: ProviderModelDefinition[];
-  todoToolName: string;
-};
-
-export const PROVIDERS: Record<ProviderId, ProviderDefinition> = {
+export const PROVIDERS: Record<ProviderId, ProviderDefinition<ProviderId>> = {
   "claude-code": CLAUDE_PROVIDER,
   "openai-codex": OPENAI_CODEX_PROVIDER,
 };
 
-export const PROVIDER_LIST = Object.values(PROVIDERS);
+export const PROVIDER_LIST: ProviderDefinition<ProviderId>[] = Object.values(PROVIDERS);
 
-export function getProviderDefinition(providerId: ProviderId): ProviderDefinition {
+export function getProviderDefinition(providerId: ProviderId): ProviderDefinition<ProviderId> {
   return PROVIDERS[providerId];
 }
 
