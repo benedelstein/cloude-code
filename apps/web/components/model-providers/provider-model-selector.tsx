@@ -33,6 +33,7 @@ interface ProviderModelSelectorProps {
   onSelect: (providerId: ProviderId, modelId: string) => void;
   onConnect: (providerId: ProviderId) => void;
   disabled?: boolean;
+  triggerClassName?: string;
 }
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
@@ -54,6 +55,7 @@ export function ProviderModelSelector({
   onSelect,
   onConnect,
   disabled,
+  triggerClassName,
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const selectedHandle = selectedProvider
@@ -76,7 +78,10 @@ export function ProviderModelSelector({
         <button
           type="button"
           disabled={disabled}
-          className="flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50 cursor-pointer"
+          className={cn(
+            "flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
+            triggerClassName,
+          )}
         >
           {hasSelection && (
             <Image

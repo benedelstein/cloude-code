@@ -246,8 +246,8 @@ export function ChatInput({
           )}
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-          {selectedProvider && selectedModel && onProviderModelChange && (
-            <div className="min-w-0 max-w-[18rem] shrink">
+          {selectedProvider && selectedModel && selectedEffort && onProviderModelChange && onProviderEffortChange && (
+            <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-0 rounded-md border border-border">
               <ProviderModelSelector
                 selectedProvider={selectedProvider}
                 selectedModel={selectedModel}
@@ -256,16 +256,15 @@ export function ChatInput({
                 onConnect={() => setManuallyOpenedSigninPanel(true)}
                 allowedProviderIds={[selectedProvider]}
                 disabled={disabled || isAuthBlocking}
+                triggerClassName="rounded-r-none pr-1.5"
               />
-            </div>
-          )}
-          {selectedProvider && selectedEffort && onProviderEffortChange && (
-            <div className="min-w-0 max-w-[8rem] shrink">
+              <div className="h-3.5 w-px shrink-0 bg-border" />
               <ProviderEffortSelector
                 selectedProvider={selectedProvider}
                 selectedEffort={selectedEffort}
                 onSelect={onProviderEffortChange}
                 disabled={disabled || isAuthBlocking}
+                triggerClassName="rounded-l-none pl-1.5"
               />
             </div>
           )}

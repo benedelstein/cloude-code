@@ -18,6 +18,7 @@ interface ProviderEffortSelectorProps {
   selectedEffort: string | null;
   onSelect: (providerId: ProviderId, effortId: string) => void;
   disabled?: boolean;
+  triggerClassName?: string;
 }
 
 function getDisplayLabel(providerId: ProviderId, effortId: string): string {
@@ -31,6 +32,7 @@ export function ProviderEffortSelector({
   selectedEffort,
   onSelect,
   disabled,
+  triggerClassName,
 }: ProviderEffortSelectorProps) {
   const [open, setOpen] = useState(false);
   const hasSelection = selectedProvider !== null && selectedEffort !== null;
@@ -45,7 +47,10 @@ export function ProviderEffortSelector({
         <button
           type="button"
           disabled={disabled || !provider}
-          className="flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50"
+          className={cn(
+            "flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
+            triggerClassName,
+          )}
         >
           <span
             className={cn(

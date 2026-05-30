@@ -601,21 +601,26 @@ export function SessionCreationForm() {
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <ProviderModelSelector
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                providerAuthHandles={providerAuth.handles}
-                onSelect={handleProviderModelSelect}
-                onConnect={handleProviderConnect}
-                disabled={isFormInteractionDisabled}
-              />
-              <ProviderEffortSelector
-                selectedProvider={selectedProvider}
-                selectedEffort={selectedEffort}
-                onSelect={handleProviderEffortSelect}
-                disabled={isFormInteractionDisabled || !selectedProvider}
-              />
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-0 rounded-md border border-border">
+                <ProviderModelSelector
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  providerAuthHandles={providerAuth.handles}
+                  onSelect={handleProviderModelSelect}
+                  onConnect={handleProviderConnect}
+                  disabled={isFormInteractionDisabled}
+                  triggerClassName="rounded-r-none pr-1.5"
+                />
+                <div className="h-3.5 w-px shrink-0 bg-border" />
+                <ProviderEffortSelector
+                  selectedProvider={selectedProvider}
+                  selectedEffort={selectedEffort}
+                  onSelect={handleProviderEffortSelect}
+                  disabled={isFormInteractionDisabled || !selectedProvider}
+                  triggerClassName="rounded-l-none pl-1.5"
+                />
+              </div>
               <SendButton
                 isStreaming={false}
                 isLoading={submitting || isUploadingAttachments}
