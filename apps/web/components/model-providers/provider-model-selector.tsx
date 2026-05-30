@@ -137,7 +137,7 @@ export function ProviderModelSelector({
             onValueChange={setModelSearch}
           />
           <CommandList>
-            <CommandEmpty>No matching models.</CommandEmpty>
+            {isSearching && <CommandEmpty>No matching models.</CommandEmpty>}
             {providers.map((provider, index) => {
               const handle = providerAuthHandles.find(
                 (h) => h.providerId === provider.id,
