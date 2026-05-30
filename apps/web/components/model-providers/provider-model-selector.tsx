@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, ChevronDown, Link2 } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronDown, ChevronRight, Link2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   PROVIDERS,
@@ -58,6 +58,8 @@ export function ProviderModelSelector({
   triggerClassName,
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [collapsedProviderIds, setCollapsedProviderIds] = useState<Set<ProviderId>>(() => new Set());
   const selectedHandle = selectedProvider
     ? providerAuthHandles.find((handle) => handle.providerId === selectedProvider)
     : null;
@@ -71,6 +73,35 @@ export function ProviderModelSelector({
   const providers = allowedProviderIds
     ? PROVIDER_LIST.filter((provider) => allowedProviderIds.includes(provider.id))
     : PROVIDER_LIST;
+  const providerIdsKey = providers.map((provider) => provider.id).join("|");
+  const isSearching = modelSearch.trim().length > 0;
+
+  useEffect(() => {
+    if (!open) {
+      setModelSearch("");
+      return;
+    }
+
+    setCollapsedProviderIds(new Set(
+      selectedProvider
+        ? providers
+          .filter((provider) => provider.id !== selectedProvider)
+          .map((provider) => provider.id)
+        : [],
+    ));
+  }, [open, providerIdsKey, selectedProvider]);
+
+  const toggleProviderCollapsed = (providerId: ProviderId) => {
+    setCollapsedProviderIds((current) => {
+      const next = new Set(current);
+      if (next.has(providerId)) {
+        next.delete(providerId);
+      } else {
+        next.add(providerId);
+      }
+      return next;
+    });
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -100,7 +131,11 @@ export function ProviderModelSelector({
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="end">
         <Command>
-          <CommandInput placeholder="Search models..." />
+          <CommandInput
+            placeholder="Search models..."
+            value={modelSearch}
+            onValueChange={setModelSearch}
+          />
           <CommandList>
             <CommandEmpty>No matching models.</CommandEmpty>
             {providers.map((provider, index) => {
@@ -108,14 +143,28 @@ export function ProviderModelSelector({
                 (h) => h.providerId === provider.id,
               );
               const isConnected = handle?.connected ?? false;
+              const isCollapsed = !isSearching && collapsedProviderIds.has(provider.id);
 
               return (
                 <div key={provider.id}>
                   {index > 0 && <CommandSeparator />}
                   <CommandGroup
                     heading={
-                      <span className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 font-semibold">
+                      <span className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            toggleProviderCollapsed(provider.id);
+                          }}
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-left font-semibold transition-colors hover:bg-muted"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-3 w-3 shrink-0" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3 shrink-0" />
+                          )}
                           <Image
                             src={PROVIDER_ICONS[provider.id].src}
                             alt={PROVIDER_ICONS[provider.id].alt}
@@ -123,8 +172,8 @@ export function ProviderModelSelector({
                             height={12}
                             className="h-3 w-3"
                           />
-                          {provider.displayName}
-                        </span>
+                          <span className="min-w-0 truncate">{provider.displayName}</span>
+                        </button>
                         {!isConnected && (
                           <button
                             type="button"
@@ -142,7 +191,7 @@ export function ProviderModelSelector({
                       </span>
                     }
                   >
-                    {provider.models.map((model) => {
+                    {!isCollapsed && provider.models.map((model) => {
                       const isSelected =
                         selectedProvider === provider.id &&
                         selectedModel === model.id &&
