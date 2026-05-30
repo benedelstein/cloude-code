@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
+import { ClaudeEffort } from "@repo/shared";
 import type { AgentMode, AgentSettings, ClaudeModel } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
 import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
@@ -122,6 +123,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
           settingSources: ["local", "project", "user"],
           resume: agentSessionId,
           permissionMode: getPermissionMode(options.agentMode),
+          env: getClaudeEffortEnv(options.effort),
         });
         return withSessionIdInterceptor(model, onSessionId);
       },
@@ -161,8 +163,29 @@ const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
   return agentMode === "plan" ? "plan" : "bypassPermissions";
 };
 
+const getClaudeEffortEnv = (effort: string | undefined): Record<string, string | undefined> | undefined => {
+  if (!effort) { return undefined; }
+
+  const parsedEffort = ClaudeEffort.safeParse(effort);
+  if (!parsedEffort.success) {
+    throw new Error(`Invalid Claude effort: ${effort}`);
+  }
+
+  return { CLAUDE_CODE_EFFORT_LEVEL: parsedEffort.data };
+};
+
 const resolveClaudeModelId = (model: ClaudeModel): string => {
   switch (model) {
+    case "claude-opus-4-8":
+    case "claude-opus-4-8[1m]":
+    case "claude-opus-4-7":
+    case "claude-opus-4-7[1m]":
+    case "claude-opus-4-6":
+      return model;
+    case "claude-sonnet-4-6":
+      return "sonnet";
+    case "claude-haiku-4-5":
+      return "haiku";
     case "opus":
       return "claude-opus-4-8";
     case "opus-1m":

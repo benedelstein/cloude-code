@@ -29,8 +29,10 @@ describe("useModels", () => {
       connected: true,
       requiresReauth: false,
       defaultModel: "gpt-5",
+      defaultEffort: "high",
       authMethods: ["oauth"],
       models: [],
+      efforts: [],
     }));
 
     const { result } = renderHook(() => useModels());
@@ -52,10 +54,12 @@ describe("useModels", () => {
         providerId: "claude-code",
         providerName: "Claude Code",
         connected: false,
-        requiresReauth: false,
-        defaultModel: "claude-opus-4-1",
-        authMethods: ["oauth"],
-        models: [],
+      requiresReauth: false,
+      defaultModel: "claude-opus-4-1",
+      defaultEffort: "high",
+      authMethods: ["oauth"],
+      models: [],
+      efforts: [],
       }));
 
     const { result } = renderHook(() => useModels());

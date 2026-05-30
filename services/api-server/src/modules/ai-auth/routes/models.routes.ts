@@ -51,11 +51,18 @@ modelsRoutes.openapi(getModelsRoute, async (c) => {
       connected: status.connected,
       requiresReauth: status.requiresReauth,
       defaultModel: provider.defaultModel,
+      defaultEffort: provider.defaultEffort,
       authMethods: provider.authMethods,
       models: provider.models.map((model) => ({
         id: model.id,
         displayName: model.displayName,
         isDefault: model.isDefault,
+        selectable: status.connected,
+      })),
+      efforts: provider.efforts.map((effort) => ({
+        id: effort.id,
+        displayName: effort.displayName,
+        isDefault: effort.isDefault,
         selectable: status.connected,
       })),
     });

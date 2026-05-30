@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
+import { ProviderEffortSelector } from "@/components/model-providers/provider-effort-selector";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
 import type {
   AgentMode,
@@ -33,7 +34,9 @@ interface ChatInputProps {
   onAgentModeChange?: (mode: AgentMode) => void;
   selectedProvider: ProviderId | null;
   selectedModel: string | null;
+  selectedEffort: string | null;
   onProviderModelChange?: (providerId: ProviderId, modelId: string) => void;
+  onProviderEffortChange?: (providerId: ProviderId, effortId: string) => void;
   providerAuthHandles: ProviderAuthHandleUnion[];
   providerAuthRequired: ProviderAuthRequired;
   operationErrorMessage?: string | null;
@@ -51,7 +54,9 @@ export function ChatInput({
   onAgentModeChange,
   selectedProvider,
   selectedModel,
+  selectedEffort,
   onProviderModelChange,
+  onProviderEffortChange,
   providerAuthHandles,
   providerAuthRequired,
   operationErrorMessage,
@@ -250,6 +255,16 @@ export function ChatInput({
                 onSelect={onProviderModelChange}
                 onConnect={() => setManuallyOpenedSigninPanel(true)}
                 allowedProviderIds={[selectedProvider]}
+                disabled={disabled || isAuthBlocking}
+              />
+            </div>
+          )}
+          {selectedProvider && selectedEffort && onProviderEffortChange && (
+            <div className="min-w-0 max-w-[8rem] shrink">
+              <ProviderEffortSelector
+                selectedProvider={selectedProvider}
+                selectedEffort={selectedEffort}
+                onSelect={onProviderEffortChange}
                 disabled={disabled || isAuthBlocking}
               />
             </div>

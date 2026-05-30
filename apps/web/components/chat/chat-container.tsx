@@ -46,6 +46,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     pullRequestState,
     selectedModel,
     setSelectedModel,
+    selectedEffort,
+    setSelectedEffort,
     selectedProvider,
     agentMode,
     setAgentMode,
@@ -135,6 +137,13 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
       return;
     }
     setSelectedModel(modelId);
+  };
+
+  const handleProviderEffortChange = (providerId: ProviderId, effortId: string) => {
+    if (selectedProvider !== providerId) {
+      return;
+    }
+    setSelectedEffort(effortId);
   };
 
   return (
@@ -265,7 +274,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onAgentModeChange={setAgentMode}
                 selectedProvider={selectedProvider}
                 selectedModel={selectedModel}
+                selectedEffort={selectedEffort}
                 onProviderModelChange={handleProviderModelChange}
+                onProviderEffortChange={handleProviderEffortChange}
                 providerAuthHandles={providerAuth.handles}
                 providerAuthRequired={providerAuthRequired}
                 operationErrorMessage={operationError?.message ?? null}

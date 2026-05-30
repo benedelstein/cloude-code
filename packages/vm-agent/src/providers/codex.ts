@@ -8,7 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
-import type { AgentMode, AgentSettings } from "@repo/shared";
+import type { AgentMode, AgentSettings, OpenAICodexEffort } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
@@ -88,6 +88,7 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       getModel: (id, options: GetModelOptions) => {
         const model = provider(id, {
           sandboxPolicy: getSandboxPolicy(options.agentMode),
+          effort: options.effort as OpenAICodexEffort | undefined,
           resume: agentSessionId,
         });
         return withThreadIdInterceptor(model, onSessionId);

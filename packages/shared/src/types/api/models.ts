@@ -9,14 +9,24 @@ export const ProviderCatalogModel = z.object({
 });
 export type ProviderCatalogModel = z.infer<typeof ProviderCatalogModel>;
 
+export const ProviderCatalogEffort = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  isDefault: z.boolean(),
+  selectable: z.boolean(),
+});
+export type ProviderCatalogEffort = z.infer<typeof ProviderCatalogEffort>;
+
 export const ProviderCatalogEntry = z.object({
   providerId: ProviderId,
   providerName: z.string(),
   connected: z.boolean(),
   requiresReauth: z.boolean(),
   defaultModel: z.string(),
+  defaultEffort: z.string(),
   authMethods: z.array(AuthMethod),
   models: z.array(ProviderCatalogModel),
+  efforts: z.array(ProviderCatalogEffort),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type ProviderCatalogEntry = z.infer<typeof ProviderCatalogEntry>;

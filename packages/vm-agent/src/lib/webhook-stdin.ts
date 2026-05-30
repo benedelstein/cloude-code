@@ -8,7 +8,7 @@ export interface WebhookStdinRunner {
   queueStdinMessage(
     userMessageId: string,
     message: AgentInputMessage,
-    overrides?: { model?: string; agentMode?: AgentMode },
+    overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void;
   cancelTurn(_userMessageId: string): void;
 }
@@ -35,6 +35,7 @@ export function handleWebhookStdinLine(
       case "chat":
         runner.queueStdinMessage(input.userMessageId, input.message, {
           model: input.model,
+          effort: input.effort,
           agentMode: input.agentMode,
         });
         break;

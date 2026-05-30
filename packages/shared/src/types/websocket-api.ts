@@ -19,6 +19,8 @@ export const ChatMessageEvent = z.object({
   messageId: z.uuid().optional(),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
+  /** If provided, switch provider effort before processing the message. */
+  effort: z.string().optional(),
   /** If provided, switch agent mode before processing the message. */
   agentMode: AgentMode.optional(),
 }).refine(

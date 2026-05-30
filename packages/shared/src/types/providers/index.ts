@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { AgentSettingsClaude, CLAUDE_PROVIDER, CLAUDE_PROVIDER_ID } from "./claude";
 import { AgentSettingsCodex, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } from "./openai-codex";
-import type { ProviderDefinition, ProviderModelDefinition, ProviderModelId } from "./shared";
+import type {
+  ProviderDefinition,
+  ProviderEffortDefinition,
+  ProviderEffortId,
+  ProviderModelDefinition,
+  ProviderModelId,
+} from "./shared";
 
 export * from "./claude";
 export * from "./openai-codex";
@@ -42,6 +48,21 @@ export function getProviderModelDefinition(
 
 export function isProviderModel(providerId: ProviderId, modelId: string): boolean {
   return getProviderModelDefinition(providerId, modelId) !== null;
+}
+
+export function getProviderEffortIds(providerId: ProviderId): ProviderEffortId[] {
+  return PROVIDERS[providerId].efforts.map((effort) => effort.id);
+}
+
+export function getProviderEffortDefinition(
+  providerId: ProviderId,
+  effortId: string,
+): ProviderEffortDefinition | null {
+  return PROVIDERS[providerId].efforts.find((effort) => effort.id === effortId) ?? null;
+}
+
+export function isProviderEffort(providerId: ProviderId, effortId: string): boolean {
+  return getProviderEffortDefinition(providerId, effortId) !== null;
 }
 
 export { AgentSettingsClaude, AgentSettingsCodex };

@@ -9,6 +9,7 @@ import {
   type SessionStatus,
   type Result,
   failure,
+  getProviderEffortDefinition,
   getProviderModelDefinition,
   success,
 } from "@repo/shared";
@@ -33,6 +34,7 @@ export type ChatDispatchError =
       | "SESSION_NOT_INITIALIZED"
       | "INVALID_MESSAGE"
       | "INVALID_MODEL"
+      | "INVALID_EFFORT"
       | "DISPATCH_FAILED",
       object
     >
@@ -145,6 +147,13 @@ export class SessionChatDispatchService {
       modelOverride = modelResult.value;
     }
 
+    let effortOverride: string | undefined;
+    if (payload.effort && payload.effort !== clientState.agentSettings.effort) {
+      const effortResult = this.validateAndApplyEffortSwitch(payload.effort);
+      if (!effortResult.ok) { return failure(effortResult.error); }
+      effortOverride = effortResult.value;
+    }
+
     let agentModeOverride: AgentMode | undefined;
     if (payload.agentMode && payload.agentMode !== clientState.agentMode) {
       this.updatePartialState({ agentMode: payload.agentMode });
@@ -172,6 +181,7 @@ export class SessionChatDispatchService {
       content,
       attachmentIds,
       model: modelOverride,
+      effort: effortOverride,
       agentMode: agentModeOverride,
     });
     if (!dispatchResult.ok) {
@@ -228,6 +238,7 @@ export class SessionChatDispatchService {
     content: string | undefined;
     attachmentIds: string[];
     model?: string;
+    effort?: string;
     agentMode?: AgentMode;
   }): Promise<Result<void, ChatDispatchError>> {
     // Register the turn before spawning so any webhook that races in with
@@ -244,6 +255,7 @@ export class SessionChatDispatchService {
           attachmentIds: args.attachmentIds,
         },
         model: args.model,
+        effort: args.effort,
         agentMode: args.agentMode,
       });
     } catch (error) {
@@ -287,6 +299,35 @@ export class SessionChatDispatchService {
       } as AgentSettings,
     });
     return success(validatedModel.id);
+  }
+
+  private validateAndApplyEffortSwitch(
+    effort: string,
+  ): Result<string, ChatDispatchError> {
+    const clientState = this.getClientState();
+    const validatedEffort = getProviderEffortDefinition(
+      clientState.agentSettings.provider,
+      effort,
+    );
+    if (!validatedEffort) {
+      this.logger.warn("Invalid provider effort in chat dispatch", {
+        fields: { provider: clientState.agentSettings.provider, effort },
+      });
+      return failure(
+        chatDispatchError("INVALID_EFFORT", "Invalid effort for the current provider", {
+          provider: clientState.agentSettings.provider,
+          effort,
+        }),
+      );
+    }
+
+    this.updatePartialState({
+      agentSettings: {
+        ...clientState.agentSettings,
+        effort: validatedEffort.id,
+      } as AgentSettings,
+    });
+    return success(validatedEffort.id);
   }
 
   private async getBoundAttachmentRecords(

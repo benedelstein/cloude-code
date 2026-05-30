@@ -122,6 +122,7 @@ export { AgentSettings };
 export const AgentSettingsInput = z.object({
   provider: ProviderId.optional(),
   model: z.string().optional(),
+  effort: z.string().optional(),
   maxTokens: z.number().optional(),
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;

@@ -103,7 +103,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   queueMessage(
     userMessageId: string,
     message: AgentInputMessage,
-    overrides?: { model?: string; agentMode?: AgentMode },
+    overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void {
     this.cancelIdleTimer();
     this.harness.queueMessage(message, userMessageId, overrides);
@@ -115,7 +115,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   queueStdinMessage(
     userMessageId: string,
     message: AgentInputMessage,
-    overrides?: { model?: string; agentMode?: AgentMode },
+    overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void {
     this.queueMessage(userMessageId, message, overrides);
     this.handleEmit({ type: "stdin_ack", userMessageId });

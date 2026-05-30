@@ -91,7 +91,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   initialState: ClientState = {
     repoFullName: null,
     status: "initializing",
-    agentSettings: { provider: "claude-code", model: "opus", maxTokens: 8192 },
+    agentSettings: { provider: "claude-code", model: "claude-opus-4-8", effort: "high", maxTokens: 8192 },
     agentMode: "edit",
     pushedBranch: null,
     pullRequest: null,
@@ -547,6 +547,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     const parsed = AgentSettings.safeParse({
       provider,
       model: data.agentSettings?.model,
+      effort: data.agentSettings?.effort,
       maxTokens,
     });
     if (parsed.success) {

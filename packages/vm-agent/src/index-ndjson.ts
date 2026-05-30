@@ -74,6 +74,7 @@ rl.on("line", (rawLine) => {
           input.userMessageId,
           {
             model: input.model,
+            effort: input.effort,
             agentMode: input.agentMode,
           },
         );
