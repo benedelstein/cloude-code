@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronsUpDown, Monitor, Pencil, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, MonitorCog, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -122,7 +122,7 @@ export function SessionEnvironmentSelector({
           disabled={disabled || loading}
           className="flex h-8 max-w-[260px] cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50"
         >
-          <Monitor className="h-3.5 w-3.5 shrink-0" />
+          <MonitorCog className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">
             {loading
               ? "Loading environments..."
