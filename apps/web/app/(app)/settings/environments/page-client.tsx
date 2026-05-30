@@ -24,7 +24,17 @@ import {
 import type { RepoEnvironmentSummary } from "@repo/shared";
 import { SettingsPageHeader, SettingsShell } from "../settings-shell";
 
-const ENVIRONMENT_TABLE_GRID_CLASS = "md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem]";
+const ENVIRONMENT_TABLE_GRID_CLASS = "md:grid-cols-[minmax(7rem,1fr)_minmax(9rem,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_auto]";
+const CREATED_AT_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  year: "numeric",
+});
+
+function formatCreatedAt(createdAt: string): string {
+  return CREATED_AT_FORMATTER.format(new Date(createdAt));
+}
 
 export function EnvironmentsPageClient() {
   const [environments, setEnvironments] = useState<RepoEnvironmentSummary[]>([]);
@@ -95,33 +105,36 @@ export function EnvironmentsPageClient() {
         <SettingsPageHeader
           title="Environments"
           description="Repo-specific setup profiles for new agent sessions."
-          action={(
-            <Button asChild className="w-full shadow-none md:w-auto">
-              <Link href="/settings/environments/create">
-                <Plus className="h-4 w-4" />
-                Create environment
-              </Link>
-            </Button>
-          )}
         />
 
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-secondary" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search environments"
-            className="pl-9 shadow-none"
-          />
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="relative min-w-0 max-w-sm flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-secondary" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search environments"
+              className="pl-9 shadow-none"
+            />
+          </div>
+          <Button asChild className="h-9 w-9 shrink-0 px-0 shadow-none min-[560px]:w-auto min-[560px]:px-4">
+            <Link href="/settings/environments/create">
+              <Plus className="h-4 w-4" />
+              <span className="sr-only">Create environment</span>
+              <span aria-hidden="true" className="hidden min-[560px]:inline">
+                Create environment
+              </span>
+            </Link>
+          </Button>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-secondary md:grid`}>
-            <div>Name</div>
-            <div>Repo</div>
-            <div>Network</div>
-            <div>Startup</div>
-            <div>Actions</div>
+          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-2 text-left text-xs font-medium uppercase text-foreground-secondary md:grid`}>
+            <div className="min-w-0 justify-self-start text-left">Name</div>
+            <div className="min-w-0 justify-self-start text-left">Repo</div>
+            <div className="min-w-0 justify-self-start text-left">Network</div>
+            <div className="min-w-0 justify-self-start text-left">Created at</div>
+            <div className="min-w-0 justify-self-start text-left">Actions</div>
           </div>
 
           {loading ? (
@@ -207,13 +220,17 @@ function EnvironmentListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
-          className={`grid gap-3 px-4 py-4 ${ENVIRONMENT_TABLE_GRID_CLASS}`}
+          className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-2.5 ${ENVIRONMENT_TABLE_GRID_CLASS}`}
         >
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-5 w-44" />
-          <Skeleton className="h-5 w-20" />
-          <Skeleton className="h-5 w-14" />
-          <Skeleton className="ml-auto h-8 w-20" />
+          <div className="min-w-0">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-2 h-4 w-44" />
+            <Skeleton className="mt-3 h-4 w-36 md:hidden" />
+          </div>
+          <Skeleton className="h-7 w-16 md:order-5" />
+          <Skeleton className="hidden h-5 w-44 md:block" />
+          <Skeleton className="hidden h-5 w-20 md:block" />
+          <Skeleton className="hidden h-5 w-24 md:block" />
         </div>
       ))}
     </div>
@@ -237,40 +254,101 @@ function EnvironmentRow({
         ? "No access"
         : "Unrestricted";
 
+  const createdAtLabel = formatCreatedAt(environment.createdAt);
+
   return (
-    <div className={`grid gap-3 border-b border-border px-4 py-4 last:border-b-0 md:items-center ${ENVIRONMENT_TABLE_GRID_CLASS}`}>
-      <div className="min-w-0">
-        <Link
-          href={`/settings/environments/${environment.id}`}
-          className="block truncate text-sm font-medium text-foreground hover:underline"
-        >
-          {environment.name}
+    <div className="border-b border-border transition-colors hover:bg-muted/40 last:border-b-0">
+      <div className="flex items-start justify-between gap-3 px-4 py-3 md:hidden">
+        <EnvironmentSummary
+          environment={environment}
+          networkLabel={networkLabel}
+          createdAtLabel={createdAtLabel}
+        />
+        <EnvironmentActions
+          environment={environment}
+          deleting={deleting}
+          onDelete={onDelete}
+        />
+      </div>
+
+      <div className={`hidden gap-3 px-4 py-2.5 md:grid md:items-center ${ENVIRONMENT_TABLE_GRID_CLASS}`}>
+        <EnvironmentName environment={environment} />
+        <RepoLink repoFullName={environment.repoFullName} className="justify-self-start text-sm" />
+        <div className="min-w-0 justify-self-start truncate text-left text-sm text-foreground-secondary">
+          {networkLabel}
+        </div>
+        <div className="min-w-0 justify-self-start truncate text-left text-sm text-foreground-secondary">
+          {createdAtLabel}
+        </div>
+        <EnvironmentActions
+          environment={environment}
+          deleting={deleting}
+          onDelete={onDelete}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentSummary({
+  environment,
+  networkLabel,
+  createdAtLabel,
+}: {
+  environment: RepoEnvironmentSummary;
+  networkLabel: string;
+  createdAtLabel: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <EnvironmentName environment={environment} />
+      <RepoLink repoFullName={environment.repoFullName} className="mt-1 text-xs" />
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-secondary">
+        <span>{networkLabel}</span>
+        <span>{createdAtLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentName({ environment }: { environment: RepoEnvironmentSummary }) {
+  return (
+    <Link
+      href={`/settings/environments/${environment.id}`}
+      className="block truncate text-sm font-medium text-foreground hover:underline"
+    >
+      {environment.name}
+    </Link>
+  );
+}
+
+function EnvironmentActions({
+  environment,
+  deleting,
+  onDelete,
+}: {
+  environment: RepoEnvironmentSummary;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 justify-start gap-1">
+      <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
+        <Link href={`/settings/environments/${environment.id}`} aria-label={`Edit ${environment.name}`}>
+          <Pencil className="h-4 w-4" />
         </Link>
-        <RepoLink repoFullName={environment.repoFullName} className="mt-1 text-xs md:hidden" />
-      </div>
-      <RepoLink repoFullName={environment.repoFullName} className="hidden text-sm md:inline-flex" />
-      <div className="text-sm text-foreground-secondary">{networkLabel}</div>
-      <div className="text-sm text-foreground-secondary">
-        {environment.startupScript ? "Yes" : "No"}
-      </div>
-      <div className="flex justify-start gap-1">
-        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
-          <Link href={`/settings/environments/${environment.id}`} aria-label={`Edit ${environment.name}`}>
-            <Pencil className="h-4 w-4" />
-          </Link>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
-          disabled={deleting}
-          onClick={onDelete}
-          aria-label={deleting ? `Deleting ${environment.name}` : `Delete ${environment.name}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
+        disabled={deleting}
+        onClick={onDelete}
+        aria-label={deleting ? `Deleting ${environment.name}` : `Delete ${environment.name}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
     </div>
   );
 }

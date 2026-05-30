@@ -1,5 +1,6 @@
 import { App, Octokit } from "octokit";
 import {
+  buildGitHubAppInstallUrl,
   failure,
   success,
   type Logger,
@@ -100,7 +101,7 @@ export class GitHubAppService {
    * Returns the GitHub App installation URL (for users who need to install the app).
    */
   getInstallUrl(): string {
-    return `https://github.com/apps/${this.appSlug}/installations/new`;
+    return buildGitHubAppInstallUrl(this.appSlug);
   }
 
   async hasInstallations(accessToken: string): Promise<boolean> {

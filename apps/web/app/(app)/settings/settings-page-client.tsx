@@ -3,15 +3,24 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ArrowUpRight, ChevronRight, Github, LogOut, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronRight,
+  Github,
+  LogOut,
+  MonitorCog,
+  Plug,
+  RefreshCw,
+  Unplug,
+} from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
-import { Button } from "@/components/ui/button";
+import { AnimatedIconButton } from "@/components/animated-icon-button";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
-import { listRepos } from "@/lib/client-api";
+import { GITHUB_APP_INSTALL_URL } from "@/lib/github-app";
 import { SettingsPageHeader, SettingsShell } from "./settings-shell";
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
@@ -20,6 +29,7 @@ const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
 };
 
 const SETTINGS_ICON_CLASSNAME = "h-4 w-4";
+const ACTION_BUTTON_ICON_CLASSNAME = "h-3.5 w-3.5 shrink-0";
 
 export function SettingsPageClient() {
   const { user, logout } = useAuth();
@@ -27,7 +37,6 @@ export function SettingsPageClient() {
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
   const [showSigninPanel, setShowSigninPanel] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] = useState<ProviderId | null>(null);
-  const [githubInstallUrl, setGithubInstallUrl] = useState<string | null>(null);
   const signinPanelHandle = providerAuth.getHandle(signinPanelProvider);
 
   useEffect(() => {
@@ -70,27 +79,6 @@ export function SettingsPageClient() {
       setDisconnectingProvider(null);
     }
   };
-
-  useEffect(() => {
-    let stale = false;
-
-    (async () => {
-      try {
-        const response = await listRepos({ limit: 1 });
-        if (!stale) {
-          setGithubInstallUrl(response.installUrl);
-        }
-      } catch {
-        if (!stale) {
-          setGithubInstallUrl(null);
-        }
-      }
-    })();
-
-    return () => {
-      stale = true;
-    };
-  }, []);
 
   return (
     <SettingsShell>
@@ -146,16 +134,18 @@ export function SettingsPageClient() {
                 ? `Connected as ${user.login}`
                 : "Connected to your GitHub account"
             }
-            action={githubInstallUrl
-              ? (
-                <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
-                  <Link href={githubInstallUrl} target="_blank" rel="noopener noreferrer">
-                    Update settings
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                </Button>
-              )
-              : undefined}
+            action={(
+              <AnimatedIconButton
+                href={GITHUB_APP_INSTALL_URL}
+                icon={<ArrowUpRight className={ACTION_BUTTON_ICON_CLASSNAME} />}
+                rel="noopener noreferrer"
+                size="sm"
+                target="_blank"
+                variant="outline"
+              >
+                Update settings
+              </AnimatedIconButton>
+            )}
           />
         </SettingsSection>
 
@@ -164,7 +154,7 @@ export function SettingsPageClient() {
           description="Reusable configuration for starting sessions."
         >
           <SettingsLinkRow
-            icon={<SlidersHorizontal className={SETTINGS_ICON_CLASSNAME} />}
+            icon={<MonitorCog className={SETTINGS_ICON_CLASSNAME} />}
             title="Environments"
             description="Manage repo-specific startup scripts and network access."
             href="/settings/environments"
@@ -205,15 +195,15 @@ export function SettingsPageClient() {
             icon={<LogOut className={SETTINGS_ICON_CLASSNAME} />}
             title="Sign out"
             action={(
-              <Button
+              <AnimatedIconButton
+                icon={<LogOut className={ACTION_BUTTON_ICON_CLASSNAME} />}
                 type="button"
                 variant="outline"
                 size="sm"
-                className="w-full justify-center shadow-none md:w-auto"
                 onClick={() => void logout()}
               >
                 Sign out
-              </Button>
+              </AnimatedIconButton>
             )}
           />
         </SettingsSection>
@@ -235,7 +225,7 @@ function SettingsSection({
     <section className="flex flex-col gap-3">
       <div>
         <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        {description && <p className="text-sm text-foreground-secondary">{description}</p>}
+        {description && <p className="text-xs text-foreground-secondary">{description}</p>}
       </div>
       <div className="overflow-hidden rounded-2xl border border-border bg-background">
         {children}
@@ -298,6 +288,11 @@ function ProviderConnectionRow({
   const buttonLabel = connected
     ? disconnecting ? "Disconnecting..." : "Disconnect"
     : handle.requiresReauth ? "Reconnect" : "Connect";
+  const buttonIcon = connected
+    ? <Unplug className={ACTION_BUTTON_ICON_CLASSNAME} />
+    : handle.requiresReauth
+      ? <RefreshCw className={ACTION_BUTTON_ICON_CLASSNAME} />
+      : <Plug className={ACTION_BUTTON_ICON_CLASSNAME} />;
 
   return (
     <SettingsItemRow
@@ -321,16 +316,16 @@ function ProviderConnectionRow({
       }
       action={
         <div className="flex flex-row gap-2">
-          <Button
+          <AnimatedIconButton
+            icon={buttonIcon}
             type="button"
-            variant={connected ? "destructiveOutline" : "default"}
+            variant={connected ? "destructiveOutline" : "outline"}
             size="sm"
-            className="w-full shadow-none md:w-auto"
             disabled={handle.loading || disconnecting}
             onClick={connected ? onDisconnect : onConnect}
           >
             {buttonLabel}
-          </Button>
+          </AnimatedIconButton>
         </div>
       }
     />
@@ -351,7 +346,7 @@ function StatusPill({
       : "bg-muted text-foreground-secondary";
 
   return (
-    <span className={`w-fit rounded-full px-2.5 py-[3px] text-[11px] font-medium ${className}`}>
+    <span className={`w-fit rounded-sm px-1.5 py-[3px] text-[10px] font-medium ${className}`}>
       {children}
     </span>
   );
@@ -374,27 +369,29 @@ function SettingsItemRow({
   action?: ReactNode;
   href?: string;
 }) {
-  const className = "flex flex-col gap-4 border-b border-border px-4 py-3 min-h-[56px] last:border-b-0 md:flex-row md:items-center md:justify-between";
+  const className = "relative flex min-h-[56px] flex-row items-center justify-between gap-3 px-4 py-3 after:pointer-events-none after:absolute after:bottom-0 after:left-4 after:right-0 after:h-px after:origin-bottom after:scale-y-50 after:bg-border last:after:hidden";
   const content = (
     <>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-secondary">
           {icon}
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+            <h3 className="text-xs font-medium text-foreground sm:text-sm">{title}</h3>
             {titleMeta}
           </div>
           {details ?? (
-            <p className="truncate text-sm text-foreground-secondary">{description}</p>
+            <p className="text-xs leading-5 text-foreground-secondary">
+              {description}
+            </p>
           )}
         </div>
       </div>
-      <div className="flex flex-row items-center">
+      <div className="flex shrink-0 flex-row items-center">
         {action}
         {href && (
-          <span className="ml-0 flex w-0 overflow-hidden opacity-0 transition-[margin,width,opacity] duration-150 group-hover:ml-2 group-hover:w-4 group-hover:opacity-100">
+          <span className="ml-2 flex w-4">
             <ChevronRight className="h-4 w-4 shrink-0" />
           </span>
         )}

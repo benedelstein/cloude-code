@@ -19,7 +19,13 @@ function providerCredentialError<Code extends ProviderCredentialError["code"]>(
   message: string,
   extra?: Record<string, unknown>,
 ): Extract<ProviderCredentialError, { code: Code }> {
-  return { domain: PROVIDER_CREDENTIAL_DOMAIN, code, message, provider, ...extra } as Extract<ProviderCredentialError, { code: Code }>;
+  return {
+    domain: PROVIDER_CREDENTIAL_DOMAIN,
+    code,
+    message,
+    provider,
+    ...extra,
+  } as Extract<ProviderCredentialError, { code: Code }>;
 }
 
 export interface AuthCredentialSnapshot {

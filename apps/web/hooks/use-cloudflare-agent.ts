@@ -36,6 +36,10 @@ function resolveDefaultApiHost(): string {
 
 const DEFAULT_API_HOST = resolveDefaultApiHost();
 
+function keepPreviousIfDeepEqual<T>(previous: T, next: T): T {
+  return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+}
+
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
@@ -304,21 +308,26 @@ export function useCloudflareAgent({
       setPushedBranch(state.pushedBranch);
       setRepoFullName(state.repoFullName);
       // for objects, we need to diff them to prevent excessive re-renders
-      setPullRequestState(prev => JSON.stringify(prev) === JSON.stringify(state.pullRequest) ? prev : state.pullRequest ?? null);
-      setTodos(prev => JSON.stringify(prev) === JSON.stringify(state.todos) ? prev : state.todos);
-      setPlan(prev => JSON.stringify(prev) === JSON.stringify(state.plan) ? prev : state.plan);
-      setPendingUserMessage(prev => JSON.stringify(prev) === JSON.stringify(state.pendingUserMessage?.message) ? prev : state.pendingUserMessage?.message ?? null);
+      setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, state.pullRequest ?? null));
+      setTodos((prev) => keepPreviousIfDeepEqual(prev, state.todos));
+      setPlan((prev) => keepPreviousIfDeepEqual(prev, state.plan));
+      setPendingUserMessage((prev) => keepPreviousIfDeepEqual(
+        prev,
+        state.pendingUserMessage?.message ?? null,
+      ));
       applyServerActiveTurn(state.activeTurn ?? null);
       setEditorUrl(state.editorUrl);
-      setAgentSettings(prev => JSON.stringify(prev) === JSON.stringify(state.agentSettings) ? prev : state.agentSettings);
-      setProviderConnection(prev => JSON.stringify(prev) === JSON.stringify(state.providerConnection) ? prev : state.providerConnection);
-      const nextProviderAuthRequired: ProviderAuthRequired = state.providerConnection && !state.providerConnection.connected
+      setAgentSettings((prev) => keepPreviousIfDeepEqual(prev, state.agentSettings));
+      setProviderConnection((prev) => keepPreviousIfDeepEqual(prev, state.providerConnection));
+      const providerConnection = state.providerConnection;
+      const shouldRequireProviderAuth = providerConnection && !providerConnection.connected;
+      const nextProviderAuthRequired: ProviderAuthRequired = shouldRequireProviderAuth
         ? {
-            providerId: state.providerConnection.provider,
-            state: state.providerConnection.requiresReauth ? "reauth_required" : "auth_required",
+            providerId: providerConnection.provider,
+            state: providerConnection.requiresReauth ? "reauth_required" : "auth_required",
           }
         : null;
-      setProviderAuthRequired(prev => JSON.stringify(prev) === JSON.stringify(nextProviderAuthRequired) ? prev : nextProviderAuthRequired);
+      setProviderAuthRequired((prev) => keepPreviousIfDeepEqual(prev, nextProviderAuthRequired));
       // Track the server-known agent mode for diff-based sending
       serverAgentModeRef.current = state.agentMode ?? "edit";
       // Initialize agent mode from server state (only if not yet set locally)

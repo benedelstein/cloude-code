@@ -255,7 +255,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                   scrollToBottomRef.current?.();
                   sendMessage(...args);
                 }}
-                onUploadAttachments={(files) => uploadAttachments(files, sessionId).then((response) => response.attachments)}
+                onUploadAttachments={(files) => uploadAttachments(files, sessionId)
+                  .then((response) => response.attachments)}
                 onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
                 onStop={stop}
                 disabled={!isReady}

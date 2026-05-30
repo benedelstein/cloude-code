@@ -44,6 +44,7 @@ The repo-wide ESLint config enforces:
 - No type-only imports that leave runtime side-effect imports behind.
 - No `any`.
 - No unused variables except intentionally `_`-prefixed values.
+- Maximum line length of 120 characters for code, ignoring comments, strings, template literals, regex literals, and URLs.
 - Maximum file length of 1000 lines.
 - Naming conventions for symbols:
   - Variables and imports use `camelCase`, `PascalCase`, or `UPPER_CASE`.

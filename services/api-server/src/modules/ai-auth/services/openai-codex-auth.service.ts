@@ -26,7 +26,11 @@ export type OpenAICodexErrorCode =
 
 const OPENAI_CODEX_AUTH_DOMAIN = "openai_codex_auth" as const;
 
-export type OpenAICodexAuthError = DomainError<typeof OPENAI_CODEX_AUTH_DOMAIN, OpenAICodexErrorCode, { status: number }>;
+export type OpenAICodexAuthError = DomainError<
+  typeof OPENAI_CODEX_AUTH_DOMAIN,
+  OpenAICodexErrorCode,
+  { status: number }
+>;
 
 function openAICodexAuthError(code: OpenAICodexErrorCode, message: string, status: number): OpenAICodexAuthError {
   return { domain: OPENAI_CODEX_AUTH_DOMAIN, code, message, status };

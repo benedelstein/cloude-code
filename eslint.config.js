@@ -97,6 +97,18 @@ export default tseslint.config(
           skipComments: false,
         },
       ],
+      "max-len": [
+        "error",
+        {
+          code: 120,
+          tabWidth: 2,
+          ignoreComments: true,
+          ignoreStrings: true,
+          ignoreTemplateLiterals: true,
+          ignoreRegExpLiterals: true,
+          ignoreUrls: true,
+        },
+      ],
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-import-type-side-effects": "error",

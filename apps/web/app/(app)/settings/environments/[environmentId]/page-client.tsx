@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, TriangleAlert } from "lucide-react";
+import { Save, TriangleAlert } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -92,14 +92,6 @@ export function EditEnvironmentPageClient({
           <SettingsPageHeader
             title="Environment not found"
             description="The environment may have been deleted."
-            action={(
-              <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
-                <Link href="/settings/environments">
-                  <ArrowLeft className="h-4 w-4" />
-                  Environments
-                </Link>
-              </Button>
-            )}
           />
         </div>
       </SettingsShell>
@@ -112,14 +104,6 @@ export function EditEnvironmentPageClient({
         <SettingsPageHeader
           title="Edit environment"
           description={`Update setup for sessions created in ${environment.repoFullName}.`}
-          action={(
-            <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
-              <Link href="/settings/environments">
-                <ArrowLeft className="h-4 w-4" />
-                Environments
-              </Link>
-            </Button>
-          )}
         />
 
         <section className="rounded-lg border border-border bg-background">

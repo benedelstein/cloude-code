@@ -20,7 +20,15 @@ export type RenderItem =
   | { kind: "reasoning"; key: string; part: { text?: string; startedAt?: number; endedAt?: number } }
   | { kind: "action-item"; key: string; item: ActionItem };
 
-export function WorkItems({ items, isStreaming, isUser }: { items: RenderItem[]; isStreaming: boolean; isUser: boolean }) {
+export function WorkItems({
+  items,
+  isStreaming,
+  isUser,
+}: {
+  items: RenderItem[];
+  isStreaming: boolean;
+  isUser: boolean;
+}) {
   return (
     <>
       {items.map((item, index) => {
@@ -40,7 +48,15 @@ export function WorkItems({ items, isStreaming, isUser }: { items: RenderItem[];
   );
 }
 
-function WorkItemRenderer({ item, isStreaming, isUser }: { item: RenderItem; isStreaming: boolean; isUser: boolean }) {
+function WorkItemRenderer({
+  item,
+  isStreaming,
+  isUser,
+}: {
+  item: RenderItem;
+  isStreaming: boolean;
+  isUser: boolean;
+}) {
   switch (item.kind) {
     case "text":
       return <TextPart text={item.text} isUser={isUser} />;

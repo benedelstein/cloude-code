@@ -372,7 +372,15 @@ export function SessionCreationForm() {
 
   const submitMessage = async () => {
     const trimmedMessage = message.trim();
-    if (!selectedProvider || !selectedModel || !isProviderConnected || !selectedRepo || (!trimmedMessage && attachments.length === 0)) { return; }
+    if (
+      !selectedProvider
+      || !selectedModel
+      || !isProviderConnected
+      || !selectedRepo
+      || (!trimmedMessage && attachments.length === 0)
+    ) {
+      return;
+    }
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
       return;
