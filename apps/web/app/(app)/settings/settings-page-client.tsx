@@ -6,7 +6,6 @@ import Image from "next/image";
 import {
   ArrowUpRight,
   ChevronRight,
-  Github,
   LogOut,
   MonitorCog,
   Plug,
@@ -22,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/github-app";
 import { SettingsPageHeader, SettingsShell } from "./settings-shell";
+import { GithubIcon } from "@/components/github-icon";
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
   "claude-code": { src: "/claude_logo.svg", alt: "Claude" },
@@ -126,7 +126,7 @@ export function SettingsPageClient() {
           description="Repository access and installation status."
         >
           <SettingsItemRow
-            icon={<Github className={SETTINGS_ICON_CLASSNAME} />}
+            icon={<GithubIcon className={SETTINGS_ICON_CLASSNAME} />}
             title="GitHub"
             titleMeta={<StatusPill tone="success">Connected</StatusPill>}
             description={

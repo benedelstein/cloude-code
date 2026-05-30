@@ -24,7 +24,6 @@ import {
 import type { RepoEnvironmentSummary } from "@repo/shared";
 import { SettingsPageHeader, SettingsShell } from "../settings-shell";
 
-const ENVIRONMENT_TABLE_GRID_CLASS = "md:grid-cols-[minmax(7rem,1fr)_minmax(9rem,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_auto]";
 const CREATED_AT_FORMATTER = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   month: "short",
@@ -129,14 +128,6 @@ export function EnvironmentsPageClient() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-2 text-left text-xs font-medium uppercase text-foreground-secondary md:grid`}>
-            <div className="min-w-0 justify-self-start text-left">Name</div>
-            <div className="min-w-0 justify-self-start text-left">Repo</div>
-            <div className="min-w-0 justify-self-start text-left">Network</div>
-            <div className="min-w-0 justify-self-start text-left">Created at</div>
-            <div className="min-w-0 justify-self-start text-left">Actions</div>
-          </div>
-
           {loading ? (
             <EnvironmentListSkeleton />
           ) : filteredEnvironments.length === 0 ? (
@@ -149,14 +140,11 @@ export function EnvironmentsPageClient() {
               </p>
             </div>
           ) : (
-            filteredEnvironments.map((environment) => (
-              <EnvironmentRow
-                key={environment.id}
-                environment={environment}
-                deleting={deletingId === environment.id}
-                onDelete={() => setDeleteDialogEnvironment(environment)}
-              />
-            ))
+            <EnvironmentList
+              environments={filteredEnvironments}
+              deletingId={deletingId}
+              onDelete={setDeleteDialogEnvironment}
+            />
           )}
         </div>
 
@@ -216,28 +204,72 @@ function RepoLink({
 
 function EnvironmentListSkeleton() {
   return (
-    <div className="divide-y divide-border">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div
-          key={index}
-          className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-2.5 ${ENVIRONMENT_TABLE_GRID_CLASS}`}
-        >
-          <div className="min-w-0">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="mt-2 h-4 w-44" />
-            <Skeleton className="mt-3 h-4 w-36 md:hidden" />
-          </div>
-          <Skeleton className="h-7 w-16 md:order-5" />
-          <Skeleton className="hidden h-5 w-44 md:block" />
-          <Skeleton className="hidden h-5 w-20 md:block" />
-          <Skeleton className="hidden h-5 w-24 md:block" />
-        </div>
-      ))}
+    <div className="overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-[744px] table-fixed">
+        <tbody className="divide-y divide-border">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <tr key={index}>
+              <td className="px-4 py-2.5"><Skeleton className="h-5 w-32" /></td>
+              <td className="px-4 py-2.5"><Skeleton className="h-5 w-44" /></td>
+              <td className="px-4 py-2.5"><Skeleton className="h-5 w-20" /></td>
+              <td className="px-4 py-2.5"><Skeleton className="h-5 w-24" /></td>
+              <td className="sticky right-0 bg-background px-3 py-2.5">
+                <Skeleton className="h-7 w-16" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function EnvironmentRow({
+function EnvironmentList({
+  environments,
+  deletingId,
+  onDelete,
+}: {
+  environments: RepoEnvironmentSummary[];
+  deletingId: string | null;
+  onDelete: (environment: RepoEnvironmentSummary) => void;
+}) {
+  return (
+    <div className="overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-[744px] table-fixed">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[34%]" />
+          <col className="w-[16%]" />
+          <col className="w-[18%]" />
+          <col className="w-24" />
+        </colgroup>
+        <thead className="border-b border-border text-left text-xs font-medium uppercase text-foreground-secondary">
+          <tr>
+            <th className="px-4 py-2 font-medium">Name</th>
+            <th className="px-4 py-2 font-medium">Repo</th>
+            <th className="px-4 py-2 font-medium">Network</th>
+            <th className="px-4 py-2 font-medium">Created at</th>
+            <th className="sticky right-0 z-20 bg-background px-3 py-2 font-medium">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {environments.map((environment) => (
+            <EnvironmentTableRow
+              key={environment.id}
+              environment={environment}
+              deleting={deletingId === environment.id}
+              onDelete={() => onDelete(environment)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EnvironmentTableRow({
   environment,
   deleting,
   onDelete,
@@ -246,69 +278,42 @@ function EnvironmentRow({
   deleting: boolean;
   onDelete: () => void;
 }) {
-  const networkLabel = environment.network.mode === "default"
-    ? "Default"
-    : environment.network.mode === "custom"
-      ? "Custom"
-      : environment.network.mode === "locked"
-        ? "No access"
-        : "Unrestricted";
-
-  const createdAtLabel = formatCreatedAt(environment.createdAt);
-
   return (
-    <div className="border-b border-border transition-colors hover:bg-muted/40 last:border-b-0">
-      <div className="flex items-start justify-between gap-3 px-4 py-3 md:hidden">
-        <EnvironmentSummary
-          environment={environment}
-          networkLabel={networkLabel}
-          createdAtLabel={createdAtLabel}
-        />
-        <EnvironmentActions
-          environment={environment}
-          deleting={deleting}
-          onDelete={onDelete}
-        />
-      </div>
-
-      <div className={`hidden gap-3 px-4 py-2.5 md:grid md:items-center ${ENVIRONMENT_TABLE_GRID_CLASS}`}>
+    <tr className="group transition-colors hover:bg-muted/40">
+      <td className="min-w-0 px-4 py-2.5">
         <EnvironmentName environment={environment} />
-        <RepoLink repoFullName={environment.repoFullName} className="justify-self-start text-sm" />
-        <div className="min-w-0 justify-self-start truncate text-left text-sm text-foreground-secondary">
-          {networkLabel}
-        </div>
-        <div className="min-w-0 justify-self-start truncate text-left text-sm text-foreground-secondary">
-          {createdAtLabel}
-        </div>
+      </td>
+      <td className="min-w-0 px-4 py-2.5">
+        <RepoLink repoFullName={environment.repoFullName} className="text-sm" />
+      </td>
+      <td className="truncate px-4 py-2.5 text-sm text-foreground-secondary">
+        {getNetworkLabel(environment)}
+      </td>
+      <td className="truncate px-4 py-2.5 text-sm text-foreground-secondary">
+        {formatCreatedAt(environment.createdAt)}
+      </td>
+      <td className="sticky right-0 z-10 bg-background px-3 py-2.5 group-hover:bg-muted/40">
         <EnvironmentActions
           environment={environment}
           deleting={deleting}
           onDelete={onDelete}
         />
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
-function EnvironmentSummary({
-  environment,
-  networkLabel,
-  createdAtLabel,
-}: {
-  environment: RepoEnvironmentSummary;
-  networkLabel: string;
-  createdAtLabel: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <EnvironmentName environment={environment} />
-      <RepoLink repoFullName={environment.repoFullName} className="mt-1 text-xs" />
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-secondary">
-        <span>{networkLabel}</span>
-        <span>{createdAtLabel}</span>
-      </div>
-    </div>
-  );
+function getNetworkLabel(environment: RepoEnvironmentSummary): string {
+  switch (environment.network.mode) {
+    case "default":
+      return "Default";
+    case "custom":
+      return "Custom";
+    case "locked":
+      return "No access";
+    case "open":
+      return "Unrestricted";
+  }
 }
 
 function EnvironmentName({ environment }: { environment: RepoEnvironmentSummary }) {
@@ -332,8 +337,8 @@ function EnvironmentActions({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex shrink-0 justify-start gap-1">
-      <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
+    <div className="flex shrink-0 justify-center gap-1">
+      <Button asChild variant="ghost" size="icon" className="h-7 w-7 min-w-7 shrink-0 text-foreground-secondary shadow-none hover:bg-accent/10 hover:text-accent">
         <Link href={`/settings/environments/${environment.id}`} aria-label={`Edit ${environment.name}`}>
           <Pencil className="h-4 w-4" />
         </Link>
@@ -342,7 +347,7 @@ function EnvironmentActions({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-7 w-7 text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
+        className="h-7 w-7 min-w-7 shrink-0 text-foreground-secondary shadow-none hover:bg-danger/10 hover:text-danger"
         disabled={deleting}
         onClick={onDelete}
         aria-label={deleting ? `Deleting ${environment.name}` : `Delete ${environment.name}`}
