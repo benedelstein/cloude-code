@@ -24,7 +24,7 @@ import {
   type NetworkAccessConfig,
   type RepoEnvironmentSummary,
 } from "@repo/shared";
-import { SettingsShell } from "../../settings-shell";
+import { SettingsPageHeader, SettingsShell } from "../../settings-shell";
 import { DefaultAllowlistSheetTrigger } from "../default-allowlist-sheet";
 
 type FormState = {
@@ -89,18 +89,18 @@ export function EditEnvironmentPageClient({
     return (
       <SettingsShell>
         <div className="flex w-full flex-col gap-4">
-          <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-foreground-secondary shadow-none hover:bg-transparent hover:text-foreground">
-            <Link href="/settings/environments">
-              <ArrowLeft className="h-4 w-4" />
-              Environments
-            </Link>
-          </Button>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Environment not found</h2>
-            <p className="mt-1 text-sm text-foreground-muted">
-              The environment may have been deleted.
-            </p>
-          </div>
+          <SettingsPageHeader
+            title="Environment not found"
+            description="The environment may have been deleted."
+            action={(
+              <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
+                <Link href="/settings/environments">
+                  <ArrowLeft className="h-4 w-4" />
+                  Environments
+                </Link>
+              </Button>
+            )}
+          />
         </div>
       </SettingsShell>
     );
@@ -109,20 +109,18 @@ export function EditEnvironmentPageClient({
   return (
     <SettingsShell>
       <form onSubmit={(event) => void handleSubmit(event)} className="flex w-full flex-col gap-6">
-        <div className="flex flex-col gap-4 border-b border-border pb-4">
-          <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-foreground-secondary shadow-none hover:bg-transparent hover:text-foreground">
-            <Link href="/settings/environments">
-              <ArrowLeft className="h-4 w-4" />
-              Environments
-            </Link>
-          </Button>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Edit environment</h2>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Update setup for sessions created in {environment.repoFullName}.
-            </p>
-          </div>
-        </div>
+        <SettingsPageHeader
+          title="Edit environment"
+          description={`Update setup for sessions created in ${environment.repoFullName}.`}
+          action={(
+            <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
+              <Link href="/settings/environments">
+                <ArrowLeft className="h-4 w-4" />
+                Environments
+              </Link>
+            </Button>
+          )}
+        />
 
         <section className="rounded-lg border border-border bg-background">
           <FormSection title="Repository">
@@ -174,7 +172,7 @@ export function EditEnvironmentPageClient({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <span className="text-xs leading-5 text-foreground-muted">
+              <span className="text-xs leading-5 text-foreground-secondary">
                 {form.networkMode === "default" ? (
                   <>
                     Your agent can access the{" "}
@@ -203,7 +201,7 @@ export function EditEnvironmentPageClient({
                     <span className="text-sm text-foreground-secondary">
                       Include the default allowlist
                     </span>
-                    <span className="text-xs text-foreground-muted">
+                    <span className="text-xs text-foreground-secondary">
                       Adds common provider, source control, package registry, and development domains.{" "}
                       <DefaultAllowlistSheetTrigger />
                     </span>
@@ -305,7 +303,7 @@ function FormSection({
 }) {
   return (
     <div className="grid gap-5 border-b border-border p-5 last:border-b-0">
-      <h3 className="text-sm font-semibold text-foreground-muted">
+      <h3 className="text-sm font-semibold text-foreground-secondary">
         {title}
       </h3>
       {children}
@@ -338,7 +336,7 @@ function Field({
       <span className="text-sm font-medium text-foreground">{label}</span>
       {children}
       {description && (
-        <span className="text-xs text-foreground-muted">{description}</span>
+        <span className="text-xs text-foreground-secondary">{description}</span>
       )}
     </div>
   );

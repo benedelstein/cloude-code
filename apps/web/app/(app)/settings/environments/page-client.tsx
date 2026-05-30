@@ -22,7 +22,7 @@ import {
   listUserRepoEnvironments,
 } from "@/lib/client-api";
 import type { RepoEnvironmentSummary } from "@repo/shared";
-import { SettingsShell } from "../settings-shell";
+import { SettingsPageHeader, SettingsShell } from "../settings-shell";
 
 const ENVIRONMENT_TABLE_GRID_CLASS = "md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,1fr)_9rem_8rem_12rem]";
 
@@ -92,23 +92,21 @@ export function EnvironmentsPageClient() {
   return (
     <SettingsShell>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Environments</h2>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Repo-specific setup profiles for new agent sessions.
-            </p>
-          </div>
-          <Button asChild className="w-full shadow-none md:w-auto">
-            <Link href="/settings/environments/create">
-              <Plus className="h-4 w-4" />
-              Create environment
-            </Link>
-          </Button>
-        </div>
+        <SettingsPageHeader
+          title="Environments"
+          description="Repo-specific setup profiles for new agent sessions."
+          action={(
+            <Button asChild className="w-full shadow-none md:w-auto">
+              <Link href="/settings/environments/create">
+                <Plus className="h-4 w-4" />
+                Create environment
+              </Link>
+            </Button>
+          )}
+        />
 
         <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-secondary" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -118,7 +116,7 @@ export function EnvironmentsPageClient() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-muted md:grid`}>
+          <div className={`hidden ${ENVIRONMENT_TABLE_GRID_CLASS} gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase text-foreground-secondary md:grid`}>
             <div>Name</div>
             <div>Repo</div>
             <div>Network</div>
@@ -133,7 +131,7 @@ export function EnvironmentsPageClient() {
               <h3 className="text-sm font-medium text-foreground">
                 {query.trim() ? "No matching environments" : "No environments yet"}
               </h3>
-              <p className="mt-1 text-sm text-foreground-muted">
+              <p className="mt-1 text-sm text-foreground-secondary">
                 Create an environment when a repo needs custom setup.
               </p>
             </div>

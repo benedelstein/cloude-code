@@ -99,7 +99,7 @@ export function DefaultAllowlistSheetTrigger({
           </Button>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
             {loading ? (
-              <div className="p-4 text-sm text-foreground-muted">
+              <div className="p-4 text-sm text-foreground-secondary">
                 Loading domains...
               </div>
             ) : (

@@ -3,29 +3,31 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { ArrowUpRight, ChevronRight, Github, LogOut, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
-import { Github, LogOut, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
-import { SettingsShell } from "./settings-shell";
+import { listRepos } from "@/lib/client-api";
+import { SettingsPageHeader, SettingsShell } from "./settings-shell";
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
   "claude-code": { src: "/claude_logo.svg", alt: "Claude" },
   "openai-codex": { src: "/openai_logo.svg", alt: "OpenAI" },
 };
 
+const SETTINGS_ICON_CLASSNAME = "h-4 w-4";
+
 export function SettingsPageClient() {
-  const { user, loading, logout } = useAuth();
+  const { user, logout } = useAuth();
   const providerAuth = useProviderAuth();
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
   const [showSigninPanel, setShowSigninPanel] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] = useState<ProviderId | null>(null);
-  const displayName = user?.name || user?.login || "Your account";
+  const [githubInstallUrl, setGithubInstallUrl] = useState<string | null>(null);
   const signinPanelHandle = providerAuth.getHandle(signinPanelProvider);
 
   useEffect(() => {
@@ -69,11 +71,33 @@ export function SettingsPageClient() {
     }
   };
 
+  useEffect(() => {
+    let stale = false;
+
+    (async () => {
+      try {
+        const response = await listRepos({ limit: 1 });
+        if (!stale) {
+          setGithubInstallUrl(response.installUrl);
+        }
+      } catch {
+        if (!stale) {
+          setGithubInstallUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      stale = true;
+    };
+  }, []);
+
   return (
     <SettingsShell>
       <div className="flex w-full flex-col gap-8">
-        <section className="rounded-2xl border border-border bg-background p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4">
+          <SettingsPageHeader title="Settings" />
+          {/* <section className="rounded-2xl border border-border bg-background p-5">
             <div className="flex items-center gap-4">
               {loading ? (
                 <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
@@ -99,39 +123,39 @@ export function SettingsPageClient() {
                     <h2 className="truncate text-lg font-semibold text-foreground">
                       {displayName}
                     </h2>
-                    <p className="truncate text-sm text-foreground-muted">
+                    <p className="truncate text-sm text-foreground-secondary">
                       {user?.login ? `@${user.login}` : "Signed in"}
                     </p>
                   </>
                 )}
               </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-center shadow-none md:w-auto"
-              onClick={() => void logout()}
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </Button>
-          </div>
-        </section>
+          </section> */}
+        </div>
 
         <SettingsSection
           title="Source control"
           description="Repository access and installation status."
         >
-          <SettingsRow
-            icon={<Github className="h-5 w-5" />}
+          <SettingsItemRow
+            icon={<Github className={SETTINGS_ICON_CLASSNAME} />}
             title="GitHub"
+            titleMeta={<StatusPill tone="success">Connected</StatusPill>}
             description={
               user?.login
                 ? `Connected as ${user.login}`
                 : "Connected to your GitHub account"
             }
-            actionLabel="Connected"
-            tone="success"
+            action={githubInstallUrl
+              ? (
+                <Button asChild variant="outline" size="sm" className="w-full shadow-none md:w-auto">
+                  <Link href={githubInstallUrl} target="_blank" rel="noopener noreferrer">
+                    Update settings
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              )
+              : undefined}
           />
         </SettingsSection>
 
@@ -140,11 +164,10 @@ export function SettingsPageClient() {
           description="Reusable configuration for starting sessions."
         >
           <SettingsLinkRow
-            icon={<SlidersHorizontal className="h-5 w-5" />}
+            icon={<SlidersHorizontal className={SETTINGS_ICON_CLASSNAME} />}
             title="Environments"
             description="Manage repo-specific startup scripts and network access."
             href="/settings/environments"
-            actionLabel="Manage"
           />
         </SettingsSection>
 
@@ -159,7 +182,7 @@ export function SettingsPageClient() {
 
         <SettingsSection
           title="Provider connections"
-          description="Manage model-provider authorization for session creation."
+          description="Manage model-provider authorization."
         >
           {PROVIDER_LIST.map((provider) => {
             const handle = providerAuth.getHandle(provider.id);
@@ -174,6 +197,26 @@ export function SettingsPageClient() {
             );
           })}
         </SettingsSection>
+
+        <SettingsSection
+          title="Other"
+        >
+          <SettingsItemRow
+            icon={<LogOut className={SETTINGS_ICON_CLASSNAME} />}
+            title="Sign out"
+            action={(
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full justify-center shadow-none md:w-auto"
+                onClick={() => void logout()}
+              >
+                Sign out
+              </Button>
+            )}
+          />
+        </SettingsSection>
       </div>
     </SettingsShell>
   );
@@ -185,14 +228,14 @@ function SettingsSection({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-3">
       <div>
         <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        <p className="text-sm text-foreground-muted">{description}</p>
+        {description && <p className="text-sm text-foreground-secondary">{description}</p>}
       </div>
       <div className="overflow-hidden rounded-2xl border border-border bg-background">
         {children}
@@ -206,32 +249,19 @@ function SettingsLinkRow({
   title,
   description,
   href,
-  actionLabel,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
   href: string;
-  actionLabel: string;
 }) {
   return (
-    <Link
+    <SettingsItemRow
+      icon={icon}
+      title={title}
+      description={description}
       href={href}
-      className="flex flex-col gap-4 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/50 md:flex-row md:items-center md:justify-between"
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-muted">
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
-          <p className="truncate text-sm text-foreground-muted">{description}</p>
-        </div>
-      </div>
-      <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground-muted">
-        {actionLabel}
-      </span>
-    </Link>
+    />
   );
 }
 
@@ -270,40 +300,40 @@ function ProviderConnectionRow({
     : handle.requiresReauth ? "Reconnect" : "Connect";
 
   return (
-    <div className="flex flex-col gap-4 border-b border-border px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-muted">
-          <Image
-            src={icon.src}
-            alt={icon.alt}
-            width={20}
-            height={20}
-            className="h-5 w-5"
-          />
+    <SettingsItemRow
+      icon={
+        <Image
+          src={icon.src}
+          alt={icon.alt}
+          width={16}
+          height={16}
+          className="h-4 w-4"
+        />
+      }
+      title={provider.displayName}
+      titleMeta={
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
+          {handle.error && (
+            <span className="text-xs text-danger">{handle.error}</span>
+          )}
         </div>
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-foreground">
-            {provider.displayName}
-          </h3>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
-            {handle.error && (
-              <span className="text-xs text-danger">{handle.error}</span>
-            )}
-          </div>
+      }
+      action={
+        <div className="flex flex-row gap-2">
+          <Button
+            type="button"
+            variant={connected ? "destructiveOutline" : "default"}
+            size="sm"
+            className="w-full shadow-none md:w-auto"
+            disabled={handle.loading || disconnecting}
+            onClick={connected ? onDisconnect : onConnect}
+          >
+            {buttonLabel}
+          </Button>
         </div>
-      </div>
-      <Button
-        type="button"
-        variant={connected ? "outline" : "default"}
-        size="sm"
-        className="w-full shadow-none md:w-auto"
-        disabled={handle.loading || disconnecting}
-        onClick={connected ? onDisconnect : onConnect}
-      >
-        {buttonLabel}
-      </Button>
-    </div>
+      }
+    />
   );
 }
 
@@ -318,48 +348,70 @@ function StatusPill({
     ? "bg-edit-subtle text-edit"
     : tone === "warning"
       ? "bg-warning/10 text-warning"
-      : "bg-muted text-foreground-muted";
+      : "bg-muted text-foreground-secondary";
 
   return (
-    <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${className}`}>
+    <span className={`w-fit rounded-full px-2.5 py-[3px] text-[11px] font-medium ${className}`}>
       {children}
     </span>
   );
 }
 
-function SettingsRow({
+function SettingsItemRow({
   icon,
   title,
+  titleMeta,
   description,
-  actionLabel,
-  tone = "muted",
+  details,
+  action,
+  href,
 }: {
   icon: ReactNode;
   title: string;
-  description: string;
-  actionLabel: string;
-  tone?: "muted" | "success";
+  titleMeta?: ReactNode;
+  description?: string;
+  details?: ReactNode;
+  action?: ReactNode;
+  href?: string;
 }) {
-  return (
-    <div className="flex flex-col gap-4 border-b border-border px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+  const className = "flex flex-col gap-4 border-b border-border px-4 py-3 min-h-[56px] last:border-b-0 md:flex-row md:items-center md:justify-between";
+  const content = (
+    <>
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-muted">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground-secondary">
           {icon}
         </div>
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
-          <p className="truncate text-sm text-foreground-muted">{description}</p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-medium text-foreground">{title}</h3>
+            {titleMeta}
+          </div>
+          {details ?? (
+            <p className="truncate text-sm text-foreground-secondary">{description}</p>
+          )}
         </div>
       </div>
-      <span
-        className={
-          tone === "success"
-            ? "w-fit rounded-full bg-edit-subtle px-2.5 py-1 text-xs font-medium text-edit"
-            : "w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground-muted"
-        }
-      >
-        {actionLabel}
-      </span>
-    </div>
+      <div className="flex flex-row items-center">
+        {action}
+        {href && (
+          <span className="ml-0 flex w-0 overflow-hidden opacity-0 transition-[margin,width,opacity] duration-150 group-hover:ml-2 group-hover:w-4 group-hover:opacity-100">
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          </span>
+        )}
+      </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`${className} group transition-colors hover:bg-muted/50`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }

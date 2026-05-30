@@ -107,6 +107,7 @@ function renderSidebar() {
 
 describe("SessionSidebar", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.setSystemTime(new Date("2026-05-24T12:10:00.000Z"));
     vi.stubGlobal("matchMedia", vi.fn(() => ({
       matches: false,
@@ -241,6 +242,33 @@ describe("SessionSidebar", () => {
     expect(mocks.push).toHaveBeenCalledWith(
       "/dashboard?repoId=100&repoFullName=acme%2Frepo",
     );
+  });
+
+  it("opens account actions from the profile menu", async () => {
+    renderSidebar();
+
+    const accountMenuTrigger = screen.getByRole("button", {
+      name: "Open account menu",
+    });
+    fireEvent.pointerDown(accountMenuTrigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(accountMenuTrigger, { pointerType: "mouse" });
+    fireEvent.click(accountMenuTrigger);
+    fireEvent.keyDown(accountMenuTrigger, { key: "Enter", code: "Enter" });
+
+    expect(await screen.findByText("Ben")).toBeTruthy();
+    expect(screen.getByText("@ben")).toBeTruthy();
+
+    const settingsItem = await screen.findByRole("menuitem", {
+      name: "Settings",
+    });
+    expect(settingsItem.getAttribute("href")).toBe("/settings");
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
+    expect(mocks.logout).toHaveBeenCalledTimes(1);
   });
 
   it("optimistically removes deleted sessions without showing a row spinner", async () => {
