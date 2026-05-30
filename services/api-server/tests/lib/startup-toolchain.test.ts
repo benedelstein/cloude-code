@@ -5,10 +5,13 @@ import type { Logger } from "@repo/shared";
 import type { WorkersSpriteClient } from "../../src/shared/integrations/sprites/WorkersSpriteClient";
 import { DEFAULT_NETWORK_POLICY } from "../../src/shared/integrations/sprites/network-policy";
 import {
+  CLAUDE_CODE_STARTUP_CHECK_ID,
+  MIN_CLAUDE_CODE_CLI_VERSION,
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
   ensureSpriteStartupToolchain,
   getProviderStartupToolchainChecks,
 } from "../../src/shared/integrations/sprites/startup-toolchain";
+import { getClaudeStartupToolchainChecks } from "../../src/shared/integrations/sprites/startup-toolchain/providers/claude";
 import { getOpenAICodexStartupToolchainChecks } from "../../src/shared/integrations/sprites/startup-toolchain/providers/openai-codex";
 
 const MIN_CODEX_CLI_VERSION = "0.130.0";
@@ -45,7 +48,7 @@ describe("startup toolchain dispatch", () => {
     }).map((check) => check.id)).toEqual(["openai-codex.cli"]);
     expect(getProviderStartupToolchainChecks("claude-code", {
       logger: createLogger(),
-    })).toEqual([]);
+    }).map((check) => check.id)).toEqual([CLAUDE_CODE_STARTUP_CHECK_ID]);
   });
 
   it("skips execution when the startup checkpoint contract is current", async () => {
@@ -114,6 +117,84 @@ describe("startup toolchain dispatch", () => {
       );
       expect(source).not.toMatch(/openai-codex|claude-code|codex --version|install\.sh/);
     }
+  });
+});
+
+describe("Claude Code startup check", () => {
+  it("runs one Claude startup bash script", async () => {
+    const sprite = createSprite([{
+      stdout: "claude is current: 2.1.154\n",
+      exitCode: 0,
+    }]);
+    const [check] = getClaudeStartupToolchainChecks({
+      logger: createLogger(),
+    });
+
+    const result = await check!.ensureReady({ sprite });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.value).toMatchObject({
+      id: CLAUDE_CODE_STARTUP_CHECK_ID,
+      status: "ready",
+      requiredVersion: MIN_CLAUDE_CODE_CLI_VERSION,
+    });
+    expect(sprite.execHttp).toHaveBeenCalledOnce();
+    expect(sprite.execHttp).toHaveBeenCalledWith(
+      expect.stringContaining("bash -lc"),
+    );
+    expect(sprite.execHttp).toHaveBeenCalledWith(
+      expect.stringContaining(`min_version="${MIN_CLAUDE_CODE_CLI_VERSION}"`),
+    );
+  });
+
+  it("updates stale Claude Code and verifies the version", async () => {
+    const sprite = createSprite([{
+      stdout: "claude is ready: 2.1.154\n",
+      exitCode: 0,
+    }]);
+    const [check] = getClaudeStartupToolchainChecks({
+      logger: createLogger(),
+    });
+
+    const result = await check!.ensureReady({ sprite });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const command = vi.mocked(sprite.execHttp).mock.calls[0]?.[0] as string;
+    expect(command).toContain("read_claude_version()");
+    expect(command).toContain("version_at_least()");
+    expect(command).toContain("claude update");
+    expect(command).toContain("claude is ready");
+  });
+
+  it("fails when the startup script fails", async () => {
+    const sprite = createSprite([{
+      stdout: "",
+      stderr: "claude version 2.1.153 is below required 2.1.154 after update\n",
+      exitCode: 1,
+    }]);
+    const [check] = getClaudeStartupToolchainChecks({
+      logger: createLogger(),
+    });
+
+    const result = await check!.ensureReady({ sprite });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toMatchObject({
+      code: "CHECK_FAILED",
+      provider: "claude-code",
+      checkId: CLAUDE_CODE_STARTUP_CHECK_ID,
+      requiredVersion: MIN_CLAUDE_CODE_CLI_VERSION,
+      exitCode: 1,
+    });
   });
 });
 

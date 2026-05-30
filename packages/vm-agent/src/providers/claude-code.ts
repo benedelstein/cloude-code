@@ -164,11 +164,19 @@ const getPermissionMode = (agentMode: AgentMode): PermissionMode => {
 const resolveClaudeModelId = (model: ClaudeModel): string => {
   switch (model) {
     case "opus":
-      return "claude-opus-4-7[1m]";
+      return "claude-opus-4-8";
+    case "opus-1m":
+      return "claude-opus-4-8[1m]";
     case "sonnet":
       return "sonnet";
     case "haiku":
       return "haiku";
+    case "opus-4-7":
+      return "claude-opus-4-7";
+    case "opus-4-7-1m":
+      return "claude-opus-4-7[1m]";
+    case "opus-4-6":
+      return "claude-opus-4-6";
     default: {
       const _exhaustive: never = model;
       throw new Error(`Unhandled Claude model: ${_exhaustive}`);

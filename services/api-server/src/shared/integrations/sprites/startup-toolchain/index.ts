@@ -16,6 +16,10 @@ import type {
 
 export * from "./types";
 export {
+  CLAUDE_CODE_STARTUP_CHECK_ID,
+  MIN_CLAUDE_CODE_CLI_VERSION,
+} from "./providers/claude";
+export {
   OPENAI_CODEX_INSTALL_SCRIPT_URL,
   OPENAI_CODEX_STARTUP_CHECK_ID,
 } from "./providers/openai-codex";
@@ -26,7 +30,7 @@ export function getProviderStartupToolchainChecks(
 ): StartupToolchainCheck[] {
   switch (providerId) {
     case "claude-code":
-      return getClaudeStartupToolchainChecks();
+      return getClaudeStartupToolchainChecks({ logger: deps.logger });
     case "openai-codex":
       return getOpenAICodexStartupToolchainChecks({
         logger: deps.logger,
