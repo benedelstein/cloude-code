@@ -10,7 +10,6 @@ export interface GitProxyServiceDeps {
   secretProvider: GitProxySecretProvider;
   repoPolicyProvider: GitProxyRepoPolicyProvider;
   logger: Logger;
-  fetchGitHub?: typeof fetch;
 }
 
 export interface GitProxyResult {
@@ -23,14 +22,12 @@ export class GitProxyService {
   private readonly secretProvider: GitProxySecretProvider;
   private readonly repoPolicyProvider: GitProxyRepoPolicyProvider;
   private readonly logger: Logger;
-  private readonly fetchGitHub: typeof fetch;
 
   constructor(deps: GitProxyServiceDeps) {
     this.tokenProvider = deps.tokenProvider;
     this.secretProvider = deps.secretProvider;
     this.repoPolicyProvider = deps.repoPolicyProvider;
     this.logger = deps.logger.scope("git-proxy");
-    this.fetchGitHub = deps.fetchGitHub ?? fetch;
   }
 
   async handleRequest(request: Request, path: string): Promise<GitProxyResult> {
@@ -134,7 +131,7 @@ export class GitProxyService {
     }
 
     try {
-      const response = await this.fetchGitHub(targetUrl, {
+      const response = await globalThis.fetch(targetUrl, {
         method: originalRequest.method,
         headers,
         body,

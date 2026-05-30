@@ -18,12 +18,18 @@ export const getSessionToken = cache(async (): Promise<string | null> => {
  * Next.js proxy) because there is no browser cookie jar available here.
  * https://nextjs.org/docs/app/guides/authentication#creating-a-data-access-layer-dal
  */
-export const verifySession = cache(async (): Promise<UserInfo> => {
+export const getVerifiedSessionToken = cache(async (): Promise<string> => {
   const sessionToken = await getSessionToken();
 
   if (!sessionToken) {
     redirect("/");
   }
+
+  return sessionToken;
+});
+
+export const verifySession = cache(async (): Promise<UserInfo> => {
+  const sessionToken = await getVerifiedSessionToken();
 
   try {
     return await getAuthenticatedUser(sessionToken);

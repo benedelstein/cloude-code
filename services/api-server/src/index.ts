@@ -8,6 +8,7 @@ import {
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
+  buildRepoEnvironmentsRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
   buildWebhooksRoutes,
@@ -58,6 +59,7 @@ app.route("/models", buildModelsRoutes());
 
 // Protected routes
 app.route("/repos", buildReposRoutes());
+app.route("/", buildRepoEnvironmentsRoutes());
 app.route("/sessions", buildSessionsRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
 

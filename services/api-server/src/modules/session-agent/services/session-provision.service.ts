@@ -1,12 +1,21 @@
-import type { ClientState, Logger, SessionStatus } from "@repo/shared";
+import {
+  dedent,
+  type ClientState,
+  type Logger,
+  type SessionEnvironmentSnapshot,
+  type SessionStatus,
+} from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
-import { buildNetworkPolicy } from "@/shared/integrations/sprites/network-policy";
+import {
+  buildBootstrapNetworkPolicy,
+  buildFinalNetworkPolicy,
+} from "@/shared/integrations/sprites/network-policy";
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
-import { configureGitRemote } from "@/shared/integrations/git/git-setup.service";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
+import { SessionStartupScriptService } from "./session-startup-script.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -21,6 +30,7 @@ export interface SessionProvisionServiceDeps {
 
   getServerState: () => ServerState;
   getClientState: () => ClientState;
+  getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   updateServerState: (partial: Partial<ServerState>) => void;
   updatePartialState: (partial: Partial<ClientState>) => void;
   synthesizeStatus: () => SessionStatus;
@@ -45,11 +55,13 @@ export class SessionProvisionService {
   private readonly spritesCoordinator: SpritesCoordinator;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
+  private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
+  private readonly startupScriptService: SessionStartupScriptService;
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
   private ensureProvisionedPromise: Promise<void> | null = null;
@@ -60,11 +72,13 @@ export class SessionProvisionService {
     this.spritesCoordinator = deps.spritesCoordinator;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
+    this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.updateServerState = deps.updateServerState;
     this.updatePartialState = deps.updatePartialState;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
     this.githubTokenProvider = deps.githubTokenProvider;
+    this.startupScriptService = new SessionStartupScriptService(this.logger);
   }
 
   /**
@@ -82,7 +96,8 @@ export class SessionProvisionService {
   private async provision(): Promise<void> {
     try {
       const serverState = this.getServerState();
-      if (!serverState.spriteName) {
+      let spriteName = serverState.spriteName;
+      if (!spriteName) {
         this.updatePartialState({ status: this.synthesizeStatus() });
         this.logger.debug("Provisioning sprite for session", {
           fields: { sessionId: serverState.sessionId },
@@ -92,27 +107,29 @@ export class SessionProvisionService {
           name: serverState.sessionId!,
         });
 
-        // Lock down outbound network access to known-good domains
+        // For provisioning, allow network access to known-good domains
         const sprite = new WorkersSpriteClient(
           spriteResponse.name,
           this.env.SPRITES_API_KEY,
           this.env.SPRITES_API_URL,
         );
         const workerHostname = new URL(this.env.WORKER_URL).hostname;
-        const networkPolicy = buildNetworkPolicy([
-          { domain: workerHostname, action: "allow" },
-        ]);
+        const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
         await sprite.setNetworkPolicy(networkPolicy);
 
-        this.updateServerState({ spriteName: spriteResponse.name });
+        spriteName = spriteResponse.name;
+        this.updateServerState({ spriteName });
         this.updatePartialState({ status: this.synthesizeStatus() });
       }
 
-      const spriteName = this.getServerState().spriteName;
-      if (spriteName) {
-        await this.ensureStartupToolchain(spriteName);
+      if (!spriteName) {
+        throw new Error("Sprite name is missing");
       }
 
+      // Update environment toolchain packages
+      await this.ensureStartupToolchain(spriteName);
+
+      // Clone Repo
       if (!this.getServerState().repoCloned) {
         this.updatePartialState({ status: this.synthesizeStatus() });
         await this.cloneRepo(spriteName!);
@@ -121,6 +138,16 @@ export class SessionProvisionService {
           status: this.synthesizeStatus(),
           lastError: null,
         });
+      }
+
+      if (!this.getServerState().startupScriptCompleted) {
+        await this.tryRunStartupScript(spriteName);
+        this.updateServerState({ startupScriptCompleted: true });
+      }
+
+      if (!this.getServerState().finalNetworkPolicyApplied) {
+        await this.applyFinalNetworkPolicy(spriteName);
+        this.updateServerState({ finalNetworkPolicyApplied: true });
       }
     } catch (error) {
       const errorMessage =
@@ -256,7 +283,7 @@ export class SessionProvisionService {
       {},
     );
     const actualBaseBranch = branchResult.stdout.trim() || "main";
-    if (actualBaseBranch !== clientState.baseBranch && clientState.baseBranch) {
+    if (clientState.baseBranch && actualBaseBranch !== clientState.baseBranch) {
       this.logger.warn("Base branch does not match actual base branch", {
         fields: {
           configuredBaseBranch: clientState.baseBranch,
@@ -264,17 +291,76 @@ export class SessionProvisionService {
         },
       });
     }
-    this.updatePartialState({ baseBranch: actualBaseBranch });
+    if (actualBaseBranch !== clientState.baseBranch) {
+      this.updatePartialState({ baseBranch: actualBaseBranch });
+    }
 
     const gitProxySecret = this.ensureGitProxySecret();
+    const environmentSnapshot = this.getEnvironmentSnapshot();
+    const fetchUrl = environmentSnapshot.network.mode === "locked"
+      ? cloneUrl
+      : githubRemoteUrl;
 
     // Configure remote URLs, git identity, and proxy auth header
-    await configureGitRemote(sprite, {
-      workspaceDir: WORKSPACE_DIR,
-      githubRemoteUrl,
-      cloneUrl,
-      proxyBaseUrl,
-      gitProxySecret,
-    });
+    await sprite.execHttp(dedent`
+      set -e
+      cd ${WORKSPACE_DIR}
+      git remote set-url origin ${fetchUrl}
+      git remote set-url --push origin ${cloneUrl}
+      git config user.email "agent@cloudecode.dev"
+      git config user.name "Cloude Code"
+      git config --unset-all http.extraHeader || true
+      git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true
+      git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${gitProxySecret}"
+    `, {});
   }
+
+  private async tryRunStartupScript(spriteName: string): Promise<void> {
+    const environmentSnapshot = this.getEnvironmentSnapshot();
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    try {
+      await this.startupScriptService.run({
+        sprite,
+        script: environmentSnapshot.startupScript,
+        workspaceDir: WORKSPACE_DIR,
+        env: environmentSnapshot.plainEnvVars,
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      this.logger.warn("Continuing after session startup script failure", {
+        error,
+        fields: { sessionId: this.getServerState().sessionId },
+      });
+      this.updatePartialState({
+        lastError: errorMessage,
+        status: this.synthesizeStatus(),
+      });
+    }
+  }
+
+  private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {
+    const environmentSnapshot = this.getEnvironmentSnapshot();
+    const providerId = this.getClientState().agentSettings.provider;
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    const workerHostname = new URL(this.env.WORKER_URL).hostname;
+
+    await sprite.setNetworkPolicy(buildFinalNetworkPolicy({
+      workerHostname,
+      providerId,
+      network: environmentSnapshot.network,
+    }));
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

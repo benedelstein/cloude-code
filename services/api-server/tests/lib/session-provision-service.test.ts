@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger } from "@repo/shared";
+import type { ClientState, Logger, SessionEnvironmentSnapshot } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { SessionProvisionService } from "../../src/modules/session-agent/services/session-provision.service";
@@ -9,7 +9,6 @@ const mockState = vi.hoisted(() => ({
   setNetworkPolicy: vi.fn(),
   execHttp: vi.fn(),
   ensureSpriteStartupToolchain: vi.fn(),
-  configureGitRemote: vi.fn(),
   getReadOnlyTokenForRepo: vi.fn(),
 }));
 
@@ -28,15 +27,12 @@ vi.mock("@/shared/integrations/sprites/WorkersSpriteClient", () => {
 });
 
 vi.mock("@/shared/integrations/sprites/network-policy", () => ({
-  buildNetworkPolicy: (rules: unknown[]) => rules,
+  buildBootstrapNetworkPolicy: () => [{ domain: "bootstrap", action: "allow" }],
+  buildFinalNetworkPolicy: () => [{ domain: "final", action: "allow" }],
 }));
 
 vi.mock("@/shared/integrations/sprites/startup-toolchain", () => ({
   ensureSpriteStartupToolchain: mockState.ensureSpriteStartupToolchain,
-}));
-
-vi.mock("@/shared/integrations/git/git-setup.service", () => ({
-  configureGitRemote: mockState.configureGitRemote,
 }));
 
 function createLogger(): Logger {
@@ -75,6 +71,24 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentProcessId: null,
     activeUserMessageId: null,
     startupToolchain: null,
+    startupScriptCompleted: false,
+    finalNetworkPolicyApplied: false,
+    ...overrides,
+  };
+}
+
+function createEnvironmentSnapshot(
+  overrides: Partial<SessionEnvironmentSnapshot> = {},
+): SessionEnvironmentSnapshot {
+  return {
+    sourceEnvironmentId: null,
+    sourceEnvironmentName: null,
+    repoId: 1,
+    network: { mode: "default" },
+    plainEnvVars: {},
+    startupScript: null,
+    resolvedAt: "2026-05-29T00:00:00.000Z",
+    schemaVersion: 1,
     ...overrides,
   };
 }
@@ -83,6 +97,7 @@ function createService(
   serverState: ServerState,
   clientState: ClientState,
   envOverrides: Partial<Env> = {},
+  environmentSnapshot: SessionEnvironmentSnapshot = createEnvironmentSnapshot(),
 ) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
@@ -106,6 +121,7 @@ function createService(
     spritesCoordinator: spritesCoordinator as never,
     getServerState: () => serverState,
     getClientState: () => clientState,
+    getEnvironmentSnapshot: () => environmentSnapshot,
     updateServerState,
     updatePartialState,
     synthesizeStatus: () => "provisioning",
@@ -157,10 +173,9 @@ describe("SessionProvisionService startup toolchain", () => {
       ok: true,
       value: "readonly-token",
     });
-    mockState.configureGitRemote.mockResolvedValue(undefined);
   });
 
-  it("runs startup toolchain after network policy and before clone", async () => {
+  it("runs startup toolchain after bootstrap network policy and before clone", async () => {
     const serverState = createServerState();
     const { service, updateServerState } = createService(
       serverState,
@@ -175,6 +190,7 @@ describe("SessionProvisionService startup toolchain", () => {
       "startupToolchain",
       "cloneCheck",
       "cloneRepo",
+      "setNetworkPolicy",
     ]);
     expect(updateServerState).toHaveBeenCalledWith({
       startupToolchain: {
@@ -233,6 +249,192 @@ describe("SessionProvisionService startup toolchain", () => {
       "setNetworkPolicy",
       "startupToolchain",
     ]);
-    expect(mockState.configureGitRemote).not.toHaveBeenCalled();
+  });
+
+  it("keeps fetch pointed at GitHub by default", async () => {
+    const serverState = createServerState();
+    const { service } = createService(serverState, createClientState());
+
+    await service.ensureProvisioned();
+
+    const remoteConfigCommand = getRemoteConfigCommand();
+    expect(remoteConfigCommand).toContain(
+      "git remote set-url origin https://github.com/ben/repo.git",
+    );
+    expect(remoteConfigCommand).toContain(
+      "git remote set-url --push origin https://worker.test/git-proxy/session-1/github.com/ben/repo.git",
+    );
+    expect(remoteConfigCommand).toContain(
+      "git config --add \"http.https://worker.test/git-proxy/session-1/.extraHeader\" \"Authorization: Bearer git-proxy-secret\"",
+    );
+  });
+
+  it("uses the git proxy for fetch in locked network mode", async () => {
+    const serverState = createServerState();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({ network: { mode: "locked" } }),
+    );
+
+    await service.ensureProvisioned();
+
+    expect(getRemoteConfigCommand()).toContain(
+      "git remote set-url origin https://worker.test/git-proxy/session-1/github.com/ben/repo.git",
+    );
+  });
+
+  it("runs startup script before applying final network policy", async () => {
+    const serverState = createServerState();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+    );
+    mockState.execHttp.mockImplementation(async (command: string) => {
+      if (command.startsWith("test -d")) {
+        mockState.events.push("cloneCheck");
+        return { stdout: "empty", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git -c")) {
+        mockState.events.push("cloneRepo");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git rev-parse")) {
+        return { stdout: "main", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    const environmentSnapshot = {
+      sourceEnvironmentId: null,
+      sourceEnvironmentName: null,
+      repoId: 1,
+      network: { mode: "locked" as const },
+      plainEnvVars: {},
+      startupScript: "pnpm install",
+      resolvedAt: "2026-05-29T00:00:00.000Z",
+      schemaVersion: 1 as const,
+    };
+    const serviceWithScript = new SessionProvisionService({
+      logger: createLogger(),
+      env: {
+        SPRITES_API_KEY: "sprites-key",
+        SPRITES_API_URL: "https://api.sprites.test",
+        WORKER_URL: "https://worker.test",
+      } as Env,
+      spritesCoordinator: {
+        createSprite: vi.fn(async () => {
+          mockState.events.push("createSprite");
+          return { name: "sprite-1", status: "running" };
+        }),
+      } as never,
+      getServerState: () => serverState,
+      getClientState: () => createClientState(),
+      getEnvironmentSnapshot: () => environmentSnapshot,
+      updateServerState: (partial) => Object.assign(serverState, partial),
+      updatePartialState: vi.fn(),
+      synthesizeStatus: () => "provisioning",
+      ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
+      githubTokenProvider: {
+        getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
+      },
+    });
+
+    await serviceWithScript.ensureProvisioned();
+
+    expect(mockState.events).toEqual([
+      "createSprite",
+      "setNetworkPolicy",
+      "startupToolchain",
+      "cloneCheck",
+      "cloneRepo",
+      "startupScript",
+      "setNetworkPolicy",
+    ]);
+    expect(service).toBeDefined();
+  });
+
+  it("records startup script failure and continues provisioning", async () => {
+    const serverState = createServerState();
+    const updatePartialState = vi.fn();
+    mockState.execHttp.mockImplementation(async (command: string) => {
+      if (command.startsWith("test -d")) {
+        mockState.events.push("cloneCheck");
+        return { stdout: "empty", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git -c")) {
+        mockState.events.push("cloneRepo");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git rev-parse")) {
+        return { stdout: "main", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return {
+          stdout: "",
+          stderr: "bash: line 1: pnpm: command not found",
+          exitCode: 127,
+        };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    const service = new SessionProvisionService({
+      logger: createLogger(),
+      env: {
+        SPRITES_API_KEY: "sprites-key",
+        SPRITES_API_URL: "https://api.sprites.test",
+        WORKER_URL: "https://worker.test",
+      } as Env,
+      spritesCoordinator: {
+        createSprite: vi.fn(async () => {
+          mockState.events.push("createSprite");
+          return { name: "sprite-1", status: "running" };
+        }),
+      } as never,
+      getServerState: () => serverState,
+      getClientState: () => createClientState(),
+      getEnvironmentSnapshot: () => createEnvironmentSnapshot({
+        startupScript: "pnpm install",
+      }),
+      updateServerState: (partial) => Object.assign(serverState, partial),
+      updatePartialState,
+      synthesizeStatus: () => "ready",
+      ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
+      githubTokenProvider: {
+        getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
+      },
+    });
+
+    await service.ensureProvisioned();
+
+    expect(mockState.events).toEqual([
+      "createSprite",
+      "setNetworkPolicy",
+      "startupToolchain",
+      "cloneCheck",
+      "cloneRepo",
+      "startupScript",
+      "setNetworkPolicy",
+    ]);
+    expect(serverState.startupScriptCompleted).toBe(true);
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
+    expect(updatePartialState).toHaveBeenCalledWith({
+      lastError: "Startup script failed (exit 127): bash: line 1: pnpm: command not found",
+      status: "ready",
+    });
   });
 });
+
+function getRemoteConfigCommand(): string {
+  const remoteConfigCall = mockState.execHttp.mock.calls.find(([command]) =>
+    String(command).includes("git remote set-url origin"));
+  expect(remoteConfigCall).toBeDefined();
+  return String(remoteConfigCall?.[0]);
+}

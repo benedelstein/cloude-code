@@ -244,7 +244,7 @@ function AppShellLayout({
       <SidebarInset className="overflow-hidden bg-background-secondary">
         <div className="sticky top-0 z-10 h-0">
           <div
-            className="pt-1 pb-8 has-[.header-card:empty]:pt-0 has-[.header-card:empty]:pb-0"
+            className="pt-1 pb-8 has-[.header-card>div:empty]:pt-0 has-[.header-card>div:empty]:pb-0"
             style={{
               background: "linear-gradient(to bottom, var(--background-secondary) 0, var(--background-secondary) 60px, transparent 100%)",
             }}

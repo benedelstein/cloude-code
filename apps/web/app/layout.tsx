@@ -1,18 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Caprasimo } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Sonner } from "@/components/ui/sonner";
 
-const caprasimo = Caprasimo({
-  subsets: ["latin"],
-  weight: "400",
+const caprasimo = localFont({
+  src: "./fonts/caprasimo-latin-400-normal.woff2",
   variable: "--font-caprasimo",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Cloude Code",
+  title: {
+    default: "Cloude Code",
+    template: "%s | Cloude Code",
+  },
   description: "Develop in the cloud.",
+  openGraph: {
+    title: {
+      default: "Cloude Code",
+      template: "%s | Cloude Code",
+    },
+    description: "Develop in the cloud.",
+    siteName: "Cloude Code",
+  },
 };
 
 export const viewport: Viewport = {

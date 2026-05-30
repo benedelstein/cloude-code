@@ -1,10 +1,11 @@
 import "server-only";
 
 import type {
-  UserInfo,
-  TokenResponse,
   LogoutResponse,
   SessionInfoResponse,
+  TokenResponse,
+  UserInfo,
+  UserRepoEnvironmentResponse,
 } from "@repo/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -89,6 +90,13 @@ export async function serverLogout(token: string): Promise<LogoutResponse> {
     token,
     method: "POST",
   });
+}
+
+export async function getServerUserRepoEnvironment(
+  environmentId: string,
+  token: string,
+): Promise<UserRepoEnvironmentResponse> {
+  return serverApiFetch(`/environments/${environmentId}`, { token });
 }
 
 export { ServerApiError };

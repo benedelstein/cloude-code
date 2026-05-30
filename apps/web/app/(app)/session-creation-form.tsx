@@ -3,14 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { listRepos, searchRepos, listBranches, createSession, uploadAttachments, deleteAttachment, type Repo } from "@/lib/client-api";
+import {
+  listBranches,
+  createSession,
+  uploadAttachments,
+  deleteAttachment,
+} from "@/lib/client-api";
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
-import type { Branch, ListReposResponse, ListBranchesResponse, ProviderId } from "@repo/shared";
+import type {
+  Branch,
+  ListBranchesResponse,
+  ProviderId,
+} from "@repo/shared";
 import { PROVIDERS, isProviderModel } from "@repo/shared";
-import { readCache, writeCache, CACHE_KEY_REPOS, branchCacheKey } from "@/lib/swr-cache";
+import { readCache, writeCache, branchCacheKey } from "@/lib/swr-cache";
 import { storeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
 import {
   buildOptimisticUserMessage,
@@ -25,9 +34,11 @@ import { SendButton } from "@/components/chat/send-button";
 import type { AgentMode } from "@repo/shared";
 import {
   BranchSelector,
-  RepoSelector,
   mergeBranches,
 } from "./session-creation-selectors";
+import { RepoSelector } from "./repo-selector";
+import { useRepoPicker } from "./use-repo-picker";
+import { SessionEnvironmentSelector } from "./session-environment-selector";
 
 const LAST_PROVIDER_MODEL_SELECTION_KEY = "lastProviderModelSelection";
 
@@ -59,18 +70,8 @@ export function SessionCreationForm() {
   const requestedRepoFullName = searchParams.get("repoFullName") ?? null;
   const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
 
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [installUrl, setInstallUrl] = useState<string | null>(null);
-  const [reposLoading, setReposLoading] = useState(true);
-  const [reposCursor, setReposCursor] = useState<string | null>(null);
-  const [reposLoadingMore, setReposLoadingMore] = useState(false);
-  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
-  const [repoSearchQuery, setRepoSearchQuery] = useState("");
-  const [repoSearchResults, setRepoSearchResults] = useState<Repo[]>([]);
-  const [repoSearchLoading, setRepoSearchLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [branchesCursor, setBranchesCursor] = useState<string | null>(null);
@@ -80,13 +81,35 @@ export function SessionCreationForm() {
   const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedAgentMode, setSelectedAgentMode] = useState<AgentMode>("edit");
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [showSigninPanel, setShowSigninPanel] = useState(false);
   const [signinPanelProvider, setSigninPanelProvider] = useState<ProviderId>("claude-code");
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const reposRef = useRef<Repo[]>([]);
   const branchesRef = useRef<Branch[]>([]);
   const selectedRepoIdRef = useRef<number | null>(null);
+  const {
+    visibleRepos,
+    installUrl,
+    loading: reposLoading,
+    cursor: reposCursor,
+    loadingMore: reposLoadingMore,
+    selectedRepo,
+    setSelectedRepo,
+    searchQuery: repoSearchQuery,
+    setSearchQuery: setRepoSearchQuery,
+    searching: repoSearchLoading,
+    isSearchMode: isRepoSearchMode,
+    open: repoPickerOpen,
+    setOpen: setRepoPickerOpen,
+    loadMore: loadMoreRepos,
+  } = useRepoPicker({
+    requestedRepoId: hasRequestedRepo ? requestedRepoId : null,
+    requestedRepoFullName,
+    useLastSelectedRepo: true,
+    autoSelectSingleRepo: true,
+    openOnMissingRequestedRepo: true,
+  });
 
   const providerAuth = useProviderAuth();
   const activeHandle = selectedProvider
@@ -97,39 +120,12 @@ export function SessionCreationForm() {
   const isProviderLoading = activeHandle?.loading ?? false;
 
   useEffect(() => {
-    reposRef.current = repos;
-  }, [repos]);
-
-  useEffect(() => {
     selectedRepoIdRef.current = selectedRepo?.id ?? null;
   }, [selectedRepo]);
 
   useEffect(() => {
     branchesRef.current = branches;
   }, [branches]);
-
-  function mergeRepos(existingRepos: Repo[], incomingRepos: Repo[]): Repo[] {
-    const reposById = new Map<number, Repo>();
-
-    for (const repo of existingRepos) {
-      reposById.set(repo.id, repo);
-    }
-
-    for (const repo of incomingRepos) {
-      reposById.set(repo.id, repo);
-    }
-
-    return Array.from(reposById.values());
-  }
-
-  function findRequestedRepo(repoList: Repo[]): Repo | undefined {
-    if (!hasRequestedRepo) {
-      return undefined;
-    }
-    return repoList.find((repo) =>
-      repo.id === requestedRepoId || repo.fullName === requestedRepoFullName,
-    );
-  }
 
   const {
     attachments,
@@ -342,183 +338,6 @@ export function SessionCreationForm() {
   }
 
   useEffect(() => {
-    // Phase 1: Restore from cache (synchronous, instant render)
-    const cached = readCache<ListReposResponse>(CACHE_KEY_REPOS);
-    if (cached) {
-      setRepos(cached.data.repos);
-      setInstallUrl(cached.data.installUrl);
-      setReposCursor(cached.data.cursor);
-      setReposLoading(false);
-
-      const requestedRepo = findRequestedRepo(cached.data.repos);
-      const lastRepoId = localStorage.getItem("lastRepoId");
-      const lastRepo = lastRepoId
-        ? cached.data.repos.find((r) => r.id === Number(lastRepoId))
-        : undefined;
-      if (requestedRepo) {
-        setSelectedRepo(requestedRepo);
-      } else if (lastRepo) {
-        setSelectedRepo(lastRepo);
-      } else if (cached.data.repos.length === 1) {
-        setSelectedRepo(cached.data.repos[0]);
-      }
-    }
-
-    // Phase 2: Revalidate in the background (always runs)
-    (async () => {
-      try {
-        const data = await listRepos();
-        writeCache(CACHE_KEY_REPOS, data);
-        setRepos(data.repos);
-        setInstallUrl(data.installUrl);
-        setReposCursor(data.cursor);
-
-        setSelectedRepo((currentSelected) => {
-          const requestedRepo = findRequestedRepo(data.repos);
-          if (requestedRepo) {
-            return requestedRepo;
-          }
-
-          if (currentSelected) {
-            const stillLoaded = data.repos.find((repo) => repo.id === currentSelected.id);
-            return stillLoaded ?? currentSelected;
-          }
-
-          const lastRepoId = localStorage.getItem("lastRepoId");
-          const lastRepo = lastRepoId
-            ? data.repos.find((r) => r.id === Number(lastRepoId))
-            : undefined;
-          if (lastRepo) { return lastRepo; }
-          if (data.repos.length === 1 && !data.cursor) { return data.repos[0]; }
-          return null;
-        });
-      } catch (err) {
-        if (!cached) {
-          toast.error("Failed to fetch repositories", { description: (err as Error).message });
-        }
-      } finally {
-        setReposLoading(false);
-      }
-    })();
-  }, [hasRequestedRepo, requestedRepoFullName, requestedRepoId]);
-
-  useEffect(() => {
-    if (!hasRequestedRepo || !requestedRepoFullName) {
-      return;
-    }
-    if (selectedRepo?.id === requestedRepoId) {
-      return;
-    }
-
-    let stale = false;
-    const timer = setTimeout(async () => {
-      try {
-        const data = await searchRepos(requestedRepoFullName, { limit: 10 });
-        if (stale) { return; }
-        const requestedRepo = findRequestedRepo(data.repos);
-        if (!requestedRepo) {
-          return;
-        }
-        setRepos((currentRepos) => mergeRepos(currentRepos, [requestedRepo]));
-        setSelectedRepo(requestedRepo);
-      } catch {
-        if (!stale) {
-          setRepoSearchQuery(requestedRepoFullName);
-          setRepoPickerOpen(true);
-        }
-      }
-    }, 0);
-
-    return () => {
-      stale = true;
-      clearTimeout(timer);
-    };
-  }, [
-    hasRequestedRepo,
-    requestedRepoFullName,
-    requestedRepoId,
-    selectedRepo?.id,
-  ]);
-
-  // Debounced server-side repo search. When the input has a value, we hit
-  // /repos/search and replace the displayed list with those results. When the
-  // input is empty, we revert to the paginated browse list.
-  useEffect(() => {
-    const trimmedQuery = repoSearchQuery.trim();
-    if (trimmedQuery.length === 0) {
-      setRepoSearchResults([]);
-      setRepoSearchLoading(false);
-      return;
-    }
-
-    let stale = false;
-    setRepoSearchLoading(true);
-    const timer = setTimeout(async () => {
-      try {
-        const data = await searchRepos(trimmedQuery);
-        if (stale) { return; }
-        setRepoSearchResults(data.repos);
-      } catch (error) {
-        if (stale) { return; }
-        toast.error("Repo search failed", {
-          description: error instanceof Error ? error.message : "Unknown error",
-        });
-        setRepoSearchResults([]);
-      } finally {
-        if (!stale) { setRepoSearchLoading(false); }
-      }
-    }, 200);
-
-    return () => {
-      stale = true;
-      clearTimeout(timer);
-    };
-  }, [repoSearchQuery]);
-
-  // Reset the search input when the picker closes so reopening starts clean.
-  useEffect(() => {
-    if (!repoPickerOpen && repoSearchQuery !== "") {
-      setRepoSearchQuery("");
-    }
-  }, [repoPickerOpen, repoSearchQuery]);
-
-  async function loadMoreRepos(): Promise<void> {
-    if (!reposCursor || reposLoadingMore) {
-      return;
-    }
-
-    setReposLoadingMore(true);
-
-    try {
-      const data = await listRepos({ cursor: reposCursor });
-      const nextRepos = mergeRepos(reposRef.current, data.repos);
-      const nextData: ListReposResponse = {
-        repos: nextRepos,
-        installUrl: data.installUrl,
-        cursor: data.cursor,
-      };
-
-      setRepos(nextRepos);
-      setInstallUrl(data.installUrl);
-      setReposCursor(data.cursor);
-      writeCache(CACHE_KEY_REPOS, nextData);
-      setSelectedRepo((currentSelected) => {
-        if (!currentSelected) {
-          return null;
-        }
-
-        return nextRepos.find((repo) => repo.id === currentSelected.id) ?? currentSelected;
-      });
-    } catch (error) {
-      toast.error("Failed to load more repositories", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setReposLoadingMore(false);
-    }
-  }
-
-  useEffect(() => {
     if (!showSigninPanel) {
       return;
     }
@@ -572,6 +391,7 @@ export function SessionCreationForm() {
         { provider: selectedProvider, model: selectedModel },
         selectedAgentMode,
         uploadedDescriptors.map((attachment) => attachment.attachmentId),
+        selectedEnvironmentId ?? undefined,
       );
 
       addSession({
@@ -650,38 +470,51 @@ export function SessionCreationForm() {
     >
       <InputFrame
         footer={
-          <div className="flex items-center gap-2 min-w-0">
-            <RepoSelector
-              repos={repoSearchQuery.trim().length > 0 ? repoSearchResults : repos}
-              selectedRepo={selectedRepo}
-              onSelect={setSelectedRepo}
-              loading={reposLoading}
-              disabled={isFormInteractionDisabled}
-              installUrl={installUrl}
-              open={repoPickerOpen}
-              onOpenChange={setRepoPickerOpen}
-              hasMore={reposCursor !== null}
-              loadingMore={reposLoadingMore}
-              onLoadMore={loadMoreRepos}
-              searchQuery={repoSearchQuery}
-              onSearchQueryChange={setRepoSearchQuery}
-              searching={repoSearchLoading}
-              isSearchMode={repoSearchQuery.trim().length > 0}
-            />
-            {selectedRepo && (branches.length > 0 || branchesLoading) && (
-              <BranchSelector
-                branches={branches}
-                selectedBranch={selectedBranch}
-                onSelect={setSelectedBranch}
-                loading={branchesLoading}
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="inline-flex h-8 min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-md border border-border bg-background">
+              <RepoSelector
+                repos={visibleRepos}
+                selectedRepo={selectedRepo}
+                onSelect={setSelectedRepo}
+                loading={reposLoading}
                 disabled={isFormInteractionDisabled}
-                open={branchPickerOpen}
-                onOpenChange={setBranchPickerOpen}
-                hasMore={branchesCursor !== null}
-                loadingMore={branchesLoadingMore}
-                onLoadMore={loadMoreBranches}
+                installUrl={installUrl}
+                open={repoPickerOpen}
+                onOpenChange={setRepoPickerOpen}
+                hasMore={reposCursor !== null}
+                loadingMore={reposLoadingMore}
+                onLoadMore={loadMoreRepos}
+                searchQuery={repoSearchQuery}
+                onSearchQueryChange={setRepoSearchQuery}
+                searching={repoSearchLoading}
+                isSearchMode={isRepoSearchMode}
+                triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
-            )}
+              {selectedRepo && (branches.length > 0 || branchesLoading) && (
+                <>
+                  <div className="w-px self-stretch bg-border" />
+                  <BranchSelector
+                    branches={branches}
+                    selectedBranch={selectedBranch}
+                    onSelect={setSelectedBranch}
+                    loading={branchesLoading}
+                    disabled={isFormInteractionDisabled}
+                    open={branchPickerOpen}
+                    onOpenChange={setBranchPickerOpen}
+                    hasMore={branchesCursor !== null}
+                    loadingMore={branchesLoadingMore}
+                    onLoadMore={loadMoreBranches}
+                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                  />
+                </>
+              )}
+            </div>
+            <SessionEnvironmentSelector
+              selectedRepo={selectedRepo}
+              disabled={isFormInteractionDisabled}
+              selectedEnvironmentId={selectedEnvironmentId}
+              onSelectEnvironment={setSelectedEnvironmentId}
+            />
           </div>
         }
       >
