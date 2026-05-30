@@ -247,7 +247,7 @@ export function ChatInput({
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
           {selectedProvider && selectedModel && selectedEffort && onProviderModelChange && onProviderEffortChange && (
-            <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-0 rounded-md border border-border">
+            <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-1">
               <ProviderModelSelector
                 selectedProvider={selectedProvider}
                 selectedModel={selectedModel}
@@ -258,7 +258,6 @@ export function ChatInput({
                 disabled={disabled || isAuthBlocking}
                 triggerClassName="rounded-sm pr-1.5"
               />
-              <div className="h-4 w-px shrink-0 bg-border" />
               <ProviderEffortSelector
                 selectedProvider={selectedProvider}
                 selectedEffort={selectedEffort}

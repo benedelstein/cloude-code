@@ -530,7 +530,7 @@ export function SessionCreationForm() {
                 onSearchQueryChange={setRepoSearchQuery}
                 searching={repoSearchLoading}
                 isSearchMode={isRepoSearchMode}
-                triggerClassName="my-0.5 h-7 rounded-sm border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
               />
               {selectedRepo && (branches.length > 0 || branchesLoading) && (
                 <>
@@ -546,7 +546,7 @@ export function SessionCreationForm() {
                     hasMore={branchesCursor !== null}
                     loadingMore={branchesLoadingMore}
                     onLoadMore={loadMoreBranches}
-                    triggerClassName="my-0.5 h-7 rounded-sm border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+                    triggerClassName="h-full rounded-none border-0 bg-transparent px-2 shadow-none hover:bg-muted"
                   />
                 </>
               )}
@@ -602,7 +602,7 @@ export function SessionCreationForm() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-0 rounded-md border border-border">
+              <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-1">
                 <ProviderModelSelector
                   selectedProvider={selectedProvider}
                   selectedModel={selectedModel}
@@ -612,7 +612,6 @@ export function SessionCreationForm() {
                   disabled={isFormInteractionDisabled}
                   triggerClassName="rounded-sm pr-1.5"
                 />
-                <div className="h-4 w-px shrink-0 bg-border" />
                 <ProviderEffortSelector
                   selectedProvider={selectedProvider}
                   selectedEffort={selectedEffort}
