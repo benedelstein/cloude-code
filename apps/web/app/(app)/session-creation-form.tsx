@@ -12,8 +12,7 @@ import {
 import { useProviderAuth } from "@/hooks/use-provider-auth";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
-import { ProviderEffortSelector } from "@/components/model-providers/provider-effort-selector";
-import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
+import { ProviderModelEffortSelector } from "@/components/model-providers/provider-model-effort-selector";
 import type {
   Branch,
   ListBranchesResponse,
@@ -602,25 +601,16 @@ export function SessionCreationForm() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-1">
-                <ProviderModelSelector
-                  selectedProvider={selectedProvider}
-                  selectedModel={selectedModel}
-                  providerAuthHandles={providerAuth.handles}
-                  onSelect={handleProviderModelSelect}
-                  onConnect={handleProviderConnect}
-                  disabled={isFormInteractionDisabled}
-                  hideChevron
-                  triggerClassName="rounded-sm pr-1.5"
-                />
-                <ProviderEffortSelector
-                  selectedProvider={selectedProvider}
-                  selectedEffort={selectedEffort}
-                  onSelect={handleProviderEffortSelect}
-                  disabled={isFormInteractionDisabled || !selectedProvider}
-                  triggerClassName="rounded-sm pl-1.5"
-                />
-              </div>
+              <ProviderModelEffortSelector
+                selectedProvider={selectedProvider}
+                selectedModel={selectedModel}
+                selectedEffort={selectedEffort}
+                providerAuthHandles={providerAuth.handles}
+                onModelSelect={handleProviderModelSelect}
+                onEffortSelect={handleProviderEffortSelect}
+                onConnect={handleProviderConnect}
+                disabled={isFormInteractionDisabled}
+              />
               <SendButton
                 isStreaming={false}
                 isLoading={submitting || isUploadingAttachments}

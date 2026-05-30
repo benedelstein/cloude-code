@@ -4,8 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
-import { ProviderEffortSelector } from "@/components/model-providers/provider-effort-selector";
-import { ProviderModelSelector } from "@/components/model-providers/provider-model-selector";
+import { ProviderModelEffortSelector } from "@/components/model-providers/provider-model-effort-selector";
 import type {
   AgentMode,
   MessageAttachmentRef,
@@ -228,7 +227,7 @@ export function ChatInput({
           }
           disabled={disabled || isAuthBlocking}
           rows={1}
-          className="w-full resize-none overflow-hidden bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none overflow-y-auto bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 px-3 pb-2">
@@ -247,26 +246,18 @@ export function ChatInput({
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
           {selectedProvider && selectedModel && selectedEffort && onProviderModelChange && onProviderEffortChange && (
-            <div className="flex min-w-0 max-w-[24rem] shrink items-center gap-1">
-              <ProviderModelSelector
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                providerAuthHandles={providerAuthHandles}
-                onSelect={onProviderModelChange}
-                onConnect={() => setManuallyOpenedSigninPanel(true)}
-                allowedProviderIds={[selectedProvider]}
-                disabled={disabled || isAuthBlocking}
-                hideChevron
-                triggerClassName="rounded-sm pr-1.5"
-              />
-              <ProviderEffortSelector
-                selectedProvider={selectedProvider}
-                selectedEffort={selectedEffort}
-                onSelect={onProviderEffortChange}
-                disabled={disabled || isAuthBlocking}
-                triggerClassName="rounded-sm pl-1.5"
-              />
-            </div>
+            <ProviderModelEffortSelector
+              selectedProvider={selectedProvider}
+              selectedModel={selectedModel}
+              selectedEffort={selectedEffort}
+              providerAuthHandles={providerAuthHandles}
+              onModelSelect={onProviderModelChange}
+              onEffortSelect={onProviderEffortChange}
+              onConnect={() => setManuallyOpenedSigninPanel(true)}
+              allowedProviderIds={[selectedProvider]}
+              disabled={disabled || isAuthBlocking}
+              className="gap-0"
+            />
           )}
           <SendButton
             isStreaming={isStreaming}

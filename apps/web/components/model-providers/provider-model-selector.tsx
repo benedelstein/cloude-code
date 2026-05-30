@@ -112,7 +112,7 @@ export function ProviderModelSelector({
           type="button"
           disabled={disabled}
           className={cn(
-            "flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
+            "flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50",
             triggerClassName,
           )}
         >
@@ -125,7 +125,7 @@ export function ProviderModelSelector({
               className="h-3 w-3 shrink-0"
             />
           )}
-          <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary text-bold")}>
+          <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary font-bold")}>
             {displayLabel}
           </span>
           {!hideChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />}

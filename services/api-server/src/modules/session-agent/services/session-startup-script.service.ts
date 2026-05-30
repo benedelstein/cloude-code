@@ -23,6 +23,7 @@ export class SessionStartupScriptService {
     }
 
     this.logger.info("Running session startup script");
+    const d0 = Date.now();
     const result = await args.sprite.execHttp(
       `timeout ${STARTUP_SCRIPT_TIMEOUT_SECONDS}s bash -lc ${shellQuote(script)}`,
       {
@@ -30,11 +31,13 @@ export class SessionStartupScriptService {
         env: args.env,
       },
     );
+    const durationMs = Date.now() - d0;
 
     if (result.exitCode !== 0) {
       this.logger.warn("Session startup script failed", {
         fields: {
           exitCode: result.exitCode,
+          durationMs,
           stdout: truncateOutput(result.stdout),
           stderr: truncateOutput(result.stderr),
         },
@@ -46,6 +49,7 @@ export class SessionStartupScriptService {
 
     this.logger.info("Session startup script completed", {
       fields: {
+        durationMs,
         stdoutBytes: result.stdout.length,
         stderrBytes: result.stderr.length,
       },
