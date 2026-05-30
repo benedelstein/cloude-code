@@ -256,6 +256,7 @@ export function ChatInput({
                 onConnect={() => setManuallyOpenedSigninPanel(true)}
                 allowedProviderIds={[selectedProvider]}
                 disabled={disabled || isAuthBlocking}
+                hideChevron
                 triggerClassName="rounded-sm pr-1.5"
               />
               <ProviderEffortSelector

@@ -34,6 +34,7 @@ interface ProviderModelSelectorProps {
   onConnect: (providerId: ProviderId) => void;
   disabled?: boolean;
   triggerClassName?: string;
+  hideChevron?: boolean;
 }
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
@@ -56,6 +57,7 @@ export function ProviderModelSelector({
   onConnect,
   disabled,
   triggerClassName,
+  hideChevron = false,
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
@@ -126,7 +128,7 @@ export function ProviderModelSelector({
           <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary text-bold")}>
             {displayLabel}
           </span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+          {!hideChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="end">

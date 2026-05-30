@@ -610,6 +610,7 @@ export function SessionCreationForm() {
                   onSelect={handleProviderModelSelect}
                   onConnect={handleProviderConnect}
                   disabled={isFormInteractionDisabled}
+                  hideChevron
                   triggerClassName="rounded-sm pr-1.5"
                 />
                 <ProviderEffortSelector
