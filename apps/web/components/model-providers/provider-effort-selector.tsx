@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { PROVIDERS, type ProviderId } from "@repo/shared";
 import {
@@ -60,7 +60,7 @@ export function ProviderEffortSelector({
           >
             {displayLabel}
           </span>
-          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[220px] p-0" align="end">

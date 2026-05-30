@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Link2 } from "lucide-react";
+import { Check, ChevronDown, Link2 } from "lucide-react";
 import { useState } from "react";
 import Image from "next/image";
 import {
@@ -95,7 +95,7 @@ export function ProviderModelSelector({
           <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary text-bold")}>
             {displayLabel}
           </span>
-          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="end">
