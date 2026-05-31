@@ -19,10 +19,23 @@ export class SessionStartupScriptService {
   }): Promise<void> {
     const script = args.script?.trim();
     if (!script) {
+      this.logger.info("No session startup script configured", {
+        fields: {
+          workspaceDir: args.workspaceDir,
+          envVarCount: Object.keys(args.env).length,
+        },
+      });
       return;
     }
 
-    this.logger.info("Running session startup script");
+    this.logger.info("Running session startup script", {
+      fields: {
+        workspaceDir: args.workspaceDir,
+        scriptLength: script.length,
+        envVarCount: Object.keys(args.env).length,
+        timeoutSeconds: STARTUP_SCRIPT_TIMEOUT_SECONDS,
+      },
+    });
     const d0 = Date.now();
     const result = await args.sprite.execHttp(
       `timeout ${STARTUP_SCRIPT_TIMEOUT_SECONDS}s bash -lc ${shellQuote(script)}`,

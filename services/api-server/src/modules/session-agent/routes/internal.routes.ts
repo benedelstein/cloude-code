@@ -49,7 +49,6 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
 
   internalRoutes.post("/session/:sessionId/chunks", async (c) => {
     const sessionId = c.req.param("sessionId");
-    logger.info("[/chunks] incoming webhook", { fields: { sessionId } });
     const target = await getWebhookTarget(
       c.env,
       sessionId,
@@ -104,18 +103,6 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
       sequence: item.sequence,
       chunk: item.chunk as UIMessageChunk,
     }));
-    logger.info("[/chunks] forwarding to DO", {
-      fields: {
-        sessionId,
-        userMessageId: parsed.data.userMessageId,
-        chunkCount: chunks.length,
-        firstSeq: chunks[0]?.sequence ?? -1,
-        lastSeq: chunks[chunks.length - 1]?.sequence ?? -1,
-        types: chunks
-          .map((c) => (c.chunk as { type?: string } | null)?.type ?? "unknown")
-          .join(","),
-      },
-    });
     const accepted = await target.stub.handleWebhookChunks(
       target.token,
       parsed.data.userMessageId,
@@ -136,7 +123,6 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
 
   internalRoutes.post("/session/:sessionId/events", async (c) => {
     const sessionId = c.req.param("sessionId");
-    logger.info("[/events] incoming webhook", { fields: { sessionId } });
     const target = await getWebhookTarget(
       c.env,
       sessionId,
@@ -187,9 +173,6 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
       );
     }
 
-    logger.info("[/events] forwarding to DO", {
-      fields: { sessionId, eventType: parsed.data.event.type },
-    });
     const accepted = await target.stub.handleWebhookEvent(
       target.token,
       parsed.data.event,

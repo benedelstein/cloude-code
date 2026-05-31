@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getSessionToken, verifySession } from "@/lib/auth";
-import { getSession } from "@/lib/server-api";
+import { getSession, ServerApiError } from "@/lib/server-api";
 import { SessionPageClient } from "./session-page-client";
 
 interface SessionPageProps {
@@ -18,10 +18,18 @@ export async function generateMetadata({
     return { title: "Cloude Code" };
   }
 
-  const session = await getSession(sessionId, sessionToken);
+  let sessionTitle: string | null = null;
+  try {
+    const session = await getSession(sessionId, sessionToken);
+    sessionTitle = session.title;
+  } catch (error) {
+    if (!(error instanceof ServerApiError && error.status === 403)) {
+      throw error;
+    }
+  }
 
   return {
-    title: session.title ? `${session.title} | Cloude Code` : "Cloude Code",
+    title: sessionTitle ? `${sessionTitle} | Cloude Code` : "Cloude Code",
   };
 }
 

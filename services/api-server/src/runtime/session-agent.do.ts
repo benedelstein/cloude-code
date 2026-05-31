@@ -904,8 +904,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   async enforceSessionAccessBlocked(
     notifyClients = true,
   ): Promise<void> {
+    const message = "Repository access for this session is blocked. Update the GitHub App installation or your GitHub access to continue.";
     this.updatePartialState({
-      lastError: "Repository access for this session is currently blocked.",
+      lastError: message,
     });
     await this.cancelActiveTurnAndClearState();
     await this.processManager.kill();
@@ -913,7 +914,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       this.broadcastMessage({
         type: "operation.error",
         code: "REPO_ACCESS_BLOCKED",
-        message: "Repository access for this session is currently blocked.",
+        message,
       });
     }
   }

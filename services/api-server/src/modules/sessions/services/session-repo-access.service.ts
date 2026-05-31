@@ -17,7 +17,7 @@ import {
   getSessionAccessRowForUser,
 } from "./session-access.service";
 import type { Env } from "@/shared/types";
-import { failure, success } from "@repo/shared";
+import { failure, success, type SessionAccessBlockReason } from "@repo/shared";
 
 const logger = createLogger("session-repo-access.ts");
 
@@ -89,11 +89,34 @@ function mapGitHubAppErrorToUserRepoAccessError(error: {
   }
 }
 
-function blockedSessionAccessResult(justBlocked: boolean): SessionRepoAccessResult {
+function getBlockedSessionAccessMessage(
+  reason: SessionAccessBlockReason | null,
+): string {
+  switch (reason) {
+    case "REPO_REMOVED_FROM_INSTALLATION":
+      return "The GitHub App installation no longer has access to this repository.";
+    case "INSTALLATION_DELETED":
+      return "The GitHub App installation for this repository has been deleted.";
+    case "INSTALLATION_SUSPENDED":
+      return "The GitHub App installation for this repository is suspended.";
+    case "ACCESS_CHECK_DENIED":
+    case null:
+      return "Repository access for this session is blocked. Update the GitHub App installation or your GitHub access to continue.";
+    default: {
+      const exhaustiveCheck: never = reason;
+      throw new Error(`Unhandled session access block reason: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function blockedSessionAccessResult(
+  justBlocked: boolean,
+  reason: SessionAccessBlockReason | null,
+): SessionRepoAccessResult {
   return failure({
     code: "REPO_ACCESS_BLOCKED",
     status: 403,
-    message: "You do not have access to this repository.",
+    message: getBlockedSessionAccessMessage(reason),
     justBlocked,
   });
 }
@@ -290,7 +313,10 @@ export async function assertSessionRepoAccess(params: {
           preserveExistingBlockReason:
             shouldUseRecoveryPath && session.accessBlockReason !== null,
         });
-        return blockedSessionAccessResult(!shouldUseRecoveryPath);
+        return blockedSessionAccessResult(
+          !shouldUseRecoveryPath,
+          session.accessBlockReason,
+        );
       case "INSTALLATION_NOT_FOUND":
         await blockSessionForAccessCheckDenied({
           env,
@@ -299,7 +325,10 @@ export async function assertSessionRepoAccess(params: {
           preserveExistingBlockReason:
             shouldUseRecoveryPath && session.accessBlockReason !== null,
         });
-        return blockedSessionAccessResult(!shouldUseRecoveryPath);
+        return blockedSessionAccessResult(
+          !shouldUseRecoveryPath,
+          session.accessBlockReason,
+        );
       case "GITHUB_API_ERROR":
         logger.warn("GitHub session repo access check failed without an authoritative block result.", {
           fields: {

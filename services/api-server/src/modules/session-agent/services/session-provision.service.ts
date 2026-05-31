@@ -317,6 +317,21 @@ export class SessionProvisionService {
 
   private async tryRunStartupScript(spriteName: string): Promise<void> {
     const environmentSnapshot = this.getEnvironmentSnapshot();
+    const startupScript = environmentSnapshot.startupScript;
+    const trimmedStartupScript = startupScript?.trim() ?? "";
+    this.logger.info("Checking session startup script", {
+      fields: {
+        sessionId: this.getServerState().sessionId,
+        spriteName,
+        sourceEnvironmentId: environmentSnapshot.sourceEnvironmentId,
+        sourceEnvironmentName: environmentSnapshot.sourceEnvironmentName,
+        networkMode: environmentSnapshot.network.mode,
+        hasStartupScript: trimmedStartupScript.length > 0,
+        startupScriptLength: startupScript?.length ?? 0,
+        trimmedStartupScriptLength: trimmedStartupScript.length,
+        envVarCount: Object.keys(environmentSnapshot.plainEnvVars).length,
+      },
+    });
     const sprite = new WorkersSpriteClient(
       spriteName,
       this.env.SPRITES_API_KEY,

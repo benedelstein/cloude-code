@@ -4,11 +4,12 @@ import type { WorkersSpriteClient } from "../../src/shared/integrations/sprites/
 import { SessionStartupScriptService } from "../../src/modules/session-agent/services/session-startup-script.service";
 
 function createLogger() {
+  const info = vi.fn();
   const warn = vi.fn();
   const logger: Logger = {
     log() {},
     debug() {},
-    info() {},
+    info,
     warn,
     error() {},
     scope() {
@@ -16,12 +17,36 @@ function createLogger() {
     },
   };
 
-  return { logger, warn };
+  return { info, logger, warn };
 }
 
 describe("SessionStartupScriptService", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("logs when no startup script is configured", async () => {
+    const { info, logger } = createLogger();
+    const sprite = {
+      execHttp: vi.fn(),
+    } as unknown as WorkersSpriteClient;
+
+    const service = new SessionStartupScriptService(logger);
+
+    await service.run({
+      sprite,
+      script: "   ",
+      workspaceDir: "/workspace",
+      env: { FOO: "bar" },
+    });
+
+    expect(sprite.execHttp).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith("No session startup script configured", {
+      fields: {
+        workspaceDir: "/workspace",
+        envVarCount: 1,
+      },
+    });
   });
 
   it("logs duration when the startup script fails", async () => {
