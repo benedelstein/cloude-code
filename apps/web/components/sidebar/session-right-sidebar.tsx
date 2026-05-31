@@ -41,7 +41,7 @@ export function SessionRightSidebar() {
     setIsPlanLoading(true);
     setPlanError(null);
 
-    (async () => {
+    void (async () => {
       try {
         const plan = await getSessionPlan(sessionId)
         if (isCancelled) {

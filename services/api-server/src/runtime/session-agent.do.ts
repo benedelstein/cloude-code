@@ -519,7 +519,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   private queueEnsureReady(): void {
-    this.ensureReady().catch((error) => {
+    void this.ensureReady().catch((error) => {
       this.logger.error("ensureReady failed", { error });
     });
   }

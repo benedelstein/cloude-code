@@ -281,7 +281,7 @@ export function SessionCreationForm() {
     setBranchesLoadingMore(false);
 
     // Phase 2: Revalidate
-    (async () => {
+    void (async () => {
       try {
         const data = await listBranches(repoId, {});
         if (stale) { return; }

@@ -46,7 +46,7 @@ export function EnvironmentsPageClient() {
   useEffect(() => {
     let stale = false;
     setLoading(true);
-    (async () => {
+    void (async () => {
       try {
         const data = await listUserRepoEnvironments();
         if (!stale) {

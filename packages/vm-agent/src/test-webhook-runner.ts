@@ -196,8 +196,9 @@ const agent = spawn("bun", spawnArgs, {
 
 agent.on("exit", (code) => {
   console.log(`\nvm-agent exited with code ${code}`);
-  server.stop();
-  process.exit(code ?? 0);
+  void server.stop().finally(() => {
+    process.exit(code ?? 0);
+  });
 });
 
 process.on("SIGINT", () => {

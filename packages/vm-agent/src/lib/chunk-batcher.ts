@@ -34,14 +34,16 @@ export class ChunkBatcher {
     this.buffer.push({ sequence: this.sequence++, chunk });
 
     if (isTerminalChunk(chunk) || this.buffer.length >= this.opts.maxChunks) {
-      this.flushNow();
+      void this.flushNow();
       return;
     }
 
     if (!this.timer) {
-      // bounded-age: timer starts when the first chunk lands in an empty buffer 
+      // bounded-age: timer starts when the first chunk lands in an empty buffer
       // and is not reset on subsequent arrivals.
-      this.timer = setTimeout(() => this.flushNow(), this.opts.maxAgeMs);
+      this.timer = setTimeout(() => {
+        void this.flushNow();
+      }, this.opts.maxAgeMs);
     }
   }
 

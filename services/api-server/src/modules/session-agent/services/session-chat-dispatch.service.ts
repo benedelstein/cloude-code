@@ -353,7 +353,10 @@ export class SessionChatDispatchService {
       connectionId ? [connectionId] : undefined,
     );
 
-    this.handleSentMessageSideEffects(sessionId, message, attachmentIds);
+    void this.handleSentMessageSideEffects(sessionId, message, attachmentIds)
+      .catch((error) => {
+        this.logger.warn("User message side effects failed", { error });
+      });
   }
 
   private async handleSentMessageSideEffects(

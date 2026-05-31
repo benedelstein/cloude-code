@@ -55,7 +55,7 @@ export function SessionEnvironmentSelector({
     let stale = false;
     setLoading(true);
     onSelectEnvironment(null);
-    (async () => {
+    void (async () => {
       try {
         const data = await listRepoEnvironments(selectedRepo.id);
         if (stale) { return; }

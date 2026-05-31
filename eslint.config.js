@@ -1,5 +1,9 @@
 import eslint from "@eslint/js";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import tseslint from "typescript-eslint";
+
+const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -115,6 +119,27 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-expressions": [
         "error",
         { allowTaggedTemplates: true },
+      ],
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parserOptions: {
+        project: [
+          "./apps/web/tsconfig.json",
+          "./packages/shared/tsconfig.eslint.json",
+          "./packages/vm-agent/tsconfig.eslint.json",
+          "./scripts/tsconfig.json",
+          "./services/api-server/tsconfig.eslint.json",
+        ],
+        tsconfigRootDir,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        { ignoreVoid: true },
       ],
     },
   },

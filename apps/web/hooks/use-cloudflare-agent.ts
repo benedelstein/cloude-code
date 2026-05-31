@@ -220,7 +220,7 @@ export function useCloudflareAgent({
                 // Leave stream open for new live chunks via agent.chunks
               },
             });
-            consumeStream(stream);
+            void consumeStream(stream);
           }
         }
         break;
@@ -237,7 +237,7 @@ export function useCloudflareAgent({
               }
             },
           });
-          consumeStream(stream);
+          void consumeStream(stream);
         } else {
           for (const chunk of incoming) {
             streamControllerRef.current.enqueue(chunk);
@@ -382,7 +382,7 @@ export function useCloudflareAgent({
     });
 
     // Start consuming the stream
-    consumeStream(stream);
+    void consumeStream(stream);
 
     // Send via useAgent's connection, include model/agentMode only if they differ from server settings
     const modelToSend = selectedModel && selectedModel !== agentSettings?.model ? selectedModel : undefined;

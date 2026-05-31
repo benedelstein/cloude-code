@@ -144,7 +144,7 @@ export function useRepoPicker({
     }
 
     let stale = false;
-    (async () => {
+    void (async () => {
       try {
         const data = await listRepos();
         if (stale) { return; }
