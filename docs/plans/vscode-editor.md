@@ -1,9 +1,11 @@
 # VS Code Editor Feature - Design Document
 
-Status: disabled. The live `SessionAgentDO.openEditor()` and
-`closeEditor()` methods currently return `EDITOR_DISABLED` because the old
-implementation in `session-agent-editor.ts` still calls `setUrlAuth("public")`.
-The Worker/TCP-proxy fix below is the target design, not implemented behavior.
+Status: disabled / not wired. The live `SessionAgentRpc` interface exposes no
+editor open/close RPC, and no session route currently calls
+`handleEditorOpen(...)` or `handleEditorClose(...)`. The old helper at
+`services/api-server/src/modules/session-agent/services/session-agent-editor.service.ts`
+still calls `setUrlAuth("public")`, so the Worker/TCP-proxy fix below is the
+target design, not implemented behavior.
 
 ## Goal
 
@@ -46,7 +48,7 @@ The Worker adds an authenticated `/sessions/:sessionId/editor/*` route:
 
 ## Files
 
-- `services/api-server/src/routes/sessions/sessions.routes.ts` — add authenticated `/editor/*` proxy route
-- `services/api-server/src/lib/sprites/WorkersSpriteClient.ts` — add `proxyTcp(port)` method wrapping the Sprites proxy WebSocket API
-- `services/api-server/src/durable-objects/session-agent-editor.ts` — remove `setUrlAuth("public")`, drop connection token
-- `services/api-server/src/durable-objects/session-agent-do.ts` — re-enable editor routes
+- `services/api-server/src/modules/sessions/routes/sessions.routes.ts` — add authenticated `/editor/*` proxy route
+- `services/api-server/src/shared/integrations/sprites/WorkersSpriteClient.ts` — add `proxyTcp(port)` method wrapping the Sprites proxy WebSocket API
+- `services/api-server/src/modules/session-agent/services/session-agent-editor.service.ts` — remove `setUrlAuth("public")`, drop connection token
+- `services/api-server/src/runtime/session-agent.do.ts` — re-enable editor RPC/routes

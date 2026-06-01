@@ -123,6 +123,7 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 - You can only create a session on a repo if you have access to it via its github app installation.
   We first check the installation that the repo is associated with, and then use the user's github access token to verify that the user can access that repo via the installation.
   Even if a user can access a repo, they may not have access to it via the installation.
+- You can only create a repo environment for a repo if the same `assertUserRepoAccess(...)` path confirms access. Session creation resolves the selected environment through `RepoEnvironmentsService.resolveEnvironmentSnapshot(...)` and stores that immutable snapshot in the session Durable Object.
 - You can only view a session if you created it (for now).
 - You can only install the github app on a repo if you have admin access to it (this is a limitation of the github api).
 

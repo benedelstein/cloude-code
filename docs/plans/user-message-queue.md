@@ -1,5 +1,13 @@
 # User Message Queue - Design Document
 
+Status: proposed, not current behavior. The live system still uses
+`ClientState.pendingUserMessage` for the initial pending message, rejects a new
+`chat.message` while `server_state.activeUserMessageId` or
+`pendingUserMessage` is set in
+`services/api-server/src/runtime/session-agent.do.ts`, and dispatches through
+`SessionChatDispatchService.maybeDispatchPendingMessage(...)` /
+`dispatchChatMessage(...)`.
+
 ## Goal
 
 Replace the current single-slot `pendingUserMessage` flow with a durable FIFO user-message queue owned by the session Durable Object.
@@ -222,8 +230,8 @@ This avoids the main race in the current design, where one path may store a pend
 
 ## Files
 
-- `services/api-server/src/durable-objects/session-agent-do.ts` - move to accept/enqueue/drain semantics and remove `pendingUserMessage`
-- `services/api-server/src/durable-objects/repositories/server-state-repository.ts` - add durable server-only queue metadata
+- `services/api-server/src/runtime/session-agent.do.ts` - move to accept/enqueue/drain semantics and remove `pendingUserMessage`
+- `services/api-server/src/modules/session-agent/repositories/server-state.repository.ts` - add durable server-only queue metadata
 - `packages/shared/src/types/session.ts` and `packages/shared/src/types/websocket-api.ts` - replace public pending state with queued ids and use canonical client-sent message ids
 - `apps/web/hooks/use-cloudflare-agent.ts` and chat UI components - send `messageId`, allow send while responding, and render queued indicators inline
 

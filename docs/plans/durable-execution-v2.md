@@ -5,6 +5,7 @@ Status: implemented with some naming and behavior drift. The current source of t
 Known differences from this plan:
 
 - `AgentWorkflowCoordinator` became `AgentTurnCoordinator`.
+- Code sketches use old pre-module file paths; current session-agent code lives under `services/api-server/src/runtime/` and `services/api-server/src/modules/session-agent/`.
 - The vm-agent uses `src/index-webhook.ts` and an initial-message file for fresh spawns.
 - `SpriteAgentProcessManager` now attempts warm process reuse via stdin ack before spawning fresh.
 - The DO broadcasts batched `agent.chunks` messages to clients.

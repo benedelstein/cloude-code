@@ -1,5 +1,15 @@
 # Agent DO State Refactoring
 
+Status: historical refactor notes, not current source-of-truth behavior. The
+live Durable Object is `services/api-server/src/runtime/session-agent.do.ts`;
+client-visible state is `ClientState` in `packages/shared/src/types/session.ts`;
+server-only Durable Object state is `ServerState` in
+`services/api-server/src/modules/session-agent/repositories/server-state.repository.ts`;
+and vm-agent process coordination lives in
+`services/api-server/src/modules/session-agent/services/sprite-agent-process-manager.service.ts`.
+The notes below predate the current module layout, webhook turn path, and
+repo-environment snapshot state.
+
 ## Problem
 
 Currently the session-agent-do state is a mess. The file is 1500+ lines, there are states strewn all over the place, and there is unclear state transitioning logic. 

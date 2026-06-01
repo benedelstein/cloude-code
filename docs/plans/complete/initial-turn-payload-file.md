@@ -1,5 +1,11 @@
 # Plan: Initial Message File
 
+Status: implemented. `SpriteAgentProcessManager.writeInitialMessageFile(...)`
+writes the per-turn payload with mode `0600`, `buildAgentArgs(...)` passes
+`--initialMessagePath`, and `packages/vm-agent/src/lib/webhook-initial-message.ts`
+reads, validates, and unlinks the file. `--initialMessage` still exists as a
+vm-agent local fallback, but production spawning uses `--initialMessagePath`.
+
 ## Context
 
 Webhook-mode agent turns currently pass the initial user message through sprite exec argv as `--initialMessage`. `SpriteWebsocketSession` encodes exec argv into the request URL, so long prompts or image attachments can exceed URL/request-line limits before the vm-agent process starts.

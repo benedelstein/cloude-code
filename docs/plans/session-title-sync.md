@@ -3,8 +3,10 @@
 Status: proposed, not current behavior. The creation path does generate and
 persist an initial title in `SessionsService.createSession(...)`, but the DO
 still calls `updateSessionHistoryData(...)` from
-`SessionChatDispatchService.handleSentMessageSideEffects(...)`; that helper
-generates a title when the first persisted user message is observed.
+`SessionChatDispatchService.handleSentMessageSideEffects(...)` in
+`services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts`;
+that helper calls `updateSessionHistoryData(...)`, which generates a title
+when the first persisted user message is observed.
 
 ## Summary
 
@@ -15,10 +17,10 @@ generates a title when the first persisted user message is observed.
 
 ## Target Changes
 
-- Remove first-message title generation from [session-agent-history.ts](/Users/ben/code/cloude-code/services/api-server/src/durable-objects/session-agent-history.ts).
+- Remove first-message title generation from `services/api-server/src/modules/session-agent/services/session-agent-history.service.ts`.
 - Keep `updateSessionHistoryData()` responsible only for durable history metadata like `lastMessageAt`; it should not mutate `sessions.title`.
-- Keep initial title generation in [sessions.service.ts](/Users/ben/code/cloude-code/services/api-server/src/lib/sessions/sessions.service.ts) after session creation and before returning the `CreateSessionResponse`.
-- Preserve current web behavior in [session-creation-form.tsx](/Users/ben/code/cloude-code/apps/web/app/(app)/session-creation-form.tsx): use the returned `session.title` to seed `SessionListProvider` immediately.
+- Keep initial title generation in `services/api-server/src/modules/sessions/services/sessions.service.ts` after session creation and before returning the `CreateSessionResponse`.
+- Preserve current web behavior in `apps/web/app/(app)/session-creation-form.tsx`: use the returned `session.title` to seed `SessionListProvider` immediately.
 - Treat the D1 `sessions.title` row as the server source of truth; the existing local `updateTitle(...)` path remains only for optimistic manual rename UX.
 
 ## Public Interfaces
