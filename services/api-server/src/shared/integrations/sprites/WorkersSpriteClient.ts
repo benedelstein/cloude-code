@@ -26,6 +26,13 @@ export interface SpriteInfoResponse {
 
 const logger = createLogger("WorkersSpriteClient.ts");
 
+interface ResponseBodyRead {
+  buffer: Uint8Array;
+  chunkCount: number;
+  lastChunkAtMs: number | null;
+  readError?: string;
+}
+
 export class WorkersSpriteClient {
   private baseUrl: string;
   private apiKey: string;
@@ -45,6 +52,7 @@ export class WorkersSpriteClient {
       dir?: string;
     } = {},
   ): Promise<ExecResult> {
+    const d0 = Date.now();
     const url = new URL(`${this.baseUrl}/v1/sprites/${this.name}/exec`);
 
     // Wrap command in sh -c to support shell syntax (pipes, redirects, etc.)
@@ -72,6 +80,7 @@ export class WorkersSpriteClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
     });
+    const fetchHeadersMs = Date.now() - d0;
 
     if (!response.ok) {
       const text = await response.text();
@@ -89,26 +98,28 @@ export class WorkersSpriteClient {
     //   \x01 = stdout data follows (until newline)
     //   \x02 = stderr data follows (until newline)
     //   \x03 = exit, next byte is the exit code as a raw byte value
-    const buffer = new Uint8Array(await response.arrayBuffer());
+    const body = await readResponseBody(response, d0);
+    const buffer = body.buffer;
 
     let stdout = "";
     let stderr = "";
-    let exitCode = -1;
+    const exitMarkerIndex = findExitMarker(buffer);
+    const exitCode = exitMarkerIndex === -1
+      ? -1
+      : (buffer[exitMarkerIndex + 1] ?? 0);
+    const outputBuffer = exitMarkerIndex === -1
+      ? buffer
+      : buffer.subarray(0, exitMarkerIndex);
     const decoder = new TextDecoder();
 
     let i = 0;
-    while (i < buffer.length) {
-      const marker = buffer[i];
-      if (marker === 0x03) {
-        // Exit code: single byte following the marker
-        exitCode = i + 1 < buffer.length ? (buffer[i + 1] ?? 0) : 0;
-        break;
-      }
+    while (i < outputBuffer.length) {
+      const marker = outputBuffer[i];
 
       // Find the end of this chunk (next newline or end of buffer)
-      let end = buffer.indexOf(0x0a, i + 1);
-      if (end === -1) { end = buffer.length; }
-      const chunk = decoder.decode(buffer.subarray(i + 1, end));
+      let end = outputBuffer.indexOf(0x0a, i + 1);
+      if (end === -1) { end = outputBuffer.length; }
+      const chunk = decoder.decode(outputBuffer.subarray(i + 1, end));
 
       if (marker === 0x01) {
         stdout += chunk + "\n";
@@ -117,6 +128,23 @@ export class WorkersSpriteClient {
       }
 
       i = end + 1;
+    }
+
+    if (exitCode === -1) {
+      logger.warn("Exec HTTP response ended without exit marker", {
+        fields: {
+          spriteName: this.name,
+          durationMs: Date.now() - d0,
+          fetchHeadersMs,
+          responseBytes: buffer.length,
+          chunkCount: body.chunkCount,
+          lastChunkAtMs: body.lastChunkAtMs,
+          contentType: response.headers.get("content-type"),
+          contentLength: response.headers.get("content-length"),
+          rawTailHex: toHex(buffer.subarray(Math.max(0, buffer.length - 32))),
+          readError: body.readError ?? null,
+        },
+      });
     }
 
     return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
@@ -304,4 +332,67 @@ export class WorkersSpriteClient {
       );
     }
   }
+}
+
+async function readResponseBody(response: Response, startedAtMs: number): Promise<ResponseBodyRead> {
+  if (!response.body) {
+    return {
+      buffer: new Uint8Array(),
+      chunkCount: 0,
+      lastChunkAtMs: null,
+    };
+  }
+
+  const reader = response.body.getReader();
+  const buffers: Uint8Array[] = [];
+  let chunkCount = 0;
+  let totalBytes = 0;
+  let lastChunkAtMs: number | null = null;
+  let readError: string | undefined;
+
+  while (true) {
+    try {
+      const { done, value } = await reader.read();
+      if (done) { break; }
+
+      chunkCount += 1;
+      totalBytes += value.byteLength;
+      lastChunkAtMs = Date.now() - startedAtMs;
+      buffers.push(value);
+    } catch (error) {
+      readError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      break;
+    }
+  }
+
+  const buffer = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of buffers) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return {
+    buffer,
+    chunkCount,
+    lastChunkAtMs,
+    readError,
+  };
+}
+
+function toHex(value: Uint8Array): string {
+  return Array.from(value)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join(" ");
+}
+
+function findExitMarker(buffer: Uint8Array): number {
+  for (let index = buffer.length - 2; index >= 0; index -= 1) {
+    if (buffer[index] !== 0x03) { continue; }
+    if (index === 0 || buffer[index - 1] === 0x0a || buffer[index - 1] === 0x0d) {
+      return index;
+    }
+  }
+
+  return -1;
 }

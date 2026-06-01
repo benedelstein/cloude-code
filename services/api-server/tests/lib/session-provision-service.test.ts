@@ -426,7 +426,7 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(serverState.startupScriptCompleted).toBe(true);
     expect(serverState.finalNetworkPolicyApplied).toBe(true);
     expect(updatePartialState).toHaveBeenCalledWith({
-      lastError: "Startup script failed (exit 127): bash: line 1: pnpm: command not found",
+      lastError: "Startup script failed with exit code 127 after 0ms",
       status: "ready",
     });
   });

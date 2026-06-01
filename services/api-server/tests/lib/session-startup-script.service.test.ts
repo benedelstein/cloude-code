@@ -69,7 +69,7 @@ describe("SessionStartupScriptService", () => {
       script: "pnpm install",
       workspaceDir: "/workspace",
       env: {},
-    })).rejects.toThrow("Startup script failed (exit -1): install output");
+    })).rejects.toThrow("Startup script failed with exit code -1 after 6500ms");
 
     expect(warn).toHaveBeenCalledWith("Session startup script failed", {
       fields: {
