@@ -35,6 +35,66 @@ describe("WorkersSpriteClient", () => {
     });
   });
 
+  it("preserves multiline stdout in a single HTTP exec frame", async () => {
+    const body = concatBytes(
+      new Uint8Array([0x01]),
+      encoder.encode("one\ntwo\nthree\n"),
+      new Uint8Array([0x03, 0x00]),
+    );
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      headers: { "content-type": "application/octet-stream" },
+      status: 200,
+    })) as unknown as typeof fetch);
+
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    const result = await client.execHttp("printf lines");
+
+    expect(result).toEqual({
+      stdout: "one\ntwo\nthree",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
+  it("parses stdout and stderr from separate HTTP exec frames", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(concatBytes(
+          new Uint8Array([0x01]),
+          encoder.encode("out\n"),
+        ));
+        controller.enqueue(concatBytes(
+          new Uint8Array([0x02]),
+          encoder.encode("err\n"),
+        ));
+        controller.enqueue(new Uint8Array([0x03, 0x07]));
+        controller.close();
+      },
+    }), {
+      headers: { "content-type": "application/octet-stream" },
+      status: 200,
+    })) as unknown as typeof fetch);
+
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    const result = await client.execHttp("echo out; echo err >&2; exit 7");
+
+    expect(result).toEqual({
+      stdout: "out",
+      stderr: "err",
+      exitCode: 7,
+    });
+  });
+
   it("streams WebSocket exec chunks while returning accumulated output", async () => {
     const client = new WorkersSpriteClient(
       "sprite-1",

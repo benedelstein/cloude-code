@@ -26,11 +26,19 @@ export interface SpriteInfoResponse {
 
 const logger = createLogger("WorkersSpriteClient.ts");
 
-interface ResponseBodyRead {
+interface ExecHttpResponseRead extends ExecResult {
   buffer: Uint8Array;
   chunkCount: number;
   lastChunkAtMs: number | null;
   readError?: string;
+}
+
+interface ExecHttpParseState {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  stdoutDecoder: TextDecoder;
+  stderrDecoder: TextDecoder;
 }
 
 export class WorkersSpriteClient {
@@ -94,60 +102,30 @@ export class WorkersSpriteClient {
       );
     }
 
-    // Sprites exec returns a binary stream with control byte prefixes:
-    //   \x01 = stdout data follows (until newline)
-    //   \x02 = stderr data follows (until newline)
-    //   \x03 = exit, next byte is the exit code as a raw byte value
-    const body = await readResponseBody(response, d0);
-    const buffer = body.buffer;
+    const result = await readExecHttpResponse(response, d0);
 
-    let stdout = "";
-    let stderr = "";
-    const exitMarkerIndex = findExitMarker(buffer);
-    const exitCode = exitMarkerIndex === -1
-      ? -1
-      : (buffer[exitMarkerIndex + 1] ?? 0);
-    const outputBuffer = exitMarkerIndex === -1
-      ? buffer
-      : buffer.subarray(0, exitMarkerIndex);
-    const decoder = new TextDecoder();
-
-    let i = 0;
-    while (i < outputBuffer.length) {
-      const marker = outputBuffer[i];
-
-      // Find the end of this chunk (next newline or end of buffer)
-      let end = outputBuffer.indexOf(0x0a, i + 1);
-      if (end === -1) { end = outputBuffer.length; }
-      const chunk = decoder.decode(outputBuffer.subarray(i + 1, end));
-
-      if (marker === 0x01) {
-        stdout += chunk + "\n";
-      } else if (marker === 0x02) {
-        stderr += chunk + "\n";
-      }
-
-      i = end + 1;
-    }
-
-    if (exitCode === -1) {
+    if (result.exitCode === -1) {
       logger.warn("Exec HTTP response ended without exit marker", {
         fields: {
           spriteName: this.name,
           durationMs: Date.now() - d0,
           fetchHeadersMs,
-          responseBytes: buffer.length,
-          chunkCount: body.chunkCount,
-          lastChunkAtMs: body.lastChunkAtMs,
+          responseBytes: result.buffer.length,
+          chunkCount: result.chunkCount,
+          lastChunkAtMs: result.lastChunkAtMs,
           contentType: response.headers.get("content-type"),
           contentLength: response.headers.get("content-length"),
-          rawTailHex: toHex(buffer.subarray(Math.max(0, buffer.length - 32))),
-          readError: body.readError ?? null,
+          rawTailHex: toHex(result.buffer.subarray(Math.max(0, result.buffer.length - 32))),
+          readError: result.readError ?? null,
         },
       });
     }
 
-    return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
+    return {
+      stdout: result.stdout.trimEnd(),
+      stderr: result.stderr.trimEnd(),
+      exitCode: result.exitCode,
+    };
   }
 
   /**
@@ -338,9 +316,23 @@ export class WorkersSpriteClient {
   }
 }
 
-async function readResponseBody(response: Response, startedAtMs: number): Promise<ResponseBodyRead> {
+async function readExecHttpResponse(
+  response: Response,
+  startedAtMs: number,
+): Promise<ExecHttpResponseRead> {
+  const state: ExecHttpParseState = {
+    stdout: "",
+    stderr: "",
+    exitCode: -1,
+    stdoutDecoder: new TextDecoder(),
+    stderrDecoder: new TextDecoder(),
+  };
+
   if (!response.body) {
     return {
+      stdout: "",
+      stderr: "",
+      exitCode: -1,
       buffer: new Uint8Array(),
       chunkCount: 0,
       lastChunkAtMs: null,
@@ -363,6 +355,7 @@ async function readResponseBody(response: Response, startedAtMs: number): Promis
       totalBytes += value.byteLength;
       lastChunkAtMs = Date.now() - startedAtMs;
       buffers.push(value);
+      parseExecHttpFrame(state, value);
     } catch (error) {
       readError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       break;
@@ -377,11 +370,46 @@ async function readResponseBody(response: Response, startedAtMs: number): Promis
   }
 
   return {
+    stdout: state.stdout + state.stdoutDecoder.decode(),
+    stderr: state.stderr + state.stderrDecoder.decode(),
+    exitCode: state.exitCode,
     buffer,
     chunkCount,
     lastChunkAtMs,
     readError,
   };
+}
+
+function parseExecHttpFrame(state: ExecHttpParseState, frame: Uint8Array): void {
+  if (state.exitCode !== -1 || frame.length === 0) {
+    return;
+  }
+
+  const streamId = frame[0];
+  const payloadWithMaybeExit = frame.subarray(1);
+
+  if (streamId === 0x03) {
+    state.exitCode = payloadWithMaybeExit[0] ?? 0;
+    return;
+  }
+
+  // Sprites HTTP exec frames are stream-id-prefixed payload chunks. In live
+  // responses the final exit marker can be coalesced onto the last output
+  // frame, so strip a trailing \x03 <exit-code> sentinel before decoding.
+  const trailingExitMarkerIndex = findTrailingExitMarker(payloadWithMaybeExit);
+  const payload = trailingExitMarkerIndex === -1
+    ? payloadWithMaybeExit
+    : payloadWithMaybeExit.subarray(0, trailingExitMarkerIndex);
+
+  if (streamId === 0x01) {
+    state.stdout += state.stdoutDecoder.decode(payload, { stream: true });
+  } else if (streamId === 0x02) {
+    state.stderr += state.stderrDecoder.decode(payload, { stream: true });
+  }
+
+  if (trailingExitMarkerIndex !== -1) {
+    state.exitCode = payloadWithMaybeExit[trailingExitMarkerIndex + 1] ?? 0;
+  }
 }
 
 function toHex(value: Uint8Array): string {
@@ -390,13 +418,8 @@ function toHex(value: Uint8Array): string {
     .join(" ");
 }
 
-function findExitMarker(buffer: Uint8Array): number {
-  for (let index = buffer.length - 2; index >= 0; index -= 1) {
-    if (buffer[index] !== 0x03) { continue; }
-    if (index === 0 || buffer[index - 1] === 0x0a || buffer[index - 1] === 0x0d) {
-      return index;
-    }
-  }
-
-  return -1;
+function findTrailingExitMarker(buffer: Uint8Array): number {
+  return buffer.length >= 2 && buffer[buffer.length - 2] === 0x03
+    ? buffer.length - 2
+    : -1;
 }
