@@ -37,10 +37,10 @@ export class SessionStartupScriptService {
       },
     });
     const d0 = Date.now();
-    const result = await args.sprite.execHttp(
+    const result = await args.sprite.execWs(
       `timeout ${STARTUP_SCRIPT_TIMEOUT_SECONDS}s bash -lc ${shellQuote(script)}`,
       {
-        dir: args.workspaceDir,
+        cwd: args.workspaceDir,
         env: args.env,
       },
     );

@@ -8,6 +8,7 @@ const mockState = vi.hoisted(() => ({
   events: [] as string[],
   setNetworkPolicy: vi.fn(),
   execHttp: vi.fn(),
+  execWs: vi.fn(),
   ensureSpriteStartupToolchain: vi.fn(),
   getReadOnlyTokenForRepo: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock("@/shared/integrations/sprites/WorkersSpriteClient", () => {
     }
     setNetworkPolicy = mockState.setNetworkPolicy;
     execHttp = mockState.execHttp;
+    execWs = mockState.execWs;
   }
   return {
     WorkersSpriteClient,
@@ -169,6 +171,12 @@ describe("SessionProvisionService startup toolchain", () => {
       }
       return { stdout: "", stderr: "", exitCode: 0 };
     });
+    mockState.execWs.mockImplementation(async (command: string) => {
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
     mockState.getReadOnlyTokenForRepo.mockResolvedValue({
       ok: true,
       value: "readonly-token",
@@ -303,9 +311,11 @@ describe("SessionProvisionService startup toolchain", () => {
       if (command.includes("git rev-parse")) {
         return { stdout: "main", stderr: "", exitCode: 0 };
       }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    mockState.execWs.mockImplementation(async (command: string) => {
       if (command.includes("timeout")) {
         mockState.events.push("startupScript");
-        return { stdout: "", stderr: "", exitCode: 0 };
       }
       return { stdout: "", stderr: "", exitCode: 0 };
     });
@@ -374,6 +384,9 @@ describe("SessionProvisionService startup toolchain", () => {
       if (command.includes("git rev-parse")) {
         return { stdout: "main", stderr: "", exitCode: 0 };
       }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    mockState.execWs.mockImplementation(async (command: string) => {
       if (command.includes("timeout")) {
         mockState.events.push("startupScript");
         return {

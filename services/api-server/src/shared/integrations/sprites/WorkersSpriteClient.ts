@@ -162,6 +162,8 @@ export class WorkersSpriteClient {
       env?: Record<string, string>;
       cwd?: string;
       idleTimeoutMs?: number;
+      onStdout?: (data: string) => void;
+      onStderr?: (data: string) => void;
     } = {},
   ): Promise<ExecResult> {
     const session = this.createSession("sh", ["-c", command], {
@@ -175,9 +177,11 @@ export class WorkersSpriteClient {
     let stderr = "";
     session.onStdout((data) => {
       stdout += data;
+      options.onStdout?.(data);
     });
     session.onStderr((data) => {
       stderr += data;
+      options.onStderr?.(data);
     });
 
     await session.start();
