@@ -324,18 +324,31 @@ function SessionSetupTaskRow({
     setIsOutputOpen(false);
   }, [task.id]);
 
+  const taskLabel = getSetupTaskLabel(task);
+
   return (
     <div className="py-1">
       <div className="flex min-w-0 items-start gap-2">
         <SetupTaskStatusIcon task={task} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-sm text-foreground-secondary">
-              {getSetupTaskLabel(task)}
-            </span>
-            {task.output?.truncated && (
-              <span className="shrink-0 text-[10px] font-medium uppercase text-foreground-tertiary">
-                truncated
+            {hasOutput ? (
+              <button
+                type="button"
+                onClick={() => setIsOutputOpen((current) => !current)}
+                className="inline-flex min-w-0 items-center gap-1 text-sm text-foreground-secondary transition-colors hover:text-foreground"
+                aria-expanded={isOutputOpen}
+              >
+                <span className="min-w-0 truncate">{taskLabel}</span>
+                {isOutputOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                )}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate text-sm text-foreground-secondary">
+                {taskLabel}
               </span>
             )}
           </div>
@@ -344,18 +357,6 @@ function SessionSetupTaskRow({
           )}
           {hasOutput && task.output && (
             <div className="mt-1">
-              <button
-                type="button"
-                onClick={() => setIsOutputOpen((current) => !current)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-foreground-secondary hover:text-foreground"
-              >
-                {isOutputOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                )}
-                Setup script output
-              </button>
               {isOutputOpen && (
                 <SessionSetupOutput output={task.output} />
               )}
@@ -384,7 +385,7 @@ function SetupTaskStatusIcon({ task }: { task: SessionSetupTask }) {
 
 function SessionSetupOutput({ output }: { output: SessionSetupTaskOutput }) {
   return (
-    <div className="mt-2 overflow-hidden rounded-md border border-border bg-muted/40">
+    <div className="my-1 overflow-hidden rounded-md border border-border bg-background text-xs">
       {output.stdout && (
         <SetupOutputBlock label="stdout" value={output.stdout} />
       )}
@@ -392,7 +393,7 @@ function SessionSetupOutput({ output }: { output: SessionSetupTaskOutput }) {
         <SetupOutputBlock label="stderr" value={output.stderr} />
       )}
       {output.exitCode !== null && (
-        <div className="border-t border-border px-3 py-1.5 text-xs text-foreground-secondary">
+        <div className="border-t border-border bg-muted/30 px-3 py-1.5 font-mono text-foreground-secondary">
           exit {output.exitCode}
         </div>
       )}
@@ -403,10 +404,10 @@ function SessionSetupOutput({ output }: { output: SessionSetupTaskOutput }) {
 function SetupOutputBlock({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-b border-border last:border-b-0">
-      <div className="border-b border-border px-3 py-1 text-[10px] font-medium uppercase text-foreground-secondary">
-        {label}
+      <div className="border-b border-border bg-muted/30 px-3 py-1.5 font-mono text-foreground-secondary">
+        {label.toUpperCase()}
       </div>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-5 text-foreground">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono leading-relaxed text-foreground-secondary">
         {value}
       </pre>
     </div>

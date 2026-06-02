@@ -179,8 +179,9 @@ describe("MessageList", () => {
     fireEvent.click(screen.getByRole("button", { name: /Initialized session/ }));
 
     expect(screen.getByText("Setup script failed")).toBeTruthy();
-    expect(screen.getByText("truncated")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Setup script output/ }));
+    expect(screen.queryByText("truncated")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Setup script failed/ }));
     expect(screen.getByText("setup failed")).toBeTruthy();
+    expect(screen.getByText("STDERR")).toBeTruthy();
   });
 });
