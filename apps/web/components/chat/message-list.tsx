@@ -159,6 +159,7 @@ export function MessageList({
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
+  const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -214,13 +215,19 @@ export function MessageList({
       {!showError && !showLoading && !showEmpty && (
         <div className="max-w-4xl mx-auto px-8 space-y-2">
           {allMessages.map((message) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              isStreaming={streamingMessage?.id === message.id}
-              userAvatarUrl={userAvatarUrl}
-              providerId={providerId}
-            />
+            <div key={message.id} className="contents">
+              {shouldRenderSetupRun && sessionSetupRun && message.id === firstAssistantMessageId && (
+                <SessionSetupRunIndicator
+                  setupRun={sessionSetupRun}
+                />
+              )}
+              <MessageItem
+                message={message}
+                isStreaming={streamingMessage?.id === message.id}
+                userAvatarUrl={userAvatarUrl}
+                providerId={providerId}
+              />
+            </div>
           ))}
           {shouldRenderPendingUserMessage && pendingUserMessage && (
             <MessageItem
@@ -229,7 +236,7 @@ export function MessageList({
               providerId={providerId}
             />
           )}
-          {shouldRenderSetupRun && sessionSetupRun ? (
+          {shouldRenderSetupRun && sessionSetupRun && firstAssistantMessageId === null ? (
             <SessionSetupRunIndicator
               setupRun={sessionSetupRun}
             />
@@ -281,7 +288,7 @@ function SessionSetupRunIndicator({
         className="group flex w-fit items-center gap-2 text-left text-sm text-foreground-secondary transition-colors hover:text-foreground"
         aria-expanded={isExpanded}
       >
-        <WorkingCloudIndicator />
+        <WorkingCloudIndicator animated={setupRun.status === "running"} />
         <span className="font-medium">{title}</span>
         {isExpanded ? (
           <ChevronDown className="h-4 w-4 shrink-0" />

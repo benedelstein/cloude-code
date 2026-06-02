@@ -83,7 +83,7 @@ describe("MessageList", () => {
   });
 
   it("keeps completed setup visible while the setup run still exists", () => {
-    render(React.createElement(MessageList, {
+    const { container } = render(React.createElement(MessageList, {
       messages: [],
       streamingMessage: null,
       isResponding: true,
@@ -108,6 +108,42 @@ describe("MessageList", () => {
 
     expect(screen.getByRole("status", { name: "Initialized session" })).toBeTruthy();
     expect(screen.queryByRole("status", { name: "Working" })).toBeNull();
+    expect(container.querySelector("animate")).toBeNull();
+  });
+
+  it("renders completed setup before assistant output", () => {
+    render(React.createElement(MessageList, {
+      messages: [
+        {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Doing fine. What do you need?" }],
+        },
+      ],
+      streamingMessage: null,
+      sessionSetupRun: {
+        id: "setup-1",
+        mode: "create",
+        status: "completed",
+        startedAt: "2026-06-02T00:00:00.000Z",
+        completedAt: "2026-06-02T00:00:02.000Z",
+        tasks: [
+          {
+            id: "cloud_container",
+            status: "completed",
+            startedAt: "2026-06-02T00:00:00.000Z",
+            completedAt: "2026-06-02T00:00:01.000Z",
+            error: null,
+            output: null,
+          },
+        ],
+      },
+    }));
+
+    const setupText = screen.getByText("Initialized session");
+    const assistantText = screen.getByText("Doing fine. What do you need?");
+    expect(setupText.compareDocumentPosition(assistantText) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 
   it("renders failed setup script output collapsed behind a disclosure", () => {
