@@ -28,7 +28,7 @@ describe("SessionStartupScriptService", () => {
   it("logs when no startup script is configured", async () => {
     const { info, logger } = createLogger();
     const sprite = {
-      execHttp: vi.fn(),
+      execWs: vi.fn(),
     } as unknown as WorkersSpriteClient;
 
     const service = new SessionStartupScriptService(logger);
@@ -40,7 +40,7 @@ describe("SessionStartupScriptService", () => {
       env: { FOO: "bar" },
     });
 
-    expect(sprite.execHttp).not.toHaveBeenCalled();
+    expect(sprite.execWs).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith("No session startup script configured", {
       fields: {
         workspaceDir: "/workspace",
@@ -52,7 +52,7 @@ describe("SessionStartupScriptService", () => {
   it("logs duration when the startup script fails", async () => {
     const { logger, warn } = createLogger();
     const sprite = {
-      execHttp: vi.fn(async () => ({
+      execWs: vi.fn(async () => ({
         stdout: "install output",
         stderr: "",
         exitCode: -1,
@@ -69,7 +69,7 @@ describe("SessionStartupScriptService", () => {
       script: "pnpm install",
       workspaceDir: "/workspace",
       env: {},
-    })).rejects.toThrow("Startup script failed (exit -1): install output");
+    })).rejects.toThrow("Startup script failed with exit code -1 after 6500ms");
 
     expect(warn).toHaveBeenCalledWith("Session startup script failed", {
       fields: {

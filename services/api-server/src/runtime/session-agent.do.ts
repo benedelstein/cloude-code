@@ -519,7 +519,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   private queueEnsureReady(): void {
-    void this.ensureReady().catch((error) => {
+    void this.keepAliveWhile(() => this.ensureReady()).catch((error) => {
       this.logger.error("ensureReady failed", { error });
     });
   }
@@ -695,8 +695,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       }
     }
 
-    // Clear all storage on the DO (DO will cease to exist after this)
-    await this.ctx.storage.deleteAll();
+    // Clear Agent SDK state, alarms, WebSocket resources, and all DO storage.
+    await this.destroy();
 
     return success(undefined);
   }

@@ -26,6 +26,21 @@ export interface SpriteInfoResponse {
 
 const logger = createLogger("WorkersSpriteClient.ts");
 
+interface ExecHttpResponseRead extends ExecResult {
+  buffer: Uint8Array;
+  chunkCount: number;
+  lastChunkAtMs: number | null;
+  readError?: string;
+}
+
+interface ExecHttpParseState {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  stdoutDecoder: TextDecoder;
+  stderrDecoder: TextDecoder;
+}
+
 export class WorkersSpriteClient {
   private baseUrl: string;
   private apiKey: string;
@@ -45,6 +60,7 @@ export class WorkersSpriteClient {
       dir?: string;
     } = {},
   ): Promise<ExecResult> {
+    const d0 = Date.now();
     const url = new URL(`${this.baseUrl}/v1/sprites/${this.name}/exec`);
 
     // Wrap command in sh -c to support shell syntax (pipes, redirects, etc.)
@@ -72,6 +88,7 @@ export class WorkersSpriteClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
     });
+    const fetchHeadersMs = Date.now() - d0;
 
     if (!response.ok) {
       const text = await response.text();
@@ -85,41 +102,30 @@ export class WorkersSpriteClient {
       );
     }
 
-    // Sprites exec returns a binary stream with control byte prefixes:
-    //   \x01 = stdout data follows (until newline)
-    //   \x02 = stderr data follows (until newline)
-    //   \x03 = exit, next byte is the exit code as a raw byte value
-    const buffer = new Uint8Array(await response.arrayBuffer());
+    const result = await readExecHttpResponse(response, d0);
 
-    let stdout = "";
-    let stderr = "";
-    let exitCode = -1;
-    const decoder = new TextDecoder();
-
-    let i = 0;
-    while (i < buffer.length) {
-      const marker = buffer[i];
-      if (marker === 0x03) {
-        // Exit code: single byte following the marker
-        exitCode = i + 1 < buffer.length ? (buffer[i + 1] ?? 0) : 0;
-        break;
-      }
-
-      // Find the end of this chunk (next newline or end of buffer)
-      let end = buffer.indexOf(0x0a, i + 1);
-      if (end === -1) { end = buffer.length; }
-      const chunk = decoder.decode(buffer.subarray(i + 1, end));
-
-      if (marker === 0x01) {
-        stdout += chunk + "\n";
-      } else if (marker === 0x02) {
-        stderr += chunk + "\n";
-      }
-
-      i = end + 1;
+    if (result.exitCode === -1) {
+      logger.warn("Exec HTTP response ended without exit marker", {
+        fields: {
+          spriteName: this.name,
+          durationMs: Date.now() - d0,
+          fetchHeadersMs,
+          responseBytes: result.buffer.length,
+          chunkCount: result.chunkCount,
+          lastChunkAtMs: result.lastChunkAtMs,
+          contentType: response.headers.get("content-type"),
+          contentLength: response.headers.get("content-length"),
+          rawTailHex: toHex(result.buffer.subarray(Math.max(0, result.buffer.length - 32))),
+          readError: result.readError ?? null,
+        },
+      });
     }
 
-    return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode };
+    return {
+      stdout: result.stdout.trimEnd(),
+      stderr: result.stderr.trimEnd(),
+      exitCode: result.exitCode,
+    };
   }
 
   /**
@@ -134,6 +140,8 @@ export class WorkersSpriteClient {
       env?: Record<string, string>;
       cwd?: string;
       idleTimeoutMs?: number;
+      onStdout?: (data: string) => void;
+      onStderr?: (data: string) => void;
     } = {},
   ): Promise<ExecResult> {
     const session = this.createSession("sh", ["-c", command], {
@@ -147,9 +155,11 @@ export class WorkersSpriteClient {
     let stderr = "";
     session.onStdout((data) => {
       stdout += data;
+      options.onStdout?.(data);
     });
     session.onStderr((data) => {
       stderr += data;
+      options.onStderr?.(data);
     });
 
     await session.start();
@@ -304,4 +314,97 @@ export class WorkersSpriteClient {
       );
     }
   }
+}
+
+async function readExecHttpResponse(
+  response: Response,
+  startedAtMs: number,
+): Promise<ExecHttpResponseRead> {
+  const state: ExecHttpParseState = {
+    stdout: "",
+    stderr: "",
+    exitCode: -1,
+    stdoutDecoder: new TextDecoder(),
+    stderrDecoder: new TextDecoder(),
+  };
+
+  if (!response.body) {
+    return {
+      stdout: "",
+      stderr: "",
+      exitCode: -1,
+      buffer: new Uint8Array(),
+      chunkCount: 0,
+      lastChunkAtMs: null,
+    };
+  }
+
+  const reader = response.body.getReader();
+  const buffers: Uint8Array[] = [];
+  let chunkCount = 0;
+  let totalBytes = 0;
+  let lastChunkAtMs: number | null = null;
+  let readError: string | undefined;
+
+  while (true) {
+    try {
+      const { done, value } = await reader.read();
+      if (done) { break; }
+
+      chunkCount += 1;
+      totalBytes += value.byteLength;
+      lastChunkAtMs = Date.now() - startedAtMs;
+      buffers.push(value);
+      parseExecHttpFrame(state, value);
+    } catch (error) {
+      readError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      break;
+    }
+  }
+
+  const buffer = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of buffers) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  state.stdout += state.stdoutDecoder.decode();
+  state.stderr += state.stderrDecoder.decode();
+
+  return {
+    stdout: state.stdout,
+    stderr: state.stderr,
+    exitCode: state.exitCode,
+    buffer,
+    chunkCount,
+    lastChunkAtMs,
+    readError,
+  };
+}
+
+function parseExecHttpFrame(state: ExecHttpParseState, frame: Uint8Array): void {
+  if (state.exitCode !== -1 || frame.length === 0) {
+    return;
+  }
+
+  const streamId = frame[0];
+  const payloadWithMaybeExit = frame.subarray(1);
+
+  if (streamId === 0x03) {
+    state.exitCode = payloadWithMaybeExit[0] ?? 0;
+    return;
+  }
+
+  if (streamId === 0x01) {
+    state.stdout += state.stdoutDecoder.decode(payloadWithMaybeExit, { stream: true });
+  } else if (streamId === 0x02) {
+    state.stderr += state.stderrDecoder.decode(payloadWithMaybeExit, { stream: true });
+  }
+}
+
+function toHex(value: Uint8Array): string {
+  return Array.from(value)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join(" ");
 }

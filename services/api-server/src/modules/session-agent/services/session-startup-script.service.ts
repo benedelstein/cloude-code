@@ -37,10 +37,10 @@ export class SessionStartupScriptService {
       },
     });
     const d0 = Date.now();
-    const result = await args.sprite.execHttp(
+    const result = await args.sprite.execWs(
       `timeout ${STARTUP_SCRIPT_TIMEOUT_SECONDS}s bash -lc ${shellQuote(script)}`,
       {
-        dir: args.workspaceDir,
+        cwd: args.workspaceDir,
         env: args.env,
       },
     );
@@ -55,9 +55,7 @@ export class SessionStartupScriptService {
           stderr: truncateOutput(result.stderr),
         },
       });
-      throw new Error(
-        `Startup script failed (exit ${result.exitCode}): ${truncateOutput(result.stderr || result.stdout)}`,
-      );
+      throw new SessionStartupScriptError(result.exitCode, durationMs);
     }
 
     this.logger.info("Session startup script completed", {
@@ -67,6 +65,13 @@ export class SessionStartupScriptService {
         stderrBytes: result.stderr.length,
       },
     });
+  }
+}
+
+class SessionStartupScriptError extends Error {
+  constructor(exitCode: number, durationMs: number) {
+    super(`Startup script failed with exit code ${exitCode} after ${durationMs}ms`);
+    this.name = "SessionStartupScriptError";
   }
 }
 
