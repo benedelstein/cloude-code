@@ -2,9 +2,11 @@
 
 Status: implemented with current file-name drift. Provider metadata now lives
 under `packages/shared/src/types/providers/`; provider auth dispatch is in
-`services/api-server/src/lib/providers/ai-auth-provider.ts`; Sprite
-credential sync is in `ai-credential-provider.ts`; and the DO uses
-`SpriteAgentProcessManager`, not the older `agent-process-manager.ts` name.
+`services/api-server/src/modules/ai-auth/services/provider-auth.service.ts`;
+Sprite credential sync is in
+`services/api-server/src/modules/ai-auth/services/provider-credential-adapter.service.ts`;
+and the DO uses `SpriteAgentProcessManager`, not the older
+`agent-process-manager.ts` name.
 Legacy `claude_tokens` and `openai_tokens` tables still exist, but current
 Claude/OpenAI Codex auth services store active credentials in
 `user_provider_credentials`.

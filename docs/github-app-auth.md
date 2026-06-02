@@ -37,7 +37,7 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
   ```
   git -c http.extraHeader="Authorization: Basic <base64(x-access-token:TOKEN)>" clone ...
   ```
-- **Push/fetch after clone**: `origin` is reset to the public GitHub URL for reads, and `origin --push` is set to `WORKER_URL/git-proxy/:sessionId/github.com/owner/repo.git`. The proxy authenticates Sprite requests with a per-session bearer secret and forwards to GitHub with a fresh or cached installation token from `getInstallationTokenForRepo(...)`.
+- **Push/fetch after clone**: `origin --push` is set to `WORKER_URL/git-proxy/:sessionId/github.com/owner/repo.git`. For reads, `SessionProvisionService.cloneRepo(...)` uses the public GitHub URL unless the selected repo environment's network mode is `"locked"`, in which case `origin` also uses the Worker git proxy so fetches still work after `buildFinalNetworkPolicy(...)` denies direct GitHub access. The proxy authenticates Sprite requests with a per-session bearer secret and forwards to GitHub with a fresh or cached installation token from `getInstallationTokenForRepo(...)`.
 
 ## Architecture
 
@@ -47,8 +47,10 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 |------|---------|
 | `services/api-server/src/modules/github/services/github-app.service.ts` | `GitHubAppService` - token resolution, installation lookup, webhook handling |
 | `services/api-server/src/modules/sessions/services/session-repo-access.service.ts` | Session repo access checks for create/read/connect/chat paths |
+| `services/api-server/src/modules/repo-environments/services/repo-environments.service.ts` | Repo environment ownership/access checks and session environment snapshot resolution |
 | `services/api-server/src/modules/session-agent/services/session-provision.service.ts` | Sprite provisioning, read-only clone, git remote setup |
 | `services/api-server/src/modules/session-agent/services/session-git-proxy.service.ts` | Session-scoped git proxy auth/access wrapper |
+| `services/api-server/src/shared/integrations/sprites/network-policy.ts` | Bootstrap/final Sprite network policy construction |
 | `services/api-server/src/modules/webhooks/routes/webhooks.routes.ts` | `POST /webhooks/github` - receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |
 
@@ -58,6 +60,7 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 - **`github_installation_repos`** — Tracks which repos are accessible when `repository_selection = "selected"`. When `"all"`, every repo under the account is accessible (no rows needed).
 - **`installation_token_cache`** — Caches encrypted installation access tokens. Runtime cache keys include the repo id and permission scope, and reads require `expires_at` to be more than 5 minutes in the future.
 - **`github_user_repo_access_cache`** — Caches per-user repo access checks for 5 minutes. This is used by session creation and existing-session access checks.
+- **`repo_environments`** — Stores repo-scoped environment presets. Session creation snapshots the selected environment; provisioning uses the snapshot for final network policy, plain env vars, and startup script behavior.
 
 ### Webhook Events
 

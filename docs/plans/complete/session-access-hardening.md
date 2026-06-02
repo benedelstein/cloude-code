@@ -2,7 +2,7 @@
 
 Status: implemented with naming drift. The current guard is
 `assertSessionRepoAccess(...)` in
-`services/api-server/src/lib/providers/repo-access-provider.ts`, and blocked
+`services/api-server/src/modules/sessions/services/session-repo-access.service.ts`, and blocked
 sessions use `access_blocked_at` / `access_block_reason` columns rather than
 the `revoked_at` / `revoked_reason` names in this original plan.
 
@@ -68,10 +68,10 @@ The guard should:
 
 Use it from only these entrypoints:
 
-- `getAuthorizedSessionAgent(...)` in `services/api-server/src/routes/sessions/sessions.routes.ts`
-- websocket connect in `services/api-server/src/routes/agent.routes.ts`
-- `chat.message` in `services/api-server/src/durable-objects/session-agent-do.ts`
-- DO git-proxy handling in `services/api-server/src/durable-objects/session-agent-do.ts`
+- `getAuthorizedSessionAgent(...)` in `services/api-server/src/modules/sessions/services/sessions.service.ts`
+- websocket connect in `services/api-server/src/modules/session-agent/routes/agent.routes.ts`
+- `chat.message` in `services/api-server/src/runtime/session-agent.do.ts`
+- DO git-proxy handling in `services/api-server/src/runtime/session-agent.do.ts` via `SessionGitProxyService`
 
 ### Enforcement points
 
@@ -84,7 +84,7 @@ This gives coverage with minimal surface area:
 
 This avoids spreading the check across every individual route. The existing helper `getAuthorizedSessionAgent(...)` should become the HTTP entrypoint for the centralized guard rather than adding a new check in each route handler.
 
-`POST /sessions/:sessionId/websocket-token` is now guarded. `SessionsService.createSessionWebSocketToken(...)` calls `assertSessionRepoAccess(...)` before minting a token, and `services/api-server/src/routes/agent.routes.ts` repeats the same access check at websocket upgrade.
+`POST /sessions/:sessionId/websocket-token` is now guarded. `SessionsService.createSessionWebSocketToken(...)` calls `assertSessionRepoAccess(...)` before minting a token, and `services/api-server/src/modules/session-agent/routes/agent.routes.ts` repeats the same access check at websocket upgrade.
 
 For already-open websockets:
 

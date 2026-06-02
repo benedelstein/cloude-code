@@ -83,5 +83,6 @@ D1 repositories live inside the module that owns the data:
 - `services/api-server/src/modules/auth/repositories/` - user account and session persistence.
 - `services/api-server/src/modules/ai-auth/repositories/` - provider OAuth credential state.
 - `services/api-server/src/modules/github/repositories/` - GitHub App installation, access, and token cache state.
+- `services/api-server/src/modules/repo-environments/repositories/` - per-user, per-repo environment presets for network policy, plain env vars, and startup scripts.
 
 Durable Object SQLite repositories for session-agent state live in `services/api-server/src/modules/session-agent/repositories/`.
