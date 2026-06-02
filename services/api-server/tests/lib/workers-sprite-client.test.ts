@@ -9,16 +9,10 @@ describe("WorkersSpriteClient", () => {
   });
 
   it("parses an exit marker after trailing blank stdout lines", async () => {
-    const body = concatBytes(
-      new Uint8Array([0x01]),
-      encoder.encode("build complete\n\n"),
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(new Uint8Array([0x01]), encoder.encode("build complete\n\n")),
       new Uint8Array([0x03, 0x00]),
-    );
-    const fetchMock = vi.fn(async () => new Response(body, {
-      headers: { "content-type": "application/octet-stream" },
-      status: 200,
-    })) as unknown as typeof fetch;
-    vi.stubGlobal("fetch", fetchMock);
+    )) as unknown as typeof fetch);
 
     const client = new WorkersSpriteClient(
       "sprite-1",
@@ -36,15 +30,10 @@ describe("WorkersSpriteClient", () => {
   });
 
   it("preserves multiline stdout in a single HTTP exec frame", async () => {
-    const body = concatBytes(
-      new Uint8Array([0x01]),
-      encoder.encode("one\ntwo\nthree\n"),
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(new Uint8Array([0x01]), encoder.encode("one\ntwo\nthree\n")),
       new Uint8Array([0x03, 0x00]),
-    );
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
-      headers: { "content-type": "application/octet-stream" },
-      status: 200,
-    })) as unknown as typeof fetch);
+    )) as unknown as typeof fetch);
 
     const client = new WorkersSpriteClient(
       "sprite-1",
@@ -61,24 +50,33 @@ describe("WorkersSpriteClient", () => {
     });
   });
 
+  it("does not treat trailing payload bytes as an exit marker", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(new Uint8Array([0x01]), encoder.encode("ok"), new Uint8Array([0x03, 0x2a])),
+      new Uint8Array([0x03, 0x00]),
+    )) as unknown as typeof fetch);
+
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    const result = await client.execHttp("printf marker bytes");
+
+    expect(result).toEqual({
+      stdout: "ok\u0003*",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
   it("parses stdout and stderr from separate HTTP exec frames", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream({
-      start(controller) {
-        controller.enqueue(concatBytes(
-          new Uint8Array([0x01]),
-          encoder.encode("out\n"),
-        ));
-        controller.enqueue(concatBytes(
-          new Uint8Array([0x02]),
-          encoder.encode("err\n"),
-        ));
-        controller.enqueue(new Uint8Array([0x03, 0x07]));
-        controller.close();
-      },
-    }), {
-      headers: { "content-type": "application/octet-stream" },
-      status: 200,
-    })) as unknown as typeof fetch);
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(new Uint8Array([0x01]), encoder.encode("out\n")),
+      concatBytes(new Uint8Array([0x02]), encoder.encode("err\n")),
+      new Uint8Array([0x03, 0x07]),
+    )) as unknown as typeof fetch);
 
     const client = new WorkersSpriteClient(
       "sprite-1",
@@ -159,4 +157,18 @@ function concatBytes(...chunks: Uint8Array[]): Uint8Array {
   }
 
   return result;
+}
+
+function createExecResponse(...frames: Uint8Array[]): Response {
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const frame of frames) {
+        controller.enqueue(frame);
+      }
+      controller.close();
+    },
+  }), {
+    headers: { "content-type": "application/octet-stream" },
+    status: 200,
+  });
 }

@@ -393,22 +393,10 @@ function parseExecHttpFrame(state: ExecHttpParseState, frame: Uint8Array): void 
     return;
   }
 
-  // Sprites HTTP exec frames are stream-id-prefixed payload chunks. In live
-  // responses the final exit marker can be coalesced onto the last output
-  // frame, so strip a trailing \x03 <exit-code> sentinel before decoding.
-  const trailingExitMarkerIndex = findTrailingExitMarker(payloadWithMaybeExit);
-  const payload = trailingExitMarkerIndex === -1
-    ? payloadWithMaybeExit
-    : payloadWithMaybeExit.subarray(0, trailingExitMarkerIndex);
-
   if (streamId === 0x01) {
-    state.stdout += state.stdoutDecoder.decode(payload, { stream: true });
+    state.stdout += state.stdoutDecoder.decode(payloadWithMaybeExit, { stream: true });
   } else if (streamId === 0x02) {
-    state.stderr += state.stderrDecoder.decode(payload, { stream: true });
-  }
-
-  if (trailingExitMarkerIndex !== -1) {
-    state.exitCode = payloadWithMaybeExit[trailingExitMarkerIndex + 1] ?? 0;
+    state.stderr += state.stderrDecoder.decode(payloadWithMaybeExit, { stream: true });
   }
 }
 
@@ -416,10 +404,4 @@ function toHex(value: Uint8Array): string {
   return Array.from(value)
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join(" ");
-}
-
-function findTrailingExitMarker(buffer: Uint8Array): number {
-  return buffer.length >= 2 && buffer[buffer.length - 2] === 0x03
-    ? buffer.length - 2
-    : -1;
 }
