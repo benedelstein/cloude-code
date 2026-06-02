@@ -369,9 +369,12 @@ async function readExecHttpResponse(
     offset += chunk.byteLength;
   }
 
+  state.stdout += state.stdoutDecoder.decode();
+  state.stderr += state.stderrDecoder.decode();
+
   return {
-    stdout: state.stdout + state.stdoutDecoder.decode(),
-    stderr: state.stderr + state.stderrDecoder.decode(),
+    stdout: state.stdout,
+    stderr: state.stderr,
     exitCode: state.exitCode,
     buffer,
     chunkCount,
