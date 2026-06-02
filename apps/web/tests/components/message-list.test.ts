@@ -82,7 +82,7 @@ describe("MessageList", () => {
       .toBeTruthy();
   });
 
-  it("renders working indicator after setup completes while responding", () => {
+  it("keeps completed setup visible while the setup run still exists", () => {
     render(React.createElement(MessageList, {
       messages: [],
       streamingMessage: null,
@@ -106,8 +106,8 @@ describe("MessageList", () => {
       },
     }));
 
-    expect(screen.getByRole("status", { name: "Working" })).toBeTruthy();
-    expect(screen.queryByText("Initialized session")).toBeNull();
+    expect(screen.getByRole("status", { name: "Initialized session" })).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Working" })).toBeNull();
   });
 
   it("renders failed setup script output collapsed behind a disclosure", () => {

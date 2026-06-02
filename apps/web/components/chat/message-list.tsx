@@ -158,9 +158,7 @@ export function MessageList({
   const hasPendingUserMessage = !!pendingUserMessage;
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
-  const setupRunHasFailedTask = sessionSetupRun?.tasks.some((task) => task.status === "failed") ?? false;
-  const shouldRenderSetupRun = sessionSetupRun !== null
-    && (sessionSetupRun.status !== "completed" || setupRunHasFailedTask);
+  const shouldRenderSetupRun = sessionSetupRun !== null;
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
