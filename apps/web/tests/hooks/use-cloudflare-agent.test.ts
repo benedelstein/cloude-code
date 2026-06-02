@@ -34,6 +34,7 @@ function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
   return {
     repoFullName: "ben/repo",
     status: "ready",
+    sessionSetupRun: null,
     agentSettings: { provider: "openai-codex", model: "gpt-5.3-codex", effort: "high", maxTokens: 8192 },
     agentMode: "edit",
     pushedBranch: null,

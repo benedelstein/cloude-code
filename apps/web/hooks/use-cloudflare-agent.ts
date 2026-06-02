@@ -18,6 +18,7 @@ import type {
   AgentSettings,
   ProviderConnectionState,
   SessionStatus,
+  SessionSetupRun,
   SessionWebSocketTokenResponse,
   ClientMessage,
   ProviderAuthRequired,
@@ -57,6 +58,7 @@ export interface UseCloudflareAgentReturn {
   sessionStatus: SessionStatus | null;
   sessionErrorMessage: string | null;
   sessionErrorCode: string | null;
+  sessionSetupRun: SessionSetupRun | null;
   operationError: OperationErrorEvent | null;
   isHistoryLoading: boolean;
   hasHydratedState: boolean;
@@ -102,6 +104,7 @@ export function useCloudflareAgent({
   const [streamingMessage, setStreamingMessage] = useState<UIMessage | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [sessionErrorMessage, setSessionErrorMessage] = useState<string | null>(null);
+  const [sessionSetupRun, setSessionSetupRun] = useState<SessionSetupRun | null>(null);
   const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
@@ -318,6 +321,7 @@ export function useCloudflareAgent({
         prev,
         state.pendingUserMessage?.message ?? null,
       ));
+      setSessionSetupRun((prev) => keepPreviousIfDeepEqual(prev, state.sessionSetupRun));
       applyServerActiveTurn(state.activeTurn ?? null);
       setEditorUrl(state.editorUrl);
       setAgentSettings((prev) => keepPreviousIfDeepEqual(prev, state.agentSettings));
@@ -420,6 +424,7 @@ export function useCloudflareAgent({
     sessionStatus,
     sessionErrorMessage,
     sessionErrorCode: null,
+    sessionSetupRun,
     operationError,
     isHistoryLoading,
     hasHydratedState,

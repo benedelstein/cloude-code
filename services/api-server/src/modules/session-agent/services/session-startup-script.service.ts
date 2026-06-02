@@ -4,6 +4,27 @@ import type { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersS
 const STARTUP_SCRIPT_TIMEOUT_SECONDS = 300;
 const STARTUP_SCRIPT_OUTPUT_LIMIT = 8000;
 
+export type SessionStartupScriptRunResult =
+  | { status: "skipped" }
+  | {
+      status: "completed";
+      output: SessionStartupScriptOutput;
+      durationMs: number;
+    }
+  | {
+      status: "failed";
+      errorMessage: string;
+      output: SessionStartupScriptOutput;
+      durationMs: number;
+    };
+
+export type SessionStartupScriptOutput = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  truncated: boolean;
+};
+
 export class SessionStartupScriptService {
   private readonly logger: Logger;
 
@@ -16,7 +37,7 @@ export class SessionStartupScriptService {
     script: string | null;
     workspaceDir: string;
     env: PlainEnvVars;
-  }): Promise<void> {
+  }): Promise<SessionStartupScriptRunResult> {
     const script = args.script?.trim();
     if (!script) {
       this.logger.info("No session startup script configured", {
@@ -25,7 +46,7 @@ export class SessionStartupScriptService {
           envVarCount: Object.keys(args.env).length,
         },
       });
-      return;
+      return { status: "skipped" };
     }
 
     this.logger.info("Running session startup script", {
@@ -45,17 +66,24 @@ export class SessionStartupScriptService {
       },
     );
     const durationMs = Date.now() - d0;
+    const output = buildStartupScriptOutput(result);
 
     if (result.exitCode !== 0) {
       this.logger.warn("Session startup script failed", {
         fields: {
           exitCode: result.exitCode,
           durationMs,
-          stdout: truncateOutput(result.stdout),
-          stderr: truncateOutput(result.stderr),
+          stdout: output.stdout,
+          stderr: output.stderr,
         },
       });
-      throw new SessionStartupScriptError(result.exitCode, durationMs);
+      const error = new SessionStartupScriptError(result.exitCode, durationMs);
+      return {
+        status: "failed",
+        errorMessage: error.message,
+        output,
+        durationMs,
+      };
     }
 
     this.logger.info("Session startup script completed", {
@@ -65,6 +93,7 @@ export class SessionStartupScriptService {
         stderrBytes: result.stderr.length,
       },
     });
+    return { status: "completed", output, durationMs };
   }
 }
 
@@ -83,4 +112,19 @@ function truncateOutput(value: string): string {
   return value.length > STARTUP_SCRIPT_OUTPUT_LIMIT
     ? `${value.slice(0, STARTUP_SCRIPT_OUTPUT_LIMIT)}...`
     : value;
+}
+
+function buildStartupScriptOutput(result: {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}): SessionStartupScriptOutput {
+  return {
+    stdout: truncateOutput(result.stdout),
+    stderr: truncateOutput(result.stderr),
+    exitCode: result.exitCode,
+    truncated:
+      result.stdout.length > STARTUP_SCRIPT_OUTPUT_LIMIT
+      || result.stderr.length > STARTUP_SCRIPT_OUTPUT_LIMIT,
+  };
 }

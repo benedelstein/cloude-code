@@ -2,6 +2,8 @@ import { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import {
   type ClientState,
   type Logger,
+  type SessionSetupRun,
+  type SessionSetupTaskId,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
@@ -51,6 +53,7 @@ import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-tur
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/sprite-agent-process-manager.service";
 import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
 import { SessionChatDispatchService } from "@/modules/session-agent/services/session-chat-dispatch.service";
+import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
@@ -85,13 +88,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly processManager: SpriteAgentProcessManager;
   private readonly provisionService: SessionProvisionService;
   private readonly chatDispatchService: SessionChatDispatchService;
+  private readonly setupRunService: SessionSetupRunService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
 
   initialState: ClientState = {
     repoFullName: null,
-    status: "initializing",
+    status: "preparing",
+    sessionSetupRun: null,
     agentSettings: { ...DEFAULT_AGENT_SETTINGS },
     agentMode: "edit",
     pushedBranch: null,
@@ -148,6 +153,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     // Load server state from SQLite
     this.serverState = this.serverStateRepository.get();
 
+    this.setupRunService = new SessionSetupRunService({
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updatePartialState: (partial) => this.updatePartialState(partial),
+      synthesizeStatus: (setupRun) => this.synthesizeStatus(setupRun),
+    });
+
     this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
       env: this.env,
@@ -163,6 +175,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
+      setupReporter: {
+        completeTask: (taskId) => this.setupRunService.completeTask(taskId),
+        failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
+        completeRun: () => this.setupRunService.completeRun(),
+        failRun: (error) => this.setupRunService.failRun(error),
+      },
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -188,6 +206,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
       githubTokenProvider: githubAppService,
+      setupReporter: {
+        startTask: (taskId) => this.setupRunService.startTask(taskId),
+        completeTask: (taskId, output) => this.setupRunService.completeTask(taskId, output),
+        failTask: (taskId, error, output) => this.setupRunService.failTask(taskId, error, output),
+        skipTask: (taskId) => this.setupRunService.skipTask(taskId),
+        failRun: (error) => this.setupRunService.failRun(error),
+      },
     });
 
     this.chatDispatchService = new SessionChatDispatchService({
@@ -202,6 +227,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
+      setActiveSetupTaskId: (taskId) => this.updateServerState({ activeSetupTaskId: taskId }),
+      setupReporter: {
+        startTask: (taskId) => this.setupRunService.startTask(taskId),
+        failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
+        failRun: (error) => this.setupRunService.failRun(error),
+      },
     });
 
     this.providerConnectionService = new SessionProviderConnectionService({
@@ -238,6 +269,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     // NOTE: doing this here brecause we cant access this.name in the constructor. cf bug
     // Reset transient ClientState fields on every restart so they never get
     // stuck from a previous instance's in-progress operation.
+    this.setupRunService.repairOnStart();
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
@@ -284,10 +316,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    * the in-memory agent connection state. Used to reset transient status
    * on restart and after each provisioning step.
    */
-  private synthesizeStatus(): SessionStatus {
-    if (!this.serverState.initialized) { return "initializing"; }
-    if (!this.serverState.spriteName) { return "provisioning"; }
-    if (!this.serverState.repoCloned) { return "cloning"; }
+  private synthesizeStatus(
+    setupRun: SessionSetupRun | null = this.state.sessionSetupRun,
+  ): SessionStatus {
+    if (!this.serverState.initialized) { return "preparing"; }
+    if (!this.serverState.spriteName) { return "preparing"; }
+    if (!this.serverState.repoCloned) { return "preparing"; }
+    if (!this.serverState.startupScriptCompleted) { return "preparing"; }
+    if (!this.serverState.finalNetworkPolicyApplied) { return "preparing"; }
+    if (this.serverState.activeSetupTaskId) { return "preparing"; }
+    if (setupRun?.status === "running" || setupRun?.status === "failed") {
+      return "preparing";
+    }
     return "ready";
   }
 
@@ -515,7 +555,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       return;
     }
     await this.provisionService.ensureProvisioned();
-    await this.chatDispatchService.maybeDispatchPendingMessage();
+    if (this.state.pendingUserMessage) {
+      await this.chatDispatchService.maybeDispatchPendingMessage({
+        setupContext: "initial_agent_start",
+      });
+      return;
+    }
+    this.setupRunService.completeRun();
   }
 
   private queueEnsureReady(): void {
@@ -573,6 +619,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         attachmentService: this.attachmentService,
       },
     );
+    const setupTaskIds: SessionSetupTaskId[] = [
+      "cloud_container",
+      "repository",
+    ];
+    if ((data.environmentSnapshot.startupScript?.trim() ?? "").length > 0) {
+      setupTaskIds.push("setup_script");
+    }
+    if (pendingUserUiMessage) {
+      setupTaskIds.push("initial_agent_start");
+    }
+
     // Mark initialized in ServerState
     this.updateServerState({
       initialized: true,
@@ -595,6 +652,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         : null,
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
+      sessionSetupRun: this.setupRunService.buildRun("create", setupTaskIds),
       status: this.synthesizeStatus(),
     });
 

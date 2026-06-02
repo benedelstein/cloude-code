@@ -74,6 +74,7 @@ function createClientState(): ClientState {
   return {
     sessionId: "session-1",
     status: "ready",
+    sessionSetupRun: null,
     repoFullName: "ben/repo",
     repoUrl: "https://github.com/ben/repo",
     baseBranch: "main",
@@ -105,6 +106,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: "provider-session-1",
     agentProcessId: null,
     activeUserMessageId: null,
+    activeSetupTaskId: null,
     startupToolchain: null,
     webhookToken: null,
     ...overrides,

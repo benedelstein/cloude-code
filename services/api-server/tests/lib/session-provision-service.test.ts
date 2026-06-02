@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger, SessionEnvironmentSnapshot } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
-import { SessionProvisionService } from "../../src/modules/session-agent/services/session-provision.service";
+import {
+  SessionProvisionService,
+  type SessionSetupTaskReporter,
+} from "../../src/modules/session-agent/services/session-provision.service";
 
 const mockState = vi.hoisted(() => ({
   events: [] as string[],
@@ -72,6 +75,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: null,
     agentProcessId: null,
     activeUserMessageId: null,
+    activeSetupTaskId: null,
     startupToolchain: null,
     startupScriptCompleted: false,
     finalNetworkPolicyApplied: false,
@@ -95,11 +99,22 @@ function createEnvironmentSnapshot(
   };
 }
 
+function createSetupReporter(): SessionSetupTaskReporter {
+  return {
+    startTask: vi.fn(),
+    completeTask: vi.fn(),
+    failTask: vi.fn(),
+    skipTask: vi.fn(),
+    failRun: vi.fn(),
+  };
+}
+
 function createService(
   serverState: ServerState,
   clientState: ClientState,
   envOverrides: Partial<Env> = {},
   environmentSnapshot: SessionEnvironmentSnapshot = createEnvironmentSnapshot(),
+  setupReporter?: SessionSetupTaskReporter,
 ) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
@@ -126,11 +141,12 @@ function createService(
     getEnvironmentSnapshot: () => environmentSnapshot,
     updateServerState,
     updatePartialState,
-    synthesizeStatus: () => "provisioning",
+    synthesizeStatus: () => "preparing",
     ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
     githubTokenProvider: {
       getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
     },
+    setupReporter,
   });
 
   return { service, updateServerState, spritesCoordinator };
@@ -348,7 +364,7 @@ describe("SessionProvisionService startup toolchain", () => {
       getEnvironmentSnapshot: () => environmentSnapshot,
       updateServerState: (partial) => Object.assign(serverState, partial),
       updatePartialState: vi.fn(),
-      synthesizeStatus: () => "provisioning",
+      synthesizeStatus: () => "preparing",
       ensureGitProxySecret: vi.fn(() => "git-proxy-secret"),
       githubTokenProvider: {
         getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
@@ -367,6 +383,41 @@ describe("SessionProvisionService startup toolchain", () => {
       "setNetworkPolicy",
     ]);
     expect(service).toBeDefined();
+  });
+
+  it("reports setup task transitions without owning setup state", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const environmentSnapshot = createEnvironmentSnapshot({
+      startupScript: "echo setup",
+    });
+    mockState.execWs.mockResolvedValue({
+      stdout: "setup ok",
+      stderr: "",
+      exitCode: 0,
+    });
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      environmentSnapshot,
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(1, "cloud_container");
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(2, "repository");
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(3, "setup_script");
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("repository");
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("setup_script", {
+      stdout: "setup ok",
+      stderr: "",
+      exitCode: 0,
+      truncated: false,
+    });
+    expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
   it("records startup script failure and continues provisioning", async () => {
@@ -438,10 +489,48 @@ describe("SessionProvisionService startup toolchain", () => {
     ]);
     expect(serverState.startupScriptCompleted).toBe(true);
     expect(serverState.finalNetworkPolicyApplied).toBe(true);
-    expect(updatePartialState).toHaveBeenCalledWith({
-      lastError: "Startup script failed with exit code 127 after 0ms",
-      status: "ready",
+    expect(updatePartialState).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastError: "Startup script failed with exit code 127 after 0ms",
+      }),
+    );
+  });
+
+  it("reports startup script failure as a nonfatal setup task failure", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    mockState.execWs.mockImplementation(async (command: string) => {
+      if (command.includes("timeout")) {
+        return {
+          stdout: "",
+          stderr: "setup failed",
+          exitCode: 1,
+        };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
     });
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({ startupScript: "exit 1" }),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.failTask).toHaveBeenCalledWith(
+      "setup_script",
+      expect.stringMatching(/^Startup script failed with exit code 1 after \d+ms$/),
+      {
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+        truncated: false,
+      },
+    );
+    expect(setupReporter.failRun).not.toHaveBeenCalled();
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
   });
 });
 

@@ -6,18 +6,51 @@ import {
 } from "./providers/index";
 
 export const SessionStatus = z.enum([
-  /** DO initialized but handleInit not yet called */
-  "initializing",
-  /** Provisioning the sprite VM */
-  "provisioning",
-  /** Cloning the repository onto the sprite */
-  "cloning",
-  /** Attaching to the agent process running on the vm */
-  "attaching",
+  /** Session setup is still in progress or blocked. */
+  "preparing",
   /** Ready to send and receive messages */
   "ready",
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
+
+export type SessionSetupRunMode = "create" | "resume";
+export type SessionSetupRunStatus = "running" | "completed" | "failed";
+export type SessionSetupTaskId =
+  | "cloud_container"
+  | "repository"
+  | "setup_script"
+  | "initial_agent_start";
+export type SessionSetupTaskStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type SessionSetupTaskOutput = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  truncated: boolean;
+};
+
+export type SessionSetupTask = {
+  id: SessionSetupTaskId;
+  status: SessionSetupTaskStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+  output: SessionSetupTaskOutput | null;
+};
+
+export type SessionSetupRun = {
+  id: string;
+  mode: SessionSetupRunMode;
+  status: SessionSetupRunStatus;
+  startedAt: string;
+  completedAt: string | null;
+  tasks: SessionSetupTask[];
+};
 
 export const PullRequestState = z.enum(["open", "merged", "closed"]);
 export type PullRequestState = z.infer<typeof PullRequestState>;
@@ -76,6 +109,8 @@ export type ClientState = {
   repoFullName: string | null;
   /** Synthesized from ServerState checkpoints — reset on restart */
   status: SessionStatus;
+  /** Public setup checklist shown while a session is preparing. */
+  sessionSetupRun: SessionSetupRun | null;
   agentSettings: AgentSettings;
   pullRequest: {
     url: string;

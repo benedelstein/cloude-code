@@ -38,6 +38,12 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
+  setupReporter?: {
+    completeTask(taskId: "initial_agent_start"): void;
+    failTask(taskId: "initial_agent_start", error: string): void;
+    completeRun(): void;
+    failRun(error: string): void;
+  };
 }
 
 /**
@@ -63,6 +69,7 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
+  private readonly setupReporter: AgentTurnCoordinatorDeps["setupReporter"];
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -93,6 +100,7 @@ export class AgentTurnCoordinator {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
     this.updateWorkingState = deps.updateWorkingState;
+    this.setupReporter = deps.setupReporter;
   }
 
   /**
@@ -269,12 +277,22 @@ export class AgentTurnCoordinator {
     const serverState = this.getServerState();
     switch (event.type) {
       case "ready":
+        if (serverState.activeSetupTaskId === "initial_agent_start") {
+          this.updateServerState({ activeSetupTaskId: null });
+          this.setupReporter?.completeTask("initial_agent_start");
+          this.setupReporter?.completeRun();
+        }
         this.updatePartialState({ status: this.synthesizeStatus() });
         break;
       case "error":
         this.logger.error("vm-agent error", {
           fields: { errorMessage: event.error },
         });
+        if (serverState.activeSetupTaskId === "initial_agent_start") {
+          this.updateServerState({ activeSetupTaskId: null });
+          this.setupReporter?.failTask("initial_agent_start", event.error);
+          this.setupReporter?.failRun(event.error);
+        }
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
         this.clearActiveTurnState();

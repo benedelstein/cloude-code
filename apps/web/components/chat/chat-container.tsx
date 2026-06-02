@@ -32,9 +32,9 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const {
     messages,
     streamingMessage,
-    sessionStatus,
     sessionErrorMessage,
     sessionErrorCode,
+    sessionSetupRun,
     operationError,
     isHistoryLoading,
     isReady,
@@ -215,6 +215,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isHistoryLoading={isHistoryLoading}
           sessionErrorMessage={sessionErrorMessage}
           sessionErrorCode={sessionErrorCode}
+          sessionSetupRun={sessionSetupRun}
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
@@ -256,7 +257,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             />
             <InputFrame>
               <StatusBanner
-                sessionStatus={sessionStatus}
                 sessionErrorMessage={sessionErrorMessage}
               />
               <ChatInput

@@ -3,6 +3,7 @@ import {
   type ClientState,
   type Logger,
   type SessionEnvironmentSnapshot,
+  type SessionSetupTaskOutput,
   type SessionStatus,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
@@ -18,6 +19,21 @@ import type { ServerState } from "../repositories/server-state.repository";
 import { SessionStartupScriptService } from "./session-startup-script.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
+
+export interface SessionSetupTaskReporter {
+  startTask(taskId: "cloud_container" | "repository" | "setup_script"): void;
+  completeTask(
+    taskId: "cloud_container" | "repository" | "setup_script",
+    output?: SessionSetupTaskOutput,
+  ): void;
+  failTask(
+    taskId: "cloud_container" | "repository" | "setup_script",
+    error: string,
+    output?: SessionSetupTaskOutput,
+  ): void;
+  skipTask(taskId: "cloud_container" | "repository" | "setup_script"): void;
+  failRun(error: string): void;
+}
 
 /**
  * Dependencies injected from the SessionAgentDO into the provisioner.
@@ -38,6 +54,7 @@ export interface SessionProvisionServiceDeps {
   githubTokenProvider: {
     getReadOnlyTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>>;
   };
+  setupReporter?: SessionSetupTaskReporter;
 }
 
 /**
@@ -61,6 +78,7 @@ export class SessionProvisionService {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
+  private readonly setupReporter: SessionProvisionServiceDeps["setupReporter"];
   private readonly startupScriptService: SessionStartupScriptService;
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
@@ -78,6 +96,7 @@ export class SessionProvisionService {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
     this.githubTokenProvider = deps.githubTokenProvider;
+    this.setupReporter = deps.setupReporter;
     this.startupScriptService = new SessionStartupScriptService(this.logger);
   }
 
@@ -97,47 +116,64 @@ export class SessionProvisionService {
     try {
       const serverState = this.getServerState();
       let spriteName = serverState.spriteName;
-      if (!spriteName) {
+      this.setupReporter?.startTask("cloud_container");
+      try {
         this.updatePartialState({ status: this.synthesizeStatus() });
-        this.logger.debug("Provisioning sprite for session", {
-          fields: { sessionId: serverState.sessionId },
-        });
+        if (!spriteName) {
+          this.logger.debug("Provisioning sprite for session", {
+            fields: { sessionId: serverState.sessionId },
+          });
 
-        const spriteResponse = await this.spritesCoordinator.createSprite({
-          name: serverState.sessionId!,
-        });
+          const spriteResponse = await this.spritesCoordinator.createSprite({
+            name: serverState.sessionId!,
+          });
 
-        // For provisioning, allow network access to known-good domains
-        const sprite = new WorkersSpriteClient(
-          spriteResponse.name,
-          this.env.SPRITES_API_KEY,
-          this.env.SPRITES_API_URL,
-        );
-        const workerHostname = new URL(this.env.WORKER_URL).hostname;
-        const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
-        await sprite.setNetworkPolicy(networkPolicy);
+          // For provisioning, allow network access to known-good domains
+          const sprite = new WorkersSpriteClient(
+            spriteResponse.name,
+            this.env.SPRITES_API_KEY,
+            this.env.SPRITES_API_URL,
+          );
+          const workerHostname = new URL(this.env.WORKER_URL).hostname;
+          const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
+          await sprite.setNetworkPolicy(networkPolicy);
 
-        spriteName = spriteResponse.name;
-        this.updateServerState({ spriteName });
-        this.updatePartialState({ status: this.synthesizeStatus() });
+          spriteName = spriteResponse.name;
+          this.updateServerState({ spriteName });
+          this.updatePartialState({ status: this.synthesizeStatus() });
+        }
+
+        if (!spriteName) {
+          throw new Error("Sprite name is missing");
+        }
+
+        // Update environment toolchain packages
+        await this.ensureStartupToolchain(spriteName);
+        this.setupReporter?.completeTask("cloud_container");
+      } catch (error) {
+        this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
+        throw error;
       }
-
       if (!spriteName) {
-        throw new Error("Sprite name is missing");
+        throw new Error("Sprite name is missing after cloud container setup");
       }
-
-      // Update environment toolchain packages
-      await this.ensureStartupToolchain(spriteName);
 
       // Clone Repo
       if (!this.getServerState().repoCloned) {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        await this.cloneRepo(spriteName!);
-        this.updateServerState({ repoCloned: true });
-        this.updatePartialState({
-          status: this.synthesizeStatus(),
-          lastError: null,
-        });
+        this.setupReporter?.startTask("repository");
+        try {
+          this.updatePartialState({ status: this.synthesizeStatus() });
+          await this.cloneRepo(spriteName);
+          this.updateServerState({ repoCloned: true });
+          this.setupReporter?.completeTask("repository");
+          this.updatePartialState({
+            status: this.synthesizeStatus(),
+            lastError: null,
+          });
+        } catch (error) {
+          this.setupReporter?.failTask("repository", getErrorMessage(error));
+          throw error;
+        }
       }
 
       if (!this.getServerState().startupScriptCompleted) {
@@ -149,10 +185,14 @@ export class SessionProvisionService {
         await this.applyFinalNetworkPolicy(spriteName);
         this.updateServerState({ finalNetworkPolicyApplied: true });
       }
+      this.updatePartialState({
+        status: this.synthesizeStatus(),
+      });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to provision session", { error });
+      this.setupReporter?.failRun(errorMessage);
       this.updatePartialState({
         lastError: errorMessage,
         status: this.synthesizeStatus(),
@@ -339,22 +379,37 @@ export class SessionProvisionService {
     );
 
     try {
-      await this.startupScriptService.run({
+      this.setupReporter?.startTask("setup_script");
+      const result = await this.startupScriptService.run({
         sprite,
         script: environmentSnapshot.startupScript,
         workspaceDir: WORKSPACE_DIR,
         env: environmentSnapshot.plainEnvVars,
       });
+      switch (result.status) {
+        case "skipped":
+          this.setupReporter?.skipTask("setup_script");
+          break;
+        case "completed":
+          this.setupReporter?.completeTask("setup_script", result.output);
+          break;
+        case "failed":
+          this.logger.warn("Continuing after session startup script failure", {
+            fields: {
+              sessionId: this.getServerState().sessionId,
+              errorMessage: result.errorMessage,
+            },
+          });
+          this.setupReporter?.failTask("setup_script", result.errorMessage, result.output);
+          break;
+      }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       this.logger.warn("Continuing after session startup script failure", {
         error,
         fields: { sessionId: this.getServerState().sessionId },
       });
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
+      this.setupReporter?.failTask("setup_script", errorMessage);
     }
   }
 

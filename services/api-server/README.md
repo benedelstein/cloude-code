@@ -41,7 +41,7 @@ Cloudflare worker server for managing session state and communicating between cl
 
 ```typescript
 { type: "connected", sessionId, status }      // Connection established
-{ type: "session.status", status, message? }  // Status change (provisioning → ready)
+{ type: "session.status", status, message? }  // Status change (preparing → ready)
 { type: "sync.response", messages: [] }       // Message history
 { type: "agent.chunk", chunk }                // Streaming response chunk
 { type: "agent.finish", message }             // Response complete
@@ -51,9 +51,9 @@ Cloudflare worker server for managing session state and communicating between cl
 
 ## Session Status
 
-`provisioning` → `cloning` → `ready`
+`preparing` → `ready`
 
-On reconnect: `syncing` → `attaching` → `ready`
+Detailed startup progress is exposed on `ClientState.sessionSetupRun`.
 
 ## Example (TypeScript)
 
