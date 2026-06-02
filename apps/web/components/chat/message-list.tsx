@@ -158,7 +158,9 @@ export function MessageList({
   const hasPendingUserMessage = !!pendingUserMessage;
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
-  const shouldRenderSetupRun = sessionSetupRun !== null;
+  const setupRunHasFailedTask = sessionSetupRun?.tasks.some((task) => task.status === "failed") ?? false;
+  const shouldRenderSetupRun = sessionSetupRun !== null
+    && (sessionSetupRun.status !== "completed" || setupRunHasFailedTask);
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -172,7 +174,8 @@ export function MessageList({
     && !showLoading
     && allMessages.length === 0
     && !hasPendingUserMessage
-    && !shouldRenderSetupRun;
+    && !shouldRenderSetupRun
+    && !isResponding;
 
   return (
     <div
@@ -212,12 +215,6 @@ export function MessageList({
       )}
       {!showError && !showLoading && !showEmpty && (
         <div className="max-w-4xl mx-auto px-8 space-y-2">
-          {sessionSetupRun && (
-            <SessionSetupRunCard
-              setupRun={sessionSetupRun}
-              providerId={providerId}
-            />
-          )}
           {allMessages.map((message) => (
             <MessageItem
               key={message.id}
@@ -234,7 +231,14 @@ export function MessageList({
               providerId={providerId}
             />
           )}
-          {isResponding && <TypingIndicator />}
+          {shouldRenderSetupRun && sessionSetupRun ? (
+            <SessionSetupRunIndicator
+              setupRun={sessionSetupRun}
+              providerId={providerId}
+            />
+          ) : (
+            isResponding && <TypingIndicator />
+          )}
           <div ref={bottomRef} />
         </div>
       )}
@@ -255,7 +259,7 @@ function TypingIndicator() {
   );
 }
 
-function SessionSetupRunCard({
+function SessionSetupRunIndicator({
   setupRun,
   providerId,
 }: {
@@ -269,26 +273,30 @@ function SessionSetupRunCard({
   }, [setupRun.id, setupRun.status]);
 
   const title = getSetupRunTitle(setupRun);
-  const hasFailedTask = setupRun.tasks.some((task) => task.status === "failed");
 
   return (
-    <div className="mb-3 rounded-md border border-border bg-background shadow-sm">
+    <div
+      role="status"
+      aria-label={title}
+      className="w-fit py-1 text-sm text-foreground-secondary"
+    >
       <button
         type="button"
         onClick={() => setIsExpanded((current) => !current)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+        className="group flex w-fit items-center gap-2 text-left text-sm text-foreground-secondary transition-colors hover:text-foreground"
+        aria-expanded={isExpanded}
       >
+        <WorkingCloudIndicator />
+        <span className="font-medium">{title}</span>
         {isExpanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-foreground-secondary" />
+          <ChevronDown className="h-4 w-4 shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-foreground-secondary" />
+          <ChevronRight className="h-4 w-4 shrink-0" />
         )}
-        <SetupRunStatusIcon setupRun={setupRun} hasFailedTask={hasFailedTask} />
-        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{title}</span>
       </button>
       {isExpanded && (
-        <div className="border-t border-border px-3 py-2">
-          <div className="space-y-1">
+        <div className="ml-14 mt-1">
+          <div className="space-y-0.5">
             {setupRun.tasks.map((task) => (
               <SessionSetupTaskRow
                 key={task.id}
@@ -318,16 +326,16 @@ function SessionSetupTaskRow({
   }, [task.id]);
 
   return (
-    <div className="rounded-md px-2 py-1.5">
+    <div className="py-1">
       <div className="flex min-w-0 items-start gap-2">
         <SetupTaskStatusIcon task={task} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-sm text-foreground">
+            <span className="min-w-0 truncate text-sm text-foreground-secondary">
               {getSetupTaskLabel(task, providerId)}
             </span>
             {task.output?.truncated && (
-              <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase text-foreground-secondary">
+              <span className="shrink-0 text-[10px] font-medium uppercase text-foreground-tertiary">
                 truncated
               </span>
             )}
@@ -360,29 +368,10 @@ function SessionSetupTaskRow({
   );
 }
 
-function SetupRunStatusIcon({
-  setupRun,
-  hasFailedTask,
-}: {
-  setupRun: SessionSetupRun;
-  hasFailedTask: boolean;
-}) {
-  if (setupRun.status === "running") {
-    return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />;
-  }
-  if (setupRun.status === "failed") {
-    return <XCircle className="h-4 w-4 shrink-0 text-danger" />;
-  }
-  if (hasFailedTask) {
-    return <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />;
-  }
-  return <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />;
-}
-
 function SetupTaskStatusIcon({ task }: { task: SessionSetupTask }) {
   switch (task.status) {
     case "pending":
-      return <Circle className="mt-0.5 h-4 w-4 shrink-0 text-foreground-tertiary" />;
+      return <Circle className="mt-0.5 h-4 w-4 shrink-0 text-foreground-tertiary/60" strokeWidth={1.75} />;
     case "running":
       return <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent" />;
     case "completed":
@@ -390,7 +379,7 @@ function SetupTaskStatusIcon({ task }: { task: SessionSetupTask }) {
     case "failed":
       return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />;
     case "skipped":
-      return <Circle className="mt-0.5 h-4 w-4 shrink-0 text-foreground-tertiary" />;
+      return <Circle className="mt-0.5 h-4 w-4 shrink-0 text-foreground-tertiary/60" strokeWidth={1.75} />;
   }
 }
 
@@ -440,15 +429,68 @@ function getSetupTaskLabel(
   task: SessionSetupTask,
   providerId?: ProviderId | null,
 ): string {
+  const providerName = getProviderDisplayName(providerId);
   switch (task.id) {
-    case "cloud_container":
+    case "cloud_container": {
+      switch (task.status) {
+        case "pending":
+          return "Set up cloud container";
+        case "running":
+          return "Setting up cloud container";
+        case "completed":
+          return "Set up cloud container";
+        case "failed":
+          return "Cloud container setup failed";
+        case "skipped":
+          return "Skipped cloud container setup";
+      }
       return "Set up cloud container";
-    case "repository":
-      return "Cloned repository";
-    case "setup_script":
-      return task.status === "failed" ? "Setup script failed" : "Completed setup script";
-    case "initial_agent_start":
-      return `Started ${getProviderDisplayName(providerId)}`;
+    }
+    case "repository": {
+      switch (task.status) {
+        case "pending":
+          return "Clone repository";
+        case "running":
+          return "Cloning repository";
+        case "completed":
+          return "Cloned repository";
+        case "failed":
+          return "Repository clone failed";
+        case "skipped":
+          return "Skipped repository clone";
+      }
+      return "Clone repository";
+    }
+    case "setup_script": {
+      switch (task.status) {
+        case "pending":
+          return "Run setup script";
+        case "running":
+          return "Running setup script";
+        case "completed":
+          return "Completed setup script";
+        case "failed":
+          return "Setup script failed";
+        case "skipped":
+          return "Skipped setup script";
+      }
+      return "Run setup script";
+    }
+    case "initial_agent_start": {
+      switch (task.status) {
+        case "pending":
+          return `Start ${providerName}`;
+        case "running":
+          return `Starting ${providerName}`;
+        case "completed":
+          return `Started ${providerName}`;
+        case "failed":
+          return `${providerName} start failed`;
+        case "skipped":
+          return `Skipped ${providerName} start`;
+      }
+      return `Start ${providerName}`;
+    }
   }
 }
 

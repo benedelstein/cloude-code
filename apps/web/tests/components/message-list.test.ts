@@ -35,10 +35,15 @@ describe("MessageList", () => {
       .toBeTruthy();
   });
 
-  it("renders running setup at the top of the message list", () => {
+  it("renders running setup inline below the pending user message", () => {
     render(React.createElement(MessageList, {
       messages: [],
       streamingMessage: null,
+      pendingUserMessage: {
+        id: "pending-1",
+        role: "user",
+        parts: [{ type: "text", text: "hello there" }],
+      },
       sessionSetupRun: {
         id: "setup-1",
         mode: "create",
@@ -69,7 +74,40 @@ describe("MessageList", () => {
 
     expect(screen.getByText("Initializing session")).toBeTruthy();
     expect(screen.getByText("Set up cloud container")).toBeTruthy();
-    expect(screen.getByText("Started Codex")).toBeTruthy();
+    expect(screen.getByText("Starting Codex")).toBeTruthy();
+
+    const messageText = screen.getByText("hello there");
+    const setupText = screen.getByText("Initializing session");
+    expect(messageText.compareDocumentPosition(setupText) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it("renders working indicator after setup completes while responding", () => {
+    render(React.createElement(MessageList, {
+      messages: [],
+      streamingMessage: null,
+      isResponding: true,
+      sessionSetupRun: {
+        id: "setup-1",
+        mode: "create",
+        status: "completed",
+        startedAt: "2026-06-02T00:00:00.000Z",
+        completedAt: "2026-06-02T00:00:02.000Z",
+        tasks: [
+          {
+            id: "cloud_container",
+            status: "completed",
+            startedAt: "2026-06-02T00:00:00.000Z",
+            completedAt: "2026-06-02T00:00:01.000Z",
+            error: null,
+            output: null,
+          },
+        ],
+      },
+    }));
+
+    expect(screen.getByRole("status", { name: "Working" })).toBeTruthy();
+    expect(screen.queryByText("Initialized session")).toBeNull();
   });
 
   it("renders failed setup script output collapsed behind a disclosure", () => {
