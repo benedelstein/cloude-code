@@ -74,7 +74,7 @@ describe("MessageList", () => {
 
     expect(screen.getByText("Initializing session")).toBeTruthy();
     expect(screen.getByText("Set up cloud container")).toBeTruthy();
-    expect(screen.getByText("Starting Codex")).toBeTruthy();
+    expect(screen.getByText("Starting agent process")).toBeTruthy();
 
     const messageText = screen.getByText("hello there");
     const setupText = screen.getByText("Initializing session");

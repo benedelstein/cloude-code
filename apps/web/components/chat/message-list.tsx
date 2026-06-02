@@ -234,7 +234,6 @@ export function MessageList({
           {shouldRenderSetupRun && sessionSetupRun ? (
             <SessionSetupRunIndicator
               setupRun={sessionSetupRun}
-              providerId={providerId}
             />
           ) : (
             isResponding && <TypingIndicator />
@@ -261,10 +260,8 @@ function TypingIndicator() {
 
 function SessionSetupRunIndicator({
   setupRun,
-  providerId,
 }: {
   setupRun: SessionSetupRun;
-  providerId?: ProviderId | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(setupRun.status !== "completed");
 
@@ -301,7 +298,6 @@ function SessionSetupRunIndicator({
               <SessionSetupTaskRow
                 key={task.id}
                 task={task}
-                providerId={providerId}
               />
             ))}
           </div>
@@ -313,10 +309,8 @@ function SessionSetupRunIndicator({
 
 function SessionSetupTaskRow({
   task,
-  providerId,
 }: {
   task: SessionSetupTask;
-  providerId?: ProviderId | null;
 }) {
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const hasOutput = task.output !== null && (task.output.stdout || task.output.stderr);
@@ -332,7 +326,7 @@ function SessionSetupTaskRow({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate text-sm text-foreground-secondary">
-              {getSetupTaskLabel(task, providerId)}
+              {getSetupTaskLabel(task)}
             </span>
             {task.output?.truncated && (
               <span className="shrink-0 text-[10px] font-medium uppercase text-foreground-tertiary">
@@ -425,11 +419,7 @@ function getSetupRunTitle(setupRun: SessionSetupRun): string {
   return setupRun.mode === "resume" ? `Resumed ${modeLabel}` : `Initialized ${modeLabel}`;
 }
 
-function getSetupTaskLabel(
-  task: SessionSetupTask,
-  providerId?: ProviderId | null,
-): string {
-  const providerName = getProviderDisplayName(providerId);
+function getSetupTaskLabel(task: SessionSetupTask): string {
   switch (task.id) {
     case "cloud_container": {
       switch (task.status) {
@@ -479,29 +469,18 @@ function getSetupTaskLabel(
     case "initial_agent_start": {
       switch (task.status) {
         case "pending":
-          return `Start ${providerName}`;
+          return "Start agent process";
         case "running":
-          return `Starting ${providerName}`;
+          return "Starting agent process";
         case "completed":
-          return `Started ${providerName}`;
+          return "Started agent process";
         case "failed":
-          return `${providerName} start failed`;
+          return "Agent process start failed";
         case "skipped":
-          return `Skipped ${providerName} start`;
+          return "Skipped agent process start";
       }
-      return `Start ${providerName}`;
+      return "Start agent process";
     }
-  }
-}
-
-function getProviderDisplayName(providerId?: ProviderId | null): string {
-  switch (providerId) {
-    case "openai-codex":
-      return "Codex";
-    case "claude-code":
-      return "Claude Code";
-    default:
-      return "agent";
   }
 }
 
