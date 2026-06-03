@@ -117,6 +117,7 @@ export class SessionProvisionService {
   }
 
   private async provision(): Promise<void> {
+    let taskFailureReported = false;
     try {
       const serverState = this.getServerState();
       let spriteName = serverState.spriteName;
@@ -135,6 +136,7 @@ export class SessionProvisionService {
           this.setupReporter?.completeTask("cloud_container");
         } catch (error) {
           this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
+          taskFailureReported = true;
           throw error;
         }
       }
@@ -156,6 +158,7 @@ export class SessionProvisionService {
           });
         } catch (error) {
           this.setupReporter?.failTask("repository", getErrorMessage(error));
+          taskFailureReported = true;
           throw error;
         }
       }
@@ -176,7 +179,9 @@ export class SessionProvisionService {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error("Failed to provision session", { error });
-      this.setupReporter?.failRun(errorMessage);
+      if (!taskFailureReported) {
+        this.setupReporter?.failRun(errorMessage);
+      }
       this.updatePartialState({
         lastError: errorMessage,
         status: this.synthesizeStatus(),

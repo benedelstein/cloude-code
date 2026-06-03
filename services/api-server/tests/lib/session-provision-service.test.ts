@@ -274,6 +274,66 @@ describe("SessionProvisionService startup toolchain", () => {
     ]);
   });
 
+  it("does not fail the run directly when a blocking task reports failure", async () => {
+    mockState.ensureSpriteStartupToolchain.mockImplementation(async () => {
+      return {
+        ok: false,
+        error: {
+          domain: "startup_toolchain",
+          code: "CHECK_FAILED",
+          message: "Codex CLI repair script failed.",
+          provider: "openai-codex",
+          checkId: "openai-codex.cli",
+        },
+      };
+    });
+
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await expect(service.ensureProvisioned()).rejects.toThrow(
+      "Codex CLI repair script failed.",
+    );
+    expect(setupReporter.failTask).toHaveBeenCalledWith(
+      "cloud_container",
+      "Codex CLI repair script failed.",
+    );
+    expect(setupReporter.failRun).not.toHaveBeenCalled();
+  });
+
+  it("fails the run directly for unscoped provisioning failures", async () => {
+    mockState.setNetworkPolicy.mockRejectedValueOnce(new Error("Policy failed"));
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+      repoCloned: true,
+      startupScriptCompleted: true,
+    });
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await expect(service.ensureProvisioned()).rejects.toThrow("Policy failed");
+    expect(setupReporter.failTask).not.toHaveBeenCalled();
+    expect(setupReporter.failRun).toHaveBeenCalledWith("Policy failed");
+  });
+
   it("keeps fetch pointed at GitHub by default", async () => {
     const serverState = createServerState();
     const { service } = createService(serverState, createClientState());
