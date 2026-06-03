@@ -13,17 +13,19 @@ function formatMessageTime(date: Date): string {
 export function MessageHoverActions({
   isUser,
   createdAt,
+  canShowActions,
   canCopy,
   copied,
   onCopy,
 }: {
   isUser: boolean;
   createdAt: Date | null;
+  canShowActions: boolean;
   canCopy: boolean;
   copied: boolean;
   onCopy: () => void;
 }) {
-  if (!createdAt && !canCopy) { return null; }
+  if (!canShowActions || (!createdAt && !canCopy)) { return null; }
 
   return (
     <div

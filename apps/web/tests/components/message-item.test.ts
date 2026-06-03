@@ -26,12 +26,16 @@ function userMessage(): UIMessage {
 
 describe("MessageItem", () => {
   it("hides the copy action while an assistant message is streaming", () => {
-    render(React.createElement(MessageItem, {
-      message: assistantMessage(),
+    const { container } = render(React.createElement(MessageItem, {
+      message: {
+        ...assistantMessage(),
+        metadata: { startedAt: Date.now() - 5_000 },
+      },
       isStreaming: true,
     }));
 
     expect(screen.queryByRole("button", { name: "Copy message" })).toBeNull();
+    expect(container.querySelector("[class*='group-hover/message:opacity-100']")).toBeNull();
   });
 
   it("shows a live work header while an assistant message is streaming", () => {

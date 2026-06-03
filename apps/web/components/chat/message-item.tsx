@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { getToolName } from "ai";
 import { isTextUIPart, isToolUIPart } from "ai";
@@ -36,7 +36,9 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
+  const [isAutoCollapsingWork, setIsAutoCollapsingWork] = useState(false);
   const [copied, setCopied] = useState(false);
+  const wasStreamingRef = useRef(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -213,6 +215,33 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const bubbleImageParts = isUser ? [] : imageParts;
   const hasBubbleContent = !isUser || bubbleImageParts.length > 0 || renderItems.length > 0;
   const showActiveWorkHeader = !isUser && !!isStreaming && !showCollapsedTurn;
+  const shouldStartAutoCollapse = !isUser && showCollapsedTurn && !isStreaming && wasStreamingRef.current;
+  const visibleWorkExpanded = workExpanded || shouldStartAutoCollapse || isAutoCollapsingWork;
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      return undefined;
+    }
+
+    if (shouldStartAutoCollapse) {
+      wasStreamingRef.current = false;
+      setIsAutoCollapsingWork(true);
+      const frame = window.requestAnimationFrame(() => {
+        setIsAutoCollapsingWork(false);
+      });
+      return () => {
+        window.cancelAnimationFrame(frame);
+      };
+    }
+
+    if (!showCollapsedTurn) {
+      wasStreamingRef.current = false;
+      setIsAutoCollapsingWork(false);
+    }
+
+    return undefined;
+  }, [isStreaming, shouldStartAutoCollapse, showCollapsedTurn]);
 
   return (
     <>
@@ -263,7 +292,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                       <div
                         className={clsx(
                           "grid transition-[grid-template-rows] duration-200 ease-out",
-                          workExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                          visibleWorkExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                         )}
                       >
                         <div className="overflow-hidden min-h-0">
@@ -297,6 +326,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
               <MessageHoverActions
                 isUser={isUser}
                 createdAt={createdAt}
+                canShowActions={isUser || isSettled}
                 canCopy={canCopyMessage}
                 copied={copied}
                 onCopy={() => void copyMessageText()}
