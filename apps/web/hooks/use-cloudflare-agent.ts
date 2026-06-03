@@ -41,6 +41,22 @@ function keepPreviousIfDeepEqual<T>(previous: T, next: T): T {
   return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
 }
 
+function withLiveStartedAt(message: UIMessage, startedAt: number): UIMessage {
+  const metadata = message.metadata && typeof message.metadata === "object"
+    ? message.metadata as Record<string, unknown>
+    : {};
+  if (typeof metadata.startedAt === "number") {
+    return message;
+  }
+  return {
+    ...message,
+    metadata: {
+      ...metadata,
+      startedAt,
+    },
+  };
+}
+
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
@@ -125,6 +141,7 @@ export function useCloudflareAgent({
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
+  const streamingStartedAtRef = useRef<number | null>(null);
   const serverAgentModeRef = useRef<AgentMode>("edit");
   const hasSeenServerActiveTurnRef = useRef(false);
   const resolvedAgentMode = agentMode ?? "edit";
@@ -151,6 +168,7 @@ export function useCloudflareAgent({
     console.log("[agent] resetPendingResponse", reason, { hadStream: !!streamControllerRef.current, wasConsuming: isConsumingRef.current });
     setWaitingForResponse(false);
     setStreamingMessage(null);
+    streamingStartedAtRef.current = null;
     isConsumingRef.current = false;
     if (streamControllerRef.current) {
       try {
@@ -178,7 +196,8 @@ export function useCloudflareAgent({
       });
 
       for await (const message of messageStream) {
-        setStreamingMessage(message);
+        streamingStartedAtRef.current = streamingStartedAtRef.current ?? Date.now();
+        setStreamingMessage(withLiveStartedAt(message, streamingStartedAtRef.current));
       }
       console.log("[agent] consumeStream ended normally");
     } catch (err) {
@@ -257,6 +276,7 @@ export function useCloudflareAgent({
         // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         setStreamingMessage(null);
+        streamingStartedAtRef.current = null;
         setWaitingForResponse(false);
         applyServerActiveTurn(null);
         break;
@@ -377,6 +397,7 @@ export function useCloudflareAgent({
       setMessages((prev) => [...prev, userMessage]);
     }
     setWaitingForResponse(true);
+    streamingStartedAtRef.current = null;
 
     // Create a new stream for this response
     const stream = new ReadableStream<UIMessageChunk>({
