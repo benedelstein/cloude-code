@@ -39,7 +39,7 @@ export function WorkItems({
           || (isToolItem && previous?.kind === "text");
 
         return (
-          <div key={item.key} className={clsx(needsBoundarySpacing && "mt-4")}>
+          <div key={item.key} className={clsx(needsBoundarySpacing && "mt-2")}>
             <WorkItemRenderer item={item} isStreaming={isStreaming} isUser={isUser} />
           </div>
         );
