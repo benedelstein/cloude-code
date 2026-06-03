@@ -427,11 +427,13 @@ export function SessionCreationForm() {
         : undefined;
       const session = await createSession(
         selectedRepo.id,
-        trimmedMessage || undefined,
+        {
+          content: trimmedMessage || undefined,
+          attachmentIds: uploadedDescriptors.map((attachment) => attachment.attachmentId),
+        },
         branchToUse,
         { provider: selectedProvider, model: selectedModel, effort: selectedEffort },
         selectedAgentMode,
-        uploadedDescriptors.map((attachment) => attachment.attachmentId),
         selectedEnvironmentId ?? undefined,
       );
 

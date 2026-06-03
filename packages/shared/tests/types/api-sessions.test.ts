@@ -4,23 +4,57 @@ import { CreateSessionRequest } from "../../src/types/api/sessions";
 import { SessionSummary } from "../../src/types/session";
 
 describe("session api schemas", () => {
+  it("rejects create-session requests without an initial message", () => {
+    expect(() => CreateSessionRequest.parse({
+      repoId: 1,
+    })).toThrow();
+
+    expect(() => CreateSessionRequest.parse({
+      repoId: 1,
+      initialMessage: {},
+    })).toThrow();
+
+    expect(() => CreateSessionRequest.parse({
+      repoId: 1,
+      initialMessage: { content: "   " },
+    })).toThrow();
+  });
+
+  it("accepts create-session requests with text or attachments", () => {
+    const attachmentId = "123e4567-e89b-12d3-a456-426614174000";
+
+    expect(() => CreateSessionRequest.parse({
+      repoId: 1,
+      initialMessage: { content: "Fix the bug" },
+    })).not.toThrow();
+
+    expect(() => CreateSessionRequest.parse({
+      repoId: 1,
+      initialMessage: { attachmentIds: [attachmentId] },
+    })).not.toThrow();
+  });
+
   it("limits create-session initial attachments to five", () => {
     const attachmentId = "123e4567-e89b-12d3-a456-426614174000";
 
     expect(() => CreateSessionRequest.parse({
       repoId: 1,
-      attachmentIds: Array.from(
-        { length: MAX_ATTACHMENTS_PER_MESSAGE },
-        () => attachmentId,
-      ),
+      initialMessage: {
+        attachmentIds: Array.from(
+          { length: MAX_ATTACHMENTS_PER_MESSAGE },
+          () => attachmentId,
+        ),
+      },
     })).not.toThrow();
 
     expect(() => CreateSessionRequest.parse({
       repoId: 1,
-      attachmentIds: Array.from(
-        { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
-        () => attachmentId,
-      ),
+      initialMessage: {
+        attachmentIds: Array.from(
+          { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
+          () => attachmentId,
+        ),
+      },
     })).toThrow();
   });
 

@@ -30,6 +30,24 @@ export const SessionPlanResponse = z.object({
 });
 export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
 
+export const CreateSessionInitialMessage = z.object({
+  content: z.string().trim().min(1).optional().describe("Initial text content for the session"),
+  attachmentIds: z.array(z.uuid())
+    .max(MAX_ATTACHMENTS_PER_MESSAGE)
+    .optional()
+    .describe("Uploaded attachment IDs to bind to the initial message"),
+}).superRefine((value, context) => {
+  const hasContent = Boolean(value.content);
+  const hasAttachments = (value.attachmentIds?.length ?? 0) > 0;
+  if (!hasContent && !hasAttachments) {
+    context.addIssue({
+      code: "custom",
+      message: "initialMessage must include content or attachments",
+    });
+  }
+});
+export type CreateSessionInitialMessage = z.infer<typeof CreateSessionInitialMessage>;
+
 export const CreateSessionRequest = z.object({
   /** Numeric GitHub repo ID */
   repoId: z.number().describe("Numeric GitHub repo ID"),
@@ -37,8 +55,7 @@ export const CreateSessionRequest = z.object({
   settings: AgentSettingsInput.optional().describe("Agent settings"),
   agentMode: AgentMode.optional().describe("Agent operational mode"),
   branch: z.string().min(1).optional().describe("Optional branch to base the session on (defaults to repo's default branch)"),
-  initialMessage: z.string().min(1).optional().describe("Optional first message to send immediately after session creation"),
-  attachmentIds: z.array(z.uuid()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional().describe("Optional uploaded attachment IDs to bind to this session on create"),
+  initialMessage: CreateSessionInitialMessage.describe("Initial user message to send immediately after session creation"),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 

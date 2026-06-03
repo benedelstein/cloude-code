@@ -2,6 +2,7 @@ import type {
   AgentMode,
   AgentSettingsInput,
   AgentEvent,
+  CreateSessionInitialMessage,
   PullRequestState,
   Result,
   SessionInfoResponse,
@@ -19,8 +20,7 @@ export interface InitSessionAgentRequest {
   /** Base branch */
   branch?: string;
   environmentSnapshot: SessionEnvironmentSnapshot;
-  initialMessage?: string;
-  initialAttachmentIds?: string[];
+  initialMessage: CreateSessionInitialMessage;
 }
 
 /** POST /pr — set initial pull request info on the DO */

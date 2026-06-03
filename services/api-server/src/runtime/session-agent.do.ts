@@ -597,11 +597,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       data.userId,
     );
 
-    const pendingAttachmentIds = data.initialAttachmentIds ?? [];
+    const pendingAttachmentIds = data.initialMessage.attachmentIds ?? [];
     const pendingUserUiMessage = await buildUserUiMessage(
       data.sessionId,
       data.initialMessage,
-      pendingAttachmentIds,
       {
         attachmentService: this.attachmentService,
       },
@@ -610,10 +609,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       "cloud_container",
       "repository",
       "setup_script",
+      "initial_agent_start",
     ];
-    if (pendingUserUiMessage) {
-      setupTaskIds.push("initial_agent_start");
-    }
     const sessionSetupRun = this.setupRunService.buildRun("create", setupTaskIds);
 
     // Mark initialized in ServerState
@@ -630,12 +627,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       agentSettings: settings,
       providerConnection,
       agentMode: data.agentMode ?? "edit",
-      pendingUserMessage: pendingUserUiMessage
-        ? {
-            message: pendingUserUiMessage,
-            attachmentIds: pendingAttachmentIds,
-          }
-        : null,
+      pendingUserMessage: {
+        message: pendingUserUiMessage,
+        attachmentIds: pendingAttachmentIds,
+      },
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
       sessionSetupRun,
