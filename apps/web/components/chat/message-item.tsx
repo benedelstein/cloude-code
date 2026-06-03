@@ -20,6 +20,7 @@ import {
 import { MessageHoverActions } from "@/components/chat/message-hover-actions";
 import { TurnWorkHeader } from "@/components/chat/message-turn-work-header";
 import { WorkItems, type RenderItem } from "@/components/chat/message-work-items";
+import { WorkingCloudRow } from "@/components/chat/working-cloud-indicator";
 
 interface MessageItemProps {
   message: UIMessage;
@@ -211,7 +212,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const userImageParts = isUser ? imageParts : [];
   const bubbleImageParts = isUser ? [] : imageParts;
   const hasBubbleContent = !isUser || bubbleImageParts.length > 0 || renderItems.length > 0;
-  const showActiveWorkHeader = !isUser && !!isStreaming && startedAt !== undefined && !showCollapsedTurn;
+  const showActiveWorkHeader = !isUser && !!isStreaming && !showCollapsedTurn;
 
   return (
     <>
@@ -240,14 +241,17 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                   />
 
                   {showActiveWorkHeader && (
-                    <TurnWorkHeader
-                      expanded={false}
-                      onToggle={() => undefined}
-                      startedAt={startedAt}
-                      endedAt={endedAt}
-                      isStreaming={true}
-                      collapsible={false}
-                    />
+                    <>
+                      <TurnWorkHeader
+                        expanded={false}
+                        onToggle={() => undefined}
+                        startedAt={startedAt}
+                        endedAt={endedAt}
+                        isStreaming={true}
+                        collapsible={false}
+                      />
+                      <WorkingCloudRow />
+                    </>
                   )}
 
                   {!isUser && showCollapsedTurn && (

@@ -35,7 +35,7 @@ describe("MessageItem", () => {
   });
 
   it("shows a live work header while an assistant message is streaming", () => {
-    render(React.createElement(MessageItem, {
+    const { container } = render(React.createElement(MessageItem, {
       message: {
         ...assistantMessage(),
         metadata: { startedAt: Date.now() - 5_000 },
@@ -44,6 +44,7 @@ describe("MessageItem", () => {
     }));
 
     expect(screen.getByText(/Working for/)).toBeTruthy();
+    expect(container.querySelector("animate")).toBeTruthy();
   });
 
   it("shows the copy action after an assistant message has settled", () => {

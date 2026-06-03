@@ -98,3 +98,11 @@ export function WorkingCloudIndicator({ className = "", animated = true }: Worki
     </span>
   );
 }
+
+export function WorkingCloudRow() {
+  return (
+    <div className="py-0.5">
+      <WorkingCloudIndicator />
+    </div>
+  );
+}

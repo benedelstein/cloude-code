@@ -24,7 +24,7 @@ import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { MessageItem } from "./message-item";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
-import { WorkingCloudIndicator } from "./working-cloud-indicator";
+import { WorkingCloudRow } from "./working-cloud-indicator";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -259,10 +259,10 @@ function TypingIndicator() {
     <div
       role="status"
       aria-label="Working"
-      className="flex w-fit items-center gap-2 py-1 text-sm text-foreground-secondary"
+      className="w-fit py-1 text-sm text-foreground-secondary"
     >
-      <WorkingCloudIndicator />
-      <span>Working</span>
+      <div className="font-medium">Working</div>
+      <WorkingCloudRow />
     </div>
   );
 }
@@ -292,7 +292,6 @@ function SessionSetupRunIndicator({
         className="group flex w-fit items-center gap-2 text-left text-sm text-foreground-secondary transition-colors hover:text-foreground"
         aria-expanded={isExpanded}
       >
-        <WorkingCloudIndicator animated={setupRun.status === "running"} />
         <span className="font-medium">{title}</span>
         {isExpanded ? (
           <ChevronDown className="h-4 w-4 shrink-0" />
@@ -300,11 +299,14 @@ function SessionSetupRunIndicator({
           <ChevronRight className="h-4 w-4 shrink-0" />
         )}
       </button>
+      {setupRun.status === "running" && (
+        <WorkingCloudRow />
+      )}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="ml-14 mt-1 space-y-0.5">
+          <div className="mt-1 space-y-0.5">
             {setupRun.tasks.map((task) => (
               <SessionSetupTaskRow
                 key={task.id}

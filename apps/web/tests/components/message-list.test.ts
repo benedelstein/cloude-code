@@ -36,7 +36,7 @@ describe("MessageList", () => {
   });
 
   it("renders running setup inline below the pending user message", () => {
-    render(React.createElement(MessageList, {
+    const { container } = render(React.createElement(MessageList, {
       messages: [],
       streamingMessage: null,
       pendingUserMessage: {
@@ -75,6 +75,7 @@ describe("MessageList", () => {
     expect(screen.getByText("Initializing session")).toBeTruthy();
     expect(screen.getByText("Set up cloud container")).toBeTruthy();
     expect(screen.getByText("Starting agent process")).toBeTruthy();
+    expect(container.querySelector("animate")).toBeTruthy();
 
     const messageText = screen.getByText("hello there");
     const setupText = screen.getByText("Initializing session");
@@ -147,7 +148,7 @@ describe("MessageList", () => {
   });
 
   it("shows the live work header on the latest assistant message while responding", () => {
-    render(React.createElement(MessageList, {
+    const { container } = render(React.createElement(MessageList, {
       messages: [
         {
           id: "user-1",
@@ -175,6 +176,7 @@ describe("MessageList", () => {
     }));
 
     expect(screen.getByText(/Working for/)).toBeTruthy();
+    expect(container.querySelector("animate")).toBeTruthy();
     expect(screen.queryByRole("status", { name: "Working" })).toBeNull();
   });
 

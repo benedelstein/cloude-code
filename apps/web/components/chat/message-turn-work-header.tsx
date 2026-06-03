@@ -27,7 +27,7 @@ export function TurnWorkHeader({
     : 60_000;
   const now = useNow(tickIntervalMs);
 
-  let label = "Worked";
+  let label = isStreaming ? "Working" : "Worked";
   if (startedAt !== undefined && endedAt !== undefined) {
     label = `Worked for ${humanizeDuration(endedAt - startedAt)}`;
   } else if (startedAt !== undefined && isStreaming) {
