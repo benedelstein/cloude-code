@@ -283,7 +283,6 @@ function updateSetupTask(
     case "cloud_container":
     case "repository":
     case "initial_agent_start":
-      return { ...task, ...fields };
     case "setup_script":
       return { ...task, ...fields };
     default: {

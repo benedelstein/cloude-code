@@ -119,6 +119,7 @@ export class SessionProvisionService {
   private async provision(): Promise<void> {
     const serverState = this.getServerState();
     let spriteName = serverState.spriteName;
+    // create sprite and ensure startup toolchain
     if (!spriteName || !serverState.startupToolchain) {
       this.setupReporter?.startTask("cloud_container");
       try {
@@ -137,9 +138,6 @@ export class SessionProvisionService {
         this.recordProvisioningError(error);
         throw error;
       }
-    }
-    if (!spriteName) {
-      throw new Error("Sprite name is missing after cloud container setup");
     }
 
     // Clone Repo
@@ -420,6 +418,8 @@ export class SessionProvisionService {
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
+      // TODO: Kinda overfit that we imply that this is a non-blocking task here.
+      // might want to dfer that to the caller.
       this.logger.warn("Continuing after session startup script failure", {
         error,
         fields: { sessionId: this.getServerState().sessionId },
