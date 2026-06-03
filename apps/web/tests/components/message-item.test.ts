@@ -44,7 +44,10 @@ describe("MessageItem", () => {
     }));
 
     expect(screen.getByText(/Working for/)).toBeTruthy();
-    expect(container.querySelector("animate")).toBeTruthy();
+    const cloudAnimation = container.querySelector("animate");
+    expect(cloudAnimation).toBeTruthy();
+    expect(screen.getByText("Partial response").compareDocumentPosition(cloudAnimation!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 
   it("shows the copy action after an assistant message has settled", () => {

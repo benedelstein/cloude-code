@@ -241,17 +241,14 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                   />
 
                   {showActiveWorkHeader && (
-                    <>
-                      <TurnWorkHeader
-                        expanded={false}
-                        onToggle={() => undefined}
-                        startedAt={startedAt}
-                        endedAt={endedAt}
-                        isStreaming={true}
-                        collapsible={false}
-                      />
-                      <WorkingCloudRow />
-                    </>
+                    <TurnWorkHeader
+                      expanded={false}
+                      onToggle={() => undefined}
+                      startedAt={startedAt}
+                      endedAt={endedAt}
+                      isStreaming={true}
+                      collapsible={false}
+                    />
                   )}
 
                   {!isUser && showCollapsedTurn && (
@@ -287,6 +284,10 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                     isStreaming={!!isStreaming}
                     isUser={isUser}
                   />
+
+                  {showActiveWorkHeader && (
+                    <WorkingCloudRow />
+                  )}
                 </div>
               )}
 
