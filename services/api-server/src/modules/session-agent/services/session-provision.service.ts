@@ -129,7 +129,6 @@ export class SessionProvisionService {
           spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
           this.updateServerState({ spriteName });
           this.updatePartialState({ status: this.synthesizeStatus() });
-          await this.ensureStartupToolchain(spriteName);
           this.setupReporter?.completeTask("cloud_container");
         } catch (error) {
           this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
