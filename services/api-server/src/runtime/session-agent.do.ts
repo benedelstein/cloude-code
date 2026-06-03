@@ -310,11 +310,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.serverStateRepository.update(partial);
   }
 
-  private synthesizeStatus(
-    setupRun: SessionSetupRun | null = this.state.sessionSetupRun,
-  ): SessionStatus {
+  private synthesizeStatus(setupRun?: SessionSetupRun | null): SessionStatus {
+    const effectiveSetupRun = setupRun === undefined
+      ? this.state.sessionSetupRun
+      : setupRun;
     if (!this.serverState.initialized) { return "preparing"; }
-    return setupRun?.status === "completed" ? "ready" : "preparing";
+    return effectiveSetupRun?.status === "completed" ? "ready" : "preparing";
   }
 
   /**
