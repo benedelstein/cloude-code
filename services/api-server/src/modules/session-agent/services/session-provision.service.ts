@@ -120,38 +120,15 @@ export class SessionProvisionService {
     try {
       const serverState = this.getServerState();
       let spriteName = serverState.spriteName;
-      if (!spriteName || !serverState.startupToolchain) {
+      if (!spriteName) {
         this.setupReporter?.startTask("cloud_container");
         try {
           this.updatePartialState({ status: this.synthesizeStatus() });
-          if (!spriteName) {
-            this.logger.debug("Provisioning sprite for session", {
-              fields: { sessionId: serverState.sessionId },
-            });
-
-            const spriteResponse = await this.spritesCoordinator.createSprite({
-              name: serverState.sessionId!,
-            });
-
-            // For provisioning, allow network access to known-good domains
-            const sprite = new WorkersSpriteClient(
-              spriteResponse.name,
-              this.env.SPRITES_API_KEY,
-              this.env.SPRITES_API_URL,
-            );
-            const workerHostname = new URL(this.env.WORKER_URL).hostname;
-            const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
-            await sprite.setNetworkPolicy(networkPolicy);
-
-            spriteName = spriteResponse.name;
-            this.updateServerState({ spriteName });
-            this.updatePartialState({ status: this.synthesizeStatus() });
-          }
-
-          if (!spriteName) {
-            throw new Error("Sprite name is missing");
-          }
-
+          const sessionId = serverState.sessionId;
+          if (!sessionId) { throw new Error("Session id is missing"); }
+          spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
+          this.updateServerState({ spriteName });
+          this.updatePartialState({ status: this.synthesizeStatus() });
           await this.ensureStartupToolchain(spriteName);
           this.setupReporter?.completeTask("cloud_container");
         } catch (error) {
@@ -161,6 +138,10 @@ export class SessionProvisionService {
       }
       if (!spriteName) {
         throw new Error("Sprite name is missing after cloud container setup");
+      }
+
+      if (!this.getServerState().startupToolchain) {
+        await this.ensureStartupToolchain(spriteName);
       }
 
       // Clone Repo
@@ -204,6 +185,28 @@ export class SessionProvisionService {
       });
       throw error;
     }
+  }
+
+  private async createSpriteWithBootstrapNetworkPolicy(sessionId: string): Promise<string> {
+    this.logger.debug("Provisioning sprite for session", {
+      fields: { sessionId },
+    });
+
+    const spriteResponse = await this.spritesCoordinator.createSprite({
+      name: sessionId,
+    });
+
+    // For provisioning, allow network access to known-good domains.
+    const sprite = new WorkersSpriteClient(
+      spriteResponse.name,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+    const workerHostname = new URL(this.env.WORKER_URL).hostname;
+    const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
+    await sprite.setNetworkPolicy(networkPolicy);
+
+    return spriteResponse.name;
   }
 
   private async ensureStartupToolchain(spriteName: string): Promise<void> {
