@@ -210,7 +210,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         startTask: (taskId) => this.setupRunService.startTask(taskId),
         completeTask: (taskId, output) => this.setupRunService.completeTask(taskId, output),
         failTask: (taskId, error, output) => this.setupRunService.failTask(taskId, error, output),
-        skipTask: (taskId) => this.setupRunService.skipTask(taskId),
+        skipTask: (taskId, notice) => this.setupRunService.skipTask(taskId, notice),
         failRun: (error) => this.setupRunService.failRun(error),
       },
     });
@@ -622,10 +622,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     const setupTaskIds: SessionSetupTaskId[] = [
       "cloud_container",
       "repository",
+      "setup_script",
     ];
-    if ((data.environmentSnapshot.startupScript?.trim() ?? "").length > 0) {
-      setupTaskIds.push("setup_script");
-    }
     if (pendingUserUiMessage) {
       setupTaskIds.push("initial_agent_start");
     }

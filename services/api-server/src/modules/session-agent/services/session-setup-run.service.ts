@@ -3,6 +3,7 @@ import type {
   SessionSetupRun,
   SessionSetupTask,
   SessionSetupTaskId,
+  SessionSetupTaskNotice,
   SessionSetupTaskOutput,
   SessionStatus,
 } from "@repo/shared";
@@ -50,6 +51,7 @@ export class SessionSetupRunService {
         completedAt: null,
         error: null,
         output: null,
+        notice: null,
       })),
     };
   }
@@ -63,6 +65,7 @@ export class SessionSetupRunService {
         startedAt: task.startedAt ?? now,
         completedAt: null,
         error: null,
+        notice: null,
       };
     });
   }
@@ -78,6 +81,7 @@ export class SessionSetupRunService {
         completedAt: now,
         error: null,
         output: output ?? task.output,
+        notice: null,
       };
     });
   }
@@ -96,11 +100,12 @@ export class SessionSetupRunService {
         completedAt: now,
         error,
         output: output ?? task.output,
+        notice: null,
       };
     });
   }
 
-  skipTask(taskId: SessionSetupTaskId): void {
+  skipTask(taskId: SessionSetupTaskId, notice?: SessionSetupTaskNotice): void {
     this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }
       return {
@@ -109,6 +114,7 @@ export class SessionSetupRunService {
         startedAt: task.startedAt ?? now,
         completedAt: now,
         error: null,
+        notice: notice ?? null,
       };
     });
   }
@@ -233,5 +239,6 @@ function completeSetupTaskForRepair(
     startedAt: task.startedAt ?? completedAt,
     completedAt,
     error: null,
+    notice: null,
   };
 }

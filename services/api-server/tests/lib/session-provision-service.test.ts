@@ -420,6 +420,56 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
+  it("reports skipped setup scripts with a create environment notice", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({
+        repoId: 123,
+        startupScript: null,
+      }),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenCalledWith("setup_script");
+    expect(setupReporter.skipTask).toHaveBeenCalledWith("setup_script", {
+      kind: "create_environment_setup_script",
+      repoId: 123,
+    });
+    expect(setupReporter.failRun).not.toHaveBeenCalled();
+  });
+
+  it("reports skipped setup scripts with an edit environment notice", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const sourceEnvironmentId = "123e4567-e89b-12d3-a456-426614174000";
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({
+        sourceEnvironmentId,
+        sourceEnvironmentName: "Default",
+        startupScript: "",
+      }),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.skipTask).toHaveBeenCalledWith("setup_script", {
+      kind: "edit_environment_setup_script",
+      environmentId: sourceEnvironmentId,
+      environmentName: "Default",
+    });
+    expect(setupReporter.failRun).not.toHaveBeenCalled();
+  });
+
   it("records startup script failure and continues provisioning", async () => {
     const serverState = createServerState();
     const updatePartialState = vi.fn();

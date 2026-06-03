@@ -34,6 +34,17 @@ export type SessionSetupTaskOutput = {
   truncated: boolean;
 };
 
+export type SessionSetupTaskNotice =
+  | {
+      kind: "create_environment_setup_script";
+      repoId: number;
+    }
+  | {
+      kind: "edit_environment_setup_script";
+      environmentId: string;
+      environmentName: string | null;
+    };
+
 export type SessionSetupTask = {
   id: SessionSetupTaskId;
   status: SessionSetupTaskStatus;
@@ -41,6 +52,7 @@ export type SessionSetupTask = {
   completedAt: string | null;
   error: string | null;
   output: SessionSetupTaskOutput | null;
+  notice?: SessionSetupTaskNotice | null;
 };
 
 export type SessionSetupRun = {

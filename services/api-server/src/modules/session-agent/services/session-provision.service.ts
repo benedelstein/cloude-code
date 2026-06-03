@@ -3,6 +3,7 @@ import {
   type ClientState,
   type Logger,
   type SessionEnvironmentSnapshot,
+  type SessionSetupTaskNotice,
   type SessionSetupTaskOutput,
   type SessionStatus,
 } from "@repo/shared";
@@ -31,7 +32,10 @@ export interface SessionSetupTaskReporter {
     error: string,
     output?: SessionSetupTaskOutput,
   ): void;
-  skipTask(taskId: "cloud_container" | "repository" | "setup_script"): void;
+  skipTask(
+    taskId: "cloud_container" | "repository" | "setup_script",
+    notice?: SessionSetupTaskNotice,
+  ): void;
   failRun(error: string): void;
 }
 
@@ -388,7 +392,10 @@ export class SessionProvisionService {
       });
       switch (result.status) {
         case "skipped":
-          this.setupReporter?.skipTask("setup_script");
+          this.setupReporter?.skipTask(
+            "setup_script",
+            buildSkippedSetupScriptNotice(environmentSnapshot),
+          );
           break;
         case "completed":
           this.setupReporter?.completeTask("setup_script", result.output);
@@ -433,4 +440,21 @@ export class SessionProvisionService {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildSkippedSetupScriptNotice(
+  snapshot: SessionEnvironmentSnapshot,
+): SessionSetupTaskNotice {
+  if (snapshot.sourceEnvironmentId) {
+    return {
+      kind: "edit_environment_setup_script",
+      environmentId: snapshot.sourceEnvironmentId,
+      environmentName: snapshot.sourceEnvironmentName,
+    };
+  }
+
+  return {
+    kind: "create_environment_setup_script",
+    repoId: snapshot.repoId,
+  };
 }

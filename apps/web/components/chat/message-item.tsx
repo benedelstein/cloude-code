@@ -27,9 +27,10 @@ interface MessageItemProps {
   isStreaming?: boolean;
   userAvatarUrl?: string | null;
   providerId?: ProviderId | null;
+  className?: string;
 }
 
-export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }: MessageItemProps) {
+export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, className }: MessageItemProps) {
   const isUser = message.role === "user";
   const metadata = (message.metadata ?? {}) as Record<string, unknown>;
   const isAborted = !isUser && metadata.aborted === true;
@@ -245,7 +246,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
 
   return (
     <>
-      <div className={clsx("group/message flex", isUser ? "justify-end" : "justify-start")}>
+      <div className={clsx("group/message flex", isUser ? "justify-end" : "justify-start", className)}>
         <div className={clsx("order-1", isUser ? "max-w-[85%]" : "w-[85%]")}>
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
@@ -296,7 +297,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                         )}
                       >
                         <div className="overflow-hidden min-h-0">
-                          <div className="space-y-0.5 mb-4">
+                          <div className="space-y-0.5 mb-2">
                             <WorkItems
                               items={renderItems.slice(0, collapsedPrefixLength)}
                               isStreaming={!!isStreaming}

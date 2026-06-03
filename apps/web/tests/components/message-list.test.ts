@@ -60,6 +60,18 @@ describe("MessageList", () => {
             output: null,
           },
           {
+            id: "setup_script",
+            status: "skipped",
+            startedAt: "2026-06-02T00:00:01.000Z",
+            completedAt: "2026-06-02T00:00:01.000Z",
+            error: null,
+            output: null,
+            notice: {
+              kind: "create_environment_setup_script",
+              repoId: 123,
+            },
+          },
+          {
             id: "initial_agent_start",
             status: "running",
             startedAt: "2026-06-02T00:00:01.000Z",
@@ -74,6 +86,10 @@ describe("MessageList", () => {
 
     expect(screen.getByText("Initializing session")).toBeTruthy();
     expect(screen.getByText("Set up cloud container")).toBeTruthy();
+    expect(screen.getByText("Skipped setup script")).toBeTruthy();
+    expect(screen.getByText(/No environment is connected to this session/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Create an environment" }).getAttribute("href"))
+      .toBe("/settings/environments/create?repoId=123");
     expect(screen.getByText("Starting agent process")).toBeTruthy();
     const cloudAnimation = container.querySelector("animate");
     expect(cloudAnimation).toBeTruthy();
@@ -84,6 +100,40 @@ describe("MessageList", () => {
     const setupText = screen.getByText("Initializing session");
     expect(messageText.compareDocumentPosition(setupText) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+  });
+
+  it("links skipped setup script tasks to the source environment when one exists", () => {
+    render(React.createElement(MessageList, {
+      messages: [],
+      streamingMessage: null,
+      sessionSetupRun: {
+        id: "setup-1",
+        mode: "create",
+        status: "completed",
+        startedAt: "2026-06-02T00:00:00.000Z",
+        completedAt: "2026-06-02T00:00:02.000Z",
+        tasks: [
+          {
+            id: "setup_script",
+            status: "skipped",
+            startedAt: "2026-06-02T00:00:01.000Z",
+            completedAt: "2026-06-02T00:00:01.000Z",
+            error: null,
+            output: null,
+            notice: {
+              kind: "edit_environment_setup_script",
+              environmentId: "env-1",
+              environmentName: "Default",
+            },
+          },
+        ],
+      },
+    }));
+
+    expect(screen.getByText("Skipped setup script")).toBeTruthy();
+    expect(screen.getByText(/This environment does not have a setup script/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Edit Default" }).getAttribute("href"))
+      .toBe("/settings/environments/env-1");
   });
 
   it("keeps completed setup visible while the setup run still exists", () => {
@@ -148,6 +198,44 @@ describe("MessageList", () => {
     const assistantText = screen.getByText("Doing fine. What do you need?");
     expect(setupText.compareDocumentPosition(assistantText) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+  });
+
+  it("matches setup header weight and chevron behavior to work headers", () => {
+    render(React.createElement(MessageList, {
+      messages: [],
+      streamingMessage: null,
+      sessionSetupRun: {
+        id: "setup-1",
+        mode: "create",
+        status: "completed",
+        startedAt: "2026-06-02T00:00:00.000Z",
+        completedAt: "2026-06-02T00:00:02.000Z",
+        tasks: [
+          {
+            id: "cloud_container",
+            status: "completed",
+            startedAt: "2026-06-02T00:00:00.000Z",
+            completedAt: "2026-06-02T00:00:01.000Z",
+            error: null,
+            output: null,
+          },
+        ],
+      },
+    }));
+
+    const setupButton = screen.getByRole("button", { name: /Initialized session/ });
+    const setupTitle = screen.getByText("Initialized session");
+    const setupChevron = setupButton.querySelector("svg");
+
+    expect(setupTitle.className).not.toContain("font-medium");
+    expect(setupChevron?.className.baseVal).toContain("transition-transform");
+    expect(setupChevron?.className.baseVal).toContain("hidden");
+    expect(setupChevron?.className.baseVal).toContain("group-hover:block");
+
+    fireEvent.click(setupButton);
+
+    expect(setupChevron?.className.baseVal).toContain("rotate-90");
+    expect(setupChevron?.className.baseVal).not.toContain("hidden");
   });
 
   it("shows the live work header on the latest assistant message while responding", () => {
@@ -242,9 +330,18 @@ describe("MessageList", () => {
     expect(screen.getByText("Setup script failed")).toBeTruthy();
     expect(screen.queryByText("truncated")).toBeNull();
     const outputButton = screen.getByRole("button", { name: /Setup script failed/ });
+    const outputChevron = outputButton.querySelector("svg");
+
     expect(outputButton.getAttribute("aria-expanded")).toBe("false");
+    expect(outputChevron?.className.baseVal).toContain("transition-transform");
+    expect(outputChevron?.className.baseVal).not.toContain("hidden");
+    expect(outputChevron?.className.baseVal).not.toContain("group-hover:block");
+    expect(outputChevron?.className.baseVal).not.toContain("rotate-90");
+
     fireEvent.click(outputButton);
+
     expect(outputButton.getAttribute("aria-expanded")).toBe("true");
+    expect(outputChevron?.className.baseVal).toContain("rotate-90");
     expect(screen.getByText("setup failed")).toBeTruthy();
     expect(screen.getByText("STDERR")).toBeTruthy();
   });

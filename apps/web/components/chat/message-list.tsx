@@ -13,13 +13,13 @@ import type {
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Circle,
   Loader2,
   MessageCircle,
   XCircle,
 } from "lucide-react";
+import clsx from "clsx";
 import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { MessageItem } from "./message-item";
@@ -233,6 +233,11 @@ export function MessageList({
                 isStreaming={activeAssistantMessageId === message.id}
                 userAvatarUrl={userAvatarUrl}
                 providerId={providerId}
+                className={
+                  shouldRenderSetupRun && sessionSetupRun && message.id === firstAssistantMessageId
+                    ? "mt-1"
+                    : undefined
+                }
               />
             </div>
           ))}
@@ -303,12 +308,13 @@ function SessionSetupRunIndicator({
         className="group flex w-fit items-center gap-2 text-left text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
         aria-expanded={isExpanded}
       >
-        <span className="font-medium">{title}</span>
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0" />
-        )}
+        <span>{title}</span>
+        <ChevronRight
+          className={clsx(
+            "h-3.5 w-3.5 shrink-0 transition-transform",
+            isExpanded ? "rotate-90" : "hidden group-hover:block",
+          )}
+        />
       </button>
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
@@ -359,11 +365,12 @@ function SessionSetupTaskRow({
                 aria-expanded={isOutputOpen}
               >
                 <span className="min-w-0 truncate">{taskLabel}</span>
-                {isOutputOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                )}
+                <ChevronRight
+                  className={clsx(
+                    "h-3.5 w-3.5 shrink-0 transition-transform",
+                    isOutputOpen && "rotate-90",
+                  )}
+                />
               </button>
             ) : (
               <span className="min-w-0 truncate text-[13px] text-foreground-secondary">
@@ -373,6 +380,9 @@ function SessionSetupTaskRow({
           </div>
           {task.error && (
             <p className="mt-1 text-xs leading-5 text-danger">{task.error}</p>
+          )}
+          {task.id === "setup_script" && task.status === "skipped" && task.notice && (
+            <SetupScriptSkippedNotice notice={task.notice} />
           )}
           {hasOutput && task.output && (
             <div
@@ -386,6 +396,42 @@ function SessionSetupTaskRow({
         </div>
       </div>
     </div>
+  );
+}
+
+function SetupScriptSkippedNotice({
+  notice,
+}: {
+  notice: NonNullable<SessionSetupTask["notice"]>;
+}) {
+  const linkClassName = "font-medium text-foreground underline underline-offset-2 transition-colors hover:text-accent";
+
+  if (notice.kind === "create_environment_setup_script") {
+    return (
+      <p className="mt-1 max-w-lg text-xs leading-5 text-foreground-tertiary">
+        No environment is connected to this session.{" "}
+        <Link
+          href={`/settings/environments/create?repoId=${notice.repoId}`}
+          className={linkClassName}
+        >
+          Create an environment
+        </Link>{" "}
+        to add a setup script.
+      </p>
+    );
+  }
+
+  return (
+    <p className="mt-1 max-w-lg text-xs leading-5 text-foreground-tertiary">
+      This environment does not have a setup script.{" "}
+      <Link
+        href={`/settings/environments/${notice.environmentId}`}
+        className={linkClassName}
+      >
+        Edit {notice.environmentName ?? "the environment"}
+      </Link>{" "}
+      to add one.
+    </p>
   );
 }
 
