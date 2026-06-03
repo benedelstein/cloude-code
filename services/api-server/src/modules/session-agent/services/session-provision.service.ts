@@ -120,15 +120,18 @@ export class SessionProvisionService {
     try {
       const serverState = this.getServerState();
       let spriteName = serverState.spriteName;
-      if (!spriteName) {
+      if (!spriteName || !serverState.startupToolchain) {
         this.setupReporter?.startTask("cloud_container");
         try {
           this.updatePartialState({ status: this.synthesizeStatus() });
-          const sessionId = serverState.sessionId;
-          if (!sessionId) { throw new Error("Session id is missing"); }
-          spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
-          this.updateServerState({ spriteName });
-          this.updatePartialState({ status: this.synthesizeStatus() });
+          if (!spriteName) {
+            const sessionId = serverState.sessionId;
+            if (!sessionId) { throw new Error("Session id is missing"); }
+            spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
+            this.updateServerState({ spriteName });
+            this.updatePartialState({ status: this.synthesizeStatus() });
+          }
+          await this.ensureStartupToolchain(spriteName);
           this.setupReporter?.completeTask("cloud_container");
         } catch (error) {
           this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
@@ -137,10 +140,6 @@ export class SessionProvisionService {
       }
       if (!spriteName) {
         throw new Error("Sprite name is missing after cloud container setup");
-      }
-
-      if (!this.getServerState().startupToolchain) {
-        await this.ensureStartupToolchain(spriteName);
       }
 
       // Clone Repo

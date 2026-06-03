@@ -419,7 +419,7 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
-  it("does not report cloud container task when the sprite checkpoint is present", async () => {
+  it("reports cloud container task when the sprite exists but toolchain is missing", async () => {
     const serverState = createServerState({
       spriteName: "sprite-1",
     });
@@ -434,9 +434,35 @@ describe("SessionProvisionService startup toolchain", () => {
 
     await service.ensureProvisioned();
 
+    expect(setupReporter.startTask).toHaveBeenCalledWith("cloud_container");
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
+    expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
+  });
+
+  it("does not report cloud container task when cloud container checkpoints are present", async () => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+    });
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
     expect(setupReporter.startTask).not.toHaveBeenCalledWith("cloud_container");
     expect(setupReporter.completeTask).not.toHaveBeenCalledWith("cloud_container");
-    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
+    expect(mockState.ensureSpriteStartupToolchain).not.toHaveBeenCalled();
     expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
   });
 
