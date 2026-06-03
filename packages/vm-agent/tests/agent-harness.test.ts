@@ -93,16 +93,19 @@ describe("startAgentHarness", () => {
 
     const handle = startAgentHarness({ config: { setup }, settings, emit });
 
-    handle.queueMessage({
-      content: "hello",
-      attachments: [
-        {
-          filename: "diagram.png",
-          mediaType: "image/png",
-          dataUrl: "data:image/png;base64,abc",
-        },
-      ],
-    });
+    handle.queueMessage(
+      {
+        content: "hello",
+        attachments: [
+          {
+            filename: "diagram.png",
+            mediaType: "image/png",
+            dataUrl: "data:image/png;base64,abc",
+          },
+        ],
+      },
+      "user-message-1",
+    );
 
     await pollOutputs(
       outputs,
@@ -201,7 +204,7 @@ describe("startAgentHarness", () => {
       onTurnEnd,
     });
 
-    handle.queueMessage({ content: "hi" });
+    handle.queueMessage({ content: "hi" }, "user-message-1");
 
     // Wait for ready + the stream to have started before cancelling.
     await pollOutputs(outputs, (current) => current.some((o) => o.type === "ready"));
@@ -209,6 +212,67 @@ describe("startAgentHarness", () => {
 
     await pollOutputs(outputs, () => onTurnEnd.mock.calls.length === 1);
     expect(onTurnEnd).toHaveBeenCalledWith({ finishReason: "abort", aborted: true });
+
+    await handle.shutdown();
+  });
+
+  it("treats setup failure as fatal without ending a turn", async () => {
+    const outputs: AgentOutput[] = [];
+    const emit = (output: AgentOutput) => {
+      outputs.push(output);
+    };
+    const onSetupError = vi.fn();
+    const onTurnEnd = vi.fn();
+    const setupError = new Error("provider auth failed");
+    const setup = vi.fn(async () => {
+      throw setupError;
+    });
+
+    const handle = startAgentHarness({
+      config: { setup },
+      settings,
+      emit,
+      onSetupError,
+      onTurnEnd,
+    });
+
+    handle.queueMessage({ content: "hi" }, "user-message-1");
+
+    await pollOutputs(outputs, () => onSetupError.mock.calls.length === 1);
+
+    expect(outputs).toContainEqual({ type: "error", error: String(setupError) });
+    expect(onSetupError).toHaveBeenCalledWith(setupError);
+    expect(onTurnEnd).not.toHaveBeenCalled();
+    expect(mockState.streamText).not.toHaveBeenCalled();
+
+    await handle.shutdown();
+  });
+
+  it("does not process queued messages after setup failure", async () => {
+    const outputs: AgentOutput[] = [];
+    const emit = (output: AgentOutput) => {
+      outputs.push(output);
+    };
+    const onSetupError = vi.fn();
+    const setup = vi.fn(async () => {
+      throw new Error("setup failed");
+    });
+
+    const handle = startAgentHarness({
+      config: { setup },
+      settings,
+      emit,
+      onSetupError,
+    });
+
+    handle.queueMessage({ content: "first" }, "user-message-1");
+    handle.queueMessage({ content: "second" }, "user-message-2");
+
+    await pollOutputs(outputs, () => onSetupError.mock.calls.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(setup).toHaveBeenCalledTimes(1);
+    expect(mockState.streamText).not.toHaveBeenCalled();
 
     await handle.shutdown();
   });

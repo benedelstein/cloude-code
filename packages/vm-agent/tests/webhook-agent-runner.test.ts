@@ -15,6 +15,7 @@ vi.mock("fs", () => ({
 }));
 
 import { WebhookAgentRunner } from "../src/webhook-agent-runner";
+import { WebhookClient } from "../src/lib/webhook-client";
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
@@ -267,5 +268,135 @@ describe("WebhookAgentRunner", () => {
     );
 
     await runner.shutdown();
+  });
+
+  it("posts setup failure error and waits for it before shutdown exit", async () => {
+    const eventPostStarted = createDeferred();
+    const releaseEventPost = createDeferred();
+    const eventPosts: unknown[] = [];
+    const onShutdown = vi.fn();
+
+    globalThis.fetch = vi.fn(async (url, init) => {
+      if (String(url).endsWith("/events")) {
+        eventPosts.push(JSON.parse(String(init?.body)));
+        eventPostStarted.resolve();
+        await releaseEventPost.promise;
+      }
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const setupError = new Error("missing provider token");
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => {
+          throw setupError;
+        },
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown,
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await eventPostStarted.promise;
+
+    expect(eventPosts).toEqual([
+      {
+        event: {
+          type: "error",
+          error: String(setupError),
+        },
+      },
+    ]);
+    expect(onShutdown).not.toHaveBeenCalled();
+
+    releaseEventPost.resolve();
+
+    await waitFor(() => onShutdown.mock.calls.length === 1);
+    expect(onShutdown).toHaveBeenCalledWith(1);
+  });
+
+  it("waits for pending event posts during normal shutdown", async () => {
+    const eventPostStarted = createDeferred();
+    const releaseEventPost = createDeferred();
+    const onShutdown = vi.fn();
+
+    globalThis.fetch = vi.fn(async (url) => {
+      if (String(url).endsWith("/events")) {
+        eventPostStarted.resolve();
+        await releaseEventPost.promise;
+      }
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown,
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await eventPostStarted.promise;
+
+    const shutdownPromise = runner.shutdown();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(onShutdown).not.toHaveBeenCalled();
+
+    releaseEventPost.resolve();
+    await shutdownPromise;
+
+    expect(onShutdown).toHaveBeenCalledWith(0);
+  });
+
+  it("does not create unhandled rejections when tracked event posts reject", async () => {
+    const postSpy = vi
+      .spyOn(WebhookClient.prototype, "post")
+      .mockImplementation(async (path) => {
+        if (path === "/events") {
+          throw new Error("event post rejected");
+        }
+      });
+    const onShutdown = vi.fn();
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown,
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await waitFor(() => postSpy.mock.calls.some(([path]) => path === "/events"));
+
+    await runner.shutdown();
+
+    expect(onShutdown).toHaveBeenCalledWith(0);
   });
 });
