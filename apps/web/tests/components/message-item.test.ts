@@ -34,6 +34,18 @@ describe("MessageItem", () => {
     expect(screen.queryByRole("button", { name: "Copy message" })).toBeNull();
   });
 
+  it("shows a live work header while an assistant message is streaming", () => {
+    render(React.createElement(MessageItem, {
+      message: {
+        ...assistantMessage(),
+        metadata: { startedAt: Date.now() - 5_000 },
+      },
+      isStreaming: true,
+    }));
+
+    expect(screen.getByText(/Working for/)).toBeTruthy();
+  });
+
   it("shows the copy action after an assistant message has settled", () => {
     render(React.createElement(MessageItem, {
       message: assistantMessage(),

@@ -296,9 +296,11 @@ function SessionSetupRunIndicator({
           <ChevronRight className="h-4 w-4 shrink-0" />
         )}
       </button>
-      {isExpanded && (
-        <div className="ml-14 mt-1">
-          <div className="space-y-0.5">
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="ml-14 mt-1 space-y-0.5">
             {setupRun.tasks.map((task) => (
               <SessionSetupTaskRow
                 key={task.id}
@@ -307,7 +309,7 @@ function SessionSetupRunIndicator({
             ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -356,10 +358,12 @@ function SessionSetupTaskRow({
             <p className="mt-1 text-xs leading-5 text-danger">{task.error}</p>
           )}
           {hasOutput && task.output && (
-            <div className="mt-1">
-              {isOutputOpen && (
+            <div
+              className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOutputOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+            >
+              <div className="min-h-0 overflow-hidden">
                 <SessionSetupOutput output={task.output} />
-              )}
+              </div>
             </div>
           )}
         </div>

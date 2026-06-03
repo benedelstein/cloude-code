@@ -211,6 +211,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const userImageParts = isUser ? imageParts : [];
   const bubbleImageParts = isUser ? [] : imageParts;
   const hasBubbleContent = !isUser || bubbleImageParts.length > 0 || renderItems.length > 0;
+  const showActiveWorkHeader = !isUser && !!isStreaming && startedAt !== undefined && !showCollapsedTurn;
 
   return (
     <>
@@ -237,6 +238,17 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                     alignRight={isUser}
                     onExpand={setExpandedImageUrl}
                   />
+
+                  {showActiveWorkHeader && (
+                    <TurnWorkHeader
+                      expanded={false}
+                      onToggle={() => undefined}
+                      startedAt={startedAt}
+                      endedAt={endedAt}
+                      isStreaming={true}
+                      collapsible={false}
+                    />
+                  )}
 
                   {!isUser && showCollapsedTurn && (
                     <>

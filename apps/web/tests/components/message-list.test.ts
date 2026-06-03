@@ -175,12 +175,14 @@ describe("MessageList", () => {
     }));
 
     expect(screen.getByText("Initialized session")).toBeTruthy();
-    expect(screen.queryByText("setup failed")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Initialized session/ }));
 
     expect(screen.getByText("Setup script failed")).toBeTruthy();
     expect(screen.queryByText("truncated")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Setup script failed/ }));
+    const outputButton = screen.getByRole("button", { name: /Setup script failed/ });
+    expect(outputButton.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(outputButton);
+    expect(outputButton.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("setup failed")).toBeTruthy();
     expect(screen.getByText("STDERR")).toBeTruthy();
   });
