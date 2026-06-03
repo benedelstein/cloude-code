@@ -39,13 +39,14 @@ export function GenericToolPart({ action }: GenericToolPartProps) {
 
 interface GenericGroupPartProps {
   actions: OtherAction[];
+  isActive?: boolean;
 }
 
-export function GenericGroupPart({ actions }: GenericGroupPartProps) {
+export function GenericGroupPart({ actions, isActive = false }: GenericGroupPartProps) {
   return (
     <ExpandableSummary
       icon={<Wrench className="w-3.5 h-3.5" />}
-      summary={`Tools (${actions.length})`}
+      summary={isActive ? `Using ${actions.length} tools` : `Tools (${actions.length})`}
       detail={
         <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-secondary">
           {actions.map((action, index) => (

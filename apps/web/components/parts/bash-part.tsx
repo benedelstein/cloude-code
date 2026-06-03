@@ -46,13 +46,14 @@ function PromptIcon() {
 
 interface BashGroupPartProps {
   actions: BashAction[];
+  isActive?: boolean;
 }
 
-export function BashGroupPart({ actions }: BashGroupPartProps) {
+export function BashGroupPart({ actions, isActive = false }: BashGroupPartProps) {
   return (
     <ExpandableSummary
       icon={<PromptIcon />}
-      summary={`Ran ${actions.length} commands`}
+      summary={`${isActive ? "Running" : "Ran"} ${actions.length} commands`}
       detail={
         <div className="my-1 space-y-1 pl-3">
           {actions.map((action, index) => (

@@ -30,14 +30,15 @@ export function SearchPart({ action }: SearchPartProps) {
 
 interface SearchGroupPartProps {
   actions: SearchAction[];
+  isActive?: boolean;
 }
 
-export function SearchGroupPart({ actions }: SearchGroupPartProps) {
+export function SearchGroupPart({ actions, isActive = false }: SearchGroupPartProps) {
   const total = actions.reduce((sum, action) => sum + action.patterns.length, 0);
   return (
     <ExpandableSummary
       icon={<Search className="w-3.5 h-3.5" />}
-      summary={`Searched ${total} patterns`}
+      summary={`${isActive ? "Searching" : "Searched"} ${total} patterns`}
       detail={
         <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-secondary">
           {actions.flatMap((action) => action.patterns).map((p, index) => (

@@ -260,7 +260,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, c
                 <div
                   className={clsx(
                     "rounded-md min-w-0 overflow-hidden",
-                    isUser && "px-3 py-2 bg-accent-subtle text-accent-foreground",
+                    isUser && "ml-auto w-fit max-w-full px-3 py-2 bg-accent-subtle text-accent-foreground",
                   )}
                 >
                   <AttachmentPreviewRow

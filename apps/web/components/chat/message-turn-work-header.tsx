@@ -39,7 +39,7 @@ export function TurnWorkHeader({
       type="button"
       onClick={() => collapsible && onToggle()}
       className={clsx(
-        "group mb-2 flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-secondary transition-colors text-left rounded",
+        "group mb-0 flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-secondary transition-colors text-left rounded",
         collapsible ? "cursor-pointer hover:text-foreground" : "cursor-default",
       )}
       aria-expanded={collapsible ? expanded : undefined}

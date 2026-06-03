@@ -37,10 +37,19 @@ export function WorkItems({
         const previousIsToolItem = previous?.kind === "action-item";
         const needsBoundarySpacing = (item.kind === "text" && previousIsToolItem)
           || (isToolItem && previous?.kind === "text");
+        const isActiveFinalGroup = isStreaming
+          && item.kind === "action-item"
+          && item.item.type === "group"
+          && index === items.length - 1;
 
         return (
           <div key={item.key} className={clsx(needsBoundarySpacing && "mt-2")}>
-            <WorkItemRenderer item={item} isStreaming={isStreaming} isUser={isUser} />
+            <WorkItemRenderer
+              item={item}
+              isStreaming={isStreaming}
+              isUser={isUser}
+              isActive={isActiveFinalGroup}
+            />
           </div>
         );
       })}
@@ -52,10 +61,12 @@ function WorkItemRenderer({
   item,
   isStreaming,
   isUser,
+  isActive,
 }: {
   item: RenderItem;
   isStreaming: boolean;
   isUser: boolean;
+  isActive: boolean;
 }) {
   switch (item.kind) {
     case "text":
@@ -63,7 +74,7 @@ function WorkItemRenderer({
     case "reasoning":
       return <ReasoningPart part={item.part} isStreaming={isStreaming} />;
     case "action-item":
-      return <ActionItemRenderer item={item.item} />;
+      return <ActionItemRenderer item={item.item} isActive={isActive} />;
     default: {
       const exhaustive: never = item;
       throw new Error(`Unhandled work item: ${(exhaustive as { kind: string }).kind}`);
@@ -71,9 +82,9 @@ function WorkItemRenderer({
   }
 }
 
-function ActionItemRenderer({ item }: { item: ActionItem }) {
+function ActionItemRenderer({ item, isActive }: { item: ActionItem; isActive: boolean }) {
   if (item.type === "group") {
-    return <GroupedToolPart group={item} />;
+    return <GroupedToolPart group={item} isActive={isActive} />;
   }
   const { action } = item;
   switch (action.kind) {
