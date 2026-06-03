@@ -3,8 +3,8 @@ import type {
   SessionSetupRun,
   SessionSetupTask,
   SessionSetupTaskId,
-  SessionSetupTaskNotice,
   SessionSetupTaskOutput,
+  StartupScriptSetupTaskSkipReason,
 } from "@repo/shared";
 import type { ServerState } from "../repositories/server-state.repository";
 
@@ -45,7 +45,7 @@ export class SessionSetupRunService {
   }
 
   startTask(taskId: SessionSetupTaskId): void {
-    const setupRun = this.updateTask(taskId, (task, now) => {
+    const updatedRun = this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }
       return updateSetupTask(task, {
         status: "running",
@@ -54,12 +54,12 @@ export class SessionSetupRunService {
         error: null,
       });
     });
-    if (!setupRun) { return; }
-    this.updateRun(setupRun);
+    if (!updatedRun) { return; }
+    this.updateRun(updatedRun);
   }
 
   completeTask(taskId: SessionSetupTaskId, output?: SessionSetupTaskOutput): void {
-    const setupRun = this.updateTask(taskId, (task, now) => {
+    const updatedRun = this.updateTask(taskId, (task, now) => {
       if (task.status === "completed") { return task; }
       if (task.status === "failed" || task.status === "skipped") { return task; }
       const nextTask = updateSetupTask(task, {
@@ -69,11 +69,11 @@ export class SessionSetupRunService {
         error: null,
       });
       return nextTask.id === "setup_script"
-        ? { ...nextTask, output: output ?? nextTask.output, notice: null }
+        ? { ...nextTask, output: output ?? nextTask.output, skipReason: null }
         : nextTask;
     });
-    if (!setupRun) { return; }
-    this.updateRun(this.completeRunIfReady(setupRun));
+    if (!updatedRun) { return; }
+    this.updateRun(this.completeRunIfReady(updatedRun));
   }
 
   failTask(
@@ -90,14 +90,14 @@ export class SessionSetupRunService {
         error,
       });
       return nextTask.id === "setup_script"
-        ? { ...nextTask, output: output ?? nextTask.output, notice: null }
+        ? { ...nextTask, output: output ?? nextTask.output, skipReason: null }
         : nextTask;
     });
     if (!setupRun) { return; }
     this.updateRun(this.reconcileFailedTask(setupRun, taskId));
   }
 
-  skipTask(taskId: SessionSetupTaskId, notice?: SessionSetupTaskNotice): void {
+  skipTask(taskId: SessionSetupTaskId, skipReason?: StartupScriptSetupTaskSkipReason): void {
     const setupRun = this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }
       const nextTask = updateSetupTask(task, {
@@ -107,7 +107,7 @@ export class SessionSetupRunService {
         error: null,
       });
       return nextTask.id === "setup_script"
-        ? { ...nextTask, notice: notice ?? null }
+        ? { ...nextTask, skipReason: skipReason ?? null }
         : nextTask;
     });
     if (!setupRun) { return; }
@@ -241,7 +241,7 @@ function createSetupTask(taskId: SessionSetupTaskId): SessionSetupTask {
       return {
         ...createBaseSetupTask(taskId, false),
         output: null,
-        notice: null,
+        skipReason: null,
       };
     }
     case "initial_agent_start": {
@@ -297,13 +297,12 @@ function completeSetupTaskForRepair(
   task: SessionSetupTask,
   completedAt: string,
 ): SessionSetupTask {
-  const nextTask = updateSetupTask(task, {
+  return updateSetupTask(task, {
     status: "completed",
     startedAt: task.startedAt ?? completedAt,
     completedAt,
     error: null,
   });
-  return nextTask.id === "setup_script" ? { ...nextTask, notice: null } : nextTask;
 }
 
 function replaceSetupTask(

@@ -89,7 +89,7 @@ describe("SessionSetupRunService", () => {
     ]);
     expect(setupRun.tasks.find((task) => task.id === "setup_script")).toMatchObject({
       output: null,
-      notice: null,
+      skipReason: null,
     });
   });
 

@@ -29,13 +29,13 @@ export type SessionSetupTaskOutput = {
   truncated: boolean;
 };
 
-export type SessionSetupTaskNotice =
+export type StartupScriptSetupTaskSkipReason =
   | {
-      kind: "create_environment_setup_script";
+      kind: "no_environment";
       repoId: number;
     }
   | {
-      kind: "edit_environment_setup_script";
+      kind: "no_script";
       environmentId: string;
       environmentName: string | null;
     };
@@ -63,7 +63,7 @@ export type StartupScriptSetupTask = BaseSessionSetupTask & {
   id: "setup_script";
   isBlocking: false;
   output: SessionSetupTaskOutput | null;
-  notice: SessionSetupTaskNotice | null;
+  skipReason: StartupScriptSetupTaskSkipReason | null;
 };
 
 export type InitialAgentStartSetupTask = BaseSessionSetupTask & {

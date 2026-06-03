@@ -386,8 +386,8 @@ function SessionSetupTaskRow({
           {task.error && (
             <p className="mt-1 text-xs leading-5 text-danger">{task.error}</p>
           )}
-          {setupScriptTask?.status === "skipped" && setupScriptTask.notice && (
-            <SetupScriptSkippedNotice notice={setupScriptTask.notice} />
+          {setupScriptTask?.status === "skipped" && setupScriptTask.skipReason && (
+            <SetupScriptSkippedReason skipReason={setupScriptTask.skipReason} />
           )}
           {hasOutput && setupScriptTask?.output && (
             <div
@@ -404,19 +404,19 @@ function SessionSetupTaskRow({
   );
 }
 
-function SetupScriptSkippedNotice({
-  notice,
+function SetupScriptSkippedReason({
+  skipReason,
 }: {
-  notice: NonNullable<StartupScriptSetupTask["notice"]>;
+  skipReason: NonNullable<StartupScriptSetupTask["skipReason"]>;
 }) {
   const linkClassName = "font-medium text-foreground underline underline-offset-2 transition-colors hover:text-accent";
 
-  if (notice.kind === "create_environment_setup_script") {
+  if (skipReason.kind === "no_environment") {
     return (
       <p className="mt-1 max-w-lg text-xs leading-5 text-foreground-tertiary">
         No environment is connected to this session.{" "}
         <Link
-          href={`/settings/environments/create?repoId=${notice.repoId}`}
+          href={`/settings/environments/create?repoId=${skipReason.repoId}`}
           className={linkClassName}
         >
           Create an environment
@@ -430,10 +430,10 @@ function SetupScriptSkippedNotice({
     <p className="mt-1 max-w-lg text-xs leading-5 text-foreground-tertiary">
       This environment does not have a setup script.{" "}
       <Link
-        href={`/settings/environments/${notice.environmentId}`}
+        href={`/settings/environments/${skipReason.environmentId}`}
         className={linkClassName}
       >
-        Edit {notice.environmentName ?? "the environment"}
+        Edit {skipReason.environmentName ?? "the environment"}
       </Link>{" "}
       to add one.
     </p>
@@ -506,17 +506,17 @@ function getSetupTaskLabel(task: SessionSetupTask): string {
     case "cloud_container": {
       switch (task.status) {
         case "pending":
-          return "Set up cloud container";
+          return "Set up cloud computer";
         case "running":
-          return "Setting up cloud container";
+          return "Setting up cloud computer";
         case "completed":
-          return "Set up cloud container";
+          return "Set up cloud computer";
         case "failed":
-          return "Cloud container setup failed";
+          return "Cloud computer setup failed";
         case "skipped":
-          return "Skipped cloud container setup";
+          return "Skipped cloud computer setup";
       }
-      return "Set up cloud container";
+      return "Set up cloud computer";
     }
     case "repository": {
       switch (task.status) {

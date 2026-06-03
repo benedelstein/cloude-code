@@ -419,7 +419,33 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
-  it("reports skipped setup scripts with a create environment notice", async () => {
+  it("does not report cloud container task when durable checkpoints are present", async () => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+    });
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).not.toHaveBeenCalledWith("cloud_container");
+    expect(setupReporter.completeTask).not.toHaveBeenCalledWith("cloud_container");
+    expect(mockState.ensureSpriteStartupToolchain).not.toHaveBeenCalled();
+    expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
+  });
+
+  it("reports skipped setup scripts with a no environment skip reason", async () => {
     const serverState = createServerState();
     const setupReporter = createSetupReporter();
     const { service } = createService(
@@ -437,13 +463,13 @@ describe("SessionProvisionService startup toolchain", () => {
 
     expect(setupReporter.startTask).toHaveBeenCalledWith("setup_script");
     expect(setupReporter.skipTask).toHaveBeenCalledWith("setup_script", {
-      kind: "create_environment_setup_script",
+      kind: "no_environment",
       repoId: 123,
     });
     expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
-  it("reports skipped setup scripts with an edit environment notice", async () => {
+  it("reports skipped setup scripts with a no script skip reason", async () => {
     const serverState = createServerState();
     const setupReporter = createSetupReporter();
     const sourceEnvironmentId = "123e4567-e89b-12d3-a456-426614174000";
@@ -462,7 +488,7 @@ describe("SessionProvisionService startup toolchain", () => {
     await service.ensureProvisioned();
 
     expect(setupReporter.skipTask).toHaveBeenCalledWith("setup_script", {
-      kind: "edit_environment_setup_script",
+      kind: "no_script",
       environmentId: sourceEnvironmentId,
       environmentName: "Default",
     });

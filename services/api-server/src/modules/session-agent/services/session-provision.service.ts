@@ -3,9 +3,9 @@ import {
   type ClientState,
   type Logger,
   type SessionEnvironmentSnapshot,
-  type SessionSetupTaskNotice,
   type SessionSetupTaskOutput,
   type SessionStatus,
+  type StartupScriptSetupTaskSkipReason,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
@@ -34,7 +34,7 @@ export interface SessionSetupTaskReporter {
   ): void;
   skipTask(
     taskId: "cloud_container" | "repository" | "setup_script",
-    notice?: SessionSetupTaskNotice,
+    skipReason?: StartupScriptSetupTaskSkipReason,
   ): void;
   failRun(error: string): void;
 }
@@ -120,43 +120,44 @@ export class SessionProvisionService {
     try {
       const serverState = this.getServerState();
       let spriteName = serverState.spriteName;
-      this.setupReporter?.startTask("cloud_container");
-      try {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        if (!spriteName) {
-          this.logger.debug("Provisioning sprite for session", {
-            fields: { sessionId: serverState.sessionId },
-          });
-
-          const spriteResponse = await this.spritesCoordinator.createSprite({
-            name: serverState.sessionId!,
-          });
-
-          // For provisioning, allow network access to known-good domains
-          const sprite = new WorkersSpriteClient(
-            spriteResponse.name,
-            this.env.SPRITES_API_KEY,
-            this.env.SPRITES_API_URL,
-          );
-          const workerHostname = new URL(this.env.WORKER_URL).hostname;
-          const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
-          await sprite.setNetworkPolicy(networkPolicy);
-
-          spriteName = spriteResponse.name;
-          this.updateServerState({ spriteName });
+      if (!spriteName || !serverState.startupToolchain) {
+        this.setupReporter?.startTask("cloud_container");
+        try {
           this.updatePartialState({ status: this.synthesizeStatus() });
-        }
+          if (!spriteName) {
+            this.logger.debug("Provisioning sprite for session", {
+              fields: { sessionId: serverState.sessionId },
+            });
 
-        if (!spriteName) {
-          throw new Error("Sprite name is missing");
-        }
+            const spriteResponse = await this.spritesCoordinator.createSprite({
+              name: serverState.sessionId!,
+            });
 
-        // Update environment toolchain packages
-        await this.ensureStartupToolchain(spriteName);
-        this.setupReporter?.completeTask("cloud_container");
-      } catch (error) {
-        this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
-        throw error;
+            // For provisioning, allow network access to known-good domains
+            const sprite = new WorkersSpriteClient(
+              spriteResponse.name,
+              this.env.SPRITES_API_KEY,
+              this.env.SPRITES_API_URL,
+            );
+            const workerHostname = new URL(this.env.WORKER_URL).hostname;
+            const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
+            await sprite.setNetworkPolicy(networkPolicy);
+
+            spriteName = spriteResponse.name;
+            this.updateServerState({ spriteName });
+            this.updatePartialState({ status: this.synthesizeStatus() });
+          }
+
+          if (!spriteName) {
+            throw new Error("Sprite name is missing");
+          }
+
+          await this.ensureStartupToolchain(spriteName);
+          this.setupReporter?.completeTask("cloud_container");
+        } catch (error) {
+          this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
+          throw error;
+        }
       }
       if (!spriteName) {
         throw new Error("Sprite name is missing after cloud container setup");
@@ -394,7 +395,7 @@ export class SessionProvisionService {
         case "skipped":
           this.setupReporter?.skipTask(
             "setup_script",
-            buildSkippedSetupScriptNotice(environmentSnapshot),
+            buildSkippedSetupScriptSkipReason(environmentSnapshot),
           );
           break;
         case "completed":
@@ -442,19 +443,19 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function buildSkippedSetupScriptNotice(
+function buildSkippedSetupScriptSkipReason(
   snapshot: SessionEnvironmentSnapshot,
-): SessionSetupTaskNotice {
+): StartupScriptSetupTaskSkipReason {
   if (snapshot.sourceEnvironmentId) {
     return {
-      kind: "edit_environment_setup_script",
+      kind: "no_script",
       environmentId: snapshot.sourceEnvironmentId,
       environmentName: snapshot.sourceEnvironmentName,
     };
   }
 
   return {
-    kind: "create_environment_setup_script",
+    kind: "no_environment",
     repoId: snapshot.repoId,
   };
 }
