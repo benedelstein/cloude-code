@@ -32,7 +32,6 @@ type InitialAgentStartTaskId = "initial_agent_start";
 export interface InitialAgentStartReporter {
   startTask(taskId: InitialAgentStartTaskId): void;
   failTask(taskId: InitialAgentStartTaskId, error: string): void;
-  failRun(error: string): void;
 }
 
 export type ChatDispatchError =
@@ -78,7 +77,6 @@ export interface SessionChatDispatchServiceDeps {
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage, without?: string[]) => void;
   synthesizeStatus: () => SessionStatus;
-  setActiveSetupTaskId?: (taskId: InitialAgentStartTaskId | null) => void;
   setupReporter?: InitialAgentStartReporter;
 }
 
@@ -107,7 +105,6 @@ export class SessionChatDispatchService {
   private readonly updatePartialState: SessionChatDispatchServiceDeps["updatePartialState"];
   private readonly broadcastMessage: SessionChatDispatchServiceDeps["broadcastMessage"];
   private readonly synthesizeStatus: () => SessionStatus;
-  private readonly setActiveSetupTaskId: SessionChatDispatchServiceDeps["setActiveSetupTaskId"];
   private readonly setupReporter: SessionChatDispatchServiceDeps["setupReporter"];
 
   constructor(deps: SessionChatDispatchServiceDeps) {
@@ -122,7 +119,6 @@ export class SessionChatDispatchService {
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
     this.synthesizeStatus = deps.synthesizeStatus;
-    this.setActiveSetupTaskId = deps.setActiveSetupTaskId;
     this.setupReporter = deps.setupReporter;
   }
 
@@ -263,7 +259,6 @@ export class SessionChatDispatchService {
     // the spawn returns.
     this.turnCoordinator.beginTurn(args.userMessageId);
     if (args.setupContext) {
-      this.setActiveSetupTaskId?.(args.setupContext);
       this.setupReporter?.startTask(args.setupContext);
     }
 
@@ -282,9 +277,7 @@ export class SessionChatDispatchService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (args.setupContext) {
-        this.setActiveSetupTaskId?.(null);
         this.setupReporter?.failTask(args.setupContext, message);
-        this.setupReporter?.failRun(message);
       }
       return failure(
         chatDispatchError("DISPATCH_FAILED", message, { cause: message }),
@@ -292,9 +285,7 @@ export class SessionChatDispatchService {
     }
     if (!spawnResult.ok) {
       if (args.setupContext) {
-        this.setActiveSetupTaskId?.(null);
         this.setupReporter?.failTask(args.setupContext, spawnResult.error.message);
-        this.setupReporter?.failRun(spawnResult.error.message);
       }
       return failure(spawnResult.error);
     }

@@ -9,6 +9,7 @@ import type {
   SessionSetupRun,
   SessionSetupTask,
   SessionSetupTaskOutput,
+  StartupScriptSetupTask,
 } from "@repo/shared";
 import {
   AlertTriangle,
@@ -343,7 +344,11 @@ function SessionSetupTaskRow({
   task: SessionSetupTask;
 }) {
   const [isOutputOpen, setIsOutputOpen] = useState(false);
-  const hasOutput = task.output !== null && (task.output.stdout || task.output.stderr);
+  const setupScriptTask = getSetupScriptTask(task);
+  const hasOutput =
+    setupScriptTask !== null
+    && setupScriptTask.output !== null
+    && (setupScriptTask.output.stdout || setupScriptTask.output.stderr);
 
   useEffect(() => {
     setIsOutputOpen(false);
@@ -381,15 +386,15 @@ function SessionSetupTaskRow({
           {task.error && (
             <p className="mt-1 text-xs leading-5 text-danger">{task.error}</p>
           )}
-          {task.id === "setup_script" && task.status === "skipped" && task.notice && (
-            <SetupScriptSkippedNotice notice={task.notice} />
+          {setupScriptTask?.status === "skipped" && setupScriptTask.notice && (
+            <SetupScriptSkippedNotice notice={setupScriptTask.notice} />
           )}
-          {hasOutput && task.output && (
+          {hasOutput && setupScriptTask?.output && (
             <div
               className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOutputOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
             >
               <div className="min-h-0 overflow-hidden">
-                <SessionSetupOutput output={task.output} />
+                <SessionSetupOutput output={setupScriptTask.output} />
               </div>
             </div>
           )}
@@ -402,7 +407,7 @@ function SessionSetupTaskRow({
 function SetupScriptSkippedNotice({
   notice,
 }: {
-  notice: NonNullable<SessionSetupTask["notice"]>;
+  notice: NonNullable<StartupScriptSetupTask["notice"]>;
 }) {
   const linkClassName = "font-medium text-foreground underline underline-offset-2 transition-colors hover:text-accent";
 
@@ -433,6 +438,10 @@ function SetupScriptSkippedNotice({
       to add one.
     </p>
   );
+}
+
+function getSetupScriptTask(task: SessionSetupTask): StartupScriptSetupTask | null {
+  return task.id === "setup_script" ? task : null;
 }
 
 function SetupTaskStatusIcon({ task }: { task: SessionSetupTask }) {

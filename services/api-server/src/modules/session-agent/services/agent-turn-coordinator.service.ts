@@ -41,8 +41,6 @@ export interface AgentTurnCoordinatorDeps {
   setupReporter?: {
     completeTask(taskId: "initial_agent_start"): void;
     failTask(taskId: "initial_agent_start", error: string): void;
-    completeRun(): void;
-    failRun(error: string): void;
   };
 }
 
@@ -274,13 +272,10 @@ export class AgentTurnCoordinator {
    */
   handleEvent(event: AgentEvent): void {
     this.ensureRehydratedState();
-    const serverState = this.getServerState();
     switch (event.type) {
       case "ready":
-        if (serverState.activeSetupTaskId === "initial_agent_start") {
-          this.updateServerState({ activeSetupTaskId: null });
+        if (this.isInitialAgentStartRunning()) {
           this.setupReporter?.completeTask("initial_agent_start");
-          this.setupReporter?.completeRun();
         }
         this.updatePartialState({ status: this.synthesizeStatus() });
         break;
@@ -288,10 +283,8 @@ export class AgentTurnCoordinator {
         this.logger.error("vm-agent error", {
           fields: { errorMessage: event.error },
         });
-        if (serverState.activeSetupTaskId === "initial_agent_start") {
-          this.updateServerState({ activeSetupTaskId: null });
+        if (this.isInitialAgentStartRunning()) {
           this.setupReporter?.failTask("initial_agent_start", event.error);
-          this.setupReporter?.failRun(event.error);
         }
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
@@ -306,7 +299,8 @@ export class AgentTurnCoordinator {
           message: event.error,
         });
         break;
-      case "sessionId":
+      case "sessionId": {
+        const serverState = this.getServerState();
         this.logger.info("Storing agent session ID", {
           fields: { agentSessionId: event.sessionId },
         });
@@ -323,6 +317,7 @@ export class AgentTurnCoordinator {
         }
         this.updateServerState({ agentSessionId: event.sessionId });
         break;
+      }
       case "heartbeat":
       case "debug":
         break;
@@ -357,6 +352,12 @@ export class AgentTurnCoordinator {
   // ============================================
   // Private
   // ============================================
+
+  private isInitialAgentStartRunning(): boolean {
+    return this.getClientState().sessionSetupRun?.tasks.some((task) =>
+      task.id === "initial_agent_start" && task.status === "running",
+    ) ?? false;
+  }
 
   /**
    * Best-effort: if the sprite process for the active turn no longer exists,

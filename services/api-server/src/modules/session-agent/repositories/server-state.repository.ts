@@ -1,6 +1,5 @@
 import type { Migration, SqlFn, Repository } from "./repository.types";
 import type { StartupToolchainCheckpoint } from "@/shared/types/startup-toolchain";
-import type { SessionSetupTaskId } from "@repo/shared";
 
 /**
  * Durable server-only session state — never synced to clients.
@@ -23,8 +22,6 @@ export type ServerState = {
   agentProcessId: number | null;
   /** User message id currently being handled by the agent, or null if idle. */
   activeUserMessageId: string | null;
-  /** Setup task currently bound to the active turn, or null for ordinary turns. */
-  activeSetupTaskId: Extract<SessionSetupTaskId, "initial_agent_start"> | null;
   /** Provider runtime toolchain checkpoints for this Sprite. */
   startupToolchain: StartupToolchainCheckpoint | null;
   /** True after the selected environment startup script has completed, failed, or no-op'd. */
@@ -43,7 +40,6 @@ function defaultServerState(): ServerState {
     agentSessionId: null,
     agentProcessId: null,
     activeUserMessageId: null,
-    activeSetupTaskId: null,
     startupToolchain: null,
     startupScriptCompleted: false,
     finalNetworkPolicyApplied: false,

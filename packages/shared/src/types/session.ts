@@ -15,11 +15,6 @@ export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export type SessionSetupRunMode = "create" | "resume";
 export type SessionSetupRunStatus = "running" | "completed" | "failed";
-export type SessionSetupTaskId =
-  | "cloud_container"
-  | "repository"
-  | "setup_script"
-  | "initial_agent_start";
 export type SessionSetupTaskStatus =
   | "pending"
   | "running"
@@ -45,15 +40,44 @@ export type SessionSetupTaskNotice =
       environmentName: string | null;
     };
 
-export type SessionSetupTask = {
-  id: SessionSetupTaskId;
+export type BaseSessionSetupTask = {
+  id: string;
+  isBlocking: boolean;
   status: SessionSetupTaskStatus;
   startedAt: string | null;
   completedAt: string | null;
   error: string | null;
-  output: SessionSetupTaskOutput | null;
-  notice?: SessionSetupTaskNotice | null;
 };
+
+export type CloudContainerSetupTask = BaseSessionSetupTask & {
+  id: "cloud_container";
+  isBlocking: true;
+};
+
+export type RepositorySetupTask = BaseSessionSetupTask & {
+  id: "repository";
+  isBlocking: true;
+};
+
+export type StartupScriptSetupTask = BaseSessionSetupTask & {
+  id: "setup_script";
+  isBlocking: false;
+  output: SessionSetupTaskOutput | null;
+  notice: SessionSetupTaskNotice | null;
+};
+
+export type InitialAgentStartSetupTask = BaseSessionSetupTask & {
+  id: "initial_agent_start";
+  isBlocking: true;
+};
+
+export type SessionSetupTask =
+  | CloudContainerSetupTask
+  | RepositorySetupTask
+  | StartupScriptSetupTask
+  | InitialAgentStartSetupTask;
+
+export type SessionSetupTaskId = SessionSetupTask["id"];
 
 export type SessionSetupRun = {
   id: string;

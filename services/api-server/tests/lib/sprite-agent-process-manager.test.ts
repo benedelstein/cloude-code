@@ -106,7 +106,6 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: "provider-session-1",
     agentProcessId: null,
     activeUserMessageId: null,
-    activeSetupTaskId: null,
     startupToolchain: null,
     webhookToken: null,
     ...overrides,

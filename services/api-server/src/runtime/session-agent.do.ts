@@ -156,8 +156,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.setupRunService = new SessionSetupRunService({
       getServerState: () => this.serverState,
       getClientState: () => this.state,
-      updatePartialState: (partial) => this.updatePartialState(partial),
-      synthesizeStatus: (setupRun) => this.synthesizeStatus(setupRun),
+      updateRunState: (setupRun) =>
+        this.updatePartialState({
+          sessionSetupRun: setupRun,
+          status: this.synthesizeStatus(setupRun),
+        }),
     });
 
     this.turnCoordinator = new AgentTurnCoordinator({
@@ -178,8 +181,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       setupReporter: {
         completeTask: (taskId) => this.setupRunService.completeTask(taskId),
         failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
-        completeRun: () => this.setupRunService.completeRun(),
-        failRun: (error) => this.setupRunService.failRun(error),
       },
     });
 
@@ -227,11 +228,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
-      setActiveSetupTaskId: (taskId) => this.updateServerState({ activeSetupTaskId: taskId }),
       setupReporter: {
         startTask: (taskId) => this.setupRunService.startTask(taskId),
         failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
-        failRun: (error) => this.setupRunService.failRun(error),
       },
     });
 
@@ -324,7 +323,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (!this.serverState.repoCloned) { return "preparing"; }
     if (!this.serverState.startupScriptCompleted) { return "preparing"; }
     if (!this.serverState.finalNetworkPolicyApplied) { return "preparing"; }
-    if (this.serverState.activeSetupTaskId) { return "preparing"; }
     if (setupRun?.status === "running" || setupRun?.status === "failed") {
       return "preparing";
     }

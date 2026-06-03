@@ -75,7 +75,6 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     agentSessionId: null,
     agentProcessId: null,
     activeUserMessageId: null,
-    activeSetupTaskId: null,
     startupToolchain: null,
     startupScriptCompleted: false,
     finalNetworkPolicyApplied: false,
