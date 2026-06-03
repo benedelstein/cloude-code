@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloude-code-slack-client",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-03",
+  "vars": {
+    "CLOUDE_DEFAULT_REPO_ID": ""
+  }
+}

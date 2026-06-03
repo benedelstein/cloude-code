@@ -14,6 +14,7 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 - **@repo/vm-agent** (`packages/vm-agent/`) - Runs inside the Sprite VM. Provides a shared AI SDK agent harness with Claude Code and OpenAI Codex providers. The current deployment path uses the webhook entrypoint; the NDJSON entrypoint remains for the legacy stdin/stdout path. Uses Bun runtime.
 - **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. `src/runtime/` contains Worker runtime entrypoints such as the `SessionAgentDO` Durable Object, while `src/modules/` contains route, service, repository, and type code by domain.
 - **@repo/web** (`apps/web/`) - Next.js web client.
+- **@repo/slack-client** (`apps/slack-client/`) - Cloudflare Worker Slack Events API client. It receives bot mentions, validates Slack requests, and calls the API server over HTTP instead of importing server runtime code.
 
 ## Key Files
 
@@ -33,6 +34,7 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 ## Boundaries
 
 - **Web client to API server** - `apps/web` talks to the API through HTTP routes and WebSocket messages. Shared protocol types come from `@repo/shared`.
+- **Slack client to API server** - `apps/slack-client` receives Slack Events API callbacks and talks to the API server through protected HTTP routes. It must not import API-server runtime code or bypass API authentication.
 - **API routes to Durable Objects** - Hono routes authenticate, parse, and route requests. Session-agent routes depend on the shared `SessionAgentRpc` protocol and Durable Object binding, not the `SessionAgentDO` class. `SessionAgentDO` coordinates session state and execution from `services/api-server/src/runtime/session-agent.do.ts`.
 - **Durable Object to Sprite VM** - The Durable Object starts VM work and receives VM output through webhook routes. Do not reintroduce long-lived Durable Object ownership of VM stdout as the main execution path.
 - **Workspace import graph** - Repo-wide package direction is enforced by `scripts/check-workspace-boundaries.ts`. `packages/*` cannot import `apps/*` or `services/*`; `apps/*` cannot import `services/*`; `services/*` cannot import `apps/*`.

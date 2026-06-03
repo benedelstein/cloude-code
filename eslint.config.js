@@ -128,6 +128,7 @@ export default tseslint.config(
       parserOptions: {
         project: [
           "./apps/web/tsconfig.json",
+          "./apps/slack-client/tsconfig.eslint.json",
           "./packages/shared/tsconfig.eslint.json",
           "./packages/vm-agent/tsconfig.eslint.json",
           "./scripts/tsconfig.json",

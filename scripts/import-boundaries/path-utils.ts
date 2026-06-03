@@ -9,6 +9,7 @@ export const repoRoot = path.resolve(
 
 const sourceRoots = [
   "apps/web",
+  "apps/slack-client",
   "packages/shared",
   "packages/vm-agent",
   "services/api-server",
