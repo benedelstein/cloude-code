@@ -160,10 +160,13 @@ export function MessageList({
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
   const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
-  const latestAssistantMessageId = [...allMessages]
-    .reverse()
-    .find((message) => message.role === "assistant")?.id ?? null;
-  const activeAssistantMessageId = streamingMessage?.id ?? (isResponding ? latestAssistantMessageId : null);
+  const latestUserMessageIndex = findLastMessageIndex(allMessages, "user");
+  const latestAssistantMessageIndex = findLastMessageIndex(allMessages, "assistant");
+  const latestAssistantMessageId = latestAssistantMessageIndex === -1
+    ? null
+    : allMessages[latestAssistantMessageIndex]?.id ?? null;
+  const activeAssistantMessageId = streamingMessage?.id
+    ?? (isResponding && latestAssistantMessageIndex > latestUserMessageIndex ? latestAssistantMessageId : null);
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -259,12 +262,20 @@ function TypingIndicator() {
     <div
       role="status"
       aria-label="Working"
-      className="w-fit py-1 text-sm text-foreground-secondary"
+      className="w-fit py-1 text-foreground-secondary"
     >
-      <div className="font-medium">Working</div>
       <WorkingCloudRow />
     </div>
   );
+}
+
+function findLastMessageIndex(messages: UIMessage[], role: UIMessage["role"]) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index]?.role === role) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function SessionSetupRunIndicator({

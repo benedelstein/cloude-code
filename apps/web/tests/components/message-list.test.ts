@@ -180,6 +180,31 @@ describe("MessageList", () => {
     expect(screen.queryByRole("status", { name: "Working" })).toBeNull();
   });
 
+  it("shows a cloud-only working indicator before the next assistant message exists", () => {
+    const { container } = render(React.createElement(MessageList, {
+      messages: [
+        {
+          id: "assistant-1",
+          role: "assistant",
+          metadata: { startedAt: Date.now() - 30_000 },
+          parts: [{ type: "text", text: "Previous answer" }],
+        },
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "hmm what branches are there" }],
+        },
+      ],
+      streamingMessage: null,
+      isResponding: true,
+    }));
+
+    expect(screen.queryByText(/Working for/)).toBeNull();
+    expect(screen.queryByText("Working")).toBeNull();
+    expect(screen.getByRole("status", { name: "Working" })).toBeTruthy();
+    expect(container.querySelector("animate")).toBeTruthy();
+  });
+
   it("renders failed setup script output collapsed behind a disclosure", () => {
     render(React.createElement(MessageList, {
       messages: [],
