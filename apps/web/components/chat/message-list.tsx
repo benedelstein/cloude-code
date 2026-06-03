@@ -295,12 +295,12 @@ function SessionSetupRunIndicator({
     <div
       role="status"
       aria-label={title}
-      className="w-fit py-1 text-sm text-foreground-secondary"
+      className="w-fit py-1 text-[13px] text-foreground-secondary"
     >
       <button
         type="button"
         onClick={() => setIsExpanded((current) => !current)}
-        className="group flex w-fit items-center gap-2 text-left text-sm text-foreground-secondary transition-colors hover:text-foreground"
+        className="group flex w-fit items-center gap-2 text-left text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
         aria-expanded={isExpanded}
       >
         <span className="font-medium">{title}</span>
@@ -310,9 +310,6 @@ function SessionSetupRunIndicator({
           <ChevronRight className="h-4 w-4 shrink-0" />
         )}
       </button>
-      {setupRun.status === "running" && (
-        <WorkingCloudRow />
-      )}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       >
@@ -324,6 +321,9 @@ function SessionSetupRunIndicator({
                 task={task}
               />
             ))}
+            {setupRun.status === "running" && (
+              <WorkingCloudRow />
+            )}
           </div>
         </div>
       </div>
@@ -355,7 +355,7 @@ function SessionSetupTaskRow({
               <button
                 type="button"
                 onClick={() => setIsOutputOpen((current) => !current)}
-                className="inline-flex min-w-0 items-center gap-1 text-sm text-foreground-secondary transition-colors hover:text-foreground"
+                className="inline-flex min-w-0 items-center gap-1 text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
                 aria-expanded={isOutputOpen}
               >
                 <span className="min-w-0 truncate">{taskLabel}</span>
@@ -366,7 +366,7 @@ function SessionSetupTaskRow({
                 )}
               </button>
             ) : (
-              <span className="min-w-0 truncate text-sm text-foreground-secondary">
+              <span className="min-w-0 truncate text-[13px] text-foreground-secondary">
                 {taskLabel}
               </span>
             )}

@@ -75,7 +75,10 @@ describe("MessageList", () => {
     expect(screen.getByText("Initializing session")).toBeTruthy();
     expect(screen.getByText("Set up cloud container")).toBeTruthy();
     expect(screen.getByText("Starting agent process")).toBeTruthy();
-    expect(container.querySelector("animate")).toBeTruthy();
+    const cloudAnimation = container.querySelector("animate");
+    expect(cloudAnimation).toBeTruthy();
+    expect(screen.getByText("Starting agent process").compareDocumentPosition(cloudAnimation!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
 
     const messageText = screen.getByText("hello there");
     const setupText = screen.getByText("Initializing session");
