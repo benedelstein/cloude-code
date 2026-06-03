@@ -117,77 +117,78 @@ export class SessionProvisionService {
   }
 
   private async provision(): Promise<void> {
-    let taskFailureReported = false;
-    try {
-      const serverState = this.getServerState();
-      let spriteName = serverState.spriteName;
-      if (!spriteName || !serverState.startupToolchain) {
-        this.setupReporter?.startTask("cloud_container");
-        try {
+    const serverState = this.getServerState();
+    let spriteName = serverState.spriteName;
+    if (!spriteName || !serverState.startupToolchain) {
+      this.setupReporter?.startTask("cloud_container");
+      try {
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        if (!spriteName) {
+          const sessionId = serverState.sessionId;
+          if (!sessionId) { throw new Error("Session id is missing"); }
+          spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
+          this.updateServerState({ spriteName });
           this.updatePartialState({ status: this.synthesizeStatus() });
-          if (!spriteName) {
-            const sessionId = serverState.sessionId;
-            if (!sessionId) { throw new Error("Session id is missing"); }
-            spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
-            this.updateServerState({ spriteName });
-            this.updatePartialState({ status: this.synthesizeStatus() });
-          }
-          await this.ensureStartupToolchain(spriteName);
-          this.setupReporter?.completeTask("cloud_container");
-        } catch (error) {
-          this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
-          taskFailureReported = true;
-          throw error;
         }
+        await this.ensureStartupToolchain(spriteName);
+        this.setupReporter?.completeTask("cloud_container");
+      } catch (error) {
+        this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
+        this.recordProvisioningError(error);
+        throw error;
       }
-      if (!spriteName) {
-        throw new Error("Sprite name is missing after cloud container setup");
-      }
+    }
+    if (!spriteName) {
+      throw new Error("Sprite name is missing after cloud container setup");
+    }
 
-      // Clone Repo
-      if (!this.getServerState().repoCloned) {
-        this.setupReporter?.startTask("repository");
-        try {
-          this.updatePartialState({ status: this.synthesizeStatus() });
-          await this.cloneRepo(spriteName);
-          this.updateServerState({ repoCloned: true });
-          this.setupReporter?.completeTask("repository");
-          this.updatePartialState({
-            status: this.synthesizeStatus(),
-            lastError: null,
-          });
-        } catch (error) {
-          this.setupReporter?.failTask("repository", getErrorMessage(error));
-          taskFailureReported = true;
-          throw error;
-        }
+    // Clone Repo
+    if (!this.getServerState().repoCloned) {
+      this.setupReporter?.startTask("repository");
+      try {
+        this.updatePartialState({ status: this.synthesizeStatus() });
+        await this.cloneRepo(spriteName);
+        this.updateServerState({ repoCloned: true });
+        this.setupReporter?.completeTask("repository");
+        this.updatePartialState({
+          status: this.synthesizeStatus(),
+          lastError: null,
+        });
+      } catch (error) {
+        this.setupReporter?.failTask("repository", getErrorMessage(error));
+        this.recordProvisioningError(error);
+        throw error;
       }
+    }
 
-      if (!this.getServerState().startupScriptCompleted) {
-        await this.tryRunStartupScript(spriteName);
-        this.updateServerState({ startupScriptCompleted: true });
-      }
+    if (!this.getServerState().startupScriptCompleted) {
+      await this.tryRunStartupScript(spriteName);
+      this.updateServerState({ startupScriptCompleted: true });
+    }
 
-      if (!this.getServerState().finalNetworkPolicyApplied) {
+    if (!this.getServerState().finalNetworkPolicyApplied) {
+      try {
         await this.applyFinalNetworkPolicy(spriteName);
         this.updateServerState({ finalNetworkPolicyApplied: true });
-      }
-      this.updatePartialState({
-        status: this.synthesizeStatus(),
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error("Failed to provision session", { error });
-      if (!taskFailureReported) {
+      } catch (error) {
+        const errorMessage = getErrorMessage(error);
         this.setupReporter?.failRun(errorMessage);
+        this.recordProvisioningError(error);
+        throw error;
       }
-      this.updatePartialState({
-        lastError: errorMessage,
-        status: this.synthesizeStatus(),
-      });
-      throw error;
     }
+    this.updatePartialState({
+      status: this.synthesizeStatus(),
+    });
+  }
+
+  private recordProvisioningError(error: unknown): void {
+    const errorMessage = getErrorMessage(error);
+    this.logger.error("Failed to provision session", { error });
+    this.updatePartialState({
+      lastError: errorMessage,
+      status: this.synthesizeStatus(),
+    });
   }
 
   private async createSpriteWithBootstrapNetworkPolicy(sessionId: string): Promise<string> {
