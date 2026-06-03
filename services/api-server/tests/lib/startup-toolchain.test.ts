@@ -107,7 +107,7 @@ describe("startup toolchain dispatch", () => {
   it("keeps provisioning and spawn call sites provider-agnostic", () => {
     const callSitePaths = [
       "../../src/modules/session-agent/services/session-provision.service.ts",
-      "../../src/modules/session-agent/services/sprite-agent-process-manager.service.ts",
+      "../../src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts",
     ];
 
     for (const callSitePath of callSitePaths) {

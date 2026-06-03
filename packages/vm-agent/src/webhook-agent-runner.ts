@@ -184,7 +184,12 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         // Write directly to stdout so the attaching DO can await the ack.
         process.stdout.write(encodeAgentOutput(output) + "\n");
         return;
-      case "ready": // TODO: EMIT TO STDOUT.
+      case "ready":
+        process.stdout.write(encodeAgentOutput(output) + "\n");
+        this.log("debug", "emit ready -> stdout");
+        this.log("debug", "emit event -> /events", { ...output });
+        this.webhookEventHandler.post(output);
+        return;
       case "error":
       case "sessionId":
         this.log("debug", "emit event -> /events", { ...output });

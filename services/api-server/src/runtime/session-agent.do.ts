@@ -50,7 +50,6 @@ import type {
   ChatMessageEvent,
 } from "@repo/shared";
 import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-turn-coordinator.service";
-import { SpriteAgentProcessManager } from "@/modules/session-agent/services/sprite-agent-process-manager.service";
 import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
 import { SessionChatDispatchService } from "@/modules/session-agent/services/session-chat-dispatch.service";
 import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
@@ -64,6 +63,7 @@ import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
+import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -178,10 +178,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
-      setupReporter: {
-        completeTask: (taskId) => this.setupRunService.completeTask(taskId),
-        failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
-      },
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -230,6 +226,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       synthesizeStatus: () => this.synthesizeStatus(),
       setupReporter: {
         startTask: (taskId) => this.setupRunService.startTask(taskId),
+        completeTask: (taskId) => this.setupRunService.completeTask(taskId),
         failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
       },
     });
@@ -548,6 +545,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       });
       return;
     }
+    // TODO: should we call this here? doesnt completing a task auto-complete the run if possible. 
     this.setupRunService.completeRun();
   }
 
@@ -592,6 +590,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       });
       settings = AgentSettings.parse({ provider, maxTokens });
     }
+    // TODO: use blockConcurrencyWhile?
     const providerConnection = await this.providerConnectionService.resolveState(
       settings.provider,
       data.userId,
@@ -605,6 +604,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         attachmentService: this.attachmentService,
       },
     );
+    // TODO: i dont like manually constructing the array. it should be fixed. 
     const setupTaskIds: SessionSetupTaskId[] = [
       "cloud_container",
       "repository",
@@ -751,7 +751,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.turnCoordinator.ensureRehydratedState();
     switch (message.type) {
       case "chat.message":
-        await this.handleChatMessage(connection, message);
+        await this.handleUserChatMessage(connection, message);
         break;
       case "sync.request":
         await this.handleSyncRequest(connection);
@@ -762,7 +762,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
   }
 
-  private async handleChatMessage(
+  private async handleUserChatMessage(
     connection: Connection,
     payload: ChatMessageEvent,
   ): Promise<void> {

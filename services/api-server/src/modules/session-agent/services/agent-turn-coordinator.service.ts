@@ -38,10 +38,6 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
-  setupReporter?: {
-    completeTask(taskId: "initial_agent_start"): void;
-    failTask(taskId: "initial_agent_start", error: string): void;
-  };
 }
 
 /**
@@ -67,7 +63,6 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
-  private readonly setupReporter: AgentTurnCoordinatorDeps["setupReporter"];
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -98,7 +93,6 @@ export class AgentTurnCoordinator {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
     this.updateWorkingState = deps.updateWorkingState;
-    this.setupReporter = deps.setupReporter;
   }
 
   /**
@@ -274,18 +268,12 @@ export class AgentTurnCoordinator {
     this.ensureRehydratedState();
     switch (event.type) {
       case "ready":
-        if (this.isInitialAgentStartRunning()) {
-          this.setupReporter?.completeTask("initial_agent_start");
-        }
         this.updatePartialState({ status: this.synthesizeStatus() });
         break;
       case "error":
         this.logger.error("vm-agent error", {
           fields: { errorMessage: event.error },
         });
-        if (this.isInitialAgentStartRunning()) {
-          this.setupReporter?.failTask("initial_agent_start", event.error);
-        }
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
         this.clearActiveTurnState();
@@ -352,12 +340,6 @@ export class AgentTurnCoordinator {
   // ============================================
   // Private
   // ============================================
-
-  private isInitialAgentStartRunning(): boolean {
-    return this.getClientState().sessionSetupRun?.tasks.some((task) =>
-      task.id === "initial_agent_start" && task.status === "running",
-    ) ?? false;
-  }
 
   /**
    * Best-effort: if the sprite process for the active turn no longer exists,

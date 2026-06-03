@@ -21,16 +21,15 @@ import { updateSessionHistoryData } from "./session-agent-history.service";
 import type { MessageRepository } from "../repositories/message.repository";
 import type { ServerState } from "../repositories/server-state.repository";
 import type { AgentTurnCoordinator } from "./agent-turn-coordinator.service";
-import type {
-  SpriteAgentProcessManager,
-  SpriteAgentProcessManagerError,
-} from "./sprite-agent-process-manager.service";
+import type { SpriteAgentProcessManager } from "./agent-process/sprite-agent-process-manager.service";
+import type { SpriteAgentProcessManagerError } from "../types/agent-process-manager.types";
 
 const CHAT_DISPATCH_DOMAIN = "chat_dispatch";
 type InitialAgentStartTaskId = "initial_agent_start";
 
 export interface InitialAgentStartReporter {
   startTask(taskId: InitialAgentStartTaskId): void;
+  completeTask(taskId: InitialAgentStartTaskId): void;
   failTask(taskId: InitialAgentStartTaskId, error: string): void;
 }
 
@@ -209,6 +208,7 @@ export class SessionChatDispatchService {
    * No-op if there is no pending message or a turn is already in flight.
    */
   async maybeDispatchPendingMessage(args: {
+    // TODO: i dont like this setupContext param. 
     setupContext?: InitialAgentStartTaskId;
   } = {}): Promise<void> {
     const clientState = this.getClientState();
@@ -258,6 +258,7 @@ export class SessionChatDispatchService {
     // chunks is not rejected as stale. The processId is filled in below once
     // the spawn returns.
     this.turnCoordinator.beginTurn(args.userMessageId);
+    // TODO: i dont like this optional filter
     if (args.setupContext) {
       this.setupReporter?.startTask(args.setupContext);
     }
@@ -291,6 +292,9 @@ export class SessionChatDispatchService {
     }
 
     this.turnCoordinator.attachProcessId(spawnResult.value.agentProcessId);
+    if (args.setupContext) {
+      this.setupReporter?.completeTask(args.setupContext);
+    }
     return success(undefined);
   }
 

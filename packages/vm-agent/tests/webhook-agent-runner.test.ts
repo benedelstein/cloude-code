@@ -215,6 +215,53 @@ describe("WebhookAgentRunner", () => {
     await runner.shutdown();
   });
 
+  it("writes ready to stdout and posts ready to events after setup", async () => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    const eventPosts: unknown[] = [];
+
+    globalThis.fetch = vi.fn(async (url, init) => {
+      if (String(url).endsWith("/events")) {
+        eventPosts.push(JSON.parse(String(init?.body)));
+      }
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown: () => {},
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await waitFor(() =>
+      eventPosts.some((post) =>
+        JSON.stringify(post).includes('"type":"ready"'),
+      ),
+    );
+
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"ready"'),
+    );
+    expect(eventPosts).toContainEqual({ event: { type: "ready" } });
+
+    await runner.shutdown();
+  });
+
   it("emits process heartbeats while active and idle", async () => {
     const log = vi.fn();
     const releaseStream = createDeferred();

@@ -78,6 +78,7 @@ export class SessionProvisionService {
   private readonly getClientState: () => ClientState;
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
+  // TODO: SCOPE THIS TO THE WRITES WE ACTUALLY NEED.
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
@@ -166,15 +167,18 @@ export class SessionProvisionService {
 
     if (!this.getServerState().finalNetworkPolicyApplied) {
       try {
+        // TODO: MAKE THIS A STARTUP TASK?
         await this.applyFinalNetworkPolicy(spriteName);
         this.updateServerState({ finalNetworkPolicyApplied: true });
       } catch (error) {
         const errorMessage = getErrorMessage(error);
+        // failing to apply the network policy is a blocking error.
         this.setupReporter?.failRun(errorMessage);
         this.recordProvisioningError(error);
         throw error;
       }
     }
+    // TODO: can we avoid these adhoc status updates throughout the code?
     this.updatePartialState({
       status: this.synthesizeStatus(),
     });
@@ -418,8 +422,8 @@ export class SessionProvisionService {
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      // TODO: Kinda overfit that we imply that this is a non-blocking task here.
-      // might want to dfer that to the caller.
+      // TODO: Kinda unsure that we decide that this is a non-blocking task here.
+      // might want to defer that to the caller.
       this.logger.warn("Continuing after session startup script failure", {
         error,
         fields: { sessionId: this.getServerState().sessionId },
