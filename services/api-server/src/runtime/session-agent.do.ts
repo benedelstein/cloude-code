@@ -310,23 +310,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.serverStateRepository.update(partial);
   }
 
-  /**
-   * Derives the session status from durable ServerState checkpoints and
-   * the in-memory agent connection state. Used to reset transient status
-   * on restart and after each provisioning step.
-   */
   private synthesizeStatus(
     setupRun: SessionSetupRun | null = this.state.sessionSetupRun,
   ): SessionStatus {
     if (!this.serverState.initialized) { return "preparing"; }
-    if (!this.serverState.spriteName) { return "preparing"; }
-    if (!this.serverState.repoCloned) { return "preparing"; }
-    if (!this.serverState.startupScriptCompleted) { return "preparing"; }
-    if (!this.serverState.finalNetworkPolicyApplied) { return "preparing"; }
-    if (setupRun?.status === "running" || setupRun?.status === "failed") {
-      return "preparing";
-    }
-    return "ready";
+    return setupRun?.status === "completed" ? "ready" : "preparing";
   }
 
   /**
@@ -625,6 +613,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (pendingUserUiMessage) {
       setupTaskIds.push("initial_agent_start");
     }
+    const sessionSetupRun = this.setupRunService.buildRun("create", setupTaskIds);
 
     // Mark initialized in ServerState
     this.updateServerState({
@@ -648,8 +637,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         : null,
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
-      sessionSetupRun: this.setupRunService.buildRun("create", setupTaskIds),
-      status: this.synthesizeStatus(),
+      sessionSetupRun,
+      status: this.synthesizeStatus(sessionSetupRun),
     });
 
     // Provision sprite asynchronously
