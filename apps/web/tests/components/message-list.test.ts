@@ -146,6 +146,38 @@ describe("MessageList", () => {
       .toBeTruthy();
   });
 
+  it("shows the live work header on the latest assistant message while responding", () => {
+    render(React.createElement(MessageList, {
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "look for auth files" }],
+        },
+        {
+          id: "assistant-1",
+          role: "assistant",
+          metadata: { startedAt: Date.now() - 8_000 },
+          parts: [
+            {
+              type: "dynamic-tool",
+              toolName: "bash",
+              toolCallId: "tool-1",
+              state: "output-available",
+              input: { cmd: "rg auth" },
+              output: "auth.ts",
+            },
+          ],
+        },
+      ],
+      streamingMessage: null,
+      isResponding: true,
+    }));
+
+    expect(screen.getByText(/Working for/)).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Working" })).toBeNull();
+  });
+
   it("renders failed setup script output collapsed behind a disclosure", () => {
     render(React.createElement(MessageList, {
       messages: [],

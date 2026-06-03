@@ -160,6 +160,10 @@ export function MessageList({
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
   const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
+  const latestAssistantMessageId = [...allMessages]
+    .reverse()
+    .find((message) => message.role === "assistant")?.id ?? null;
+  const activeAssistantMessageId = streamingMessage?.id ?? (isResponding ? latestAssistantMessageId : null);
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -223,7 +227,7 @@ export function MessageList({
               )}
               <MessageItem
                 message={message}
-                isStreaming={streamingMessage?.id === message.id}
+                isStreaming={activeAssistantMessageId === message.id}
                 userAvatarUrl={userAvatarUrl}
                 providerId={providerId}
               />
@@ -241,7 +245,7 @@ export function MessageList({
               setupRun={sessionSetupRun}
             />
           ) : (
-            isResponding && <TypingIndicator />
+            isResponding && activeAssistantMessageId === null && <TypingIndicator />
           )}
           <div ref={bottomRef} />
         </div>
