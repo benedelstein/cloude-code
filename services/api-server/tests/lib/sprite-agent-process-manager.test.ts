@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentSettings, ClientState, Logger } from "@repo/shared";
+import type { AgentSettings, ClientState, Logger, SessionSetupRun } from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 
@@ -72,11 +72,21 @@ const agentSettings: AgentSettings = {
   effort: "medium",
 };
 
-function createClientState(): ClientState {
+function createCompletedSetupRun(): SessionSetupRun {
+  return {
+    id: "setup-run-1",
+    status: "completed",
+    startedAt: "2026-06-03T00:00:00.000Z",
+    completedAt: "2026-06-03T00:01:00.000Z",
+    tasks: [],
+  };
+}
+
+function createClientState(overrides: Partial<ClientState> = {}): ClientState {
   return {
     sessionId: "session-1",
     status: "ready",
-    sessionSetupRun: null,
+    sessionSetupRun: createCompletedSetupRun(),
     repoFullName: "ben/repo",
     repoUrl: "https://github.com/ben/repo",
     baseBranch: "main",
@@ -96,6 +106,7 @@ function createClientState(): ClientState {
     activeTurn: null,
     providerConnection: null,
     createdAt: new Date(),
+    ...overrides,
   } as ClientState;
 }
 
@@ -119,6 +130,7 @@ function createManager(
   envOverrides: Partial<Env> = {},
   snapshotPlainEnvVars: Record<string, string> = {},
   processStartReporter?: AgentProcessStartReporter,
+  clientState: ClientState = createClientState(),
 ) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
@@ -138,7 +150,7 @@ function createManager(
     } as never,
     getServerState: () => serverState,
     updateAgentProcessId,
-    getClientState: createClientState,
+    getClientState: () => clientState,
     getEnvironmentSnapshot: () => ({
       sourceEnvironmentId: null,
       sourceEnvironmentName: null,
@@ -345,6 +357,29 @@ describe("SpriteAgentProcessManager", () => {
     expect(mockState.createSession).not.toHaveBeenCalled();
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
     expect(processStartReporter.handleProcessStartEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses to dispatch before the setup run completes", async () => {
+    const serverState = createServerState();
+    const clientState = createClientState({
+      sessionSetupRun: {
+        ...createCompletedSetupRun(),
+        status: "running",
+        completedAt: null,
+      },
+    });
+    const { manager } = createManager(serverState, {}, {}, undefined, clientState);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-2", content: "second turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SESSION_NOT_READY");
+    }
+    expect(mockState.attachSession).not.toHaveBeenCalled();
+    expect(mockState.createSession).not.toHaveBeenCalled();
   });
 
   it("waits for a stdin ack split across stdout chunks", async () => {
