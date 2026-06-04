@@ -45,7 +45,7 @@ function createHarness(args: {
       clientState.status = setupRun.status === "completed" ? "ready" : "preparing";
     },
   });
-  const setupRun = setupRunService.buildRun("create");
+  const setupRun = setupRunService.buildRun();
   clientState.sessionSetupRun = {
     ...setupRun,
     tasks: setupRun.tasks.map((task) =>

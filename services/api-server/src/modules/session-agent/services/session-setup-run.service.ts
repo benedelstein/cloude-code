@@ -37,13 +37,10 @@ export class SessionSetupRunService {
     this.updateRunState = deps.updateRunState;
   }
 
-  buildRun(
-    mode: SessionSetupRun["mode"],
-  ): SessionSetupRun {
+  buildRun(): SessionSetupRun {
     const now = new Date().toISOString();
     return {
       id: crypto.randomUUID(),
-      mode,
       status: "running",
       startedAt: now,
       completedAt: null,

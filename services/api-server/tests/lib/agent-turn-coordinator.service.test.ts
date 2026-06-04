@@ -19,7 +19,6 @@ function createLogger(): Logger {
 function createRunningInitialAgentStartRun(): SessionSetupRun {
   return {
     id: "setup-run-1",
-    mode: "create",
     status: "running",
     startedAt: "2026-06-03T00:00:00.000Z",
     completedAt: null,

@@ -92,6 +92,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
+  private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
   initialState: ClientState = {
     repoFullName: null,
@@ -530,17 +531,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    * Uses mutexes so concurrent callers share one in-flight operation.
    * Each step is idempotent — skipped if already completed via serverState checkpoints.
    */
-  async ensureReady(): Promise<void> {
+  private async ensureReady(): Promise<void> {
     if (!this.serverState.initialized) {
-      // handleInit has not been called yet — nothing to do
-      this.logger.warn("Session not initialized — skipping ensureReady");
-      return;
+      const initResult = await this.initializeSessionStatePromise;
+      if (!initResult) {
+        this.logger.error("Session not initialized — skipping ensureReady");
+        return;
+      }
+      if (!initResult.ok) {
+        return;
+      }
     }
     await this.provisionService.ensureProvisioned();
-    if (!this.state.pendingUserMessage) {
-      this.logger.warn("Expected pending initial message after provisioning");
-      return;
-    }
     await this.chatDispatchService.maybeDispatchPendingMessage();
   }
 
@@ -555,6 +557,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   // ============================================
 
   async handleInit(request: InitSessionAgentRequest): Promise<HandleInitResult> {
+    // prevents other networking code from running while initializing
+    const initPromise = this.ctx.blockConcurrencyWhile(
+      () => this.initializeSessionState(request),
+    );
+    this.initializeSessionStatePromise = initPromise;
+    try {
+      const initResult = await initPromise;
+      if (initResult.ok) {
+        this.queueEnsureReady();
+      }
+      return initResult;
+    } finally {
+      if (this.initializeSessionStatePromise === initPromise) {
+        this.initializeSessionStatePromise = null;
+      }
+    }
+  }
+
+  private async initializeSessionState(
+    request: InitSessionAgentRequest,
+  ): Promise<HandleInitResult> {
     // Prevent re-initialization
     if (this.serverState.initialized) {
       this.logger.error(
@@ -599,7 +622,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         attachmentService: this.attachmentService,
       },
     );
-    const sessionSetupRun = this.setupRunService.buildRun("create");
+    const sessionSetupRun = this.setupRunService.buildRun();
 
     // Mark initialized in ServerState
     this.updateServerState({
@@ -624,9 +647,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       sessionSetupRun,
       status: this.synthesizeStatus(sessionSetupRun),
     });
-
-    // Provision sprite asynchronously
-    this.queueEnsureReady();
 
     return success(undefined);
   }

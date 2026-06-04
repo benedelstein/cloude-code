@@ -91,7 +91,6 @@ function createSetupRun(
 
   return {
     id: "setup-run-1",
-    mode: "create",
     status: "running",
     startedAt: "2026-06-03T00:00:00.000Z",
     completedAt: null,
@@ -387,6 +386,43 @@ describe("SessionProvisionService startup toolchain", () => {
 
     await expect(service.ensureProvisioned()).rejects.toThrow("Policy failed");
     expect(setupReporter.failTask).toHaveBeenCalledWith("network_policy", "Policy failed");
+  });
+
+  it("continues provisioning after nonblocking task failures", async () => {
+    mockState.execHttp.mockImplementation(async (command: string) => {
+      if (command.startsWith("test -d")) {
+        return { stdout: "empty", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git -c")) {
+        throw new Error("Clone failed");
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+    });
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      createClientState({
+        prepareTask: (task) =>
+          task.id === "repository" ? { ...task, isBlocking: false } as SessionSetupTask : task,
+      }),
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.failTask).toHaveBeenCalledWith("repository", "Clone failed");
+    expect(serverState.repoCloned).toBe(false);
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
   });
 
   it("keeps fetch pointed at GitHub by default", async () => {

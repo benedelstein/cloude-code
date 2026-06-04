@@ -114,7 +114,7 @@ export class SessionChatDispatchService {
   /**
    * Dispatches a chat message from a client into a new vm-agent turn.
    * Resolves bound attachments, applies any model/agent-mode overrides,
-   * persists the user message, and spawns the agent process.
+   * persists the user messages, and sends the message to the vm-agent.
    */
   async dispatchChatMessage(
     payload: ChatMessageEvent,

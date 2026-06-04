@@ -13,7 +13,6 @@ export const SessionStatus = z.enum([
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
-export type SessionSetupRunMode = "create" | "resume";
 export type SessionSetupRunStatus = "running" | "completed" | "failed";
 export type SessionSetupTaskStatus =
   | "pending"
@@ -87,7 +86,6 @@ export type SessionSetupTaskId = SessionSetupTask["id"];
 
 export type SessionSetupRun = {
   id: string;
-  mode: SessionSetupRunMode;
   status: SessionSetupRunStatus;
   startedAt: string;
   completedAt: string | null;

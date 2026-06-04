@@ -46,7 +46,7 @@ function createHarness(args: {
     },
   });
 
-  const run = service.buildRun("create");
+  const run = service.buildRun();
   clientState.sessionSetupRun = {
     ...run,
     tasks: run.tasks.map((task) =>

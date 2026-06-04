@@ -491,14 +491,13 @@ function SetupOutputBlock({ label, value }: { label: string; value: string }) {
 }
 
 function getSetupRunTitle(setupRun: SessionSetupRun): string {
-  const modeLabel = setupRun.mode === "resume" ? "session" : "session";
   if (setupRun.status === "running") {
-    return setupRun.mode === "resume" ? `Resuming ${modeLabel}` : `Initializing ${modeLabel}`;
+    return "Initializing session";
   }
   if (setupRun.status === "failed") {
-    return setupRun.mode === "resume" ? `Resume failed` : `Initialization failed`;
+    return "Initialization failed";
   }
-  return setupRun.mode === "resume" ? `Resumed ${modeLabel}` : `Initialized ${modeLabel}`;
+  return "Initialized session";
 }
 
 function getSetupTaskLabel(task: SessionSetupTask): string {

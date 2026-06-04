@@ -193,8 +193,8 @@ export class SessionProvisionService {
       this.setupReporter?.completeTask(task.id);
       return spriteName;
     } catch (error) {
-      this.failProvisionTask(task, error);
-      throw error;
+      this.handleProvisionTaskFailure(task, error);
+      return this.requireSpriteName(spriteName);
     }
   }
 
@@ -215,8 +215,7 @@ export class SessionProvisionService {
         lastError: null,
       });
     } catch (error) {
-      this.failProvisionTask(task, error);
-      throw error;
+      this.handleProvisionTaskFailure(task, error);
     }
   }
 
@@ -252,50 +251,50 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
+    let result: Awaited<ReturnType<SessionStartupScriptService["run"]>>;
     try {
-      const result = await this.startupScriptService.run({
+      result = await this.startupScriptService.run({
         sprite,
         script: environmentSnapshot.startupScript,
         workspaceDir: WORKSPACE_DIR,
         env: environmentSnapshot.plainEnvVars,
       });
-      switch (result.status) {
-        case "skipped":
-          this.setupReporter?.skipTask(
-            task.id,
-            buildSkippedSetupScriptSkipReason(environmentSnapshot),
-          );
-          break;
-        case "completed":
-          this.setupReporter?.completeTask(task.id, result.output);
-          break;
-        case "failed":
-          this.logger.warn("Continuing after session startup script failure", {
-            fields: {
-              sessionId: this.getServerState().sessionId,
-              errorMessage: result.errorMessage,
-            },
-          });
-          this.setupReporter?.failTask(task.id, result.errorMessage, result.output);
-          if (task.isBlocking) {
-            throw new Error(result.errorMessage);
-          }
-          break;
-      }
-      this.updateServerState({ startupScriptCompleted: true });
     } catch (error) {
-      const errorMessage = getErrorMessage(error);
       this.logger.warn("Continuing after session startup script failure", {
         error,
         fields: { sessionId: this.getServerState().sessionId },
       });
-      this.setupReporter?.failTask(task.id, errorMessage);
       this.updateServerState({ startupScriptCompleted: true });
-      if (task.isBlocking) {
-        this.recordProvisioningError(error);
-        throw error;
-      }
+      this.handleProvisionTaskFailure(task, error);
+      return;
     }
+
+    switch (result.status) {
+      case "skipped":
+        this.setupReporter?.skipTask(
+          task.id,
+          buildSkippedSetupScriptSkipReason(environmentSnapshot),
+        );
+        break;
+      case "completed":
+        this.setupReporter?.completeTask(task.id, result.output);
+        break;
+      case "failed":
+        this.logger.warn("Continuing after session startup script failure", {
+          fields: {
+            sessionId: this.getServerState().sessionId,
+            errorMessage: result.errorMessage,
+          },
+        });
+        this.updateServerState({ startupScriptCompleted: true });
+        this.handleProvisionTaskFailure(
+          task,
+          new Error(result.errorMessage),
+          result.output,
+        );
+        return;
+    }
+    this.updateServerState({ startupScriptCompleted: true });
   }
 
   private async ensureNetworkPolicyTask(
@@ -309,8 +308,7 @@ export class SessionProvisionService {
       this.setupReporter?.completeTask(task.id);
       this.updatePartialState({ status: this.synthesizeStatus() });
     } catch (error) {
-      this.failProvisionTask(task, error);
-      throw error;
+      this.handleProvisionTaskFailure(task, error);
     }
   }
 
@@ -320,17 +318,21 @@ export class SessionProvisionService {
     this.updateServerState({ finalNetworkPolicyApplied: true });
   }
 
-  private failProvisionTask(
+  private handleProvisionTaskFailure(
     task: ProvisionSetupTask,
     error: unknown,
     output?: SessionSetupTaskOutput,
   ): void {
+    const errorMessage = getErrorMessage(error);
     if (output) {
-      this.setupReporter?.failTask(task.id, getErrorMessage(error), output);
+      this.setupReporter?.failTask(task.id, errorMessage, output);
     } else {
-      this.setupReporter?.failTask(task.id, getErrorMessage(error));
+      this.setupReporter?.failTask(task.id, errorMessage);
     }
-    this.recordProvisioningError(error);
+    if (task.isBlocking) {
+      this.recordProvisioningError(error);
+      throw error instanceof Error ? error : new Error(errorMessage);
+    }
   }
 
   private requireSpriteName(spriteName: string | null): string {
