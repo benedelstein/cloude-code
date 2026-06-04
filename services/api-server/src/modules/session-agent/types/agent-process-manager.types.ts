@@ -32,6 +32,26 @@ export type SpriteAgentProcessManagerError =
       Record<string, unknown>
     >;
 
+export type AgentProcessStartEvent =
+  | {
+      type: "fresh_start_started";
+      userMessageId: string;
+    }
+  | {
+      type: "fresh_start_ready";
+      userMessageId: string;
+      agentProcessId: number;
+    }
+  | {
+      type: "fresh_start_failed";
+      userMessageId: string;
+      error: SpriteAgentProcessManagerError;
+    };
+
+export interface AgentProcessStartReporter {
+  handleProcessStartEvent(event: AgentProcessStartEvent): void;
+}
+
 export type ProviderCredentialError =
   | DomainError<"provider_credential", "AUTH_REQUIRED" | "REAUTH_REQUIRED", { provider: AgentSettings["provider"] }>
   | DomainError<"provider_credential", "SYNC_FAILED", { provider: AgentSettings["provider"] }>;

@@ -50,6 +50,7 @@ vi.mock("../../src/modules/session-agent/services/agent-attachment.service", () 
 import { encodeAgentInput, encodeAgentOutput } from "@repo/shared";
 import { SpritesError } from "../../src/shared/integrations/sprites/types";
 import { SpriteAgentProcessManager } from "../../src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
+import type { AgentProcessStartReporter } from "../../src/modules/session-agent/types/agent-process-manager.types";
 
 function createLogger(): Logger {
   return {
@@ -117,6 +118,7 @@ function createManager(
   serverState: ServerState,
   envOverrides: Partial<Env> = {},
   snapshotPlainEnvVars: Record<string, string> = {},
+  processStartReporter?: AgentProcessStartReporter,
 ) {
   const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
     serverState.agentProcessId = agentProcessId;
@@ -150,6 +152,7 @@ function createManager(
     getProviderCredentialAdapter: () => ({
       getCredentialSnapshot: mockState.getCredentialSnapshot,
     }),
+    processStartReporter,
   });
 
   return { manager, updateAgentProcessId };
@@ -312,7 +315,13 @@ describe("SpriteAgentProcessManager", () => {
     mockState.attachSession.mockReturnValue(existingSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const processStartReporter = { handleProcessStartEvent: vi.fn() };
+    const { manager, updateAgentProcessId } = createManager(
+      serverState,
+      {},
+      {},
+      processStartReporter,
+    );
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-2", content: "second turn", attachmentIds: [] },
@@ -335,6 +344,7 @@ describe("SpriteAgentProcessManager", () => {
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+    expect(processStartReporter.handleProcessStartEvent).not.toHaveBeenCalled();
   });
 
   it("waits for a stdin ack split across stdout chunks", async () => {
@@ -487,7 +497,13 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState();
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const processStartReporter = { handleProcessStartEvent: vi.fn() };
+    const { manager, updateAgentProcessId } = createManager(
+      serverState,
+      {},
+      {},
+      processStartReporter,
+    );
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
@@ -495,6 +511,16 @@ describe("SpriteAgentProcessManager", () => {
 
     expect(result.ok).toBe(true);
     expect(updateAgentProcessId).toHaveBeenLastCalledWith(91);
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenCalledTimes(2);
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(1, {
+      type: "fresh_start_started",
+      userMessageId: "user-message-3",
+    });
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(2, {
+      type: "fresh_start_ready",
+      userMessageId: "user-message-3",
+      agentProcessId: 91,
+    });
   });
 
   it("returns TURN_DID_NOT_START when a fresh process exits before ready", async () => {
@@ -502,7 +528,13 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState();
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const processStartReporter = { handleProcessStartEvent: vi.fn() };
+    const { manager, updateAgentProcessId } = createManager(
+      serverState,
+      {},
+      {},
+      processStartReporter,
+    );
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
@@ -514,6 +546,93 @@ describe("SpriteAgentProcessManager", () => {
       expect(result.error.message).toBe("vm-agent exited before vm-agent ready: 1");
     }
     expect(updateAgentProcessId).not.toHaveBeenCalledWith(84);
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenLastCalledWith({
+      type: "fresh_start_failed",
+      userMessageId: "user-message-3",
+      error: expect.objectContaining({
+        code: "TURN_DID_NOT_START",
+        message: "vm-agent exited before vm-agent ready: 1",
+      }),
+    });
+  });
+
+  it("emits a fresh start failure when provider credentials are unavailable", async () => {
+    mockState.getCredentialSnapshot.mockResolvedValue({
+      ok: false,
+      error: {
+        domain: "provider_credential",
+        code: "AUTH_REQUIRED",
+        message: "Connect OpenAI Codex",
+        provider: "openai-codex",
+      },
+    });
+    const processStartReporter = { handleProcessStartEvent: vi.fn() };
+    const serverState = createServerState();
+    const { manager } = createManager(serverState, {}, {}, processStartReporter);
+
+    const result = await manager.dispatchMessage({
+      userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("PROVIDER_AUTH_REQUIRED");
+    }
+    expect(mockState.createSession).not.toHaveBeenCalled();
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenCalledTimes(2);
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(1, {
+      type: "fresh_start_started",
+      userMessageId: "user-message-3",
+    });
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(2, {
+      type: "fresh_start_failed",
+      userMessageId: "user-message-3",
+      error: expect.objectContaining({
+        code: "PROVIDER_AUTH_REQUIRED",
+        message: "Connect OpenAI Codex",
+      }),
+    });
+  });
+
+  it("emits a fresh start failure when initial attachment resolution fails", async () => {
+    mockState.resolveAttachments.mockResolvedValue({
+      ok: false,
+      error: {
+        code: "ATTACHMENTS_RESOLUTION_FAILED",
+        message: "Failed to resolve attachments",
+        attachmentIds: ["00000000-0000-0000-0000-000000000001"],
+      },
+    });
+    const processStartReporter = { handleProcessStartEvent: vi.fn() };
+    const serverState = createServerState();
+    const { manager } = createManager(serverState, {}, {}, processStartReporter);
+
+    const result = await manager.dispatchMessage({
+      userMessage: {
+        id: "user-message-3",
+        content: "fresh turn",
+        attachmentIds: ["00000000-0000-0000-0000-000000000001"],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ATTACHMENTS_RESOLUTION_FAILED");
+    }
+    expect(mockState.createSession).not.toHaveBeenCalled();
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenCalledTimes(2);
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(1, {
+      type: "fresh_start_started",
+      userMessageId: "user-message-3",
+    });
+    expect(processStartReporter.handleProcessStartEvent).toHaveBeenNthCalledWith(2, {
+      type: "fresh_start_failed",
+      userMessageId: "user-message-3",
+      error: expect.objectContaining({
+        code: "ATTACHMENTS_RESOLUTION_FAILED",
+        message: "Failed to resolve attachments",
+      }),
+    });
   });
 
   it("times out when a fresh process does not emit ready within thirty seconds", async () => {

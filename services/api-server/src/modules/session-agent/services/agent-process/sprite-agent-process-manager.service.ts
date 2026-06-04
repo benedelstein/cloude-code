@@ -21,7 +21,12 @@ import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle
 import { AgentAttachmentService } from "../agent-attachment.service";
 import type { SecretRepository } from "../../repositories/secret.repository";
 import type { ServerState } from "../../repositories/server-state.repository";
-import type { DispatchMessageInput, SpriteAgentProcessManagerError } from "../../types/agent-process-manager.types";
+import type {
+  AgentProcessStartEvent,
+  AgentProcessStartReporter,
+  DispatchMessageInput,
+  SpriteAgentProcessManagerError,
+} from "../../types/agent-process-manager.types";
 import {
   managerError,
   mapAttachmentResolutionError,
@@ -66,6 +71,7 @@ export interface SpriteAgentProcessManagerDeps {
     env: Env,
     logger: Logger,
   ): ProviderCredentialAdapter;
+  processStartReporter?: AgentProcessStartReporter;
 }
 
 export type DispatchMessageResult = Result<
@@ -104,6 +110,7 @@ export class SpriteAgentProcessManager {
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly attachmentService: AgentAttachmentService;
   private readonly getProviderCredentialAdapter: SpriteAgentProcessManagerDeps["getProviderCredentialAdapter"];
+  private readonly processStartReporter: SpriteAgentProcessManagerDeps["processStartReporter"];
 
   /** In-flight spawn promise, or null if no spawn is running. */
   private startMutex: Promise<DispatchMessageResult> | null = null;
@@ -120,6 +127,7 @@ export class SpriteAgentProcessManager {
     this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
     this.getProviderCredentialAdapter = deps.getProviderCredentialAdapter;
+    this.processStartReporter = deps.processStartReporter;
   }
 
   /**
@@ -282,46 +290,42 @@ export class SpriteAgentProcessManager {
         : clientState.agentSettings;
     const agentMode: AgentMode = input.agentMode ?? clientState.agentMode;
 
-    const attachmentsResult = await this.attachmentService.resolveAttachments(
-      sessionId,
-      input.userMessage.attachmentIds,
-    );
-    if (!attachmentsResult.ok) {
-      return failure(mapAttachmentResolutionError(attachmentsResult.error));
-    }
-    const resolvedAttachments = attachmentsResult.value.agentAttachments;
-
-    const agentMessage: AgentInputMessage = {
-      content: input.userMessage.content,
-      attachments:
-        resolvedAttachments.length > 0
-          ? (resolvedAttachments as AgentInputAttachment[])
-          : undefined,
-    };
-
     const spriteClient = this.getSpriteClient();
 
-    const reuseResult = await this.tryDispatchToExistingProcess(spriteClient, {
-      processId: serverState.agentProcessId,
-      userMessageId: input.userMessage.id,
-      message: agentMessage,
-      model: input.model,
-      effort: input.effort,
-      agentMode: input.agentMode,
-    });
-    switch (reuseResult.status) {
-      case "reused":
-        return success({ agentProcessId: reuseResult.agentProcessId });
-      case "failed":
-        return failure(reuseResult.error);
-      case "fallback":
-        break;
+    let agentMessage: AgentInputMessage | null = null;
+    if (serverState.agentProcessId) {
+      const messageResult = await this.resolveAgentMessage(
+        sessionId,
+        input.userMessage,
+      );
+      if (!messageResult.ok) {
+        return failure(messageResult.error);
+      }
+      agentMessage = messageResult.value;
+
+      const reuseResult = await this.tryDispatchToExistingProcess(spriteClient, {
+        processId: serverState.agentProcessId,
+        userMessageId: input.userMessage.id,
+        message: agentMessage,
+        model: input.model,
+        effort: input.effort,
+        agentMode: input.agentMode,
+      });
+      switch (reuseResult.status) {
+        case "reused":
+          return success({ agentProcessId: reuseResult.agentProcessId });
+        case "failed":
+          return failure(reuseResult.error);
+        case "fallback":
+          break;
+      }
     }
 
     // can't reuse, so start a new agent process.
     return await this.tryDispatchToNewProcess(spriteClient, {
       userMessageId: input.userMessage.id,
-      agentMessage,
+      userMessage: input.userMessage,
+      resolvedAgentMessage: agentMessage,
       sessionId,
       userId,
       model: input.model,
@@ -338,18 +342,50 @@ export class SpriteAgentProcessManager {
       settings: AgentSettings;
       sessionId: string;
       userId: string;
-      agentMessage: AgentInputMessage;
+      userMessage: DispatchMessageInput["userMessage"];
+      resolvedAgentMessage: AgentInputMessage | null;
       model: string | undefined;
       effort: string | undefined;
       agentMode: AgentMode;
     },
   ): Promise<DispatchMessageResult> {
-    const { settings, userId, agentMessage, model, effort, sessionId, agentMode, userMessageId } = args;
+    const {
+      settings,
+      userId,
+      model,
+      effort,
+      sessionId,
+      agentMode,
+      userMessageId,
+    } = args;
+    this.reportProcessStartEvent({
+      type: "fresh_start_started",
+      userMessageId,
+    });
+
+    const messageResult = args.resolvedAgentMessage
+      ? success(args.resolvedAgentMessage)
+      : await this.resolveAgentMessage(sessionId, args.userMessage);
+    if (!messageResult.ok) {
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: messageResult.error,
+      });
+      return failure(messageResult.error);
+    }
+    const agentMessage = messageResult.value;
+
     const credentialResult = await this.loadCredentialSnapshot(
       settings,
       userId,
     );
     if (!credentialResult.ok) {
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: credentialResult.error,
+      });
       return failure(credentialResult.error);
     }
     const credentialSnapshot = credentialResult.value;
@@ -429,13 +465,29 @@ export class SpriteAgentProcessManager {
 
       const startResult = await this.startAndWaitForReady(session);
       if (!startResult.ok) {
+        this.reportProcessStartEvent({
+          type: "fresh_start_failed",
+          userMessageId,
+          error: startResult.error,
+        });
         return failure(startResult.error);
       }
       this.updateAgentProcessId(startResult.value);
+      this.reportProcessStartEvent({
+        type: "fresh_start_ready",
+        userMessageId,
+        agentProcessId: startResult.value,
+      });
       return success({ agentProcessId: startResult.value });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return failure(managerError("SPAWN_FAILED", message, { cause: message }));
+      const spawnError = managerError("SPAWN_FAILED", message, { cause: message });
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: spawnError,
+      });
+      return failure(spawnError);
     } finally {
       // Close our setup websocket. The vm-agent keeps running on the sprite
       // for up to maxRunAfterDisconnect.
@@ -448,6 +500,32 @@ export class SpriteAgentProcessManager {
         }
       }
     }
+  }
+
+  private reportProcessStartEvent(event: AgentProcessStartEvent): void {
+    this.processStartReporter?.handleProcessStartEvent(event);
+  }
+
+  private async resolveAgentMessage(
+    sessionId: string,
+    userMessage: DispatchMessageInput["userMessage"],
+  ): Promise<Result<AgentInputMessage, SpriteAgentProcessManagerError>> {
+    const attachmentsResult = await this.attachmentService.resolveAttachments(
+      sessionId,
+      userMessage.attachmentIds,
+    );
+    if (!attachmentsResult.ok) {
+      return failure(mapAttachmentResolutionError(attachmentsResult.error));
+    }
+    const resolvedAttachments = attachmentsResult.value.agentAttachments;
+
+    return success({
+      content: userMessage.content,
+      attachments:
+        resolvedAttachments.length > 0
+          ? (resolvedAttachments as AgentInputAttachment[])
+          : undefined,
+    });
   }
 
   private async tryDispatchToExistingProcess(

@@ -25,13 +25,6 @@ import type { SpriteAgentProcessManager } from "./agent-process/sprite-agent-pro
 import type { SpriteAgentProcessManagerError } from "../types/agent-process-manager.types";
 
 const CHAT_DISPATCH_DOMAIN = "chat_dispatch";
-type InitialAgentStartTaskId = "initial_agent_start";
-
-export interface InitialAgentStartReporter {
-  startTask(taskId: InitialAgentStartTaskId): void;
-  completeTask(taskId: InitialAgentStartTaskId): void;
-  failTask(taskId: InitialAgentStartTaskId, error: string): void;
-}
 
 export type ChatDispatchError =
   | DomainError<
@@ -76,7 +69,6 @@ export interface SessionChatDispatchServiceDeps {
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage, without?: string[]) => void;
   synthesizeStatus: () => SessionStatus;
-  setupReporter?: InitialAgentStartReporter;
 }
 
 export interface SessionChatAttachmentProvider {
@@ -104,7 +96,6 @@ export class SessionChatDispatchService {
   private readonly updatePartialState: SessionChatDispatchServiceDeps["updatePartialState"];
   private readonly broadcastMessage: SessionChatDispatchServiceDeps["broadcastMessage"];
   private readonly synthesizeStatus: () => SessionStatus;
-  private readonly setupReporter: SessionChatDispatchServiceDeps["setupReporter"];
 
   constructor(deps: SessionChatDispatchServiceDeps) {
     this.logger = deps.logger.scope("session-chat-dispatch");
@@ -118,7 +109,6 @@ export class SessionChatDispatchService {
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
     this.synthesizeStatus = deps.synthesizeStatus;
-    this.setupReporter = deps.setupReporter;
   }
 
   /**
@@ -207,10 +197,7 @@ export class SessionChatDispatchService {
    * Dispatches the pending initial message once provisioning completes.
    * No-op if there is no pending message or a turn is already in flight.
    */
-  async maybeDispatchPendingMessage(args: {
-    // TODO: i dont like this setupContext param. 
-    setupContext?: InitialAgentStartTaskId;
-  } = {}): Promise<void> {
+  async maybeDispatchPendingMessage(): Promise<void> {
     const clientState = this.getClientState();
     const serverState = this.getServerState();
     const pendingMessage = clientState.pendingUserMessage;
@@ -231,7 +218,6 @@ export class SessionChatDispatchService {
       userMessageId: userMessage.id,
       content,
       attachmentIds,
-      setupContext: args.setupContext,
     });
     if (!dispatchResult.ok) {
       this.logger.error("Failed to dispatch pending message", {
@@ -252,16 +238,11 @@ export class SessionChatDispatchService {
     model?: string;
     effort?: string;
     agentMode?: AgentMode;
-    setupContext?: InitialAgentStartTaskId;
   }): Promise<Result<void, ChatDispatchError>> {
     // Register the turn before spawning so any webhook that races in with
     // chunks is not rejected as stale. The processId is filled in below once
     // the spawn returns.
     this.turnCoordinator.beginTurn(args.userMessageId);
-    // TODO: i dont like this optional filter
-    if (args.setupContext) {
-      this.setupReporter?.startTask(args.setupContext);
-    }
 
     let spawnResult;
     try {
@@ -277,24 +258,15 @@ export class SessionChatDispatchService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (args.setupContext) {
-        this.setupReporter?.failTask(args.setupContext, message);
-      }
       return failure(
         chatDispatchError("DISPATCH_FAILED", message, { cause: message }),
       );
     }
     if (!spawnResult.ok) {
-      if (args.setupContext) {
-        this.setupReporter?.failTask(args.setupContext, spawnResult.error.message);
-      }
       return failure(spawnResult.error);
     }
 
     this.turnCoordinator.attachProcessId(spawnResult.value.agentProcessId);
-    if (args.setupContext) {
-      this.setupReporter?.completeTask(args.setupContext);
-    }
     return success(undefined);
   }
 

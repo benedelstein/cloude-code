@@ -44,6 +44,14 @@ export class SessionSetupRunService {
     };
   }
 
+  /** Returns true when a setup task can still receive lifecycle updates. */
+  canUpdateTask(taskId: SessionSetupTaskId): boolean {
+    const setupRun = this.getClientState().sessionSetupRun;
+    if (!setupRun || setupRun.status !== "running") { return false; }
+    const task = setupRun.tasks.find((candidate) => candidate.id === taskId);
+    return Boolean(task && !isTerminalSetupTask(task));
+  }
+
   startTask(taskId: SessionSetupTaskId): void {
     const updatedRun = this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }

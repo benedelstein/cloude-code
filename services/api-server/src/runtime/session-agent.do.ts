@@ -56,6 +56,7 @@ import { SessionSetupRunService } from "@/modules/session-agent/services/session
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
+import { InitialAgentStartProcessReporter } from "@/modules/session-agent/services/initial-agent-start-process-reporter.service";
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
 import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
@@ -162,6 +163,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
           status: this.synthesizeStatus(setupRun),
         }),
     });
+    const initialAgentStartProcessReporter = new InitialAgentStartProcessReporter({
+      setupRunService: this.setupRunService,
+    });
 
     this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
@@ -189,6 +193,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getClientState: () => this.state,
       getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       getProviderCredentialAdapter,
+      processStartReporter: initialAgentStartProcessReporter,
     });
 
     this.provisionService = new SessionProvisionService({
@@ -224,11 +229,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
-      setupReporter: {
-        startTask: (taskId) => this.setupRunService.startTask(taskId),
-        completeTask: (taskId) => this.setupRunService.completeTask(taskId),
-        failTask: (taskId, error) => this.setupRunService.failTask(taskId, error),
-      },
     });
 
     this.providerConnectionService = new SessionProviderConnectionService({
@@ -539,14 +539,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       return;
     }
     await this.provisionService.ensureProvisioned();
-    if (this.state.pendingUserMessage) {
-      await this.chatDispatchService.maybeDispatchPendingMessage({
-        setupContext: "initial_agent_start",
-      });
+    if (!this.state.pendingUserMessage) {
+      this.logger.warn("Expected pending initial message after provisioning");
       return;
     }
-    // TODO: should we call this here? doesnt completing a task auto-complete the run if possible. 
-    this.setupRunService.completeRun();
+    await this.chatDispatchService.maybeDispatchPendingMessage();
   }
 
   private queueEnsureReady(): void {
