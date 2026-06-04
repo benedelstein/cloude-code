@@ -1,13 +1,17 @@
-import {
-  dedent,
-  type ClientState,
-  type Logger,
-  type SessionEnvironmentSnapshot,
-  type SessionSetupTask,
-  type SessionSetupTaskOutput,
-  type SessionStatus,
-  type StartupScriptSetupTaskSkipReason,
+import type {
+  CloudContainerSetupTask,
+  NetworkPolicySetupTask,
+  RepositorySetupTask,
+  StartupScriptSetupTask,
+  ClientState,
+  Logger,
+  SessionEnvironmentSnapshot,
+  SessionSetupTaskOutput,
+  SessionStatus,
+  StartupScriptSetupTaskSkipReason,
+  SessionSetupTaskId,
 } from "@repo/shared";
+import { dedent } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
@@ -23,28 +27,33 @@ import { SessionStartupScriptService } from "./session-startup-script.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
+class ProvisionTaskError extends Error {
+  readonly output: SessionSetupTaskOutput;
+
+  constructor(message: string, output: SessionSetupTaskOutput) {
+    super(message);
+    this.name = "ProvisionTaskError";
+    this.output = output;
+  }
+}
+
 type ProvisionClientStateUpdate = Partial<
   Pick<ClientState, "baseBranch" | "lastError" | "status">
 >;
-type ProvisionSetupTask = Extract<
-  SessionSetupTask,
-  { id: "cloud_container" | "repository" | "setup_script" | "network_policy" }
->;
-type ProvisionSetupTaskId = ProvisionSetupTask["id"];
 
 export interface SessionSetupTaskReporter {
-  startTask(taskId: ProvisionSetupTaskId): void;
+  startTask(taskId: SessionSetupTaskId): void;
   completeTask(
-    taskId: ProvisionSetupTaskId,
+    taskId: SessionSetupTaskId,
     output?: SessionSetupTaskOutput,
   ): void;
   failTask(
-    taskId: ProvisionSetupTaskId,
+    taskId: SessionSetupTaskId,
     error: string,
     output?: SessionSetupTaskOutput,
   ): void;
   skipTask(
-    taskId: ProvisionSetupTaskId,
+    taskId: SessionSetupTaskId,
     skipReason?: StartupScriptSetupTaskSkipReason,
   ): void;
 }
@@ -66,7 +75,9 @@ export interface SessionProvisionServiceDeps {
   synthesizeStatus: () => SessionStatus;
   ensureGitProxySecret: () => string;
   githubTokenProvider: {
-    getReadOnlyTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>>;
+    getReadOnlyTokenForRepo(
+      repoFullName: string,
+    ): Promise<GitHubAppResult<string>>;
   };
   setupReporter?: SessionSetupTaskReporter;
 }
@@ -97,6 +108,7 @@ export class SessionProvisionService {
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
   private ensureProvisionedPromise: Promise<void> | null = null;
+  private spriteName: string | null = null;
 
   constructor(deps: SessionProvisionServiceDeps) {
     this.logger = deps.logger.scope("session-provision-service");
@@ -119,7 +131,9 @@ export class SessionProvisionService {
    * concurrently — all callers share one in-flight promise.
    */
   ensureProvisioned(): Promise<void> {
-    if (this.ensureProvisionedPromise) { return this.ensureProvisionedPromise; }
+    if (this.ensureProvisionedPromise) {
+      return this.ensureProvisionedPromise;
+    }
     this.ensureProvisionedPromise = this.provision().finally(() => {
       this.ensureProvisionedPromise = null;
     });
@@ -127,35 +141,65 @@ export class SessionProvisionService {
   }
 
   private async provision(): Promise<void> {
+    this.spriteName = this.getServerState().spriteName;
     const setupRun = this.getClientState().sessionSetupRun;
-    if (!setupRun) { return; }
+    if (!setupRun) {
+      return;
+    }
     if (setupRun.status !== "running") {
-      this.logger.error("Setup run is not running — skipping provision", { fields: { setupRunStatus: setupRun.status } });
+      this.logger.error("Setup run is not running — skipping provision", {
+        fields: { setupRunStatus: setupRun.status },
+      });
       return;
     }
 
-    let spriteName = this.getServerState().spriteName;
     for (const task of setupRun.tasks) {
       if (isTerminalSetupTask(task)) { continue; }
-      switch (task.id) {
-        case "cloud_container":
-          spriteName = await this.ensureCloudContainerTask(task, spriteName);
-          break;
-        case "repository":
-          await this.ensureRepositoryTask(task, this.requireSpriteName(spriteName));
-          break;
-        case "setup_script":
-          await this.ensureSetupScriptTask(task, this.requireSpriteName(spriteName));
-          break;
-        case "network_policy":
-          await this.ensureNetworkPolicyTask(task, this.requireSpriteName(spriteName));
-          break;
-        case "initial_agent_start":
-          this.updatePartialState({ status: this.synthesizeStatus() });
-          return;
-        default: {
-          const exhaustiveCheck: never = task;
-          throw new Error(`Unhandled setup task: ${JSON.stringify(exhaustiveCheck)}`);
+      try {
+        switch (task.id) {
+          case "cloud_container":
+            await this.ensureCloudContainerTask(task);
+            break;
+          case "repository":
+            await this.ensureRepositoryTask(
+              task,
+              this.requireSpriteName(),
+            );
+            break;
+          case "setup_script":
+            await this.ensureSetupScriptTask(
+              task,
+              this.requireSpriteName(),
+            );
+            break;
+          case "network_policy":
+            await this.ensureNetworkPolicyTask(
+              task,
+              this.requireSpriteName(),
+            );
+            break;
+          case "initial_agent_start":
+            // not handled here
+            break;
+          default: {
+            const exhaustiveCheck: never = task;
+            throw new Error(
+              `Unhandled provision task: ${JSON.stringify(exhaustiveCheck)}`,
+            );
+          }
+        }
+      } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        const output =
+          error instanceof ProvisionTaskError ? error.output : undefined;
+        if (output) {
+          this.setupReporter?.failTask(task.id, errorMessage, output);
+        } else {
+          this.setupReporter?.failTask(task.id, errorMessage);
+        }
+        if (task.isBlocking) {
+          this.recordProvisioningError(error);
+          throw error instanceof Error ? error : new Error(errorMessage);
         }
       }
     }
@@ -173,54 +217,59 @@ export class SessionProvisionService {
   }
 
   private async ensureCloudContainerTask(
-    task: Extract<ProvisionSetupTask, { id: "cloud_container" }>,
-    existingSpriteName: string | null,
-  ): Promise<string> {
-    let spriteName = existingSpriteName;
+    task: CloudContainerSetupTask,
+  ): Promise<void> {
     this.setupReporter?.startTask(task.id);
-    try {
+    this.updatePartialState({ status: this.synthesizeStatus() });
+    if (!this.spriteName) {
+      const sessionId = this.getServerState().sessionId;
+      if (!sessionId) {
+        throw new Error("Session id is missing");
+      }
+      this.logger.debug("creating sprite", {
+        fields: { sessionId },
+      });
+      const spriteResponse = await this.spritesCoordinator.createSprite({
+        name: sessionId,
+      });
+      this.spriteName = spriteResponse.name;
+      // For provisioning, allow network access to known-good domains.
+      const sprite = new WorkersSpriteClient(
+        this.spriteName!,
+        this.env.SPRITES_API_KEY,
+        this.env.SPRITES_API_URL,
+      );
+      const workerHostname = new URL(this.env.WORKER_URL).hostname;
+      const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
+      await sprite.setNetworkPolicy(networkPolicy);
+      this.updateServerState({ spriteName: this.spriteName });
       this.updatePartialState({ status: this.synthesizeStatus() });
-      if (!spriteName) {
-        const sessionId = this.getServerState().sessionId;
-        if (!sessionId) { throw new Error("Session id is missing"); }
-        spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
-        this.updateServerState({ spriteName });
-        this.updatePartialState({ status: this.synthesizeStatus() });
-      }
-      if (!this.getServerState().startupToolchain) {
-        await this.ensureStartupToolchain(spriteName);
-      }
-      this.setupReporter?.completeTask(task.id);
-      return spriteName;
-    } catch (error) {
-      this.handleProvisionTaskFailure(task, error);
-      return this.requireSpriteName(spriteName);
     }
+    if (!this.getServerState().startupToolchain) {
+      await this.ensureStartupToolchain(this.spriteName);
+    }
+    this.setupReporter?.completeTask(task.id);
   }
 
   private async ensureRepositoryTask(
-    task: Extract<ProvisionSetupTask, { id: "repository" }>,
+    task: RepositorySetupTask,
     spriteName: string,
   ): Promise<void> {
     this.setupReporter?.startTask(task.id);
-    try {
-      this.updatePartialState({ status: this.synthesizeStatus() });
-      if (!this.getServerState().repoCloned) {
-        await this.cloneRepo(spriteName);
-        this.updateServerState({ repoCloned: true });
-      }
-      this.setupReporter?.completeTask(task.id);
-      this.updatePartialState({
-        status: this.synthesizeStatus(),
-        lastError: null,
-      });
-    } catch (error) {
-      this.handleProvisionTaskFailure(task, error);
+    this.updatePartialState({ status: this.synthesizeStatus() });
+    if (!this.getServerState().repoCloned) {
+      await this.cloneRepo(spriteName);
+      this.updateServerState({ repoCloned: true });
     }
+    this.setupReporter?.completeTask(task.id);
+    this.updatePartialState({
+      status: this.synthesizeStatus(),
+      lastError: null,
+    });
   }
 
   private async ensureSetupScriptTask(
-    task: Extract<ProvisionSetupTask, { id: "setup_script" }>,
+    task: StartupScriptSetupTask,
     spriteName: string,
   ): Promise<void> {
     this.setupReporter?.startTask(task.id);
@@ -251,23 +300,14 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
-    let result: Awaited<ReturnType<SessionStartupScriptService["run"]>>;
-    try {
-      result = await this.startupScriptService.run({
-        sprite,
-        script: environmentSnapshot.startupScript,
-        workspaceDir: WORKSPACE_DIR,
-        env: environmentSnapshot.plainEnvVars,
-      });
-    } catch (error) {
-      this.logger.warn("Continuing after session startup script failure", {
-        error,
-        fields: { sessionId: this.getServerState().sessionId },
-      });
+    const result = await this.startupScriptService.run({
+      sprite,
+      script: environmentSnapshot.startupScript,
+      workspaceDir: WORKSPACE_DIR,
+      env: environmentSnapshot.plainEnvVars,
+    }).finally(() => {
       this.updateServerState({ startupScriptCompleted: true });
-      this.handleProvisionTaskFailure(task, error);
-      return;
-    }
+    });
 
     switch (result.status) {
       case "skipped":
@@ -286,80 +326,30 @@ export class SessionProvisionService {
             errorMessage: result.errorMessage,
           },
         });
-        this.updateServerState({ startupScriptCompleted: true });
-        this.handleProvisionTaskFailure(
-          task,
-          new Error(result.errorMessage),
-          result.output,
-        );
-        return;
+        throw new ProvisionTaskError(result.errorMessage, result.output);
     }
-    this.updateServerState({ startupScriptCompleted: true });
   }
 
   private async ensureNetworkPolicyTask(
-    task: Extract<ProvisionSetupTask, { id: "network_policy" }>,
+    task: NetworkPolicySetupTask,
     spriteName: string,
   ): Promise<void> {
     this.setupReporter?.startTask(task.id);
-    try {
-      this.updatePartialState({ status: this.synthesizeStatus() });
-      await this.ensureFinalNetworkPolicy(spriteName);
-      this.setupReporter?.completeTask(task.id);
-      this.updatePartialState({ status: this.synthesizeStatus() });
-    } catch (error) {
-      this.handleProvisionTaskFailure(task, error);
+    this.updatePartialState({ status: this.synthesizeStatus() });
+    if (!this.getServerState().finalNetworkPolicyApplied) {
+      await this.applyFinalNetworkPolicy(spriteName);
+      this.updateServerState({ finalNetworkPolicyApplied: true });
     }
+    this.setupReporter?.completeTask(task.id);
+    this.updatePartialState({ status: this.synthesizeStatus() });
   }
 
-  private async ensureFinalNetworkPolicy(spriteName: string): Promise<void> {
-    if (this.getServerState().finalNetworkPolicyApplied) { return; }
-    await this.applyFinalNetworkPolicy(spriteName);
-    this.updateServerState({ finalNetworkPolicyApplied: true });
-  }
-
-  private handleProvisionTaskFailure(
-    task: ProvisionSetupTask,
-    error: unknown,
-    output?: SessionSetupTaskOutput,
-  ): void {
-    const errorMessage = getErrorMessage(error);
-    if (output) {
-      this.setupReporter?.failTask(task.id, errorMessage, output);
-    } else {
-      this.setupReporter?.failTask(task.id, errorMessage);
+  private requireSpriteName(): string {
+    const spriteName = this.spriteName;
+    if (!spriteName) {
+      throw new Error("Sprite name is missing");
     }
-    if (task.isBlocking) {
-      this.recordProvisioningError(error);
-      throw error instanceof Error ? error : new Error(errorMessage);
-    }
-  }
-
-  private requireSpriteName(spriteName: string | null): string {
-    if (!spriteName) { throw new Error("Sprite name is missing"); }
     return spriteName;
-  }
-
-  private async createSpriteWithBootstrapNetworkPolicy(sessionId: string): Promise<string> {
-    this.logger.debug("Provisioning sprite for session", {
-      fields: { sessionId },
-    });
-
-    const spriteResponse = await this.spritesCoordinator.createSprite({
-      name: sessionId,
-    });
-
-    // For provisioning, allow network access to known-good domains.
-    const sprite = new WorkersSpriteClient(
-      spriteResponse.name,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-    const workerHostname = new URL(this.env.WORKER_URL).hostname;
-    const networkPolicy = buildBootstrapNetworkPolicy({ workerHostname });
-    await sprite.setNetworkPolicy(networkPolicy);
-
-    return spriteResponse.name;
   }
 
   private async ensureStartupToolchain(spriteName: string): Promise<void> {
@@ -450,7 +440,8 @@ export class SessionProvisionService {
       await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
 
       // Fetch a read-only token scoped to contents:read for the initial clone
-      const cloneTokenResult = await this.githubTokenProvider.getReadOnlyTokenForRepo(repoFullName);
+      const cloneTokenResult =
+        await this.githubTokenProvider.getReadOnlyTokenForRepo(repoFullName);
       if (!cloneTokenResult.ok) {
         throw new Error(cloneTokenResult.error.message);
       }
@@ -466,7 +457,9 @@ export class SessionProvisionService {
       );
       this.logger.info("Clone completed", {
         fields: {
-          durationSeconds: Number(((Date.now() - cloneStart) / 1000).toFixed(1)),
+          durationSeconds: Number(
+            ((Date.now() - cloneStart) / 1000).toFixed(1),
+          ),
           exitCode: cloneResult.exitCode,
           stderr: cloneResult.stderr.slice(0, 500),
         },
@@ -498,12 +491,14 @@ export class SessionProvisionService {
 
     const gitProxySecret = this.ensureGitProxySecret();
     const environmentSnapshot = this.getEnvironmentSnapshot();
-    const fetchUrl = environmentSnapshot.network.mode === "locked"
-      ? cloneUrl
-      : githubRemoteUrl;
+    const fetchUrl =
+      environmentSnapshot.network.mode === "locked"
+        ? cloneUrl
+        : githubRemoteUrl;
 
     // Configure remote URLs, git identity, and proxy auth header
-    await sprite.execHttp(dedent`
+    await sprite.execHttp(
+      dedent`
       set -e
       cd ${WORKSPACE_DIR}
       git remote set-url origin ${fetchUrl}
@@ -513,7 +508,9 @@ export class SessionProvisionService {
       git config --unset-all http.extraHeader || true
       git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true
       git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${gitProxySecret}"
-    `, {});
+    `,
+      {},
+    );
   }
 
   private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {
@@ -526,11 +523,13 @@ export class SessionProvisionService {
     );
     const workerHostname = new URL(this.env.WORKER_URL).hostname;
 
-    await sprite.setNetworkPolicy(buildFinalNetworkPolicy({
-      workerHostname,
-      providerId,
-      network: environmentSnapshot.network,
-    }));
+    await sprite.setNetworkPolicy(
+      buildFinalNetworkPolicy({
+        workerHostname,
+        providerId,
+        network: environmentSnapshot.network,
+      }),
+    );
   }
 }
 
