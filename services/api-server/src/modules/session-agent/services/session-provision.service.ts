@@ -3,6 +3,7 @@ import {
   type ClientState,
   type Logger,
   type SessionEnvironmentSnapshot,
+  type SessionSetupTask,
   type SessionSetupTaskOutput,
   type SessionStatus,
   type StartupScriptSetupTaskSkipReason,
@@ -17,26 +18,35 @@ import {
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
+import { isTerminalSetupTask } from "./session-setup-run.service";
 import { SessionStartupScriptService } from "./session-startup-script.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
+type ProvisionClientStateUpdate = Partial<
+  Pick<ClientState, "baseBranch" | "lastError" | "status">
+>;
+type ProvisionSetupTask = Extract<
+  SessionSetupTask,
+  { id: "cloud_container" | "repository" | "setup_script" | "network_policy" }
+>;
+type ProvisionSetupTaskId = ProvisionSetupTask["id"];
+
 export interface SessionSetupTaskReporter {
-  startTask(taskId: "cloud_container" | "repository" | "setup_script"): void;
+  startTask(taskId: ProvisionSetupTaskId): void;
   completeTask(
-    taskId: "cloud_container" | "repository" | "setup_script",
+    taskId: ProvisionSetupTaskId,
     output?: SessionSetupTaskOutput,
   ): void;
   failTask(
-    taskId: "cloud_container" | "repository" | "setup_script",
+    taskId: ProvisionSetupTaskId,
     error: string,
     output?: SessionSetupTaskOutput,
   ): void;
   skipTask(
-    taskId: "cloud_container" | "repository" | "setup_script",
+    taskId: ProvisionSetupTaskId,
     skipReason?: StartupScriptSetupTaskSkipReason,
   ): void;
-  failRun(error: string): void;
 }
 
 /**
@@ -52,7 +62,7 @@ export interface SessionProvisionServiceDeps {
   getClientState: () => ClientState;
   getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   updateServerState: (partial: Partial<ServerState>) => void;
-  updatePartialState: (partial: Partial<ClientState>) => void;
+  updatePartialState: (partial: ProvisionClientStateUpdate) => void;
   synthesizeStatus: () => SessionStatus;
   ensureGitProxySecret: () => string;
   githubTokenProvider: {
@@ -78,7 +88,6 @@ export class SessionProvisionService {
   private readonly getClientState: () => ClientState;
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly updateServerState: SessionProvisionServiceDeps["updateServerState"];
-  // TODO: SCOPE THIS TO THE WRITES WE ACTUALLY NEED.
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
@@ -118,70 +127,40 @@ export class SessionProvisionService {
   }
 
   private async provision(): Promise<void> {
-    const serverState = this.getServerState();
-    let spriteName = serverState.spriteName;
-    // create sprite and ensure startup toolchain
-    if (!spriteName || !serverState.startupToolchain) {
-      this.setupReporter?.startTask("cloud_container");
-      try {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        if (!spriteName) {
-          const sessionId = serverState.sessionId;
-          if (!sessionId) { throw new Error("Session id is missing"); }
-          spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
-          this.updateServerState({ spriteName });
+    const setupRun = this.getClientState().sessionSetupRun;
+    if (!setupRun) { return; }
+    if (setupRun.status !== "running") {
+      this.logger.error("Setup run is not running — skipping provision", { fields: { setupRunStatus: setupRun.status } });
+      return;
+    }
+
+    let spriteName = this.getServerState().spriteName;
+    for (const task of setupRun.tasks) {
+      if (isTerminalSetupTask(task)) { continue; }
+      switch (task.id) {
+        case "cloud_container":
+          spriteName = await this.ensureCloudContainerTask(task, spriteName);
+          break;
+        case "repository":
+          await this.ensureRepositoryTask(task, this.requireSpriteName(spriteName));
+          break;
+        case "setup_script":
+          await this.ensureSetupScriptTask(task, this.requireSpriteName(spriteName));
+          break;
+        case "network_policy":
+          await this.ensureNetworkPolicyTask(task, this.requireSpriteName(spriteName));
+          break;
+        case "initial_agent_start":
           this.updatePartialState({ status: this.synthesizeStatus() });
+          return;
+        default: {
+          const exhaustiveCheck: never = task;
+          throw new Error(`Unhandled setup task: ${JSON.stringify(exhaustiveCheck)}`);
         }
-        await this.ensureStartupToolchain(spriteName);
-        this.setupReporter?.completeTask("cloud_container");
-      } catch (error) {
-        this.setupReporter?.failTask("cloud_container", getErrorMessage(error));
-        this.recordProvisioningError(error);
-        throw error;
       }
     }
 
-    // Clone Repo
-    if (!this.getServerState().repoCloned) {
-      this.setupReporter?.startTask("repository");
-      try {
-        this.updatePartialState({ status: this.synthesizeStatus() });
-        await this.cloneRepo(spriteName);
-        this.updateServerState({ repoCloned: true });
-        this.setupReporter?.completeTask("repository");
-        this.updatePartialState({
-          status: this.synthesizeStatus(),
-          lastError: null,
-        });
-      } catch (error) {
-        this.setupReporter?.failTask("repository", getErrorMessage(error));
-        this.recordProvisioningError(error);
-        throw error;
-      }
-    }
-
-    if (!this.getServerState().startupScriptCompleted) {
-      await this.tryRunStartupScript(spriteName);
-      this.updateServerState({ startupScriptCompleted: true });
-    }
-
-    if (!this.getServerState().finalNetworkPolicyApplied) {
-      try {
-        // TODO: MAKE THIS A STARTUP TASK?
-        await this.applyFinalNetworkPolicy(spriteName);
-        this.updateServerState({ finalNetworkPolicyApplied: true });
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        // failing to apply the network policy is a blocking error.
-        this.setupReporter?.failRun(errorMessage);
-        this.recordProvisioningError(error);
-        throw error;
-      }
-    }
-    // TODO: can we avoid these adhoc status updates throughout the code?
-    this.updatePartialState({
-      status: this.synthesizeStatus(),
-    });
+    this.updatePartialState({ status: this.synthesizeStatus() });
   }
 
   private recordProvisioningError(error: unknown): void {
@@ -191,6 +170,172 @@ export class SessionProvisionService {
       lastError: errorMessage,
       status: this.synthesizeStatus(),
     });
+  }
+
+  private async ensureCloudContainerTask(
+    task: Extract<ProvisionSetupTask, { id: "cloud_container" }>,
+    existingSpriteName: string | null,
+  ): Promise<string> {
+    let spriteName = existingSpriteName;
+    this.setupReporter?.startTask(task.id);
+    try {
+      this.updatePartialState({ status: this.synthesizeStatus() });
+      if (!spriteName) {
+        const sessionId = this.getServerState().sessionId;
+        if (!sessionId) { throw new Error("Session id is missing"); }
+        spriteName = await this.createSpriteWithBootstrapNetworkPolicy(sessionId);
+        this.updateServerState({ spriteName });
+        this.updatePartialState({ status: this.synthesizeStatus() });
+      }
+      if (!this.getServerState().startupToolchain) {
+        await this.ensureStartupToolchain(spriteName);
+      }
+      this.setupReporter?.completeTask(task.id);
+      return spriteName;
+    } catch (error) {
+      this.failProvisionTask(task, error);
+      throw error;
+    }
+  }
+
+  private async ensureRepositoryTask(
+    task: Extract<ProvisionSetupTask, { id: "repository" }>,
+    spriteName: string,
+  ): Promise<void> {
+    this.setupReporter?.startTask(task.id);
+    try {
+      this.updatePartialState({ status: this.synthesizeStatus() });
+      if (!this.getServerState().repoCloned) {
+        await this.cloneRepo(spriteName);
+        this.updateServerState({ repoCloned: true });
+      }
+      this.setupReporter?.completeTask(task.id);
+      this.updatePartialState({
+        status: this.synthesizeStatus(),
+        lastError: null,
+      });
+    } catch (error) {
+      this.failProvisionTask(task, error);
+      throw error;
+    }
+  }
+
+  private async ensureSetupScriptTask(
+    task: Extract<ProvisionSetupTask, { id: "setup_script" }>,
+    spriteName: string,
+  ): Promise<void> {
+    this.setupReporter?.startTask(task.id);
+    if (this.getServerState().startupScriptCompleted) {
+      this.setupReporter?.completeTask(task.id);
+      return;
+    }
+
+    const environmentSnapshot = this.getEnvironmentSnapshot();
+    const startupScript = environmentSnapshot.startupScript;
+    const trimmedStartupScript = startupScript?.trim() ?? "";
+    this.logger.info("Checking session startup script", {
+      fields: {
+        sessionId: this.getServerState().sessionId,
+        spriteName,
+        sourceEnvironmentId: environmentSnapshot.sourceEnvironmentId,
+        sourceEnvironmentName: environmentSnapshot.sourceEnvironmentName,
+        networkMode: environmentSnapshot.network.mode,
+        hasStartupScript: trimmedStartupScript.length > 0,
+        startupScriptLength: startupScript?.length ?? 0,
+        trimmedStartupScriptLength: trimmedStartupScript.length,
+        envVarCount: Object.keys(environmentSnapshot.plainEnvVars).length,
+      },
+    });
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    try {
+      const result = await this.startupScriptService.run({
+        sprite,
+        script: environmentSnapshot.startupScript,
+        workspaceDir: WORKSPACE_DIR,
+        env: environmentSnapshot.plainEnvVars,
+      });
+      switch (result.status) {
+        case "skipped":
+          this.setupReporter?.skipTask(
+            task.id,
+            buildSkippedSetupScriptSkipReason(environmentSnapshot),
+          );
+          break;
+        case "completed":
+          this.setupReporter?.completeTask(task.id, result.output);
+          break;
+        case "failed":
+          this.logger.warn("Continuing after session startup script failure", {
+            fields: {
+              sessionId: this.getServerState().sessionId,
+              errorMessage: result.errorMessage,
+            },
+          });
+          this.setupReporter?.failTask(task.id, result.errorMessage, result.output);
+          if (task.isBlocking) {
+            throw new Error(result.errorMessage);
+          }
+          break;
+      }
+      this.updateServerState({ startupScriptCompleted: true });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      this.logger.warn("Continuing after session startup script failure", {
+        error,
+        fields: { sessionId: this.getServerState().sessionId },
+      });
+      this.setupReporter?.failTask(task.id, errorMessage);
+      this.updateServerState({ startupScriptCompleted: true });
+      if (task.isBlocking) {
+        this.recordProvisioningError(error);
+        throw error;
+      }
+    }
+  }
+
+  private async ensureNetworkPolicyTask(
+    task: Extract<ProvisionSetupTask, { id: "network_policy" }>,
+    spriteName: string,
+  ): Promise<void> {
+    this.setupReporter?.startTask(task.id);
+    try {
+      this.updatePartialState({ status: this.synthesizeStatus() });
+      await this.ensureFinalNetworkPolicy(spriteName);
+      this.setupReporter?.completeTask(task.id);
+      this.updatePartialState({ status: this.synthesizeStatus() });
+    } catch (error) {
+      this.failProvisionTask(task, error);
+      throw error;
+    }
+  }
+
+  private async ensureFinalNetworkPolicy(spriteName: string): Promise<void> {
+    if (this.getServerState().finalNetworkPolicyApplied) { return; }
+    await this.applyFinalNetworkPolicy(spriteName);
+    this.updateServerState({ finalNetworkPolicyApplied: true });
+  }
+
+  private failProvisionTask(
+    task: ProvisionSetupTask,
+    error: unknown,
+    output?: SessionSetupTaskOutput,
+  ): void {
+    if (output) {
+      this.setupReporter?.failTask(task.id, getErrorMessage(error), output);
+    } else {
+      this.setupReporter?.failTask(task.id, getErrorMessage(error));
+    }
+    this.recordProvisioningError(error);
+  }
+
+  private requireSpriteName(spriteName: string | null): string {
+    if (!spriteName) { throw new Error("Sprite name is missing"); }
+    return spriteName;
   }
 
   private async createSpriteWithBootstrapNetworkPolicy(sessionId: string): Promise<string> {
@@ -367,69 +512,6 @@ export class SessionProvisionService {
       git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true
       git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${gitProxySecret}"
     `, {});
-  }
-
-  private async tryRunStartupScript(spriteName: string): Promise<void> {
-    const environmentSnapshot = this.getEnvironmentSnapshot();
-    const startupScript = environmentSnapshot.startupScript;
-    const trimmedStartupScript = startupScript?.trim() ?? "";
-    this.logger.info("Checking session startup script", {
-      fields: {
-        sessionId: this.getServerState().sessionId,
-        spriteName,
-        sourceEnvironmentId: environmentSnapshot.sourceEnvironmentId,
-        sourceEnvironmentName: environmentSnapshot.sourceEnvironmentName,
-        networkMode: environmentSnapshot.network.mode,
-        hasStartupScript: trimmedStartupScript.length > 0,
-        startupScriptLength: startupScript?.length ?? 0,
-        trimmedStartupScriptLength: trimmedStartupScript.length,
-        envVarCount: Object.keys(environmentSnapshot.plainEnvVars).length,
-      },
-    });
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    try {
-      this.setupReporter?.startTask("setup_script");
-      const result = await this.startupScriptService.run({
-        sprite,
-        script: environmentSnapshot.startupScript,
-        workspaceDir: WORKSPACE_DIR,
-        env: environmentSnapshot.plainEnvVars,
-      });
-      switch (result.status) {
-        case "skipped":
-          this.setupReporter?.skipTask(
-            "setup_script",
-            buildSkippedSetupScriptSkipReason(environmentSnapshot),
-          );
-          break;
-        case "completed":
-          this.setupReporter?.completeTask("setup_script", result.output);
-          break;
-        case "failed":
-          this.logger.warn("Continuing after session startup script failure", {
-            fields: {
-              sessionId: this.getServerState().sessionId,
-              errorMessage: result.errorMessage,
-            },
-          });
-          this.setupReporter?.failTask("setup_script", result.errorMessage, result.output);
-          break;
-      }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      // TODO: Kinda unsure that we decide that this is a non-blocking task here.
-      // might want to defer that to the caller.
-      this.logger.warn("Continuing after session startup script failure", {
-        error,
-        fields: { sessionId: this.getServerState().sessionId },
-      });
-      this.setupReporter?.failTask("setup_script", errorMessage);
-    }
   }
 
   private async applyFinalNetworkPolicy(spriteName: string): Promise<void> {

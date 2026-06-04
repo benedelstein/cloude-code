@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger, SessionEnvironmentSnapshot } from "@repo/shared";
+import type {
+  ClientState,
+  Logger,
+  SessionEnvironmentSnapshot,
+  SessionSetupRun,
+  SessionSetupTask,
+} from "@repo/shared";
 import type { Env } from "../../src/shared/types";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import {
@@ -53,7 +59,9 @@ function createLogger(): Logger {
   };
 }
 
-function createClientState(): ClientState {
+function createClientState(args: {
+  prepareTask?: (task: SessionSetupTask) => SessionSetupTask;
+} = {}): ClientState {
   return {
     repoFullName: "ben/repo",
     baseBranch: "main",
@@ -62,7 +70,57 @@ function createClientState(): ClientState {
       model: "gpt-5.5",
       maxTokens: 8192,
     },
+    sessionSetupRun: createSetupRun(args.prepareTask),
   } as ClientState;
+}
+
+function createSetupRun(
+  prepareTask?: (task: SessionSetupTask) => SessionSetupTask,
+): SessionSetupRun {
+  const tasks = [
+    createSetupTask("cloud_container", true),
+    createSetupTask("repository", true),
+    {
+      ...createSetupTask("setup_script", false),
+      output: null,
+      skipReason: null,
+    },
+    createSetupTask("network_policy", true),
+    createSetupTask("initial_agent_start", true),
+  ] as SessionSetupTask[];
+
+  return {
+    id: "setup-run-1",
+    mode: "create",
+    status: "running",
+    startedAt: "2026-06-03T00:00:00.000Z",
+    completedAt: null,
+    tasks: prepareTask ? tasks.map(prepareTask) : tasks,
+  };
+}
+
+function createSetupTask<Id extends SessionSetupTask["id"], IsBlocking extends boolean>(
+  id: Id,
+  isBlocking: IsBlocking,
+): Extract<SessionSetupTask, { id: Id }> {
+  return {
+    id,
+    isBlocking,
+    status: "pending",
+    startedAt: null,
+    completedAt: null,
+    error: null,
+  } as Extract<SessionSetupTask, { id: Id }>;
+}
+
+function completeTask(task: SessionSetupTask): SessionSetupTask {
+  return {
+    ...task,
+    status: "completed",
+    startedAt: "2026-06-03T00:00:00.000Z",
+    completedAt: "2026-06-03T00:00:00.000Z",
+    error: null,
+  };
 }
 
 function createServerState(overrides: Partial<ServerState> = {}): ServerState {
@@ -104,7 +162,6 @@ function createSetupReporter(): SessionSetupTaskReporter {
     completeTask: vi.fn(),
     failTask: vi.fn(),
     skipTask: vi.fn(),
-    failRun: vi.fn(),
   };
 }
 
@@ -305,10 +362,9 @@ describe("SessionProvisionService startup toolchain", () => {
       "cloud_container",
       "Codex CLI repair script failed.",
     );
-    expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
-  it("fails the run directly for unscoped provisioning failures", async () => {
+  it("reports final network policy failures through the network policy task", async () => {
     mockState.setNetworkPolicy.mockRejectedValueOnce(new Error("Policy failed"));
     const serverState = createServerState({
       spriteName: "sprite-1",
@@ -330,8 +386,7 @@ describe("SessionProvisionService startup toolchain", () => {
     );
 
     await expect(service.ensureProvisioned()).rejects.toThrow("Policy failed");
-    expect(setupReporter.failTask).not.toHaveBeenCalled();
-    expect(setupReporter.failRun).toHaveBeenCalledWith("Policy failed");
+    expect(setupReporter.failTask).toHaveBeenCalledWith("network_policy", "Policy failed");
   });
 
   it("keeps fetch pointed at GitHub by default", async () => {
@@ -468,6 +523,7 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.startTask).toHaveBeenNthCalledWith(1, "cloud_container");
     expect(setupReporter.startTask).toHaveBeenNthCalledWith(2, "repository");
     expect(setupReporter.startTask).toHaveBeenNthCalledWith(3, "setup_script");
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(4, "network_policy");
     expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
     expect(setupReporter.completeTask).toHaveBeenCalledWith("repository");
     expect(setupReporter.completeTask).toHaveBeenCalledWith("setup_script", {
@@ -476,7 +532,7 @@ describe("SessionProvisionService startup toolchain", () => {
       exitCode: 0,
       truncated: false,
     });
-    expect(setupReporter.failRun).not.toHaveBeenCalled();
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("network_policy");
   });
 
   it("reports cloud container task when the sprite exists but toolchain is missing", async () => {
@@ -500,7 +556,7 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
   });
 
-  it("does not report cloud container task when cloud container checkpoints are present", async () => {
+  it("skips cloud container task when the setup task is already terminal", async () => {
     const serverState = createServerState({
       spriteName: "sprite-1",
       startupToolchain: {
@@ -512,7 +568,10 @@ describe("SessionProvisionService startup toolchain", () => {
     const setupReporter = createSetupReporter();
     const { service } = createService(
       serverState,
-      createClientState(),
+      createClientState({
+        prepareTask: (task) =>
+          task.id === "cloud_container" ? completeTask(task) : task,
+      }),
       {},
       createEnvironmentSnapshot(),
       setupReporter,
@@ -547,7 +606,6 @@ describe("SessionProvisionService startup toolchain", () => {
       kind: "no_environment",
       repoId: 123,
     });
-    expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
   it("reports skipped setup scripts with a no script skip reason", async () => {
@@ -573,7 +631,6 @@ describe("SessionProvisionService startup toolchain", () => {
       environmentId: sourceEnvironmentId,
       environmentName: "Default",
     });
-    expect(setupReporter.failRun).not.toHaveBeenCalled();
   });
 
   it("records startup script failure and continues provisioning", async () => {
@@ -685,7 +742,6 @@ describe("SessionProvisionService startup toolchain", () => {
         truncated: false,
       },
     );
-    expect(setupReporter.failRun).not.toHaveBeenCalled();
     expect(serverState.finalNetworkPolicyApplied).toBe(true);
   });
 });

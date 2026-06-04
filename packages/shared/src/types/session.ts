@@ -66,6 +66,11 @@ export type StartupScriptSetupTask = BaseSessionSetupTask & {
   skipReason: StartupScriptSetupTaskSkipReason | null;
 };
 
+export type NetworkPolicySetupTask = BaseSessionSetupTask & {
+  id: "network_policy";
+  isBlocking: true;
+};
+
 export type InitialAgentStartSetupTask = BaseSessionSetupTask & {
   id: "initial_agent_start";
   isBlocking: true;
@@ -75,6 +80,7 @@ export type SessionSetupTask =
   | CloudContainerSetupTask
   | RepositorySetupTask
   | StartupScriptSetupTask
+  | NetworkPolicySetupTask
   | InitialAgentStartSetupTask;
 
 export type SessionSetupTaskId = SessionSetupTask["id"];

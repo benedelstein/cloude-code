@@ -548,6 +548,21 @@ function getSetupTaskLabel(task: SessionSetupTask): string {
       }
       return "Run setup script";
     }
+    case "network_policy": {
+      switch (task.status) {
+        case "pending":
+          return "Apply network policy";
+        case "running":
+          return "Applying network policy";
+        case "completed":
+          return "Applied network policy";
+        case "failed":
+          return "Network policy failed";
+        case "skipped":
+          return "Skipped network policy";
+      }
+      return "Apply network policy";
+    }
     case "initial_agent_start": {
       switch (task.status) {
         case "pending":

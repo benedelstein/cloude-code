@@ -12,6 +12,7 @@ const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
   "cloud_container",
   "repository",
   "setup_script",
+  "network_policy",
   "initial_agent_start",
 ];
 
@@ -136,16 +137,6 @@ export class SessionSetupRunService {
     this.updateRun(nextRun);
   }
 
-  failRun(_error: string): void {
-    const setupRun = this.getClientState().sessionSetupRun;
-    if (!setupRun || setupRun.status !== "running") { return; }
-    this.updateRun({
-      ...setupRun,
-      status: "failed",
-      completedAt: new Date().toISOString(),
-    });
-  }
-
   /** Recovers setup run state from saved state when the DO restarts. */
   repairOnStart(): void {
     const setupRun = this.getClientState().sessionSetupRun;
@@ -153,7 +144,8 @@ export class SessionSetupRunService {
 
     const serverState = this.getServerState();
     const now = new Date().toISOString();
-    const repairedTasks = setupRun.tasks.map((task): SessionSetupTask => {
+    const repairableRun = ensureNetworkPolicyTaskPresent(setupRun, serverState, now);
+    const repairedTasks = repairableRun.tasks.map((task): SessionSetupTask => {
       if (isTerminalSetupTask(task)) { return task; }
       switch (task.id) {
         case "cloud_container":
@@ -166,12 +158,16 @@ export class SessionSetupRunService {
           return serverState.startupScriptCompleted
             ? completeSetupTaskForRepair(task, now)
             : task;
+        case "network_policy":
+          return serverState.finalNetworkPolicyApplied
+            ? completeSetupTaskForRepair(task, now)
+            : task;
         case "initial_agent_start":
           return task;
       }
     });
 
-    this.updateRun(this.completeRunIfReady({ ...setupRun, tasks: repairedTasks }));
+    this.updateRun(this.completeRunIfReady({ ...repairableRun, tasks: repairedTasks }));
   }
 
   private updateTask(
@@ -198,7 +194,6 @@ export class SessionSetupRunService {
 
   private completeRunIfReady(setupRun: SessionSetupRun): SessionSetupRun {
     if (setupRun.status !== "running") { return setupRun; }
-    if (!this.getServerState().finalNetworkPolicyApplied) { return setupRun; }
     if (!setupRun.tasks.every(isTerminalSetupTask)) { return setupRun; }
     if (setupRun.tasks.some((task) => task.status === "failed" && task.isBlocking)) {
       return setupRun;
@@ -227,7 +222,12 @@ export class SessionSetupRunService {
   }
 }
 
-function isTerminalSetupTask(task: SessionSetupTask): boolean {
+/**
+ * Returns true if the setup task is terminal (completed, failed, or skipped).
+ * @param task - The setup task to check.
+ * @returns True if the task is terminal (completed, failed, or skipped).
+ */
+export function isTerminalSetupTask(task: SessionSetupTask): boolean {
   switch (task.status) {
     case "completed":
     case "failed":
@@ -257,6 +257,9 @@ function createSetupTask(taskId: SessionSetupTaskId): SessionSetupTask {
         output: null,
         skipReason: null,
       };
+    }
+    case "network_policy": {
+      return createBaseSetupTask(taskId, true);
     }
     case "initial_agent_start": {
       return createBaseSetupTask(taskId, true);
@@ -296,6 +299,7 @@ function updateSetupTask(
   switch (task.id) {
     case "cloud_container":
     case "repository":
+    case "network_policy":
     case "initial_agent_start":
     case "setup_script":
       return { ...task, ...fields };
@@ -304,6 +308,29 @@ function updateSetupTask(
       throw new Error(`Unhandled setup task: ${JSON.stringify(exhaustiveCheck)}`);
     }
   }
+}
+
+function ensureNetworkPolicyTaskPresent(
+  setupRun: SessionSetupRun,
+  serverState: ServerState,
+  now: string,
+): SessionSetupRun {
+  if (setupRun.tasks.some((task) => task.id === "network_policy")) {
+    return setupRun;
+  }
+
+  const networkPolicyTask = serverState.finalNetworkPolicyApplied
+    ? completeSetupTaskForRepair(createSetupTask("network_policy"), now)
+    : createSetupTask("network_policy");
+  const initialAgentTaskIndex = setupRun.tasks.findIndex((task) =>
+    task.id === "initial_agent_start");
+  const tasks = [...setupRun.tasks];
+  if (initialAgentTaskIndex === -1) {
+    tasks.push(networkPolicyTask);
+  } else {
+    tasks.splice(initialAgentTaskIndex, 0, networkPolicyTask);
+  }
+  return { ...setupRun, tasks };
 }
 
 function completeSetupTaskForRepair(

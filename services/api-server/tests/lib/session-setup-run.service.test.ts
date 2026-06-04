@@ -81,6 +81,7 @@ describe("SessionSetupRunService", () => {
       ["cloud_container", true],
       ["repository", true],
       ["setup_script", false],
+      ["network_policy", true],
       ["initial_agent_start", true],
     ]);
     expect(setupRun.tasks.find((task) => task.id === "setup_script")).toMatchObject({
@@ -145,6 +146,7 @@ describe("SessionSetupRunService", () => {
 
   it.each([
     "initial_agent_start",
+    "network_policy",
     "cloud_container",
     "repository",
   ] as const)("fails the run when %s fails", (taskId) => {
@@ -157,5 +159,42 @@ describe("SessionSetupRunService", () => {
     expect(setupRun.completedAt).not.toBeNull();
     expect(setupRun.tasks.find((task) => task.id === taskId)?.status)
       .toBe("failed");
+  });
+
+  it("repairs older running setup runs by inserting the network policy task", () => {
+    const { clientState, service } = createHarness({
+      serverState: { finalNetworkPolicyApplied: false },
+    });
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      tasks: setupRun.tasks.filter((task) => task.id !== "network_policy"),
+    };
+
+    service.repairOnStart();
+
+    expect(requireSetupRun(clientState).tasks.map((task) => task.id)).toEqual([
+      "cloud_container",
+      "repository",
+      "setup_script",
+      "network_policy",
+      "initial_agent_start",
+    ]);
+    expect(requireSetupRun(clientState).tasks.find((task) => task.id === "network_policy")?.status)
+      .toBe("pending");
+  });
+
+  it("marks inserted network policy tasks complete when the checkpoint exists", () => {
+    const { clientState, service } = createHarness();
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      tasks: setupRun.tasks.filter((task) => task.id !== "network_policy"),
+    };
+
+    service.repairOnStart();
+
+    expect(requireSetupRun(clientState).tasks.find((task) => task.id === "network_policy")?.status)
+      .toBe("completed");
   });
 });

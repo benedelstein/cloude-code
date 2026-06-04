@@ -212,7 +212,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         completeTask: (taskId, output) => this.setupRunService.completeTask(taskId, output),
         failTask: (taskId, error, output) => this.setupRunService.failTask(taskId, error, output),
         skipTask: (taskId, skipReason) => this.setupRunService.skipTask(taskId, skipReason),
-        failRun: (error) => this.setupRunService.failRun(error),
       },
     });
 
