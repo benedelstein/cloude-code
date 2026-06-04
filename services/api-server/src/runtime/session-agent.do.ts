@@ -3,7 +3,6 @@ import {
   type ClientState,
   type Logger,
   type SessionSetupRun,
-  type SessionSetupTaskId,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
@@ -601,14 +600,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         attachmentService: this.attachmentService,
       },
     );
-    // TODO: i dont like manually constructing the array. it should be fixed. 
-    const setupTaskIds: SessionSetupTaskId[] = [
-      "cloud_container",
-      "repository",
-      "setup_script",
-      "initial_agent_start",
-    ];
-    const sessionSetupRun = this.setupRunService.buildRun("create", setupTaskIds);
+    const sessionSetupRun = this.setupRunService.buildRun("create");
 
     // Mark initialized in ServerState
     this.updateServerState({

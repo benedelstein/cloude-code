@@ -3,7 +3,6 @@ import type {
   ClientState,
   SessionSetupRun,
   SessionSetupTask,
-  SessionSetupTaskId,
 } from "@repo/shared";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { InitialAgentStartProcessReporter } from "../../src/modules/session-agent/services/initial-agent-start-process-reporter.service";
@@ -46,13 +45,7 @@ function createHarness(args: {
       clientState.status = setupRun.status === "completed" ? "ready" : "preparing";
     },
   });
-  const taskIds: SessionSetupTaskId[] = [
-    "cloud_container",
-    "repository",
-    "setup_script",
-    "initial_agent_start",
-  ];
-  const setupRun = setupRunService.buildRun("create", taskIds);
+  const setupRun = setupRunService.buildRun("create");
   clientState.sessionSetupRun = {
     ...setupRun,
     tasks: setupRun.tasks.map((task) =>

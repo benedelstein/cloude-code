@@ -3,7 +3,6 @@ import type {
   ClientState,
   SessionSetupRun,
   SessionSetupTask,
-  SessionSetupTaskId,
 } from "@repo/shared";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { SessionSetupRunService } from "../../src/modules/session-agent/services/session-setup-run.service";
@@ -33,10 +32,9 @@ function createClientState(): ClientState {
 }
 
 function createHarness(args: {
-  taskIds: SessionSetupTaskId[];
   serverState?: Partial<ServerState>;
   prepareTask?: (task: SessionSetupTask) => SessionSetupTask;
-}) {
+} = {}) {
   const serverState = createServerState(args.serverState);
   const clientState = createClientState();
   const service = new SessionSetupRunService({
@@ -48,7 +46,7 @@ function createHarness(args: {
     },
   });
 
-  const run = service.buildRun("create", args.taskIds);
+  const run = service.buildRun("create");
   clientState.sessionSetupRun = {
     ...run,
     tasks: run.tasks.map((task) =>
@@ -76,9 +74,7 @@ function requireSetupRun(clientState: ClientState): SessionSetupRun {
 
 describe("SessionSetupRunService", () => {
   it("builds typed setup tasks with task-owned blocking metadata", () => {
-    const { clientState } = createHarness({
-      taskIds: ["cloud_container", "repository", "setup_script", "initial_agent_start"],
-    });
+    const { clientState } = createHarness();
 
     const setupRun = requireSetupRun(clientState);
     expect(setupRun.tasks.map((task) => [task.id, task.isBlocking])).toEqual([
@@ -95,7 +91,6 @@ describe("SessionSetupRunService", () => {
 
   it("auto-completes the run after completing the last pending fatal task", () => {
     const { clientState, service } = createHarness({
-      taskIds: ["cloud_container", "repository", "setup_script", "initial_agent_start"],
       prepareTask: (task) =>
         task.id === "initial_agent_start" ? task : completeTask(task),
     });
@@ -114,7 +109,10 @@ describe("SessionSetupRunService", () => {
     "%s does not complete the run while another task is pending",
     (transition) => {
       const { clientState, service } = createHarness({
-        taskIds: ["cloud_container", "repository", "setup_script"],
+        prepareTask: (task) =>
+          task.id === "cloud_container" || task.id === "repository"
+            ? task
+            : completeTask(task),
       });
 
       if (transition === "completeTask") {
@@ -133,7 +131,6 @@ describe("SessionSetupRunService", () => {
 
   it("does not fail the run when setup_script fails", () => {
     const { clientState, service } = createHarness({
-      taskIds: ["cloud_container", "repository", "setup_script", "initial_agent_start"],
       prepareTask: (task) =>
         task.id === "setup_script" ? task : completeTask(task),
     });
@@ -151,9 +148,7 @@ describe("SessionSetupRunService", () => {
     "cloud_container",
     "repository",
   ] as const)("fails the run when %s fails", (taskId) => {
-    const { clientState, service } = createHarness({
-      taskIds: ["cloud_container", "repository", "setup_script", "initial_agent_start"],
-    });
+    const { clientState, service } = createHarness();
 
     service.failTask(taskId, "fatal failure");
 

@@ -8,6 +8,13 @@ import type {
 } from "@repo/shared";
 import type { ServerState } from "../repositories/server-state.repository";
 
+const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
+  "cloud_container",
+  "repository",
+  "setup_script",
+  "initial_agent_start",
+];
+
 export interface SessionSetupRunServiceDeps {
   getServerState: () => ServerState;
   getClientState: () => ClientState;
@@ -31,7 +38,6 @@ export class SessionSetupRunService {
 
   buildRun(
     mode: SessionSetupRun["mode"],
-    taskIds: SessionSetupTaskId[],
   ): SessionSetupRun {
     const now = new Date().toISOString();
     return {
@@ -40,7 +46,7 @@ export class SessionSetupRunService {
       status: "running",
       startedAt: now,
       completedAt: null,
-      tasks: taskIds.map(createSetupTask),
+      tasks: CREATE_SETUP_TASK_IDS.map(createSetupTask),
     };
   }
 
