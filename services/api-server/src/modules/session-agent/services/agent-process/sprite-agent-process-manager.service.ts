@@ -8,7 +8,6 @@ import {
   type Result,
   type SessionEnvironmentSnapshot,
   encodeAgentInput,
-  decodeAgentOutput,
   failure,
   success,
 } from "@repo/shared";
@@ -30,7 +29,15 @@ import {
   type AuthCredentialSnapshot,
   type ProviderCredentialError,
 } from "../../types/agent-process-manager.types";
-import { consumeLines, hashScript } from "../../utils/agent-process-manager.utils";
+import {
+  continueWaiting,
+  hashScript,
+  lineMatchesAgentOutput,
+  rejectWaiting,
+  resolveWaiting,
+  type SessionSignalDecision,
+  waitForSessionSignals,
+} from "../../utils/agent-process-manager.utils";
 import { writeCredentialFiles, writeVmAgentScript } from "./write-files.service";
 
 const HOME_DIR = "/home/sprite";
@@ -617,76 +624,22 @@ export class SpriteAgentProcessManager {
     timeoutMs: number,
   ): Promise<void> {
     const ackName = expectedType === "stdin_ack" ? "stdin ack" : "cancel ack";
-    return new Promise((resolve, reject) => {
-      let buffer = "";
-      let settled = false;
-      const disposers: Array<() => void> = [];
-
-      const cleanup = () => {
-        clearTimeout(timeout);
-        for (const dispose of disposers) {
-          dispose();
-        }
-      };
-
-      const settle = (fn: () => void) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        cleanup();
-        fn();
-      };
-
-      const processLine = (line: string) => {
-        const trimmedLine = line.replace(/\r$/, "");
-        if (!trimmedLine) {
-          return;
-        }
-
-        try {
-          const output = decodeAgentOutput(trimmedLine);
-          if (output.type === expectedType) {
-            if (output.userMessageId === userMessageId) {
-              settle(resolve);
-            }
-            return;
-          }
-        } catch {
-          // Attached stdout is noisy; only typed AgentOutput lines participate
-          // in the ack handshake.
-        }
-      };
-
-      const timeout = setTimeout(() => {
-        settle(() =>
-          reject(
-            new Error(`Timed out waiting for ${ackName} for ${userMessageId}`),
-          ),
-        );
-      }, timeoutMs);
-
-      disposers.push(
-        session.onStdout((chunk) => {
-          const parsed = consumeLines(buffer, chunk);
-          buffer = parsed.remainder;
-          for (const line of parsed.lines) {
-            processLine(line);
-          }
-        }),
-      );
-      disposers.push(
-        session.onError((error) => {
-          settle(() => reject(error));
-        }),
-      );
-      disposers.push(
-        session.onExit((code) => {
-          settle(() =>
-            reject(new Error(`vm-agent exited before ${ackName}: ${code}`)),
-          );
-        }),
-      );
+    return waitForSessionSignals(session, {
+      timeoutMs,
+      onStdoutLine: (line) =>
+        lineMatchesAgentOutput(
+          line,
+          (output) =>
+            output.type === expectedType &&
+            output.userMessageId === userMessageId,
+        )
+          ? resolveWaiting(undefined)
+          : continueWaiting(),
+      onError: (error) => rejectWaiting(error),
+      onExit: (code) =>
+        rejectWaiting(new Error(`vm-agent exited before ${ackName}: ${code}`)),
+      onTimeout: () =>
+        rejectWaiting(new Error(`Timed out waiting for ${ackName} for ${userMessageId}`)),
     });
   }
 
@@ -757,10 +710,6 @@ export class SpriteAgentProcessManager {
   ): Promise<Result<number, SpriteAgentProcessManagerError>> {
     let processId: number | null = null;
     let sawReady = false;
-    let stdoutBuffer = "";
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const disposers: Array<() => void> = [];
 
     const missingStartupSignal = (): string => {
       if (processId === null && !sawReady) {
@@ -772,108 +721,61 @@ export class SpriteAgentProcessManager {
       return "vm-agent ready";
     };
 
-    const cleanup = () => {
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
+    const maybeReady = (): SessionSignalDecision<Result<number, SpriteAgentProcessManagerError>> => {
+      if (processId !== null && sawReady) {
+        return resolveWaiting(success(processId));
       }
-      for (const dispose of disposers) {
-        dispose();
-      }
+      return continueWaiting();
     };
 
-    const startupPromise = new Promise<Result<number, SpriteAgentProcessManagerError>>((resolve) => {
-      const settle = (result: Result<number, SpriteAgentProcessManagerError>) => {
-        if (settled) {
-          return;
+    return waitForSessionSignals<Result<number, SpriteAgentProcessManagerError>>(session, {
+      timeoutMs: FRESH_START_READY_TIMEOUT_MS,
+      startSession: true,
+      onServerMessage: (message) => {
+        if (message.type === "session_info" && processId === null) {
+          processId = message.session_id;
+          this.logger.debug("Captured agent process id", {
+            fields: { processId },
+          });
         }
-        settled = true;
-        resolve(result);
-      };
-
-      const maybeResolve = () => {
-        if (processId !== null && sawReady) {
-          settle(success(processId));
+        return maybeReady();
+      },
+      onStdoutLine: (line) => {
+        if (lineMatchesAgentOutput(line, (output) => output.type === "ready")) {
+          sawReady = true;
         }
-      };
-
-      const processLine = (line: string) => {
-        const trimmedLine = line.replace(/\r$/, "");
-        if (!trimmedLine) {
-          return;
-        }
-        try {
-          const output = decodeAgentOutput(trimmedLine);
-          if (output.type === "ready") {
-            sawReady = true;
-            maybeResolve();
-          }
-        } catch {
-          // Fresh-start stdout includes shell/provider noise.
-        }
-      };
-
-      disposers.push(
-        session.onServerMessage((message) => {
-          if (message.type === "session_info" && processId === null) {
-            processId = message.session_id;
-            this.logger.debug("Captured agent process id", {
-              fields: { processId },
-            });
-            maybeResolve();
-          }
-        }),
-      );
-      disposers.push(
-        session.onStdout((chunk) => {
-          const parsed = consumeLines(stdoutBuffer, chunk);
-          stdoutBuffer = parsed.remainder;
-          for (const line of parsed.lines) {
-            processLine(line);
-          }
-        }),
-      );
-      disposers.push(
-        session.onError((error) => {
-          settle(failure(
+        return maybeReady();
+      },
+      onError: (error) =>
+        resolveWaiting(
+          failure(
             managerError(
               "TURN_DID_NOT_START",
               `${error.message} before ${missingStartupSignal()}`,
               { cause: error.message },
             ),
-          ));
-        }),
-      );
-      disposers.push(
-        session.onExit((code) => {
-          settle(failure(
+          ),
+        ),
+      onExit: (code) =>
+        resolveWaiting(
+          failure(
             managerError(
               "TURN_DID_NOT_START",
               `vm-agent exited before ${missingStartupSignal()}: ${code}`,
               { exitCode: code },
             ),
-          ));
-        }),
-      );
-    });
-
-    const timeoutPromise = new Promise<Result<number, SpriteAgentProcessManagerError>>((resolve) => {
-      timeout = setTimeout(() => {
-        resolve(failure(
-          managerError(
-            "TURN_DID_NOT_START",
-            `Timed out waiting for ${missingStartupSignal()}`,
           ),
-        ));
-      }, FRESH_START_READY_TIMEOUT_MS);
+        ),
+      onTimeout: () =>
+        resolveWaiting(
+          failure(
+            managerError(
+              "TURN_DID_NOT_START",
+              `Timed out waiting for ${missingStartupSignal()}`,
+            ),
+          ),
+        ),
     });
-
-    try {
-      await session.start();
-      return await Promise.race([startupPromise, timeoutPromise]);
-    } finally {
-      cleanup();
-    }
   }
 
   // ============================================
@@ -898,5 +800,4 @@ export class SpriteAgentProcessManager {
       this.env.SPRITES_API_URL,
     );
   }
-
 }
