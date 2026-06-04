@@ -2,6 +2,7 @@ import { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import {
   type ClientState,
   type Logger,
+  type SessionSetupRun,
   ClientMessage as ClientMessageSchema,
   type ClientMessage,
   type ServerMessage,
@@ -48,12 +49,13 @@ import type {
   ChatMessageEvent,
 } from "@repo/shared";
 import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-turn-coordinator.service";
-import { SpriteAgentProcessManager } from "@/modules/session-agent/services/sprite-agent-process-manager.service";
 import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
 import { SessionChatDispatchService } from "@/modules/session-agent/services/session-chat-dispatch.service";
+import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
+import { InitialAgentStartProcessReporter } from "@/modules/session-agent/services/initial-agent-start-process-reporter.service";
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
 import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
@@ -61,6 +63,7 @@ import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
+import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -85,13 +88,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly processManager: SpriteAgentProcessManager;
   private readonly provisionService: SessionProvisionService;
   private readonly chatDispatchService: SessionChatDispatchService;
+  private readonly setupRunService: SessionSetupRunService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
+  private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
   initialState: ClientState = {
     repoFullName: null,
-    status: "initializing",
+    status: "preparing",
+    sessionSetupRun: null,
     agentSettings: { ...DEFAULT_AGENT_SETTINGS },
     agentMode: "edit",
     pushedBranch: null,
@@ -148,6 +154,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     // Load server state from SQLite
     this.serverState = this.serverStateRepository.get();
 
+    this.setupRunService = new SessionSetupRunService({
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      updateRunState: (setupRun) =>
+        this.updatePartialState({
+          sessionSetupRun: setupRun,
+          status: this.synthesizeStatus(setupRun),
+        }),
+    });
+    const initialAgentStartProcessReporter = new InitialAgentStartProcessReporter({
+      setupRunService: this.setupRunService,
+    });
+
     this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
       env: this.env,
@@ -174,6 +193,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getClientState: () => this.state,
       getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       getProviderCredentialAdapter,
+      processStartReporter: initialAgentStartProcessReporter,
     });
 
     this.provisionService = new SessionProvisionService({
@@ -188,6 +208,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
       githubTokenProvider: githubAppService,
+      setupReporter: {
+        startTask: (taskId) => this.setupRunService.startTask(taskId),
+        completeTask: (taskId, output) => this.setupRunService.completeTask(taskId, output),
+        failTask: (taskId, error, output) => this.setupRunService.failTask(taskId, error, output),
+        skipTask: (taskId, skipReason) => this.setupRunService.skipTask(taskId, skipReason),
+      },
     });
 
     this.chatDispatchService = new SessionChatDispatchService({
@@ -238,6 +264,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     // NOTE: doing this here brecause we cant access this.name in the constructor. cf bug
     // Reset transient ClientState fields on every restart so they never get
     // stuck from a previous instance's in-progress operation.
+    this.setupRunService.repairOnStart();
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
@@ -279,16 +306,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.serverStateRepository.update(partial);
   }
 
-  /**
-   * Derives the session status from durable ServerState checkpoints and
-   * the in-memory agent connection state. Used to reset transient status
-   * on restart and after each provisioning step.
-   */
-  private synthesizeStatus(): SessionStatus {
-    if (!this.serverState.initialized) { return "initializing"; }
-    if (!this.serverState.spriteName) { return "provisioning"; }
-    if (!this.serverState.repoCloned) { return "cloning"; }
-    return "ready";
+  private synthesizeStatus(setupRun?: SessionSetupRun | null): SessionStatus {
+    const effectiveSetupRun = setupRun === undefined
+      ? this.state.sessionSetupRun
+      : setupRun;
+    if (!this.serverState.initialized) { return "preparing"; }
+    return effectiveSetupRun?.status === "completed" ? "ready" : "preparing";
   }
 
   /**
@@ -508,11 +531,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    * Uses mutexes so concurrent callers share one in-flight operation.
    * Each step is idempotent — skipped if already completed via serverState checkpoints.
    */
-  async ensureReady(): Promise<void> {
+  private async ensureReady(): Promise<void> {
     if (!this.serverState.initialized) {
-      // handleInit has not been called yet — nothing to do
-      this.logger.warn("Session not initialized — skipping ensureReady");
-      return;
+      const initResult = await this.initializeSessionStatePromise;
+      if (!initResult) {
+        this.logger.error("Session not initialized — skipping ensureReady");
+        return;
+      }
+      if (!initResult.ok) {
+        return;
+      }
     }
     await this.provisionService.ensureProvisioned();
     await this.chatDispatchService.maybeDispatchPendingMessage();
@@ -529,6 +557,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   // ============================================
 
   async handleInit(request: InitSessionAgentRequest): Promise<HandleInitResult> {
+    // prevents other networking code from running while initializing
+    const initPromise = this.ctx.blockConcurrencyWhile(
+      () => this.initializeSessionState(request),
+    );
+    this.initializeSessionStatePromise = initPromise;
+    try {
+      const initResult = await initPromise;
+      if (initResult.ok) {
+        this.queueEnsureReady();
+      }
+      return initResult;
+    } finally {
+      if (this.initializeSessionStatePromise === initPromise) {
+        this.initializeSessionStatePromise = null;
+      }
+    }
+  }
+
+  private async initializeSessionState(
+    request: InitSessionAgentRequest,
+  ): Promise<HandleInitResult> {
     // Prevent re-initialization
     if (this.serverState.initialized) {
       this.logger.error(
@@ -559,20 +608,22 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       });
       settings = AgentSettings.parse({ provider, maxTokens });
     }
+    // TODO: use blockConcurrencyWhile?
     const providerConnection = await this.providerConnectionService.resolveState(
       settings.provider,
       data.userId,
     );
 
-    const pendingAttachmentIds = data.initialAttachmentIds ?? [];
+    const pendingAttachmentIds = data.initialMessage.attachmentIds ?? [];
     const pendingUserUiMessage = await buildUserUiMessage(
       data.sessionId,
       data.initialMessage,
-      pendingAttachmentIds,
       {
         attachmentService: this.attachmentService,
       },
     );
+    const sessionSetupRun = this.setupRunService.buildRun();
+
     // Mark initialized in ServerState
     this.updateServerState({
       initialized: true,
@@ -587,19 +638,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       agentSettings: settings,
       providerConnection,
       agentMode: data.agentMode ?? "edit",
-      pendingUserMessage: pendingUserUiMessage
-        ? {
-            message: pendingUserUiMessage,
-            attachmentIds: pendingAttachmentIds,
-          }
-        : null,
+      pendingUserMessage: {
+        message: pendingUserUiMessage,
+        attachmentIds: pendingAttachmentIds,
+      },
       // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
       baseBranch: data.branch ?? null,
-      status: this.synthesizeStatus(),
+      sessionSetupRun,
+      status: this.synthesizeStatus(sessionSetupRun),
     });
-
-    // Provision sprite asynchronously
-    this.queueEnsureReady();
 
     return success(undefined);
   }
@@ -712,7 +759,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.turnCoordinator.ensureRehydratedState();
     switch (message.type) {
       case "chat.message":
-        await this.handleChatMessage(connection, message);
+        await this.handleUserChatMessage(connection, message);
         break;
       case "sync.request":
         await this.handleSyncRequest(connection);
@@ -723,7 +770,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
   }
 
-  private async handleChatMessage(
+  private async handleUserChatMessage(
     connection: Connection,
     payload: ChatMessageEvent,
   ): Promise<void> {
@@ -732,52 +779,53 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         return;
       }
 
-      await this.ensureReady();
+      await this.keepAliveWhile(async () => {
+        await this.ensureReady();
 
-      if (
-        this.serverState.activeUserMessageId &&
-        !this.serverState.agentProcessId &&
-        !this.state.pendingUserMessage
-      ) {
-        const staleUserMessageId = this.serverState.activeUserMessageId;
-        this.logger.warn(
-          "Clearing active turn with no agent process before chat dispatch",
-          { fields: { userMessageId: staleUserMessageId } },
-        );
-        this.turnCoordinator.handleTurnSpawnFailed(
-          staleUserMessageId,
-          "Previous agent turn did not start",
-        );
-      }
+        if (
+          this.serverState.activeUserMessageId &&
+          !this.serverState.agentProcessId &&
+          !this.state.pendingUserMessage
+        ) {
+          const staleUserMessageId = this.serverState.activeUserMessageId;
+          this.logger.warn(
+            "Clearing active turn with no agent process before chat dispatch",
+            { fields: { userMessageId: staleUserMessageId } },
+          );
+          this.turnCoordinator.handleTurnSpawnFailed(
+            staleUserMessageId,
+            "Previous agent turn did not start",
+          );
+        }
 
-      if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
-        // TODO: message queuing
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
-            message: "Agent is already handling a message",
-          },
-          connection,
-        );
-        return;
-      }
+        if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
+          // TODO: message queuing
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "CHAT_MESSAGE_FAILED",
+              message: "Agent is already handling a message",
+            },
+            connection,
+          );
+          return;
+        }
 
-      const result = await this.chatDispatchService.dispatchChatMessage(payload, connection.id);
-      if (!result.ok) {
-        this.logger.warn("Workflow chat message dispatch failed", {
-          fields: { code: result.error.code },
-        });
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
-            message: result.error.message,
-          },
-          connection,
-        );
-        return;
-      }
+        const result = await this.chatDispatchService.dispatchChatMessage(payload, connection.id);
+        if (!result.ok) {
+          this.logger.warn("Workflow chat message dispatch failed", {
+            fields: { code: result.error.code },
+          });
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "CHAT_MESSAGE_FAILED",
+              message: result.error.message,
+            },
+            connection,
+          );
+        }
+      });
     } catch (error) {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(

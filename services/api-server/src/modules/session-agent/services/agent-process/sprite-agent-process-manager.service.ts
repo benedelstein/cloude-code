@@ -4,12 +4,10 @@ import {
   type AgentMode,
   type AgentSettings,
   type ClientState,
-  type DomainError,
   type Logger,
   type Result,
   type SessionEnvironmentSnapshot,
   encodeAgentInput,
-  decodeAgentOutput,
   failure,
   success,
 } from "@repo/shared";
@@ -17,16 +15,35 @@ import type { Env } from "@/shared/types";
 import {
   SpritesError,
   WorkersSpriteClient,
-  type SpriteServerMessage,
   type SpriteWebsocketSession,
 } from "@/shared/integrations/sprites";
 import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle.js";
+import { AgentAttachmentService } from "../agent-attachment.service";
+import type { SecretRepository } from "../../repositories/secret.repository";
+import type { ServerState } from "../../repositories/server-state.repository";
+import type {
+  AgentProcessStartEvent,
+  AgentProcessStartReporter,
+  DispatchMessageInput,
+  SpriteAgentProcessManagerError,
+} from "../../types/agent-process-manager.types";
 import {
-  AgentAttachmentService,
-  type AttachmentResolutionError,
-} from "./agent-attachment.service";
-import type { SecretRepository } from "../repositories/secret.repository";
-import type { ServerState } from "../repositories/server-state.repository";
+  managerError,
+  mapAttachmentResolutionError,
+  mapProviderCredentialError,
+  type AuthCredentialSnapshot,
+  type ProviderCredentialError,
+} from "../../types/agent-process-manager.types";
+import {
+  continueWaiting,
+  hashScript,
+  lineMatchesAgentOutput,
+  rejectWaiting,
+  resolveWaiting,
+  type SessionSignalDecision,
+  waitForSessionSignals,
+} from "../../utils/agent-process-manager.utils";
+import { writeCredentialFiles, writeVmAgentScript } from "./write-files.service";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -34,136 +51,11 @@ const APP_DIR = `${HOME_DIR}/.cloude`;
 const VM_AGENT_LOG_DIR = `${APP_DIR}/logs`;
 const VM_AGENT_SCRIPT_PATH = `${APP_DIR}/agent-webhook.js`;
 const VM_AGENT_MESSAGE_DIR = `${APP_DIR}/turns`;
-const AGENT_PROCESS_MANAGER_DOMAIN = "agent_process_manager";
 
-export type ProviderCredentialError =
-  | DomainError<"provider_credential", "AUTH_REQUIRED" | "REAUTH_REQUIRED", { provider: AgentSettings["provider"] }>
-  | DomainError<"provider_credential", "SYNC_FAILED", { provider: AgentSettings["provider"] }>;
-
-export interface AuthCredentialSnapshot {
-  files: Array<{
-    path: string;
-    contents: string;
-    mode?: string;
-  }>;
-  envVars: Record<string, string>;
-}
+const FRESH_START_READY_TIMEOUT_MS = 30_000;
 
 export interface ProviderCredentialAdapter {
   getCredentialSnapshot(userId: string): Promise<Result<AuthCredentialSnapshot, ProviderCredentialError>>;
-}
-
-/**
- * SHA-256 hex of the embedded vm-agent bundle. Cached for the worker isolate
- * lifetime since the bundle string is constant per deploy.
- */
-let cachedBundleHash: Promise<string> | null = null;
-function getBundleHash(): Promise<string> {
-  if (!cachedBundleHash) {
-    cachedBundleHash = crypto.subtle
-      .digest("SHA-256", new TextEncoder().encode(VM_AGENT_WEBHOOK_SCRIPT))
-      .then((buf) =>
-        Array.from(new Uint8Array(buf))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join(""),
-      );
-  }
-  return cachedBundleHash;
-}
-
-export type SpriteAgentProcessManagerError =
-  | DomainError<
-      typeof AGENT_PROCESS_MANAGER_DOMAIN,
-      "PROVIDER_AUTH_REQUIRED" | "PROVIDER_CREDENTIALS_SYNC_FAILED",
-      { provider: AgentSettings["provider"] }
-    >
-  | DomainError<
-      typeof AGENT_PROCESS_MANAGER_DOMAIN,
-      "ATTACHMENTS_NOT_FOUND" | "ATTACHMENTS_RESOLUTION_FAILED",
-      { attachmentIds: string[] }
-    >
-  | DomainError<
-      typeof AGENT_PROCESS_MANAGER_DOMAIN,
-      | "SESSION_NOT_READY"
-      | "USER_NOT_FOUND"
-      | "INVALID_AGENT_SETTINGS"
-      | "SPAWN_FAILED"
-      | "TURN_DID_NOT_START",
-      Record<string, unknown>
-    >;
-
-function managerError<Code extends SpriteAgentProcessManagerError["code"]>(
-  code: Code,
-  message: string,
-  details: Record<string, unknown> = {},
-): Extract<SpriteAgentProcessManagerError, { code: Code }> {
-  return {
-    domain: AGENT_PROCESS_MANAGER_DOMAIN,
-    code,
-    message,
-    ...details,
-  } as Extract<SpriteAgentProcessManagerError, { code: Code }>;
-}
-
-
-function consumeLines(
-  buffer: string,
-  chunk: string,
-): { lines: string[]; remainder: string } {
-  const parts = `${buffer}${chunk}`.split("\n");
-  return {
-    lines: parts.slice(0, -1),
-    remainder: parts.at(-1) ?? "",
-  };
-}
-
-function mapProviderCredentialError(
-  error: ProviderCredentialError,
-): Extract<
-  SpriteAgentProcessManagerError,
-  { code: "PROVIDER_AUTH_REQUIRED" | "PROVIDER_CREDENTIALS_SYNC_FAILED" }
-> {
-  switch (error.code) {
-    case "AUTH_REQUIRED":
-    case "REAUTH_REQUIRED":
-      return managerError("PROVIDER_AUTH_REQUIRED", error.message, {
-        provider: error.provider,
-      });
-    case "SYNC_FAILED":
-      return managerError("PROVIDER_CREDENTIALS_SYNC_FAILED", error.message, {
-        provider: error.provider,
-      });
-    default: {
-      const exhaustiveCheck: never = error;
-      throw new Error(
-        `Unhandled provider credential error: ${JSON.stringify(exhaustiveCheck)}`,
-      );
-    }
-  }
-}
-
-function mapAttachmentResolutionError(
-  error: AttachmentResolutionError,
-): Extract<
-  SpriteAgentProcessManagerError,
-  { code: "ATTACHMENTS_NOT_FOUND" | "ATTACHMENTS_RESOLUTION_FAILED" }
-> {
-  switch (error.code) {
-    case "ATTACHMENTS_NOT_FOUND":
-      return managerError("ATTACHMENTS_NOT_FOUND", error.message, {
-        attachmentIds: error.attachmentIds,
-      });
-    case "ATTACHMENTS_RESOLUTION_FAILED":
-      return managerError("ATTACHMENTS_RESOLUTION_FAILED", error.message, {
-        attachmentIds: error.attachmentIds,
-      });
-    default: {
-      const exhaustiveCheck: never = error;
-      throw new Error(
-        `Unhandled attachment resolution error: ${JSON.stringify(exhaustiveCheck)}`,
-      );
-    }
-  }
 }
 
 export interface SpriteAgentProcessManagerDeps {
@@ -179,17 +71,7 @@ export interface SpriteAgentProcessManagerDeps {
     env: Env,
     logger: Logger,
   ): ProviderCredentialAdapter;
-}
-
-export interface DispatchMessageInput {
-  userMessage: {
-    id: string;
-    content: string | undefined;
-    attachmentIds: string[];
-  };
-  model?: string;
-  effort?: string;
-  agentMode?: AgentMode;
+  processStartReporter?: AgentProcessStartReporter;
 }
 
 export type DispatchMessageResult = Result<
@@ -228,9 +110,12 @@ export class SpriteAgentProcessManager {
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly attachmentService: AgentAttachmentService;
   private readonly getProviderCredentialAdapter: SpriteAgentProcessManagerDeps["getProviderCredentialAdapter"];
+  private readonly processStartReporter: SpriteAgentProcessManagerDeps["processStartReporter"];
 
   /** In-flight spawn promise, or null if no spawn is running. */
   private startMutex: Promise<DispatchMessageResult> | null = null;
+  /** Cached sha 256 of script bundle to avoid writing it to the sprite on every dispatch */
+  private cachedBundleHash: string | null = null;
 
   constructor(deps: SpriteAgentProcessManagerDeps) {
     this.env = deps.env;
@@ -242,6 +127,7 @@ export class SpriteAgentProcessManager {
     this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
     this.getProviderCredentialAdapter = deps.getProviderCredentialAdapter;
+    this.processStartReporter = deps.processStartReporter;
   }
 
   /**
@@ -251,8 +137,12 @@ export class SpriteAgentProcessManager {
    * single in-flight operation so back-to-back dispatches cannot race to write
    * or spawn twice.
    */
-  async dispatchMessage(input: DispatchMessageInput): Promise<DispatchMessageResult> {
-    if (this.startMutex) { return this.startMutex; }
+  async dispatchMessage(
+    input: DispatchMessageInput,
+  ): Promise<DispatchMessageResult> {
+    if (this.startMutex) {
+      return this.startMutex;
+    }
 
     const spawn = (async (): Promise<DispatchMessageResult> => {
       try {
@@ -279,11 +169,7 @@ export class SpriteAgentProcessManager {
       return { processPreserved: false };
     }
 
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
+    const sprite = this.getSpriteClient();
     const session = sprite.attachSession(String(processId), {
       idleTimeoutMs: 10_000,
     });
@@ -321,14 +207,16 @@ export class SpriteAgentProcessManager {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) { return; }
+    if (!processId || !spriteName) {
+      return;
+    }
 
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
+    const sprite = this.getSpriteClient();
+    await this.killActiveProcess(
+      sprite,
+      processId,
+      new Error("terminating active process"),
     );
-    await this.killActiveProcess(sprite, processId, new Error("terminating active process"));
   }
 
   /** Force-kills the active agent process. Used on session delete. */
@@ -336,13 +224,11 @@ export class SpriteAgentProcessManager {
     const serverState = this.getServerState();
     const processId = serverState.agentProcessId;
     const spriteName = serverState.spriteName;
-    if (!processId || !spriteName) { return; }
+    if (!processId || !spriteName) {
+      return;
+    }
 
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
+    const sprite = this.getSpriteClient();
     try {
       await sprite.killSession(processId, "SIGTERM");
     } catch (error) {
@@ -359,7 +245,9 @@ export class SpriteAgentProcessManager {
    */
   ensureWebhookToken(): string {
     const existing = this.secretRepository.get("webhook_token");
-    if (existing) { return existing; }
+    if (existing) {
+      return existing;
+    }
     const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
     this.secretRepository.set("webhook_token", token);
     return token;
@@ -378,75 +266,139 @@ export class SpriteAgentProcessManager {
     const spriteName = serverState.spriteName;
     const userId = serverState.userId;
 
-    if (!sessionId || !spriteName || !serverState.repoCloned) {
+    if (!sessionId || !spriteName || clientState.sessionSetupRun?.status !== "completed") {
       return failure(
-        managerError("SESSION_NOT_READY", "Session provisioning is not complete"),
+        managerError(
+          "SESSION_NOT_READY",
+          "Session provisioning is not complete",
+        ),
       );
     }
     if (!userId) {
-      return failure(managerError("USER_NOT_FOUND", "Session user id is missing"));
+      return failure(
+        managerError("USER_NOT_FOUND", "Session user id is missing"),
+      );
     }
 
-    const settings: AgentSettings = input.model || input.effort
-      ? ({
-          ...clientState.agentSettings,
-          model: input.model ?? clientState.agentSettings.model,
-          effort: input.effort ?? clientState.agentSettings.effort,
-        } as AgentSettings)
-      : clientState.agentSettings;
+    const settings: AgentSettings =
+      input.model || input.effort
+        ? ({
+            ...clientState.agentSettings,
+            model: input.model ?? clientState.agentSettings.model,
+            effort: input.effort ?? clientState.agentSettings.effort,
+          } as AgentSettings)
+        : clientState.agentSettings;
     const agentMode: AgentMode = input.agentMode ?? clientState.agentMode;
 
-    const attachmentsResult = await this.attachmentService.resolveAttachments(
-      sessionId,
-      input.userMessage.attachmentIds,
-    );
-    if (!attachmentsResult.ok) {
-      return failure(mapAttachmentResolutionError(attachmentsResult.error));
+    const spriteClient = this.getSpriteClient();
+
+    let agentMessage: AgentInputMessage | null = null;
+    if (serverState.agentProcessId) {
+      const messageResult = await this.resolveAgentMessage(
+        sessionId,
+        input.userMessage,
+      );
+      if (!messageResult.ok) {
+        return failure(messageResult.error);
+      }
+      agentMessage = messageResult.value;
+
+      const reuseResult = await this.tryDispatchToExistingProcess(spriteClient, {
+        processId: serverState.agentProcessId,
+        userMessageId: input.userMessage.id,
+        message: agentMessage,
+        model: input.model,
+        effort: input.effort,
+        agentMode: input.agentMode,
+      });
+      switch (reuseResult.status) {
+        case "reused":
+          return success({ agentProcessId: reuseResult.agentProcessId });
+        case "failed":
+          return failure(reuseResult.error);
+        case "fallback":
+          break;
+      }
     }
-    const resolvedAttachments = attachmentsResult.value.agentAttachments;
 
-    const agentMessage: AgentInputMessage = {
-      content: input.userMessage.content,
-      attachments:
-        resolvedAttachments.length > 0
-          ? (resolvedAttachments as AgentInputAttachment[])
-          : undefined,
-    };
-
-    const sprite = new WorkersSpriteClient(
-      spriteName,
-      this.env.SPRITES_API_KEY,
-      this.env.SPRITES_API_URL,
-    );
-
-    const reuseResult = await this.tryDispatchToExistingProcess(sprite, {
-      processId: serverState.agentProcessId,
+    // can't reuse, so start a new agent process.
+    return await this.tryDispatchToNewProcess(spriteClient, {
       userMessageId: input.userMessage.id,
-      message: agentMessage,
+      userMessage: input.userMessage,
+      resolvedAgentMessage: agentMessage,
+      sessionId,
+      userId,
       model: input.model,
       effort: input.effort,
-      agentMode: input.agentMode,
+      agentMode: agentMode,
+      settings
     });
-    switch (reuseResult.status) {
-      case "reused":
-        return success({ agentProcessId: reuseResult.agentProcessId });
-      case "failed":
-        return failure(reuseResult.error);
-      case "fallback":
-        break;
-    }
+  }
 
-    const credentialResult = await this.loadCredentialSnapshot(settings, userId);
+  private async tryDispatchToNewProcess(
+    sprite: WorkersSpriteClient,
+    args: {
+      userMessageId: string;
+      settings: AgentSettings;
+      sessionId: string;
+      userId: string;
+      userMessage: DispatchMessageInput["userMessage"];
+      resolvedAgentMessage: AgentInputMessage | null;
+      model: string | undefined;
+      effort: string | undefined;
+      agentMode: AgentMode;
+    },
+  ): Promise<DispatchMessageResult> {
+    const {
+      settings,
+      userId,
+      model,
+      effort,
+      sessionId,
+      agentMode,
+      userMessageId,
+    } = args;
+    this.reportProcessStartEvent({
+      type: "fresh_start_started",
+      userMessageId,
+    });
+
+    const messageResult = args.resolvedAgentMessage
+      ? success(args.resolvedAgentMessage)
+      : await this.resolveAgentMessage(sessionId, args.userMessage);
+    if (!messageResult.ok) {
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: messageResult.error,
+      });
+      return failure(messageResult.error);
+    }
+    const agentMessage = messageResult.value;
+
+    const credentialResult = await this.loadCredentialSnapshot(
+      settings,
+      userId,
+    );
     if (!credentialResult.ok) {
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: credentialResult.error,
+      });
       return failure(credentialResult.error);
     }
     const credentialSnapshot = credentialResult.value;
 
     let session: SpriteWebsocketSession | null = null;
     try {
-      await this.writeCredentialFiles(sprite, credentialSnapshot);
-      await this.writeVmAgentScript(sprite);
-
+      await writeCredentialFiles(sprite, credentialSnapshot);
+      await writeVmAgentScript(
+        sprite,
+        VM_AGENT_SCRIPT_PATH,
+        VM_AGENT_WEBHOOK_SCRIPT,
+        await this.getBundleHash(),
+      );
       const webhookToken = this.ensureWebhookToken();
       const webhookUrl = this.buildWebhookUrl(sessionId);
       const environmentSnapshot = this.getEnvironmentSnapshot();
@@ -454,7 +406,6 @@ export class SpriteAgentProcessManager {
       // write the initial message to a file, messages with attachments are too large for argv
       const initialMessagePath = `${VM_AGENT_MESSAGE_DIR}/${crypto.randomUUID()}.json`;
       await this.writeInitialMessageFile(
-        sprite,
         initialMessagePath,
         agentMessage,
       );
@@ -469,10 +420,10 @@ export class SpriteAgentProcessManager {
         settings,
         agentMode,
         initialMessagePath,
-        userMessageId: input.userMessage.id,
-        agentSessionId: serverState.agentSessionId ?? undefined,
-        model: input.model,
-        effort: input.effort,
+        userMessageId: userMessageId,
+        agentSessionId: this.getServerState().agentSessionId ?? undefined,
+        model: model,
+        effort: effort,
       });
       const logPath = `${VM_AGENT_LOG_DIR}/${sessionId}.log`;
       // Run inside a shell so we can tee stdout/stderr to both the sprite exec
@@ -482,10 +433,10 @@ export class SpriteAgentProcessManager {
       // the process inside a tmux session on the sprite, and setsid would tear
       // it out of tmux's session group, breaking the keep-running behavior.
       session = sprite.createSession(
-        "sh",
+        "bash",
         [
           "-c",
-          `mkdir -p ${VM_AGENT_LOG_DIR} && bun "$@" 2>&1 | tee -a ${logPath}`,
+          `mkdir -p ${VM_AGENT_LOG_DIR} && set -o pipefail && bun "$@" 2>&1 | tee -a ${logPath}`,
           "vm-agent",
           ...agentArgs,
         ],
@@ -494,8 +445,7 @@ export class SpriteAgentProcessManager {
           // TTY + detachable matches the sprite docs example for sessions that
           // "stay alive after disconnect". Without TTY, sessions appear to be
           // suspended once the spawn websocket closes regardless of
-          // `maxRunAfterDisconnect`. Output is redirected to a log file inside
-          // the shell wrapper, so we never actually write to the PTY.
+          // `maxRunAfterDisconnect`.
           tty: true,
           detachable: true,
           env: {
@@ -513,13 +463,31 @@ export class SpriteAgentProcessManager {
         },
       );
 
-      const processId = await this.startAndCaptureProcessId(session);
-      this.updateAgentProcessId(processId);
-      return success({ agentProcessId: processId });
+      const startResult = await this.startAndWaitForReady(session);
+      if (!startResult.ok) {
+        this.reportProcessStartEvent({
+          type: "fresh_start_failed",
+          userMessageId,
+          error: startResult.error,
+        });
+        return failure(startResult.error);
+      }
+      this.updateAgentProcessId(startResult.value);
+      this.reportProcessStartEvent({
+        type: "fresh_start_ready",
+        userMessageId,
+        agentProcessId: startResult.value,
+      });
+      return success({ agentProcessId: startResult.value });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      return failure(managerError("SPAWN_FAILED", message, { cause: message }));
+      const message = error instanceof Error ? error.message : String(error);
+      const spawnError = managerError("SPAWN_FAILED", message, { cause: message });
+      this.reportProcessStartEvent({
+        type: "fresh_start_failed",
+        userMessageId,
+        error: spawnError,
+      });
+      return failure(spawnError);
     } finally {
       // Close our setup websocket. The vm-agent keeps running on the sprite
       // for up to maxRunAfterDisconnect.
@@ -534,6 +502,32 @@ export class SpriteAgentProcessManager {
     }
   }
 
+  private reportProcessStartEvent(event: AgentProcessStartEvent): void {
+    this.processStartReporter?.handleProcessStartEvent(event);
+  }
+
+  private async resolveAgentMessage(
+    sessionId: string,
+    userMessage: DispatchMessageInput["userMessage"],
+  ): Promise<Result<AgentInputMessage, SpriteAgentProcessManagerError>> {
+    const attachmentsResult = await this.attachmentService.resolveAttachments(
+      sessionId,
+      userMessage.attachmentIds,
+    );
+    if (!attachmentsResult.ok) {
+      return failure(mapAttachmentResolutionError(attachmentsResult.error));
+    }
+    const resolvedAttachments = attachmentsResult.value.agentAttachments;
+
+    return success({
+      content: userMessage.content,
+      attachments:
+        resolvedAttachments.length > 0
+          ? (resolvedAttachments as AgentInputAttachment[])
+          : undefined,
+    });
+  }
+
   private async tryDispatchToExistingProcess(
     sprite: WorkersSpriteClient,
     args: {
@@ -545,7 +539,9 @@ export class SpriteAgentProcessManager {
       agentMode: AgentMode | undefined;
     },
   ): Promise<ExistingProcessDispatchResult> {
-    if (!args.processId) { return { status: "fallback" }; }
+    if (!args.processId) {
+      return { status: "fallback" };
+    }
 
     const session = sprite.attachSession(String(args.processId), {
       idleTimeoutMs: 10_000,
@@ -554,9 +550,15 @@ export class SpriteAgentProcessManager {
 
     try {
       await session.start();
-      this.logger.debug("Attached to existing vm-agent process; waiting for stdin ack", {
-        fields: { processId: args.processId, userMessageId: args.userMessageId },
-      });
+      this.logger.debug(
+        "Attached to existing vm-agent process; waiting for stdin ack",
+        {
+          fields: {
+            processId: args.processId,
+            userMessageId: args.userMessageId,
+          },
+        },
+      );
       // wait for the agent process to explicitly acknowledge the message write
       const stdinAck = this.waitForAck(
         session,
@@ -577,18 +579,30 @@ export class SpriteAgentProcessManager {
       wroteStdin = true;
       await stdinAck;
       this.logger.debug("Dispatched turn to existing vm-agent process", {
-        fields: { processId: args.processId, userMessageId: args.userMessageId },
+        fields: {
+          processId: args.processId,
+          userMessageId: args.userMessageId,
+        },
       });
       return { status: "reused", agentProcessId: args.processId };
     } catch (error) {
       this.updateAgentProcessId(null);
       if (wroteStdin) {
-        const processStopped = await this.killUncertainProcess(sprite, args.processId);
+        const processStopped = await this.killUncertainProcess(
+          sprite,
+          args.processId,
+        );
         if (processStopped) {
-          this.logger.warn("Existing vm-agent process stopped before stdin ack; spawning a new one", {
-            error,
-            fields: { processId: args.processId, userMessageId: args.userMessageId },
-          });
+          this.logger.warn(
+            "Existing vm-agent process stopped before stdin ack; spawning a new one",
+            {
+              error,
+              fields: {
+                processId: args.processId,
+                userMessageId: args.userMessageId,
+              },
+            },
+          );
           return { status: "fallback" };
         }
         const message = error instanceof Error ? error.message : String(error);
@@ -606,10 +620,16 @@ export class SpriteAgentProcessManager {
         };
       }
 
-      this.logger.warn("Existing vm-agent process is not reusable; spawning a new one", {
-        error,
-        fields: { processId: args.processId, userMessageId: args.userMessageId },
-      });
+      this.logger.warn(
+        "Existing vm-agent process is not reusable; spawning a new one",
+        {
+          error,
+          fields: {
+            processId: args.processId,
+            userMessageId: args.userMessageId,
+          },
+        },
+      );
       return { status: "fallback" };
     } finally {
       try {
@@ -623,9 +643,11 @@ export class SpriteAgentProcessManager {
 
   private async killUncertainProcess(
     sprite: WorkersSpriteClient,
-    processId: number
+    processId: number,
   ): Promise<boolean> {
-    this.logger.debug("Existing vm-agent process did not ack stdin; killing it");
+    this.logger.debug(
+      "Existing vm-agent process did not ack stdin; killing it",
+    );
     try {
       await sprite.killSession(processId, "SIGTERM");
       this.updateAgentProcessId(null);
@@ -665,7 +687,10 @@ export class SpriteAgentProcessManager {
       }
       this.logger.warn("Failed to terminate agent process", {
         error,
-        fields: { processId, cause: cause instanceof Error ? cause.message : String(cause) },
+        fields: {
+          processId,
+          cause: cause instanceof Error ? cause.message : String(cause),
+        },
       });
     }
   }
@@ -677,64 +702,22 @@ export class SpriteAgentProcessManager {
     timeoutMs: number,
   ): Promise<void> {
     const ackName = expectedType === "stdin_ack" ? "stdin ack" : "cancel ack";
-    return new Promise((resolve, reject) => {
-      let buffer = "";
-      let settled = false;
-      const disposers: Array<() => void> = [];
-
-      const cleanup = () => {
-        clearTimeout(timeout);
-        for (const dispose of disposers) { dispose(); }
-      };
-
-      const settle = (fn: () => void) => {
-        if (settled) { return; }
-        settled = true;
-        cleanup();
-        fn();
-      };
-
-      const processLine = (line: string) => {
-        const trimmedLine = line.replace(/\r$/, "");
-        if (!trimmedLine) { return; }
-
-        try {
-          const output = decodeAgentOutput(trimmedLine);
-          if (output.type === expectedType) {
-            if (output.userMessageId === userMessageId) { settle(resolve); }
-            return;
-          }
-        } catch {
-          // Attached stdout is noisy; only typed AgentOutput lines participate
-          // in the ack handshake.
-        }
-      };
-
-      const timeout = setTimeout(() => {
-        settle(() =>
-          reject(
-            new Error(`Timed out waiting for ${ackName} for ${userMessageId}`),
-          ),
-        );
-      }, timeoutMs);
-
-      disposers.push(
-        session.onStdout((chunk) => {
-          const parsed = consumeLines(buffer, chunk);
-          buffer = parsed.remainder;
-          for (const line of parsed.lines) { processLine(line); }
-        }),
-      );
-      disposers.push(
-        session.onError((error) => {
-          settle(() => reject(error));
-        }),
-      );
-      disposers.push(
-        session.onExit((code) => {
-          settle(() => reject(new Error(`vm-agent exited before ${ackName}: ${code}`)));
-        }),
-      );
+    return waitForSessionSignals(session, {
+      timeoutMs,
+      onStdoutLine: (line) =>
+        lineMatchesAgentOutput(
+          line,
+          (output) =>
+            output.type === expectedType &&
+            output.userMessageId === userMessageId,
+        )
+          ? resolveWaiting(undefined)
+          : continueWaiting(),
+      onError: (error) => rejectWaiting(error),
+      onExit: (code) =>
+        rejectWaiting(new Error(`vm-agent exited before ${ackName}: ${code}`)),
+      onTimeout: () =>
+        rejectWaiting(new Error(`Timed out waiting for ${ackName} for ${userMessageId}`)),
     });
   }
 
@@ -754,49 +737,13 @@ export class SpriteAgentProcessManager {
     return success(snapshot.value);
   }
 
-  private async writeCredentialFiles(
-    sprite: WorkersSpriteClient,
-    snapshot: AuthCredentialSnapshot,
-  ): Promise<void> {
-    for (const file of snapshot.files) {
-      await sprite.writeFile(
-        file.path,
-        file.contents,
-        file.mode ? { mode: file.mode } : undefined,
-      );
-    }
-  }
 
   private async writeInitialMessageFile(
-    sprite: WorkersSpriteClient,
     path: string,
     message: AgentInputMessage,
   ): Promise<void> {
+    const sprite = this.getSpriteClient();
     await sprite.writeFile(path, JSON.stringify(message), { mode: "0600" });
-  }
-
-  /**
-   * Writes the vm-agent bundle to the sprite, skipping the upload when the
-   * file already on disk matches the embedded bundle. The sprite is the source
-   * of truth — we hash on the sprite via `sha256sum` instead of tracking a
-   * "last written" hash in DO state, so a sprite reset or missing file
-   * naturally falls through to a re-upload.
-   */
-  private async writeVmAgentScript(sprite: WorkersSpriteClient): Promise<void> {
-    const expectedHash = await getBundleHash();
-    try {
-      const result = await sprite.execHttp(
-        `sha256sum ${VM_AGENT_SCRIPT_PATH} 2>/dev/null | cut -d' ' -f1`,
-      );
-      if (result.exitCode === 0 && result.stdout.trim() === expectedHash) {
-        this.logger.debug("vm-agent script unchanged, skipping upload");
-        return;
-      }
-    } catch (error) {
-      this.logger.debug("vm-agent hash check failed, will re-upload", { error });
-    }
-    this.logger.debug("vm-agent script hash check failed, will re-upload");
-    await sprite.writeFile(VM_AGENT_SCRIPT_PATH, VM_AGENT_WEBHOOK_SCRIPT);
   }
 
   private buildAgentArgs(args: {
@@ -836,45 +783,99 @@ export class SpriteAgentProcessManager {
     return `${this.env.WORKER_URL}/internal/session/${sessionId}`;
   }
 
-  /**
-   * Waits for the sprite exec's `session_info` frame so we can capture the
-   * process id, with a 10s timeout. Runs concurrently with the websocket
-   * start() — session_info is pushed automatically once the process boots.
-   */
-  private async startAndCaptureProcessId(
+  private async startAndWaitForReady(
     session: SpriteWebsocketSession,
-  ): Promise<number> {
+  ): Promise<Result<number, SpriteAgentProcessManagerError>> {
     let processId: number | null = null;
-    let resolveProcessId: (id: number) => void = () => {};
-    const processIdPromise = new Promise<number>((resolve) => {
-      resolveProcessId = resolve;
-    });
+    let sawReady = false;
 
-    session.onServerMessage((message: SpriteServerMessage) => {
-      if (message.type === "session_info" && processId === null) {
-        processId = message.session_id;
-        this.logger.debug("Captured agent process id", {
-          fields: { processId },
-        });
-        resolveProcessId(processId);
+    const missingStartupSignal = (): string => {
+      if (processId === null && !sawReady) {
+        return "vm-agent session_info and ready";
       }
-    });
+      if (processId === null) {
+        return "vm-agent session_info";
+      }
+      return "vm-agent ready";
+    };
 
-    await session.start();
+    const maybeReady = (): SessionSignalDecision<Result<number, SpriteAgentProcessManagerError>> => {
+      if (processId !== null && sawReady) {
+        return resolveWaiting(success(processId));
+      }
+      return continueWaiting();
+    };
 
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(
-        () =>
-          reject(
+    return waitForSessionSignals<Result<number, SpriteAgentProcessManagerError>>(session, {
+      timeoutMs: FRESH_START_READY_TIMEOUT_MS,
+      startSession: true,
+      onServerMessage: (message) => {
+        if (message.type === "session_info" && processId === null) {
+          processId = message.session_id;
+          this.logger.debug("Captured agent process id", {
+            fields: { processId },
+          });
+        }
+        return maybeReady();
+      },
+      onStdoutLine: (line) => {
+        if (lineMatchesAgentOutput(line, (output) => output.type === "ready")) {
+          sawReady = true;
+        }
+        return maybeReady();
+      },
+      onError: (error) =>
+        resolveWaiting(
+          failure(
             managerError(
               "TURN_DID_NOT_START",
-              "Timed out waiting for vm-agent session_info",
+              `${error.message} before ${missingStartupSignal()}`,
+              { cause: error.message },
             ),
           ),
-        10_000,
-      );
+        ),
+      onExit: (code) =>
+        resolveWaiting(
+          failure(
+            managerError(
+              "TURN_DID_NOT_START",
+              `vm-agent exited before ${missingStartupSignal()}: ${code}`,
+              { exitCode: code },
+            ),
+          ),
+        ),
+      onTimeout: () =>
+        resolveWaiting(
+          failure(
+            managerError(
+              "TURN_DID_NOT_START",
+              `Timed out waiting for ${missingStartupSignal()}`,
+            ),
+          ),
+        ),
     });
+  }
 
-    return Promise.race([processIdPromise, timeoutPromise]);
+  // ============================================
+  // Private Helpers
+  // ============================================
+
+  private async getBundleHash(): Promise<string | null> {
+    if (!this.cachedBundleHash) {
+      this.cachedBundleHash = await hashScript(VM_AGENT_WEBHOOK_SCRIPT);
+    }
+    return this.cachedBundleHash;
+  }
+
+  private getSpriteClient(): WorkersSpriteClient {
+    const spriteName = this.getServerState().spriteName;
+    if (!spriteName) {
+      throw new Error("Sprite name is not set");
+    }
+    return new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
   }
 }

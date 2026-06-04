@@ -6,6 +6,7 @@ import type {
   ListReposResponse,
   ListBranchesResponse,
   SearchReposResponse,
+  CreateSessionInitialMessage,
   CreateSessionResponse,
   SessionWebSocketTokenResponse,
   DeleteSessionResponse,
@@ -179,11 +180,10 @@ export async function listBranches(
 
 export async function createSession(
   repoId: number,
-  initialMessage?: string,
+  initialMessage: CreateSessionInitialMessage,
   branch?: string,
   settings?: AgentSettingsInput,
   agentMode?: AgentMode,
-  attachmentIds?: string[],
   environmentId?: string,
 ): Promise<CreateSessionResponse> {
   return apiFetch("/sessions", {
@@ -195,7 +195,6 @@ export async function createSession(
       branch,
       settings,
       agentMode,
-      attachmentIds,
       environmentId,
     }),
   });

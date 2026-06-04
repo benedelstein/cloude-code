@@ -5,7 +5,8 @@
  * stdio runner and the new webhook runner.
  */
 import type {
-  StreamTextOnErrorCallback} from "ai";
+  StreamTextOnErrorCallback,
+} from "ai";
 import {
   type LanguageModel,
   type StreamTextOnStepFinishCallback,
@@ -70,6 +71,8 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
    * completion before the next iteration starts or shutdown progresses.
    */
   onTurnEnd?: (_result: AgentTurnEndResult) => void | Promise<void>;
+  /** Fires when provider setup fails after the first queued message is claimed. */
+  onSetupError?: (_error: unknown) => void | Promise<void>;
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
 }
@@ -114,7 +117,7 @@ const SHUTDOWN_POISON: QueueEntry = Object.freeze({
 export function startAgentHarness<S extends AgentSettings>(
   opts: AgentHarnessOptions<S>,
 ): AgentHarnessHandle {
-  const { config, settings, emit, onTurnStart, onTurnEnd } = opts;
+  const { config, settings, emit, onTurnStart, onTurnEnd, onSetupError } = opts;
 
   const sessionId = process.env.SESSION_ID ?? "";
   const sessionSuffix = sessionId.slice(0, 4);
@@ -194,6 +197,7 @@ export function startAgentHarness<S extends AgentSettings>(
       messageResolver = null;
       resolve(SHUTDOWN_POISON);
     }
+    // await the loop to finish processing.
     if (loopDone) { await loopDone; }
   }
 
@@ -260,8 +264,9 @@ export function startAgentHarness<S extends AgentSettings>(
     return { finishReason, aborted };
   }
 
-  async function ensureSetup(): Promise<boolean> {
-    if (setupResult) { return true; }
+  /** this will throw if setup fails. */
+  async function ensureSetup(): Promise<void> {
+    if (setupResult) { return; }
 
     let spriteContext = "";
     try {
@@ -275,19 +280,14 @@ export function startAgentHarness<S extends AgentSettings>(
       });
     }
 
-    try {
-      setupResult = await config.setup({
-        emit,
-        settings,
-        agentMode,
-        sessionSuffix,
-        args,
-        spriteContext,
-      });
-    } catch (error) {
-      emit({ type: "error", error: String(error) });
-      return false;
-    }
+    setupResult = await config.setup({
+      emit,
+      settings,
+      agentMode,
+      sessionSuffix,
+      args,
+      spriteContext,
+    });
 
     emit({ type: "ready" });
 
@@ -301,8 +301,6 @@ export function startAgentHarness<S extends AgentSettings>(
         }
       });
     }
-
-    return true;
   }
 
   async function runLoop(): Promise<void> {
@@ -313,9 +311,16 @@ export function startAgentHarness<S extends AgentSettings>(
       currentEntry = entry;
 
       try {
-        const ready = await ensureSetup();
-        if (!ready) { continue; }
+        await ensureSetup();
+      } catch (error) {
+        emit({ type: "error", error: String(error) });
+        stopped = true;
+        currentEntry = null;
+        await onSetupError?.(error);
+        return;
+      }
 
+      try {
         if (entry.abortController.signal.aborted) {
           // A scoped cancel may arrive after the loop claims the turn but
           // before streamText starts. Skip the model call in that case.

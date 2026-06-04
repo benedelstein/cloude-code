@@ -11,15 +11,23 @@ interface TurnWorkHeaderProps {
   startedAt: number | undefined;
   endedAt: number | undefined;
   isStreaming: boolean;
+  collapsible?: boolean;
 }
 
-export function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStreaming }: TurnWorkHeaderProps) {
+export function TurnWorkHeader({
+  expanded,
+  onToggle,
+  startedAt,
+  endedAt,
+  isStreaming,
+  collapsible = true,
+}: TurnWorkHeaderProps) {
   const tickIntervalMs = isStreaming && startedAt !== undefined && endedAt === undefined
     ? 1000
     : 60_000;
   const now = useNow(tickIntervalMs);
 
-  let label = "Worked";
+  let label = isStreaming ? "Working" : "Worked";
   if (startedAt !== undefined && endedAt !== undefined) {
     label = `Worked for ${humanizeDuration(endedAt - startedAt)}`;
   } else if (startedAt !== undefined && isStreaming) {
@@ -29,12 +37,17 @@ export function TurnWorkHeader({ expanded, onToggle, startedAt, endedAt, isStrea
   return (
     <button
       type="button"
-      onClick={onToggle}
-      className="group flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-secondary hover:text-foreground transition-colors text-left rounded cursor-pointer"
-      aria-expanded={expanded}
+      onClick={() => collapsible && onToggle()}
+      className={clsx(
+        "group mb-0 flex w-fit items-center gap-2 py-1 text-[13px] text-foreground-secondary transition-colors text-left rounded",
+        collapsible ? "cursor-pointer hover:text-foreground" : "cursor-default",
+      )}
+      aria-expanded={collapsible ? expanded : undefined}
     >
       <span>{label}</span>
-      <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded ? "rotate-90" : "hidden group-hover:block")} />
+      {collapsible && (
+        <ChevronRight className={clsx("w-3.5 h-3.5 transition-transform", expanded ? "rotate-90" : "hidden group-hover:block")} />
+      )}
     </button>
   );
 }

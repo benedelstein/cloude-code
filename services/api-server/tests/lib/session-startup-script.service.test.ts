@@ -33,13 +33,14 @@ describe("SessionStartupScriptService", () => {
 
     const service = new SessionStartupScriptService(logger);
 
-    await service.run({
+    const result = await service.run({
       sprite,
       script: "   ",
       workspaceDir: "/workspace",
       env: { FOO: "bar" },
     });
 
+    expect(result).toEqual({ status: "skipped" });
     expect(sprite.execWs).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith("No session startup script configured", {
       fields: {
@@ -69,7 +70,17 @@ describe("SessionStartupScriptService", () => {
       script: "pnpm install",
       workspaceDir: "/workspace",
       env: {},
-    })).rejects.toThrow("Startup script failed with exit code -1 after 6500ms");
+    })).resolves.toEqual({
+      status: "failed",
+      errorMessage: "Startup script failed with exit code -1 after 6500ms",
+      output: {
+        stdout: "install output",
+        stderr: "",
+        exitCode: -1,
+        truncated: false,
+      },
+      durationMs: 6_500,
+    });
 
     expect(warn).toHaveBeenCalledWith("Session startup script failed", {
       fields: {

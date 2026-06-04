@@ -266,7 +266,6 @@ export class AgentTurnCoordinator {
    */
   handleEvent(event: AgentEvent): void {
     this.ensureRehydratedState();
-    const serverState = this.getServerState();
     switch (event.type) {
       case "ready":
         this.updatePartialState({ status: this.synthesizeStatus() });
@@ -288,7 +287,8 @@ export class AgentTurnCoordinator {
           message: event.error,
         });
         break;
-      case "sessionId":
+      case "sessionId": {
+        const serverState = this.getServerState();
         this.logger.info("Storing agent session ID", {
           fields: { agentSessionId: event.sessionId },
         });
@@ -305,6 +305,7 @@ export class AgentTurnCoordinator {
         }
         this.updateServerState({ agentSessionId: event.sessionId });
         break;
+      }
       case "heartbeat":
       case "debug":
         break;

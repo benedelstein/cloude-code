@@ -262,7 +262,7 @@ function AppShellLayout({
               }}
             >
               <div
-                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} min-w-0 flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-xl has-[>:empty]:hidden`}
+                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} min-w-0 flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-md has-[>:empty]:hidden`}
               >
                 <AppHeaderSlot />
               </div>

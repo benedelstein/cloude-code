@@ -114,7 +114,8 @@ Do not validate loosely and keep passing `unknown`, raw JSON, or casted values t
 - Use `Result<T, E>` for expected business logic and operational failures. See `packages/shared/src/types/errors.ts`.
 - Define `E` as a small tagged plain-object union with a stable `code` string.
 - Do not use `Error` subclasses for normal control flow.
-- Use `throw` only for bugs, invariant violations, and unexpected integration/runtime failures.
+- Never rely on runtime type introspection for handling errors. eg. `if (typeof error === "object" && error !== null && "code" in error && error.code === "TURN_DID_NOT_START") { ... }`. You should be using Result and/or DomainError for typed error handling.
+- Use `throw` ONLY for bugs, invariant violations, and unexpected integration/runtime failures.
 - Convert integration exceptions into scoped business-error `Result` values at service boundaries before they flow through the rest of the app.
 
 ## Logging

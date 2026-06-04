@@ -81,8 +81,10 @@ describe("client-api", () => {
 
     await createSession(
       42,
-      "hello",
-      undefined,
+      {
+        content: "hello",
+        attachmentIds: ["123e4567-e89b-12d3-a456-426614174998"],
+      },
       undefined,
       undefined,
       undefined,
@@ -92,6 +94,10 @@ describe("client-api", () => {
     const init = vi.mocked(fetch).mock.calls[0]?.[1];
     expect(JSON.parse(String(init?.body))).toMatchObject({
       repoId: 42,
+      initialMessage: {
+        content: "hello",
+        attachmentIds: ["123e4567-e89b-12d3-a456-426614174998"],
+      },
       environmentId: "123e4567-e89b-12d3-a456-426614174999",
     });
   });

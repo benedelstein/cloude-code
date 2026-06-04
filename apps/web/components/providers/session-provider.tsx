@@ -51,6 +51,7 @@ function createPendingSession(
     sessionStatus,
     sessionErrorMessage: sessionError?.message ?? null,
     sessionErrorCode: sessionError?.code ?? null,
+    sessionSetupRun: null,
     operationError: null,
     isHistoryLoading: sessionError === null,
     hasHydratedState: false,

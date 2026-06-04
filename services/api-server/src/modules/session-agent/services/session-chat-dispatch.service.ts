@@ -21,10 +21,8 @@ import { updateSessionHistoryData } from "./session-agent-history.service";
 import type { MessageRepository } from "../repositories/message.repository";
 import type { ServerState } from "../repositories/server-state.repository";
 import type { AgentTurnCoordinator } from "./agent-turn-coordinator.service";
-import type {
-  SpriteAgentProcessManager,
-  SpriteAgentProcessManagerError,
-} from "./sprite-agent-process-manager.service";
+import type { SpriteAgentProcessManager } from "./agent-process/sprite-agent-process-manager.service";
+import type { SpriteAgentProcessManagerError } from "../types/agent-process-manager.types";
 
 const CHAT_DISPATCH_DOMAIN = "chat_dispatch";
 
@@ -116,7 +114,7 @@ export class SessionChatDispatchService {
   /**
    * Dispatches a chat message from a client into a new vm-agent turn.
    * Resolves bound attachments, applies any model/agent-mode overrides,
-   * persists the user message, and spawns the agent process.
+   * persists the user messages, and sends the message to the vm-agent.
    */
   async dispatchChatMessage(
     payload: ChatMessageEvent,

@@ -103,14 +103,15 @@ function ReadContent({
 
 interface ReadGroupPartProps {
   actions: ReadAction[];
+  isActive?: boolean;
 }
 
-export function ReadGroupPart({ actions }: ReadGroupPartProps) {
+export function ReadGroupPart({ actions, isActive = false }: ReadGroupPartProps) {
   const total = actions.reduce((sum, action) => sum + action.paths.length, 0);
   return (
     <ExpandableSummary
       icon={<FileText className="w-3.5 h-3.5" />}
-      summary={`Read ${total} files`}
+      summary={`${isActive ? "Reading" : "Read"} ${total} files`}
       detail={
         <div className="pl-3">
           {actions.map((action, index) => (

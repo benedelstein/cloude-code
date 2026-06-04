@@ -16,20 +16,46 @@ import { GenericGroupPart } from "./generic-tool-part";
 
 interface GroupedToolPartProps {
   group: ActionGroup;
+  isActive?: boolean;
 }
 
-export function GroupedToolPart({ group }: GroupedToolPartProps) {
+export function GroupedToolPart({ group, isActive = false }: GroupedToolPartProps) {
   switch (group.kind) {
     case "bash":
-      return <BashGroupPart actions={group.actions.map((action) => action.payload as BashAction)} />;
+      return (
+        <BashGroupPart
+          actions={group.actions.map((action) => action.payload as BashAction)}
+          isActive={isActive}
+        />
+      );
     case "read":
-      return <ReadGroupPart actions={group.actions.map((action) => action.payload as ReadAction)} />;
+      return (
+        <ReadGroupPart
+          actions={group.actions.map((action) => action.payload as ReadAction)}
+          isActive={isActive}
+        />
+      );
     case "search":
-      return <SearchGroupPart actions={group.actions.map((action) => action.payload as SearchAction)} />;
+      return (
+        <SearchGroupPart
+          actions={group.actions.map((action) => action.payload as SearchAction)}
+          isActive={isActive}
+        />
+      );
     case "web":
-      return <WebGroupPart actions={group.actions.map((action) => action.payload as WebAction)} />;
+      return (
+        <WebGroupPart
+          actions={group.actions.map((action) => action.payload as WebAction)}
+          isActive={isActive}
+        />
+      );
     case "other":
-      return <GenericGroupPart actions={group.actions.map((action) => action.payload as OtherAction)} />;
+      return (
+        <GenericGroupPart
+          actions={group.actions.map((action) => action.payload as OtherAction)}
+          isActive={isActive}
+        />
+      );
     default: {
       const exhaustive: never = group.kind;
       throw new Error(`Unhandled group kind: ${exhaustive}`);

@@ -36,13 +36,14 @@ export function WebPart({ action }: WebPartProps) {
 
 interface WebGroupPartProps {
   actions: WebAction[];
+  isActive?: boolean;
 }
 
-export function WebGroupPart({ actions }: WebGroupPartProps) {
+export function WebGroupPart({ actions, isActive = false }: WebGroupPartProps) {
   return (
     <ExpandableSummary
       icon={<Globe className="w-3.5 h-3.5" />}
-      summary={`Web requests (${actions.length})`}
+      summary={isActive ? `Making ${actions.length} web requests` : `Web requests (${actions.length})`}
       detail={
         <ul className="my-1 space-y-0.5 pl-3 font-mono text-xs text-foreground-secondary">
           {actions.map((action, index) => (

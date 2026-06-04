@@ -6,18 +6,91 @@ import {
 } from "./providers/index";
 
 export const SessionStatus = z.enum([
-  /** DO initialized but handleInit not yet called */
-  "initializing",
-  /** Provisioning the sprite VM */
-  "provisioning",
-  /** Cloning the repository onto the sprite */
-  "cloning",
-  /** Attaching to the agent process running on the vm */
-  "attaching",
+  /** Session setup is still in progress or blocked. */
+  "preparing",
   /** Ready to send and receive messages */
   "ready",
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
+
+export type SessionSetupRunStatus = "running" | "completed" | "failed";
+export type SessionSetupTaskStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type SessionSetupTaskOutput = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  truncated: boolean;
+};
+
+export type StartupScriptSetupTaskSkipReason =
+  | {
+      kind: "no_environment";
+      repoId: number;
+    }
+  | {
+      kind: "no_script";
+      environmentId: string;
+      environmentName: string | null;
+    };
+
+export type BaseSessionSetupTask = {
+  id: string;
+  isBlocking: boolean;
+  status: SessionSetupTaskStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+};
+
+export type CloudContainerSetupTask = BaseSessionSetupTask & {
+  id: "cloud_container";
+  isBlocking: true;
+};
+
+export type RepositorySetupTask = BaseSessionSetupTask & {
+  id: "repository";
+  isBlocking: true;
+};
+
+export type StartupScriptSetupTask = BaseSessionSetupTask & {
+  id: "setup_script";
+  isBlocking: false;
+  output: SessionSetupTaskOutput | null;
+  skipReason: StartupScriptSetupTaskSkipReason | null;
+};
+
+export type NetworkPolicySetupTask = BaseSessionSetupTask & {
+  id: "network_policy";
+  isBlocking: true;
+};
+
+export type InitialAgentStartSetupTask = BaseSessionSetupTask & {
+  id: "initial_agent_start";
+  isBlocking: true;
+};
+
+export type SessionSetupTask =
+  | CloudContainerSetupTask
+  | RepositorySetupTask
+  | StartupScriptSetupTask
+  | NetworkPolicySetupTask
+  | InitialAgentStartSetupTask;
+
+export type SessionSetupTaskId = SessionSetupTask["id"];
+
+export type SessionSetupRun = {
+  id: string;
+  status: SessionSetupRunStatus;
+  startedAt: string;
+  completedAt: string | null;
+  tasks: SessionSetupTask[];
+};
 
 export const PullRequestState = z.enum(["open", "merged", "closed"]);
 export type PullRequestState = z.infer<typeof PullRequestState>;
@@ -76,6 +149,8 @@ export type ClientState = {
   repoFullName: string | null;
   /** Synthesized from ServerState checkpoints — reset on restart */
   status: SessionStatus;
+  /** Public setup checklist shown while a session is preparing. */
+  sessionSetupRun: SessionSetupRun | null;
   agentSettings: AgentSettings;
   pullRequest: {
     url: string;

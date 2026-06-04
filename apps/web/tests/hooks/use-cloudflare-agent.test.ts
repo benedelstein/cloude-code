@@ -34,6 +34,7 @@ function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
   return {
     repoFullName: "ben/repo",
     status: "ready",
+    sessionSetupRun: null,
     agentSettings: { provider: "openai-codex", model: "gpt-5.3-codex", effort: "high", maxTokens: 8192 },
     agentMode: "edit",
     pushedBranch: null,
@@ -101,5 +102,26 @@ describe("useCloudflareAgent", () => {
     });
 
     expect(result.current.isResponding).toBe(false);
+  });
+
+  it("stamps live startedAt metadata on streaming messages", async () => {
+    const { result } = renderAgent();
+
+    await act(async () => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "agent.chunks",
+          chunks: [
+            { type: "start", messageId: "assistant-1" },
+            { type: "text-start", id: "text-1" },
+            { type: "text-delta", id: "text-1", delta: "hello" },
+          ],
+        }),
+      });
+      await Promise.resolve();
+    });
+
+    const metadata = result.current.streamingMessage?.metadata as { startedAt?: unknown } | undefined;
+    expect(typeof metadata?.startedAt).toBe("number");
   });
 });

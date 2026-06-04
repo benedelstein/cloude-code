@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { getToolName } from "ai";
 import { isTextUIPart, isToolUIPart } from "ai";
@@ -20,22 +20,26 @@ import {
 import { MessageHoverActions } from "@/components/chat/message-hover-actions";
 import { TurnWorkHeader } from "@/components/chat/message-turn-work-header";
 import { WorkItems, type RenderItem } from "@/components/chat/message-work-items";
+import { WorkingCloudRow } from "@/components/chat/working-cloud-indicator";
 
 interface MessageItemProps {
   message: UIMessage;
   isStreaming?: boolean;
   userAvatarUrl?: string | null;
   providerId?: ProviderId | null;
+  className?: string;
 }
 
-export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }: MessageItemProps) {
+export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, className }: MessageItemProps) {
   const isUser = message.role === "user";
   const metadata = (message.metadata ?? {}) as Record<string, unknown>;
   const isAborted = !isUser && metadata.aborted === true;
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
+  const [isAutoCollapsingWork, setIsAutoCollapsingWork] = useState(false);
   const [copied, setCopied] = useState(false);
+  const wasStreamingRef = useRef(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -211,10 +215,38 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
   const userImageParts = isUser ? imageParts : [];
   const bubbleImageParts = isUser ? [] : imageParts;
   const hasBubbleContent = !isUser || bubbleImageParts.length > 0 || renderItems.length > 0;
+  const showActiveWorkHeader = !isUser && !!isStreaming && !showCollapsedTurn;
+  const shouldStartAutoCollapse = !isUser && showCollapsedTurn && !isStreaming && wasStreamingRef.current;
+  const visibleWorkExpanded = workExpanded || shouldStartAutoCollapse || isAutoCollapsingWork;
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      return undefined;
+    }
+
+    if (shouldStartAutoCollapse) {
+      wasStreamingRef.current = false;
+      setIsAutoCollapsingWork(true);
+      const frame = window.requestAnimationFrame(() => {
+        setIsAutoCollapsingWork(false);
+      });
+      return () => {
+        window.cancelAnimationFrame(frame);
+      };
+    }
+
+    if (!showCollapsedTurn) {
+      wasStreamingRef.current = false;
+      setIsAutoCollapsingWork(false);
+    }
+
+    return undefined;
+  }, [isStreaming, shouldStartAutoCollapse, showCollapsedTurn]);
 
   return (
     <>
-      <div className={clsx("group/message flex", isUser ? "justify-end" : "justify-start")}>
+      <div className={clsx("group/message flex", isUser ? "justify-end" : "justify-start", className)}>
         <div className={clsx("order-1", isUser ? "max-w-[85%]" : "w-[85%]")}>
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
@@ -228,7 +260,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                 <div
                   className={clsx(
                     "rounded-md min-w-0 overflow-hidden",
-                    isUser && "px-3 py-2 bg-accent-subtle text-accent-foreground",
+                    isUser && "ml-auto w-fit max-w-full px-3 py-2 bg-accent-subtle text-accent-foreground",
                   )}
                 >
                   <AttachmentPreviewRow
@@ -237,6 +269,17 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                     alignRight={isUser}
                     onExpand={setExpandedImageUrl}
                   />
+
+                  {showActiveWorkHeader && (
+                    <TurnWorkHeader
+                      expanded={false}
+                      onToggle={() => undefined}
+                      startedAt={startedAt}
+                      endedAt={endedAt}
+                      isStreaming={true}
+                      collapsible={false}
+                    />
+                  )}
 
                   {!isUser && showCollapsedTurn && (
                     <>
@@ -250,11 +293,11 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                       <div
                         className={clsx(
                           "grid transition-[grid-template-rows] duration-200 ease-out",
-                          workExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                          visibleWorkExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                         )}
                       >
                         <div className="overflow-hidden min-h-0">
-                          <div className="space-y-0.5 mb-4">
+                          <div className="space-y-0.5 mb-2">
                             <WorkItems
                               items={renderItems.slice(0, collapsedPrefixLength)}
                               isStreaming={!!isStreaming}
@@ -271,6 +314,10 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
                     isStreaming={!!isStreaming}
                     isUser={isUser}
                   />
+
+                  {showActiveWorkHeader && (
+                    <WorkingCloudRow />
+                  )}
                 </div>
               )}
 
@@ -280,6 +327,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId }:
               <MessageHoverActions
                 isUser={isUser}
                 createdAt={createdAt}
+                canShowActions={isUser || isSettled}
                 canCopy={canCopyMessage}
                 copied={copied}
                 onCopy={() => void copyMessageText()}

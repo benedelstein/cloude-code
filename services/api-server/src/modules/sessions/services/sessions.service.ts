@@ -219,7 +219,11 @@ export class SessionsService {
       },
     });
 
-    const attachmentIds = [...new Set(params.request.attachmentIds ?? [])];
+    const attachmentIds = [...new Set(params.request.initialMessage.attachmentIds ?? [])];
+    const initialMessage = {
+      ...params.request.initialMessage,
+      attachmentIds,
+    };
     let attachmentsBound = false;
 
     await this.sessionsRepository.create({
@@ -257,8 +261,7 @@ export class SessionsService {
         agentMode: params.request.agentMode,
         branch: params.request.branch,
         environmentSnapshot,
-        initialMessage: params.request.initialMessage,
-        initialAttachmentIds: attachmentIds,
+        initialMessage,
       });
       if (!initResult.ok) {
         if (attachmentsBound && attachmentIds.length > 0) {
@@ -293,11 +296,11 @@ export class SessionsService {
     }
 
     let title: string | null = null;
-    if (params.request.initialMessage) {
+    if (initialMessage.content) {
       try {
         title = await generateSessionTitle(
           this.env.ANTHROPIC_API_KEY,
-          params.request.initialMessage,
+          initialMessage.content,
         );
         await this.sessionsRepository.updateTitle(sessionId, title);
       } catch (error) {
@@ -702,7 +705,6 @@ export class SessionsService {
     branch: CreateSessionRequest["branch"];
     environmentSnapshot: SessionEnvironmentSnapshot;
     initialMessage: CreateSessionRequest["initialMessage"];
-    initialAttachmentIds: string[];
   }): Promise<SessionsServiceResult<void>> {
     const sessionAgent = await this.getSessionAgent(params.sessionId);
     const initResult = await sessionAgent.handleInit(
@@ -715,7 +717,6 @@ export class SessionsService {
         branch: params.branch,
         environmentSnapshot: params.environmentSnapshot,
         initialMessage: params.initialMessage,
-        initialAttachmentIds: params.initialAttachmentIds,
       },
     ) as HandleInitResult;
 
