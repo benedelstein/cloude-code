@@ -759,52 +759,53 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         return;
       }
 
-      await this.ensureReady();
+      await this.keepAliveWhile(async () => {
+        await this.ensureReady();
 
-      if (
-        this.serverState.activeUserMessageId &&
-        !this.serverState.agentProcessId &&
-        !this.state.pendingUserMessage
-      ) {
-        const staleUserMessageId = this.serverState.activeUserMessageId;
-        this.logger.warn(
-          "Clearing active turn with no agent process before chat dispatch",
-          { fields: { userMessageId: staleUserMessageId } },
-        );
-        this.turnCoordinator.handleTurnSpawnFailed(
-          staleUserMessageId,
-          "Previous agent turn did not start",
-        );
-      }
+        if (
+          this.serverState.activeUserMessageId &&
+          !this.serverState.agentProcessId &&
+          !this.state.pendingUserMessage
+        ) {
+          const staleUserMessageId = this.serverState.activeUserMessageId;
+          this.logger.warn(
+            "Clearing active turn with no agent process before chat dispatch",
+            { fields: { userMessageId: staleUserMessageId } },
+          );
+          this.turnCoordinator.handleTurnSpawnFailed(
+            staleUserMessageId,
+            "Previous agent turn did not start",
+          );
+        }
 
-      if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
-        // TODO: message queuing
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
-            message: "Agent is already handling a message",
-          },
-          connection,
-        );
-        return;
-      }
+        if (this.serverState.activeUserMessageId || this.state.pendingUserMessage) {
+          // TODO: message queuing
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "CHAT_MESSAGE_FAILED",
+              message: "Agent is already handling a message",
+            },
+            connection,
+          );
+          return;
+        }
 
-      const result = await this.chatDispatchService.dispatchChatMessage(payload, connection.id);
-      if (!result.ok) {
-        this.logger.warn("Workflow chat message dispatch failed", {
-          fields: { code: result.error.code },
-        });
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "CHAT_MESSAGE_FAILED",
-            message: result.error.message,
-          },
-          connection,
-        );
-        return;
-      }
+        const result = await this.chatDispatchService.dispatchChatMessage(payload, connection.id);
+        if (!result.ok) {
+          this.logger.warn("Workflow chat message dispatch failed", {
+            fields: { code: result.error.code },
+          });
+          this.sendMessage(
+            {
+              type: "operation.error",
+              code: "CHAT_MESSAGE_FAILED",
+              message: result.error.message,
+            },
+            connection,
+          );
+        }
+      });
     } catch (error) {
       this.logger.error("Failed to handle chat message", { error });
       this.sendMessage(
