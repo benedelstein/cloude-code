@@ -483,7 +483,7 @@ function SetupOutputBlock({ label, value }: { label: string; value: string }) {
       <div className="border-b border-border bg-muted/30 px-3 py-1.5 font-mono text-foreground-secondary">
         {label.toUpperCase()}
       </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono leading-relaxed text-foreground-secondary">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word px-3 py-2 font-mono leading-relaxed text-foreground-secondary">
         {value}
       </pre>
     </div>

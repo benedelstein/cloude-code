@@ -266,7 +266,7 @@ export class SpriteAgentProcessManager {
     const spriteName = serverState.spriteName;
     const userId = serverState.userId;
 
-    if (!sessionId || !spriteName || !serverState.repoCloned) {
+    if (!sessionId || !spriteName || clientState.sessionSetupRun?.status !== "completed") {
       return failure(
         managerError(
           "SESSION_NOT_READY",
