@@ -166,6 +166,25 @@ export const createUserSessionsWebSocketTokenRoute = createRoute({
   },
 });
 
+export const getUserSessionsUpdatesRoute = createRoute({
+  method: "get",
+  path: "/updates",
+  request: {
+    query: z.object({
+      token: z.string().optional(),
+    }),
+  },
+  responses: {
+    101: {
+      description: "User sessions WebSocket stream",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Authentication required",
+    },
+  },
+});
+
 export const updateSessionTitleRoute = createRoute({
   method: "patch",
   path: "/{sessionId}/title",

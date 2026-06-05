@@ -40,7 +40,7 @@ function createService(database: D1Database) {
       SESSION_AGENT: {},
       USER_SESSIONS: {
         getByName: vi.fn(() => ({
-          fetch: vi.fn(async () => new Response(null, { status: 204 })),
+          requestResync: vi.fn(async () => {}),
         })),
       },
       WEBSOCKET_TOKEN_SIGNING_KEY: "test-secret",

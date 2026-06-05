@@ -3,13 +3,19 @@ import {
   type Logger,
   type UserSessionsServerMessage as UserSessionsServerMessageType,
 } from "@repo/shared";
+import { DurableObject } from "cloudflare:workers";
 import { SessionsRepository } from "@/modules/sessions/repositories/sessions.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import { UserSessionsPublishMessage } from "@/shared/types/user-sessions";
+import {
+  USER_SESSIONS_USER_ID_HEADER,
+  UserSessionsSessionRpcRequestSchema,
+  UserSessionsUserRpcRequestSchema,
+  type UserSessionsRpc,
+  type UserSessionsSessionRpcRequest,
+  type UserSessionsUserRpcRequest,
+} from "@/shared/types/user-sessions";
 import type { LogLevel } from "@repo/shared";
-
-const USER_ID_HEADER = "X-User-Id";
 
 function isWebSocketUpgrade(request: Request): boolean {
   return request.headers.get("Upgrade")?.toLowerCase() === "websocket";
@@ -21,39 +27,67 @@ function createWebSocketPair(): [WebSocket, WebSocket] {
   return [sockets[0]!, sockets[1]!];
 }
 
-export class UserSessionsDO implements DurableObject {
-  private readonly ctx: DurableObjectState;
-  private readonly env: Env;
+export class UserSessionsDO extends DurableObject<Env> implements UserSessionsRpc {
   private readonly logger: Logger;
   private readonly sessionsRepository: SessionsRepository;
 
   constructor(ctx: DurableObjectState, env: Env) {
-    this.ctx = ctx;
-    this.env = env;
+    super(ctx, env);
     initializeLogger({
       level: env.LOG_LEVEL as LogLevel,
       format: env.ENVIRONMENT === "production" ? "json" : "pretty",
     });
     this.logger = createLogger("user-sessions.do.ts");
     this.sessionsRepository = new SessionsRepository(env.DB);
+    this.logger.debug("User sessions DO initialized", {
+      fields: {
+        env: env.ENVIRONMENT,
+        logLevel: env.LOG_LEVEL,
+      },
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
-    const userId = await this.authorizeRequest(request);
-    if (!userId) {
-      return new Response("Unauthorized", { status: 401 });
+    const url = new URL(request.url);
+    if (url.pathname !== "/") {
+      return new Response("Not found", { status: 404 });
     }
 
-    const url = new URL(request.url);
-    if (request.method === "POST" && url.pathname === "/publish") {
-      return this.handlePublish(request, userId);
+    const userId = this.authorizeRequest(request);
+    if (!userId) {
+      return new Response("Unauthorized", { status: 401 });
     }
 
     if (request.method === "GET" && isWebSocketUpgrade(request)) {
       return this.handleConnect();
     }
 
-    return new Response("Not found", { status: 404 });
+    return new Response("Expected WebSocket upgrade", { status: 400 });
+  }
+
+  async invalidateSessionSummary(
+    request: UserSessionsSessionRpcRequest,
+  ): Promise<void> {
+    const parsed = this.parseSessionRpcRequest(request);
+    this.assertUserScope(parsed.userId);
+    await this.broadcastSummary(parsed.userId, parsed.sessionId);
+  }
+
+  async removeSessionSummary(
+    request: UserSessionsSessionRpcRequest,
+  ): Promise<void> {
+    const parsed = this.parseSessionRpcRequest(request);
+    this.assertUserScope(parsed.userId);
+    this.broadcast({
+      type: "session.summary.removed",
+      sessionId: parsed.sessionId,
+    });
+  }
+
+  async requestResync(request: UserSessionsUserRpcRequest): Promise<void> {
+    const parsed = this.parseUserRpcRequest(request);
+    this.assertUserScope(parsed.userId);
+    this.broadcast({ type: "session.list.resync_required" });
   }
 
   webSocketMessage(_webSocket: WebSocket, _message: string | ArrayBuffer): void {
@@ -73,26 +107,73 @@ export class UserSessionsDO implements DurableObject {
     this.logger.warn("User sessions websocket error", { error });
   }
 
-  private async authorizeRequest(request: Request): Promise<string | null> {
-    const requestUserId = request.headers.get(USER_ID_HEADER);
+  private authorizeRequest(request: Request): string | null {
+    const requestUserId = request.headers.get(USER_SESSIONS_USER_ID_HEADER);
     if (!requestUserId) {
       return null;
     }
 
-    const storedUserId = await this.ctx.storage.get<string>("userId");
+    const parsed = UserSessionsUserRpcRequestSchema.safeParse({
+      userId: requestUserId,
+    });
+    if (!parsed.success) {
+      return null;
+    }
+
+    const authorized = this.authorizeUser(parsed.data.userId);
+    return authorized ? parsed.data.userId : null;
+  }
+
+  private assertUserScope(userId: string): void {
+    if (this.authorizeUser(userId)) {
+      return;
+    }
+
+    throw new Error("User sessions Durable Object scoped to a different user");
+  }
+
+  private authorizeUser(requestUserId: string): boolean {
+    const storedUserId = this.getStoredUserId();
     if (!storedUserId) {
-      await this.ctx.storage.put("userId", requestUserId);
-      return requestUserId;
+      this.ctx.storage.kv.put("userId", requestUserId);
+      this.logger.debug("Initialized user sessions DO user", {
+        fields: { userId: requestUserId },
+      });
+      return true;
     }
 
     if (storedUserId !== requestUserId) {
       this.logger.warn("Rejected user sessions request for mismatched user", {
         fields: { storedUserId, requestUserId },
       });
-      return null;
+      return false;
     }
 
-    return storedUserId;
+    return true;
+  }
+
+  private getStoredUserId(): string | null {
+    return this.ctx.storage.kv.get<string>("userId") ?? null;
+  }
+
+  private parseSessionRpcRequest(
+    request: UserSessionsSessionRpcRequest,
+  ): UserSessionsSessionRpcRequest {
+    const parsed = UserSessionsSessionRpcRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      throw new Error("Invalid user sessions RPC session request");
+    }
+    return parsed.data;
+  }
+
+  private parseUserRpcRequest(
+    request: UserSessionsUserRpcRequest,
+  ): UserSessionsUserRpcRequest {
+    const parsed = UserSessionsUserRpcRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      throw new Error("Invalid user sessions RPC user request");
+    }
+    return parsed.data;
   }
 
   private handleConnect(): Response {
@@ -103,39 +184,6 @@ export class UserSessionsDO implements DurableObject {
       status: 101,
       webSocket: client,
     });
-  }
-
-  private async handlePublish(
-    request: Request,
-    userId: string,
-  ): Promise<Response> {
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    const parsed = UserSessionsPublishMessage.safeParse(body);
-    if (!parsed.success) {
-      return new Response("Invalid publish message", { status: 400 });
-    }
-
-    switch (parsed.data.type) {
-      case "session.summary.invalidate":
-        await this.broadcastSummary(userId, parsed.data.sessionId);
-        return new Response(null, { status: 204 });
-      case "session.summary.remove":
-        this.broadcast({ type: "session.summary.removed", sessionId: parsed.data.sessionId });
-        return new Response(null, { status: 204 });
-      case "session.list.resync_required":
-        this.broadcast({ type: "session.list.resync_required" });
-        return new Response(null, { status: 204 });
-      default: {
-        const exhaustiveCheck: never = parsed.data;
-        throw new Error(`Unhandled user sessions publish message: ${exhaustiveCheck}`);
-      }
-    }
   }
 
   private async broadcastSummary(
@@ -167,7 +215,7 @@ export class UserSessionsDO implements DurableObject {
 
     const payload = JSON.stringify(parseResult.data);
     for (const webSocket of this.ctx.getWebSockets()) {
-      this.sendRaw(webSocket, payload);
+      this._sendRaw(webSocket, payload);
     }
   }
 
@@ -187,10 +235,10 @@ export class UserSessionsDO implements DurableObject {
       });
       return;
     }
-    this.sendRaw(webSocket, JSON.stringify(parseResult.data));
+    this._sendRaw(webSocket, JSON.stringify(parseResult.data));
   }
 
-  private sendRaw(webSocket: WebSocket, payload: string): void {
+  private _sendRaw(webSocket: WebSocket, payload: string): void {
     try {
       webSocket.send(payload);
     } catch (error) {

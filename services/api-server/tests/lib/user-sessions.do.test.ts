@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserSessionsDO } from "../../src/runtime/user-sessions.do";
 import type { Env } from "../../src/shared/types";
+import { USER_SESSIONS_USER_ID_HEADER } from "../../src/shared/types/user-sessions";
 
 const USER_ID = "123e4567-e89b-12d3-a456-426614174001";
 const OTHER_USER_ID = "123e4567-e89b-12d3-a456-426614174002";
@@ -85,7 +86,16 @@ function createMockDatabase(firstRow: unknown = null) {
 
 function createStorage(initial: Record<string, unknown> = {}) {
   const values = new Map<string, unknown>(Object.entries(initial));
+
   return {
+    kv: {
+      get<T>(key: string): T | undefined {
+        return values.get(key) as T | undefined;
+      },
+      put(key: string, value: unknown): void {
+        values.set(key, value);
+      },
+    },
     async get<T>(key: string): Promise<T | undefined> {
       return values.get(key) as T | undefined;
     },
@@ -132,17 +142,6 @@ function createDO(params: {
   return { calls, context, durableObject };
 }
 
-function publishRequest(body: unknown, userId = USER_ID): Request {
-  return new Request("http://user-sessions/publish", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-User-Id": userId,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 function parseSent(webSocket: FakeWebSocket, index = 0): unknown {
   return JSON.parse(webSocket.sent[index] ?? "null");
 }
@@ -157,10 +156,10 @@ describe("UserSessionsDO", () => {
     vi.stubGlobal("WebSocketPair", FakeWebSocketPair);
     const { context, durableObject } = createDO();
 
-    const response = await durableObject.fetch(new Request("http://user-sessions/updates", {
+    const response = await durableObject.fetch(new Request("http://user-sessions/", {
       headers: {
         Upgrade: "websocket",
-        "X-User-Id": USER_ID,
+        [USER_SESSIONS_USER_ID_HEADER]: USER_ID,
       },
     }));
 
@@ -171,8 +170,23 @@ describe("UserSessionsDO", () => {
     });
   });
 
-  it("fetches and broadcasts a full summary for invalidation", async () => {
+  it("rejects non-root fetch paths", async () => {
     vi.stubGlobal("Response", FakeResponse);
+    vi.stubGlobal("WebSocketPair", FakeWebSocketPair);
+    const { context, durableObject } = createDO();
+
+    const response = await durableObject.fetch(new Request("http://user-sessions/updates", {
+      headers: {
+        Upgrade: "websocket",
+        [USER_SESSIONS_USER_ID_HEADER]: USER_ID,
+      },
+    }));
+
+    expect(response.status).toBe(404);
+    expect(context.webSockets).toHaveLength(0);
+  });
+
+  it("fetches and broadcasts a full summary for invalidation", async () => {
     const webSocket = new FakeWebSocket();
     const { calls, durableObject } = createDO({
       firstRow: createSessionRow(),
@@ -180,12 +194,11 @@ describe("UserSessionsDO", () => {
       webSockets: [webSocket],
     });
 
-    const response = await durableObject.fetch(publishRequest({
-      type: "session.summary.invalidate",
+    await durableObject.invalidateSessionSummary({
+      userId: USER_ID,
       sessionId: SESSION_ID,
-    }));
+    });
 
-    expect(response.status).toBe(204);
     expect(calls[0]?.query).toContain("WHERE id = ? AND user_id = ?");
     expect(calls[0]?.bindings).toEqual([SESSION_ID, USER_ID]);
     expect(parseSent(webSocket)).toMatchObject({
@@ -200,7 +213,6 @@ describe("UserSessionsDO", () => {
   });
 
   it("broadcasts removed when an invalidated summary is missing or archived", async () => {
-    vi.stubGlobal("Response", FakeResponse);
     const missingSocket = new FakeWebSocket();
     const missing = createDO({
       firstRow: null,
@@ -208,10 +220,10 @@ describe("UserSessionsDO", () => {
       webSockets: [missingSocket],
     });
 
-    await missing.durableObject.fetch(publishRequest({
-      type: "session.summary.invalidate",
+    await missing.durableObject.invalidateSessionSummary({
+      userId: USER_ID,
       sessionId: SESSION_ID,
-    }));
+    });
 
     expect(parseSent(missingSocket)).toEqual({
       type: "session.summary.removed",
@@ -225,10 +237,10 @@ describe("UserSessionsDO", () => {
       webSockets: [archivedSocket],
     });
 
-    await archived.durableObject.fetch(publishRequest({
-      type: "session.summary.invalidate",
+    await archived.durableObject.invalidateSessionSummary({
+      userId: USER_ID,
       sessionId: SESSION_ID,
-    }));
+    });
 
     expect(parseSent(archivedSocket)).toEqual({
       type: "session.summary.removed",
@@ -237,19 +249,17 @@ describe("UserSessionsDO", () => {
   });
 
   it("broadcasts explicit remove messages without fetching D1", async () => {
-    vi.stubGlobal("Response", FakeResponse);
     const webSocket = new FakeWebSocket();
     const { calls, durableObject } = createDO({
       initialUserId: USER_ID,
       webSockets: [webSocket],
     });
 
-    const response = await durableObject.fetch(publishRequest({
-      type: "session.summary.remove",
+    await durableObject.removeSessionSummary({
+      userId: USER_ID,
       sessionId: SESSION_ID,
-    }));
+    });
 
-    expect(response.status).toBe(204);
     expect(calls).toHaveLength(0);
     expect(parseSent(webSocket)).toEqual({
       type: "session.summary.removed",
@@ -257,36 +267,47 @@ describe("UserSessionsDO", () => {
     });
   });
 
-  it("rejects requests for a different user once scoped", async () => {
-    vi.stubGlobal("Response", FakeResponse);
+  it("broadcasts resync requests without fetching D1", async () => {
+    const webSocket = new FakeWebSocket();
+    const { calls, durableObject } = createDO({
+      initialUserId: USER_ID,
+      webSockets: [webSocket],
+    });
+
+    await durableObject.requestResync({ userId: USER_ID });
+
+    expect(calls).toHaveLength(0);
+    expect(parseSent(webSocket)).toEqual({
+      type: "session.list.resync_required",
+    });
+  });
+
+  it("rejects RPC requests for a different user once scoped", async () => {
     const webSocket = new FakeWebSocket();
     const { durableObject } = createDO({
       initialUserId: USER_ID,
       webSockets: [webSocket],
     });
 
-    const response = await durableObject.fetch(publishRequest({
-      type: "session.summary.remove",
+    await expect(durableObject.removeSessionSummary({
+      userId: OTHER_USER_ID,
       sessionId: SESSION_ID,
-    }, OTHER_USER_ID));
+    })).rejects.toThrow("User sessions Durable Object scoped to a different user");
 
-    expect(response.status).toBe(401);
     expect(webSocket.sent).toEqual([]);
   });
 
-  it("rejects invalid publish messages and invalid outbound messages", async () => {
-    vi.stubGlobal("Response", FakeResponse);
+  it("rejects invalid RPC requests and invalid outbound messages", async () => {
     const webSocket = new FakeWebSocket();
     const { durableObject } = createDO({
       initialUserId: USER_ID,
       webSockets: [webSocket],
     });
 
-    const response = await durableObject.fetch(publishRequest({
-      type: "session.summary.remove",
+    await expect(durableObject.removeSessionSummary({
+      userId: USER_ID,
       sessionId: "not-a-uuid",
-    }));
-    expect(response.status).toBe(400);
+    })).rejects.toThrow("Invalid user sessions RPC session request");
 
     (durableObject as unknown as {
       broadcast(message: unknown): void;

@@ -1,16 +1,26 @@
 import { z } from "zod";
 
-export const UserSessionsPublishMessage = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("session.summary.invalidate"),
-    sessionId: z.uuid(),
-  }),
-  z.object({
-    type: z.literal("session.summary.remove"),
-    sessionId: z.uuid(),
-  }),
-  z.object({
-    type: z.literal("session.list.resync_required"),
-  }),
-]);
-export type UserSessionsPublishMessage = z.infer<typeof UserSessionsPublishMessage>;
+export const USER_SESSIONS_USER_ID_HEADER = "X-User-Id";
+
+export const UserSessionsSessionRpcRequestSchema = z.object({
+  userId: z.uuid(),
+  sessionId: z.uuid(),
+});
+export type UserSessionsSessionRpcRequest = z.infer<
+  typeof UserSessionsSessionRpcRequestSchema
+>;
+
+export const UserSessionsUserRpcRequestSchema = z.object({
+  userId: z.uuid(),
+});
+export type UserSessionsUserRpcRequest = z.infer<
+  typeof UserSessionsUserRpcRequestSchema
+>;
+
+export interface UserSessionsRpc {
+  invalidateSessionSummary(
+    request: UserSessionsSessionRpcRequest,
+  ): Promise<void>;
+  removeSessionSummary(request: UserSessionsSessionRpcRequest): Promise<void>;
+  requestResync(request: UserSessionsUserRpcRequest): Promise<void>;
+}

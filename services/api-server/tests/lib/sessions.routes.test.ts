@@ -4,6 +4,7 @@ import { createSessionsRoutes } from "../../src/modules/sessions/routes/sessions
 import type { AuthUser } from "../../src/shared/types/auth";
 import type { Env } from "../../src/shared/types";
 import type { SessionsService } from "../../src/modules/sessions/services/sessions.service";
+import { USER_SESSIONS_USER_ID_HEADER } from "../../src/shared/types/user-sessions";
 
 const USER_ID = "123e4567-e89b-12d3-a456-426614174001";
 
@@ -105,8 +106,8 @@ describe("sessions routes user sessions websocket", () => {
     const forwardedRequest = fetchUserSessions.mock.calls[0]?.[0] as Request;
     expect(response.status).toBe(200);
     expect(env.USER_SESSIONS.getByName).toHaveBeenCalledWith(USER_ID);
-    expect(forwardedRequest.url).toBe("http://user-sessions/updates?keep=yes");
-    expect(forwardedRequest.headers.get("X-User-Id")).toBe(USER_ID);
+    expect(forwardedRequest.url).toBe("http://user-sessions/");
+    expect(forwardedRequest.headers.get(USER_SESSIONS_USER_ID_HEADER)).toBe(USER_ID);
     expect(forwardedRequest.headers.get("Upgrade")).toBe("websocket");
   });
 

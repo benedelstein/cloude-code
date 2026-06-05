@@ -1,4 +1,4 @@
-import type { UserSessionsPublishMessage } from "@/shared/types/user-sessions";
+import type { UserSessionsRpc } from "@/shared/types/user-sessions";
 import type { Env } from "@/shared/types";
 import type { Logger } from "@repo/shared";
 
@@ -15,50 +15,45 @@ export class UserSessionsPublisher {
     userId: string;
     sessionId: string;
   }): Promise<void> {
-    await this.publish(params.userId, {
-      type: "session.summary.invalidate",
-      sessionId: params.sessionId,
-    });
+    await this.publish(params.userId, "session.summary.invalidate", (stub) =>
+      stub.invalidateSessionSummary(params)
+    );
   }
 
   async removeSessionSummary(params: {
     userId: string;
     sessionId: string;
   }): Promise<void> {
-    await this.publish(params.userId, {
-      type: "session.summary.remove",
-      sessionId: params.sessionId,
-    });
+    await this.publish(params.userId, "session.summary.remove", (stub) =>
+      stub.removeSessionSummary(params)
+    );
   }
 
   async requestResync(userId: string): Promise<void> {
-    await this.publish(userId, {
-      type: "session.list.resync_required",
-    });
+    await this.publish(userId, "session.list.resync_required", (stub) =>
+      stub.requestResync({ userId })
+    );
   }
 
   private async publish(
     userId: string,
-    message: UserSessionsPublishMessage,
+    type: string,
+    publish: (stub: UserSessionsRpc) => Promise<void>,
   ): Promise<void> {
-    const stub = this.env.USER_SESSIONS.getByName(userId);
-    const response = await stub.fetch("http://user-sessions/publish", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-User-Id": userId,
-      },
-      body: JSON.stringify(message),
-    });
-
-    if (!response.ok) {
+    try {
+      const stub = this.env.USER_SESSIONS.getByName(
+        userId,
+      ) as unknown as UserSessionsRpc;
+      await publish(stub);
+    } catch (error) {
       this.logger.warn("Failed to publish user sessions update", {
+        error,
         fields: {
           userId,
-          type: message.type,
-          status: response.status,
+          type,
         },
       });
+      throw error;
     }
   }
 }
