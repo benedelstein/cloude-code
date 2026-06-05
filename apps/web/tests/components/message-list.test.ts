@@ -2,6 +2,7 @@ import React from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { UIMessage } from "ai";
 import type { SessionSetupRun, SessionSetupTask } from "@repo/shared";
 import { MessageList } from "@/components/chat/message-list";
 
@@ -51,6 +52,14 @@ function cloudCount(container: HTMLElement): number {
   return container.querySelectorAll("svg[viewBox='0 0 64 44']").length;
 }
 
+function assistantMessage(): UIMessage {
+  return {
+    id: "message-1",
+    role: "assistant",
+    parts: [{ type: "text", text: "Ready." }],
+  };
+}
+
 describe("MessageList", () => {
   it("renders only the persistent working cloud while setup is running", () => {
     const { container } = render(React.createElement(MessageList, {
@@ -83,5 +92,19 @@ describe("MessageList", () => {
     }));
 
     expect(cloudCount(container)).toBe(1);
+  });
+
+  it("keeps the persistent cloud rendered in its idle state when not working", () => {
+    const { container } = render(React.createElement(MessageList, {
+      messages: [assistantMessage()],
+      streamingMessage: null,
+      isResponding: false,
+    }));
+
+    const cloud = container.querySelector("svg[viewBox='0 0 64 44']");
+    const cloudFrame = cloud?.closest("span");
+
+    expect(cloudCount(container)).toBe(1);
+    expect(cloudFrame?.className).toContain("h-[16px]");
   });
 });
