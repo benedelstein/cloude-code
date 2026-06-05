@@ -290,6 +290,15 @@ export function useCloudflareAgent({
         setMessages((prev) => [...prev, msg.message as UIMessage]);
         break;
 
+      case "branch.pushed":
+        setPushedBranch(msg.branch);
+        setRepoFullName(msg.repoFullName);
+        break;
+
+      case "pull_request.updated":
+        setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, msg.pullRequest));
+        break;
+
       case "operation.error":
         resetPendingResponse("operation.error");
         applyServerActiveTurn(null);

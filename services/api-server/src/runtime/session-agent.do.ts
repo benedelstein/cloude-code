@@ -704,14 +704,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   async setPullRequest(data: SetPullRequestRequest): Promise<void> {
+    const pullRequest = {
+      url: data.url,
+      number: data.number,
+      state: data.state,
+    };
     this.updatePartialState({
-      pullRequest: {
-        url: data.url,
-        number: data.number,
-        state: data.state,
-      },
+      pullRequest,
     });
     await this.sessionSummaryService.persistPullRequest(data);
+    this.broadcastPullRequestUpdated(pullRequest);
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
@@ -719,8 +721,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (!pullRequest) {
       return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
-    this.updatePartialState({ pullRequest: { ...pullRequest, state: data.state } });
+    const updatedPullRequest = { ...pullRequest, state: data.state };
+    this.updatePartialState({ pullRequest: updatedPullRequest });
     await this.sessionSummaryService.persistPullRequestState(data.state);
+    this.broadcastPullRequestUpdated(updatedPullRequest);
     return success(undefined);
   }
 
@@ -977,6 +981,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       fields: { type: message.type, connectionCount },
     });
     this.broadcast(JSON.stringify(message), without);
+  }
+
+  private broadcastPullRequestUpdated(pullRequest: NonNullable<ClientState["pullRequest"]>): void {
+    this.broadcastMessage({
+      type: "pull_request.updated",
+      pullRequest,
+    });
   }
 
   private sendMessage(message: ServerMessage, to: Connection): void {

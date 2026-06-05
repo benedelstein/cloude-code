@@ -45,6 +45,20 @@ describe("websocket api schemas", () => {
     expect(server.activeTurn?.userMessageId).toBe("user-message-1");
   });
 
+  it("parses pull request update events", () => {
+    const server = ServerMessage.parse({
+      type: "pull_request.updated",
+      pullRequest: {
+        url: "https://github.com/ben/repo/pull/12",
+        number: 12,
+        state: "open",
+      },
+    });
+
+    expect(server.type).toBe("pull_request.updated");
+    expect(server.pullRequest.number).toBe(12);
+  });
+
   it("limits chat messages to five attachments", () => {
     const attachment = {
       attachmentId: "123e4567-e89b-12d3-a456-426614174000",

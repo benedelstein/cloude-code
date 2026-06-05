@@ -104,6 +104,46 @@ describe("useCloudflareAgent", () => {
     expect(result.current.isResponding).toBe(false);
   });
 
+  it("updates pull request state from websocket events", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "pull_request.updated",
+          pullRequest: {
+            url: "https://github.com/ben/repo/pull/12",
+            number: 12,
+            state: "open",
+          },
+        }),
+      });
+    });
+
+    expect(result.current.pullRequestState).toEqual({
+      url: "https://github.com/ben/repo/pull/12",
+      number: 12,
+      state: "open",
+    });
+  });
+
+  it("updates pushed branch state from websocket events", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "branch.pushed",
+          branch: "cloude/change-abcd",
+          repoFullName: "ben/repo",
+        }),
+      });
+    });
+
+    expect(result.current.pushedBranch).toBe("cloude/change-abcd");
+    expect(result.current.repoFullName).toBe("ben/repo");
+  });
+
   it("stamps live startedAt metadata on streaming messages", async () => {
     const { result } = renderAgent();
 
