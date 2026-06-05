@@ -60,6 +60,7 @@ export function createGitHubWebhookSessionProvider(
         url: input.url,
         state: input.state,
       });
+      // publish session update for each session referencing this pull request
       await Promise.allSettled(
         invalidations.map((row) =>
           userSessionsPublisher.invalidateSessionSummary({
