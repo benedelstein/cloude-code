@@ -115,6 +115,8 @@ export function useUserSessionsWebSocket({
         return;
       }
 
+      console.log("[user-sessions] ws event", parseResult.data);
+
       switch (parseResult.data.type) {
         case "user_sessions.connected":
           break;
