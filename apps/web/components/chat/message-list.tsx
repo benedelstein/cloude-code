@@ -255,7 +255,9 @@ export function MessageList({
               setupRun={sessionSetupRun}
             />
           )}
-          <PersistentWorkingCloud active={isResponding === true && !isSetupRunning} />
+          {isResponding === true && !isSetupRunning && (
+            <PersistentWorkingCloud />
+          )}
           <div ref={bottomRef} />
         </div>
       )}
@@ -263,10 +265,10 @@ export function MessageList({
   );
 }
 
-function PersistentWorkingCloud({ active }: { active: boolean }) {
+function PersistentWorkingCloud() {
   return (
     <div className="w-fit py-1">
-      <WorkingCloudRow active={active} />
+      <WorkingCloudRow />
     </div>
   );
 }
