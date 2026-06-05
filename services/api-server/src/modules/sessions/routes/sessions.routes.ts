@@ -8,6 +8,7 @@ import {
   createPullRequestRoute,
   createSessionRoute,
   createSessionWebSocketTokenRoute,
+  createUserSessionsWebSocketTokenRoute,
   deleteSessionRoute,
   getPullRequestRoute,
   getSessionMessagesRoute,
@@ -25,14 +26,48 @@ type SessionsRouteEnv = {
 export interface SessionsRouteDeps {
   authMiddleware: MiddlewareHandler<SessionsRouteEnv>;
   createSessionsService(env: Env): SessionsService;
+  verifyUserSessionsWebSocketToken(
+    signingKey: string,
+    token: string,
+  ): Promise<{ userId: string } | null>;
 }
 
 export function createSessionsRoutes(
   deps: SessionsRouteDeps,
 ): OpenAPIHono<SessionsRouteEnv> {
-const sessionsRoutes = new OpenAPIHono<SessionsRouteEnv>();
+  const sessionsRoutes = new OpenAPIHono<SessionsRouteEnv>();
 
-sessionsRoutes.use("*", deps.authMiddleware);
+  sessionsRoutes.get("/updates", async (c) => {
+    const requestUrl = new URL(c.req.url);
+    const token = requestUrl.searchParams.get("token");
+    if (!token) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const tokenPayload = await deps.verifyUserSessionsWebSocketToken(
+      c.env.WEBSOCKET_TOKEN_SIGNING_KEY,
+      token,
+    );
+    if (!tokenPayload) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const headers = new Headers(c.req.raw.headers);
+    headers.set("X-User-Id", tokenPayload.userId);
+    requestUrl.searchParams.delete("token");
+    const stub = c.env.USER_SESSIONS.getByName(tokenPayload.userId);
+    const doRequest = new Request(
+      `http://user-sessions${requestUrl.pathname}${requestUrl.search}`,
+      {
+        method: c.req.method,
+        headers,
+        body: c.req.raw.body,
+      },
+    );
+    return stub.fetch(doRequest);
+  });
+
+  sessionsRoutes.use("*", deps.authMiddleware);
 
 // List sessions for the current user, grouped by repo for the sidebar.
 sessionsRoutes.openapi(listSessionsRoute, async (c) => {
@@ -159,6 +194,16 @@ sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
   }
 
   return c.json(result.value, 200);
+});
+
+sessionsRoutes.openapi(createUserSessionsWebSocketTokenRoute, async (c) => {
+  const user = c.get("user");
+  const sessionsService = deps.createSessionsService(c.env);
+  const token = await sessionsService.createUserSessionsWebSocketToken({
+    userId: user.id,
+  });
+
+  return c.json(token, 200);
 });
 
 // Update session title

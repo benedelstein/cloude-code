@@ -24,6 +24,7 @@ import {
 import { isSessionOwnedByUser } from "@/modules/sessions/services/session-access.service";
 import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/services/session-provider-connection.service";
 import { verifySessionWebSocketToken } from "@/modules/sessions/services/session-websocket-token.service";
+import { verifyUserSessionsWebSocketToken } from "@/modules/sessions/services/user-sessions-websocket-token.service";
 import { createWebhooksRoutes } from "@/modules/webhooks/routes/webhooks.routes";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
@@ -139,6 +140,7 @@ export function buildRepoEnvironmentsRoutes() {
 export function buildSessionsRoutes() {
   return createSessionsRoutes({
     authMiddleware,
+    verifyUserSessionsWebSocketToken,
     createSessionsService: (env) =>
       new SessionsService({
         env,

@@ -38,6 +38,11 @@ function createService(database: D1Database) {
     env: {
       DB: database,
       SESSION_AGENT: {},
+      USER_SESSIONS: {
+        getByName: vi.fn(() => ({
+          fetch: vi.fn(async () => new Response(null, { status: 204 })),
+        })),
+      },
       WEBSOCKET_TOKEN_SIGNING_KEY: "test-secret",
       ANTHROPIC_API_KEY: "anthropic-key",
     } as Env,

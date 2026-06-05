@@ -8,12 +8,12 @@ import {
 
 describe("repo cursor", () => {
   it("round-trips through encode/decode", () => {
-    const cursor = { maxUpdatedAt: "2026-05-22 00:00:00", repoId: 42 };
+    const cursor = { maxCreatedAt: "2026-05-22 00:00:00", repoId: 42 };
     expect(decodeRepoCursor(encodeRepoCursor(cursor))).toEqual(cursor);
   });
 
   it("preserves repo ids that contain digits only (no scientific notation drift)", () => {
-    const cursor = { maxUpdatedAt: "2026-05-22 00:00:00", repoId: 1234567890 };
+    const cursor = { maxCreatedAt: "2026-05-22 00:00:00", repoId: 1234567890 };
     expect(decodeRepoCursor(encodeRepoCursor(cursor))).toEqual(cursor);
   });
 
@@ -38,7 +38,7 @@ describe("repo cursor", () => {
 describe("session cursor", () => {
   it("round-trips through encode/decode", () => {
     const cursor = {
-      updatedAt: "2026-05-22 00:00:00",
+      createdAt: "2026-05-22 00:00:00",
       sessionId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
     };
     expect(decodeSessionCursor(encodeSessionCursor(cursor))).toEqual(cursor);
@@ -50,7 +50,7 @@ describe("session cursor", () => {
     // suffix after the final "|" rather than the first.
     const synthetic = btoa("weird|ts|with|pipes|session-uuid");
     expect(decodeSessionCursor(synthetic)).toEqual({
-      updatedAt: "weird|ts|with|pipes",
+      createdAt: "weird|ts|with|pipes",
       sessionId: "session-uuid",
     });
   });

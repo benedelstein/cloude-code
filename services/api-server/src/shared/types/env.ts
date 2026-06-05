@@ -1,6 +1,7 @@
 export interface Env {
   // Durable Objects
   SESSION_AGENT: DurableObjectNamespace;
+  USER_SESSIONS: DurableObjectNamespace;
 
   // D1 Database
   DB: D1Database;

@@ -7,12 +7,17 @@ import type {
   SessionSummary,
 } from "@repo/shared";
 
-const { listSessions } = vi.hoisted(() => ({
+const { listSessions, useUserSessionsWebSocket } = vi.hoisted(() => ({
   listSessions: vi.fn(),
+  useUserSessionsWebSocket: vi.fn(),
 }));
 
 vi.mock("@/lib/client-api", () => ({
   listSessions,
+}));
+
+vi.mock("@/hooks/use-user-sessions-websocket", () => ({
+  useUserSessionsWebSocket,
 }));
 
 // Import after the mock so the provider picks up the mocked listSessions.
@@ -21,6 +26,13 @@ import {
   useSessionList,
   useSessionTitle,
 } from "@/components/providers/session-list-provider";
+
+type UserSessionsWebSocketOptions = {
+  enabled: boolean;
+  onSessionUpdated: (session: SessionSummary) => void;
+  onSessionRemoved: (sessionId: string) => void;
+  onResyncRequired: () => void;
+};
 
 function wrapper({ children }: { children: ReactNode }) {
   return createElement(SessionListProvider, null, children);
@@ -71,7 +83,12 @@ async function renderProvider() {
 describe("SessionListProvider", () => {
   beforeEach(() => {
     listSessions.mockReset();
+    useUserSessionsWebSocket.mockReset();
   });
+
+  function getLatestUserSessionsWebSocketOptions(): UserSessionsWebSocketOptions {
+    return useUserSessionsWebSocket.mock.calls.at(-1)?.[0] as UserSessionsWebSocketOptions;
+  }
 
   describe("initial load", () => {
     it("populates groups and nextRepoCursor from the first listSessions call", async () => {
@@ -340,6 +357,147 @@ describe("SessionListProvider", () => {
         pushedBranch: null,
         pullRequest: null,
       });
+    });
+  });
+
+  describe("user sessions websocket", () => {
+    it("enables the stream after initial load", async () => {
+      listSessions.mockResolvedValueOnce(makeResponse());
+
+      await renderProvider();
+
+      expect(getLatestUserSessionsWebSocketOptions()).toMatchObject({
+        enabled: true,
+      });
+    });
+
+    it("replaces a loaded session summary without reordering groups", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              repoId: 1,
+              repoFullName: "a/x",
+              sessions: [
+                makeSession({ id: "target", repoId: 1, repoFullName: "a/x" }),
+              ],
+            }),
+            makeGroup({
+              repoId: 2,
+              repoFullName: "b/y",
+              sessions: [
+                makeSession({ id: "other", repoId: 2, repoFullName: "b/y" }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        getLatestUserSessionsWebSocketOptions().onSessionUpdated(
+          makeSession({
+            id: "target",
+            repoId: 1,
+            repoFullName: "a/renamed",
+            workingState: "idle",
+            pushedBranch: "cloude/sidebar-abcd",
+            pullRequest: {
+              url: "https://github.com/a/renamed/pull/12",
+              number: 12,
+              state: "open",
+            },
+            updatedAt: "2026-05-23T00:00:00.000Z",
+          }),
+        );
+      });
+
+      expect(result.current.groups.map((g) => g.repoId)).toEqual([1, 2]);
+      expect(result.current.groups[0]).toMatchObject({
+        repoFullName: "a/renamed",
+        sessions: [{
+          id: "target",
+          workingState: "idle",
+          pushedBranch: "cloude/sidebar-abcd",
+          pullRequest: { number: 12 },
+        }],
+      });
+    });
+
+    it("ignores updated summaries for unloaded sessions", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({ repoId: 1, sessions: [makeSession({ id: "loaded" })] }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        getLatestUserSessionsWebSocketOptions().onSessionUpdated(
+          makeSession({ id: "not-loaded", repoId: 99, repoFullName: "other/repo" }),
+        );
+      });
+
+      expect(result.current.groups).toHaveLength(1);
+      expect(result.current.groups[0]?.sessions.map((s) => s.id)).toEqual([
+        "loaded",
+      ]);
+    });
+
+    it("removes loaded sessions from stream remove messages", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              repoId: 1,
+              sessions: [
+                makeSession({ id: "keep" }),
+                makeSession({ id: "drop" }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        getLatestUserSessionsWebSocketOptions().onSessionRemoved("drop");
+      });
+
+      expect(result.current.groups[0]?.sessions.map((s) => s.id)).toEqual([
+        "keep",
+      ]);
+    });
+
+    it("refreshes silently when the stream asks for resync or reconnect recovery", async () => {
+      listSessions
+        .mockResolvedValueOnce(
+          makeResponse({
+            groups: [makeGroup({ repoId: 1, repoFullName: "a/x" })],
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeResponse({
+            groups: [makeGroup({ repoId: 2, repoFullName: "b/y" })],
+          }),
+        );
+
+      const { result } = await renderProvider();
+
+      await act(async () => {
+        getLatestUserSessionsWebSocketOptions().onResyncRequired();
+      });
+
+      await waitFor(() => {
+        expect(result.current.groups.map((g) => g.repoId)).toEqual([2]);
+      });
+      expect(result.current.loading).toBe(false);
+      expect(listSessions).toHaveBeenCalledTimes(2);
     });
   });
 

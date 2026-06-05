@@ -10,6 +10,7 @@ import {
   updatePullRequestFromWebhook,
 } from "@/modules/sessions/services/session-access.service";
 import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
+import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
 
 export function createGitHubWebhookSessionProvider(
   env: Env,
@@ -21,6 +22,10 @@ export function createGitHubWebhookSessionProvider(
       createLogger("github-webhook-session-provider.ts"),
     ),
   });
+  const userSessionsPublisher = createUserSessionsPublisher(
+    env,
+    createLogger("github-webhook-user-sessions-publisher.ts"),
+  );
 
   return {
     blockSessionsForDeletedInstallation(installationId) {
@@ -46,8 +51,8 @@ export function createGitHubWebhookSessionProvider(
     revokeUserSessionsByGithubId(githubId) {
       return userSessionService.revokeAllSessionsByGithubId(githubId);
     },
-    updatePullRequestFromWebhook(input) {
-      return updatePullRequestFromWebhook({
+    async updatePullRequestFromWebhook(input) {
+      const invalidations = await updatePullRequestFromWebhook({
         env,
         installationId: input.installationId,
         repoId: input.repoId,
@@ -55,6 +60,14 @@ export function createGitHubWebhookSessionProvider(
         url: input.url,
         state: input.state,
       });
+      await Promise.allSettled(
+        invalidations.map((row) =>
+          userSessionsPublisher.invalidateSessionSummary({
+            userId: row.userId,
+            sessionId: row.id,
+          }),
+        ),
+      );
     },
   };
 }

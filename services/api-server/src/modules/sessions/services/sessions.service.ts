@@ -9,6 +9,7 @@ import {
   type SessionInfoResponse as SessionInfoResponseType,
   type SessionPlanResponse as SessionPlanResponseType,
   type SessionWebSocketTokenResponse,
+  type UserSessionsWebSocketTokenResponse,
   success,
   type UpdateSessionTitleResponse,
   type DeleteSessionResponse,
@@ -36,6 +37,11 @@ import {
 } from "./session-pull-request.service";
 import { requestSessionAccessBlockedCleanup } from "./session-access-block.service";
 import { mintSessionWebSocketToken } from "./session-websocket-token.service";
+import { mintUserSessionsWebSocketToken } from "./user-sessions-websocket-token.service";
+import {
+  createUserSessionsPublisher,
+  type UserSessionsPublisher,
+} from "./user-sessions-publisher.service";
 import {
   assertSessionRepoAccess,
   assertUserRepoAccess,
@@ -103,6 +109,7 @@ export class SessionsService {
   private readonly repoAccessProviders: SessionRepoAccessProviders;
   private readonly repoEnvironmentResolver: SessionRepoEnvironmentResolver;
   private readonly createPullRequestGitHubProvider: () => SessionPullRequestGitHubProvider;
+  private readonly userSessionsPublisher: UserSessionsPublisher;
 
   constructor(deps: SessionsServiceDeps) {
     this.env = deps.env;
@@ -111,6 +118,10 @@ export class SessionsService {
     this.repoAccessProviders = deps.repoAccessProviders;
     this.repoEnvironmentResolver = deps.repoEnvironmentResolver;
     this.createPullRequestGitHubProvider = deps.createPullRequestGitHubProvider;
+    this.userSessionsPublisher = createUserSessionsPublisher(
+      deps.env,
+      logger.scope("user-sessions-publisher"),
+    );
   }
 
   /**
@@ -314,6 +325,7 @@ export class SessionsService {
         userId: params.userId,
       },
     );
+    await this.publishUserSessionsResync(params.userId);
 
     return success({
       sessionId,
@@ -437,6 +449,17 @@ export class SessionsService {
     return success(webSocketToken);
   }
 
+  async createUserSessionsWebSocketToken(params: {
+    userId: string;
+  }): Promise<UserSessionsWebSocketTokenResponse> {
+    return mintUserSessionsWebSocketToken(
+      this.env.WEBSOCKET_TOKEN_SIGNING_KEY,
+      {
+        userId: params.userId,
+      },
+    );
+  }
+
   /**
    * Updates the persisted session title for a caller-owned session.
    * @param params.sessionId - Session id.
@@ -455,6 +478,7 @@ export class SessionsService {
     }
 
     await this.sessionsRepository.updateTitle(params.sessionId, params.title);
+    await this.publishSessionSummaryInvalidated(params.userId, params.sessionId);
     return success({ title: params.title });
   }
 
@@ -597,6 +621,7 @@ export class SessionsService {
     }
 
     await this.sessionsRepository.archive(params.sessionId);
+    await this.publishSessionSummaryRemoved(params.userId, params.sessionId);
     return success({ archived: true });
   }
 
@@ -624,7 +649,53 @@ export class SessionsService {
     }
 
     await this.sessionsRepository.deleteAndQueueAttachmentGc(params.sessionId);
+    await this.publishSessionSummaryRemoved(params.userId, params.sessionId);
     return success({ deleted: true });
+  }
+
+  private async publishSessionSummaryInvalidated(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    try {
+      await this.userSessionsPublisher.invalidateSessionSummary({
+        userId,
+        sessionId,
+      });
+    } catch (error) {
+      logger.warn("Failed to publish session summary invalidation", {
+        error,
+        fields: { sessionId, userId },
+      });
+    }
+  }
+
+  private async publishSessionSummaryRemoved(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    try {
+      await this.userSessionsPublisher.removeSessionSummary({
+        userId,
+        sessionId,
+      });
+    } catch (error) {
+      logger.warn("Failed to publish session summary removal", {
+        error,
+        fields: { sessionId, userId },
+      });
+    }
+  }
+
+  private async publishUserSessionsResync(userId: string): Promise<void> {
+    try {
+      await this.userSessionsPublisher.requestResync(userId);
+    } catch (error) {
+      logger.warn("Failed to publish user sessions resync", {
+        error,
+        fields: { userId },
+      });
+    }
   }
 
   private mapAgentError(error: SessionAgentRpcError): SessionsServiceError {

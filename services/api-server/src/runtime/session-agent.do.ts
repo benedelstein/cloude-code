@@ -61,6 +61,7 @@ import { UserSessionService } from "@/modules/auth/services/user-session.service
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
+import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
@@ -142,9 +143,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
     this.githubAppService = new GitHubAppService(this.env, this.logger);
+    const userSessionsPublisher = createUserSessionsPublisher(
+      this.env,
+      this.logger.scope("user-sessions-publisher"),
+    );
     this.sessionSummaryService = new SessionSummaryService({
       repository: createSessionSummaryWriter(this.env),
       getSessionId: () => this.serverState.sessionId,
+      getUserId: () => this.serverState.userId,
+      publishSessionSummaryInvalidated: (userId, sessionId) =>
+        userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
+      queueBackgroundWork: (promise) => this.ctx.waitUntil(promise),
       logger: this.logger,
     });
     this.pullRequestLifecycleService = new SessionPullRequestLifecycleService({

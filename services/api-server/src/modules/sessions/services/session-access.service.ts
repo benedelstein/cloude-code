@@ -3,9 +3,11 @@ import type { Env } from "@/shared/types";
 import {
   SessionsRepository,
   type SessionAccessRow,
+  type SessionInvalidationRow,
 } from "../repositories/sessions.repository";
 
 export type { SessionAccessRow };
+export type { SessionInvalidationRow };
 
 export interface SessionSummaryWriter {
   updateWorkingState(
@@ -112,8 +114,8 @@ export async function updatePullRequestFromWebhook(params: {
   number: number;
   url: string;
   state: PullRequestState;
-}): Promise<void> {
-  await new SessionsRepository(params.env.DB).updatePullRequestFromWebhook({
+}): Promise<SessionInvalidationRow[]> {
+  return new SessionsRepository(params.env.DB).updatePullRequestFromWebhook({
     installationId: params.installationId,
     repoId: params.repoId,
     number: params.number,

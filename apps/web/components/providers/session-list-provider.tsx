@@ -14,6 +14,7 @@ import {
   type SessionRepoGroup,
   type SessionSummary,
 } from "@/lib/client-api";
+import { useUserSessionsWebSocket } from "@/hooks/use-user-sessions-websocket";
 
 interface SessionListContextValue {
   groups: SessionRepoGroup[];
@@ -66,15 +67,22 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
     Record<number, boolean>
   >({});
 
-  const fetchInitial = useCallback(() => {
-    setLoading(true);
+  const fetchInitial = useCallback((options: { showLoading?: boolean } = {}) => {
+    const showLoading = options.showLoading ?? true;
+    if (showLoading) {
+      setLoading(true);
+    }
     listSessions()
       .then((data) => {
         setGroups(data.groups);
         setNextRepoCursor(data.nextRepoCursor);
       })
       .catch((error) => console.error("Failed to load sessions:", error))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (showLoading) {
+          setLoading(false);
+        }
+      });
   }, []);
 
   useEffect(() => {
@@ -160,7 +168,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         repoFullName: session.repoFullName,
         sessions: [session, ...existing.sessions],
       };
-      // Move the affected group to the top to reflect "most recent activity".
+      // New sessions are newest by creation time, so their repo group moves to the top.
       const rest = prev.filter((_, i) => i !== existingIndex);
       return [updatedGroup, ...rest];
     });
@@ -179,6 +187,31 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         // still exist; keep the group in that case so the "Show more" affordance
         // remains.
         .filter((g) => g.sessions.length > 0 || g.nextSessionCursor !== null),
+    );
+  }, []);
+
+  const replaceLoadedSession = useCallback((updatedSession: SessionSummary) => {
+    setGroups((prev) =>
+      prev.map((group) => {
+        let didReplace = false;
+        const sessions = group.sessions.map((session) => {
+          if (session.id !== updatedSession.id) {
+            return session;
+          }
+          didReplace = true;
+          return updatedSession;
+        });
+        if (!didReplace) {
+          return group;
+        }
+        return {
+          ...group,
+          repoFullName: group.repoId === updatedSession.repoId
+            ? updatedSession.repoFullName
+            : group.repoFullName,
+          sessions,
+        };
+      }),
     );
   }, []);
 
@@ -209,6 +242,20 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const refresh = useCallback(() => {
+    fetchInitial({ showLoading: false });
+  }, [fetchInitial]);
+
+  useUserSessionsWebSocket({
+    enabled: !loading,
+    onSessionUpdated: replaceLoadedSession,
+    onSessionRemoved: removeSession,
+    onResyncRequired: refresh,
+    onAuthError: (error) => {
+      console.error("User sessions websocket auth error:", error);
+    },
+  });
+
   return (
     <SessionListContext.Provider
       value={{
@@ -223,7 +270,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         updateSessionSidebarState,
         loadMoreRepos,
         loadMoreSessionsForRepo,
-        refresh: fetchInitial,
+        refresh,
       }}
     >
       {children}

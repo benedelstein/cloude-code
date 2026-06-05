@@ -14,12 +14,13 @@ import {
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
 import { SessionAgentDO } from "@/runtime/session-agent.do";
+import { UserSessionsDO } from "@/runtime/user-sessions.do";
 import { handleScheduled } from "@/composition/scheduled";
 import type { Env } from "@/shared/types";
 import { initializeLogger } from "@/shared/logging";
 // import { requestLoggerMiddleware } from "@/shared/middleware/request-logger.middleware";
 
-export { SessionAgentDO };
+export { SessionAgentDO, UserSessionsDO };
 
 const app = new Hono<{ Bindings: Env }>();
 
