@@ -1,11 +1,29 @@
 import type { Metadata } from "next";
-import { getSessionToken, verifySession } from "@/lib/auth";
+import { cache } from "react";
+import { notFound } from "next/navigation";
+import { getSessionToken, getVerifiedSessionToken, verifySession } from "@/lib/auth";
 import { getSession, ServerApiError } from "@/lib/server-api";
 import { SessionPageClient } from "./session-page-client";
 
 interface SessionPageProps {
   params: Promise<{ sessionId: string }>;
 }
+
+const getSessionForRoute = cache(async (sessionId: string, sessionToken: string) => {
+  try {
+    return await getSession(sessionId, sessionToken);
+  } catch (error) {
+    if (error instanceof ServerApiError) {
+      if (error.status === 404) {
+        notFound();
+      }
+      if (error.status === 403) {
+        return null;
+      }
+    }
+    throw error;
+  }
+});
 
 export async function generateMetadata({
   params,
@@ -18,15 +36,8 @@ export async function generateMetadata({
     return { title: "Cloude Code" };
   }
 
-  let sessionTitle: string | null = null;
-  try {
-    const session = await getSession(sessionId, sessionToken);
-    sessionTitle = session.title;
-  } catch (error) {
-    if (!(error instanceof ServerApiError && error.status === 403)) {
-      throw error;
-    }
-  }
+  const session = await getSessionForRoute(sessionId, sessionToken);
+  const sessionTitle = session?.title ?? null;
 
   return {
     title: sessionTitle ? `${sessionTitle} | Cloude Code` : "Cloude Code",
@@ -37,6 +48,8 @@ export default async function SessionPage({ params }: SessionPageProps) {
   await verifySession();
 
   const { sessionId } = await params;
+  const sessionToken = await getVerifiedSessionToken();
+  await getSessionForRoute(sessionId, sessionToken);
 
   return <SessionPageClient sessionId={sessionId} />;
 }
