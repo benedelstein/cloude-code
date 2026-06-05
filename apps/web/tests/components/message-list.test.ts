@@ -52,12 +52,24 @@ function cloudCount(container: HTMLElement): number {
 }
 
 describe("MessageList", () => {
-  it("does not render an extra working cloud while setup is running", () => {
+  it("renders only the persistent working cloud while setup is running", () => {
     const { container } = render(React.createElement(MessageList, {
       messages: [],
       streamingMessage: null,
       sessionSetupRun: runningSetupRun(),
       isResponding: true,
+    }));
+
+    expect(cloudCount(container)).toBe(1);
+    expect(container.querySelector("[aria-label='Initializing session'] svg[viewBox='0 0 64 44']")).toBeNull();
+  });
+
+  it("shows the persistent working cloud for setup before agent responding starts", () => {
+    const { container } = render(React.createElement(MessageList, {
+      messages: [],
+      streamingMessage: null,
+      sessionSetupRun: runningSetupRun(),
+      isResponding: false,
     }));
 
     expect(cloudCount(container)).toBe(1);
