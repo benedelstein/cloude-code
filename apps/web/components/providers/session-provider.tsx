@@ -9,7 +9,12 @@ import {
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { consumeInitialPendingUserMessage } from "@/lib/session-pending-user-message";
 import { useSessionWebSocketToken } from "@/hooks/use-session-websocket-token";
-import type { SessionStatus, SessionWebSocketTokenResponse } from "@repo/shared";
+import type {
+  ClientState,
+  SessionStatus,
+  SessionSummary,
+  SessionWebSocketTokenResponse,
+} from "@repo/shared";
 
 const SessionContext = createContext<UseCloudflareAgentReturn | null>(null);
 
@@ -35,6 +40,20 @@ interface SessionProviderWithTokenProps extends SessionProviderProps {
 interface SessionBootstrapError {
   message: string;
   code: string | null;
+}
+
+function toSidebarPullRequest(
+  pullRequestState: ClientState["pullRequest"] | null,
+): SessionSummary["pullRequest"] {
+  if (pullRequestState?.status !== "created") {
+    return null;
+  }
+
+  return {
+    url: pullRequestState.url,
+    number: pullRequestState.number,
+    state: pullRequestState.state,
+  };
 }
 
 // fake session object for when we don't have a wss token yet
@@ -103,7 +122,7 @@ function SessionProviderWithToken({
     updateSessionSidebarState(sessionId, {
       workingState: session.isResponding ? "responding" : "idle",
       pushedBranch: session.pushedBranch,
-      pullRequest: session.pullRequestState,
+      pullRequest: toSidebarPullRequest(session.pullRequestState),
     });
   }, [
     session.isResponding,

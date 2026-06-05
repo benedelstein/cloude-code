@@ -4,6 +4,7 @@ import type { SessionInfoResponse } from "@repo/shared";
 import type {
   HandleGetMessagesResult,
   HandleGetSessionResult,
+  SetPullRequestFailedRequest,
   SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
@@ -138,6 +139,25 @@ async function persistPullRequest(
   }
 }
 
+async function setPullRequestCreating(sessionStub: SessionAgentStub): Promise<void> {
+  try {
+    await sessionStub.setPullRequestCreating();
+  } catch (error) {
+    logger.error("Failed to mark pull request creation as running", { error });
+  }
+}
+
+async function setPullRequestFailed(
+  sessionStub: SessionAgentStub,
+  failureData: SetPullRequestFailedRequest,
+): Promise<void> {
+  try {
+    await sessionStub.setPullRequestFailed(failureData);
+  } catch (error) {
+    logger.error("Failed to mark pull request creation as failed", { error });
+  }
+}
+
 export async function createPullRequestForSession(params: {
   sessionStub: SessionAgentStub;
   github: SessionPullRequestGitHubProvider;
@@ -177,6 +197,7 @@ export async function createPullRequestForSession(params: {
 
   const branchName = session.pushedBranch;
   const baseBranch = session.baseBranch ?? "main";
+  await setPullRequestCreating(sessionStub);
   const sessionMessages = await getSessionMessages(sessionStub);
   const pullRequestContextMessages = buildPullRequestContextMessages(sessionMessages);
 
@@ -234,12 +255,17 @@ export async function createPullRequestForSession(params: {
   if (!createPullRequestResult.ok) {
     const details = createPullRequestResult.error.details
       ?? createPullRequestResult.error.message;
+    const responseDetails = `${details} (base: ${baseBranch}, head: ${branchName})`;
+    await setPullRequestFailed(sessionStub, {
+      error: "Failed to create pull request",
+      details: responseDetails,
+    });
     throw new SessionPullRequestServiceError(
       "Failed to create pull request",
       400,
       {
         error: "Failed to create pull request",
-        details: `${details} (base: ${baseBranch}, head: ${branchName})`,
+        details: responseDetails,
       },
     );
   }

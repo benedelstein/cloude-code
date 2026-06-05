@@ -8,7 +8,9 @@ import {
 import type { SessionAgentRpc } from "../../src/shared/types/session-agent";
 
 function createSessionStub() {
+  const setPullRequestCreating = vi.fn<SessionAgentRpc["setPullRequestCreating"]>().mockResolvedValue(undefined);
   const setPullRequest = vi.fn<SessionAgentRpc["setPullRequest"]>().mockResolvedValue(undefined);
+  const setPullRequestFailed = vi.fn<SessionAgentRpc["setPullRequestFailed"]>().mockResolvedValue(undefined);
   const sessionStub = {
     handleGetSession: vi.fn<SessionAgentRpc["handleGetSession"]>().mockReturnValue(success({
       sessionId: "123e4567-e89b-12d3-a456-426614174000",
@@ -19,15 +21,17 @@ function createSessionStub() {
       pushedBranch: "cloude/mobile-scroll-fix-bafd",
     })),
     handleGetMessages: vi.fn<SessionAgentRpc["handleGetMessages"]>().mockReturnValue(success([])),
+    setPullRequestCreating,
     setPullRequest,
+    setPullRequestFailed,
   } as unknown as SessionAgentRpc;
 
-  return { sessionStub, setPullRequest };
+  return { sessionStub, setPullRequest, setPullRequestCreating, setPullRequestFailed };
 }
 
 describe("createPullRequestForSession", () => {
   it("returns and persists the pull request returned by GitHub", async () => {
-    const { sessionStub, setPullRequest } = createSessionStub();
+    const { sessionStub, setPullRequest, setPullRequestCreating } = createSessionStub();
     const github: SessionPullRequestGitHubProvider = {
       compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
         .mockResolvedValue(failure({
@@ -60,6 +64,7 @@ describe("createPullRequestForSession", () => {
       head: "cloude/mobile-scroll-fix-bafd",
       base: "main",
     });
+    expect(setPullRequestCreating).toHaveBeenCalledOnce();
     expect(setPullRequest).toHaveBeenCalledWith({
       number: 58,
       url: "https://github.com/benedelstein/cloude-code/pull/58",
@@ -68,7 +73,7 @@ describe("createPullRequestForSession", () => {
   });
 
   it("includes provider details when pull request creation fails", async () => {
-    const { sessionStub } = createSessionStub();
+    const { sessionStub, setPullRequestFailed } = createSessionStub();
     const github: SessionPullRequestGitHubProvider = {
       compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
         .mockResolvedValue(failure({
@@ -93,5 +98,9 @@ describe("createPullRequestForSession", () => {
         details: "GitHub returned 422: Validation Failed: base invalid (base: main, head: cloude/mobile-scroll-fix-bafd)",
       },
     } satisfies Partial<SessionPullRequestServiceError>);
+    expect(setPullRequestFailed).toHaveBeenCalledWith({
+      error: "Failed to create pull request",
+      details: "GitHub returned 422: Validation Failed: base invalid (base: main, head: cloude/mobile-scroll-fix-bafd)",
+    });
   });
 });

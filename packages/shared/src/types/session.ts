@@ -89,6 +89,24 @@ export type SessionSetupRun = {
 export const PullRequestState = z.enum(["open", "merged", "closed"]);
 export type PullRequestState = z.infer<typeof PullRequestState>;
 
+export const PullRequestClientState = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("creating"),
+  }),
+  z.object({
+    status: z.literal("failed"),
+    error: z.string(),
+    details: z.string().optional(),
+  }),
+  z.object({
+    status: z.literal("created"),
+    url: z.string(),
+    number: z.number(),
+    state: PullRequestState,
+  }),
+]);
+export type PullRequestClientState = z.infer<typeof PullRequestClientState>;
+
 export const SessionWorkingState = z.enum(["idle", "responding"]);
 export type SessionWorkingState = z.infer<typeof SessionWorkingState>;
 
@@ -146,11 +164,7 @@ export type ClientState = {
   /** Public setup checklist shown while a session is preparing. */
   sessionSetupRun: SessionSetupRun | null;
   agentSettings: AgentSettings;
-  pullRequest: {
-    url: string;
-    number: number;
-    state: PullRequestState;
-  } | null;
+  pullRequest: PullRequestClientState | null;
   /** Branch name locked after first push (for "Create PR" flow) */
   pushedBranch: string | null;
   /** Branch the session was based off — used as the PR target */

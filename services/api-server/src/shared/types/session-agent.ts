@@ -30,6 +30,12 @@ export interface SetPullRequestRequest {
   state: PullRequestState;
 }
 
+/** Mark pull request creation as failed in live client state. */
+export interface SetPullRequestFailedRequest {
+  error: string;
+  details?: string;
+}
+
 /** PATCH /pr — update pull request state on the DO */
 export interface UpdatePullRequestRequest {
   state: PullRequestState;
@@ -68,7 +74,9 @@ export interface SessionAgentRpc {
   handleGetMessages(): HandleGetMessagesResult;
   handleGetPlan(): HandleGetPlanResult;
   handleDeleteSession(): Promise<HandleDeleteSessionResult>;
+  setPullRequestCreating(): Promise<void>;
   setPullRequest(data: SetPullRequestRequest): Promise<void>;
+  setPullRequestFailed(data: SetPullRequestFailedRequest): Promise<void>;
   updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult>;
   enforceSessionAccessBlocked(closeConnections?: boolean): Promise<void>;
 }

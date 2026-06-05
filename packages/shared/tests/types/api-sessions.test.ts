@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
 import { CreateSessionRequest } from "../../src/types/api/sessions";
-import { SessionSummary } from "../../src/types/session";
+import { PullRequestClientState, SessionSummary } from "../../src/types/session";
 
 describe("session api schemas", () => {
   it("rejects create-session requests without an initial message", () => {
@@ -76,6 +76,34 @@ describe("session api schemas", () => {
       updatedAt: "2026-05-22T00:00:00.000Z",
       lastMessageAt: "2026-05-22T00:00:00.000Z",
     })).not.toThrow();
+  });
+
+  it("accepts pull request client lifecycle states", () => {
+    expect(PullRequestClientState.parse({ status: "creating" })).toEqual({
+      status: "creating",
+    });
+
+    expect(PullRequestClientState.parse({
+      status: "failed",
+      error: "Failed to create pull request",
+      details: "GitHub returned 422",
+    })).toEqual({
+      status: "failed",
+      error: "Failed to create pull request",
+      details: "GitHub returned 422",
+    });
+
+    expect(PullRequestClientState.parse({
+      status: "created",
+      url: "https://github.com/owner/repo/pull/12",
+      number: 12,
+      state: "open",
+    })).toEqual({
+      status: "created",
+      url: "https://github.com/owner/repo/pull/12",
+      number: 12,
+      state: "open",
+    });
   });
 
   it("rejects invalid sidebar summary states", () => {

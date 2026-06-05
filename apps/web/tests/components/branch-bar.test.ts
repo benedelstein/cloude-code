@@ -72,4 +72,32 @@ describe("BranchBar", () => {
       expect(screen.getByText(/GitHub returned 422/)).toBeTruthy();
     });
   });
+
+  it("shows pull request creation in progress from client state", () => {
+    render(React.createElement(BranchBar, {
+      sessionId: "session-1",
+      baseBranch: "main",
+      pushedBranch: "cloude/change-abcd",
+      pullRequestState: { status: "creating" },
+    }));
+
+    const button = screen.getByRole("button", { name: /Creating/ });
+    expect(button).toHaveProperty("disabled", true);
+  });
+
+  it("shows failed pull request state with a retry button", () => {
+    render(React.createElement(BranchBar, {
+      sessionId: "session-1",
+      baseBranch: "main",
+      pushedBranch: "cloude/change-abcd",
+      pullRequestState: {
+        status: "failed",
+        error: "Failed to create pull request",
+        details: "GitHub returned 422: Validation Failed: base invalid",
+      },
+    }));
+
+    expect(screen.getByText(/GitHub returned 422/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry PR" })).toBeTruthy();
+  });
 });

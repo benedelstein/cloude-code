@@ -111,6 +111,7 @@ describe("useCloudflareAgent", () => {
       mockAgentState.options?.onStateUpdate({
         ...createClientState(null),
         pullRequest: {
+          status: "created",
           url: "https://github.com/ben/repo/pull/12",
           number: 12,
           state: "open",
@@ -119,6 +120,7 @@ describe("useCloudflareAgent", () => {
     });
 
     expect(result.current.pullRequestState).toEqual({
+      status: "created",
       url: "https://github.com/ben/repo/pull/12",
       number: 12,
       state: "open",

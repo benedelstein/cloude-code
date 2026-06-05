@@ -33,7 +33,9 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
     pushedBranch: "cloude/change-abcd",
     hasPullRequest: false,
   };
+  const setPullRequestCreating = vi.fn<SessionAgentRpc["setPullRequestCreating"]>().mockResolvedValue(undefined);
   const setPullRequest = vi.fn<SessionAgentRpc["setPullRequest"]>().mockResolvedValue(undefined);
+  const setPullRequestFailed = vi.fn<SessionAgentRpc["setPullRequestFailed"]>().mockResolvedValue(undefined);
   const sessionStub = {
     handleGetSession: vi.fn<SessionAgentRpc["handleGetSession"]>().mockReturnValue(success({
       sessionId: "session-1",
@@ -44,7 +46,9 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
       pushedBranch: "cloude/change-abcd",
     })),
     handleGetMessages: vi.fn<SessionAgentRpc["handleGetMessages"]>().mockReturnValue(success([])),
+    setPullRequestCreating,
     setPullRequest,
+    setPullRequestFailed,
   } as unknown as SessionAgentRpc;
   const github: SessionPullRequestGitHubProvider = {
     compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
@@ -80,12 +84,12 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
     ...overrides,
   });
 
-  return { github, keepAliveWhile, service, sessionStub, setPullRequest, state };
+  return { github, keepAliveWhile, service, sessionStub, setPullRequest, setPullRequestCreating, state };
 }
 
 describe("SessionAutoPullRequestService", () => {
   it("creates and persists a pull request for a pushed branch", async () => {
-    const { github, keepAliveWhile, service, setPullRequest } = createHarness();
+    const { github, keepAliveWhile, service, setPullRequest, setPullRequestCreating } = createHarness();
 
     service.queueCreateAfterTurnFinish();
     await keepAliveWhile.mock.results[0]!.value;
@@ -96,6 +100,7 @@ describe("SessionAutoPullRequestService", () => {
       head: "cloude/change-abcd",
       base: "main",
     });
+    expect(setPullRequestCreating).toHaveBeenCalledOnce();
     expect(setPullRequest).toHaveBeenCalledWith({
       number: 12,
       url: "https://github.com/ben/repo/pull/12",

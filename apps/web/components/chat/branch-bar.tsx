@@ -22,12 +22,19 @@ export function BranchBar({
   pushedBranch,
   pullRequestState,
 }: BranchBarProps) {
-  const url = pullRequestState?.url ?? null;
-  const state = pullRequestState?.state ?? null;
+  const createdPullRequest = pullRequestState?.status === "created" ? pullRequestState : null;
+  const failedPullRequest = pullRequestState?.status === "failed" ? pullRequestState : null;
+  const isCreatingPullRequest = pullRequestState?.status === "creating";
+  const url = createdPullRequest?.url ?? null;
+  const state = createdPullRequest?.state ?? null;
   const displayBaseBranch = baseBranch ?? "main";
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const showCreating = isCreating || isCreatingPullRequest;
+  const displayError = showCreating
+    ? null
+    : error ?? failedPullRequest?.details ?? failedPullRequest?.error ?? null;
 
   const copyBranchName = useCallback(async () => {
     if (!pushedBranch) { return; }
@@ -80,7 +87,11 @@ export function BranchBar({
     <div className="min-w-0 shrink-0 overflow-hidden rounded-lg border border-border bg-background mb-2 shadow-shadow shadow-xl">
       <div className="px-4 py-2 flex min-w-0 items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-foreground-secondary min-w-0">
-          <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
+          {isCreatingPullRequest ? (
+            <LoadingSpinner className="h-4 w-4 shrink-0 text-foreground-tertiary" />
+          ) : (
+            <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
+          )}
           <span className="text-foreground font-medium">{displayBaseBranch}</span>
           {" \u2190 "}
           <button
@@ -99,8 +110,8 @@ export function BranchBar({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {error && (
-            <span className="max-w-md truncate text-xs text-danger" title={error}>{error}</span>
+          {displayError && (
+            <span className="max-w-md truncate text-xs text-danger" title={displayError}>{displayError}</span>
           )}
 
           {url ? (
@@ -116,14 +127,16 @@ export function BranchBar({
           ) : (
             <button
               onClick={handleCreatePR}
-              disabled={isCreating}
+              disabled={showCreating}
               className="inline-flex items-center cursor-pointer gap-1.5 rounded-md bg-accent-subtle px-3 py-1 text-xs font-bold text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
             >
-              {isCreating ? (
+              {showCreating ? (
                 <>
                   <LoadingSpinner className="h-3 w-3" />
                   Creating...
                 </>
+              ) : failedPullRequest ? (
+                "Retry PR"
               ) : (
                 "Create PR"
               )}

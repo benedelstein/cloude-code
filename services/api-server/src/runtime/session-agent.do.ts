@@ -35,6 +35,7 @@ import type {
   InitSessionAgentRequest,
   SessionAgentRpc,
   SetPullRequestRequest,
+  SetPullRequestFailedRequest,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
@@ -64,6 +65,7 @@ import { assertSessionRepoAccess } from "@/modules/sessions/services/session-rep
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
+import { normalizePullRequestState } from "./session-agent-pull-request-state";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -281,6 +283,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
+      pullRequest: normalizePullRequestState(this.state.pullRequest),
       activeTurn: this.serverState.activeUserMessageId
         ? { userMessageId: this.serverState.activeUserMessageId }
         : null,
@@ -659,6 +662,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (!sessionId || !this.state.repoFullName) {
       return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
     }
+    const pullRequest = this.state.pullRequest?.status === "created" ? this.state.pullRequest : null;
 
     return success({
       sessionId,
@@ -667,9 +671,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       repoFullName: this.state.repoFullName,
       baseBranch: this.state.baseBranch ?? undefined,
       pushedBranch: this.state.pushedBranch ?? undefined,
-      pullRequestUrl: this.state.pullRequest?.url ?? undefined,
-      pullRequestNumber: this.state.pullRequest?.number ?? undefined,
-      pullRequestState: this.state.pullRequest?.state ?? undefined,
+      pullRequestUrl: pullRequest?.url ?? undefined,
+      pullRequestNumber: pullRequest?.number ?? undefined,
+      pullRequestState: pullRequest?.state ?? undefined,
       editorUrl: this.state.editorUrl ?? undefined,
     } satisfies SessionInfoResponse);
   }
@@ -704,20 +708,27 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   async setPullRequest(data: SetPullRequestRequest): Promise<void> {
-    const pullRequest = {
-      url: data.url,
-      number: data.number,
-      state: data.state,
-    };
-    this.updatePartialState({
-      pullRequest,
-    });
+    const pullRequest = { status: "created" as const, url: data.url, number: data.number, state: data.state };
+    this.updatePartialState({ pullRequest });
     await this.sessionSummaryService.persistPullRequest(data);
+  }
+
+  async setPullRequestCreating(): Promise<void> {
+    this.updatePartialState({ pullRequest: { status: "creating" } });
+  }
+
+  async setPullRequestFailed(data: SetPullRequestFailedRequest): Promise<void> {
+    const pullRequest = {
+      status: "failed" as const,
+      error: data.error,
+      ...(data.details ? { details: data.details } : {}),
+    };
+    this.updatePartialState({ pullRequest });
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
     const pullRequest = this.state.pullRequest;
-    if (!pullRequest) {
+    if (!pullRequest || pullRequest.status !== "created") {
       return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
     const updatedPullRequest = { ...pullRequest, state: data.state };
