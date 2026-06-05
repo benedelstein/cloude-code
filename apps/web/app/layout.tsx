@@ -7,6 +7,7 @@ const caprasimo = localFont({
   src: "./fonts/caprasimo-latin-400-normal.woff2",
   variable: "--font-caprasimo",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
