@@ -81,6 +81,31 @@ describe("useUserSessionsWebSocketToken", () => {
     expect(createUserSessionsWebSocketToken).toHaveBeenCalledTimes(1);
   });
 
+  it("does not refetch or replace refresh when callback identities change", async () => {
+    const token = makeToken(new Date(Date.now() + 5 * 60_000).toISOString());
+    createUserSessionsWebSocketToken.mockResolvedValue(token);
+    const renderOptions = () => ({
+      enabled: true,
+      onAuthError: vi.fn(),
+      onReconnectPending: vi.fn(),
+      onReconnectRecovered: vi.fn(),
+    });
+
+    const { result, rerender } = renderHook(
+      (options) => useUserSessionsWebSocketToken(options),
+      { initialProps: renderOptions() },
+    );
+    await waitFor(() => {
+      expect(result.current.token).toEqual(token);
+    });
+    const refresh = result.current.refresh;
+
+    rerender(renderOptions());
+
+    expect(result.current.refresh).toBe(refresh);
+    expect(createUserSessionsWebSocketToken).toHaveBeenCalledTimes(1);
+  });
+
   it("retries transient failures with backoff", async () => {
     vi.useFakeTimers();
 

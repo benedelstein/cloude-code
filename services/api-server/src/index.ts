@@ -8,9 +8,10 @@ import {
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
-  buildRepoEnvironmentsRoutes,
+  buildRepoScopedEnvironmentRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
+  buildUserEnvironmentRoutes,
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
 import { SessionAgentDO } from "@/runtime/session-agent.do";
@@ -60,9 +61,10 @@ app.route("/models", buildModelsRoutes());
 
 // Protected routes
 app.route("/repos", buildReposRoutes());
-app.route("/", buildRepoEnvironmentsRoutes());
+app.route("/repos", buildRepoScopedEnvironmentRoutes());
 app.route("/sessions", buildSessionsRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
+app.route("/environments", buildUserEnvironmentRoutes());
 
 app.route("/webhooks", buildWebhooksRoutes());
 

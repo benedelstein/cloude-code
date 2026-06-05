@@ -25,7 +25,7 @@ export interface RepoEnvironmentsRouteDeps {
   createRepoEnvironmentsService(env: Env): RepoEnvironmentsService;
 }
 
-export function createRepoEnvironmentsRoutes(
+export function createRepoScopedEnvironmentRoutes(
   deps: RepoEnvironmentsRouteDeps,
 ): OpenAPIHono<RepoEnvironmentsRouteEnv> {
   const routes = new OpenAPIHono<RepoEnvironmentsRouteEnv>();
@@ -102,6 +102,16 @@ export function createRepoEnvironmentsRoutes(
     }
     return c.json(result.value, 200);
   });
+
+  return routes;
+}
+
+export function createUserEnvironmentRoutes(
+  deps: RepoEnvironmentsRouteDeps,
+): OpenAPIHono<RepoEnvironmentsRouteEnv> {
+  const routes = new OpenAPIHono<RepoEnvironmentsRouteEnv>();
+
+  routes.use("*", deps.authMiddleware);
 
   routes.openapi(listUserRepoEnvironmentsRoute, async (c) => {
     const user = c.get("user");

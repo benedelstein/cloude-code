@@ -23,6 +23,15 @@ function buildUserSessionsWebSocketUrl(token: string): string {
   return url.toString();
 }
 
+function closeWebSocketIntentionally(webSocket: WebSocket): void {
+  if (
+    webSocket.readyState === WebSocket.CONNECTING
+    || webSocket.readyState === WebSocket.OPEN
+  ) {
+    webSocket.close();
+  }
+}
+
 export function useUserSessionsWebSocket({
   enabled,
   onSessionUpdated,
@@ -34,6 +43,19 @@ export function useUserSessionsWebSocket({
   const retryTimeoutRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const hasConnectedRef = useRef(false);
+  const callbacksRef = useRef({
+    onSessionUpdated,
+    onSessionRemoved,
+    onResyncRequired,
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onSessionUpdated,
+      onSessionRemoved,
+      onResyncRequired,
+    };
+  }, [onResyncRequired, onSessionRemoved, onSessionUpdated]);
 
   const clearRetryTimeout = useCallback(() => {
     if (retryTimeoutRef.current !== null) {
@@ -48,7 +70,7 @@ export function useUserSessionsWebSocket({
   } = useUserSessionsWebSocketToken({
     enabled,
     onAuthError,
-    onReconnectPending: onResyncRequired,
+    onReconnectPending: () => callbacksRef.current.onResyncRequired(),
   });
 
   const scheduleReconnect = useCallback(() => {
@@ -75,7 +97,7 @@ export function useUserSessionsWebSocket({
       retryCountRef.current = 0;
       clearRetryTimeout();
       if (hasConnectedRef.current) {
-        onResyncRequired();
+        callbacksRef.current.onResyncRequired();
       }
       hasConnectedRef.current = true;
     };
@@ -97,13 +119,13 @@ export function useUserSessionsWebSocket({
         case "user_sessions.connected":
           break;
         case "session.summary.updated":
-          onSessionUpdated(parseResult.data.session);
+          callbacksRef.current.onSessionUpdated(parseResult.data.session);
           break;
         case "session.summary.removed":
-          onSessionRemoved(parseResult.data.sessionId);
+          callbacksRef.current.onSessionRemoved(parseResult.data.sessionId);
           break;
         case "session.list.resync_required":
-          onResyncRequired();
+          callbacksRef.current.onResyncRequired();
           break;
         default: {
           const exhaustiveCheck: never = parseResult.data;
@@ -121,7 +143,7 @@ export function useUserSessionsWebSocket({
         return;
       }
 
-      onResyncRequired();
+      callbacksRef.current.onResyncRequired();
       if (Date.now() >= new Date(webSocketToken.expiresAt).getTime()) {
         refreshWebSocketToken();
         return;
@@ -131,15 +153,12 @@ export function useUserSessionsWebSocket({
 
     return () => {
       didCloseIntentionally = true;
-      webSocket.close();
+      closeWebSocketIntentionally(webSocket);
     };
   }, [
     clearRetryTimeout,
     connectionAttempt,
     enabled,
-    onResyncRequired,
-    onSessionRemoved,
-    onSessionUpdated,
     refreshWebSocketToken,
     scheduleReconnect,
     webSocketToken,
@@ -160,7 +179,7 @@ export function useUserSessionsWebSocket({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        onResyncRequired();
+        callbacksRef.current.onResyncRequired();
       }
     };
 
@@ -168,7 +187,7 @@ export function useUserSessionsWebSocket({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [enabled, onResyncRequired]);
+  }, [enabled]);
 
   useEffect(() => {
     return () => {

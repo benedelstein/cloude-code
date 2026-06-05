@@ -30,12 +30,20 @@ vi.mock("@/hooks/use-user-sessions-websocket-token", () => ({
 }));
 
 class FakeWebSocket {
+  public static readonly CONNECTING = 0;
+  public static readonly OPEN = 1;
+  public static readonly CLOSING = 2;
+  public static readonly CLOSED = 3;
   public static readonly instances: FakeWebSocket[] = [];
   public onopen: (() => void) | null = null;
   public onmessage: ((event: MessageEvent) => void) | null = null;
   public onclose: ((event: CloseEvent) => void) | null = null;
   public onerror: (() => void) | null = null;
+  public readyState = FakeWebSocket.CONNECTING;
   public readonly sent: string[] = [];
+  public close = vi.fn(() => {
+    this.readyState = FakeWebSocket.CLOSED;
+  });
 
   constructor(public readonly url: string) {
     FakeWebSocket.instances.push(this);
@@ -44,8 +52,6 @@ class FakeWebSocket {
   send(message: string): void {
     this.sent.push(message);
   }
-
-  close(): void {}
 }
 
 function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
@@ -105,6 +111,52 @@ describe("useUserSessionsWebSocket", () => {
     expect(FakeWebSocket.instances[0]?.url).toBe(
       "wss://api.example/sessions/updates?token=stream-token",
     );
+  });
+
+  it("closes a connecting websocket on cleanup", async () => {
+    const callbacks = {
+      onSessionUpdated: vi.fn(),
+      onSessionRemoved: vi.fn(),
+      onResyncRequired: vi.fn(),
+      onAuthError: vi.fn(),
+    };
+    const { unmount } = renderHook(() => useUserSessionsWebSocket({
+      enabled: true,
+      ...callbacks,
+    }));
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const webSocket = FakeWebSocket.instances[0]!;
+    act(() => {
+      unmount();
+    });
+
+    expect(webSocket.close).toHaveBeenCalledTimes(1);
+    expect(callbacks.onResyncRequired).not.toHaveBeenCalled();
+  });
+
+  it("does not reconnect when callback identities change", async () => {
+    const renderOptions = () => ({
+      enabled: true,
+      onSessionUpdated: vi.fn(),
+      onSessionRemoved: vi.fn(),
+      onResyncRequired: vi.fn(),
+      onAuthError: vi.fn(),
+    });
+    const { rerender } = renderHook(
+      (options) => useUserSessionsWebSocket(options),
+      { initialProps: renderOptions() },
+    );
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    rerender(renderOptions());
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0]?.close).not.toHaveBeenCalled();
   });
 
   it("dispatches update, remove, and resync messages", async () => {

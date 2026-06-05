@@ -44,6 +44,20 @@ export function useUserSessionsWebSocketToken({
     useState<UserSessionsWebSocketTokenResponse | null>(null);
   const webSocketTokenRetryTimeoutRef = useRef<number | null>(null);
   const webSocketTokenRetryCountRef = useRef(0);
+  const webSocketTokenRef = useRef<UserSessionsWebSocketTokenResponse | null>(null);
+  const callbacksRef = useRef({
+    onAuthError,
+    onReconnectPending,
+    onReconnectRecovered,
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onAuthError,
+      onReconnectPending,
+      onReconnectRecovered,
+    };
+  }, [onAuthError, onReconnectPending, onReconnectRecovered]);
 
   const clearWebSocketTokenRetryTimeout = useCallback(() => {
     if (webSocketTokenRetryTimeoutRef.current !== null) {
@@ -62,8 +76,9 @@ export function useUserSessionsWebSocketToken({
       webSocketTokenRetryCountRef.current = 0;
       clearWebSocketTokenRetryTimeout();
       setHasTerminalAuthError(false);
+      webSocketTokenRef.current = nextToken;
       setWebSocketToken(nextToken);
-      onReconnectRecovered?.();
+      callbacksRef.current.onReconnectRecovered?.();
       return nextToken;
     } catch (error) {
       if (
@@ -72,8 +87,9 @@ export function useUserSessionsWebSocketToken({
       ) {
         clearWebSocketTokenRetryTimeout();
         setHasTerminalAuthError(true);
+        webSocketTokenRef.current = null;
         setWebSocketToken(null);
-        onAuthError?.({
+        callbacksRef.current.onAuthError?.({
           message: error.message,
           code: error.code ?? null,
         });
@@ -87,8 +103,8 @@ export function useUserSessionsWebSocketToken({
       webSocketTokenRetryCountRef.current += 1;
       clearWebSocketTokenRetryTimeout();
 
-      if (!webSocketToken) {
-        onReconnectPending?.();
+      if (!webSocketTokenRef.current) {
+        callbacksRef.current.onReconnectPending?.();
       }
 
       webSocketTokenRetryTimeoutRef.current = window.setTimeout(() => {
@@ -99,16 +115,13 @@ export function useUserSessionsWebSocketToken({
   }, [
     clearWebSocketTokenRetryTimeout,
     enabled,
-    onAuthError,
-    onReconnectPending,
-    onReconnectRecovered,
-    webSocketToken,
   ]);
 
   useEffect(() => {
     if (!enabled) {
       clearWebSocketTokenRetryTimeout();
       setHasTerminalAuthError(false);
+      webSocketTokenRef.current = null;
       setWebSocketToken(null);
       return;
     }
@@ -136,6 +149,7 @@ export function useUserSessionsWebSocketToken({
     clearWebSocketTokenRetryTimeout();
     webSocketTokenRetryCountRef.current = 0;
     setHasTerminalAuthError(false);
+    webSocketTokenRef.current = null;
     setWebSocketToken(null);
     void fetchWebSocketToken();
   }, [clearWebSocketTokenRetryTimeout, fetchWebSocketToken]);
