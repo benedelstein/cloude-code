@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import type { UIMessage, UIMessagePart } from "ai";
-import { AgentMode, PullRequestState, SessionStatus } from "./session";
+import { AgentMode, SessionStatus } from "./session";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MessageAttachmentRef,
@@ -126,16 +126,6 @@ export const BranchPushedEvent = z.object({
 });
 export type BranchPushedEvent = z.infer<typeof BranchPushedEvent>;
 
-export const PullRequestUpdatedEvent = z.object({
-  type: z.literal("pull_request.updated"),
-  pullRequest: z.object({
-    url: z.string(),
-    number: z.number(),
-    state: PullRequestState,
-  }),
-});
-export type PullRequestUpdatedEvent = z.infer<typeof PullRequestUpdatedEvent>;
-
 export const EditorReadyEvent = z.object({
   type: z.literal("editor.ready"),
   url: z.string(),
@@ -152,7 +142,6 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentReadyEvent,
   UserMessageEvent,
   BranchPushedEvent,
-  PullRequestUpdatedEvent,
   EditorReadyEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

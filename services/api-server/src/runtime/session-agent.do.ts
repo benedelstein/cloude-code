@@ -713,7 +713,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       pullRequest,
     });
     await this.sessionSummaryService.persistPullRequest(data);
-    this.broadcastPullRequestUpdated(pullRequest);
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
@@ -724,7 +723,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     const updatedPullRequest = { ...pullRequest, state: data.state };
     this.updatePartialState({ pullRequest: updatedPullRequest });
     await this.sessionSummaryService.persistPullRequestState(data.state);
-    this.broadcastPullRequestUpdated(updatedPullRequest);
     return success(undefined);
   }
 
@@ -981,13 +979,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       fields: { type: message.type, connectionCount },
     });
     this.broadcast(JSON.stringify(message), without);
-  }
-
-  private broadcastPullRequestUpdated(pullRequest: NonNullable<ClientState["pullRequest"]>): void {
-    this.broadcastMessage({
-      type: "pull_request.updated",
-      pullRequest,
-    });
   }
 
   private sendMessage(message: ServerMessage, to: Connection): void {

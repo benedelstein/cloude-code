@@ -297,10 +297,6 @@ export function useCloudflareAgent({
         setRepoFullName(msg.repoFullName);
         break;
 
-      case "pull_request.updated":
-        setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, msg.pullRequest));
-        break;
-
       case "operation.error":
         resetPendingResponse("operation.error");
         applyServerActiveTurn(null);

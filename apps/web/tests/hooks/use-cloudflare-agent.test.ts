@@ -104,19 +104,17 @@ describe("useCloudflareAgent", () => {
     expect(result.current.isResponding).toBe(false);
   });
 
-  it("updates pull request state from websocket events", () => {
+  it("updates pull request state from client state", () => {
     const { result } = renderAgent();
 
     act(() => {
-      mockAgentState.options?.onMessage({
-        data: JSON.stringify({
-          type: "pull_request.updated",
-          pullRequest: {
-            url: "https://github.com/ben/repo/pull/12",
-            number: 12,
-            state: "open",
-          },
-        }),
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        pullRequest: {
+          url: "https://github.com/ben/repo/pull/12",
+          number: 12,
+          state: "open",
+        },
       });
     });
 
