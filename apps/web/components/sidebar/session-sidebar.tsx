@@ -300,7 +300,7 @@ export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps)
     <>
       <Sidebar collapsible="offcanvas" variant="floating" className={className}>
         {resizeHandle}
-        <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right border-b border-sidebar-border p-0`}>
+        <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-right p-0`}>
           <div className="flex flex-row items-center justify-end h-full">
             {/* <div className="flex h-8 w-8 text-2xl">☁️</div> */}
           </div>

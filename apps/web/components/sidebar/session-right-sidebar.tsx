@@ -67,7 +67,7 @@ export function SessionRightSidebar() {
 
   return (
     <AppRightSidebarPortal>
-      <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-center border-b border-sidebar-border`}>
+      <SidebarHeader className={`${SIDEBAR_HEADER_HEIGHT_CLASS} justify-center`}>
         <div className="px-1">
           <div className="min-w-0 flex gap-0 flex-col">
             <p className="truncate text-sm font-medium">Session Context</p>

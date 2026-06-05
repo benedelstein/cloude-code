@@ -62,7 +62,7 @@ interface AppShellProps {
 }
 
 const FLOATING_SIDEBAR_PADDING_PX = 4;
-const SIDEBAR_HEADER_HEIGHT_PX = 56;
+const SIDEBAR_HEADER_HEIGHT_PX = 48;
 const FLOATING_SIDEBAR_TOGGLE_SIZE_PX = 28;
 const FLOATING_SIDEBAR_TOGGLE_TOP_PX =
   FLOATING_SIDEBAR_PADDING_PX
@@ -262,7 +262,7 @@ function AppShellLayout({
               }}
             >
               <div
-                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} min-w-0 flex-1 items-center rounded-lg border border-border bg-background px-3 shadow-shadow shadow-md has-[>:empty]:hidden`}
+                className={`header-card flex ${SIDEBAR_HEADER_HEIGHT_CLASS} min-w-0 flex-1 items-center rounded-md border border-border bg-background px-3 shadow-shadow shadow-md has-[>:empty]:hidden`}
               >
                 <AppHeaderSlot />
               </div>

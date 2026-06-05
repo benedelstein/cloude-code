@@ -94,7 +94,7 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
           <button
             type="button"
             disabled={isBusy}
-            className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm border border-border text-foreground-secondary hover:bg-accent-subtle hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
+            className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-sm text-foreground-secondary hover:bg-muted hover:text-foreground transition-colors ${isBusy ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
             aria-label="Session actions"
           >
             <span className="flex items-center justify-center gap-[3px]" aria-hidden="true">

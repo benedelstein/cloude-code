@@ -31,7 +31,7 @@ const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = { code: "KeyB", shiftKey: false, altKey: false } as const
-const SIDEBAR_HEADER_HEIGHT_CLASS = "h-14"
+const SIDEBAR_HEADER_HEIGHT_CLASS = "h-12"
 
 type SidebarKeyboardShortcut =
   | {
@@ -306,7 +306,7 @@ const Sidebar = React.forwardRef<
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-shadow group-data-[variant=floating]:shadow-xl"
+            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-md group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-shadow group-data-[variant=floating]:shadow-xl"
           >
             {children}
           </div>
