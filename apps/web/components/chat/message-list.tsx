@@ -160,7 +160,6 @@ export function MessageList({
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
-  const isSetupRunning = sessionSetupRun?.status === "running";
   const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
   const latestUserMessageIndex = findLastMessageIndex(allMessages, "user");
   const latestAssistantMessageIndex = findLastMessageIndex(allMessages, "assistant");
@@ -169,6 +168,8 @@ export function MessageList({
     : allMessages[latestAssistantMessageIndex]?.id ?? null;
   const activeAssistantMessageId = streamingMessage?.id
     ?? (isResponding && latestAssistantMessageIndex > latestUserMessageIndex ? latestAssistantMessageId : null);
+  const isSetupRunning = sessionSetupRun !== null && sessionSetupRun.status === "running";
+  const isPersistentWorkingCloudActive = isResponding === true || isSetupRunning;
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -255,7 +256,7 @@ export function MessageList({
               setupRun={sessionSetupRun}
             />
           )}
-          <PersistentWorkingCloud active={isResponding === true && !isSetupRunning} />
+          <PersistentWorkingCloud active={isPersistentWorkingCloudActive} />
           <div ref={bottomRef} />
         </div>
       )}
@@ -324,9 +325,6 @@ function SessionSetupRunIndicator({
                 task={task}
               />
             ))}
-            {setupRun.status === "running" && (
-              <WorkingCloudRow />
-            )}
           </div>
         </div>
       </div>
