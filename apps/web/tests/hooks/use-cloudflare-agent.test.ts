@@ -127,16 +127,14 @@ describe("useCloudflareAgent", () => {
     });
   });
 
-  it("updates pushed branch state from websocket events", () => {
+  it("updates pushed branch state from client state", () => {
     const { result } = renderAgent();
 
     act(() => {
-      mockAgentState.options?.onMessage({
-        data: JSON.stringify({
-          type: "branch.pushed",
-          branch: "cloude/change-abcd",
-          repoFullName: "ben/repo",
-        }),
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        pushedBranch: "cloude/change-abcd",
+        repoFullName: "ben/repo",
       });
     });
 

@@ -262,7 +262,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       getClientState: () => this.state,
       updatePartialState: (partial) => this.updatePartialState(partial),
-      broadcastMessage: (msg) => this.broadcastMessage(msg),
       updatePushedBranch: (branch) =>
         this.sessionSummaryService.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
