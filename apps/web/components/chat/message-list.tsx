@@ -160,7 +160,6 @@ export function MessageList({
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
-  const isSetupRunning = sessionSetupRun?.status === "running";
   const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
   const latestUserMessageIndex = findLastMessageIndex(allMessages, "user");
   const latestAssistantMessageIndex = findLastMessageIndex(allMessages, "assistant");
@@ -169,6 +168,8 @@ export function MessageList({
     : allMessages[latestAssistantMessageIndex]?.id ?? null;
   const activeAssistantMessageId = streamingMessage?.id
     ?? (isResponding && latestAssistantMessageIndex > latestUserMessageIndex ? latestAssistantMessageId : null);
+  const setupRunShowsWorkingCloud = sessionSetupRun !== null && sessionSetupRun.status === "running";
+  const shouldRenderPersistentWorkingCloud = isResponding === true && !setupRunShowsWorkingCloud;
 
   const showError = sessionErrorMessage !== null
     && allMessages.length === 0
@@ -255,8 +256,8 @@ export function MessageList({
               setupRun={sessionSetupRun}
             />
           )}
-          {isResponding === true && !isSetupRunning && (
-            <PersistentWorkingCloud />
+          {shouldRenderPersistentWorkingCloud && (
+            <PersistentWorkingCloud active={true} />
           )}
           <div ref={bottomRef} />
         </div>
@@ -265,10 +266,10 @@ export function MessageList({
   );
 }
 
-function PersistentWorkingCloud() {
+function PersistentWorkingCloud({ active }: { active: boolean }) {
   return (
     <div className="w-fit py-1">
-      <WorkingCloudRow />
+      <WorkingCloudRow active={active} />
     </div>
   );
 }
