@@ -28,24 +28,37 @@ const WORKING_CLOUD_STYLES = `
 `;
 
 interface WorkingCloudIndicatorProps {
+  active?: boolean;
   className?: string;
   animated?: boolean;
 }
 
-export function WorkingCloudIndicator({ className = "", animated = true }: WorkingCloudIndicatorProps) {
+export function WorkingCloudIndicator({
+  active = true,
+  className = "",
+  animated = true,
+}: WorkingCloudIndicatorProps) {
+  const isAnimated = active && animated;
+  const sizeClassName = active ? "h-[26px] w-[38px] opacity-100" : "h-[16px] w-[24px] opacity-65";
+
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex h-[26px] w-[38px] shrink-0 items-center justify-center text-foreground-secondary ${className}`}
+      className={[
+        "inline-flex shrink-0 items-center justify-center text-foreground-secondary",
+        "transition-[height,width,opacity,transform] duration-500 ease-out",
+        sizeClassName,
+        className,
+      ].join(" ")}
     >
       <style>{WORKING_CLOUD_STYLES}</style>
       <svg
         viewBox="0 0 64 44"
-        className="h-[26px] w-[38px] overflow-visible"
+        className="h-full w-full overflow-visible"
         fill="none"
         focusable="false"
       >
-        <g className={animated ? "working-cloud-float" : undefined}>
+        <g className={isAnimated ? "working-cloud-float" : undefined}>
           <path
             d="M12.4 30.1C7.4 29.3 4.9 24.1 8.4 20.5C7.2 16.3 11.3 12.4 16 13.4C18.2 8.2 25.2 7 30 10.6C34.2 7.4 41.2 8.8 43.5 13.6C49.2 13.8 55.4 18.3 54.1 25.3C59.8 30.6 54.1 38.3 45.5 36.8C42 41 35.1 40.8 31.4 37.6C26.9 41.2 19.5 40.4 17.2 35.8C13.6 36.2 10.7 34 12.4 30.1Z"
             fill="var(--background)"
@@ -56,7 +69,7 @@ export function WorkingCloudIndicator({ className = "", animated = true }: Worki
             vectorEffect="non-scaling-stroke"
             className="working-cloud-outline"
           >
-            {animated && (
+            {isAnimated && (
               <animate
                 attributeName="d"
                 dur="2.8s"
@@ -68,26 +81,26 @@ export function WorkingCloudIndicator({ className = "", animated = true }: Worki
           <path
             d="M19.2 25.6C17.2 27.8 17 30.2 18.9 32.1"
             stroke="currentColor"
-            strokeWidth="1.55"
+            strokeWidth="1.2"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            className={animated ? "working-cloud-squiggle" : undefined}
+            className={isAnimated ? "working-cloud-squiggle" : "opacity-60"}
           />
           <path
             d="M27.7 29.7C30.4 33.1 35.6 33.1 38.2 29.9"
             stroke="currentColor"
-            strokeWidth="1.55"
+            strokeWidth="1.2"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            className={animated ? "working-cloud-squiggle" : undefined}
+            className={isAnimated ? "working-cloud-squiggle" : "opacity-60"}
           />
           <path
             d="M43.6 17.4C46.5 17.6 48.3 19 48.9 21.4"
             stroke="currentColor"
-            strokeWidth="1.55"
+            strokeWidth="1.2"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            className={animated ? "working-cloud-squiggle" : undefined}
+            className={isAnimated ? "working-cloud-squiggle" : "opacity-60"}
           />
         </g>
       </svg>
@@ -95,10 +108,22 @@ export function WorkingCloudIndicator({ className = "", animated = true }: Worki
   );
 }
 
-export function WorkingCloudRow() {
+export function WorkingCloudRow({ active = true }: { active?: boolean }) {
+  if (active) {
+    return (
+      <div
+        role="status"
+        aria-label="Working"
+        className="w-fit py-0.5 text-foreground-secondary"
+      >
+        <WorkingCloudIndicator active={true} />
+      </div>
+    );
+  }
+
   return (
-    <div className="py-0.5">
-      <WorkingCloudIndicator />
+    <div aria-hidden="true" className="w-fit py-0.5 text-foreground-secondary">
+      <WorkingCloudIndicator active={active} />
     </div>
   );
 }

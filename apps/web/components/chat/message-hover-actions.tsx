@@ -14,6 +14,7 @@ export function MessageHoverActions({
   isUser,
   createdAt,
   canShowActions,
+  reserveSpace = false,
   canCopy,
   copied,
   onCopy,
@@ -21,17 +22,27 @@ export function MessageHoverActions({
   isUser: boolean;
   createdAt: Date | null;
   canShowActions: boolean;
+  reserveSpace?: boolean;
   canCopy: boolean;
   copied: boolean;
   onCopy: () => void;
 }) {
-  if (!canShowActions || (!createdAt && !canCopy)) { return null; }
+  const rowClassName = clsx(
+    "mt-1 flex h-6 items-center gap-2 text-xs text-foreground-tertiary",
+    isUser ? "justify-end" : "justify-start",
+  );
+
+  if (!canShowActions) {
+    return reserveSpace ? <div aria-hidden="true" className={rowClassName} /> : null;
+  }
+
+  if (!createdAt && !canCopy) { return null; }
 
   return (
     <div
       className={clsx(
-        "mt-1 flex items-center gap-2 text-xs text-foreground-tertiary opacity-0 transition-opacity group-hover/message:opacity-100",
-        isUser ? "justify-end" : "justify-start",
+        rowClassName,
+        "opacity-0 transition-opacity group-hover/message:opacity-100",
       )}
     >
       {createdAt && <span>{formatMessageTime(createdAt)}</span>}

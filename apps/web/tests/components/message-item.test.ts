@@ -79,10 +79,11 @@ describe("MessageItem", () => {
 
     expect(screen.queryByRole("button", { name: "Copy message" })).toBeNull();
     expect(container.querySelector("[class*='group-hover/message:opacity-100']")).toBeNull();
+    expect(container.querySelector("div[aria-hidden='true'].h-6")).toBeTruthy();
   });
 
   it("shows a live work header while an assistant message is streaming", () => {
-    const { container } = render(React.createElement(MessageItem, {
+    render(React.createElement(MessageItem, {
       message: {
         ...assistantMessage(),
         metadata: { startedAt: Date.now() - 5_000 },
@@ -91,10 +92,6 @@ describe("MessageItem", () => {
     }));
 
     expect(screen.getByText(/Working for/)).toBeTruthy();
-    const cloudAnimation = container.querySelector("animate");
-    expect(cloudAnimation).toBeTruthy();
-    expect(screen.getByText("Partial response").compareDocumentPosition(cloudAnimation!) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
   });
 
   it("shows the copy action after an assistant message has settled", () => {

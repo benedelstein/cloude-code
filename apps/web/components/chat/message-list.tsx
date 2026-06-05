@@ -255,7 +255,7 @@ export function MessageList({
               setupRun={sessionSetupRun}
             />
           )}
-          {isResponding && activeAssistantMessageId === null && !isSetupRunning && <TypingIndicator />}
+          <PersistentWorkingCloud active={isResponding === true && !isSetupRunning} />
           <div ref={bottomRef} />
         </div>
       )}
@@ -263,14 +263,10 @@ export function MessageList({
   );
 }
 
-function TypingIndicator() {
+function PersistentWorkingCloud({ active }: { active: boolean }) {
   return (
-    <div
-      role="status"
-      aria-label="Working"
-      className="w-fit py-1 text-foreground-secondary"
-    >
-      <WorkingCloudRow />
+    <div className="w-fit py-1">
+      <WorkingCloudRow active={active} />
     </div>
   );
 }

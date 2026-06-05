@@ -20,7 +20,6 @@ import {
 import { MessageHoverActions } from "@/components/chat/message-hover-actions";
 import { TurnWorkHeader } from "@/components/chat/message-turn-work-header";
 import { WorkItems, type RenderItem } from "@/components/chat/message-work-items";
-import { WorkingCloudRow } from "@/components/chat/working-cloud-indicator";
 
 interface MessageItemProps {
   message: UIMessage;
@@ -314,10 +313,6 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, c
                     isStreaming={!!isStreaming}
                     isUser={isUser}
                   />
-
-                  {showActiveWorkHeader && (
-                    <WorkingCloudRow />
-                  )}
                 </div>
               )}
 
@@ -328,6 +323,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, c
                 isUser={isUser}
                 createdAt={createdAt}
                 canShowActions={isUser || isSettled}
+                reserveSpace={!isUser && !isSettled}
                 canCopy={canCopyMessage}
                 copied={copied}
                 onCopy={() => void copyMessageText()}
