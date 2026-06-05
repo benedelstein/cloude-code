@@ -144,6 +144,19 @@ describe("useCloudflareAgent", () => {
     expect(result.current.repoFullName).toBe("ben/repo");
   });
 
+  it("updates base branch state from client state", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        baseBranch: "develop",
+      });
+    });
+
+    expect(result.current.baseBranch).toBe("develop");
+  });
+
   it("stamps live startedAt metadata on streaming messages", async () => {
     const { result } = renderAgent();
 

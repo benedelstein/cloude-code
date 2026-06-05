@@ -41,6 +41,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     isResponding,
     isStreaming,
     repoFullName,
+    baseBranch,
     pendingUserMessage,
     pushedBranch,
     pullRequestState,
@@ -252,6 +253,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             </div>
             <BranchBar
               sessionId={sessionId}
+              baseBranch={baseBranch}
               pushedBranch={pushedBranch}
               pullRequestState={pullRequestState}
             />

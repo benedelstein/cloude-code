@@ -3,6 +3,7 @@ import { failure, success } from "@repo/shared";
 import {
   createPullRequestForSession,
   type SessionPullRequestGitHubProvider,
+  type SessionPullRequestServiceError,
 } from "../../src/modules/sessions/services/session-pull-request.service";
 import type { SessionAgentRpc } from "../../src/shared/types/session-agent";
 
@@ -64,5 +65,33 @@ describe("createPullRequestForSession", () => {
       url: "https://github.com/benedelstein/cloude-code/pull/58",
       state: "open",
     });
+  });
+
+  it("includes provider details when pull request creation fails", async () => {
+    const { sessionStub } = createSessionStub();
+    const github: SessionPullRequestGitHubProvider = {
+      compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
+        .mockResolvedValue(failure({
+          code: "GITHUB_API_ERROR",
+          message: "Compare failed",
+        })),
+      createPullRequest: vi.fn<SessionPullRequestGitHubProvider["createPullRequest"]>()
+        .mockResolvedValue(failure({
+          code: "GITHUB_API_ERROR",
+          message: "Failed to create pull request for benedelstein/cloude-code.",
+          details: "GitHub returned 422: Validation Failed: base invalid",
+        })),
+      getPullRequest: vi.fn<SessionPullRequestGitHubProvider["getPullRequest"]>(),
+    };
+
+    await expect(createPullRequestForSession({
+      sessionStub,
+      github,
+      anthropicApiKey: "test-key",
+    })).rejects.toMatchObject({
+      responseBody: {
+        details: "GitHub returned 422: Validation Failed: base invalid (base: main, head: cloude/mobile-scroll-fix-bafd)",
+      },
+    } satisfies Partial<SessionPullRequestServiceError>);
   });
 });

@@ -60,6 +60,7 @@ function createPendingSession(
     isResponding: false,
     pendingUserMessage,
     repoFullName: null,
+    baseBranch: null,
     pushedBranch: null,
     pullRequestState: null,
     todos: null,

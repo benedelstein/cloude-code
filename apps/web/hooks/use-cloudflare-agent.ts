@@ -83,6 +83,7 @@ export interface UseCloudflareAgentReturn {
   isResponding: boolean;
   pendingUserMessage: UIMessage | null;
   repoFullName: string | null;
+  baseBranch: string | null;
   pushedBranch: string | null;
   pullRequestState: ClientState["pullRequest"] | null;
   todos: SessionTodo[] | null;
@@ -127,6 +128,7 @@ export function useCloudflareAgent({
   const [waitingForResponse, setWaitingForResponse] = useState(initialPendingUserMessage !== null);
   const [serverActiveTurn, setServerActiveTurn] = useState<ActiveTurnState | null>(null);
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
+  const [baseBranch, setBaseBranch] = useState<string | null>(null);
   const [pushedBranch, setPushedBranch] = useState<string | null>(null);
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
@@ -341,6 +343,7 @@ export function useCloudflareAgent({
     onStateUpdate(state: ClientState) {
       setHasHydratedState(true);
       setPushedBranch(state.pushedBranch);
+      setBaseBranch(state.baseBranch);
       setRepoFullName(state.repoFullName);
       // for objects, we need to diff them to prevent excessive re-renders
       setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, state.pullRequest ?? null));
@@ -449,6 +452,7 @@ export function useCloudflareAgent({
   return {
     sessionId,
     repoFullName,
+    baseBranch,
     messages,
     streamingMessage,
     sessionStatus,

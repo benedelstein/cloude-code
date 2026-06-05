@@ -42,6 +42,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function formatGitHubErrorDetails(error: unknown): string | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+
+  const status = typeof error.status === "number" ? error.status : null;
+  const message = typeof error.message === "string" && error.message.trim()
+    ? error.message.trim()
+    : null;
+
+  if (status && message) {
+    return `GitHub returned ${status}: ${message}`;
+  }
+  if (message) {
+    return message;
+  }
+  if (status) {
+    return `GitHub returned ${status}`;
+  }
+  return undefined;
+}
+
 export interface GitHubInstallationSummary {
   id: number;
 }
@@ -321,7 +343,7 @@ export class GitHubAppService {
       });
     } catch (error) {
       return this.githubApiFailure(
-        `Failed to compare branches for ${repoFullName}.`,
+        `Failed to compare branches for ${repoFullName} (${baseBranch}...${headBranch}).`,
         error,
       );
     }
@@ -370,7 +392,7 @@ export class GitHubAppService {
       }
 
       return this.githubApiFailure(
-        `Failed to create pull request for ${repoFullName}.`,
+        `Failed to create pull request for ${repoFullName} (${input.base} <- ${input.head}).`,
         error,
       );
     }
@@ -845,10 +867,12 @@ export class GitHubAppService {
     message: string,
     error: unknown,
   ): GitHubAppResult<T> {
-    this.logger.error("GitHub API failure", { fields: { message }, error });
+    const details = formatGitHubErrorDetails(error);
+    this.logger.error("GitHub API failure", { fields: { message, details: details ?? null }, error });
     return failure({
       code: "GITHUB_API_ERROR",
       message,
+      details,
     });
   }
 

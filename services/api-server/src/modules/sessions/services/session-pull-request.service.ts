@@ -188,7 +188,13 @@ export async function createPullRequestForSession(params: {
   );
   if (!compareDataResult.ok) {
     logger.error("Failed to fetch GitHub compare data for PR text generation", {
-      fields: { code: compareDataResult.error.code, message: compareDataResult.error.message },
+      fields: {
+        code: compareDataResult.error.code,
+        message: compareDataResult.error.message,
+        details: compareDataResult.error.details ?? null,
+        baseBranch,
+        branchName,
+      },
     });
   } else {
     compareData = compareDataResult.value;
@@ -226,12 +232,14 @@ export async function createPullRequestForSession(params: {
     base: baseBranch,
   });
   if (!createPullRequestResult.ok) {
+    const details = createPullRequestResult.error.details
+      ?? createPullRequestResult.error.message;
     throw new SessionPullRequestServiceError(
       "Failed to create pull request",
       400,
       {
         error: "Failed to create pull request",
-        details: createPullRequestResult.error.message,
+        details: `${details} (base: ${baseBranch}, head: ${branchName})`,
       },
     );
   }

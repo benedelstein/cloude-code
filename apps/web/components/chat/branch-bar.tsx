@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ExternalLink, Copy, Check } from "lucide-react";
-import { createPullRequest, getPullRequestStatus } from "@/lib/client-api";
+import { ApiError, createPullRequest, getPullRequestStatus } from "@/lib/client-api";
 import type { ClientState } from "@repo/shared";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { PrStatusIcon } from "@/components/chat/pr-status-icon";
@@ -11,17 +11,20 @@ const POLL_INTERVAL_MS = 30_000;
 
 interface BranchBarProps {
   sessionId: string;
+  baseBranch: string | null;
   pushedBranch: string | null;
   pullRequestState: ClientState["pullRequest"] | null;
 }
 
 export function BranchBar({
   sessionId,
+  baseBranch,
   pushedBranch,
   pullRequestState,
 }: BranchBarProps) {
   const url = pullRequestState?.url ?? null;
   const state = pullRequestState?.state ?? null;
+  const displayBaseBranch = baseBranch ?? "main";
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -61,7 +64,11 @@ export function BranchBar({
       // Open the PR in a new tab
       window.open(result.url, "_blank");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create PR");
+      if (err instanceof ApiError) {
+        setError(err.details ?? err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to create PR");
+      }
     } finally {
       setIsCreating(false);
     }
@@ -74,7 +81,7 @@ export function BranchBar({
       <div className="px-4 py-2 flex min-w-0 items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-foreground-secondary min-w-0">
           <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
-          <span className="text-foreground font-medium">main</span>
+          <span className="text-foreground font-medium">{displayBaseBranch}</span>
           {" \u2190 "}
           <button
             type="button"
@@ -93,7 +100,7 @@ export function BranchBar({
 
         <div className="flex items-center gap-2 shrink-0">
           {error && (
-            <span className="text-xs text-danger">{error}</span>
+            <span className="max-w-md truncate text-xs text-danger" title={error}>{error}</span>
           )}
 
           {url ? (
