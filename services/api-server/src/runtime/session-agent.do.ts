@@ -64,6 +64,7 @@ import { createSessionSummaryWriter } from "@/modules/sessions/services/session-
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
+import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -92,6 +93,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
+  private readonly githubAppService: GitHubAppService;
+  private readonly autoPullRequestService: SessionAutoPullRequestService;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
   initialState: ClientState = {
@@ -135,11 +138,26 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       apiKey: this.env.SPRITES_API_KEY,
     });
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
-    const githubAppService = new GitHubAppService(this.env, this.logger);
+    this.githubAppService = new GitHubAppService(this.env, this.logger);
     this.sessionSummaryService = new SessionSummaryService({
       repository: createSessionSummaryWriter(this.env),
       getSessionId: () => this.serverState.sessionId,
       logger: this.logger,
+    });
+    this.autoPullRequestService = new SessionAutoPullRequestService({
+      logger: this.logger,
+      sessionStub: this,
+      github: this.githubAppService,
+      anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      getState: () => ({
+        sessionId: this.serverState.sessionId,
+        repoFullName: this.state.repoFullName,
+        pushedBranch: this.state.pushedBranch,
+        hasPullRequest: this.state.pullRequest !== null,
+      }),
+      keepAliveWhile: (callback) => this.keepAliveWhile(callback),
+      assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
+      enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(false),
     });
 
     migrateAll(sql, ctx.storage, [
@@ -182,6 +200,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
+      onTurnFinished: () => this.autoPullRequestService.queueCreateAfterTurnFinish(),
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -207,7 +226,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
-      githubTokenProvider: githubAppService,
+      githubTokenProvider: this.githubAppService,
       setupReporter: {
         startTask: (taskId) => this.setupRunService.startTask(taskId),
         completeTask: (taskId, output) => this.setupRunService.completeTask(taskId, output),
@@ -252,7 +271,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         this.sessionSummaryService.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
-      githubTokenProvider: githubAppService,
+      githubTokenProvider: this.githubAppService,
     });
 
     this.logger.info("Constructed agent DO", {
@@ -293,9 +312,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     };
   }
 
-  // ============================================
   // State helpers
-  // ============================================
 
   private updatePartialState(partial: Partial<ClientState>): void {
     this.setState({ ...this.state, ...partial });
@@ -322,9 +339,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     await this.providerConnectionService.refresh();
   }
 
-  // ============================================
   // Webhook RPC handlers (called from /internal webhook routes)
-  // ============================================
 
   private isWebhookTokenValid(token: string): boolean {
     const expected = this.secretRepository.get("webhook_token");
@@ -379,9 +394,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     return true;
   }
 
-  // ============================================
   // HTTP/RPC Handlers
-  // ============================================
 
   /**
    * RPC entry point for the `/git-proxy/:sessionId/*` route. Handles repo
@@ -392,9 +405,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     return this.gitProxyService.handleRequest(request);
   }
 
-  // ============================================
   // WebSocket lifecycle (Agents SDK)
-  // ============================================
 
   onConnect(connection: Connection): void {
     this.logger.debug("Client connected", {
@@ -521,9 +532,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
   }
 
-  // ============================================
   // Provisioning
-  // ============================================
 
   /**
    * Single entry point for getting the session to a ready state.
@@ -552,9 +561,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
   }
 
-  // ============================================
   // Init handler
-  // ============================================
 
   async handleInit(request: InitSessionAgentRequest): Promise<HandleInitResult> {
     // prevents other networking code from running while initializing
@@ -651,9 +658,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     return success(undefined);
   }
 
-  // ============================================
   // Session info / management handlers
-  // ============================================
 
   handleGetSession(): HandleGetSessionResult {
     const sessionId = this.serverState.sessionId;
@@ -748,9 +753,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     return success(undefined);
   }
 
-  // ============================================
   // Client message handlers
-  // ============================================
 
   private async handleClientMessage(
     connection: Connection,
@@ -967,9 +970,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
   }
 
-  // ============================================
   // Broadcast / send helpers
-  // ============================================
 
   private broadcastMessage(message: ServerMessage, without?: string[]): void {
     let connectionCount = 0;

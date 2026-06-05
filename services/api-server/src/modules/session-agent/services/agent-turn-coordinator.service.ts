@@ -38,6 +38,7 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
+  onTurnFinished?: () => void;
 }
 
 /**
@@ -63,6 +64,7 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
+  private readonly onTurnFinished: (() => void) | null;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -93,6 +95,7 @@ export class AgentTurnCoordinator {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
     this.updateWorkingState = deps.updateWorkingState;
+    this.onTurnFinished = deps.onTurnFinished ?? null;
   }
 
   /**
@@ -253,6 +256,9 @@ export class AgentTurnCoordinator {
         // agent.finish so the wire order stays chunks → finish.
         this.flushBufferedChunks(buffered);
         this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
+        if (!isAbortedMessage(result.finishMessage)) {
+          this.onTurnFinished?.();
+        }
         return;
       }
       this.lastSeenChunkSequence = sequence;
@@ -532,4 +538,11 @@ export class AgentTurnCoordinator {
 function getChunkFinishReason(chunk: UIMessageChunk): string | undefined {
   const finishReason = (chunk as { finishReason?: unknown }).finishReason;
   return typeof finishReason === "string" ? finishReason : undefined;
+}
+
+function isAbortedMessage(message: UIMessage): boolean {
+  const metadata = message.metadata;
+  return typeof metadata === "object" &&
+    metadata !== null &&
+    (metadata as { aborted?: unknown }).aborted === true;
 }

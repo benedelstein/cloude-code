@@ -52,7 +52,7 @@ When your task is done:
 2. Push the branch: \`git push origin <branch-name>\`.
 3. NEVER push to \`main\` or any other branch. Only push to your \`cloude/\` branch.
 
-After pushing the branch, the user may create a pull request to merge the branch into the base branch.
+After you push the branch and finish your turn, the service automatically creates a pull request to merge the branch into the base branch.
 
 </git-workflow>
 

@@ -85,6 +85,7 @@ The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` response
 5. Apply derived todos/plan metadata with `applyDerivedStateFromParts`.
 6. Broadcast batched `agent.chunks`.
 7. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, and broadcast `agent.finish`.
+8. If the message was not aborted and a pushed branch exists without a stored PR, queue server-side pull request creation through the GitHub App service.
 
 The DO broadcasts chunk batches rather than individual chunks. The client protocol still receives WebSocket messages from the DO, not direct sprite traffic.
 
@@ -114,6 +115,7 @@ Duplicate webhook batches are deduped by the WAL sequence constraint. Missing ch
 - DO entrypoint: [session-agent.do.ts](../services/api-server/src/runtime/session-agent.do.ts)
 - Dispatch service: [session-chat-dispatch.service.ts](../services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts)
 - Turn coordinator: [agent-turn-coordinator.service.ts](../services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts)
+- Automatic PR queue: [session-auto-pull-request.service.ts](../services/api-server/src/runtime/session-auto-pull-request.service.ts)
 - Process manager: [sprite-agent-process-manager.service.ts](../services/api-server/src/modules/session-agent/services/sprite-agent-process-manager.service.ts)
 - VM webhook runner: [webhook-agent-runner.ts](../packages/vm-agent/src/webhook-agent-runner.ts)
 - WAL table: [pending-chunk.repository.ts](../services/api-server/src/modules/session-agent/repositories/pending-chunk.repository.ts)

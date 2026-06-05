@@ -2,7 +2,7 @@
 
 ## Overview
 
-cloude-code uses a GitHub App for repository access instead of a shared personal access token. Each session gets a scoped, short-lived installation access token that's automatically refreshed.
+cloude-code uses a GitHub App for repository access. Each session gets a scoped, short-lived installation access token that's automatically refreshed.
 
 ## How It Works
 
@@ -15,7 +15,46 @@ cloude-code uses a GitHub App for repository access instead of a shared personal
 4. API resolves numeric repo id → installation and verifies user access
 5. Durable Object provisions the Sprite, clones with a read-only installation token, and configures `origin --push` through the Worker git proxy
 6. Git proxy requests mint or reuse scoped installation tokens through `GitHubAppService`
+7. After a successful pushed branch and terminal agent turn, the Durable Object uses the same GitHub App service to create the pull request server-side
 ```
+
+### User And Installation Authorization
+
+GitHub App user access tokens are intersection-scoped. They can access only the
+repositories and permissions available to both:
+
+- the signed-in GitHub user
+- the GitHub App installation
+- the permissions granted to the GitHub App
+
+That means organization membership or direct repo access is not enough by itself. The repository
+must also be available through a GitHub App installation that the user can access. The inverse is
+also true: installing the app on a repository does not let a user act on that repository unless the
+user also has GitHub access to it.
+
+GitHub exposes this intersection through:
+
+- `GET /user/installations`
+- `GET /user/installations/{installation_id}/repositories`
+
+The repo picker uses those endpoints through `GitHubAppService.listInstallationsForAuthenticatedUser(...)`
+and `GitHubAppService.listInstallationReposForAuthenticatedUser(...)`, so users only see repositories
+inside installations they can access.
+
+Session creation and existing-session access use the same rule through `assertUserRepoAccess(...)` and
+`assertSessionRepoAccess(...)`. Those checks resolve the repository's installation, then call
+`getUserAccessibleInstallationRepoById(...)`, which lists the repositories visible to the current
+user inside that installation and requires the selected repo id to be present.
+
+Installation access tokens do not carry the signed-in user's authorization boundary. They are used
+for clone, push, fetch, compare, and pull-request operations only after the API server or Durable
+Object has already checked the user/installation intersection for the session.
+
+References:
+
+- [Generating a user access token for a GitHub App](https://docs.github.com/en/enterprise-cloud@latest/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#about-user-access-tokens)
+- [REST API endpoints for GitHub App installations](https://docs.github.com/en/rest/apps/installations?apiVersion=2022-11-28)
+- [Authorizing GitHub Apps](https://docs.github.com/en/apps/using-github-apps/authorizing-github-apps)
 
 ### Token Resolution
 
@@ -28,6 +67,8 @@ When a session is created, repo access is checked by `assertUserRepoAccess(...)`
 5. Cache the token in D1 and return it.
 
 If no installation is found in D1, the code falls back to GitHub API installation lookup and records the result.
+
+Pull request creation also uses `GitHubAppService`. The manual route and the automatic post-turn path both reuse `createPullRequestForSession(...)` so PR text generation, existing-PR handling, and DO state persistence stay in one place.
 
 ### Git Authentication on the VM
 
@@ -50,6 +91,8 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 | `services/api-server/src/modules/repo-environments/services/repo-environments.service.ts` | Repo environment ownership/access checks and session environment snapshot resolution |
 | `services/api-server/src/modules/session-agent/services/session-provision.service.ts` | Sprite provisioning, read-only clone, git remote setup |
 | `services/api-server/src/modules/session-agent/services/session-git-proxy.service.ts` | Session-scoped git proxy auth/access wrapper |
+| `services/api-server/src/modules/sessions/services/session-pull-request.service.ts` | Shared manual and automatic pull request creation flow |
+| `services/api-server/src/runtime/session-auto-pull-request.service.ts` | Post-turn automatic pull request queueing from the Durable Object |
 | `services/api-server/src/shared/integrations/sprites/network-policy.ts` | Bootstrap/final Sprite network policy construction |
 | `services/api-server/src/modules/webhooks/routes/webhooks.routes.ts` | `POST /webhooks/github` - receives GitHub webhook events |
 | `services/api-server/migrations/0001_github_app.sql` | D1 schema for installations, repos, token cache |

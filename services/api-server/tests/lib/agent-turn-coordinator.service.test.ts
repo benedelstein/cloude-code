@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger, SessionSetupRun } from "@repo/shared";
+import type { UIMessage, UIMessageChunk } from "ai";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { AgentTurnCoordinator } from "../../src/modules/session-agent/services/agent-turn-coordinator.service";
 
@@ -35,7 +36,9 @@ function createRunningInitialAgentStartRun(): SessionSetupRun {
   };
 }
 
-function createHarness() {
+function createHarness(params: {
+  onTurnFinished?: () => void;
+} = {}) {
   const serverState = {
     sessionId: "session-1",
     activeUserMessageId: "user-message-1",
@@ -47,27 +50,38 @@ function createHarness() {
     activeTurn: { userMessageId: "user-message-1", startedAt: "2026-06-03T00:00:00.000Z" },
     lastError: null,
   } as ClientState;
+  const pendingChunkRepository = {
+    getAll: vi.fn(() => []),
+    appendIfNew: vi.fn(() => true),
+    clear: vi.fn(),
+  };
+  const broadcastMessage = vi.fn();
+  const messageRepository = {
+    create: vi.fn((sessionId: string, message: UIMessage) => ({
+      sessionId,
+      createdAt: "2026-06-03T00:00:00.000Z",
+      message,
+    })),
+  };
 
   const coordinator = new AgentTurnCoordinator({
     logger: createLogger(),
     env: {} as never,
-    messageRepository: {} as never,
-    pendingChunkRepository: {
-      getAll: vi.fn(() => []),
-      clear: vi.fn(),
-    } as never,
+    messageRepository: messageRepository as never,
+    pendingChunkRepository: pendingChunkRepository as never,
     latestPlanRepository: {} as never,
     getServerState: () => serverState,
     updateServerState: (partial) => Object.assign(serverState, partial),
     getClientState: () => clientState,
     updatePartialState: (partial) => Object.assign(clientState, partial),
-    broadcastMessage: vi.fn(),
+    broadcastMessage,
     synthesizeStatus: () => "preparing",
     terminateActiveProcess: vi.fn(),
     updateWorkingState: vi.fn(),
+    onTurnFinished: params.onTurnFinished,
   });
 
-  return { clientState, coordinator };
+  return { broadcastMessage, clientState, coordinator, messageRepository, serverState };
 }
 
 describe("AgentTurnCoordinator", () => {
@@ -87,5 +101,37 @@ describe("AgentTurnCoordinator", () => {
 
     expect(clientState.sessionSetupRun?.tasks[0]?.status).toBe("running");
     expect(clientState.sessionSetupRun?.status).toBe("running");
+  });
+
+  it("runs the turn-finished hook after broadcasting a terminal assistant message", async () => {
+    const onTurnFinished = vi.fn();
+    const { broadcastMessage, coordinator, messageRepository, serverState } = createHarness({
+      onTurnFinished,
+    });
+
+    await coordinator.handleChunks("user-message-1", [
+      { sequence: 0, chunk: { type: "start", messageId: "assistant-message-1" } as UIMessageChunk },
+      { sequence: 1, chunk: { type: "finish", finishReason: "stop" } as UIMessageChunk },
+    ]);
+
+    expect(messageRepository.create).toHaveBeenCalledOnce();
+    expect(broadcastMessage).toHaveBeenLastCalledWith({
+      type: "agent.finish",
+      message: expect.objectContaining({ id: "assistant-message-1" }),
+    });
+    expect(onTurnFinished).toHaveBeenCalledOnce();
+    expect(serverState.activeUserMessageId).toBeNull();
+  });
+
+  it("does not run the turn-finished hook for aborted assistant messages", async () => {
+    const onTurnFinished = vi.fn();
+    const { coordinator } = createHarness({ onTurnFinished });
+
+    await coordinator.handleChunks("user-message-1", [
+      { sequence: 0, chunk: { type: "start", messageId: "assistant-message-1" } as UIMessageChunk },
+      { sequence: 1, chunk: { type: "abort" } as UIMessageChunk },
+    ]);
+
+    expect(onTurnFinished).not.toHaveBeenCalled();
   });
 });

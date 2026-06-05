@@ -8,6 +8,7 @@ describe("buildSystemPromptAppend", () => {
     expect(prompt).toContain("Sprite-specific context");
     expect(prompt).toContain("cloude/<descriptive-slug>-abcd");
     expect(prompt).toContain("NEVER push to `main`");
+    expect(prompt).toContain("automatically creates a pull request");
     expect(prompt).toContain("`TodoWrite`");
   });
 
