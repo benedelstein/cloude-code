@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger, SessionSetupRun } from "@repo/shared";
+import type { ClientState, Logger } from "@repo/shared";
 import type { UIMessage, UIMessageChunk } from "ai";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { AgentTurnCoordinator } from "../../src/modules/session-agent/services/agent-turn-coordinator.service";
@@ -17,25 +17,6 @@ function createLogger(): Logger {
   };
 }
 
-function createRunningInitialAgentStartRun(): SessionSetupRun {
-  return {
-    id: "setup-run-1",
-    status: "running",
-    startedAt: "2026-06-03T00:00:00.000Z",
-    completedAt: null,
-    tasks: [
-      {
-        id: "initial_agent_start",
-        isBlocking: true,
-        status: "running",
-        startedAt: "2026-06-03T00:00:00.000Z",
-        completedAt: null,
-        error: null,
-      },
-    ],
-  };
-}
-
 function createHarness(params: {
   onTurnFinished?: () => void;
 } = {}) {
@@ -45,8 +26,8 @@ function createHarness(params: {
     agentProcessId: 42,
   } as ServerState;
   const clientState = {
-    status: "preparing",
-    sessionSetupRun: createRunningInitialAgentStartRun(),
+    status: "ready",
+    sessionSetupRun: null,
     activeTurn: { userMessageId: "user-message-1", startedAt: "2026-06-03T00:00:00.000Z" },
     lastError: null,
   } as ClientState;
@@ -85,24 +66,6 @@ function createHarness(params: {
 }
 
 describe("AgentTurnCoordinator", () => {
-  it("does not complete initial_agent_start from webhook ready", () => {
-    const { clientState, coordinator } = createHarness();
-
-    coordinator.handleEvent({ type: "ready" });
-
-    expect(clientState.sessionSetupRun?.tasks[0]?.status).toBe("running");
-    expect(clientState.sessionSetupRun?.status).toBe("running");
-  });
-
-  it("does not fail initial_agent_start from webhook error", () => {
-    const { clientState, coordinator } = createHarness();
-
-    coordinator.handleEvent({ type: "error", error: "turn failed" });
-
-    expect(clientState.sessionSetupRun?.tasks[0]?.status).toBe("running");
-    expect(clientState.sessionSetupRun?.status).toBe("running");
-  });
-
   it("runs the turn-finished hook after broadcasting a terminal assistant message", async () => {
     const onTurnFinished = vi.fn();
     const { broadcastMessage, coordinator, messageRepository, serverState } = createHarness({

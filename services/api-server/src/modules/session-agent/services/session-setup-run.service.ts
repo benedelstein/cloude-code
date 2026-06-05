@@ -1,4 +1,5 @@
 import type {
+  BaseSessionSetupTask,
   ClientState,
   SessionSetupRun,
   SessionSetupTask,
@@ -13,8 +14,17 @@ const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
   "repository",
   "setup_script",
   "network_policy",
-  "initial_agent_start",
 ];
+
+type RetiredSessionSetupTask = BaseSessionSetupTask & {
+  id: "initial_agent_start";
+  isBlocking: true;
+};
+
+type StoredSessionSetupTask = SessionSetupTask | RetiredSessionSetupTask;
+type StoredSessionSetupRun = Omit<SessionSetupRun, "tasks"> & {
+  tasks: StoredSessionSetupTask[];
+};
 
 export interface SessionSetupRunServiceDeps {
   getServerState: () => ServerState;
@@ -46,14 +56,6 @@ export class SessionSetupRunService {
       completedAt: null,
       tasks: CREATE_SETUP_TASK_IDS.map(createSetupTask),
     };
-  }
-
-  /** Returns true when a setup task can still receive lifecycle updates. */
-  canUpdateTask(taskId: SessionSetupTaskId): boolean {
-    const setupRun = this.getClientState().sessionSetupRun;
-    if (!setupRun || setupRun.status !== "running") { return false; }
-    const task = setupRun.tasks.find((candidate) => candidate.id === taskId);
-    return Boolean(task && !isTerminalSetupTask(task));
   }
 
   startTask(taskId: SessionSetupTaskId): void {
@@ -137,11 +139,18 @@ export class SessionSetupRunService {
   /** Recovers setup run state from saved state when the DO restarts. */
   repairOnStart(): void {
     const setupRun = this.getClientState().sessionSetupRun;
-    if (!setupRun || setupRun.status !== "running") { return; }
+    if (!setupRun) { return; }
+    const currentRun = removeRetiredSetupTasks(setupRun);
+    if (currentRun.status !== "running") {
+      if (currentRun !== setupRun) {
+        this.updateRun(currentRun);
+      }
+      return;
+    }
 
     const serverState = this.getServerState();
     const now = new Date().toISOString();
-    const repairableRun = ensureNetworkPolicyTaskPresent(setupRun, serverState, now);
+    const repairableRun = ensureNetworkPolicyTaskPresent(currentRun, serverState, now);
     const repairedTasks = repairableRun.tasks.map((task): SessionSetupTask => {
       if (isTerminalSetupTask(task)) { return task; }
       switch (task.id) {
@@ -159,8 +168,6 @@ export class SessionSetupRunService {
           return serverState.finalNetworkPolicyApplied
             ? completeSetupTaskForRepair(task, now)
             : task;
-        case "initial_agent_start":
-          return task;
       }
     });
 
@@ -258,9 +265,6 @@ function createSetupTask(taskId: SessionSetupTaskId): SessionSetupTask {
     case "network_policy": {
       return createBaseSetupTask(taskId, true);
     }
-    case "initial_agent_start": {
-      return createBaseSetupTask(taskId, true);
-    }
     default: {
       const exhaustiveCheck: never = taskId;
       throw new Error(`Unhandled setup task id: ${exhaustiveCheck}`);
@@ -297,7 +301,6 @@ function updateSetupTask(
     case "cloud_container":
     case "repository":
     case "network_policy":
-    case "initial_agent_start":
     case "setup_script":
       return { ...task, ...fields };
     default: {
@@ -319,15 +322,19 @@ function ensureNetworkPolicyTaskPresent(
   const networkPolicyTask = serverState.finalNetworkPolicyApplied
     ? completeSetupTaskForRepair(createSetupTask("network_policy"), now)
     : createSetupTask("network_policy");
-  const initialAgentTaskIndex = setupRun.tasks.findIndex((task) =>
-    task.id === "initial_agent_start");
   const tasks = [...setupRun.tasks];
-  if (initialAgentTaskIndex === -1) {
-    tasks.push(networkPolicyTask);
-  } else {
-    tasks.splice(initialAgentTaskIndex, 0, networkPolicyTask);
-  }
+  tasks.push(networkPolicyTask);
   return { ...setupRun, tasks };
+}
+
+function removeRetiredSetupTasks(setupRun: SessionSetupRun): SessionSetupRun {
+  const storedRun = setupRun as StoredSessionSetupRun;
+  const tasks = storedRun.tasks.filter(
+    (task): task is SessionSetupTask => task.id !== "initial_agent_start",
+  );
+  return tasks.length === storedRun.tasks.length
+    ? setupRun
+    : { ...setupRun, tasks };
 }
 
 function completeSetupTaskForRepair(

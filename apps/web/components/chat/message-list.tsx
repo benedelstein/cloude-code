@@ -160,6 +160,7 @@ export function MessageList({
   const shouldRenderPendingUserMessage = hasPendingUserMessage
     && !allMessages.some((message) => message.id === pendingUserMessage.id);
   const shouldRenderSetupRun = sessionSetupRun !== null;
+  const isSetupRunning = sessionSetupRun?.status === "running";
   const firstAssistantMessageId = allMessages.find((message) => message.role === "assistant")?.id ?? null;
   const latestUserMessageIndex = findLastMessageIndex(allMessages, "user");
   const latestAssistantMessageIndex = findLastMessageIndex(allMessages, "assistant");
@@ -249,13 +250,12 @@ export function MessageList({
               providerId={providerId}
             />
           )}
-          {shouldRenderSetupRun && sessionSetupRun && firstAssistantMessageId === null ? (
+          {shouldRenderSetupRun && sessionSetupRun && firstAssistantMessageId === null && (
             <SessionSetupRunIndicator
               setupRun={sessionSetupRun}
             />
-          ) : (
-            isResponding && activeAssistantMessageId === null && <TypingIndicator />
           )}
+          {isResponding && activeAssistantMessageId === null && !isSetupRunning && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       )}
@@ -561,21 +561,6 @@ function getSetupTaskLabel(task: SessionSetupTask): string {
           return "Skipped network policy";
       }
       return "Apply network policy";
-    }
-    case "initial_agent_start": {
-      switch (task.status) {
-        case "pending":
-          return "Start agent process";
-        case "running":
-          return "Starting agent process";
-        case "completed":
-          return "Started agent process";
-        case "failed":
-          return "Agent process start failed";
-        case "skipped":
-          return "Skipped agent process start";
-      }
-      return "Start agent process";
     }
   }
 }

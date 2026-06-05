@@ -55,7 +55,6 @@ import { SessionSetupRunService } from "@/modules/session-agent/services/session
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
-import { InitialAgentStartProcessReporter } from "@/modules/session-agent/services/initial-agent-start-process-reporter.service";
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
 import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
@@ -181,10 +180,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
           status: this.synthesizeStatus(setupRun),
         }),
     });
-    const initialAgentStartProcessReporter = new InitialAgentStartProcessReporter({
-      setupRunService: this.setupRunService,
-    });
-
     this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
       env: this.env,
@@ -212,7 +207,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getClientState: () => this.state,
       getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       getProviderCredentialAdapter,
-      processStartReporter: initialAgentStartProcessReporter,
     });
 
     this.provisionService = new SessionProvisionService({

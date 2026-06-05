@@ -22,8 +22,6 @@ import { AgentAttachmentService } from "../agent-attachment.service";
 import type { SecretRepository } from "../../repositories/secret.repository";
 import type { ServerState } from "../../repositories/server-state.repository";
 import type {
-  AgentProcessStartEvent,
-  AgentProcessStartReporter,
   DispatchMessageInput,
   SpriteAgentProcessManagerError,
 } from "../../types/agent-process-manager.types";
@@ -71,7 +69,6 @@ export interface SpriteAgentProcessManagerDeps {
     env: Env,
     logger: Logger,
   ): ProviderCredentialAdapter;
-  processStartReporter?: AgentProcessStartReporter;
 }
 
 export type DispatchMessageResult = Result<
@@ -110,7 +107,6 @@ export class SpriteAgentProcessManager {
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly attachmentService: AgentAttachmentService;
   private readonly getProviderCredentialAdapter: SpriteAgentProcessManagerDeps["getProviderCredentialAdapter"];
-  private readonly processStartReporter: SpriteAgentProcessManagerDeps["processStartReporter"];
 
   /** In-flight spawn promise, or null if no spawn is running. */
   private startMutex: Promise<DispatchMessageResult> | null = null;
@@ -127,7 +123,6 @@ export class SpriteAgentProcessManager {
     this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
     this.getProviderCredentialAdapter = deps.getProviderCredentialAdapter;
-    this.processStartReporter = deps.processStartReporter;
   }
 
   /**
@@ -358,20 +353,10 @@ export class SpriteAgentProcessManager {
       agentMode,
       userMessageId,
     } = args;
-    this.reportProcessStartEvent({
-      type: "fresh_start_started",
-      userMessageId,
-    });
-
     const messageResult = args.resolvedAgentMessage
       ? success(args.resolvedAgentMessage)
       : await this.resolveAgentMessage(sessionId, args.userMessage);
     if (!messageResult.ok) {
-      this.reportProcessStartEvent({
-        type: "fresh_start_failed",
-        userMessageId,
-        error: messageResult.error,
-      });
       return failure(messageResult.error);
     }
     const agentMessage = messageResult.value;
@@ -381,11 +366,6 @@ export class SpriteAgentProcessManager {
       userId,
     );
     if (!credentialResult.ok) {
-      this.reportProcessStartEvent({
-        type: "fresh_start_failed",
-        userMessageId,
-        error: credentialResult.error,
-      });
       return failure(credentialResult.error);
     }
     const credentialSnapshot = credentialResult.value;
@@ -465,28 +445,13 @@ export class SpriteAgentProcessManager {
 
       const startResult = await this.startAndWaitForReady(session);
       if (!startResult.ok) {
-        this.reportProcessStartEvent({
-          type: "fresh_start_failed",
-          userMessageId,
-          error: startResult.error,
-        });
         return failure(startResult.error);
       }
       this.updateAgentProcessId(startResult.value);
-      this.reportProcessStartEvent({
-        type: "fresh_start_ready",
-        userMessageId,
-        agentProcessId: startResult.value,
-      });
       return success({ agentProcessId: startResult.value });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const spawnError = managerError("SPAWN_FAILED", message, { cause: message });
-      this.reportProcessStartEvent({
-        type: "fresh_start_failed",
-        userMessageId,
-        error: spawnError,
-      });
       return failure(spawnError);
     } finally {
       // Close our setup websocket. The vm-agent keeps running on the sprite
@@ -500,10 +465,6 @@ export class SpriteAgentProcessManager {
         }
       }
     }
-  }
-
-  private reportProcessStartEvent(event: AgentProcessStartEvent): void {
-    this.processStartReporter?.handleProcessStartEvent(event);
   }
 
   private async resolveAgentMessage(

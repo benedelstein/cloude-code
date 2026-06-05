@@ -82,7 +82,6 @@ describe("SessionSetupRunService", () => {
       ["repository", true],
       ["setup_script", false],
       ["network_policy", true],
-      ["initial_agent_start", true],
     ]);
     expect(setupRun.tasks.find((task) => task.id === "setup_script")).toMatchObject({
       output: null,
@@ -93,16 +92,16 @@ describe("SessionSetupRunService", () => {
   it("auto-completes the run after completing the last pending fatal task", () => {
     const { clientState, service } = createHarness({
       prepareTask: (task) =>
-        task.id === "initial_agent_start" ? task : completeTask(task),
+        task.id === "network_policy" ? task : completeTask(task),
     });
 
-    service.completeTask("initial_agent_start");
+    service.completeTask("network_policy");
 
     const setupRun = requireSetupRun(clientState);
     expect(setupRun.status).toBe("completed");
     expect(setupRun.completedAt).not.toBeNull();
     expect(clientState.status).toBe("ready");
-    expect(setupRun.tasks.find((task) => task.id === "initial_agent_start")?.status)
+    expect(setupRun.tasks.find((task) => task.id === "network_policy")?.status)
       .toBe("completed");
   });
 
@@ -145,7 +144,6 @@ describe("SessionSetupRunService", () => {
   });
 
   it.each([
-    "initial_agent_start",
     "network_policy",
     "cloud_container",
     "repository",
@@ -178,7 +176,6 @@ describe("SessionSetupRunService", () => {
       "repository",
       "setup_script",
       "network_policy",
-      "initial_agent_start",
     ]);
     expect(requireSetupRun(clientState).tasks.find((task) => task.id === "network_policy")?.status)
       .toBe("pending");
@@ -196,5 +193,67 @@ describe("SessionSetupRunService", () => {
 
     expect(requireSetupRun(clientState).tasks.find((task) => task.id === "network_policy")?.status)
       .toBe("completed");
+  });
+
+  it("repairs older running setup runs by removing retired agent start tasks", () => {
+    const { clientState, service } = createHarness();
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      tasks: [
+        ...setupRun.tasks.map(completeTask),
+        {
+          id: "initial_agent_start",
+          isBlocking: true,
+          status: "pending",
+          startedAt: null,
+          completedAt: null,
+          error: null,
+        } as unknown as SessionSetupTask,
+      ],
+    };
+
+    service.repairOnStart();
+
+    const repairedRun = requireSetupRun(clientState);
+    expect(repairedRun.tasks.map((task) => task.id)).toEqual([
+      "cloud_container",
+      "repository",
+      "setup_script",
+      "network_policy",
+    ]);
+    expect(repairedRun.status).toBe("completed");
+  });
+
+  it("removes retired agent start tasks from older completed setup runs", () => {
+    const { clientState, service } = createHarness();
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      status: "completed",
+      completedAt: "2026-06-03T00:01:00.000Z",
+      tasks: [
+        ...setupRun.tasks.map(completeTask),
+        {
+          id: "initial_agent_start",
+          isBlocking: true,
+          status: "completed",
+          startedAt: "2026-06-03T00:00:00.000Z",
+          completedAt: "2026-06-03T00:01:00.000Z",
+          error: null,
+        } as unknown as SessionSetupTask,
+      ],
+    };
+
+    service.repairOnStart();
+
+    const repairedRun = requireSetupRun(clientState);
+    expect(repairedRun.status).toBe("completed");
+    expect(repairedRun.tasks.map((task) => task.id)).toEqual([
+      "cloud_container",
+      "repository",
+      "setup_script",
+      "network_policy",
+    ]);
   });
 });

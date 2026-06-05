@@ -70,17 +70,11 @@ export type NetworkPolicySetupTask = BaseSessionSetupTask & {
   isBlocking: true;
 };
 
-export type InitialAgentStartSetupTask = BaseSessionSetupTask & {
-  id: "initial_agent_start";
-  isBlocking: true;
-};
-
 export type SessionSetupTask =
   | CloudContainerSetupTask
   | RepositorySetupTask
   | StartupScriptSetupTask
-  | NetworkPolicySetupTask
-  | InitialAgentStartSetupTask;
+  | NetworkPolicySetupTask;
 
 export type SessionSetupTaskId = SessionSetupTask["id"];
 

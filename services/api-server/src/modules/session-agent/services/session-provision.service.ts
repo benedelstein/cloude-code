@@ -140,7 +140,6 @@ export class SessionProvisionService {
 
     for (const task of setupRun.tasks) {
       if (isTerminalSetupTask(task)) { continue; }
-      if (task.id === "initial_agent_start") { continue; } // not handled here
       try {
         this.setupReporter?.startTask(task.id);
         switch (task.id) {

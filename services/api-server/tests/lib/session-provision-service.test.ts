@@ -86,7 +86,6 @@ function createSetupRun(
       skipReason: null,
     },
     createSetupTask("network_policy", true),
-    createSetupTask("initial_agent_start", true),
   ] as SessionSetupTask[];
 
   return {
