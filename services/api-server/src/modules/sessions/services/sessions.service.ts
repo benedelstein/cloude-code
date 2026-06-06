@@ -30,7 +30,6 @@ import { generateSessionTitle } from "@/shared/utils/generate-session-title";
 import { createLogger } from "@/shared/logging";
 import { SessionsRepository } from "../repositories/sessions.repository";
 import {
-  createPullRequestForSession,
   getPullRequestStatusForSession,
   type SessionPullRequestGitHubProvider,
   SessionPullRequestServiceError,
@@ -526,44 +525,12 @@ export class SessionsService {
       return authorizedSessionAgent;
     }
 
-    const github = this.createPullRequestGitHubProvider();
-    try {
-      const pullRequest = await createPullRequestForSession({
-        sessionStub: authorizedSessionAgent.value,
-        github,
-        anthropicApiKey: this.env.ANTHROPIC_API_KEY,
-      });
-      return success(pullRequest);
-    } catch (error) {
-      if (error instanceof SessionPullRequestServiceError) {
-        if (error.status === 409 && error.responseBody.url) {
-          return failure(this.buildError({
-            status: 409,
-            message: error.responseBody.error,
-            url: error.responseBody.url,
-          }));
-        }
-        if (error.status === 404) {
-          return failure(this.buildError({
-            status: 404,
-            message: error.responseBody.error,
-          }));
-        }
-        if (error.status === 400) {
-          return failure(this.buildError({
-            status: 400,
-            message: error.responseBody.error,
-            details: error.responseBody.details,
-          }));
-        }
-        return failure(this.buildError({
-          status: 400,
-          message: "Failed to create pull request",
-        }));
-      }
-
-      throw error;
+    const result = await authorizedSessionAgent.value.handleCreatePullRequest();
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
     }
+
+    return success(result.value);
   }
 
   /**
@@ -668,6 +635,16 @@ export class SessionsService {
         return this.buildError({ status: 404, message: "Plan not found" });
       case "PULL_REQUEST_NOT_FOUND":
         return this.buildError({ status: 404, message: "Pull request not found" });
+      case "BRANCH_NOT_PUSHED":
+        return this.buildError({ status: 400, message: error.message });
+      case "PULL_REQUEST_ALREADY_EXISTS":
+        return this.buildError({ status: 409, message: error.message, url: error.url });
+      case "PULL_REQUEST_CREATE_IN_PROGRESS":
+        return this.buildError({ status: 409, message: error.message });
+      case "INVALID_REPO":
+        return this.buildError({ status: 400, message: error.message });
+      case "PULL_REQUEST_CREATE_FAILED":
+        return this.buildError({ status: 400, message: error.message, details: error.details });
       case "ALREADY_INITIALIZED":
         return this.buildError({ status: 500, message: "Session already initialized" });
       case "EDITOR_DISABLED":

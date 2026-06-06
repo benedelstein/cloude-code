@@ -27,6 +27,7 @@ import { createLogger, initializeLogger } from "@/shared/logging";
 import type { UIMessageChunk } from "ai";
 import type {
   HandleDeleteSessionResult,
+  HandleCreatePullRequestResult,
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
@@ -34,7 +35,6 @@ import type {
   HandleUpdatePullRequestResult,
   InitSessionAgentRequest,
   SessionAgentRpc,
-  SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
@@ -60,10 +60,13 @@ import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provide
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
+import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
+import { normalizePullRequestState } from "@/modules/session-agent/utils/session-agent-pull-request-state.utils";
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
+import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -93,6 +96,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
   private readonly githubAppService: GitHubAppService;
+  private readonly pullRequestLifecycleService: SessionPullRequestLifecycleService;
   private readonly autoPullRequestService: SessionAutoPullRequestService;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
@@ -143,16 +147,26 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getSessionId: () => this.serverState.sessionId,
       logger: this.logger,
     });
-    this.autoPullRequestService = new SessionAutoPullRequestService({
+    this.pullRequestLifecycleService = new SessionPullRequestLifecycleService({
       logger: this.logger,
-      sessionStub: this,
       github: this.githubAppService,
       anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      createPullRequest: createPullRequestForSessionContext,
+      messageRepository: this.messageRepository,
+      sessionSummaryService: this.sessionSummaryService,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      setPullRequestClientState: (pullRequest) =>
+        this.updatePartialState({ pullRequest }),
+    });
+    this.autoPullRequestService = new SessionAutoPullRequestService({
+      logger: this.logger,
+      createPullRequest: () => this.handleCreatePullRequest(),
       getState: () => ({
         sessionId: this.serverState.sessionId,
         repoFullName: this.state.repoFullName,
         pushedBranch: this.state.pushedBranch,
-        hasPullRequest: this.state.pullRequest !== null,
+        pullRequestStatus: this.state.pullRequest?.status ?? null,
       }),
       keepAliveWhile: (callback) => this.keepAliveWhile(callback),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
@@ -260,7 +274,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       getClientState: () => this.state,
       updatePartialState: (partial) => this.updatePartialState(partial),
-      broadcastMessage: (msg) => this.broadcastMessage(msg),
       updatePushedBranch: (branch) =>
         this.sessionSummaryService.persistPushedBranch(branch),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
@@ -281,6 +294,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
+      pullRequest: normalizePullRequestState(this.state.pullRequest),
       activeTurn: this.serverState.activeUserMessageId
         ? { userMessageId: this.serverState.activeUserMessageId }
         : null,
@@ -659,6 +673,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     if (!sessionId || !this.state.repoFullName) {
       return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
     }
+    const pullRequest = this.state.pullRequest?.status === "created" ? this.state.pullRequest : null;
 
     return success({
       sessionId,
@@ -667,9 +682,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       repoFullName: this.state.repoFullName,
       baseBranch: this.state.baseBranch ?? undefined,
       pushedBranch: this.state.pushedBranch ?? undefined,
-      pullRequestUrl: this.state.pullRequest?.url ?? undefined,
-      pullRequestNumber: this.state.pullRequest?.number ?? undefined,
-      pullRequestState: this.state.pullRequest?.state ?? undefined,
+      pullRequestUrl: pullRequest?.url ?? undefined,
+      pullRequestNumber: pullRequest?.number ?? undefined,
+      pullRequestState: pullRequest?.state ?? undefined,
       editorUrl: this.state.editorUrl ?? undefined,
     } satisfies SessionInfoResponse);
   }
@@ -703,23 +718,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     } satisfies SessionPlanResponse);
   }
 
-  async setPullRequest(data: SetPullRequestRequest): Promise<void> {
-    this.updatePartialState({
-      pullRequest: {
-        url: data.url,
-        number: data.number,
-        state: data.state,
-      },
-    });
-    await this.sessionSummaryService.persistPullRequest(data);
+  async handleCreatePullRequest(): Promise<HandleCreatePullRequestResult> {
+    return this.pullRequestLifecycleService.handleCreatePullRequest();
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
     const pullRequest = this.state.pullRequest;
-    if (!pullRequest) {
+    if (!pullRequest || pullRequest.status !== "created") {
       return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
     }
-    this.updatePartialState({ pullRequest: { ...pullRequest, state: data.state } });
+    const updatedPullRequest = { ...pullRequest, state: data.state };
+    this.updatePartialState({ pullRequest: updatedPullRequest });
     await this.sessionSummaryService.persistPullRequestState(data.state);
     return success(undefined);
   }

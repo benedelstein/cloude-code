@@ -104,6 +104,57 @@ describe("useCloudflareAgent", () => {
     expect(result.current.isResponding).toBe(false);
   });
 
+  it("updates pull request state from client state", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        pullRequest: {
+          status: "created",
+          url: "https://github.com/ben/repo/pull/12",
+          number: 12,
+          state: "open",
+        },
+      });
+    });
+
+    expect(result.current.pullRequestState).toEqual({
+      status: "created",
+      url: "https://github.com/ben/repo/pull/12",
+      number: 12,
+      state: "open",
+    });
+  });
+
+  it("updates pushed branch state from client state", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        pushedBranch: "cloude/change-abcd",
+        repoFullName: "ben/repo",
+      });
+    });
+
+    expect(result.current.pushedBranch).toBe("cloude/change-abcd");
+    expect(result.current.repoFullName).toBe("ben/repo");
+  });
+
+  it("updates base branch state from client state", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onStateUpdate({
+        ...createClientState(null),
+        baseBranch: "develop",
+      });
+    });
+
+    expect(result.current.baseBranch).toBe("develop");
+  });
+
   it("stamps live startedAt metadata on streaming messages", async () => {
     const { result } = renderAgent();
 

@@ -3,6 +3,7 @@ import type {
   AgentSettingsInput,
   AgentEvent,
   CreateSessionInitialMessage,
+  PullRequestResponse,
   PullRequestState,
   Result,
   SessionInfoResponse,
@@ -23,13 +24,6 @@ export interface InitSessionAgentRequest {
   initialMessage: CreateSessionInitialMessage;
 }
 
-/** POST /pr — set initial pull request info on the DO */
-export interface SetPullRequestRequest {
-  url: string;
-  number: number;
-  state: PullRequestState;
-}
-
 /** PATCH /pr — update pull request state on the DO */
 export interface UpdatePullRequestRequest {
   state: PullRequestState;
@@ -45,6 +39,11 @@ export type SessionAgentRpcError =
   | { code: "ALREADY_INITIALIZED"; message: string; status: 400 }
   | { code: "PLAN_NOT_FOUND"; message: string }
   | { code: "PULL_REQUEST_NOT_FOUND"; message: string }
+  | { code: "BRANCH_NOT_PUSHED"; message: string; status: 400 }
+  | { code: "PULL_REQUEST_ALREADY_EXISTS"; message: string; status: 409; url: string }
+  | { code: "PULL_REQUEST_CREATE_IN_PROGRESS"; message: string; status: 409 }
+  | { code: "INVALID_REPO"; message: string; status: 400 }
+  | { code: "PULL_REQUEST_CREATE_FAILED"; message: string; status: 400; details?: string }
   | { code: "EDITOR_DISABLED"; message: string };
 
 export type HandleInitResult = Result<void, Extract<SessionAgentRpcError, { code: "ALREADY_INITIALIZED" }>>;
@@ -52,6 +51,21 @@ export type HandleGetSessionResult = Result<SessionInfoResponse, Extract<Session
 export type HandleGetMessagesResult = Result<UIMessage[], Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
 export type HandleGetPlanResult = Result<SessionPlanResponse, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" | "PLAN_NOT_FOUND" }>>;
 export type HandleDeleteSessionResult = Result<void, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
+export type HandleCreatePullRequestResult = Result<
+  PullRequestResponse,
+  Extract<
+    SessionAgentRpcError,
+    {
+      code:
+        | "SESSION_NOT_INITIALIZED"
+        | "BRANCH_NOT_PUSHED"
+        | "PULL_REQUEST_ALREADY_EXISTS"
+        | "PULL_REQUEST_CREATE_IN_PROGRESS"
+        | "INVALID_REPO"
+        | "PULL_REQUEST_CREATE_FAILED";
+    }
+  >
+>;
 export type HandleUpdatePullRequestResult = Result<void, Extract<SessionAgentRpcError, { code: "PULL_REQUEST_NOT_FOUND" }>>;
 
 export interface SessionAgentRpc {
@@ -68,7 +82,7 @@ export interface SessionAgentRpc {
   handleGetMessages(): HandleGetMessagesResult;
   handleGetPlan(): HandleGetPlanResult;
   handleDeleteSession(): Promise<HandleDeleteSessionResult>;
-  setPullRequest(data: SetPullRequestRequest): Promise<void>;
+  handleCreatePullRequest(): Promise<HandleCreatePullRequestResult>;
   updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult>;
   enforceSessionAccessBlocked(closeConnections?: boolean): Promise<void>;
 }

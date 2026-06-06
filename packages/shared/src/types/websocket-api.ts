@@ -119,13 +119,6 @@ export const UserMessageEvent = z.object({
 });
 export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
 
-export const BranchPushedEvent = z.object({
-  type: z.literal("branch.pushed"),
-  branch: z.string(),
-  repoFullName: z.string(),
-});
-export type BranchPushedEvent = z.infer<typeof BranchPushedEvent>;
-
 export const EditorReadyEvent = z.object({
   type: z.literal("editor.ready"),
   url: z.string(),
@@ -141,7 +134,6 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentFinishEvent,
   AgentReadyEvent,
   UserMessageEvent,
-  BranchPushedEvent,
   EditorReadyEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

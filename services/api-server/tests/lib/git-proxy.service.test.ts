@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientState, Logger, ServerMessage } from "@repo/shared";
+import type { ClientState, Logger } from "@repo/shared";
 import { GitProxyService } from "../../src/shared/integrations/git/git-proxy.service";
 import type { GitProxyTokenProvider } from "../../src/shared/integrations/git/git.providers";
 import { SessionGitProxyService } from "../../src/modules/session-agent/services/session-git-proxy.service";
@@ -173,7 +173,6 @@ describe("SessionGitProxyService", () => {
       Object.assign(clientState, partial);
     });
     const updatePushedBranch = vi.fn();
-    const broadcastMessage = vi.fn();
     const service = new SessionGitProxyService({
       logger: createLogger(),
       env: {} as Env,
@@ -181,7 +180,6 @@ describe("SessionGitProxyService", () => {
       getServerState: () => serverState,
       getClientState: () => clientState,
       updatePartialState,
-      broadcastMessage: broadcastMessage as (msg: ServerMessage) => void,
       updatePushedBranch,
       assertSessionRepoAccess: vi.fn(async () => ({
         ok: true,
@@ -213,11 +211,6 @@ describe("SessionGitProxyService", () => {
       pushedBranch: "cloude/change-abcd",
     });
     expect(updatePushedBranch).toHaveBeenCalledWith("cloude/change-abcd");
-    expect(broadcastMessage).toHaveBeenCalledWith({
-      type: "branch.pushed",
-      branch: "cloude/change-abcd",
-      repoFullName: "ben/repo",
-    });
     expect(secretRepository.set).not.toHaveBeenCalledWith(
       "github_token",
       expect.any(String),

@@ -79,6 +79,7 @@ export type GitHubAppErrorCode =
 export type GitHubAppServiceError = {
   code: GitHubAppErrorCode;
   message: string;
+  details?: string;
 };
 
 export type GitHubAppResult<T> = Result<T, GitHubAppServiceError>;

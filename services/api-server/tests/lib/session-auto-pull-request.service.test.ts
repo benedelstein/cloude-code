@@ -1,17 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { failure, success, type Logger } from "@repo/shared";
-import type { SessionAgentRpc } from "../../src/shared/types/session-agent";
 import type { SessionRepoAccessResult } from "../../src/shared/types/repo-access";
 import {
   SessionAutoPullRequestService,
   type SessionAutoPullRequestServiceDeps,
 } from "../../src/runtime/session-auto-pull-request.service";
-import type {
-  GitHubAppResult,
-  GitHubCompareData,
-  PullRequestData,
-} from "../../src/shared/types/github";
-import type { SessionPullRequestGitHubProvider } from "../../src/modules/sessions/services/session-pull-request.service";
 
 function createLogger(): Logger {
   return {
@@ -31,36 +24,14 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
     sessionId: "session-1",
     repoFullName: "ben/repo",
     pushedBranch: "cloude/change-abcd",
-    hasPullRequest: false,
+    pullRequestStatus: null,
   };
-  const setPullRequest = vi.fn<SessionAgentRpc["setPullRequest"]>().mockResolvedValue(undefined);
-  const sessionStub = {
-    handleGetSession: vi.fn<SessionAgentRpc["handleGetSession"]>().mockReturnValue(success({
-      sessionId: "session-1",
-      title: null,
-      status: "ready",
-      repoFullName: "ben/repo",
-      baseBranch: "main",
-      pushedBranch: "cloude/change-abcd",
-    })),
-    handleGetMessages: vi.fn<SessionAgentRpc["handleGetMessages"]>().mockReturnValue(success([])),
-    setPullRequest,
-  } as unknown as SessionAgentRpc;
-  const github: SessionPullRequestGitHubProvider = {
-    compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
-      .mockResolvedValue(failure({
-        code: "GITHUB_API_ERROR",
-        message: "Compare failed",
-      }) as GitHubAppResult<GitHubCompareData>),
-    createPullRequest: vi.fn<SessionPullRequestGitHubProvider["createPullRequest"]>()
-      .mockResolvedValue(success({
-        number: 12,
-        url: "https://github.com/ben/repo/pull/12",
-        state: "open",
-        merged: false,
-      }) as GitHubAppResult<PullRequestData>),
-    getPullRequest: vi.fn<SessionPullRequestGitHubProvider["getPullRequest"]>(),
-  };
+  const createPullRequest = vi.fn<SessionAutoPullRequestServiceDeps["createPullRequest"]>()
+    .mockResolvedValue(success({
+      number: 12,
+      url: "https://github.com/ben/repo/pull/12",
+      state: "open",
+    }));
   const keepAliveWhile = vi.fn((callback: () => Promise<void>) => callback());
   const accessResult = success({
     userId: "user-1",
@@ -70,9 +41,7 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
   }) as SessionRepoAccessResult;
   const service = new SessionAutoPullRequestService({
     logger: createLogger(),
-    sessionStub,
-    github,
-    anthropicApiKey: "test-key",
+    createPullRequest,
     getState: () => state,
     keepAliveWhile,
     assertSessionRepoAccess: vi.fn(async () => accessResult),
@@ -80,27 +49,17 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
     ...overrides,
   });
 
-  return { github, keepAliveWhile, service, sessionStub, setPullRequest, state };
+  return { createPullRequest, keepAliveWhile, service, state };
 }
 
 describe("SessionAutoPullRequestService", () => {
-  it("creates and persists a pull request for a pushed branch", async () => {
-    const { github, keepAliveWhile, service, setPullRequest } = createHarness();
+  it("creates a pull request for a pushed branch", async () => {
+    const { createPullRequest, keepAliveWhile, service } = createHarness();
 
     service.queueCreateAfterTurnFinish();
     await keepAliveWhile.mock.results[0]!.value;
 
-    expect(github.createPullRequest).toHaveBeenCalledWith("ben/repo", {
-      title: "Change",
-      body: "",
-      head: "cloude/change-abcd",
-      base: "main",
-    });
-    expect(setPullRequest).toHaveBeenCalledWith({
-      number: 12,
-      url: "https://github.com/ben/repo/pull/12",
-      state: "open",
-    });
+    expect(createPullRequest).toHaveBeenCalledOnce();
   });
 
   it("does not schedule without a pushed branch", () => {
@@ -112,6 +71,29 @@ describe("SessionAutoPullRequestService", () => {
     expect(keepAliveWhile).not.toHaveBeenCalled();
   });
 
+  it("retries after a failed pull request creation state", async () => {
+    const { createPullRequest, keepAliveWhile, service, state } = createHarness();
+    state.pullRequestStatus = "failed";
+
+    service.queueCreateAfterTurnFinish();
+    await keepAliveWhile.mock.results[0]!.value;
+
+    expect(createPullRequest).toHaveBeenCalledOnce();
+  });
+
+  it("does not schedule when pull request creation is already creating or created", () => {
+    const creatingHarness = createHarness();
+    creatingHarness.state.pullRequestStatus = "creating";
+    creatingHarness.service.queueCreateAfterTurnFinish();
+
+    const createdHarness = createHarness();
+    createdHarness.state.pullRequestStatus = "created";
+    createdHarness.service.queueCreateAfterTurnFinish();
+
+    expect(creatingHarness.keepAliveWhile).not.toHaveBeenCalled();
+    expect(createdHarness.keepAliveWhile).not.toHaveBeenCalled();
+  });
+
   it("enforces access blocking before creating a pull request", async () => {
     const enforceSessionAccessBlocked = vi.fn();
     const assertSessionRepoAccess = vi.fn(async () => failure({
@@ -120,7 +102,7 @@ describe("SessionAutoPullRequestService", () => {
       message: "Blocked",
       justBlocked: true,
     }) as SessionRepoAccessResult);
-    const { github, keepAliveWhile, service } = createHarness({
+    const { createPullRequest, keepAliveWhile, service } = createHarness({
       assertSessionRepoAccess,
       enforceSessionAccessBlocked,
     });
@@ -129,6 +111,6 @@ describe("SessionAutoPullRequestService", () => {
     await keepAliveWhile.mock.results[0]!.value;
 
     expect(enforceSessionAccessBlocked).toHaveBeenCalledOnce();
-    expect(github.createPullRequest).not.toHaveBeenCalled();
+    expect(createPullRequest).not.toHaveBeenCalled();
   });
 });

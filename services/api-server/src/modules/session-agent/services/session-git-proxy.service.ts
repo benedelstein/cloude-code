@@ -1,4 +1,4 @@
-import type { ClientState, Logger, ServerMessage } from "@repo/shared";
+import type { ClientState, Logger } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SecretRepository } from "../repositories/secret.repository";
 import type { ServerState } from "../repositories/server-state.repository";
@@ -23,7 +23,6 @@ export interface SessionGitProxyServiceDeps {
   getServerState: () => ServerState;
   getClientState: () => ClientState;
   updatePartialState: (partial: Partial<ClientState>) => void;
-  broadcastMessage: (msg: ServerMessage) => void;
   updatePushedBranch: (branch: string) => void;
   assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   enforceSessionAccessBlocked: () => Promise<void>;
@@ -35,8 +34,8 @@ export interface SessionGitProxyServiceDeps {
 /**
  * Session-scoped adapter around the agnostic `GitProxyService`.
  * Owns the git-proxy shared secret (persisted via `SecretRepository`),
- * access-control, pushed-branch state mutation, and the `branch.pushed`
- * broadcast. Installation tokens stay in the GitHub module's D1 token cache.
+ * and access-control/pushed-branch state mutation. Installation tokens stay
+ * in the GitHub module's D1 token cache.
  */
 export class SessionGitProxyService implements
   GitProxyTokenProvider,
@@ -49,7 +48,6 @@ export class SessionGitProxyService implements
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
   private readonly updatePartialState: SessionGitProxyServiceDeps["updatePartialState"];
-  private readonly broadcastMessage: SessionGitProxyServiceDeps["broadcastMessage"];
   private readonly updatePushedBranch: (branch: string) => void;
   private readonly assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
   private readonly enforceSessionAccessBlocked: () => Promise<void>;
@@ -65,7 +63,6 @@ export class SessionGitProxyService implements
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
     this.updatePartialState = deps.updatePartialState;
-    this.broadcastMessage = deps.broadcastMessage;
     this.updatePushedBranch = deps.updatePushedBranch;
     this.assertSessionRepoAccess = deps.assertSessionRepoAccess;
     this.enforceSessionAccessBlocked = deps.enforceSessionAccessBlocked;
@@ -106,11 +103,6 @@ export class SessionGitProxyService implements
       if (result.pushedBranch !== clientState.pushedBranch) {
         this.updatePartialState({ pushedBranch: result.pushedBranch });
         this.updatePushedBranch(result.pushedBranch);
-        this.broadcastMessage({
-          type: "branch.pushed",
-          branch: result.pushedBranch,
-          repoFullName: clientState.repoFullName ?? "",
-        });
       }
     }
 
