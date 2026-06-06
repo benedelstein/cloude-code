@@ -169,6 +169,7 @@ describe("SessionSummaryService", () => {
     service.persistAssistantTurnFinished({
       messageId: "assistant-message-1",
       messageCreatedAt: "2026-06-03T00:00:00.000Z",
+      aborted: false,
     });
     await waitFor(() => operations.length === 2);
 
@@ -179,6 +180,44 @@ describe("SessionSummaryService", () => {
     );
     expect(operations).toEqual(["assistant-finished:write", "publish"]);
     expect(publishSessionSummaryInvalidated).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears working state without recording latest assistant message for aborted turns", async () => {
+    const operations: string[] = [];
+    const repository = {
+      updateWorkingState: vi.fn(async () => {
+        operations.push("working-state:write");
+      }),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(),
+      updatePushedBranch: vi.fn(),
+      setPullRequest: vi.fn(),
+      updatePullRequestState: vi.fn(),
+    };
+    const publishSessionSummaryInvalidated = vi.fn(async () => {
+      operations.push("publish");
+    });
+    const service = new SessionSummaryService({
+      repository,
+      getSessionId: () => SESSION_ID,
+      getUserId: () => USER_ID,
+      publishSessionSummaryInvalidated,
+      logger: noopLogger,
+    });
+
+    service.persistAssistantTurnFinished({
+      messageId: "assistant-message-1",
+      messageCreatedAt: "2026-06-03T00:00:00.000Z",
+      aborted: true,
+    });
+    await waitFor(() => operations.length === 2);
+
+    expect(repository.updateWorkingState).toHaveBeenCalledWith(
+      SESSION_ID,
+      "idle",
+    );
+    expect(repository.recordAssistantTurnFinished).not.toHaveBeenCalled();
+    expect(operations).toEqual(["working-state:write", "publish"]);
   });
 
   it("marks read before publishing summary invalidation", async () => {

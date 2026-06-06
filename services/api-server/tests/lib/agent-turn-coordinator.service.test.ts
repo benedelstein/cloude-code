@@ -49,6 +49,11 @@ function createHarness(params: {
     })),
   };
   const updateWorkingState = vi.fn();
+  const onTurnFinished = params.onTurnFinished ?? ((turn: FinishedAssistantTurn) => {
+    if (turn.aborted) {
+      updateWorkingState("idle");
+    }
+  });
 
   const coordinator = new AgentTurnCoordinator({
     logger: createLogger(),
@@ -64,7 +69,7 @@ function createHarness(params: {
     synthesizeStatus: () => "preparing",
     terminateActiveProcess: vi.fn(),
     updateWorkingState,
-    onTurnFinished: params.onTurnFinished,
+    onTurnFinished,
   });
 
   return {
@@ -104,12 +109,13 @@ describe("AgentTurnCoordinator", () => {
     expect(onTurnFinished).toHaveBeenCalledWith({
       message: expect.objectContaining({ id: "assistant-message-1" }),
       messageCreatedAt: "2026-06-03T00:00:00.000Z",
+      aborted: false,
     });
     expect(updateWorkingState).not.toHaveBeenCalledWith("idle");
     expect(serverState.activeUserMessageId).toBeNull();
   });
 
-  it("does not run the turn-finished hook for aborted assistant messages", async () => {
+  it("runs the turn-finished hook with abort for aborted assistant messages", async () => {
     const onTurnFinished = vi.fn();
     const { coordinator, updateWorkingState } = createHarness({ onTurnFinished });
 
@@ -118,8 +124,12 @@ describe("AgentTurnCoordinator", () => {
       { sequence: 1, chunk: { type: "abort" } as UIMessageChunk },
     ]);
 
-    expect(onTurnFinished).not.toHaveBeenCalled();
-    expect(updateWorkingState).toHaveBeenCalledWith("idle");
+    expect(onTurnFinished).toHaveBeenCalledWith({
+      message: expect.objectContaining({ id: "assistant-message-1" }),
+      messageCreatedAt: "2026-06-03T00:00:00.000Z",
+      aborted: true,
+    });
+    expect(updateWorkingState).not.toHaveBeenCalledWith("idle");
   });
 
   it("clears the tracked agent process when the matching process exits", () => {

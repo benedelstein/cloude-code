@@ -21,6 +21,7 @@ import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSprite
 export interface FinishedAssistantTurn {
   message: UIMessage;
   messageCreatedAt: string;
+  aborted: boolean;
 }
 
 /**
@@ -43,7 +44,7 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
-  onTurnFinished?: (turn: FinishedAssistantTurn) => void;
+  onTurnFinished: (turn: FinishedAssistantTurn) => void;
 }
 
 /**
@@ -69,7 +70,7 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
-  private readonly onTurnFinished: ((turn: FinishedAssistantTurn) => void) | null;
+  private readonly onTurnFinished: (turn: FinishedAssistantTurn) => void;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -100,7 +101,7 @@ export class AgentTurnCoordinator {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
     this.updateWorkingState = deps.updateWorkingState;
-    this.onTurnFinished = deps.onTurnFinished ?? null;
+    this.onTurnFinished = deps.onTurnFinished;
   }
 
   /**
@@ -260,13 +261,12 @@ export class AgentTurnCoordinator {
         // Flush the batched chunks (including this terminal one) before the
         // agent.finish so the wire order stays chunks → finish.
         this.flushBufferedChunks(buffered);
-        if (result.shouldRunTurnFinishedSideEffects) {
-          this.onTurnFinished?.({
-            message: result.finishMessage,
-            messageCreatedAt: result.messageCreatedAt,
-          });
-        }
-        this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
+        this.onTurnFinished({
+          message: result.finishedMessage,
+          messageCreatedAt: result.messageCreatedAt,
+          aborted: result.aborted,
+        });
+        this.broadcastMessage({ type: "agent.finish", message: result.finishedMessage });
         return;
       }
       this.lastSeenChunkSequence = sequence;
@@ -408,16 +408,16 @@ export class AgentTurnCoordinator {
    * events keep their wire order (chunks → finish).
    *
    * @returns When the chunk is non-terminal: `{ ended: false }`. When the
-   *   chunk is terminal: `{ ended: true, finishMessage }` with the persisted
+   *   chunk is terminal: `{ ended: true, finishedMessage }` with the persisted
    *   UIMessage that the caller should broadcast as `agent.finish`.
    */
   private handleStreamChunk(
     chunk: UIMessageChunk,
   ): { ended: false } | {
     ended: true;
-    finishMessage: UIMessage;
+    finishedMessage: UIMessage;
     messageCreatedAt: string;
-    shouldRunTurnFinishedSideEffects: boolean;
+    aborted: boolean;
   } {
     const serverState = this.getServerState();
 
@@ -441,18 +441,18 @@ export class AgentTurnCoordinator {
       serverState.sessionId!,
       finishedMessage,
     );
+    const aborted = isAbortedMessage(stored.message);
     this.pendingChunkRepository.clear();
     this.messageAccumulator.reset();
     this.logger.info("Terminal chunk received", {
       fields: {
         userMessageId: serverState.activeUserMessageId,
-        finishReason: getChunkFinishReason(chunk) ?? "unknown",
+        finishReason: getLogFinishReason(aborted, chunk),
       },
     });
-    const shouldRunTurnFinishedSideEffects = !isAbortedMessage(stored.message);
     this.clearActiveTurnState({
       preserveAgentProcessId: true,
-      persistWorkingState: !shouldRunTurnFinishedSideEffects,
+      persistWorkingState: false, // will be handled by caller
     });
     this.updatePartialState({
       lastError: null,
@@ -460,9 +460,9 @@ export class AgentTurnCoordinator {
     });
     return {
       ended: true,
-      finishMessage: stored.message,
+      finishedMessage: stored.message,
       messageCreatedAt: stored.createdAt,
-      shouldRunTurnFinishedSideEffects,
+      aborted,
     };
   }
 
@@ -487,11 +487,18 @@ export class AgentTurnCoordinator {
     if (abortedMessage) {
       const sessionId = this.getServerState().sessionId!;
       const stored = this.messageRepository.create(sessionId, abortedMessage);
+      this.onTurnFinished({
+        message: stored.message,
+        messageCreatedAt: stored.createdAt,
+        aborted: true,
+      });
       this.broadcastMessage({ type: "agent.finish", message: stored.message });
       this.messageAccumulator.reset();
+      this.clearActiveTurnState({ ...options, persistWorkingState: false });
+      return true;
     }
     this.clearActiveTurnState(options);
-    return !!abortedMessage;
+    return false;
   }
 
   /**
@@ -627,4 +634,17 @@ function isAbortedMessage(message: UIMessage): boolean {
   return typeof metadata === "object" &&
     metadata !== null &&
     (metadata as { aborted?: unknown }).aborted === true;
+}
+
+function getLogFinishReason(
+  aborted: boolean,
+  terminalChunk: UIMessageChunk,
+): string {
+  if (aborted) {
+    return "abort";
+  }
+  if (terminalChunk.type === "error") {
+    return "error";
+  }
+  return getChunkFinishReason(terminalChunk) ?? "unknown";
 }

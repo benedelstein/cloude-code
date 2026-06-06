@@ -234,7 +234,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         this.sessionSummaryService.persistAssistantTurnFinished({
           messageId: turn.message.id,
           messageCreatedAt: turn.messageCreatedAt,
+          aborted: turn.aborted,
         });
+        if (turn.aborted) {
+          return;
+        }
         this.autoPullRequestService.queueCreateAfterTurnFinish();
       },
     });

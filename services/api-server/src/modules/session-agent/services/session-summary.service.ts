@@ -54,7 +54,13 @@ export class SessionSummaryService {
   persistAssistantTurnFinished(params: {
     messageId: string;
     messageCreatedAt: string;
+    aborted: boolean;
   }): void {
+    if (params.aborted) {
+      this.persistWorkingState("idle");
+      return;
+    }
+
     void this.enqueueMutation(
       "assistant_turn_finished",
       (sessionId) =>
