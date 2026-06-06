@@ -32,25 +32,17 @@ describe("normalizePullRequestState", () => {
     expect(normalizePullRequestState({ status: "creating" })).toBeNull();
   });
 
-  it("converts legacy persisted pull request state to created state", () => {
-    expect(normalizePullRequestState({
-      url: "https://github.com/ben/repo/pull/2",
-      number: 2,
-      state: "merged",
-    })).toEqual({
-      status: "created",
-      url: "https://github.com/ben/repo/pull/2",
-      number: 2,
-      state: "merged",
-    });
-  });
-
   it("rejects invalid pull request state", () => {
     expect(normalizePullRequestState({
       status: "created",
       url: "https://github.com/ben/repo/pull/3",
       number: 3,
       state: "draft",
+    })).toBeNull();
+    expect(normalizePullRequestState({
+      url: "https://github.com/ben/repo/pull/2",
+      number: 2,
+      state: "merged",
     })).toBeNull();
   });
 });
