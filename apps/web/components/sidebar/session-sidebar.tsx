@@ -12,6 +12,7 @@ import {
   Plus,
   Settings,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   deleteSession,
   archiveSession,
@@ -291,8 +292,11 @@ export function SessionSidebar({ className, resizeHandle }: SessionSidebarProps)
     removeSession(sessionId);
     try {
       await deleteSession(sessionId);
-    } catch (err) {
-      console.error("Failed to delete session:", err);
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+      toast.error("Failed to delete session", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 

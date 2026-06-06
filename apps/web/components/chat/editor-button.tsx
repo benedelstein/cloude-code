@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Globe, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { archiveSession, deleteSession } from "@/lib/client-api";
 import { useSessionList } from "@/components/providers/session-list-provider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -82,6 +83,9 @@ export function SessionActionsButton({ sessionId }: SessionActionsButtonProps) {
       removeSession(sessionId);
     } catch (error) {
       console.error("Failed to delete session:", error);
+      toast.error("Failed to delete session", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setIsDeleting(false);
     }
