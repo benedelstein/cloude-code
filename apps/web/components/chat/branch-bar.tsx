@@ -11,14 +11,12 @@ const POLL_INTERVAL_MS = 30_000;
 
 interface BranchBarProps {
   sessionId: string;
-  baseBranch: string | null;
   pushedBranch: string | null;
   pullRequestState: ClientState["pullRequest"] | null;
 }
 
 export function BranchBar({
   sessionId,
-  baseBranch,
   pushedBranch,
   pullRequestState,
 }: BranchBarProps) {
@@ -27,7 +25,6 @@ export function BranchBar({
   const isCreatingPullRequest = pullRequestState?.status === "creating";
   const url = createdPullRequest?.url ?? null;
   const state = createdPullRequest?.state ?? null;
-  const displayBaseBranch = baseBranch ?? "main";
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -92,8 +89,6 @@ export function BranchBar({
           ) : (
             <PrStatusIcon pullRequestUrl={url} pullRequestState={state} />
           )}
-          <span className="text-foreground font-medium">{displayBaseBranch}</span>
-          {" \u2190 "}
           <button
             type="button"
             onClick={() => void copyBranchName()}
