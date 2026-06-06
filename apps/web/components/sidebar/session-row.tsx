@@ -38,7 +38,7 @@ function SessionArtifactSlot({ session }: { session: SessionSummary }) {
     );
   }
 
-  return <span aria-hidden="true" className="block h-5 w-5" />;
+  return null;
 }
 
 function SessionAttentionSlot({

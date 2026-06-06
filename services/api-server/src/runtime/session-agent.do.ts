@@ -151,7 +151,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getUserId: () => this.serverState.userId,
       publishSessionSummaryInvalidated: (userId, sessionId) =>
         userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
-      queueBackgroundWork: (promise) => this.ctx.waitUntil(promise),
       logger: this.logger,
     });
     this.queryService = new SessionQueryService({
@@ -744,7 +743,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         await this.handleSyncRequest(connection);
         break;
       case "session.mark_read":
-        await this.handleMarkRead(connection, message.messageId);
+        await this.handleMarkRead(message.messageId);
         break;
       case "operation.cancel":
         await this.cancelActiveTurnAndClearState();
@@ -833,16 +832,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.sendMessage(this.syncService.buildSyncResponse(), connection);
   }
 
-  private async handleMarkRead(
-    connection: Connection,
-    messageId: string,
-  ): Promise<void> {
-    const accessGuard = await this.repoAccessLifecycleService.guardSessionRepoAccess();
-    if (!accessGuard.ok) {
-      this.sendMessage(accessGuard.message, connection);
-      return;
-    }
-
+  private async handleMarkRead(messageId: string): Promise<void> {
     await this.sessionSummaryService.markRead(messageId);
   }
 

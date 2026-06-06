@@ -75,13 +75,6 @@ function isVisibleDocument(): boolean {
   return document.visibilityState === "visible";
 }
 
-function isAbortedMessage(message: UIMessage): boolean {
-  const metadata = message.metadata;
-  return typeof metadata === "object" &&
-    metadata !== null &&
-    (metadata as { aborted?: unknown }).aborted === true;
-}
-
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
@@ -221,6 +214,7 @@ export function useCloudflareAgent({
       return;
     }
     if (lastMarkReadSentRef.current === messageId) {
+      // already marked this read.
       return;
     }
     lastMarkReadSentRef.current = messageId;
@@ -329,7 +323,7 @@ export function useCloudflareAgent({
         }
         // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
         setMessages((prev) => [...prev, finishedMessage]);
-        if (finishedMessage.role === "assistant" && !isAbortedMessage(finishedMessage)) {
+        if (finishedMessage.role === "assistant") {
           latestAssistantMessageIdRef.current = finishedMessage.id;
           markRead(finishedMessage.id);
         }

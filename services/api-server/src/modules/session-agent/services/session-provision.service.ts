@@ -132,7 +132,7 @@ export class SessionProvisionService {
     const setupRun = this.getClientState().sessionSetupRun;
     if (!setupRun) { return; }
     if (setupRun.status !== "running") {
-      this.logger.error("Setup run is not running — skipping provision", {
+      this.logger.debug("Setup run is not running — skipping provision", {
         fields: { setupRunStatus: setupRun.status },
       });
       return;

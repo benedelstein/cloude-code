@@ -38,7 +38,6 @@ export class SessionSummaryService {
         userId: string,
         sessionId: string,
       ) => Promise<void>;
-      queueBackgroundWork: (promise: Promise<void>) => void;
       logger: Logger;
     },
   ) {}
@@ -136,7 +135,6 @@ export class SessionSummaryService {
       });
     });
     this.mutationQueue = observedTask;
-    this.params.queueBackgroundWork(observedTask);
     return rawTask;
   }
 }

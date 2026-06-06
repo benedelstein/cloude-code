@@ -14,11 +14,23 @@ const noopLogger: Logger = {
   scope: () => noopLogger,
 };
 
+async function waitFor(
+  predicate: () => boolean,
+  attempts = 50,
+): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for expected condition");
+}
+
 describe("SessionSummaryService", () => {
   it("publishes invalidation only after the D1 write resolves", async () => {
     const operations: string[] = [];
     const writeDeferred = Promise.withResolvers<void>();
-    const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(async () => {
         operations.push("write:start");
@@ -39,7 +51,6 @@ describe("SessionSummaryService", () => {
       getSessionId: () => SESSION_ID,
       getUserId: () => USER_ID,
       publishSessionSummaryInvalidated,
-      queueBackgroundWork: (promise) => queued.push(promise),
       logger: noopLogger,
     });
 
@@ -50,7 +61,7 @@ describe("SessionSummaryService", () => {
     expect(publishSessionSummaryInvalidated).not.toHaveBeenCalled();
 
     writeDeferred.resolve();
-    await queued[0];
+    await waitFor(() => operations.length === 3);
 
     expect(operations).toEqual(["write:start", "write:done", "publish"]);
     expect(publishSessionSummaryInvalidated).toHaveBeenCalledWith(
@@ -61,7 +72,6 @@ describe("SessionSummaryService", () => {
 
   it("serializes summary mutations before publishing invalidations", async () => {
     const operations: string[] = [];
-    const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(async () => {
         operations.push("working:write");
@@ -82,13 +92,12 @@ describe("SessionSummaryService", () => {
       getSessionId: () => SESSION_ID,
       getUserId: () => USER_ID,
       publishSessionSummaryInvalidated,
-      queueBackgroundWork: (promise) => queued.push(promise),
       logger: noopLogger,
     });
 
     service.persistWorkingState("responding");
     service.persistPushedBranch("cloude/sidebar-abcd");
-    await Promise.all(queued);
+    await waitFor(() => operations.length === 4);
 
     expect(operations).toEqual([
       "working:write",
@@ -100,7 +109,6 @@ describe("SessionSummaryService", () => {
 
   it("persists pull request state before publishing summary invalidation", async () => {
     const operations: string[] = [];
-    const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
@@ -119,12 +127,10 @@ describe("SessionSummaryService", () => {
       getSessionId: () => SESSION_ID,
       getUserId: () => USER_ID,
       publishSessionSummaryInvalidated,
-      queueBackgroundWork: (promise) => queued.push(promise),
       logger: noopLogger,
     });
 
     await service.persistPullRequestState("merged");
-    await Promise.all(queued);
 
     expect(repository.updatePullRequestState).toHaveBeenCalledWith(
       SESSION_ID,
@@ -139,7 +145,6 @@ describe("SessionSummaryService", () => {
 
   it("publishes one invalidation after assistant-finished summary persistence", async () => {
     const operations: string[] = [];
-    const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(async () => {
@@ -158,7 +163,6 @@ describe("SessionSummaryService", () => {
       getSessionId: () => SESSION_ID,
       getUserId: () => USER_ID,
       publishSessionSummaryInvalidated,
-      queueBackgroundWork: (promise) => queued.push(promise),
       logger: noopLogger,
     });
 
@@ -166,7 +170,7 @@ describe("SessionSummaryService", () => {
       messageId: "assistant-message-1",
       messageCreatedAt: "2026-06-03T00:00:00.000Z",
     });
-    await Promise.all(queued);
+    await waitFor(() => operations.length === 2);
 
     expect(repository.recordAssistantTurnFinished).toHaveBeenCalledWith(
       SESSION_ID,
@@ -179,7 +183,6 @@ describe("SessionSummaryService", () => {
 
   it("marks read before publishing summary invalidation", async () => {
     const operations: string[] = [];
-    const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
@@ -198,12 +201,10 @@ describe("SessionSummaryService", () => {
       getSessionId: () => SESSION_ID,
       getUserId: () => USER_ID,
       publishSessionSummaryInvalidated,
-      queueBackgroundWork: (promise) => queued.push(promise),
       logger: noopLogger,
     });
 
     await service.markRead("assistant-message-1");
-    await Promise.all(queued);
 
     expect(repository.markRead).toHaveBeenCalledWith(
       SESSION_ID,

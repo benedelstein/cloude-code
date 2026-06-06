@@ -88,6 +88,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
     updatedAt: fromSqliteDatetime(row.updated_at),
     lastMessageAt: fromSqliteDatetime(row.last_message_at),
     lastAssistantMessageId: row.last_assistant_message_id,
+    // on mark read, we only update if the message matches the latest assistant message.
     hasUnread: row.last_assistant_message_id !== null &&
       row.last_read_message_id !== row.last_assistant_message_id,
   };
@@ -208,6 +209,12 @@ export class SessionsRepository {
       .run();
   }
 
+  /**
+   * Updates a session's last read message id and timestamp.
+   * Only updates if the passed in messageId matches the latest assistant message id.
+   * @param sessionId 
+   * @param messageId 
+   */
   async markRead(sessionId: string, messageId: string): Promise<void> {
     await this.database
       .prepare(

@@ -264,6 +264,29 @@ describe("useCloudflareAgent", () => {
     });
   });
 
+  it("marks an aborted finished assistant message read when visible", () => {
+    renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "agent.finish",
+          message: {
+            id: "assistant-message-1",
+            role: "assistant",
+            parts: [],
+            metadata: { aborted: true },
+          },
+        }),
+      });
+    });
+
+    expect(latestSentMessage()).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+  });
+
   it("defers mark-read while hidden and sends it when visible again", () => {
     setDocumentVisibility("hidden");
     renderAgent();
