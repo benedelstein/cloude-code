@@ -1,3 +1,4 @@
+// Buffer reconnects so tokens do not expire during upgrade.
 export const WEBSOCKET_TOKEN_EXPIRY_BUFFER_MS = 30 * 1000;
 
 export interface WebSocketTokenLike {

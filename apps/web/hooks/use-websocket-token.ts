@@ -23,9 +23,8 @@ export interface UseWebSocketTokenResult<TToken extends WebSocketTokenLike> {
 }
 
 /**
- * Owns the shared lifecycle for short-lived websocket upgrade tokens:
- * initial fetch, transient retry backoff, terminal auth errors, key changes, and explicit refresh.
- * Transport hooks remain responsible for deciding when a token should be refreshed before connecting.
+ * Manages mint/retry state for websocket upgrade tokens. This hook does not
+ * open sockets; transport hooks call refresh() when a reconnect needs a new token.
  */
 export function useWebSocketToken<TToken extends WebSocketTokenLike>({
   tokenKey,
@@ -66,6 +65,7 @@ export function useWebSocketToken<TToken extends WebSocketTokenLike>({
     }
   }, []);
 
+  // Shared path for initial mint, explicit refresh, and retry backoff.
   const fetchWebSocketToken = useCallback(async () => {
     if (!enabled) {
       return null;
@@ -133,6 +133,7 @@ export function useWebSocketToken<TToken extends WebSocketTokenLike>({
     setWebSocketToken(nextToken);
   }, [clearWebSocketTokenRetryTimeout, enabled, getInitialToken, tokenKey]);
 
+  // Mint once when enabled and no token is available.
   useEffect(() => {
     if (!enabled) {
       clearWebSocketTokenRetryTimeout();
@@ -161,6 +162,7 @@ export function useWebSocketToken<TToken extends WebSocketTokenLike>({
     };
   }, [clearWebSocketTokenRetryTimeout]);
 
+  // Reset retry/auth state, then mint a replacement token.
   const refresh = useCallback(() => {
     clearWebSocketTokenRetryTimeout();
     webSocketTokenRetryCountRef.current = 0;

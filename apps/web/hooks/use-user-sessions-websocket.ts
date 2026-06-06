@@ -20,7 +20,12 @@ interface UseUserSessionsWebSocketOptions {
 
 function buildUserSessionsWebSocketUrl(token: string): string {
   const url = new URL("/sessions/updates", WS_API_URL);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  // Normalize the HTTP API origin for browser WebSocket clients.
+  if (url.protocol === "https:") {
+    url.protocol = "wss:";
+  } else if (url.protocol === "http:") {
+    url.protocol = "ws:";
+  }
   url.searchParams.set("token", token);
   return url.toString();
 }
@@ -78,6 +83,7 @@ export function useUserSessionsWebSocket({
     onReconnectPending: () => callbacksRef.current.onResyncRequired(),
   });
 
+  // This hook owns the raw sidebar WebSocket retry loop.
   const scheduleReconnect = useCallback(() => {
     const retryDelay = Math.min(
       1000 * 2 ** retryCountRef.current,
@@ -95,6 +101,7 @@ export function useUserSessionsWebSocket({
       return;
     }
 
+    // Token expiry only matters during the next WebSocket upgrade.
     if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
       refreshWebSocketToken();
       return;
@@ -106,6 +113,7 @@ export function useUserSessionsWebSocket({
     webSocket.onopen = () => {
       retryCountRef.current = 0;
       clearRetryTimeout();
+      // Reconnects can miss events while offline; resync once healthy.
       if (hasConnectedRef.current) {
         callbacksRef.current.onResyncRequired();
       }
@@ -161,6 +169,7 @@ export function useUserSessionsWebSocket({
       }
 
       callbacksRef.current.onResyncRequired();
+      // Browser close events hide the server's upgrade status.
       if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
         refreshWebSocketToken();
         return;

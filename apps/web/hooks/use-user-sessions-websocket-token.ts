@@ -7,6 +7,7 @@ import { useWebSocketToken } from "./use-websocket-token";
 
 let inFlightWebSocketTokenRequest: Promise<UserSessionsWebSocketTokenResponse> | null = null;
 
+// Deduplicate concurrent mints for the user-scoped sidebar stream.
 function requestUserSessionsWebSocketToken(): Promise<UserSessionsWebSocketTokenResponse> {
   if (inFlightWebSocketTokenRequest) {
     return inFlightWebSocketTokenRequest;
@@ -39,6 +40,7 @@ export function useUserSessionsWebSocketToken({
   onReconnectPending,
   onReconnectRecovered,
 }: UseUserSessionsWebSocketTokenOptions): UseUserSessionsWebSocketTokenResult {
+  // User-scoped adapter around the shared token lifecycle.
   const requestToken = useCallback(
     () => requestUserSessionsWebSocketToken(),
     [],

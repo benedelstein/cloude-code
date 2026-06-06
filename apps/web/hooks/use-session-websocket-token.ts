@@ -8,6 +8,7 @@ import { useWebSocketToken } from "./use-websocket-token";
 
 const inFlightWebSocketTokenRequests = new Map<string, Promise<SessionWebSocketTokenResponse>>();
 
+// Deduplicate concurrent mints for the same session.
 function requestSessionWebSocketToken(
   sessionId: string,
 ): Promise<SessionWebSocketTokenResponse> {
@@ -45,6 +46,7 @@ export function useSessionWebSocketToken({
   onReconnectPending,
   onReconnectRecovered,
 }: UseSessionWebSocketTokenOptions): UseSessionWebSocketTokenResult {
+  // Session-specific adapter around the shared token lifecycle.
   const requestToken = useCallback(
     () => requestSessionWebSocketToken(sessionId),
     [sessionId],

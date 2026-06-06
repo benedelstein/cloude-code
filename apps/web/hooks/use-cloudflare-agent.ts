@@ -303,7 +303,7 @@ export function useCloudflareAgent({
     }
   }, [applyServerActiveTurn, onError, resetPendingResponse]);
 
-  // Use Cloudflare's useAgent hook
+  // useAgent/PartySocket owns the session WebSocket and reconnect loop.
   const agent = useAgent<ClientState>({
     agent: "session",
     name: sessionId,
@@ -324,10 +324,7 @@ export function useCloudflareAgent({
       console.log("[agent] ws onClose", { hadStream: !!streamControllerRef.current, isConsuming: isConsumingRef.current });
       resetPendingResponse("onClose");
       setOperationError(null);
-      // Token is only verified at the WS upgrade. If it's already past expiry,
-      // partysocket's auto-reconnect would 401 with the stale token — fetch a
-      // fresh one so the next handshake succeeds. Otherwise let partysocket
-      // reconnect with the current token untouched (no extra sync churn).
+      // Token expiry only matters for the next WebSocket upgrade.
       if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
         refreshWebSocketToken?.();
       }
