@@ -70,7 +70,15 @@ export class UserSessionsDO extends DurableObject<Env> implements UserSessionsRp
   ): Promise<void> {
     const parsed = this.parseSessionRpcRequest(request);
     this.assertUserScope(parsed.userId);
-    await this.broadcastSummary(parsed.userId, parsed.sessionId);
+    await this.broadcastSummary(parsed.userId, parsed.sessionId, "session.summary.updated");
+  }
+
+  async createSessionSummary(
+    request: UserSessionsSessionRpcRequest,
+  ): Promise<void> {
+    const parsed = this.parseSessionRpcRequest(request);
+    this.assertUserScope(parsed.userId);
+    await this.broadcastSummary(parsed.userId, parsed.sessionId, "session.summary.created");
   }
 
   async removeSessionSummary(
@@ -189,6 +197,7 @@ export class UserSessionsDO extends DurableObject<Env> implements UserSessionsRp
   private async broadcastSummary(
     userId: string,
     sessionId: string,
+    type: "session.summary.created" | "session.summary.updated",
   ): Promise<void> {
     const summary = await this.sessionsRepository.getByIdForUser(sessionId, userId);
     if (!summary || summary.archived) {
@@ -196,7 +205,7 @@ export class UserSessionsDO extends DurableObject<Env> implements UserSessionsRp
       return;
     }
 
-    this.broadcast({ type: "session.summary.updated", session: summary });
+    this.broadcast({ type, session: summary });
   }
 
   private broadcast(message: UserSessionsServerMessageType): void {

@@ -156,6 +156,10 @@ describe("session api schemas", () => {
       type: "user_sessions.connected",
     })).not.toThrow();
     expect(() => UserSessionsServerMessage.parse({
+      type: "session.summary.created",
+      session,
+    })).not.toThrow();
+    expect(() => UserSessionsServerMessage.parse({
       type: "session.summary.updated",
       session,
     })).not.toThrow();

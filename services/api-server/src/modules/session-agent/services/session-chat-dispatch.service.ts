@@ -69,6 +69,10 @@ export interface SessionChatDispatchServiceDeps {
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage, without?: string[]) => void;
   synthesizeStatus: () => SessionStatus;
+  publishSessionSummaryInvalidated: (
+    userId: string,
+    sessionId: string,
+  ) => Promise<void>;
 }
 
 export interface SessionChatAttachmentProvider {
@@ -96,6 +100,8 @@ export class SessionChatDispatchService {
   private readonly updatePartialState: SessionChatDispatchServiceDeps["updatePartialState"];
   private readonly broadcastMessage: SessionChatDispatchServiceDeps["broadcastMessage"];
   private readonly synthesizeStatus: () => SessionStatus;
+  private readonly publishSessionSummaryInvalidated:
+    SessionChatDispatchServiceDeps["publishSessionSummaryInvalidated"];
 
   constructor(deps: SessionChatDispatchServiceDeps) {
     this.logger = deps.logger.scope("session-chat-dispatch");
@@ -109,6 +115,7 @@ export class SessionChatDispatchService {
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
     this.synthesizeStatus = deps.synthesizeStatus;
+    this.publishSessionSummaryInvalidated = deps.publishSessionSummaryInvalidated;
   }
 
   /**
@@ -368,7 +375,7 @@ export class SessionChatDispatchService {
       attachmentIds,
     );
     const historyContent = this.toHistorySyncContent(content, attachmentRecords);
-    await updateSessionHistoryData({
+    const historyUpdateResult = await updateSessionHistoryData({
       database: this.env.DB,
       anthropicApiKey: this.env.ANTHROPIC_API_KEY,
       logger: this.logger,
@@ -376,6 +383,23 @@ export class SessionChatDispatchService {
       messageContent: historyContent,
       messageRepository: this.messageRepository,
     });
+    if (!historyUpdateResult.updatedSessionSummary) {
+      return;
+    }
+
+    const { userId } = this.getServerState();
+    if (!userId) {
+      return;
+    }
+
+    try {
+      await this.publishSessionSummaryInvalidated(userId, sessionId);
+    } catch (error) {
+      this.logger.warn("Failed to publish session summary invalidation", {
+        error,
+        fields: { sessionId, userId },
+      });
+    }
   }
 
   private toHistorySyncContent(

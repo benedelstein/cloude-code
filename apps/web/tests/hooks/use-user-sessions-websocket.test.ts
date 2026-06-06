@@ -72,6 +72,7 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
 
 function renderUserSessionsWebSocket() {
   const callbacks = {
+    onSessionCreated: vi.fn(),
     onSessionUpdated: vi.fn(),
     onSessionRemoved: vi.fn(),
     onResyncRequired: vi.fn(),
@@ -115,6 +116,7 @@ describe("useUserSessionsWebSocket", () => {
 
   it("closes a connecting websocket on cleanup", async () => {
     const callbacks = {
+      onSessionCreated: vi.fn(),
       onSessionUpdated: vi.fn(),
       onSessionRemoved: vi.fn(),
       onResyncRequired: vi.fn(),
@@ -140,6 +142,7 @@ describe("useUserSessionsWebSocket", () => {
   it("does not reconnect when callback identities change", async () => {
     const renderOptions = () => ({
       enabled: true,
+      onSessionCreated: vi.fn(),
       onSessionUpdated: vi.fn(),
       onSessionRemoved: vi.fn(),
       onResyncRequired: vi.fn(),
@@ -159,7 +162,7 @@ describe("useUserSessionsWebSocket", () => {
     expect(FakeWebSocket.instances[0]?.close).not.toHaveBeenCalled();
   });
 
-  it("dispatches update, remove, and resync messages", async () => {
+  it("dispatches create, update, remove, and resync messages", async () => {
     const callbacks = renderUserSessionsWebSocket();
     await waitFor(() => {
       expect(FakeWebSocket.instances).toHaveLength(1);
@@ -167,7 +170,15 @@ describe("useUserSessionsWebSocket", () => {
 
     const webSocket = FakeWebSocket.instances[0]!;
     const session = makeSession({ workingState: "responding" });
+    const createdSession = makeSession({
+      id: "123e4567-e89b-12d3-a456-426614174099",
+      title: "Created session",
+    });
     act(() => {
+      emitMessage(webSocket, {
+        type: "session.summary.created",
+        session: createdSession,
+      });
       emitMessage(webSocket, {
         type: "session.summary.updated",
         session,
@@ -183,6 +194,7 @@ describe("useUserSessionsWebSocket", () => {
       emitMessage(webSocket, { type: "unknown" });
     });
 
+    expect(callbacks.onSessionCreated).toHaveBeenCalledWith(createdSession);
     expect(callbacks.onSessionUpdated).toHaveBeenCalledWith(session);
     expect(callbacks.onSessionRemoved).toHaveBeenCalledWith(session.id);
     expect(callbacks.onResyncRequired).toHaveBeenCalledTimes(1);

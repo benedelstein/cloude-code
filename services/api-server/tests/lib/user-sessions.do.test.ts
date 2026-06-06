@@ -212,6 +212,32 @@ describe("UserSessionsDO", () => {
     });
   });
 
+  it("fetches and broadcasts a full summary for creation", async () => {
+    const webSocket = new FakeWebSocket();
+    const { calls, durableObject } = createDO({
+      firstRow: createSessionRow({ working_state: "idle" }),
+      initialUserId: USER_ID,
+      webSockets: [webSocket],
+    });
+
+    await durableObject.createSessionSummary({
+      userId: USER_ID,
+      sessionId: SESSION_ID,
+    });
+
+    expect(calls[0]?.query).toContain("WHERE id = ? AND user_id = ?");
+    expect(calls[0]?.bindings).toEqual([SESSION_ID, USER_ID]);
+    expect(parseSent(webSocket)).toMatchObject({
+      type: "session.summary.created",
+      session: {
+        id: SESSION_ID,
+        workingState: "idle",
+        pushedBranch: "cloude/sidebar-abcd",
+        pullRequest: { number: 4, state: "open" },
+      },
+    });
+  });
+
   it("broadcasts removed when an invalidated summary is missing or archived", async () => {
     const missingSocket = new FakeWebSocket();
     const missing = createDO({
@@ -312,7 +338,7 @@ describe("UserSessionsDO", () => {
     (durableObject as unknown as {
       broadcast(message: unknown): void;
     }).broadcast({
-      type: "session.summary.updated",
+      type: "session.summary.created",
       session: { id: SESSION_ID },
     });
 

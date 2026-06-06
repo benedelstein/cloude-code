@@ -264,6 +264,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
+      publishSessionSummaryInvalidated: (userId, sessionId) =>
+        userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
     });
 
     this.providerConnectionService = new SessionProviderConnectionService({

@@ -150,7 +150,13 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
 
   const addSession = useCallback((session: SessionSummary) => {
     setGroups((prev) => {
-      const existingIndex = prev.findIndex((g) => g.repoId === session.repoId);
+      const groupsWithoutSession = prev
+        .map((group) => ({
+          ...group,
+          sessions: group.sessions.filter((s) => s.id !== session.id),
+        }))
+        .filter((group) => group.sessions.length > 0 || group.nextSessionCursor !== null);
+      const existingIndex = groupsWithoutSession.findIndex((g) => g.repoId === session.repoId);
       if (existingIndex === -1) {
         // Brand-new repo: prepend a new group containing this session.
         const newGroup: SessionRepoGroup = {
@@ -159,9 +165,9 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
           sessions: [session],
           nextSessionCursor: null,
         };
-        return [newGroup, ...prev];
+        return [newGroup, ...groupsWithoutSession];
       }
-      const existing = prev[existingIndex]!;
+      const existing = groupsWithoutSession[existingIndex]!;
       const updatedGroup: SessionRepoGroup = {
         ...existing,
         // Refresh the display name from the newest session.
@@ -169,7 +175,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         sessions: [session, ...existing.sessions],
       };
       // New sessions are newest by creation time, so their repo group moves to the top.
-      const rest = prev.filter((_, i) => i !== existingIndex);
+      const rest = groupsWithoutSession.filter((_, i) => i !== existingIndex);
       return [updatedGroup, ...rest];
     });
   }, []);
@@ -248,6 +254,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
 
   useUserSessionsWebSocket({
     enabled: !loading,
+    onSessionCreated: addSession,
     onSessionUpdated: replaceLoadedSession,
     onSessionRemoved: removeSession,
     onResyncRequired: refresh,

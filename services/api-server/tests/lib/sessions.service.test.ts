@@ -34,14 +34,16 @@ function createMockDatabase() {
 }
 
 function createService(database: D1Database) {
-  return new SessionsService({
+  const userSessionsStub = {
+    createSessionSummary: vi.fn(async () => {}),
+    requestResync: vi.fn(async () => {}),
+  };
+  const service = new SessionsService({
     env: {
       DB: database,
       SESSION_AGENT: {},
       USER_SESSIONS: {
-        getByName: vi.fn(() => ({
-          requestResync: vi.fn(async () => {}),
-        })),
+        getByName: vi.fn(() => userSessionsStub),
       },
       WEBSOCKET_TOKEN_SIGNING_KEY: "test-secret",
       ANTHROPIC_API_KEY: "anthropic-key",
@@ -83,6 +85,7 @@ function createService(database: D1Database) {
     },
     createPullRequestGitHubProvider: vi.fn() as never,
   });
+  return { service, userSessionsStub };
 }
 
 describe("SessionsService", () => {
@@ -100,7 +103,7 @@ describe("SessionsService", () => {
     const handleInit = vi.fn(async (_request: InitSessionAgentRequest) => success(undefined));
     vi.mocked(getAgentByName).mockResolvedValue({ handleInit } as never);
     const { calls, database } = createMockDatabase();
-    const service = createService(database);
+    const { service, userSessionsStub } = createService(database);
 
     try {
       const result = await service.createSession({
@@ -133,6 +136,11 @@ describe("SessionsService", () => {
           attachmentIds: [attachmentId],
         },
       }));
+      expect(userSessionsStub.createSessionSummary).toHaveBeenCalledWith({
+        userId: "123e4567-e89b-12d3-a456-426614174999",
+        sessionId,
+      });
+      expect(userSessionsStub.requestResync).not.toHaveBeenCalled();
     } finally {
       randomUuid.mockRestore();
     }

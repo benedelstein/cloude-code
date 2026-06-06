@@ -11,6 +11,15 @@ export class UserSessionsPublisher {
     this.logger = params.logger;
   }
 
+  async createSessionSummary(params: {
+    userId: string;
+    sessionId: string;
+  }): Promise<void> {
+    await this.publish(params.userId, "session.summary.create", (stub) =>
+      stub.createSessionSummary(params)
+    );
+  }
+
   async invalidateSessionSummary(params: {
     userId: string;
     sessionId: string;

@@ -12,6 +12,12 @@ export const SessionSummaryUpdatedEvent = z.object({
 });
 export type SessionSummaryUpdatedEvent = z.infer<typeof SessionSummaryUpdatedEvent>;
 
+export const SessionSummaryCreatedEvent = z.object({
+  type: z.literal("session.summary.created"),
+  session: SessionSummary,
+});
+export type SessionSummaryCreatedEvent = z.infer<typeof SessionSummaryCreatedEvent>;
+
 export const SessionSummaryRemovedEvent = z.object({
   type: z.literal("session.summary.removed"),
   sessionId: z.uuid(),
@@ -25,6 +31,7 @@ export type SessionListResyncRequiredEvent = z.infer<typeof SessionListResyncReq
 
 export const UserSessionsServerMessage = z.discriminatedUnion("type", [
   UserSessionsConnectedEvent,
+  SessionSummaryCreatedEvent,
   SessionSummaryUpdatedEvent,
   SessionSummaryRemovedEvent,
   SessionListResyncRequiredEvent,

@@ -325,7 +325,7 @@ export class SessionsService {
         userId: params.userId,
       },
     );
-    await this.publishUserSessionsResync(params.userId);
+    await this.publishSessionSummaryCreated(params.userId, sessionId);
 
     return success({
       sessionId,
@@ -670,6 +670,23 @@ export class SessionsService {
     }
   }
 
+  private async publishSessionSummaryCreated(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    try {
+      await this.userSessionsPublisher.createSessionSummary({
+        userId,
+        sessionId,
+      });
+    } catch (error) {
+      logger.warn("Failed to publish session summary creation", {
+        error,
+        fields: { sessionId, userId },
+      });
+    }
+  }
+
   private async publishSessionSummaryRemoved(
     userId: string,
     sessionId: string,
@@ -683,17 +700,6 @@ export class SessionsService {
       logger.warn("Failed to publish session summary removal", {
         error,
         fields: { sessionId, userId },
-      });
-    }
-  }
-
-  private async publishUserSessionsResync(userId: string): Promise<void> {
-    try {
-      await this.userSessionsPublisher.requestResync(userId);
-    } catch (error) {
-      logger.warn("Failed to publish user sessions resync", {
-        error,
-        fields: { userId },
       });
     }
   }

@@ -29,6 +29,7 @@ import {
 
 type UserSessionsWebSocketOptions = {
   enabled: boolean;
+  onSessionCreated: (session: SessionSummary) => void;
   onSessionUpdated: (session: SessionSummary) => void;
   onSessionRemoved: (sessionId: string) => void;
   onResyncRequired: () => void;
@@ -182,6 +183,42 @@ describe("SessionListProvider", () => {
       });
 
       expect(result.current.groups[0]?.repoFullName).toBe("new-owner/new-name");
+    });
+
+    it("upserts by session id when the session already exists", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              repoId: 1,
+              repoFullName: "a/x",
+              sessions: [
+                makeSession({ id: "duplicate", title: "Optimistic title" }),
+                makeSession({ id: "existing" }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        result.current.addSession(
+          makeSession({
+            id: "duplicate",
+            repoId: 1,
+            repoFullName: "a/x",
+            title: "Server title",
+          }),
+        );
+      });
+
+      expect(result.current.groups[0]?.sessions.map((session) => session.id)).toEqual([
+        "duplicate",
+        "existing",
+      ]);
+      expect(result.current.groups[0]?.sessions[0]?.title).toBe("Server title");
     });
   });
 
@@ -446,6 +483,36 @@ describe("SessionListProvider", () => {
       expect(result.current.groups[0]?.sessions.map((s) => s.id)).toEqual([
         "loaded",
       ]);
+    });
+
+    it("inserts created summaries from the stream", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({ repoId: 1, repoFullName: "a/x" }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        getLatestUserSessionsWebSocketOptions().onSessionCreated(
+          makeSession({
+            id: "created",
+            repoId: 99,
+            repoFullName: "new/repo",
+            title: "Created from stream",
+          }),
+        );
+      });
+
+      expect(result.current.groups[0]).toMatchObject({
+        repoId: 99,
+        repoFullName: "new/repo",
+        sessions: [{ id: "created", title: "Created from stream" }],
+      });
+      expect(result.current.groups.map((group) => group.repoId)).toEqual([99, 1]);
     });
 
     it("removes loaded sessions from stream remove messages", async () => {

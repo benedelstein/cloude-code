@@ -18,6 +18,9 @@ export type UserSessionsUserRpcRequest = z.infer<
 >;
 
 export interface UserSessionsRpc {
+  createSessionSummary(
+    request: UserSessionsSessionRpcRequest,
+  ): Promise<void>;
   invalidateSessionSummary(
     request: UserSessionsSessionRpcRequest,
   ): Promise<void>;

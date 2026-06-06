@@ -10,6 +10,7 @@ const MAX_WEBSOCKET_RETRY_DELAY_MS = 30 * 1000;
 
 interface UseUserSessionsWebSocketOptions {
   enabled: boolean;
+  onSessionCreated: (session: SessionSummary) => void;
   onSessionUpdated: (session: SessionSummary) => void;
   onSessionRemoved: (sessionId: string) => void;
   onResyncRequired: () => void;
@@ -34,6 +35,7 @@ function closeWebSocketIntentionally(webSocket: WebSocket): void {
 
 export function useUserSessionsWebSocket({
   enabled,
+  onSessionCreated,
   onSessionUpdated,
   onSessionRemoved,
   onResyncRequired,
@@ -44,6 +46,7 @@ export function useUserSessionsWebSocket({
   const retryCountRef = useRef(0);
   const hasConnectedRef = useRef(false);
   const callbacksRef = useRef({
+    onSessionCreated,
     onSessionUpdated,
     onSessionRemoved,
     onResyncRequired,
@@ -51,11 +54,12 @@ export function useUserSessionsWebSocket({
 
   useEffect(() => {
     callbacksRef.current = {
+      onSessionCreated,
       onSessionUpdated,
       onSessionRemoved,
       onResyncRequired,
     };
-  }, [onResyncRequired, onSessionRemoved, onSessionUpdated]);
+  }, [onResyncRequired, onSessionCreated, onSessionRemoved, onSessionUpdated]);
 
   const clearRetryTimeout = useCallback(() => {
     if (retryTimeoutRef.current !== null) {
@@ -121,6 +125,9 @@ export function useUserSessionsWebSocket({
 
       switch (parseResult.data.type) {
         case "user_sessions.connected":
+          break;
+        case "session.summary.created":
+          callbacksRef.current.onSessionCreated(parseResult.data.session);
           break;
         case "session.summary.updated":
           callbacksRef.current.onSessionUpdated(parseResult.data.session);

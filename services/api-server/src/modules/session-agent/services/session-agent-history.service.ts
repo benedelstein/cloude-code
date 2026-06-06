@@ -2,6 +2,10 @@ import type { Logger } from "@repo/shared";
 import { generateSessionTitle } from "@/shared/utils/generate-session-title";
 import type { MessageRepository } from "../repositories/message.repository";
 
+export interface SessionHistoryUpdateResult {
+  updatedSessionSummary: boolean;
+}
+
 export async function updateSessionHistoryData(params: {
   database: D1Database;
   anthropicApiKey: string;
@@ -9,7 +13,7 @@ export async function updateSessionHistoryData(params: {
   sessionId: string;
   messageContent: string;
   messageRepository: MessageRepository;
-}): Promise<void> {
+}): Promise<SessionHistoryUpdateResult> {
   const {
     database,
     anthropicApiKey,
@@ -25,7 +29,12 @@ export async function updateSessionHistoryData(params: {
       .prepare(`UPDATE sessions SET last_message_at = datetime('now') WHERE id = ?`)
       .bind(sessionId)
       .run();
+  } catch (error) {
+    logger.error("Failed to sync message to D1 history", { error });
+    return { updatedSessionSummary: false };
+  }
 
+  try {
     // Check if this is the first user message — if so, generate a title via LLM
     // TODO: more efficient query. store message sender in d1 as toplevel column.
     const userMessages = messageRepository.getAllBySession(sessionId)
@@ -42,6 +51,8 @@ export async function updateSessionHistoryData(params: {
         .run();
     }
   } catch (error) {
-    logger.error("Failed to sync message to D1 history", { error });
+    logger.error("Failed to generate session title from history", { error });
   }
+
+  return { updatedSessionSummary: true };
 }
