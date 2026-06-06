@@ -22,6 +22,11 @@ export interface UseWebSocketTokenResult<TToken extends WebSocketTokenLike> {
   refresh: () => void;
 }
 
+/**
+ * Owns the shared lifecycle for short-lived websocket upgrade tokens:
+ * initial fetch, transient retry backoff, terminal auth errors, key changes, and explicit refresh.
+ * Transport hooks remain responsible for deciding when a token should be refreshed before connecting.
+ */
 export function useWebSocketToken<TToken extends WebSocketTokenLike>({
   tokenKey,
   requestToken,
