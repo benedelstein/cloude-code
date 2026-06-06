@@ -312,6 +312,9 @@ export class AgentTurnCoordinator {
         this.updateServerState({ agentSessionId: event.sessionId });
         break;
       }
+      case "process_exit":
+        this.handleProcessExit(event);
+        break;
       case "heartbeat":
       case "debug":
         break;
@@ -483,6 +486,43 @@ export class AgentTurnCoordinator {
     this.updatePartialState({ status: this.synthesizeStatus() });
   }
 
+  private handleProcessExit(
+    event: Extract<AgentEvent, { type: "process_exit" }>,
+  ): void {
+    const serverState = this.getServerState();
+    if (!serverState.agentProcessRunId) {
+      this.logger.debug("Ignoring vm-agent process exit with no tracked run", {
+        fields: {
+          processRunId: event.processRunId,
+          exitCode: event.exitCode,
+        },
+      });
+      return;
+    }
+    if (serverState.agentProcessRunId !== event.processRunId) {
+      this.logger.warn("Ignoring stale vm-agent process exit", {
+        fields: {
+          currentProcessRunId: serverState.agentProcessRunId,
+          incomingProcessRunId: event.processRunId,
+          exitCode: event.exitCode,
+        },
+      });
+      return;
+    }
+
+    this.logger.info("vm-agent process exited", {
+      fields: {
+        agentProcessId: serverState.agentProcessId,
+        processRunId: event.processRunId,
+        exitCode: event.exitCode,
+      },
+    });
+    this.updateServerState({
+      agentProcessId: null,
+      agentProcessRunId: null,
+    });
+  }
+
   /**
    * Ignores webhook payloads for a messageId that does not match the current
    * active turn. Permissive when active is null so a terminal chunk that
@@ -502,10 +542,14 @@ export class AgentTurnCoordinator {
   private clearActiveTurnState(
     options: { preserveAgentProcessId?: boolean } = {},
   ): void {
+    const serverState = this.getServerState();
     this.updateServerState({
       activeUserMessageId: null,
       agentProcessId: options.preserveAgentProcessId
-        ? this.getServerState().agentProcessId
+        ? serverState.agentProcessId
+        : null,
+      agentProcessRunId: options.preserveAgentProcessId
+        ? serverState.agentProcessRunId
         : null,
     });
     this.updatePartialState({ activeTurn: null });

@@ -245,7 +245,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       logger: this.logger,
       secretRepository: this.secretRepository,
       getServerState: () => this.serverState,
-      updateAgentProcessId: (agentProcessId) => this.updateServerState({ agentProcessId }),
+      updateAgentProcessState: (partial) => this.updateServerState(partial),
       getClientState: () => this.state,
       getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
       getProviderCredentialAdapter,

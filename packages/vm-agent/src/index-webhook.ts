@@ -82,8 +82,10 @@ const initialMessage = loadInitialMessage();
 
 const webhookUrl = process.env.DO_WEBHOOK_URL;
 const webhookToken = process.env.DO_WEBHOOK_TOKEN;
+const processRunId = process.env.AGENT_PROCESS_RUN_ID;
 if (!webhookUrl) { throw new Error("Missing DO_WEBHOOK_URL env var"); }
 if (!webhookToken) { throw new Error("Missing DO_WEBHOOK_TOKEN env var"); }
+if (!processRunId) { throw new Error("Missing AGENT_PROCESS_RUN_ID env var"); }
 
 const args = {
   sessionId: typeof values.sessionId === "string" ? values.sessionId : undefined,
@@ -118,6 +120,7 @@ const runner = new WebhookAgentRunner({
   settings,
   webhookUrl,
   webhookToken,
+  processRunId,
   args,
   initialAgentMode,
   idleTimeoutMs,

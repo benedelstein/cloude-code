@@ -56,6 +56,8 @@ describe("vm-agent schemas", () => {
     expect(AgentOutput.parse({ type: "error", error: "e" }).type).toBe("error");
     expect(AgentOutput.parse({ type: "stream", chunk: { any: "value" } }).type).toBe("stream");
     expect(AgentOutput.parse({ type: "sessionId", sessionId: "s" }).type).toBe("sessionId");
+    expect(AgentOutput.parse({ type: "process_exit", processRunId: "run-1", exitCode: 0 }).type)
+      .toBe("process_exit");
     expect(AgentOutput.parse({ type: "cancel_ack", userMessageId: "user-message-1" }).type).toBe("cancel_ack");
   });
 
@@ -84,9 +86,9 @@ describe("vm-agent schemas", () => {
 
     expect(
       AgentEventsWebhookBody.parse({
-        event: { type: "debug", message: "ready-ish" },
+        event: { type: "process_exit", processRunId: "run-1", exitCode: 0 },
       }).event.type,
-    ).toBe("debug");
+    ).toBe("process_exit");
   });
 
   it("roundtrips encode/decode", () => {
