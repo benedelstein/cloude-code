@@ -513,10 +513,21 @@ export class AgentTurnCoordinator {
     this.logger.info("vm-agent process exited", {
       fields: {
         agentProcessId: serverState.agentProcessId,
+        activeUserMessageId: serverState.activeUserMessageId,
         processRunId: event.processRunId,
         exitCode: event.exitCode,
       },
     });
+
+    if (serverState.activeUserMessageId) {
+      const saved = this.commitAbortedMessage();
+      if (saved) {
+        this.logger.info("Committed partial message after vm-agent process exit");
+      }
+      this.updatePartialState({ status: this.synthesizeStatus() });
+      return;
+    }
+
     this.updateServerState({
       agentProcessId: null,
       agentProcessRunId: null,

@@ -45,6 +45,7 @@ function createHarness(params: {
       message,
     })),
   };
+  const updateWorkingState = vi.fn();
 
   const coordinator = new AgentTurnCoordinator({
     logger: createLogger(),
@@ -59,11 +60,18 @@ function createHarness(params: {
     broadcastMessage,
     synthesizeStatus: () => "preparing",
     terminateActiveProcess: vi.fn(),
-    updateWorkingState: vi.fn(),
+    updateWorkingState,
     onTurnFinished: params.onTurnFinished,
   });
 
-  return { broadcastMessage, clientState, coordinator, messageRepository, serverState };
+  return {
+    broadcastMessage,
+    clientState,
+    coordinator,
+    messageRepository,
+    serverState,
+    updateWorkingState,
+  };
 }
 
 describe("AgentTurnCoordinator", () => {
@@ -110,6 +118,43 @@ describe("AgentTurnCoordinator", () => {
 
     expect(serverState.agentProcessId).toBeNull();
     expect(serverState.agentProcessRunId).toBeNull();
+  });
+
+  it("aborts the active turn when the matching process exits mid-stream", async () => {
+    const {
+      broadcastMessage,
+      clientState,
+      coordinator,
+      messageRepository,
+      serverState,
+      updateWorkingState,
+    } = createHarness();
+
+    await coordinator.handleChunks("user-message-1", [
+      { sequence: 0, chunk: { type: "start", messageId: "assistant-message-1" } as UIMessageChunk },
+      { sequence: 1, chunk: { type: "text-start", id: "text-1" } as UIMessageChunk },
+      { sequence: 2, chunk: { type: "text-delta", id: "text-1", delta: "partial" } as UIMessageChunk },
+    ]);
+
+    coordinator.handleEvent({
+      type: "process_exit",
+      processRunId: "process-run-1",
+      exitCode: 0,
+    });
+
+    expect(messageRepository.create).toHaveBeenCalledOnce();
+    expect(broadcastMessage).toHaveBeenLastCalledWith({
+      type: "agent.finish",
+      message: expect.objectContaining({
+        id: "assistant-message-1",
+        metadata: expect.objectContaining({ aborted: true }),
+      }),
+    });
+    expect(serverState.activeUserMessageId).toBeNull();
+    expect(serverState.agentProcessId).toBeNull();
+    expect(serverState.agentProcessRunId).toBeNull();
+    expect(clientState.activeTurn).toBeNull();
+    expect(updateWorkingState).toHaveBeenLastCalledWith("idle");
   });
 
   it("ignores stale process exit events from older runs", () => {
