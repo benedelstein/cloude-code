@@ -18,6 +18,12 @@ import type { ServerState } from "../repositories/server-state.repository";
 import { SpritesError } from "@/shared/integrations/sprites/types";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
 
+export interface FinishedAssistantTurn {
+  message: UIMessage;
+  messageCreatedAt: string;
+  aborted: boolean;
+}
+
 /**
  * Dependencies injected from the SessionAgentDO into the coordinator.
  * Keeps coupling explicit and avoids a circular type reference to the DO class.
@@ -38,7 +44,7 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
-  onTurnFinished?: () => void;
+  onTurnFinished: (turn: FinishedAssistantTurn) => void;
 }
 
 /**
@@ -64,7 +70,7 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
-  private readonly onTurnFinished: (() => void) | null;
+  private readonly onTurnFinished: (turn: FinishedAssistantTurn) => void;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -95,7 +101,7 @@ export class AgentTurnCoordinator {
     this.synthesizeStatus = deps.synthesizeStatus;
     this.terminateActiveProcess = deps.terminateActiveProcess;
     this.updateWorkingState = deps.updateWorkingState;
-    this.onTurnFinished = deps.onTurnFinished ?? null;
+    this.onTurnFinished = deps.onTurnFinished;
   }
 
   /**
@@ -255,10 +261,12 @@ export class AgentTurnCoordinator {
         // Flush the batched chunks (including this terminal one) before the
         // agent.finish so the wire order stays chunks → finish.
         this.flushBufferedChunks(buffered);
-        this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
-        if (!isAbortedMessage(result.finishMessage)) {
-          this.onTurnFinished?.();
-        }
+        this.onTurnFinished({
+          message: result.finishedMessage,
+          messageCreatedAt: result.messageCreatedAt,
+          aborted: result.aborted,
+        });
+        this.broadcastMessage({ type: "agent.finish", message: result.finishedMessage });
         return;
       }
       this.lastSeenChunkSequence = sequence;
@@ -400,12 +408,17 @@ export class AgentTurnCoordinator {
    * events keep their wire order (chunks → finish).
    *
    * @returns When the chunk is non-terminal: `{ ended: false }`. When the
-   *   chunk is terminal: `{ ended: true, finishMessage }` with the persisted
+   *   chunk is terminal: `{ ended: true, finishedMessage }` with the persisted
    *   UIMessage that the caller should broadcast as `agent.finish`.
    */
   private handleStreamChunk(
     chunk: UIMessageChunk,
-  ): { ended: false } | { ended: true; finishMessage: UIMessage } {
+  ): { ended: false } | {
+    ended: true;
+    finishedMessage: UIMessage;
+    messageCreatedAt: string;
+    aborted: boolean;
+  } {
     const serverState = this.getServerState();
 
     const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
@@ -428,20 +441,29 @@ export class AgentTurnCoordinator {
       serverState.sessionId!,
       finishedMessage,
     );
+    const aborted = isAbortedMessage(stored.message);
     this.pendingChunkRepository.clear();
     this.messageAccumulator.reset();
     this.logger.info("Terminal chunk received", {
       fields: {
         userMessageId: serverState.activeUserMessageId,
-        finishReason: getChunkFinishReason(chunk) ?? "unknown",
+        finishReason: getLogFinishReason(aborted, chunk),
       },
     });
-    this.clearActiveTurnState({ preserveAgentProcessId: true });
+    this.clearActiveTurnState({
+      preserveAgentProcessId: true,
+      persistWorkingState: false, // will be handled by caller
+    });
     this.updatePartialState({
       lastError: null,
       status: this.synthesizeStatus(),
     });
-    return { ended: true, finishMessage: stored.message };
+    return {
+      ended: true,
+      finishedMessage: stored.message,
+      messageCreatedAt: stored.createdAt,
+      aborted,
+    };
   }
 
   /** Emits buffered chunks as a single agent.chunks */
@@ -465,11 +487,18 @@ export class AgentTurnCoordinator {
     if (abortedMessage) {
       const sessionId = this.getServerState().sessionId!;
       const stored = this.messageRepository.create(sessionId, abortedMessage);
+      this.onTurnFinished({
+        message: stored.message,
+        messageCreatedAt: stored.createdAt,
+        aborted: true,
+      });
       this.broadcastMessage({ type: "agent.finish", message: stored.message });
       this.messageAccumulator.reset();
+      this.clearActiveTurnState({ ...options, persistWorkingState: false });
+      return true;
     }
     this.clearActiveTurnState(options);
-    return !!abortedMessage;
+    return false;
   }
 
   /**
@@ -551,7 +580,10 @@ export class AgentTurnCoordinator {
   }
 
   private clearActiveTurnState(
-    options: { preserveAgentProcessId?: boolean } = {},
+    options: {
+      preserveAgentProcessId?: boolean;
+      persistWorkingState?: boolean;
+    } = {},
   ): void {
     const serverState = this.getServerState();
     this.updateServerState({
@@ -564,7 +596,9 @@ export class AgentTurnCoordinator {
         : null,
     });
     this.updatePartialState({ activeTurn: null });
-    this.updateWorkingState("idle");
+    if (options.persistWorkingState !== false) {
+      this.updateWorkingState("idle");
+    }
     this.lastSeenChunkSequence = null;
   }
 
@@ -600,4 +634,17 @@ function isAbortedMessage(message: UIMessage): boolean {
   return typeof metadata === "object" &&
     metadata !== null &&
     (metadata as { aborted?: unknown }).aborted === true;
+}
+
+function getLogFinishReason(
+  aborted: boolean,
+  terminalChunk: UIMessageChunk,
+): string {
+  if (aborted) {
+    return "abort";
+  }
+  if (terminalChunk.type === "error") {
+    return "error";
+  }
+  return getChunkFinishReason(terminalChunk) ?? "unknown";
 }

@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState } from "@repo/shared";
 import { useCloudflareAgent } from "@/hooks/use-cloudflare-agent";
 
@@ -22,9 +22,11 @@ vi.mock("agents/react", () => ({
 function renderAgent({
   expiresAt = new Date(Date.now() + 60_000).toISOString(),
   refreshWebSocketToken,
+  onMarkRead,
 }: {
   expiresAt?: string;
   refreshWebSocketToken?: () => void;
+  onMarkRead?: (sessionId: string, messageId: string) => void;
 } = {}) {
   return renderHook(() =>
     useCloudflareAgent({
@@ -34,8 +36,21 @@ function renderAgent({
         expiresAt,
       },
       refreshWebSocketToken,
+      onMarkRead,
     }),
   );
+}
+
+function setDocumentVisibility(visibilityState: DocumentVisibilityState): void {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: visibilityState,
+  });
+}
+
+function latestSentMessage(): unknown {
+  const payload = mockAgentState.send.mock.calls.at(-1)?.[0] as string | undefined;
+  return payload ? JSON.parse(payload) : null;
 }
 
 function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
@@ -60,6 +75,12 @@ function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
 }
 
 describe("useCloudflareAgent", () => {
+  beforeEach(() => {
+    mockAgentState.send.mockClear();
+    mockAgentState.options = null;
+    setDocumentVisibility("visible");
+  });
+
   it("derives responding state from sync activeTurn without pending chunks", () => {
     const { result } = renderAgent();
 
@@ -196,5 +217,102 @@ describe("useCloudflareAgent", () => {
     });
 
     expect(refreshWebSocketToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks the latest assistant message read after visible sync", () => {
+    const onMarkRead = vi.fn();
+    renderAgent({ onMarkRead });
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "sync.response",
+          messages: [
+            { id: "user-message-1", role: "user", parts: [] },
+            { id: "assistant-message-1", role: "assistant", parts: [] },
+          ],
+          activeTurn: null,
+        }),
+      });
+    });
+
+    expect(latestSentMessage()).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+    expect(onMarkRead).toHaveBeenCalledWith(
+      "123e4567-e89b-12d3-a456-426614174000",
+      "assistant-message-1",
+    );
+  });
+
+  it("marks a finished assistant message read when visible", () => {
+    renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "agent.finish",
+          message: { id: "assistant-message-1", role: "assistant", parts: [] },
+        }),
+      });
+    });
+
+    expect(latestSentMessage()).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+  });
+
+  it("marks an aborted finished assistant message read when visible", () => {
+    renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "agent.finish",
+          message: {
+            id: "assistant-message-1",
+            role: "assistant",
+            parts: [],
+            metadata: { aborted: true },
+          },
+        }),
+      });
+    });
+
+    expect(latestSentMessage()).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+  });
+
+  it("defers mark-read while hidden and sends it when visible again", () => {
+    setDocumentVisibility("hidden");
+    renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "sync.response",
+          messages: [
+            { id: "assistant-message-1", role: "assistant", parts: [] },
+          ],
+          activeTurn: null,
+        }),
+      });
+    });
+
+    expect(mockAgentState.send).not.toHaveBeenCalled();
+
+    act(() => {
+      setDocumentVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(latestSentMessage()).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
   });
 });

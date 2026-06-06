@@ -67,6 +67,8 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     createdAt: overrides.createdAt ?? "2026-05-22T00:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-05-22T00:00:00.000Z",
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T00:00:00.000Z",
+    lastAssistantMessageId: overrides.lastAssistantMessageId ?? null,
+    hasUnread: overrides.hasUnread ?? false,
   };
 }
 

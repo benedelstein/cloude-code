@@ -36,6 +36,12 @@ export const SyncRequestEvent = z.object({
 });
 export type SyncRequestEvent = z.infer<typeof SyncRequestEvent>;
 
+export const SessionMarkReadEvent = z.object({
+  type: z.literal("session.mark_read"),
+  messageId: z.string().min(1),
+});
+export type SessionMarkReadEvent = z.infer<typeof SessionMarkReadEvent>;
+
 export const OperationCancelEvent = z.object({
   type: z.literal("operation.cancel"),
 });
@@ -44,6 +50,7 @@ export type OperationCancelEvent = z.infer<typeof OperationCancelEvent>;
 export const ClientMessage = z.discriminatedUnion("type", [
   ChatMessageEvent,
   SyncRequestEvent,
+  SessionMarkReadEvent,
   OperationCancelEvent,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;

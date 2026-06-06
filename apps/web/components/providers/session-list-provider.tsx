@@ -30,6 +30,7 @@ interface SessionListContextValue {
     sessionId: string,
     state: Pick<SessionSummary, "workingState" | "pushedBranch" | "pullRequest">,
   ) => void;
+  markSessionRead: (sessionId: string, messageId: string) => void;
   loadMoreRepos: () => Promise<void>;
   loadMoreSessionsForRepo: (repoId: number) => Promise<void>;
   refresh: () => void;
@@ -248,6 +249,23 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const markSessionRead = useCallback((sessionId: string, messageId: string) => {
+    setGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        sessions: group.sessions.map((session) => {
+          if (
+            session.id !== sessionId ||
+            session.lastAssistantMessageId !== messageId
+          ) {
+            return session;
+          }
+          return { ...session, hasUnread: false };
+        }),
+      })),
+    );
+  }, []);
+
   const refresh = useCallback(() => {
     fetchInitial({ showLoading: false });
   }, [fetchInitial]);
@@ -275,6 +293,7 @@ export function SessionListProvider({ children }: { children: ReactNode }) {
         removeSession,
         updateTitle,
         updateSessionSidebarState,
+        markSessionRead,
         loadMoreRepos,
         loadMoreSessionsForRepo,
         refresh,

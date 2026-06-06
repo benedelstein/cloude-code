@@ -95,6 +95,8 @@ function makeSession(overrides: Partial<SessionSummary>): SessionSummary {
     createdAt: overrides.createdAt ?? "2026-05-24T12:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-05-24T12:00:00.000Z",
     lastMessageAt: overrides.lastMessageAt ?? null,
+    lastAssistantMessageId: overrides.lastAssistantMessageId ?? null,
+    hasUnread: overrides.hasUnread ?? false,
   };
 }
 
@@ -155,6 +157,13 @@ describe("SessionSidebar", () => {
           updatedAt: "2026-05-24T12:05:00.000Z",
         }),
         makeSession({
+          id: "unread",
+          title: "Unread",
+          lastAssistantMessageId: "assistant-message-1",
+          hasUnread: true,
+          updatedAt: "2026-05-24T12:08:00.000Z",
+        }),
+        makeSession({
           id: "closed-pr",
           title: "Closed PR",
           pushedBranch: "codex/closed",
@@ -191,14 +200,20 @@ describe("SessionSidebar", () => {
     }];
   });
 
-  it("renders session status indicators with responding taking precedence", async () => {
+  it("renders artifact indicators on the left and attention indicators on the right", async () => {
     renderSidebar();
 
     expect(await screen.findByLabelText("Responding")).toBeTruthy();
-    expect(screen.getAllByLabelText("Open pull request")).toHaveLength(1);
+    expect(screen.getByLabelText("Unread message")).toBeTruthy();
+    expect(screen.getAllByLabelText("Open pull request")).toHaveLength(2);
     expect(screen.getByLabelText("Closed pull request")).toBeTruthy();
     expect(screen.getByLabelText("Merged pull request")).toBeTruthy();
     expect(screen.getByLabelText("Pushed branch")).toBeTruthy();
+
+    const respondingRow = screen.getByText("Responding").closest("a");
+    expect(respondingRow).toBeTruthy();
+    expect(within(respondingRow as HTMLElement).getByLabelText("Responding")).toBeTruthy();
+    expect(within(respondingRow as HTMLElement).getByLabelText("Open pull request")).toBeTruthy();
 
     const idleRow = screen.getByText("Idle").closest("a");
     expect(idleRow).toBeTruthy();
@@ -212,16 +227,14 @@ describe("SessionSidebar", () => {
   it("renders compact timestamps and reserves the hover action slot", async () => {
     renderSidebar();
 
-    await waitFor(() => {
-      expect(screen.getAllByText("1m").length).toBeGreaterThan(0);
-    });
+    await waitFor(() => expect(screen.getByText("5m")).toBeTruthy());
     expect(screen.getByText("5m")).toBeTruthy();
     expect(screen.getByText("5d")).toBeTruthy();
     expect(screen.getByText("2w")).toBeTruthy();
     expect(screen.getAllByText("1mo")).toHaveLength(2);
 
     const timestamp = screen.getByText("5m");
-    expect(timestamp.className).toContain("group-hover/menu-item:opacity-0");
+    expect(timestamp.parentElement?.className).toContain("group-hover/menu-item:opacity-0");
     const openRow = screen.getByText("Open PR").closest("li");
     expect(openRow).toBeTruthy();
     expect(

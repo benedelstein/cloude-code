@@ -53,8 +53,8 @@ function toSidebarPullRequest(
     url: pullRequestState.url,
     number: pullRequestState.number,
     state: pullRequestState.state,
-  };
-}
+    };
+  }
 
 // fake session object for when we don't have a wss token yet
 function createPendingSession(
@@ -107,16 +107,19 @@ function SessionProviderWithToken({
   initialPendingUserMessage,
   children,
 }: SessionProviderWithTokenProps) {
+  const { markSessionRead, updateSessionSidebarState } = useSessionList();
   const session = useCloudflareAgent({
     sessionId,
     webSocketToken,
     refreshWebSocketToken,
     initialPendingUserMessage,
+    onMarkRead: (_sessionId, messageId) => {
+      markSessionRead(sessionId, messageId);
+    },
     onError: (error) => {
       console.error("Session error:", error);
     },
   });
-  const { updateSessionSidebarState } = useSessionList();
 
   useEffect(() => {
     updateSessionSidebarState(sessionId, {

@@ -27,15 +27,7 @@ interface SessionRowProps {
   onRequestDelete: (sessionId: string) => void;
 }
 
-function SessionStatusSlot({ session }: { session: SessionSummary }) {
-  if (session.workingState === "responding") {
-    return (
-      <span role="status" aria-label="Responding">
-        <LoadingSpinner className="h-3.5 w-3.5 shrink-0 text-foreground-secondary" />
-      </span>
-    );
-  }
-
+function SessionArtifactSlot({ session }: { session: SessionSummary }) {
   if (session.pullRequest || session.pushedBranch) {
     return (
       <PrStatusIcon
@@ -46,7 +38,43 @@ function SessionStatusSlot({ session }: { session: SessionSummary }) {
     );
   }
 
-  return <span aria-hidden="true" className="block h-5 w-5" />;
+  return null;
+}
+
+function SessionAttentionSlot({
+  session,
+  isActive,
+  nowMs,
+  timestamp,
+}: {
+  session: SessionSummary;
+  isActive: boolean;
+  nowMs: number;
+  timestamp: string;
+}) {
+  if (session.workingState === "responding") {
+    return (
+      <span role="status" aria-label="Responding">
+        <LoadingSpinner className="h-3.5 w-3.5 shrink-0 text-foreground-secondary" />
+      </span>
+    );
+  }
+
+  if (session.hasUnread && !isActive) {
+    return (
+      <span
+        role="status"
+        aria-label="Unread message"
+        className="block h-2 w-2 rounded-full bg-accent"
+      />
+    );
+  }
+
+  return (
+    <span className="text-xs font-mono text-foreground-tertiary">
+      {formatCompactRelativeTime(timestamp, nowMs)}
+    </span>
+  );
 }
 
 export function SessionRow({
@@ -82,13 +110,18 @@ export function SessionRow({
         >
           <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(0,1fr)_2.25rem] items-center gap-1.5">
             <span className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center">
-              <SessionStatusSlot session={session} />
+              <SessionArtifactSlot session={session} />
             </span>
             <span className="col-start-2 col-end-3 row-start-1 truncate text-sm group-hover/menu-item:col-end-4 group-hover/menu-item:pr-9 group-focus-within/menu-item:col-end-4 group-focus-within/menu-item:pr-9">
               {displayTitle}
             </span>
-            <span className="col-start-3 row-start-1 justify-self-end text-xs font-mono text-foreground-tertiary group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
-              {formatCompactRelativeTime(timestamp, nowMs)}
+            <span className="col-start-3 row-start-1 flex h-5 w-[2.25rem] items-center justify-end justify-self-end group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0">
+              <SessionAttentionSlot
+                session={session}
+                isActive={isActive}
+                nowMs={nowMs}
+                timestamp={timestamp}
+              />
             </span>
           </div>
         </Link>

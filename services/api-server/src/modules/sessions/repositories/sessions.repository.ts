@@ -43,6 +43,10 @@ interface SessionRow {
   created_at: string;
   updated_at: string;
   last_message_at: string | null;
+  last_assistant_message_id: string | null;
+  last_assistant_message_at: string | null;
+  last_read_message_id: string | null;
+  last_read_at: string | null;
 }
 
 export interface SessionAccessRow {
@@ -83,6 +87,10 @@ function rowToSummary(row: SessionRow): SessionSummary {
     createdAt: fromSqliteDatetime(row.created_at),
     updatedAt: fromSqliteDatetime(row.updated_at),
     lastMessageAt: fromSqliteDatetime(row.last_message_at),
+    lastAssistantMessageId: row.last_assistant_message_id,
+    // on mark read, we only update if the message matches the latest assistant message.
+    hasUnread: row.last_assistant_message_id !== null &&
+      row.last_read_message_id !== row.last_assistant_message_id,
   };
 }
 
@@ -179,6 +187,45 @@ export class SessionsRepository {
     await this.database
       .prepare(`UPDATE sessions SET working_state = ? WHERE id = ?`)
       .bind(workingState, sessionId)
+      .run();
+  }
+
+  async recordAssistantTurnFinished(
+    sessionId: string,
+    messageId: string,
+    messageCreatedAt: string,
+  ): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+         SET working_state = 'idle',
+             last_assistant_message_id = ?,
+             last_assistant_message_at = ?,
+             last_message_at = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+      )
+      .bind(messageId, messageCreatedAt, messageCreatedAt, sessionId)
+      .run();
+  }
+
+  /**
+   * Updates a session's last read message id and timestamp.
+   * Only updates if the passed in messageId matches the latest assistant message id.
+   * @param sessionId 
+   * @param messageId 
+   */
+  async markRead(sessionId: string, messageId: string): Promise<void> {
+    await this.database
+      .prepare(
+        `UPDATE sessions
+         SET last_read_message_id = ?,
+             last_read_at = datetime('now'),
+             updated_at = datetime('now')
+         WHERE id = ?
+           AND last_assistant_message_id = ?`,
+      )
+      .bind(messageId, sessionId, messageId)
       .run();
   }
 

@@ -34,6 +34,10 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-05-24 10:00:00",
     updated_at: "2026-05-24 10:01:00",
     last_message_at: "2026-05-24 10:02:00",
+    last_assistant_message_id: null,
+    last_assistant_message_at: null,
+    last_read_message_id: null,
+    last_read_at: null,
     ...overrides,
   };
 }
@@ -91,7 +95,61 @@ describe("SessionsRepository sidebar state", () => {
           state: "open",
         },
         createdAt: "2026-05-24T10:00:00Z",
+        lastAssistantMessageId: null,
+        hasUnread: false,
       });
+  });
+
+  it("derives unread state from assistant and read cursors", async () => {
+    const { database } = createMockDatabase({
+      firstRow: createSessionRow({
+        last_assistant_message_id: "assistant-message-2",
+        last_read_message_id: "assistant-message-1",
+      }),
+    });
+    const repository = new SessionsRepository(database);
+
+    await expect(repository.getById("123e4567-e89b-12d3-a456-426614174000"))
+      .resolves.toMatchObject({
+        lastAssistantMessageId: "assistant-message-2",
+        hasUnread: true,
+      });
+  });
+
+  it("records assistant finish state and idle in one D1 update", async () => {
+    const { database, calls } = createMockDatabase();
+    const repository = new SessionsRepository(database);
+
+    await repository.recordAssistantTurnFinished(
+      "session-1",
+      "assistant-message-1",
+      "2026-06-03T00:00:00.000Z",
+    );
+
+    expect(calls[0]?.query).toContain("working_state = 'idle'");
+    expect(calls[0]?.query).toContain("last_assistant_message_id = ?");
+    expect(calls[0]?.query).toContain("last_message_at = ?");
+    expect(calls[0]?.bindings).toEqual([
+      "assistant-message-1",
+      "2026-06-03T00:00:00.000Z",
+      "2026-06-03T00:00:00.000Z",
+      "session-1",
+    ]);
+  });
+
+  it("marks read only for the matching latest assistant message", async () => {
+    const { database, calls } = createMockDatabase();
+    const repository = new SessionsRepository(database);
+
+    await repository.markRead("session-1", "assistant-message-1");
+
+    expect(calls[0]?.query).toContain("last_read_message_id = ?");
+    expect(calls[0]?.query).toContain("AND last_assistant_message_id = ?");
+    expect(calls[0]?.bindings).toEqual([
+      "assistant-message-1",
+      "session-1",
+      "assistant-message-1",
+    ]);
   });
 
   it("fetches summaries by both session id and user id", async () => {
