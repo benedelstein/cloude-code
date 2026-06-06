@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionSummary } from "@repo/shared";
 import { useUserSessionsWebSocket } from "@/hooks/use-user-sessions-websocket";
 
@@ -101,6 +101,10 @@ describe("useUserSessionsWebSocket", () => {
       token: "stream-token",
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
     };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("connects to the user sessions stream URL with the minted token", async () => {
@@ -225,19 +229,36 @@ describe("useUserSessionsWebSocket", () => {
     expect(callbacks.onResyncRequired).toHaveBeenCalledTimes(2);
   });
 
-  it("refreshes the token instead of reconnecting when the token is expired", async () => {
+  it("refreshes the token before opening when the token is expired", async () => {
     tokenState.token = {
       token: "expired-token",
       expiresAt: new Date(Date.now() - 1000).toISOString(),
+    };
+    renderUserSessionsWebSocket();
+
+    await waitFor(() => {
+      expect(refreshWebSocketToken).toHaveBeenCalledTimes(1);
+    });
+
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it("refreshes the token on close when the token is near expiry", async () => {
+    const now = Date.now();
+    tokenState.token = {
+      token: "nearly-expired-token",
+      expiresAt: new Date(now + 31_000).toISOString(),
     };
     const callbacks = renderUserSessionsWebSocket();
     await waitFor(() => {
       expect(FakeWebSocket.instances).toHaveLength(1);
     });
 
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(now + 2_000);
     act(() => {
       FakeWebSocket.instances[0]?.onclose?.({} as CloseEvent);
     });
+    dateNowSpy.mockRestore();
 
     expect(callbacks.onResyncRequired).toHaveBeenCalledTimes(1);
     expect(refreshWebSocketToken).toHaveBeenCalledTimes(1);

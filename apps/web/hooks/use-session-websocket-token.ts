@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import type { SessionWebSocketTokenResponse } from "@repo/shared";
-import { ApiError, createSessionWebSocketToken } from "@/lib/client-api";
+import { createSessionWebSocketToken } from "@/lib/client-api";
 import { consumeInitialSessionWebSocketToken } from "@/lib/session-websocket-token";
+import { useWebSocketToken } from "./use-websocket-token";
 
-const MAX_WEBSOCKET_TOKEN_RETRY_DELAY_MS = 30 * 1000;
 const inFlightWebSocketTokenRequests = new Map<string, Promise<SessionWebSocketTokenResponse>>();
 
 function requestSessionWebSocketToken(
@@ -45,102 +45,21 @@ export function useSessionWebSocketToken({
   onReconnectPending,
   onReconnectRecovered,
 }: UseSessionWebSocketTokenOptions): UseSessionWebSocketTokenResult {
-  const [hasTerminalAuthError, setHasTerminalAuthError] = useState(false);
-  const [webSocketToken, setWebSocketToken] = useState<SessionWebSocketTokenResponse | null>(
-    () => consumeInitialSessionWebSocketToken(sessionId),
+  const requestToken = useCallback(
+    () => requestSessionWebSocketToken(sessionId),
+    [sessionId],
   );
-  const previousSessionIdRef = useRef(sessionId);
-  const webSocketTokenRetryTimeoutRef = useRef<number | null>(null);
-  const webSocketTokenRetryCountRef = useRef(0);
+  const getInitialToken = useCallback(
+    () => consumeInitialSessionWebSocketToken(sessionId),
+    [sessionId],
+  );
 
-  const clearWebSocketTokenRetryTimeout = useCallback(() => {
-    if (webSocketTokenRetryTimeoutRef.current !== null) {
-      window.clearTimeout(webSocketTokenRetryTimeoutRef.current);
-      webSocketTokenRetryTimeoutRef.current = null;
-    }
-  }, []);
-
-  const fetchWebSocketToken = useCallback(async () => {
-    try {
-      const nextToken = await requestSessionWebSocketToken(sessionId);
-      webSocketTokenRetryCountRef.current = 0;
-      clearWebSocketTokenRetryTimeout();
-      setHasTerminalAuthError(false);
-      setWebSocketToken(nextToken);
-      onReconnectRecovered?.();
-      return nextToken;
-    } catch (error) {
-      if (
-        error instanceof ApiError
-        && (error.status === 401 || error.status === 403 || error.status === 404)
-      ) {
-        clearWebSocketTokenRetryTimeout();
-        setHasTerminalAuthError(true);
-        setWebSocketToken(null);
-        onAuthError?.({
-          message: error.message,
-          code: error.code ?? null,
-        });
-        return null;
-      }
-
-      // retry with exponential backoff.
-      const retryDelay = Math.min(
-        1000 * 2 ** webSocketTokenRetryCountRef.current,
-        MAX_WEBSOCKET_TOKEN_RETRY_DELAY_MS,
-      );
-      webSocketTokenRetryCountRef.current += 1;
-      clearWebSocketTokenRetryTimeout();
-
-      if (!webSocketToken) {
-        onReconnectPending?.();
-      }
-
-      webSocketTokenRetryTimeoutRef.current = window.setTimeout(() => {
-        void fetchWebSocketToken();
-      }, retryDelay);
-      return null;
-    }
-  }, [
-    clearWebSocketTokenRetryTimeout,
+  return useWebSocketToken({
+    tokenKey: sessionId,
+    requestToken,
+    getInitialToken,
     onAuthError,
     onReconnectPending,
     onReconnectRecovered,
-    sessionId,
-    webSocketToken,
-  ]);
-
-  // if the session id changes, we need to clear the previous session id and fetch a new token.
-  useEffect(() => {
-    if (previousSessionIdRef.current === sessionId) {
-      return;
-    }
-
-    previousSessionIdRef.current = sessionId;
-    clearWebSocketTokenRetryTimeout();
-    webSocketTokenRetryCountRef.current = 0;
-    setHasTerminalAuthError(false);
-    setWebSocketToken(consumeInitialSessionWebSocketToken(sessionId));
-  }, [clearWebSocketTokenRetryTimeout, sessionId]);
-
-  // if the websocket token is not set, or there is a terminal auth error, we need to fetch a new token.
-  useEffect(() => {
-    if (webSocketToken || hasTerminalAuthError) {
-      return;
-    }
-
-    void fetchWebSocketToken();
-  }, [fetchWebSocketToken, hasTerminalAuthError, webSocketToken]);
-
-  useEffect(() => {
-    return () => {
-      clearWebSocketTokenRetryTimeout();
-    };
-  }, [clearWebSocketTokenRetryTimeout]);
-
-  const refresh = useCallback(() => {
-    void fetchWebSocketToken();
-  }, [fetchWebSocketToken]);
-
-  return { token: webSocketToken, refresh };
+  });
 }

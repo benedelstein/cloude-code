@@ -7,6 +7,7 @@ const mockAgentState = vi.hoisted(() => ({
   send: vi.fn(),
   options: null as null | {
     onMessage: (_event: { data: string }) => void;
+    onClose?: () => void;
     onStateUpdate: (_state: ClientState) => void;
   },
 }));
@@ -18,14 +19,21 @@ vi.mock("agents/react", () => ({
   }),
 }));
 
-function renderAgent() {
+function renderAgent({
+  expiresAt = new Date(Date.now() + 60_000).toISOString(),
+  refreshWebSocketToken,
+}: {
+  expiresAt?: string;
+  refreshWebSocketToken?: () => void;
+} = {}) {
   return renderHook(() =>
     useCloudflareAgent({
       sessionId: "123e4567-e89b-12d3-a456-426614174000",
       webSocketToken: {
         token: "token",
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        expiresAt,
       },
+      refreshWebSocketToken,
     }),
   );
 }
@@ -174,5 +182,19 @@ describe("useCloudflareAgent", () => {
 
     const metadata = result.current.streamingMessage?.metadata as { startedAt?: unknown } | undefined;
     expect(typeof metadata?.startedAt).toBe("number");
+  });
+
+  it("refreshes the websocket token when the socket closes near expiry", () => {
+    const refreshWebSocketToken = vi.fn();
+    renderAgent({
+      expiresAt: new Date(Date.now() + 1_000).toISOString(),
+      refreshWebSocketToken,
+    });
+
+    act(() => {
+      mockAgentState.options?.onClose?.();
+    });
+
+    expect(refreshWebSocketToken).toHaveBeenCalledTimes(1);
   });
 });

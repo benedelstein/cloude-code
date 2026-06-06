@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary } from "@repo/shared";
 import { UserSessionsServerMessage } from "@repo/shared";
 import { WS_API_URL } from "@/lib/client-api";
+import { isWebSocketTokenExpiredOrExpiring } from "@/lib/websocket-token";
 import { useUserSessionsWebSocketToken } from "./use-user-sessions-websocket-token";
 
 const MAX_WEBSOCKET_RETRY_DELAY_MS = 30 * 1000;
@@ -94,6 +95,11 @@ export function useUserSessionsWebSocket({
       return;
     }
 
+    if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
+      refreshWebSocketToken();
+      return;
+    }
+
     const webSocket = new WebSocket(buildUserSessionsWebSocketUrl(webSocketToken.token));
     let didCloseIntentionally = false;
 
@@ -155,7 +161,7 @@ export function useUserSessionsWebSocket({
       }
 
       callbacksRef.current.onResyncRequired();
-      if (Date.now() >= new Date(webSocketToken.expiresAt).getTime()) {
+      if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
         refreshWebSocketToken();
         return;
       }

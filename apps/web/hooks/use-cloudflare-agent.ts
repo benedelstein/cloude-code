@@ -6,6 +6,7 @@ import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { buildOptimisticUserMessage } from "@/lib/session-pending-user-message";
 import { normalizeHost } from "@/lib/utils";
+import { isWebSocketTokenExpiredOrExpiring } from "@/lib/websocket-token";
 import type {
   AgentMode,
   ClientState,
@@ -327,7 +328,7 @@ export function useCloudflareAgent({
       // partysocket's auto-reconnect would 401 with the stale token — fetch a
       // fresh one so the next handshake succeeds. Otherwise let partysocket
       // reconnect with the current token untouched (no extra sync churn).
-      if (Date.now() >= new Date(webSocketToken.expiresAt).getTime()) {
+      if (isWebSocketTokenExpiredOrExpiring(webSocketToken.expiresAt)) {
         refreshWebSocketToken?.();
       }
     },
