@@ -1,6 +1,7 @@
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
+  DiscordLinkClaimResponse,
   DiscordSessionRequest,
   Repo,
   Result,
@@ -65,6 +66,19 @@ export interface DiscordSessionRequestDeps {
   tokenProvider: DiscordGitHubTokenProvider;
   repoCandidateProvider: DiscordRepoCandidateProvider;
   sessionCreator: DiscordSessionCreator;
+}
+
+
+export interface DiscordLinkClaimerError {
+  status: 400;
+  message: string;
+}
+
+export interface DiscordLinkClaimer {
+  claimDiscordLink(params: {
+    token: string;
+    userId: string;
+  }): Promise<Result<DiscordLinkClaimResponse, DiscordLinkClaimerError>>;
 }
 
 export type DiscordSessionRequestPayload = DiscordSessionRequest;

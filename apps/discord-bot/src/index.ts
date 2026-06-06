@@ -144,6 +144,15 @@ async function buildDiscordMessage(response: Response): Promise<string> {
   }
 
   if (!parsed.data.ok) {
+    if (parsed.data.linkUrl) {
+      const expires = parsed.data.linkExpiresAt
+        ? ` This link expires at ${new Date(parsed.data.linkExpiresAt).toLocaleString()}.`
+        : "";
+      return truncateDiscordMessage(
+        `${parsed.data.message} ${parsed.data.linkUrl}${expires}`,
+      );
+    }
+
     const candidates = parsed.data.candidates?.map((candidate) => `- ${candidate.repoFullName}`).join("\n");
     return truncateDiscordMessage([
       `I could not create a session: ${parsed.data.message}`,

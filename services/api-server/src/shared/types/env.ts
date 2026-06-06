@@ -14,7 +14,6 @@ export interface Env {
   WEB_ORIGIN: string;
   PREVIEW_ORIGIN_ALLOWLIST_REGEX: string;
   CODEX_MIN_VERSION?: string;
-  DISCORD_USER_MAP_JSON?: string;
 
   // Secrets
   ANTHROPIC_API_KEY: string;

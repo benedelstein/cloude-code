@@ -42,6 +42,8 @@ export const DiscordSessionErrorResponse = z.object({
   ]),
   message: z.string(),
   candidates: z.array(DiscordRepoCandidate).optional(),
+  linkUrl: z.string().url().optional(),
+  linkExpiresAt: z.iso.datetime().optional(),
 });
 export type DiscordSessionErrorResponse = z.infer<
   typeof DiscordSessionErrorResponse
@@ -52,3 +54,16 @@ export const DiscordSessionResponse = z.discriminatedUnion("ok", [
   DiscordSessionErrorResponse,
 ]);
 export type DiscordSessionResponse = z.infer<typeof DiscordSessionResponse>;
+
+export const DiscordLinkClaimRequest = z.object({
+  token: z.string().min(20).max(256),
+});
+export type DiscordLinkClaimRequest = z.infer<typeof DiscordLinkClaimRequest>;
+
+export const DiscordLinkClaimResponse = z.object({
+  ok: z.literal(true),
+  discordUserId: z.string(),
+  discordUsername: z.string().nullable(),
+  expiresAt: z.iso.datetime(),
+});
+export type DiscordLinkClaimResponse = z.infer<typeof DiscordLinkClaimResponse>;

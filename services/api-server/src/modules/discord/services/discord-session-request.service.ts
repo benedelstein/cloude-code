@@ -1,16 +1,25 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import {
   type CreateSessionRequest,
+  type DiscordLinkClaimResponse,
   type DiscordRepoCandidate,
   type DiscordSessionResponse,
   type Repo,
   dedent,
+  encodeBase64Url,
+  failure,
+  type Result,
+  success,
 } from "@repo/shared";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
+import { sha256 } from "@/shared/utils/crypto";
+import { DiscordAccountLinkRepository } from "../repositories/discord-account-link.repository";
+import { DiscordLinkAttemptRepository } from "../repositories/discord-link-attempt.repository";
 import type {
+  DiscordLinkClaimerError,
   DiscordRepoResolution,
   DiscordRepoRoutingCandidate,
   DiscordSessionRequestDeps,
@@ -24,6 +33,9 @@ const MAX_README_CANDIDATES = 8;
 const MAX_README_CHARS = 1800;
 const MIN_LLM_CONFIDENCE = 0.55;
 const MIN_HEURISTIC_SCORE = 8;
+const DISCORD_LINK_ATTEMPT_TTL_MS = 15 * 60 * 1000;
+const DISCORD_ACCOUNT_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const LINK_TOKEN_BYTES = 32;
 
 const STOP_WORDS = new Set([
   "a",
@@ -66,10 +78,14 @@ const REPO_ROUTER_SYSTEM_PROMPT = dedent`
 export class DiscordSessionRequestService {
   private readonly env: Env;
   private readonly deps: DiscordSessionRequestDeps;
+  private readonly accountLinkRepository: DiscordAccountLinkRepository;
+  private readonly linkAttemptRepository: DiscordLinkAttemptRepository;
 
   constructor(env: Env, deps: DiscordSessionRequestDeps) {
     this.env = env;
     this.deps = deps;
+    this.accountLinkRepository = new DiscordAccountLinkRepository(env.DB);
+    this.linkAttemptRepository = new DiscordLinkAttemptRepository(env.DB);
   }
 
   /**
@@ -80,26 +96,29 @@ export class DiscordSessionRequestService {
     request: DiscordSessionRequestPayload;
     executionCtx: ExecutionContext;
   }): Promise<DiscordSessionResponse> {
-    const userId = this.resolveMappedUserId(params.request.discordUserId);
-    if (!userId) {
-      return {
-        ok: false,
-        code: "DISCORD_NOT_LINKED",
-        message: "This Discord user is not mapped to a Cloude account.",
-      };
+    const link = await this.accountLinkRepository.getActiveByDiscordUserId(
+      params.request.discordUserId,
+    );
+    if (!link) {
+      return this.createLinkRequiredResponse(params.request);
     }
 
-    const githubAccessToken = await this.deps.tokenProvider.getValidGitHubAccessTokenByUserId(userId);
+    await this.accountLinkRepository.touchLastUsed({
+      discordUserId: params.request.discordUserId,
+      discordUsername: params.request.discordUsername ?? null,
+    });
+
+    const githubAccessToken = await this.deps.tokenProvider.getValidGitHubAccessTokenByUserId(link.userId);
     if (!githubAccessToken) {
       return {
         ok: false,
         code: "GITHUB_AUTH_REQUIRED",
-        message: "The mapped Cloude account needs to sign in with GitHub again.",
+        message: "The linked Cloude account needs to sign in with GitHub again.",
       };
     }
 
     const reposResult = await this.deps.repoCandidateProvider.listAccessibleRepos({
-      userId,
+      userId: link.userId,
       githubAccessToken,
       executionCtx: params.executionCtx,
       limit: MAX_REPOS_TO_ROUTE,
@@ -132,7 +151,7 @@ export class DiscordSessionRequestService {
     }
 
     const sessionResult = await this.deps.sessionCreator.createSession({
-      userId,
+      userId: link.userId,
       githubAccessToken,
       request: this.buildCreateSessionRequest(params.request, resolution.repo),
     });
@@ -152,6 +171,63 @@ export class DiscordSessionRequestService {
       repoFullName: resolution.repo.fullName,
       sessionUrl: this.buildSessionUrl(sessionResult.value.sessionId),
       routingReason: resolution.reason,
+    };
+  }
+
+  async claimDiscordLink(params: {
+    token: string;
+    userId: string;
+  }): Promise<Result<DiscordLinkClaimResponse, DiscordLinkClaimerError>> {
+    const tokenHash = await sha256(params.token);
+    const attempt = await this.linkAttemptRepository.consumeValid({
+      tokenHash,
+      claimedUserId: params.userId,
+    });
+    if (!attempt) {
+      return failure({
+        status: 400,
+        message: "This Discord link is invalid or expired. Request a new link from Discord.",
+      });
+    }
+
+    const linkExpiresAt = new Date(Date.now() + DISCORD_ACCOUNT_LINK_TTL_MS).toISOString();
+    await this.accountLinkRepository.upsert({
+      discordUserId: attempt.discordUserId,
+      userId: params.userId,
+      discordUsername: attempt.discordUsername,
+      expiresAt: linkExpiresAt,
+    });
+
+    return success({
+      ok: true,
+      discordUserId: attempt.discordUserId,
+      discordUsername: attempt.discordUsername,
+      expiresAt: linkExpiresAt,
+    });
+  }
+
+  private async createLinkRequiredResponse(
+    request: DiscordSessionRequestPayload,
+  ): Promise<DiscordSessionResponse> {
+    const token = createLinkToken();
+    const tokenHash = await sha256(token);
+    const expiresAt = new Date(Date.now() + DISCORD_LINK_ATTEMPT_TTL_MS).toISOString();
+
+    await this.linkAttemptRepository.create({
+      tokenHash,
+      discordUserId: request.discordUserId,
+      discordUsername: request.discordUsername ?? null,
+      guildId: request.guildId ?? null,
+      channelId: request.channelId ?? null,
+      expiresAt,
+    });
+
+    return {
+      ok: false,
+      code: "DISCORD_NOT_LINKED",
+      message: "Link or reconnect your Cloude account to use Cloude from Discord.",
+      linkUrl: this.buildDiscordLinkUrl(token),
+      linkExpiresAt: expiresAt,
     };
   }
 
@@ -175,20 +251,11 @@ export class DiscordSessionRequestService {
     return origin ? `${origin}/session/${sessionId}` : undefined;
   }
 
-  private resolveMappedUserId(discordUserId: string): string | null {
-    const mapJson = this.env.DISCORD_USER_MAP_JSON;
-    if (!mapJson) {
-      logger.warn("Discord user map is not configured");
-      return null;
-    }
-
-    try {
-      const parsed = z.record(z.string(), z.string().uuid()).parse(JSON.parse(mapJson));
-      return parsed[discordUserId] ?? null;
-    } catch (error) {
-      logger.error("Discord user map is invalid", { error });
-      return null;
-    }
+  private buildDiscordLinkUrl(token: string): string {
+    const origin = this.env.WEB_ORIGIN.replace(/\/$/, "");
+    const url = new URL("/discord/link", origin);
+    url.searchParams.set("token", token);
+    return url.toString();
   }
 
   private async resolveRepository(params: {
@@ -319,6 +386,11 @@ function buildRoutingPrompt(
     Candidate repositories:
     ${candidateText}
   `;
+}
+
+function createLinkToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(LINK_TOKEN_BYTES));
+  return encodeBase64Url(bytes);
 }
 
 function findDirectRepoReference(prompt: string, repos: Repo[]): Repo | null {
