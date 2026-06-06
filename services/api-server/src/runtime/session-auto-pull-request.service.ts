@@ -1,11 +1,6 @@
 import type { Logger } from "@repo/shared";
-import type { SessionAgentRpc } from "@/shared/types/session-agent";
+import type { HandleCreatePullRequestResult } from "@/shared/types/session-agent";
 import type { SessionRepoAccessResult } from "@/shared/types/repo-access";
-import {
-  createPullRequestForSession,
-  type SessionPullRequestGitHubProvider,
-  SessionPullRequestServiceError,
-} from "@/modules/sessions/services/session-pull-request.service";
 
 interface AutoPullRequestState {
   sessionId: string | null;
@@ -16,9 +11,7 @@ interface AutoPullRequestState {
 
 export interface SessionAutoPullRequestServiceDeps {
   logger: Logger;
-  sessionStub: SessionAgentRpc;
-  github: SessionPullRequestGitHubProvider;
-  anthropicApiKey: string;
+  createPullRequest: () => Promise<HandleCreatePullRequestResult>;
   getState: () => AutoPullRequestState;
   keepAliveWhile: (callback: () => Promise<void>) => Promise<void>;
   assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
@@ -27,9 +20,7 @@ export interface SessionAutoPullRequestServiceDeps {
 
 export class SessionAutoPullRequestService {
   private readonly logger: Logger;
-  private readonly sessionStub: SessionAgentRpc;
-  private readonly github: SessionPullRequestGitHubProvider;
-  private readonly anthropicApiKey: string;
+  private readonly createPullRequest: () => Promise<HandleCreatePullRequestResult>;
   private readonly getState: () => AutoPullRequestState;
   private readonly keepAliveWhile: SessionAutoPullRequestServiceDeps["keepAliveWhile"];
   private readonly assertSessionRepoAccess: () => Promise<SessionRepoAccessResult>;
@@ -38,9 +29,7 @@ export class SessionAutoPullRequestService {
 
   constructor(deps: SessionAutoPullRequestServiceDeps) {
     this.logger = deps.logger.scope("session-auto-pull-request");
-    this.sessionStub = deps.sessionStub;
-    this.github = deps.github;
-    this.anthropicApiKey = deps.anthropicApiKey;
+    this.createPullRequest = deps.createPullRequest;
     this.getState = deps.getState;
     this.keepAliveWhile = deps.keepAliveWhile;
     this.assertSessionRepoAccess = deps.assertSessionRepoAccess;
@@ -94,37 +83,31 @@ export class SessionAutoPullRequestService {
       return;
     }
 
-    try {
-      const pullRequest = await createPullRequestForSession({
-        sessionStub: this.sessionStub,
-        github: this.github,
-        anthropicApiKey: this.anthropicApiKey,
-      });
-      this.logger.info("Automatically created pull request", {
+    const pullRequestResult = await this.createPullRequest();
+    if (!pullRequestResult.ok) {
+      this.logger.warn("Automatic pull request creation was skipped", {
         fields: {
           sessionId: state.sessionId,
           repoFullName: state.repoFullName,
           pushedBranch: state.pushedBranch,
-          pullRequestNumber: pullRequest.number,
+          code: pullRequestResult.error.code,
+          message: pullRequestResult.error.message,
+          details: "details" in pullRequestResult.error
+            ? pullRequestResult.error.details ?? null
+            : null,
         },
       });
-    } catch (error) {
-      if (error instanceof SessionPullRequestServiceError) {
-        this.logger.warn("Automatic pull request creation was skipped", {
-          fields: {
-            sessionId: state.sessionId,
-            repoFullName: state.repoFullName,
-            pushedBranch: state.pushedBranch,
-            status: error.status,
-            message: error.message,
-            details: error.responseBody.details ?? null,
-          },
-        });
-        return;
-      }
-
-      throw error;
+      return;
     }
+
+    this.logger.info("Automatically created pull request", {
+      fields: {
+        sessionId: state.sessionId,
+        repoFullName: state.repoFullName,
+        pushedBranch: state.pushedBranch,
+        pullRequestNumber: pullRequestResult.value.number,
+      },
+    });
   }
 
   private async handleAccessFailure(

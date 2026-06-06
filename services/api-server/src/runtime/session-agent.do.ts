@@ -27,6 +27,7 @@ import { createLogger, initializeLogger } from "@/shared/logging";
 import type { UIMessageChunk } from "ai";
 import type {
   HandleDeleteSessionResult,
+  HandleCreatePullRequestResult,
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
@@ -34,8 +35,6 @@ import type {
   HandleUpdatePullRequestResult,
   InitSessionAgentRequest,
   SessionAgentRpc,
-  SetPullRequestRequest,
-  SetPullRequestFailedRequest,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
@@ -66,6 +65,7 @@ import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provi
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
 import { normalizePullRequestState } from "./session-agent-pull-request-state";
+import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(
@@ -95,6 +95,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly gitProxyService: SessionGitProxyService;
   private readonly sessionSummaryService: SessionSummaryService;
   private readonly githubAppService: GitHubAppService;
+  private readonly pullRequestLifecycleService: SessionPullRequestLifecycleService;
   private readonly autoPullRequestService: SessionAutoPullRequestService;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
@@ -145,11 +146,20 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getSessionId: () => this.serverState.sessionId,
       logger: this.logger,
     });
-    this.autoPullRequestService = new SessionAutoPullRequestService({
+    this.pullRequestLifecycleService = new SessionPullRequestLifecycleService({
       logger: this.logger,
-      sessionStub: this,
       github: this.githubAppService,
       anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      messageRepository: this.messageRepository,
+      sessionSummaryService: this.sessionSummaryService,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      setPullRequestClientState: (pullRequest) =>
+        this.updatePartialState({ pullRequest }),
+    });
+    this.autoPullRequestService = new SessionAutoPullRequestService({
+      logger: this.logger,
+      createPullRequest: () => this.handleCreatePullRequest(),
       getState: () => ({
         sessionId: this.serverState.sessionId,
         repoFullName: this.state.repoFullName,
@@ -706,23 +716,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     } satisfies SessionPlanResponse);
   }
 
-  async setPullRequest(data: SetPullRequestRequest): Promise<void> {
-    const pullRequest = { status: "created" as const, url: data.url, number: data.number, state: data.state };
-    this.updatePartialState({ pullRequest });
-    await this.sessionSummaryService.persistPullRequest(data);
-  }
-
-  async setPullRequestCreating(): Promise<void> {
-    this.updatePartialState({ pullRequest: { status: "creating" } });
-  }
-
-  async setPullRequestFailed(data: SetPullRequestFailedRequest): Promise<void> {
-    const pullRequest = {
-      status: "failed" as const,
-      error: data.error,
-      ...(data.details ? { details: data.details } : {}),
-    };
-    this.updatePartialState({ pullRequest });
+  async handleCreatePullRequest(): Promise<HandleCreatePullRequestResult> {
+    return this.pullRequestLifecycleService.handleCreatePullRequest();
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {

@@ -1,11 +1,8 @@
 import type { UIMessage } from "ai";
 import type { SessionAgentRpc } from "@/shared/types/session-agent";
-import type { SessionInfoResponse } from "@repo/shared";
+import { failure, success, type Result, type SessionInfoResponse } from "@repo/shared";
 import type {
-  HandleGetMessagesResult,
   HandleGetSessionResult,
-  SetPullRequestFailedRequest,
-  SetPullRequestRequest,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
 import {
@@ -26,6 +23,27 @@ const MAX_CONTEXT_MESSAGES = 12;
 const MAX_CONTEXT_CHARS = 280;
 
 type SessionAgentStub = SessionAgentRpc;
+
+export interface CreatePullRequestForSessionContextParams {
+  github: SessionPullRequestGitHubProvider;
+  anthropicApiKey: string;
+  repoFullName: string;
+  baseBranch: string;
+  headBranch: string;
+  sessionMessages: UIMessage[];
+}
+
+export interface CreatedPullRequestResult {
+  url: string;
+  number: number;
+  state: "open";
+}
+
+export type PullRequestCreationError = {
+  code: "PULL_REQUEST_CREATE_FAILED";
+  message: string;
+  details?: string;
+};
 
 export interface SessionPullRequestGitHubProvider {
   compareBranches(
@@ -109,103 +127,17 @@ async function getSessionInfo(sessionStub: SessionAgentStub): Promise<SessionInf
   return result.value;
 }
 
-async function getSessionMessages(sessionStub: SessionAgentStub): Promise<UIMessage[]> {
-  try {
-    const result = (await sessionStub.handleGetMessages()) as HandleGetMessagesResult;
-    if (!result.ok) {
-      return [];
-    }
-    return result.value;
-  } catch (error) {
-    logger.error("Failed to fetch session messages for PR text generation:", { error });
-    return [];
-  }
-}
-
-async function persistPullRequest(
-  sessionStub: SessionAgentStub,
-  pullRequest: PullRequestData,
-): Promise<void> {
-  const setPullRequestBody: SetPullRequestRequest = {
-    url: pullRequest.url,
-    number: pullRequest.number,
-    state: "open",
-  };
-  try {
-    await sessionStub.setPullRequest(setPullRequestBody);
-  } catch (error) {
-    // PR exists on GitHub but state failed to persist in the DO.
-    logger.error("Failed to persist PR state in session after creation", { error });
-  }
-}
-
-async function setPullRequestCreating(sessionStub: SessionAgentStub): Promise<void> {
-  try {
-    await sessionStub.setPullRequestCreating();
-  } catch (error) {
-    logger.error("Failed to mark pull request creation as running", { error });
-  }
-}
-
-async function setPullRequestFailed(
-  sessionStub: SessionAgentStub,
-  failureData: SetPullRequestFailedRequest,
-): Promise<void> {
-  try {
-    await sessionStub.setPullRequestFailed(failureData);
-  } catch (error) {
-    logger.error("Failed to mark pull request creation as failed", { error });
-  }
-}
-
-export async function createPullRequestForSession(params: {
-  sessionStub: SessionAgentStub;
-  github: SessionPullRequestGitHubProvider;
-  anthropicApiKey: string;
-}): Promise<{
-  url: string;
-  number: number;
-  state: "open";
-}> {
-  const { sessionStub, github, anthropicApiKey } = params;
-  const session = await getSessionInfo(sessionStub);
-
-  if (!session.pushedBranch) {
-    throw new SessionPullRequestServiceError(
-      "No branch has been pushed yet",
-      400,
-      { error: "No branch has been pushed yet" },
-    );
-  }
-
-  if (session.pullRequestUrl) {
-    throw new SessionPullRequestServiceError(
-      "Pull request already exists",
-      409,
-      { error: "Pull request already exists", url: session.pullRequestUrl },
-    );
-  }
-
-  const [owner, repo] = session.repoFullName.split("/");
-  if (!owner || !repo) {
-    throw new SessionPullRequestServiceError(
-      "Invalid repoFullName",
-      400,
-      { error: "Invalid repoFullName" },
-    );
-  }
-
-  const branchName = session.pushedBranch;
-  const baseBranch = session.baseBranch ?? "main";
-  await setPullRequestCreating(sessionStub);
-  const sessionMessages = await getSessionMessages(sessionStub);
+export async function createPullRequestForSessionContext(
+  params: CreatePullRequestForSessionContextParams,
+): Promise<Result<CreatedPullRequestResult, PullRequestCreationError>> {
+  const { github, anthropicApiKey, repoFullName, baseBranch, headBranch, sessionMessages } = params;
   const pullRequestContextMessages = buildPullRequestContextMessages(sessionMessages);
 
   let compareData: GitHubCompareData | null = null;
   const compareDataResult = await github.compareBranches(
-    session.repoFullName,
+    repoFullName,
     baseBranch,
-    branchName,
+    headBranch,
   );
   if (!compareDataResult.ok) {
     logger.error("Failed to fetch GitHub compare data for PR text generation", {
@@ -214,7 +146,7 @@ export async function createPullRequestForSession(params: {
         message: compareDataResult.error.message,
         details: compareDataResult.error.details ?? null,
         baseBranch,
-        branchName,
+        branchName: headBranch,
       },
     });
   } else {
@@ -222,16 +154,16 @@ export async function createPullRequestForSession(params: {
   }
 
   const compareFiles = compareData?.files ?? [];
-  let pullRequestTitle = fallbackPullRequestTitle(branchName, compareFiles);
+  let pullRequestTitle = fallbackPullRequestTitle(headBranch, compareFiles);
   let pullRequestBody = "";
 
   if (compareData) {
     const pullRequestText = await generatePullRequestText(
       anthropicApiKey,
       {
-        repoFullName: session.repoFullName,
+        repoFullName,
         baseBranch,
-        headBranch: branchName,
+        headBranch,
         aheadBy: compareData.aheadBy,
         totalCommits: compareData.totalCommits,
         files: compareFiles,
@@ -246,38 +178,29 @@ export async function createPullRequestForSession(params: {
     }
   }
 
-  const createPullRequestResult = await github.createPullRequest(session.repoFullName, {
+  const createPullRequestResult = await github.createPullRequest(repoFullName, {
     title: pullRequestTitle,
     body: pullRequestBody,
-    head: branchName,
+    head: headBranch,
     base: baseBranch,
   });
   if (!createPullRequestResult.ok) {
     const details = createPullRequestResult.error.details
       ?? createPullRequestResult.error.message;
-    const responseDetails = `${details} (base: ${baseBranch}, head: ${branchName})`;
-    await setPullRequestFailed(sessionStub, {
-      error: "Failed to create pull request",
+    const responseDetails = `${details} (base: ${baseBranch}, head: ${headBranch})`;
+    return failure({
+      code: "PULL_REQUEST_CREATE_FAILED",
+      message: "Failed to create pull request",
       details: responseDetails,
     });
-    throw new SessionPullRequestServiceError(
-      "Failed to create pull request",
-      400,
-      {
-        error: "Failed to create pull request",
-        details: responseDetails,
-      },
-    );
   }
   const createdPullRequestValue = createPullRequestResult.value;
 
-  await persistPullRequest(sessionStub, createdPullRequestValue);
-
-  return {
+  return success({
     url: createdPullRequestValue.url,
     number: createdPullRequestValue.number,
     state: "open",
-  };
+  });
 }
 
 export async function getPullRequestStatusForSession(params: {
