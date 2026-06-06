@@ -627,29 +627,33 @@ describe("SpriteAgentProcessManager", () => {
 
   it("times out when a fresh process does not emit ready within thirty seconds", async () => {
     vi.useFakeTimers();
+    const digestSpy = vi.spyOn(crypto.subtle, "digest").mockResolvedValue(new ArrayBuffer(32));
     const spawnSession = createSpawnSession({ readyChunks: [] });
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState();
     const { manager } = createManager(serverState);
 
-    const resultPromise = manager.dispatchMessage({
-      userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
-    });
-    for (let i = 0; i < 10 && spawnSession.start.mock.calls.length === 0; i++) {
-      await vi.advanceTimersByTimeAsync(0);
-    }
-    expect(spawnSession.start).toHaveBeenCalledOnce();
-    await vi.advanceTimersByTimeAsync(30_000);
-    await vi.advanceTimersByTimeAsync(2_000);
-    const result = await resultPromise;
+    try {
+      const resultPromise = manager.dispatchMessage({
+        userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
+      });
+      await vi.waitFor(() => {
+        expect(spawnSession.start).toHaveBeenCalledOnce();
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await resultPromise;
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("TURN_DID_NOT_START");
-      expect(result.error.message).toBe("Timed out waiting for vm-agent ready");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("TURN_DID_NOT_START");
+        expect(result.error.message).toBe("Timed out waiting for vm-agent ready");
+      }
+    } finally {
+      digestSpy.mockRestore();
+      vi.useRealTimers();
     }
-    vi.useRealTimers();
   });
 
   it("preserves the bun exit status when piping output through tee", async () => {

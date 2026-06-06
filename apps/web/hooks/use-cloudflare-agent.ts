@@ -435,6 +435,7 @@ export function useCloudflareAgent({
       }
       const latestAssistantMessageId = latestAssistantMessageIdRef.current;
       if (latestAssistantMessageId) {
+        // will internally filter if we already marked this read.
         markRead(latestAssistantMessageId);
       }
     };
