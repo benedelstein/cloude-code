@@ -3,6 +3,10 @@ import {
   mintSessionWebSocketToken,
   verifySessionWebSocketToken,
 } from "../../src/modules/sessions/services/session-websocket-token.service";
+import {
+  mintUserSessionsWebSocketToken,
+  verifyUserSessionsWebSocketToken,
+} from "../../src/modules/sessions/services/user-sessions-websocket-token.service";
 
 const SECRET = "top-secret";
 const SESSION_ID = "123e4567-e89b-12d3-a456-426614174000";
@@ -40,5 +44,42 @@ describe("session websocket token", () => {
 
     vi.setSystemTime(new Date("2026-01-01T00:06:00.000Z"));
     await expect(verifySessionWebSocketToken(SECRET, minted.token)).resolves.toBeNull();
+  });
+});
+
+describe("user sessions websocket token", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("mints and verifies token", async () => {
+    const minted = await mintUserSessionsWebSocketToken(SECRET, { userId: USER_ID });
+    const payload = await verifyUserSessionsWebSocketToken(SECRET, minted.token);
+    expect(payload).toMatchObject({
+      type: "user-sessions-websocket",
+      userId: USER_ID,
+    });
+    expect(minted.expiresAt).toMatch(/Z$/);
+  });
+
+  it("rejects per-session websocket tokens", async () => {
+    const minted = await mintSessionWebSocketToken(SECRET, {
+      sessionId: SESSION_ID,
+      userId: USER_ID,
+    });
+
+    await expect(verifyUserSessionsWebSocketToken(SECRET, minted.token))
+      .resolves.toBeNull();
+  });
+
+  it("fails when token is expired", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    const minted = await mintUserSessionsWebSocketToken(SECRET, { userId: USER_ID });
+
+    vi.setSystemTime(new Date("2026-01-01T00:06:00.000Z"));
+    await expect(verifyUserSessionsWebSocketToken(SECRET, minted.token))
+      .resolves.toBeNull();
   });
 });

@@ -34,6 +34,10 @@
       {
         "name": "SESSION_AGENT",
         "class_name": "SessionAgentDO"
+      },
+      {
+        "name": "USER_SESSIONS",
+        "class_name": "UserSessionsDO"
       }
     ]
   },
@@ -41,6 +45,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["SessionAgentDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["UserSessionsDO"]
     }
   ],
   "d1_databases": [

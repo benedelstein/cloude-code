@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepoEnvironment,
   createSession,
+  createUserSessionsWebSocketToken,
   deleteSession,
   getUserRepoEnvironment,
   getCurrentUser,
@@ -66,6 +67,26 @@ describe("client-api", () => {
   it("returns undefined for 204 responses", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
     await expect(deleteSession("session-1")).resolves.toBeUndefined();
+  });
+
+  it("requests user sessions websocket tokens from the sessions updates endpoint", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      token: "sidebar-token",
+      expiresAt: "2026-05-29T00:00:00.000Z",
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    await expect(createUserSessionsWebSocketToken()).resolves.toEqual({
+      token: "sidebar-token",
+      expiresAt: "2026-05-29T00:00:00.000Z",
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0]).toMatchObject([
+      "/api/sessions/updates/token",
+      { method: "POST" },
+    ]);
   });
 
   it("sends selected environment id when creating a session", async () => {

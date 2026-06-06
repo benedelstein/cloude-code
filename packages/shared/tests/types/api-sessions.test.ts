@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
-import { CreateSessionRequest } from "../../src/types/api/sessions";
+import {
+  CreateSessionRequest,
+  UserSessionsWebSocketTokenResponse,
+} from "../../src/types/api/sessions";
 import { PullRequestClientState, SessionSummary } from "../../src/types/session";
+import { UserSessionsServerMessage } from "../../src/types/user-sessions-websocket-api";
 
 describe("session api schemas", () => {
   it("rejects create-session requests without an initial message", () => {
@@ -124,5 +128,47 @@ describe("session api schemas", () => {
       updatedAt: "2026-05-22T00:00:00.000Z",
       lastMessageAt: null,
     })).toThrow();
+  });
+
+  it("accepts user sessions websocket token responses", () => {
+    expect(() => UserSessionsWebSocketTokenResponse.parse({
+      token: "token",
+      expiresAt: "2026-05-22T00:00:00.000Z",
+    })).not.toThrow();
+  });
+
+  it("accepts user sessions websocket server messages", () => {
+    const session = SessionSummary.parse({
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      repoId: 1,
+      repoFullName: "owner/repo",
+      title: "Fix sidebar",
+      archived: false,
+      workingState: "idle",
+      pushedBranch: null,
+      pullRequest: null,
+      createdAt: "2026-05-22T00:00:00.000Z",
+      updatedAt: "2026-05-22T00:00:00.000Z",
+      lastMessageAt: null,
+    });
+
+    expect(() => UserSessionsServerMessage.parse({
+      type: "user_sessions.connected",
+    })).not.toThrow();
+    expect(() => UserSessionsServerMessage.parse({
+      type: "session.summary.created",
+      session,
+    })).not.toThrow();
+    expect(() => UserSessionsServerMessage.parse({
+      type: "session.summary.updated",
+      session,
+    })).not.toThrow();
+    expect(() => UserSessionsServerMessage.parse({
+      type: "session.summary.removed",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
+    })).not.toThrow();
+    expect(() => UserSessionsServerMessage.parse({
+      type: "session.list.resync_required",
+    })).not.toThrow();
   });
 });

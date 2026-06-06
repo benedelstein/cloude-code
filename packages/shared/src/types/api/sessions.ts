@@ -75,6 +75,14 @@ export type SessionWebSocketTokenResponse = z.infer<
   typeof SessionWebSocketTokenResponse
 >;
 
+export const UserSessionsWebSocketTokenResponse = z.object({
+  token: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type UserSessionsWebSocketTokenResponse = z.infer<
+  typeof UserSessionsWebSocketTokenResponse
+>;
+
 export const UpdateSessionTitleRequest = z.object({
   title: z.string().trim().min(1).max(60),
 });

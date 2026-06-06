@@ -8,18 +8,20 @@ import {
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
-  buildRepoEnvironmentsRoutes,
+  buildRepoScopedEnvironmentRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
+  buildUserEnvironmentRoutes,
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
 import { SessionAgentDO } from "@/runtime/session-agent.do";
+import { UserSessionsDO } from "@/runtime/user-sessions.do";
 import { handleScheduled } from "@/composition/scheduled";
 import type { Env } from "@/shared/types";
 import { initializeLogger } from "@/shared/logging";
 // import { requestLoggerMiddleware } from "@/shared/middleware/request-logger.middleware";
 
-export { SessionAgentDO };
+export { SessionAgentDO, UserSessionsDO };
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -59,9 +61,10 @@ app.route("/models", buildModelsRoutes());
 
 // Protected routes
 app.route("/repos", buildReposRoutes());
-app.route("/", buildRepoEnvironmentsRoutes());
+app.route("/repos", buildRepoScopedEnvironmentRoutes());
 app.route("/sessions", buildSessionsRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
+app.route("/environments", buildUserEnvironmentRoutes());
 
 app.route("/webhooks", buildWebhooksRoutes());
 

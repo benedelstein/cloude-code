@@ -55,6 +55,11 @@ export interface SessionAccessRow {
   accessBlockReason: SessionAccessBlockReason | null;
 }
 
+export interface SessionPullRequestRow {
+  id: string;
+  userId: string;
+}
+
 function rowToSummary(row: SessionRow): SessionSummary {
   const pullRequest = row.pull_request_url
     && row.pull_request_number !== null
@@ -224,44 +229,47 @@ export class SessionsRepository {
       .run();
   }
 
-  async updatePullRequestFromWebhook(params: {
+  /**
+   * Finds sessions currently associated with a GitHub pull request.
+   * @param params - GitHub installation, repository, and pull request number.
+   * @returns Matching session and user ids without mutating session summary state.
+   */
+  async findSessionsByPullRequest(params: {
     installationId: number;
     repoId: number;
     number: number;
-    url: string;
-    state: PullRequestState;
-  }): Promise<void> {
-    await this.database
+  }): Promise<SessionPullRequestRow[]> {
+    const result = await this.database
       .prepare(
-        `UPDATE sessions
-         SET pull_request_url = ?,
-             pull_request_number = ?,
-             pull_request_state = ?
+        `SELECT id, user_id
+         FROM sessions
          WHERE installation_id = ?
            AND repo_id = ?
            AND pull_request_number = ?`,
       )
       .bind(
-        params.url,
-        params.number,
-        params.state,
         params.installationId,
         params.repoId,
         params.number,
       )
-      .run();
+      .all<{ id: string; user_id: string }>();
+
+    return result.results.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+    }));
   }
 
   /**
    * Lists the user's non-archived sessions grouped by repository.
    *
-   * Repos are ordered by their most recently updated session. Within each
-   * group, sessions are also ordered by `updated_at` DESC. Each group includes
+   * Repos are ordered by their most recently created session. Within each
+   * group, sessions are also ordered by `created_at` DESC. Each group includes
    * up to `sessionLimit` sessions and a per-repo `nextSessionCursor` to load
    * more sessions for that repo via {@link listSessionsForRepo}.
    *
    * Pagination of the repo list uses a keyset cursor on
-   * `(MAX(updated_at), repo_id)` to keep ordering stable when multiple repos
+   * `(MAX(created_at), repo_id)` to keep ordering stable when multiple repos
    * share the same most-recent timestamp.
    *
    * @returns Page of repo groups and an optional cursor for the next page.
@@ -281,35 +289,35 @@ export class SessionsRepository {
       ? decodeRepoCursor(options.repoCursor)
       : null;
 
-    // Step 1: page of repos, ordered by most recent activity.
+    // Step 1: page of repos, ordered by newest session creation.
     // Keyset filter uses lexicographic comparison: prefer rows with strictly
-    // older max_updated_at, and break ties by smaller repo_id.
+    // older max_created_at, and break ties by smaller repo_id.
     let repoQuery: string;
     const repoBindings: (string | number)[] = [userId];
     if (decodedRepoCursor) {
       repoQuery = `
-        SELECT repo_id, MAX(updated_at) AS max_updated_at
+        SELECT repo_id, MAX(created_at) AS max_created_at
         FROM sessions
         WHERE user_id = ? AND archived = 0
         GROUP BY repo_id
-        HAVING max_updated_at < ?
-           OR (max_updated_at = ? AND repo_id < ?)
-        ORDER BY max_updated_at DESC, repo_id DESC
+        HAVING max_created_at < ?
+           OR (max_created_at = ? AND repo_id < ?)
+        ORDER BY max_created_at DESC, repo_id DESC
         LIMIT ?
       `;
       repoBindings.push(
-        decodedRepoCursor.maxUpdatedAt,
-        decodedRepoCursor.maxUpdatedAt,
+        decodedRepoCursor.maxCreatedAt,
+        decodedRepoCursor.maxCreatedAt,
         decodedRepoCursor.repoId,
         repoLimit + 1,
       );
     } else {
       repoQuery = `
-        SELECT repo_id, MAX(updated_at) AS max_updated_at
+        SELECT repo_id, MAX(created_at) AS max_created_at
         FROM sessions
         WHERE user_id = ? AND archived = 0
         GROUP BY repo_id
-        ORDER BY max_updated_at DESC, repo_id DESC
+        ORDER BY max_created_at DESC, repo_id DESC
         LIMIT ?
       `;
       repoBindings.push(repoLimit + 1);
@@ -318,7 +326,7 @@ export class SessionsRepository {
     const repoResult = await this.database
       .prepare(repoQuery)
       .bind(...repoBindings)
-      .all<{ repo_id: number; max_updated_at: string }>();
+      .all<{ repo_id: number; max_created_at: string }>();
 
     const repoRows = repoResult.results;
     const hasMoreRepos = repoRows.length > repoLimit;
@@ -336,7 +344,7 @@ export class SessionsRepository {
     const sessionQuery = `
       SELECT * FROM (
         SELECT *,
-               ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY updated_at DESC, id DESC) AS rn
+               ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY created_at DESC, id DESC) AS rn
         FROM sessions
         WHERE user_id = ? AND archived = 0 AND repo_id IN (${placeholders})
       )
@@ -369,7 +377,7 @@ export class SessionsRepository {
       const nextSessionCursor =
         hasMoreSessions && lastVisible
           ? encodeSessionCursor({
-              updatedAt: lastVisible.updated_at,
+              createdAt: lastVisible.created_at,
               sessionId: lastVisible.id,
             })
           : null;
@@ -385,7 +393,7 @@ export class SessionsRepository {
     const nextRepoCursor =
       hasMoreRepos && lastRepo
         ? encodeRepoCursor({
-            maxUpdatedAt: lastRepo.max_updated_at,
+            maxCreatedAt: lastRepo.max_created_at,
             repoId: lastRepo.repo_id,
           })
         : null;
@@ -414,14 +422,14 @@ export class SessionsRepository {
       query = `
         SELECT * FROM sessions
         WHERE user_id = ? AND repo_id = ? AND archived = 0
-          AND (updated_at < ?
-            OR (updated_at = ? AND id < ?))
-        ORDER BY updated_at DESC, id DESC
+          AND (created_at < ?
+            OR (created_at = ? AND id < ?))
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `;
       bindings.push(
-        decoded.updatedAt,
-        decoded.updatedAt,
+        decoded.createdAt,
+        decoded.createdAt,
         decoded.sessionId,
         sessionLimit + 1,
       );
@@ -429,7 +437,7 @@ export class SessionsRepository {
       query = `
         SELECT * FROM sessions
         WHERE user_id = ? AND repo_id = ? AND archived = 0
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `;
       bindings.push(sessionLimit + 1);
@@ -452,7 +460,7 @@ export class SessionsRepository {
     const nextSessionCursor =
       hasMore && lastVisible
         ? encodeSessionCursor({
-            updatedAt: lastVisible.updated_at,
+            createdAt: lastVisible.created_at,
             sessionId: lastVisible.id,
           })
         : null;
@@ -469,6 +477,18 @@ export class SessionsRepository {
     const row = await this.database
       .prepare(`SELECT * FROM sessions WHERE id = ?`)
       .bind(sessionId)
+      .first<SessionRow>();
+
+    return row ? rowToSummary(row) : null;
+  }
+
+  async getByIdForUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionSummary | null> {
+    const row = await this.database
+      .prepare(`SELECT * FROM sessions WHERE id = ? AND user_id = ?`)
+      .bind(sessionId, userId)
       .first<SessionRow>();
 
     return row ? rowToSummary(row) : null;

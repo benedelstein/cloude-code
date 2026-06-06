@@ -7,7 +7,10 @@ import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
-import { createRepoEnvironmentsRoutes } from "@/modules/repo-environments/routes/repo-environments.routes";
+import {
+  createRepoScopedEnvironmentRoutes,
+  createUserEnvironmentRoutes,
+} from "@/modules/repo-environments/routes/repo-environments.routes";
 import { RepoEnvironmentsService } from "@/modules/repo-environments/services/repo-environments.service";
 import { ReposService } from "@/modules/github/services/repo-listing.service";
 import { createReposRoutes } from "@/modules/repos/routes/repos.routes";
@@ -24,6 +27,7 @@ import {
 import { isSessionOwnedByUser } from "@/modules/sessions/services/session-access.service";
 import { requestSessionProviderConnectionRefresh } from "@/modules/sessions/services/session-provider-connection.service";
 import { verifySessionWebSocketToken } from "@/modules/sessions/services/session-websocket-token.service";
+import { verifyUserSessionsWebSocketToken } from "@/modules/sessions/services/user-sessions-websocket-token.service";
 import { createWebhooksRoutes } from "@/modules/webhooks/routes/webhooks.routes";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
@@ -119,10 +123,10 @@ export function buildReposRoutes() {
   });
 }
 
-export function buildRepoEnvironmentsRoutes() {
-  return createRepoEnvironmentsRoutes({
+function createRepoEnvironmentsRouteDeps() {
+  return {
     authMiddleware,
-    createRepoEnvironmentsService: (env) =>
+    createRepoEnvironmentsService: (env: Env) =>
       new RepoEnvironmentsService({
         env,
         accessProvider: {
@@ -133,12 +137,21 @@ export function buildRepoEnvironmentsRoutes() {
             }),
         },
       }),
-  });
+  };
+}
+
+export function buildRepoScopedEnvironmentRoutes() {
+  return createRepoScopedEnvironmentRoutes(createRepoEnvironmentsRouteDeps());
+}
+
+export function buildUserEnvironmentRoutes() {
+  return createUserEnvironmentRoutes(createRepoEnvironmentsRouteDeps());
 }
 
 export function buildSessionsRoutes() {
   return createSessionsRoutes({
     authMiddleware,
+    verifyUserSessionsWebSocketToken,
     createSessionsService: (env) =>
       new SessionsService({
         env,

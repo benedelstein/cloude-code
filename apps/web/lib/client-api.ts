@@ -9,6 +9,7 @@ import type {
   CreateSessionInitialMessage,
   CreateSessionResponse,
   SessionWebSocketTokenResponse,
+  UserSessionsWebSocketTokenResponse,
   DeleteSessionResponse,
   ArchiveSessionResponse,
   SessionInfoResponse,
@@ -285,6 +286,13 @@ export async function createSessionWebSocketToken(
   sessionId: string,
 ): Promise<SessionWebSocketTokenResponse> {
   return apiFetch(`/sessions/${sessionId}/websocket-token`, {
+    method: "POST",
+    cache: "no-store",
+  });
+}
+
+export async function createUserSessionsWebSocketToken(): Promise<UserSessionsWebSocketTokenResponse> {
+  return apiFetch("/sessions/updates/token", {
     method: "POST",
     cache: "no-store",
   });

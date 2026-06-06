@@ -49,7 +49,7 @@ const UserRepoEnvironmentIdParams = z.object({
 
 export const listUserRepoEnvironmentsRoute = createRoute({
   method: "get",
-  path: "/environments",
+  path: "/",
   responses: {
     200: {
       content: { "application/json": { schema: ListUserRepoEnvironmentsResponse } },
@@ -61,7 +61,7 @@ export const listUserRepoEnvironmentsRoute = createRoute({
 
 export const getDefaultNetworkAllowlistRoute = createRoute({
   method: "get",
-  path: "/environments/default-allowlist",
+  path: "/default-allowlist",
   responses: {
     200: {
       content: { "application/json": { schema: DefaultNetworkAllowlistResponse } },
@@ -73,7 +73,7 @@ export const getDefaultNetworkAllowlistRoute = createRoute({
 
 export const getUserRepoEnvironmentRoute = createRoute({
   method: "get",
-  path: "/environments/{environmentId}",
+  path: "/{environmentId}",
   request: {
     params: UserRepoEnvironmentIdParams,
   },
@@ -88,7 +88,7 @@ export const getUserRepoEnvironmentRoute = createRoute({
 
 export const listRepoEnvironmentsRoute = createRoute({
   method: "get",
-  path: "/repos/{repoId}/environments",
+  path: "/{repoId}/environments",
   request: {
     params: RepoEnvironmentParams,
   },
@@ -103,7 +103,7 @@ export const listRepoEnvironmentsRoute = createRoute({
 
 export const createRepoEnvironmentRoute = createRoute({
   method: "post",
-  path: "/repos/{repoId}/environments",
+  path: "/{repoId}/environments",
   request: {
     params: RepoEnvironmentParams,
     body: {
@@ -121,7 +121,7 @@ export const createRepoEnvironmentRoute = createRoute({
 
 export const getRepoEnvironmentRoute = createRoute({
   method: "get",
-  path: "/repos/{repoId}/environments/{environmentId}",
+  path: "/{repoId}/environments/{environmentId}",
   request: {
     params: RepoEnvironmentIdParams,
   },
@@ -136,7 +136,7 @@ export const getRepoEnvironmentRoute = createRoute({
 
 export const updateRepoEnvironmentRoute = createRoute({
   method: "patch",
-  path: "/repos/{repoId}/environments/{environmentId}",
+  path: "/{repoId}/environments/{environmentId}",
   request: {
     params: RepoEnvironmentIdParams,
     body: {
@@ -154,7 +154,7 @@ export const updateRepoEnvironmentRoute = createRoute({
 
 export const deleteRepoEnvironmentRoute = createRoute({
   method: "delete",
-  path: "/repos/{repoId}/environments/{environmentId}",
+  path: "/{repoId}/environments/{environmentId}",
   request: {
     params: RepoEnvironmentIdParams,
   },

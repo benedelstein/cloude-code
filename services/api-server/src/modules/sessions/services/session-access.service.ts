@@ -3,9 +3,11 @@ import type { Env } from "@/shared/types";
 import {
   SessionsRepository,
   type SessionAccessRow,
+  type SessionPullRequestRow,
 } from "../repositories/sessions.repository";
 
 export type { SessionAccessRow };
+export type { SessionPullRequestRow };
 
 export interface SessionSummaryWriter {
   updateWorkingState(
@@ -105,20 +107,16 @@ export async function blockSessionsForRemovedRepos(params: {
   );
 }
 
-export async function updatePullRequestFromWebhook(params: {
+export async function findSessionsByPullRequest(params: {
   env: Env;
   installationId: number;
   repoId: number;
   number: number;
-  url: string;
-  state: PullRequestState;
-}): Promise<void> {
-  await new SessionsRepository(params.env.DB).updatePullRequestFromWebhook({
+}): Promise<SessionPullRequestRow[]> {
+  return new SessionsRepository(params.env.DB).findSessionsByPullRequest({
     installationId: params.installationId,
     repoId: params.repoId,
     number: params.number,
-    url: params.url,
-    state: params.state,
   });
 }
 

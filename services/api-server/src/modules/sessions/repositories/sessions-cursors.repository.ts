@@ -11,18 +11,18 @@
 
 export interface RepoCursor {
   /** SQLite datetime string ("YYYY-MM-DD HH:MM:SS") for direct comparison. */
-  maxUpdatedAt: string;
+  maxCreatedAt: string;
   repoId: number;
 }
 
 export interface SessionCursor {
   /** SQLite datetime string ("YYYY-MM-DD HH:MM:SS") for direct comparison. */
-  updatedAt: string;
+  createdAt: string;
   sessionId: string;
 }
 
 export function encodeRepoCursor(cursor: RepoCursor): string {
-  return btoa(`${cursor.maxUpdatedAt}|${cursor.repoId}`);
+  return btoa(`${cursor.maxCreatedAt}|${cursor.repoId}`);
 }
 
 /**
@@ -38,14 +38,14 @@ export function decodeRepoCursor(cursor: string): RepoCursor | null {
   }
   const pipeIndex = decoded.lastIndexOf("|");
   if (pipeIndex < 0) { return null; }
-  const maxUpdatedAt = decoded.slice(0, pipeIndex);
+  const maxCreatedAt = decoded.slice(0, pipeIndex);
   const repoId = Number.parseInt(decoded.slice(pipeIndex + 1), 10);
-  if (!maxUpdatedAt || !Number.isFinite(repoId)) { return null; }
-  return { maxUpdatedAt, repoId };
+  if (!maxCreatedAt || !Number.isFinite(repoId)) { return null; }
+  return { maxCreatedAt, repoId };
 }
 
 export function encodeSessionCursor(cursor: SessionCursor): string {
-  return btoa(`${cursor.updatedAt}|${cursor.sessionId}`);
+  return btoa(`${cursor.createdAt}|${cursor.sessionId}`);
 }
 
 /**
@@ -62,8 +62,8 @@ export function decodeSessionCursor(cursor: string): SessionCursor | null {
   }
   const pipeIndex = decoded.lastIndexOf("|");
   if (pipeIndex < 0) { return null; }
-  const updatedAt = decoded.slice(0, pipeIndex);
+  const createdAt = decoded.slice(0, pipeIndex);
   const sessionId = decoded.slice(pipeIndex + 1);
-  if (!updatedAt || !sessionId) { return null; }
-  return { updatedAt, sessionId };
+  if (!createdAt || !sessionId) { return null; }
+  return { createdAt, sessionId };
 }

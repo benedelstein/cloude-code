@@ -41,6 +41,15 @@ describe("session websocket token storage", () => {
     expect(consumeInitialSessionWebSocketToken("session-3")).toBeNull();
   });
 
+  it("rejects tokens that are too close to expiry", () => {
+    sessionStorage.setItem(
+      "session-websocket-token:session-near-expiry",
+      JSON.stringify(createToken(new Date(Date.now() + 1_000).toISOString())),
+    );
+
+    expect(consumeInitialSessionWebSocketToken("session-near-expiry")).toBeNull();
+  });
+
   it("rejects malformed payloads", () => {
     sessionStorage.setItem("session-websocket-token:session-4", "{bad json");
     expect(consumeInitialSessionWebSocketToken("session-4")).toBeNull();

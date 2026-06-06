@@ -88,17 +88,44 @@ Two browser rules force this hop:
 
 So whatever does the cookie-set + opener notification has to run on the originating origin. That's `/api/auth/finalize`.
 
-## Websocket Auth
+## WebSocket Auth
 
-Websockets can't carry the session cookie — browsers don't let you set headers on `new WebSocket()`, and cross-origin cookie scoping doesn't cleanly apply to WS upgrades. So we mint a short-lived, stateless, signed token via `POST /sessions/{sessionId}/websocket-token` (authenticated via the normal cookie → Bearer BFF path), and the client passes it as a URL query param on the WS upgrade: `wss://.../agents/session/{id}?token=...`.
+Browser WebSockets cannot use the normal BFF `Authorization` header path because `new WebSocket()` does not allow custom headers. WebSocket auth is therefore a two-step flow:
 
-The token carries `sessionId`, `userId`, and `expiresAt`, signed with `WEBSOCKET_TOKEN_SIGNING_KEY`. It's verified at the upgrade handler (`agent.routes.ts`), which also re-checks session→repo access before forwarding to the Durable Object.
+1. Use the normal cookie -> BFF -> Bearer-authenticated HTTP path to mint a short-lived WebSocket token.
+2. Pass that token as `?token=...` on the WebSocket upgrade URL.
 
-### Key properties
+There are two WebSocket surfaces:
 
-- **Verified only at the WS upgrade.** Once the socket is established, the token is stripped from the URL and never re-checked. The live socket is the auth. A connection opened at t=0 with a 5-minute token will keep working at t=1h.
-- **Short TTL is leak mitigation, not session lifetime control.** Query strings are the leakiest place to put a credential (server access logs, browser history, referrer headers, proxy logs). A ~5-minute expiry caps the blast radius if the URL leaks — an attacker can use a stolen token to open a new socket only within that window. It does **not** expire in-flight connections.
-- **No proactive token refresh on the client.** Because nothing rechecks after upgrade, a periodic timer-based refresh adds churn without adding safety — and in our stack it actually causes duplicate `sync.response` events, since changing the token changes the `usePartySocket` memo key and forces a fresh WS connection. Refresh only happens lazily on socket close if the cached token has already expired (`use-session-websocket-token.ts` / `use-cloudflare-agent.ts`).
+| Socket | Token endpoint | Upgrade URL | Token scope |
+|--------|----------------|-------------|-------------|
+| Session agent | `POST /sessions/{sessionId}/websocket-token` | `/agents/session/{sessionId}?token=...` | `type`, `sessionId`, `userId`, `exp` |
+| User sessions sidebar stream | `POST /sessions/updates/token` | `/sessions/updates?token=...` | `type`, `userId`, `exp` |
+
+Both token types are stateless HMAC-SHA256 tokens signed with `WEBSOCKET_TOKEN_SIGNING_KEY`. They expire after 5 minutes and return `{ token, expiresAt }` to the web app.
+
+### Upgrade validation
+
+- The session socket upgrade is handled by `agent.routes.ts`. It verifies the token signature, token type, expiration, and `sessionId`, then re-checks session repo access before routing to the session Durable Object.
+- The user sessions stream upgrade is handled by `sessions.routes.ts`. It verifies the token signature, token type, and expiration, then forwards the request to the `UserSessionsDO` named by `userId`.
+
+The token is only checked during the WebSocket upgrade. Once a socket is established, token expiry does not close it or revoke it. A socket opened with a 5-minute token can stay open past that 5-minute window.
+
+### Refresh and reconnect
+
+The web app does not refresh WebSocket tokens on a timer. `useWebSocketToken(...)` owns token minting, transient retry backoff, and terminal auth errors; the socket hooks decide when a fresh token is needed.
+
+Current behavior:
+
+- If no token exists, the token hook mints one before opening the socket.
+- If a token is expired or within the 30-second client buffer, the socket hook refreshes before opening or reconnecting.
+- If a WebSocket closes and the token is expired or near expiry, the socket hook refreshes instead of continuing with that token.
+- Transient token-mint failures retry with exponential backoff, capped at 30 seconds.
+- Token-mint `401`, `403`, or `404` responses are treated as terminal auth/access errors and do not retry automatically.
+
+The session page can receive an initial session WebSocket token from session creation. The web app stores that token briefly in memory/sessionStorage and consumes it on first render to avoid an extra HTTP mint. Cached initial tokens are ignored if they are expired or within the 30-second buffer.
+
+Short token TTL is leak mitigation, not socket lifetime control. Query strings are exposed in more places than headers, so the TTL limits the window in which a leaked URL can open a new socket.
 
 ### Keep-alive
 
@@ -111,12 +138,22 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 | `services/api-server/src/modules/auth/routes/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, logout |
 | `services/api-server/src/modules/auth/middleware/auth.middleware.ts` | Session validation, token refresh |
 | `services/api-server/src/modules/auth/utils/preview-origin.util.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
+| `services/api-server/src/modules/session-agent/routes/agent.routes.ts` | Session WebSocket upgrade token validation and repo-access gate |
+| `services/api-server/src/modules/sessions/routes/sessions.routes.ts` | User sessions stream token validation and token mint routes |
+| `services/api-server/src/modules/sessions/services/session-websocket-token.service.ts` | Per-session WebSocket token signing and verification |
+| `services/api-server/src/modules/sessions/services/user-sessions-websocket-token.service.ts` | User-scoped sidebar stream token signing and verification |
 | `services/api-server/src/modules/github/services/github-app.service.ts` | GitHub App OAuth helpers |
 | `services/api-server/src/shared/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
 | `services/api-server/src/shared/utils/crypto.ts` | Token encryption/decryption |
 | `apps/web/app/api/auth/finalize/route.ts` | Exchanges code for session token, sets cookie, posts opener |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
 | `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout, popup management) |
+| `apps/web/hooks/use-websocket-token.ts` | Shared client token mint/retry lifecycle |
+| `apps/web/hooks/use-session-websocket-token.ts` | Session WebSocket token adapter and initial-token handoff |
+| `apps/web/hooks/use-user-sessions-websocket-token.ts` | User sessions stream token adapter |
+| `apps/web/hooks/use-cloudflare-agent.ts` | Session socket connection through `useAgent` / PartySocket |
+| `apps/web/hooks/use-user-sessions-websocket.ts` | Sidebar stream raw WebSocket connection and reconnect loop |
+| `apps/web/lib/websocket-token.ts` | Client-side token expiry buffer helpers |
 
 ## Authentication Rules
 

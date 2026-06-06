@@ -39,11 +39,8 @@ import type {
 } from "@/shared/types/session-agent";
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
 import { timingSafeCompare } from "@/shared/utils/crypto";
-import type { SessionRepoAccessResult } from "@/shared/types/repo-access";
 import type {
   AgentEvent,
-  SessionInfoResponse,
-  SessionPlanResponse,
   SessionStatus,
   LogLevel,
   ChatMessageEvent,
@@ -54,25 +51,24 @@ import { SessionChatDispatchService } from "@/modules/session-agent/services/ses
 import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
+import { SessionQueryService } from "@/modules/session-agent/services/session-query.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
+import { SessionSyncService } from "@/modules/session-agent/services/session-sync.service";
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
 import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
-import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
-import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
+import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 import { normalizePullRequestState } from "@/modules/session-agent/utils/session-agent-pull-request-state.utils";
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
 import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
+import { SessionRepoAccessLifecycleService } from "./session-repo-access-lifecycle.service";
 
 interface AgentStateInternalAccess {
-  _setStateInternal(
-    state: ClientState,
-    source: Connection | "server",
-  ): unknown;
+  _setStateInternal(state: ClientState, source: Connection | "server"): unknown;
 }
 
 export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAgentRpc {
@@ -94,9 +90,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly setupRunService: SessionSetupRunService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
+  private readonly queryService: SessionQueryService;
   private readonly sessionSummaryService: SessionSummaryService;
+  private readonly syncService: SessionSyncService;
   private readonly githubAppService: GitHubAppService;
   private readonly pullRequestLifecycleService: SessionPullRequestLifecycleService;
+  private readonly repoAccessLifecycleService: SessionRepoAccessLifecycleService;
   private readonly autoPullRequestService: SessionAutoPullRequestService;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
@@ -142,10 +141,24 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
     this.githubAppService = new GitHubAppService(this.env, this.logger);
+    const userSessionsPublisher = createUserSessionsPublisher(
+      this.env,
+      this.logger.scope("user-sessions-publisher"),
+    );
     this.sessionSummaryService = new SessionSummaryService({
       repository: createSessionSummaryWriter(this.env),
       getSessionId: () => this.serverState.sessionId,
+      getUserId: () => this.serverState.userId,
+      publishSessionSummaryInvalidated: (userId, sessionId) =>
+        userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
+      queueBackgroundWork: (promise) => this.ctx.waitUntil(promise),
       logger: this.logger,
+    });
+    this.queryService = new SessionQueryService({
+      messageRepository: this.messageRepository,
+      latestPlanRepository: this.latestPlanRepository,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
     });
     this.pullRequestLifecycleService = new SessionPullRequestLifecycleService({
       logger: this.logger,
@@ -159,6 +172,14 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       setPullRequestClientState: (pullRequest) =>
         this.updatePartialState({ pullRequest }),
     });
+    this.repoAccessLifecycleService = new SessionRepoAccessLifecycleService({
+      logger: this.logger,
+      env: this.env,
+      getServerState: () => this.serverState,
+      updatePartialState: (partial) => this.updatePartialState(partial),
+      cancelActiveTurnAndClearState: () => this.cancelActiveTurnAndClearState(),
+      killActiveProcess: () => this.processManager.kill(),
+    });
     this.autoPullRequestService = new SessionAutoPullRequestService({
       logger: this.logger,
       createPullRequest: () => this.handleCreatePullRequest(),
@@ -169,7 +190,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         pullRequestStatus: this.state.pullRequest?.status ?? null,
       }),
       keepAliveWhile: (callback) => this.keepAliveWhile(callback),
-      assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
+      assertSessionRepoAccess: () =>
+        this.repoAccessLifecycleService.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(false),
     });
 
@@ -210,6 +232,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
       onTurnFinished: () => this.autoPullRequestService.queueCreateAfterTurnFinish(),
+    });
+    this.syncService = new SessionSyncService({
+      messageRepository: this.messageRepository,
+      getServerState: () => this.serverState,
+      getClientState: () => this.state,
+      getPendingChunks: () => this.turnCoordinator.getPendingChunks(),
     });
 
     this.processManager = new SpriteAgentProcessManager({
@@ -255,6 +283,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
       synthesizeStatus: () => this.synthesizeStatus(),
+      publishSessionSummaryInvalidated: (userId, sessionId) =>
+        userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
     });
 
     this.providerConnectionService = new SessionProviderConnectionService({
@@ -276,7 +306,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       updatePushedBranch: (branch) =>
         this.sessionSummaryService.persistPushedBranch(branch),
-      assertSessionRepoAccess: () => this.assertSessionRepoAccess(),
+      assertSessionRepoAccess: () =>
+        this.repoAccessLifecycleService.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
       githubTokenProvider: this.githubAppService,
     });
@@ -422,30 +453,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.turnCoordinator.ensureRehydratedState();
 
     // Send initial connection state
-    this.sendMessage(
-      {
-        type: "connected",
-        sessionId: this.serverState.sessionId ?? "",
-        status: this.state.status,
-      },
-      connection,
-    );
+    this.sendMessage(this.syncService.buildConnectedMessage(), connection);
 
     // Send message history
-    const sessionId = this.serverState.sessionId;
-    if (sessionId) {
-      const storedMessages = this.messageRepository.getAllBySession(sessionId);
-      this.sendMessage(
-        {
-          type: "sync.response",
-          messages: storedMessages.map((m) => m.message),
-          pendingChunks: this.turnCoordinator.getPendingChunks(),
-          activeTurn: this.serverState.activeUserMessageId
-            ? { userMessageId: this.serverState.activeUserMessageId }
-            : null,
-        },
-        connection,
-      );
+    if (this.serverState.sessionId) {
+      this.sendMessage(this.syncService.buildSyncResponse(), connection);
     }
 
     // Always call ensureReady — idempotent, skips completed steps via serverState checkpoints
@@ -669,53 +681,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   // Session info / management handlers
 
   handleGetSession(): HandleGetSessionResult {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId || !this.state.repoFullName) {
-      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
-    }
-    const pullRequest = this.state.pullRequest?.status === "created" ? this.state.pullRequest : null;
-
-    return success({
-      sessionId,
-      title: null,
-      status: this.state.status,
-      repoFullName: this.state.repoFullName,
-      baseBranch: this.state.baseBranch ?? undefined,
-      pushedBranch: this.state.pushedBranch ?? undefined,
-      pullRequestUrl: pullRequest?.url ?? undefined,
-      pullRequestNumber: pullRequest?.number ?? undefined,
-      pullRequestState: pullRequest?.state ?? undefined,
-      editorUrl: this.state.editorUrl ?? undefined,
-    } satisfies SessionInfoResponse);
+    return this.queryService.handleGetSession();
   }
 
   handleGetMessages(): HandleGetMessagesResult {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) {
-      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
-    }
-
-    const storedMessages = this.messageRepository.getAllBySession(sessionId);
-    // todo: return pending too?
-    return success(storedMessages.map((m) => m.message));
+    return this.queryService.handleGetMessages();
   }
 
   handleGetPlan(): HandleGetPlanResult {
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) {
-      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
-    }
-
-    const latestPlan = this.latestPlanRepository.getBySession(sessionId);
-    if (!latestPlan) {
-      return failure({ code: "PLAN_NOT_FOUND", message: "Plan not found" });
-    }
-
-    return success({
-      plan: latestPlan.plan,
-      updatedAt: latestPlan.updatedAt,
-      sourceMessageId: latestPlan.sourceMessageId,
-    } satisfies SessionPlanResponse);
+    return this.queryService.handleGetPlan();
   }
 
   async handleCreatePullRequest(): Promise<HandleCreatePullRequestResult> {
@@ -723,14 +697,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
-    const pullRequest = this.state.pullRequest;
-    if (!pullRequest || pullRequest.status !== "created") {
-      return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
-    }
-    const updatedPullRequest = { ...pullRequest, state: data.state };
-    this.updatePartialState({ pullRequest: updatedPullRequest });
-    await this.sessionSummaryService.persistPullRequestState(data.state);
-    return success(undefined);
+    return this.pullRequestLifecycleService.updatePullRequest(data);
   }
 
   async handleDeleteSession(): Promise<HandleDeleteSessionResult> {
@@ -781,7 +748,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     payload: ChatMessageEvent,
   ): Promise<void> {
     try {
-      if (!(await this.guardSessionRepoAccess(connection))) {
+      const accessGuard = await this.repoAccessLifecycleService.guardSessionRepoAccess();
+      if (!accessGuard.ok) {
+        this.sendMessage(accessGuard.message, connection);
         return;
       }
 
@@ -846,31 +815,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   }
 
   private async handleSyncRequest(connection: Connection): Promise<void> {
-    if (!(await this.guardSessionRepoAccess(connection))) {
+    const accessGuard = await this.repoAccessLifecycleService.guardSessionRepoAccess();
+    if (!accessGuard.ok) {
+      this.sendMessage(accessGuard.message, connection);
       return;
     }
 
-    const sessionId = this.serverState.sessionId;
-    if (!sessionId) {
-      this.sendMessage(
-        { type: "sync.response", messages: [], activeTurn: null },
-        connection,
-      );
-      return;
-    }
-
-    const storedMessages = this.messageRepository.getAllBySession(sessionId);
-    this.sendMessage(
-      {
-        type: "sync.response",
-        messages: storedMessages.map((m) => m.message),
-        pendingChunks: this.turnCoordinator.getPendingChunks(),
-        activeTurn: this.serverState.activeUserMessageId
-          ? { userMessageId: this.serverState.activeUserMessageId }
-          : null,
-      },
-      connection,
-    );
+    this.sendMessage(this.syncService.buildSyncResponse(), connection);
   }
 
   private async cancelActiveTurnAndClearState(): Promise<void> {
@@ -882,94 +833,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
   }
 
-  private async assertSessionRepoAccess(): Promise<SessionRepoAccessResult> {
-    const sessionId = this.serverState.sessionId;
-    const userId = this.serverState.userId;
-    if (!sessionId || !userId) {
-      return {
-        ok: false as const,
-        error: {
-          code: "SESSION_NOT_FOUND" as const,
-          status: 404 as const,
-          message: "Session not found",
-        },
-      };
-    }
-
-    const github = new GitHubAppService(
-      this.env,
-      createLogger("session-agent-do.repo-access"),
-    );
-    return assertSessionRepoAccess({
-      env: this.env,
-      sessionId,
-      userId,
-      providers: {
-        github,
-        userTokens: new UserSessionService({
-          env: this.env,
-          githubTokenRefreshProvider: github,
-        }),
-      },
-    });
-  }
-
-  private async guardSessionRepoAccess(connection: Connection): Promise<boolean> {
-    const accessResult = await this.assertSessionRepoAccess();
-    if (accessResult.ok) {
-      return true;
-    }
-
-    switch (accessResult.error.code) {
-      case "REPO_ACCESS_BLOCKED":
-        await this.enforceSessionAccessBlocked(false);
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "REPO_ACCESS_BLOCKED",
-            message: accessResult.error.message,
-          },
-          connection,
-        );
-        return false;
-      case "GITHUB_AUTH_REQUIRED":
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "GITHUB_AUTH_REQUIRED",
-            message: accessResult.error.message,
-          },
-          connection,
-        );
-        return false;
-      default:
-        this.sendMessage(
-          {
-            type: "operation.error",
-            code: "MESSAGE_HANDLER_ERROR",
-            message: accessResult.error.message,
-          },
-          connection,
-        );
-        return false;
-    }
-  }
-
-  async enforceSessionAccessBlocked(
-    notifyClients = true,
-  ): Promise<void> {
-    const message = "Repository access for this session is blocked. Update the GitHub App installation or your GitHub access to continue.";
-    this.updatePartialState({
-      lastError: message,
-    });
-    await this.cancelActiveTurnAndClearState();
-    await this.processManager.kill();
-    if (notifyClients) {
-      this.broadcastMessage({
-        type: "operation.error",
-        code: "REPO_ACCESS_BLOCKED",
-        message,
-      });
+  async enforceSessionAccessBlocked(notifyClients = true): Promise<void> {
+    const message = await this.repoAccessLifecycleService.enforceSessionAccessBlocked(notifyClients);
+    if (message) {
+      this.broadcastMessage(message);
     }
   }
 

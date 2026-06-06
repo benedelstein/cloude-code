@@ -3,6 +3,7 @@ import {
   CreateSessionRequest,
   CreateSessionResponse,
   SessionWebSocketTokenResponse,
+  UserSessionsWebSocketTokenResponse,
   UpdateSessionTitleRequest,
   UpdateSessionTitleResponse,
   SessionInfoResponse,
@@ -146,6 +147,40 @@ export const createSessionWebSocketTokenRoute = createRoute({
     503: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
+  },
+});
+
+export const createUserSessionsWebSocketTokenRoute = createRoute({
+  method: "post",
+  path: "/updates/token",
+  responses: {
+    200: {
+      content: { "application/json": { schema: UserSessionsWebSocketTokenResponse } },
+      description: "User sessions WebSocket token",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Authentication required",
+    },
+  },
+});
+
+export const getUserSessionsUpdatesRoute = createRoute({
+  method: "get",
+  path: "/updates",
+  request: {
+    query: z.object({
+      token: z.string().optional(),
+    }),
+  },
+  responses: {
+    101: {
+      description: "User sessions WebSocket stream",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Authentication required",
     },
   },
 });
