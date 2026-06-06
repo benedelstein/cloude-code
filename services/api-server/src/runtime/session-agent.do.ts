@@ -70,10 +70,7 @@ import { SessionAutoPullRequestService } from "./session-auto-pull-request.servi
 import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
 
 interface AgentStateInternalAccess {
-  _setStateInternal(
-    state: ClientState,
-    source: Connection | "server",
-  ): unknown;
+  _setStateInternal(state: ClientState, source: Connection | "server"): unknown;
 }
 
 export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAgentRpc {
@@ -966,9 +963,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
   }
 
-  async enforceSessionAccessBlocked(
-    notifyClients = true,
-  ): Promise<void> {
+  async enforceSessionAccessBlocked(notifyClients = true): Promise<void> {
     const message = "Repository access for this session is blocked. Update the GitHub App installation or your GitHub access to continue.";
     this.updatePartialState({
       lastError: message,
