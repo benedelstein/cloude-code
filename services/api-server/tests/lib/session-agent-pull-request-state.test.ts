@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizePullRequestState } from "../../src/runtime/session-agent-pull-request-state";
+import {
+  normalizePullRequestState,
+} from "../../src/modules/session-agent/utils/session-agent-pull-request-state.utils";
 
 describe("normalizePullRequestState", () => {
   it("preserves created pull request state", () => {

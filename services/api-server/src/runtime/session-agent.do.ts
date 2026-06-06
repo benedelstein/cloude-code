@@ -64,8 +64,8 @@ import { createPullRequestForSessionContext } from "@/modules/sessions/services/
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
+import { normalizePullRequestState } from "@/modules/session-agent/utils/session-agent-pull-request-state.utils";
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
-import { normalizePullRequestState } from "./session-agent-pull-request-state";
 import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
 
 interface AgentStateInternalAccess {
