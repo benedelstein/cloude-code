@@ -75,6 +75,7 @@ function createHarness(overrides: {
   } as unknown as MessageRepository;
   const sessionSummaryService = {
     persistPullRequest: vi.fn().mockResolvedValue(undefined),
+    persistPullRequestState: vi.fn().mockResolvedValue(undefined),
   } as unknown as SessionSummaryService;
   const setPullRequestClientState = vi.fn((pullRequest: ClientState["pullRequest"]) => {
     clientState.pullRequest = pullRequest;
@@ -92,6 +93,7 @@ function createHarness(overrides: {
   });
 
   return {
+    clientState,
     github,
     service,
     sessionSummaryService,
@@ -176,5 +178,46 @@ describe("SessionPullRequestLifecycleService", () => {
       },
     });
     expect(setPullRequestClientState).not.toHaveBeenCalled();
+  });
+
+  it("updates created pull request state and persists it", async () => {
+    const { service, sessionSummaryService, setPullRequestClientState } = createHarness({
+      clientState: {
+        pullRequest: {
+          status: "created",
+          number: 12,
+          url: "https://github.com/ben/repo/pull/12",
+          state: "open",
+        },
+      },
+    });
+
+    await expect(service.updatePullRequest({ state: "merged" })).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+
+    expect(setPullRequestClientState).toHaveBeenCalledWith({
+      status: "created",
+      number: 12,
+      url: "https://github.com/ben/repo/pull/12",
+      state: "merged",
+    });
+    expect(sessionSummaryService.persistPullRequestState).toHaveBeenCalledWith("merged");
+  });
+
+  it("does not update pull request state when no pull request exists", async () => {
+    const { service, sessionSummaryService, setPullRequestClientState } = createHarness();
+
+    await expect(service.updatePullRequest({ state: "closed" })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "PULL_REQUEST_NOT_FOUND",
+        message: "Pull request not found",
+      },
+    });
+
+    expect(setPullRequestClientState).not.toHaveBeenCalled();
+    expect(sessionSummaryService.persistPullRequestState).not.toHaveBeenCalled();
   });
 });

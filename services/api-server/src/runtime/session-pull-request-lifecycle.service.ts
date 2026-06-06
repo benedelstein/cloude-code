@@ -19,7 +19,9 @@ import type {
 } from "@/modules/sessions/services/session-pull-request.service";
 import type {
   HandleCreatePullRequestResult,
+  HandleUpdatePullRequestResult,
   SessionAgentRpcError,
+  UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
 
 interface PullRequestCreationContext {
@@ -123,6 +125,17 @@ export class SessionPullRequestLifecycleService {
     this.setPullRequestClientState(pullRequest);
     await this.persistPullRequest(creationResult.value);
     return success(creationResult.value);
+  }
+
+  async updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult> {
+    const pullRequest = this.getClientState().pullRequest;
+    if (!pullRequest || pullRequest.status !== "created") {
+      return failure({ code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found" });
+    }
+
+    this.setPullRequestClientState({ ...pullRequest, state: data.state });
+    await this.sessionSummaryService.persistPullRequestState(data.state);
+    return success(undefined);
   }
 
   private getCreationContext(): PullRequestCreationContextResult {
