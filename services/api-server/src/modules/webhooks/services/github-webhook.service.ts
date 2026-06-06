@@ -292,7 +292,6 @@ export class GitHubWebhookService {
       installationId,
       repoId: payload.repository.id,
       number: payload.pull_request.number,
-      url: payload.pull_request.html_url,
       state,
     });
   }

@@ -93,4 +93,41 @@ describe("SessionSummaryService", () => {
       "publish",
     ]);
   });
+
+  it("persists pull request state before publishing summary invalidation", async () => {
+    const operations: string[] = [];
+    const queued: Promise<void>[] = [];
+    const repository = {
+      updateWorkingState: vi.fn(),
+      updatePushedBranch: vi.fn(),
+      setPullRequest: vi.fn(),
+      updatePullRequestState: vi.fn(async () => {
+        operations.push("pr-state:write");
+      }),
+    };
+    const publishSessionSummaryInvalidated = vi.fn(async () => {
+      operations.push("publish");
+    });
+    const service = new SessionSummaryService({
+      repository,
+      getSessionId: () => SESSION_ID,
+      getUserId: () => USER_ID,
+      publishSessionSummaryInvalidated,
+      queueBackgroundWork: (promise) => queued.push(promise),
+      logger: noopLogger,
+    });
+
+    await service.persistPullRequestState("merged");
+    await Promise.all(queued);
+
+    expect(repository.updatePullRequestState).toHaveBeenCalledWith(
+      SESSION_ID,
+      "merged",
+    );
+    expect(operations).toEqual(["pr-state:write", "publish"]);
+    expect(publishSessionSummaryInvalidated).toHaveBeenCalledWith(
+      USER_ID,
+      SESSION_ID,
+    );
+  });
 });

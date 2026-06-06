@@ -72,7 +72,6 @@ export interface GitHubWebhookSessionProvider {
     installationId: number;
     repoId: number;
     number: number;
-    url: string;
     state: PullRequestState;
   }): Promise<void>;
 }

@@ -107,7 +107,7 @@ describe("SessionsRepository sidebar state", () => {
     expect(calls[0]?.bindings).toEqual(["session-1", "user-1"]);
   });
 
-  it("updates PR state by installation, repo, and PR number for webhooks", async () => {
+  it("finds sessions by installation, repo, and PR number for webhooks", async () => {
     const { database, calls } = createMockDatabase({
       allRows: [[
         { id: "session-a", user_id: "user-a" },
@@ -116,24 +116,16 @@ describe("SessionsRepository sidebar state", () => {
     });
     const repository = new SessionsRepository(database);
 
-    const invalidated = await repository.updatePullRequestFromWebhook({
+    const sessions = await repository.findSessionsByPullRequest({
       installationId: 10,
       repoId: 20,
       number: 30,
-      url: "https://github.com/owner/repo/pull/30",
-      state: "merged",
     });
 
-    expect(calls[0]?.bindings).toEqual([
-      "https://github.com/owner/repo/pull/30",
-      30,
-      "merged",
-      10,
-      20,
-      30,
-    ]);
-    expect(calls[0]?.query).toContain("RETURNING id, user_id");
-    expect(invalidated).toEqual([
+    expect(calls[0]?.bindings).toEqual([10, 20, 30]);
+    expect(calls[0]?.query).toContain("SELECT id, user_id");
+    expect(calls[0]?.query).not.toContain("UPDATE sessions");
+    expect(sessions).toEqual([
       { id: "session-a", userId: "user-a" },
       { id: "session-b", userId: "user-b" },
     ]);

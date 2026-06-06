@@ -7,25 +7,22 @@ import {
   blockSessionsForDeletedInstallation,
   blockSessionsForRemovedRepos,
   blockSessionsForSuspendedInstallation,
-  updatePullRequestFromWebhook,
+  findSessionsByPullRequest,
 } from "@/modules/sessions/services/session-access.service";
 import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
-import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
+import { getSessionAgentStub } from "@/modules/session-agent/services/session-agent-stub.service";
 
 export function createGitHubWebhookSessionProvider(
   env: Env,
 ): GitHubWebhookSessionProvider {
+  const logger = createLogger("github-webhook-session-provider.ts");
   const userSessionService = new UserSessionService({
     env,
     githubTokenRefreshProvider: new GitHubAppService(
       env,
-      createLogger("github-webhook-session-provider.ts"),
+      logger,
     ),
   });
-  const userSessionsPublisher = createUserSessionsPublisher(
-    env,
-    createLogger("github-webhook-user-sessions-publisher.ts"),
-  );
 
   return {
     blockSessionsForDeletedInstallation(installationId) {
@@ -52,23 +49,52 @@ export function createGitHubWebhookSessionProvider(
       return userSessionService.revokeAllSessionsByGithubId(githubId);
     },
     async updatePullRequestFromWebhook(input) {
-      const invalidations = await updatePullRequestFromWebhook({
+      const sessions = await findSessionsByPullRequest({
         env,
         installationId: input.installationId,
         repoId: input.repoId,
         number: input.number,
-        url: input.url,
-        state: input.state,
       });
-      // publish session update for each session referencing this pull request
-      await Promise.allSettled(
-        invalidations.map((row) =>
-          userSessionsPublisher.invalidateSessionSummary({
-            userId: row.userId,
-            sessionId: row.id,
-          }),
-        ),
+
+      const results = await Promise.allSettled(
+        sessions.map(async (session) => {
+          const sessionAgent = await getSessionAgentStub(env, session.id);
+          const updateResult = await sessionAgent.updatePullRequest({
+            state: input.state,
+          });
+          return { session, updateResult };
+        }),
       );
+
+      results.forEach((result, index) => {
+        const session = sessions[index];
+        if (!session) {
+          return;
+        }
+
+        if (result.status === "rejected") {
+          logger.error("Failed to update session pull request from webhook", {
+            error: result.reason,
+            fields: {
+              sessionId: session.id,
+              userId: session.userId,
+              state: input.state,
+            },
+          });
+          return;
+        }
+
+        if (!result.value.updateResult.ok) {
+          logger.warn("Session pull request update from webhook was skipped", {
+            fields: {
+              sessionId: session.id,
+              userId: session.userId,
+              state: input.state,
+              code: result.value.updateResult.error.code,
+            },
+          });
+        }
+      });
     },
   };
 }

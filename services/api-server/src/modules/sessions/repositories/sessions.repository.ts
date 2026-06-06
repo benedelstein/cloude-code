@@ -55,7 +55,7 @@ export interface SessionAccessRow {
   accessBlockReason: SessionAccessBlockReason | null;
 }
 
-export interface SessionInvalidationRow {
+export interface SessionPullRequestRow {
   id: string;
   userId: string;
 }
@@ -229,28 +229,25 @@ export class SessionsRepository {
       .run();
   }
 
-  async updatePullRequestFromWebhook(params: {
+  /**
+   * Finds sessions currently associated with a GitHub pull request.
+   * @param params - GitHub installation, repository, and pull request number.
+   * @returns Matching session and user ids without mutating session summary state.
+   */
+  async findSessionsByPullRequest(params: {
     installationId: number;
     repoId: number;
     number: number;
-    url: string;
-    state: PullRequestState;
-  }): Promise<SessionInvalidationRow[]> {
+  }): Promise<SessionPullRequestRow[]> {
     const result = await this.database
       .prepare(
-        `UPDATE sessions
-         SET pull_request_url = ?,
-             pull_request_number = ?,
-             pull_request_state = ?
+        `SELECT id, user_id
+         FROM sessions
          WHERE installation_id = ?
            AND repo_id = ?
-           AND pull_request_number = ?
-         RETURNING id, user_id`,
+           AND pull_request_number = ?`,
       )
       .bind(
-        params.url,
-        params.number,
-        params.state,
         params.installationId,
         params.repoId,
         params.number,
