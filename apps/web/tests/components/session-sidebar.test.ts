@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
   deleteSession: vi.fn(),
   logout: vi.fn(),
+  toastError: vi.fn(),
   push: vi.fn(),
 }));
 
@@ -39,6 +40,12 @@ vi.mock("@/hooks/use-auth", () => ({
 vi.mock("@/lib/client-api", () => ({
   archiveSession: mocks.archiveSession,
   deleteSession: mocks.deleteSession,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mocks.toastError,
+  },
 }));
 
 vi.mock("@/components/providers/session-list-provider", () => ({
@@ -292,5 +299,34 @@ describe("SessionSidebar", () => {
     expect(mocks.removeSession).toHaveBeenCalledWith("open-pr");
     expect(screen.queryByText("Open PR")).toBeNull();
     expect(screen.queryByLabelText("Deleting")).toBeNull();
+  });
+
+  it("shows a toast when session deletion fails", async () => {
+    const error = new Error("Repository access could not be verified");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.deleteSession.mockRejectedValue(error);
+    renderSidebar();
+
+    const openRow = screen.getByText("Open PR").closest("li");
+    expect(openRow).toBeTruthy();
+    const rowMenuTrigger = within(openRow as HTMLElement).getByRole("button");
+    fireEvent.pointerDown(rowMenuTrigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(rowMenuTrigger, { pointerType: "mouse" });
+    fireEvent.click(rowMenuTrigger);
+    fireEvent.keyDown(rowMenuTrigger, { key: "Enter", code: "Enter" });
+    fireEvent.click(await screen.findByText("Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith("Failed to delete session", {
+        description: "Repository access could not be verified",
+      });
+    });
+    expect(consoleError).toHaveBeenCalledWith("Failed to delete session:", error);
+    consoleError.mockRestore();
   });
 });
