@@ -1,9 +1,13 @@
+import type { Repo } from "@repo/shared";
 import { createClaudeAuthRoutes } from "@/modules/ai-auth/routes/claude.routes";
 import { createModelsRoutes } from "@/modules/ai-auth/routes/models.routes";
 import { createOpenAIAuthRoutes } from "@/modules/ai-auth/routes/openai.routes";
 import { createAttachmentsRoutes } from "@/modules/attachments/routes/attachments.routes";
 import { AttachmentService } from "@/modules/attachments/services/attachment.service";
 import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
+import { createDiscordRoutes } from "@/modules/discord/routes/discord.routes";
+import { DiscordSessionRequestService } from "@/modules/discord/services/discord-session-request.service";
+import type { DiscordRepoCandidateProvider } from "@/modules/discord/types/discord.types";
 import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
@@ -53,6 +57,69 @@ function createRepoAccessProviders(env: Env) {
   return {
     github: createGitHubAppService(env, "session-repo-access.ts"),
     userTokens: createUserSessionService(env),
+  };
+}
+
+function createSessionsService(env: Env): SessionsService {
+  return new SessionsService({
+    env,
+    attachmentProvider: new AttachmentService(env.DB),
+    repoAccessProviders: createRepoAccessProviders(env),
+    repoEnvironmentResolver: new RepoEnvironmentsService({
+      env,
+      accessProvider: {
+        assertUserRepoAccess: (input) =>
+          assertUserRepoAccess({
+            ...input,
+            providers: createRepoAccessProviders(input.env),
+          }),
+      },
+    }),
+    createPullRequestGitHubProvider: () =>
+      createGitHubAppService(env, "sessions.service.ts"),
+  });
+}
+
+function createDiscordRepoCandidateProvider(env: Env): DiscordRepoCandidateProvider {
+  return {
+    async listAccessibleRepos(params) {
+      const reposService = new ReposService(env);
+      const repos: Repo[] = [];
+      let cursor: string | undefined;
+
+      while (repos.length < params.limit) {
+        const result = await reposService.listRepos({
+          userId: params.userId,
+          githubAccessToken: params.githubAccessToken,
+          executionCtx: params.executionCtx,
+          limit: Math.min(100, params.limit - repos.length),
+          cursor,
+        });
+        if (!result.ok) {
+          return result;
+        }
+
+        repos.push(...result.value.repos);
+        if (!result.value.cursor) {
+          break;
+        }
+        cursor = result.value.cursor;
+      }
+
+      return { ok: true, value: repos };
+    },
+    async getReadmeExcerpt(params) {
+      const github = createGitHubAppService(env, "discord-repo-router.ts");
+      try {
+        const readme = await github.getRepositoryReadme({
+          accessToken: params.githubAccessToken,
+          repoId: params.repo.id,
+        });
+        return readme ? readme.replace(/\s+/g, " ").trim().slice(0, params.maxChars) : null;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -156,23 +223,17 @@ export function buildSessionsRoutes() {
   return createSessionsRoutes({
     authMiddleware,
     verifyUserSessionsWebSocketToken,
-    createSessionsService: (env) =>
-      new SessionsService({
-        env,
-        attachmentProvider: new AttachmentService(env.DB),
-        repoAccessProviders: createRepoAccessProviders(env),
-        repoEnvironmentResolver: new RepoEnvironmentsService({
-          env,
-          accessProvider: {
-            assertUserRepoAccess: (input) =>
-              assertUserRepoAccess({
-                ...input,
-                providers: createRepoAccessProviders(input.env),
-              }),
-          },
-        }),
-        createPullRequestGitHubProvider: () =>
-          createGitHubAppService(env, "sessions.service.ts"),
+    createSessionsService,
+  });
+}
+
+export function buildDiscordRoutes() {
+  return createDiscordRoutes({
+    createDiscordSessionRequestService: (env) =>
+      new DiscordSessionRequestService(env, {
+        tokenProvider: createUserSessionService(env),
+        repoCandidateProvider: createDiscordRepoCandidateProvider(env),
+        sessionCreator: createSessionsService(env),
       }),
   });
 }
