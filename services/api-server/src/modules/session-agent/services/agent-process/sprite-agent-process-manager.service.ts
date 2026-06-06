@@ -61,7 +61,7 @@ export interface SpriteAgentProcessManagerDeps {
   logger: Logger;
   secretRepository: SecretRepository;
   getServerState: () => ServerState;
-  updateAgentProcessId: (agentProcessId: number | null) => void;
+  updateAgentProcessState: (partial: Pick<ServerState, "agentProcessId" | "agentProcessRunId">) => void;
   getClientState: () => ClientState;
   getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   getProviderCredentialAdapter(
@@ -102,7 +102,7 @@ export class SpriteAgentProcessManager {
   private readonly logger: Logger;
   private readonly secretRepository: SecretRepository;
   private readonly getServerState: () => ServerState;
-  private readonly updateAgentProcessId: SpriteAgentProcessManagerDeps["updateAgentProcessId"];
+  private readonly updateAgentProcessState: SpriteAgentProcessManagerDeps["updateAgentProcessState"];
   private readonly getClientState: () => ClientState;
   private readonly getEnvironmentSnapshot: () => SessionEnvironmentSnapshot;
   private readonly attachmentService: AgentAttachmentService;
@@ -118,7 +118,7 @@ export class SpriteAgentProcessManager {
     this.logger = deps.logger.scope("sprite-agent-process-manager");
     this.secretRepository = deps.secretRepository;
     this.getServerState = deps.getServerState;
-    this.updateAgentProcessId = deps.updateAgentProcessId;
+    this.updateAgentProcessState = deps.updateAgentProcessState;
     this.getClientState = deps.getClientState;
     this.getEnvironmentSnapshot = deps.getEnvironmentSnapshot;
     this.attachmentService = new AgentAttachmentService(deps.env, this.logger);
@@ -231,7 +231,7 @@ export class SpriteAgentProcessManager {
         this.logger.warn("Failed to kill agent process", { error });
       }
     }
-    this.updateAgentProcessId(null);
+    this.clearAgentProcessState();
   }
 
   /**
@@ -381,6 +381,7 @@ export class SpriteAgentProcessManager {
       );
       const webhookToken = this.ensureWebhookToken();
       const webhookUrl = this.buildWebhookUrl(sessionId);
+      const processRunId = crypto.randomUUID();
       const environmentSnapshot = this.getEnvironmentSnapshot();
 
       // write the initial message to a file, messages with attachments are too large for argv
@@ -437,6 +438,7 @@ export class SpriteAgentProcessManager {
             SESSION_ID: sessionId,
             DO_WEBHOOK_URL: webhookUrl,
             DO_WEBHOOK_TOKEN: webhookToken,
+            AGENT_PROCESS_RUN_ID: processRunId,
           },
           idleTimeoutMs: 45_000,
           // maxRunAfterDisconnect: "0",
@@ -447,7 +449,7 @@ export class SpriteAgentProcessManager {
       if (!startResult.ok) {
         return failure(startResult.error);
       }
-      this.updateAgentProcessId(startResult.value);
+      this.recordAgentProcessState(startResult.value, processRunId);
       return success({ agentProcessId: startResult.value });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -547,7 +549,7 @@ export class SpriteAgentProcessManager {
       });
       return { status: "reused", agentProcessId: args.processId };
     } catch (error) {
-      this.updateAgentProcessId(null);
+      this.clearAgentProcessState();
       if (wroteStdin) {
         const processStopped = await this.killUncertainProcess(
           sprite,
@@ -611,14 +613,14 @@ export class SpriteAgentProcessManager {
     );
     try {
       await sprite.killSession(processId, "SIGTERM");
-      this.updateAgentProcessId(null);
+      this.clearAgentProcessState();
       return true;
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Unacknowledged vm-agent process was already gone", {
           fields: { processId },
         });
-        this.updateAgentProcessId(null);
+        this.clearAgentProcessState();
         return true;
       }
       this.logger.warn("Failed to kill unacknowledged vm-agent process", {
@@ -636,14 +638,14 @@ export class SpriteAgentProcessManager {
   ): Promise<void> {
     try {
       await sprite.killSession(processId, "SIGTERM");
-      this.updateAgentProcessId(null);
+      this.clearAgentProcessState();
       this.logger.debug("Agent process terminated");
     } catch (error) {
       if (error instanceof SpritesError && error.statusCode === 404) {
         this.logger.debug("Agent process already gone", {
           fields: { processId },
         });
-        this.updateAgentProcessId(null);
+        this.clearAgentProcessState();
         return;
       }
       this.logger.warn("Failed to terminate agent process", {
@@ -654,6 +656,17 @@ export class SpriteAgentProcessManager {
         },
       });
     }
+  }
+
+  private recordAgentProcessState(agentProcessId: number, agentProcessRunId: string): void {
+    this.updateAgentProcessState({ agentProcessId, agentProcessRunId });
+  }
+
+  private clearAgentProcessState(): void {
+    this.updateAgentProcessState({
+      agentProcessId: null,
+      agentProcessRunId: null,
+    });
   }
 
   private waitForAck(

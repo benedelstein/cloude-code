@@ -20,6 +20,8 @@ export type ServerState = {
   agentSessionId: string | null;
   /** Sprite exec-session / process ID for the currently running vm-agent. */
   agentProcessId: number | null;
+  /** Locally generated run id for correlating vm-agent lifecycle webhooks. */
+  agentProcessRunId: string | null;
   /** User message id currently being handled by the agent, or null if idle. */
   activeUserMessageId: string | null;
   /** Provider runtime toolchain checkpoints for this Sprite. */
@@ -39,6 +41,7 @@ function defaultServerState(): ServerState {
     repoCloned: false,
     agentSessionId: null,
     agentProcessId: null,
+    agentProcessRunId: null,
     activeUserMessageId: null,
     startupToolchain: null,
     startupScriptCompleted: false,

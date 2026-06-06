@@ -100,6 +100,13 @@ export const AgentHeartbeatOutput = z.object({
   type: z.literal("heartbeat"),
 });
 
+/** Sent immediately before the webhook vm-agent exits. */
+export const AgentProcessExitOutput = z.object({
+  type: z.literal("process_exit"),
+  processRunId: z.string().min(1),
+  exitCode: z.number().int(),
+});
+
 export const AgentStdinAckOutput = z.object({
   type: z.literal("stdin_ack"),
   userMessageId: z.string().min(1),
@@ -112,8 +119,8 @@ export const AgentCancelAckOutput = z.object({
 
 /**
  * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
- * /chunks and everything else (ready, error, sessionId, heartbeat, debug) to
- * /events as a single event per POST.
+ * /chunks and everything else (ready, error, sessionId, heartbeat, debug,
+ * process_exit) to /events as a single event per POST.
  */
 export const AgentEvent = z.discriminatedUnion("type", [
   AgentReadyOutput,
@@ -121,6 +128,7 @@ export const AgentEvent = z.discriminatedUnion("type", [
   AgentErrorOutput,
   AgentSessionIdOutput,
   AgentHeartbeatOutput,
+  AgentProcessExitOutput,
 ]);
 export type AgentEvent = z.infer<typeof AgentEvent>;
 

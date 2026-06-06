@@ -189,6 +189,7 @@ const agent = spawn("bun", spawnArgs, {
     VM_AGENT_LOCAL: "1",
     DO_WEBHOOK_URL: baseUrl,
     DO_WEBHOOK_TOKEN: webhookToken,
+    AGENT_PROCESS_RUN_ID: randomUUID(),
     // Short idle timeout so the process exits quickly after the turn ends.
     IDLE_TIMEOUT_MS: process.env.IDLE_TIMEOUT_MS ?? "3000",
   },

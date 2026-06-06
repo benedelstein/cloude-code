@@ -1,8 +1,8 @@
 /**
  * Drives the agent harness with webhook-based delivery. Stream chunks go
  * through the ChunkBatcher and land on POST /chunks; every other output
- * (sessionId, ready, heartbeat, error, debug) goes on POST /events, one
- * event per request.
+ * (sessionId, ready, heartbeat, error, debug, process_exit) goes on POST
+ * /events, one event per request.
  */
 import {
   type AgentInputMessage,
@@ -26,6 +26,7 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings = AgentSettin
   settings: S;
   webhookUrl: string;
   webhookToken: string;
+  processRunId?: string;
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
   idleTimeoutMs?: number;
@@ -60,6 +61,21 @@ class WebhookEventHandler {
 
   post(event: AgentOutput): void {
     const promise = this.httpClient.post("/events", { event });
+    this.track(promise);
+  }
+
+  async postAndWait(event: AgentOutput): Promise<void> {
+    const promise = this.httpClient.post("/events", { event });
+    this.track(promise);
+    try {
+      await promise;
+    } catch {
+      // WebhookClient normally absorbs retry exhaustion, but tests and future
+      // clients may throw. Shutdown should still proceed after tracking settles.
+    }
+  }
+
+  private track(promise: Promise<void>): void {
     this.pending.add(promise);
     void promise
       .catch(() => undefined)
@@ -76,6 +92,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly batcher: ChunkBatcher;
   private readonly httpClient: WebhookClient;
   private readonly webhookEventHandler: WebhookEventHandler;
+  private readonly processRunId: string;
   private readonly idleTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly onShutdown: (_exitCode?: number) => void;
@@ -89,6 +106,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     this.idleTimeoutMs = opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
     this.heartbeatIntervalMs =
       opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+    this.processRunId = opts.processRunId ?? crypto.randomUUID();
     this.onShutdown = opts.onShutdown ?? ((exitCode = 0) => process.exit(exitCode));
     this.log = opts.logger ?? (() => {});
 
@@ -192,6 +210,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         return;
       case "error":
       case "sessionId":
+      case "process_exit":
         this.log("debug", "emit event -> /events", { ...output });
         this.webhookEventHandler.post(output);
         return;
@@ -271,9 +290,22 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     this.cancelHeartbeatInterval();
 
     await this.drainOutboundWithDeadline();
+    await this.postProcessExitWithDeadline(exitCode);
 
     this.log("debug", "shutdown complete", { exitCode });
     this.onShutdown(exitCode);
+  }
+
+  private async postProcessExitWithDeadline(exitCode: number): Promise<void> {
+    const post = this.webhookEventHandler.postAndWait({
+      type: "process_exit",
+      processRunId: this.processRunId,
+      exitCode,
+    });
+    const deadline = new Promise<void>((resolve) => {
+      setTimeout(resolve, SHUTDOWN_DRAIN_TIMEOUT_MS);
+    });
+    await Promise.race([post, deadline]);
   }
 
   private installSignalHandlers(): void {

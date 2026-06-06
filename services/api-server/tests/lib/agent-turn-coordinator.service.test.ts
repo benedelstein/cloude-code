@@ -24,6 +24,7 @@ function createHarness(params: {
     sessionId: "session-1",
     activeUserMessageId: "user-message-1",
     agentProcessId: 42,
+    agentProcessRunId: "process-run-1",
   } as ServerState;
   const clientState = {
     status: "ready",
@@ -96,5 +97,31 @@ describe("AgentTurnCoordinator", () => {
     ]);
 
     expect(onTurnFinished).not.toHaveBeenCalled();
+  });
+
+  it("clears the tracked agent process when the matching process exits", () => {
+    const { coordinator, serverState } = createHarness();
+
+    coordinator.handleEvent({
+      type: "process_exit",
+      processRunId: "process-run-1",
+      exitCode: 0,
+    });
+
+    expect(serverState.agentProcessId).toBeNull();
+    expect(serverState.agentProcessRunId).toBeNull();
+  });
+
+  it("ignores stale process exit events from older runs", () => {
+    const { coordinator, serverState } = createHarness();
+
+    coordinator.handleEvent({
+      type: "process_exit",
+      processRunId: "old-process-run",
+      exitCode: 0,
+    });
+
+    expect(serverState.agentProcessId).toBe(42);
+    expect(serverState.agentProcessRunId).toBe("process-run-1");
   });
 });

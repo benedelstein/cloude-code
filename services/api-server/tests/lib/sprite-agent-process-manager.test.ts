@@ -117,6 +117,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     repoCloned: true,
     agentSessionId: "provider-session-1",
     agentProcessId: null,
+    agentProcessRunId: null,
     activeUserMessageId: null,
     startupToolchain: null,
     webhookToken: null,
@@ -130,8 +131,18 @@ function createManager(
   snapshotPlainEnvVars: Record<string, string> = {},
   clientState: ClientState = createClientState(),
 ) {
-  const updateAgentProcessId = vi.fn((agentProcessId: number | null) => {
-    serverState.agentProcessId = agentProcessId;
+  const updateAgentProcessState = vi.fn(
+    (partial: Pick<ServerState, "agentProcessId" | "agentProcessRunId">) => {
+      Object.assign(serverState, partial);
+    },
+  );
+  const clearProcessState = {
+    agentProcessId: null,
+    agentProcessRunId: null,
+  };
+  const spawnedProcessState = (agentProcessId: number) => ({
+    agentProcessId,
+    agentProcessRunId: expect.any(String),
   });
   const manager = new SpriteAgentProcessManager({
     env: {
@@ -147,7 +158,7 @@ function createManager(
       delete: vi.fn(),
     } as never,
     getServerState: () => serverState,
-    updateAgentProcessId,
+    updateAgentProcessState,
     getClientState: () => clientState,
     getEnvironmentSnapshot: () => ({
       sourceEnvironmentId: null,
@@ -164,7 +175,7 @@ function createManager(
     }),
   });
 
-  return { manager, updateAgentProcessId };
+  return { clearProcessState, manager, spawnedProcessState, updateAgentProcessState };
 }
 
 function createSpawnSession(args: {
@@ -249,7 +260,7 @@ describe("SpriteAgentProcessManager", () => {
       agentProcessId: 42,
       activeUserMessageId: "user-message-2",
     });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { clearProcessState, manager, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.cancelActiveTurn();
 
@@ -258,7 +269,7 @@ describe("SpriteAgentProcessManager", () => {
       encodeAgentInput({ type: "cancel", userMessageId: "user-message-2" }) + "\n",
     );
     expect(mockState.killSession).not.toHaveBeenCalled();
-    expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).not.toHaveBeenCalledWith(clearProcessState);
   });
 
   it("kills the active process when cancel ack times out", async () => {
@@ -288,7 +299,7 @@ describe("SpriteAgentProcessManager", () => {
       agentProcessId: 42,
       activeUserMessageId: "user-message-2",
     });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { clearProcessState, manager, updateAgentProcessState } = createManager(serverState);
 
     const cancelPromise = manager.cancelActiveTurn();
     await vi.advanceTimersByTimeAsync(2_000);
@@ -296,7 +307,7 @@ describe("SpriteAgentProcessManager", () => {
 
     expect(result).toEqual({ processPreserved: false });
     expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
-    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).toHaveBeenCalledWith(clearProcessState);
     vi.useRealTimers();
   });
 
@@ -324,7 +335,7 @@ describe("SpriteAgentProcessManager", () => {
     mockState.attachSession.mockReturnValue(existingSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { clearProcessState, manager, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-2", content: "second turn", attachmentIds: [] },
@@ -346,7 +357,7 @@ describe("SpriteAgentProcessManager", () => {
     );
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
-    expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).not.toHaveBeenCalledWith(clearProcessState);
   });
 
   it("refuses to dispatch before the setup run completes", async () => {
@@ -396,7 +407,7 @@ describe("SpriteAgentProcessManager", () => {
     mockState.attachSession.mockReturnValue(existingSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { clearProcessState, manager, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-2", content: "second turn", attachmentIds: [] },
@@ -416,7 +427,7 @@ describe("SpriteAgentProcessManager", () => {
     );
     expect(existingSession.close).toHaveBeenCalledOnce();
     expect(mockState.createSession).not.toHaveBeenCalled();
-    expect(updateAgentProcessId).not.toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).not.toHaveBeenCalledWith(clearProcessState);
   });
 
   it("spawns a fresh process when an attached process exits after stdin write without ack", async () => {
@@ -439,17 +450,22 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const {
+      clearProcessState,
+      manager,
+      spawnedProcessState,
+      updateAgentProcessState,
+    } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
     });
 
     expect(result.ok).toBe(true);
-    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).toHaveBeenCalledWith(clearProcessState);
     expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
     expect(mockState.createSession).toHaveBeenCalledOnce();
-    expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
+    expect(updateAgentProcessState).toHaveBeenLastCalledWith(spawnedProcessState(84));
   });
 
   it("fails when an attached process does not ack and cannot be stopped", async () => {
@@ -471,7 +487,7 @@ describe("SpriteAgentProcessManager", () => {
     mockState.killSession.mockRejectedValue(new Error("kill failed"));
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { clearProcessState, manager, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
@@ -481,7 +497,7 @@ describe("SpriteAgentProcessManager", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("TURN_DID_NOT_START");
     }
-    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).toHaveBeenCalledWith(clearProcessState);
     expect(mockState.killSession).toHaveBeenCalledWith(42, "SIGTERM");
     expect(mockState.createSession).not.toHaveBeenCalled();
   });
@@ -501,16 +517,21 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState({ agentProcessId: 42 });
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const {
+      clearProcessState,
+      manager,
+      spawnedProcessState,
+      updateAgentProcessState,
+    } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
     });
 
     expect(result.ok).toBe(true);
-    expect(updateAgentProcessId).toHaveBeenCalledWith(null);
+    expect(updateAgentProcessState).toHaveBeenCalledWith(clearProcessState);
     expect(mockState.createSession).toHaveBeenCalledOnce();
-    expect(updateAgentProcessId).toHaveBeenLastCalledWith(84);
+    expect(updateAgentProcessState).toHaveBeenLastCalledWith(spawnedProcessState(84));
   });
 
   it("waits for a fresh process ready line split across stdout chunks", async () => {
@@ -522,14 +543,14 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState();
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { manager, spawnedProcessState, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
     });
 
     expect(result.ok).toBe(true);
-    expect(updateAgentProcessId).toHaveBeenLastCalledWith(91);
+    expect(updateAgentProcessState).toHaveBeenLastCalledWith(spawnedProcessState(91));
   });
 
   it("returns TURN_DID_NOT_START when a fresh process exits before ready", async () => {
@@ -537,7 +558,7 @@ describe("SpriteAgentProcessManager", () => {
     mockState.createSession.mockReturnValue(spawnSession);
 
     const serverState = createServerState();
-    const { manager, updateAgentProcessId } = createManager(serverState);
+    const { manager, updateAgentProcessState } = createManager(serverState);
 
     const result = await manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
@@ -548,7 +569,9 @@ describe("SpriteAgentProcessManager", () => {
       expect(result.error.code).toBe("TURN_DID_NOT_START");
       expect(result.error.message).toBe("vm-agent exited before vm-agent ready: 1");
     }
-    expect(updateAgentProcessId).not.toHaveBeenCalledWith(84);
+    expect(updateAgentProcessState).not.toHaveBeenCalledWith(
+      expect.objectContaining({ agentProcessId: 84 }),
+    );
   });
 
   it("emits a fresh start failure when provider credentials are unavailable", async () => {
@@ -694,6 +717,7 @@ describe("SpriteAgentProcessManager", () => {
       SESSION_ID: "user-session",
       DO_WEBHOOK_URL: "https://evil.test",
       DO_WEBHOOK_TOKEN: "user-token",
+      AGENT_PROCESS_RUN_ID: "user-run",
     });
 
     const result = await manager.dispatchMessage({
@@ -710,6 +734,7 @@ describe("SpriteAgentProcessManager", () => {
           SESSION_ID: "session-1",
           DO_WEBHOOK_URL: "https://worker.test/internal/session/session-1",
           DO_WEBHOOK_TOKEN: "webhook-token",
+          AGENT_PROCESS_RUN_ID: expect.any(String),
         }),
       }),
     );

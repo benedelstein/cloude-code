@@ -16,6 +16,7 @@ function createServerState(overrides: Partial<ServerState> = {}): ServerState {
     repoCloned: true,
     agentSessionId: null,
     agentProcessId: null,
+    agentProcessRunId: null,
     activeUserMessageId: null,
     startupToolchain: null,
     startupScriptCompleted: true,

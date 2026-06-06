@@ -317,6 +317,45 @@ describe("WebhookAgentRunner", () => {
     await runner.shutdown();
   });
 
+  it("posts process_exit before shutdown completes", async () => {
+    const eventPosts: unknown[] = [];
+    const onShutdown = vi.fn();
+
+    globalThis.fetch = vi.fn(async (url, init) => {
+      if (String(url).endsWith("/events")) {
+        eventPosts.push(JSON.parse(String(init?.body)));
+      }
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      processRunId: "process-run-1",
+      onShutdown,
+    });
+
+    await runner.shutdown();
+
+    expect(eventPosts).toEqual([
+      {
+        event: {
+          type: "process_exit",
+          processRunId: "process-run-1",
+          exitCode: 0,
+        },
+      },
+    ]);
+    expect(onShutdown).toHaveBeenCalledWith(0);
+  });
+
   it("posts setup failure error and waits for it before shutdown exit", async () => {
     const eventPostStarted = createDeferred();
     const releaseEventPost = createDeferred();
