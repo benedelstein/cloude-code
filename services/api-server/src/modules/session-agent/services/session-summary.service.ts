@@ -9,6 +9,12 @@ interface SessionSummaryRepository {
     sessionId: string,
     workingState: SessionWorkingState,
   ): Promise<void>;
+  recordAssistantTurnFinished(
+    sessionId: string,
+    messageId: string,
+    messageCreatedAt: string,
+  ): Promise<void>;
+  markRead(sessionId: string, messageId: string): Promise<void>;
   updatePushedBranch(sessionId: string, pushedBranch: string): Promise<void>;
   setPullRequest(
     sessionId: string,
@@ -43,6 +49,30 @@ export class SessionSummaryService {
       (sessionId) =>
         this.params.repository.updateWorkingState(sessionId, workingState),
       { workingState },
+    );
+  }
+
+  persistAssistantTurnFinished(params: {
+    messageId: string;
+    messageCreatedAt: string;
+  }): void {
+    void this.enqueueMutation(
+      "assistant_turn_finished",
+      (sessionId) =>
+        this.params.repository.recordAssistantTurnFinished(
+          sessionId,
+          params.messageId,
+          params.messageCreatedAt,
+        ),
+      params,
+    );
+  }
+
+  async markRead(messageId: string): Promise<void> {
+    await this.enqueueMutation(
+      "mark_read",
+      (sessionId) => this.params.repository.markRead(sessionId, messageId),
+      { messageId },
     );
   }
 

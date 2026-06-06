@@ -18,6 +18,11 @@ import type { ServerState } from "../repositories/server-state.repository";
 import { SpritesError } from "@/shared/integrations/sprites/types";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
 
+export interface FinishedAssistantTurn {
+  message: UIMessage;
+  messageCreatedAt: string;
+}
+
 /**
  * Dependencies injected from the SessionAgentDO into the coordinator.
  * Keeps coupling explicit and avoids a circular type reference to the DO class.
@@ -38,7 +43,7 @@ export interface AgentTurnCoordinatorDeps {
   synthesizeStatus: () => SessionStatus;
   terminateActiveProcess: () => Promise<void>;
   updateWorkingState: (state: SessionWorkingState) => void;
-  onTurnFinished?: () => void;
+  onTurnFinished?: (turn: FinishedAssistantTurn) => void;
 }
 
 /**
@@ -64,7 +69,7 @@ export class AgentTurnCoordinator {
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly terminateActiveProcess: () => Promise<void>;
   private readonly updateWorkingState: (state: SessionWorkingState) => void;
-  private readonly onTurnFinished: (() => void) | null;
+  private readonly onTurnFinished: ((turn: FinishedAssistantTurn) => void) | null;
   /**
    * The highest chunk sequence applied within the active turn. `null` means
    * no chunks have been applied yet (fresh turn or post-clear). Lazily set
@@ -255,10 +260,13 @@ export class AgentTurnCoordinator {
         // Flush the batched chunks (including this terminal one) before the
         // agent.finish so the wire order stays chunks → finish.
         this.flushBufferedChunks(buffered);
-        this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
-        if (!isAbortedMessage(result.finishMessage)) {
-          this.onTurnFinished?.();
+        if (result.shouldRunTurnFinishedSideEffects) {
+          this.onTurnFinished?.({
+            message: result.finishMessage,
+            messageCreatedAt: result.messageCreatedAt,
+          });
         }
+        this.broadcastMessage({ type: "agent.finish", message: result.finishMessage });
         return;
       }
       this.lastSeenChunkSequence = sequence;
@@ -405,7 +413,12 @@ export class AgentTurnCoordinator {
    */
   private handleStreamChunk(
     chunk: UIMessageChunk,
-  ): { ended: false } | { ended: true; finishMessage: UIMessage } {
+  ): { ended: false } | {
+    ended: true;
+    finishMessage: UIMessage;
+    messageCreatedAt: string;
+    shouldRunTurnFinishedSideEffects: boolean;
+  } {
     const serverState = this.getServerState();
 
     const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
@@ -436,12 +449,21 @@ export class AgentTurnCoordinator {
         finishReason: getChunkFinishReason(chunk) ?? "unknown",
       },
     });
-    this.clearActiveTurnState({ preserveAgentProcessId: true });
+    const shouldRunTurnFinishedSideEffects = !isAbortedMessage(stored.message);
+    this.clearActiveTurnState({
+      preserveAgentProcessId: true,
+      persistWorkingState: !shouldRunTurnFinishedSideEffects,
+    });
     this.updatePartialState({
       lastError: null,
       status: this.synthesizeStatus(),
     });
-    return { ended: true, finishMessage: stored.message };
+    return {
+      ended: true,
+      finishMessage: stored.message,
+      messageCreatedAt: stored.createdAt,
+      shouldRunTurnFinishedSideEffects,
+    };
   }
 
   /** Emits buffered chunks as a single agent.chunks */
@@ -551,7 +573,10 @@ export class AgentTurnCoordinator {
   }
 
   private clearActiveTurnState(
-    options: { preserveAgentProcessId?: boolean } = {},
+    options: {
+      preserveAgentProcessId?: boolean;
+      persistWorkingState?: boolean;
+    } = {},
   ): void {
     const serverState = this.getServerState();
     this.updateServerState({
@@ -564,7 +589,9 @@ export class AgentTurnCoordinator {
         : null,
     });
     this.updatePartialState({ activeTurn: null });
-    this.updateWorkingState("idle");
+    if (options.persistWorkingState !== false) {
+      this.updateWorkingState("idle");
+    }
     this.lastSeenChunkSequence = null;
   }
 

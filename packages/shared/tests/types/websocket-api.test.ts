@@ -19,6 +19,22 @@ describe("websocket api schemas", () => {
     expect(server.type).toBe("connected");
   });
 
+  it("parses session mark-read client messages", () => {
+    const client = ClientMessage.parse({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+
+    expect(client).toEqual({
+      type: "session.mark_read",
+      messageId: "assistant-message-1",
+    });
+    expect(() => ClientMessage.parse({
+      type: "session.mark_read",
+      messageId: "",
+    })).toThrow();
+  });
+
   it("rejects invalid messages", () => {
     expect(() => ClientMessage.parse({ type: "unknown" })).toThrow();
     expect(() => ServerMessage.parse({ type: "connected", sessionId: "not-a-uuid", status: "ready" })).toThrow();

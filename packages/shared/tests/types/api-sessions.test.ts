@@ -79,6 +79,8 @@ describe("session api schemas", () => {
       createdAt: "2026-05-22T00:00:00.000Z",
       updatedAt: "2026-05-22T00:00:00.000Z",
       lastMessageAt: "2026-05-22T00:00:00.000Z",
+      lastAssistantMessageId: "assistant-message-1",
+      hasUnread: true,
     })).not.toThrow();
   });
 
@@ -127,6 +129,8 @@ describe("session api schemas", () => {
       createdAt: "2026-05-22T00:00:00.000Z",
       updatedAt: "2026-05-22T00:00:00.000Z",
       lastMessageAt: null,
+      lastAssistantMessageId: null,
+      hasUnread: false,
     })).toThrow();
   });
 
@@ -150,6 +154,8 @@ describe("session api schemas", () => {
       createdAt: "2026-05-22T00:00:00.000Z",
       updatedAt: "2026-05-22T00:00:00.000Z",
       lastMessageAt: null,
+      lastAssistantMessageId: null,
+      hasUnread: false,
     });
 
     expect(() => UserSessionsServerMessage.parse({

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger } from "@repo/shared";
 import type { UIMessage, UIMessageChunk } from "ai";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
-import { AgentTurnCoordinator } from "../../src/modules/session-agent/services/agent-turn-coordinator.service";
+import {
+  AgentTurnCoordinator,
+  type FinishedAssistantTurn,
+} from "../../src/modules/session-agent/services/agent-turn-coordinator.service";
 
 function createLogger(): Logger {
   return {
@@ -18,7 +21,7 @@ function createLogger(): Logger {
 }
 
 function createHarness(params: {
-  onTurnFinished?: () => void;
+  onTurnFinished?: (turn: FinishedAssistantTurn) => void;
 } = {}) {
   const serverState = {
     sessionId: "session-1",
@@ -77,7 +80,13 @@ function createHarness(params: {
 describe("AgentTurnCoordinator", () => {
   it("runs the turn-finished hook after broadcasting a terminal assistant message", async () => {
     const onTurnFinished = vi.fn();
-    const { broadcastMessage, coordinator, messageRepository, serverState } = createHarness({
+    const {
+      broadcastMessage,
+      coordinator,
+      messageRepository,
+      serverState,
+      updateWorkingState,
+    } = createHarness({
       onTurnFinished,
     });
 
@@ -92,12 +101,17 @@ describe("AgentTurnCoordinator", () => {
       message: expect.objectContaining({ id: "assistant-message-1" }),
     });
     expect(onTurnFinished).toHaveBeenCalledOnce();
+    expect(onTurnFinished).toHaveBeenCalledWith({
+      message: expect.objectContaining({ id: "assistant-message-1" }),
+      messageCreatedAt: "2026-06-03T00:00:00.000Z",
+    });
+    expect(updateWorkingState).not.toHaveBeenCalledWith("idle");
     expect(serverState.activeUserMessageId).toBeNull();
   });
 
   it("does not run the turn-finished hook for aborted assistant messages", async () => {
     const onTurnFinished = vi.fn();
-    const { coordinator } = createHarness({ onTurnFinished });
+    const { coordinator, updateWorkingState } = createHarness({ onTurnFinished });
 
     await coordinator.handleChunks("user-message-1", [
       { sequence: 0, chunk: { type: "start", messageId: "assistant-message-1" } as UIMessageChunk },
@@ -105,6 +119,7 @@ describe("AgentTurnCoordinator", () => {
     ]);
 
     expect(onTurnFinished).not.toHaveBeenCalled();
+    expect(updateWorkingState).toHaveBeenCalledWith("idle");
   });
 
   it("clears the tracked agent process when the matching process exits", () => {

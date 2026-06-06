@@ -14,6 +14,12 @@ export interface SessionSummaryWriter {
     sessionId: string,
     workingState: SessionWorkingState,
   ): Promise<void>;
+  recordAssistantTurnFinished(
+    sessionId: string,
+    messageId: string,
+    messageCreatedAt: string,
+  ): Promise<void>;
+  markRead(sessionId: string, messageId: string): Promise<void>;
   updatePushedBranch(sessionId: string, pushedBranch: string): Promise<void>;
   setPullRequest(
     sessionId: string,

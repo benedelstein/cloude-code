@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -58,6 +58,30 @@ function withLiveStartedAt(message: UIMessage, startedAt: number): UIMessage {
   };
 }
 
+function getLatestAssistantMessageId(messages: UIMessage[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "assistant" && message.id) {
+      return message.id;
+    }
+  }
+  return null;
+}
+
+function isVisibleDocument(): boolean {
+  if (typeof document === "undefined") {
+    return true;
+  }
+  return document.visibilityState === "visible";
+}
+
+function isAbortedMessage(message: UIMessage): boolean {
+  const metadata = message.metadata;
+  return typeof metadata === "object" &&
+    metadata !== null &&
+    (metadata as { aborted?: unknown }).aborted === true;
+}
+
 export interface UseCloudflareAgentOptions {
   sessionId: string;
   webSocketToken: SessionWebSocketTokenResponse;
@@ -66,6 +90,7 @@ export interface UseCloudflareAgentOptions {
   refreshWebSocketToken?: () => void;
   initialPendingUserMessage?: UIMessage | null;
   onError?: (error: Error) => void;
+  onMarkRead?: (sessionId: string, messageId: string) => void;
 }
 
 export interface UseCloudflareAgentReturn {
@@ -114,6 +139,7 @@ export function useCloudflareAgent({
   refreshWebSocketToken,
   initialPendingUserMessage = null,
   onError,
+  onMarkRead,
 }: UseCloudflareAgentOptions): UseCloudflareAgentReturn {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [pendingUserMessage, setPendingUserMessage] = useState<UIMessage | null>(
@@ -147,6 +173,9 @@ export function useCloudflareAgent({
   const streamingStartedAtRef = useRef<number | null>(null);
   const serverAgentModeRef = useRef<AgentMode>("edit");
   const hasSeenServerActiveTurnRef = useRef(false);
+  const latestAssistantMessageIdRef = useRef<string | null>(null);
+  const lastMarkReadSentRef = useRef<string | null>(null);
+  const sendToAgentRef = useRef<(message: ClientMessage) => void>(() => {});
   const resolvedAgentMode = agentMode ?? "edit";
 
   const setAgentMode = useCallback((mode: AgentMode) => {
@@ -182,6 +211,22 @@ export function useCloudflareAgent({
       streamControllerRef.current = null;
     }
   }, []);
+
+  const sendToAgent = useCallback((message: ClientMessage) => {
+    sendToAgentRef.current(message);
+  }, []);
+
+  const markRead = useCallback((messageId: string) => {
+    if (!isVisibleDocument()) {
+      return;
+    }
+    if (lastMarkReadSentRef.current === messageId) {
+      return;
+    }
+    lastMarkReadSentRef.current = messageId;
+    sendToAgent({ type: "session.mark_read", messageId });
+    onMarkRead?.(sessionId, messageId);
+  }, [onMarkRead, sendToAgent, sessionId]);
 
   // Consume the stream with readUIMessageStream
   const consumeStream = useCallback(async (stream: ReadableStream<UIMessageChunk>) => {
@@ -222,6 +267,11 @@ export function useCloudflareAgent({
         setMessages(synced);
         const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
         applyServerActiveTurn(msg.activeTurn);
+        const latestAssistantMessageId = getLatestAssistantMessageId(synced);
+        latestAssistantMessageIdRef.current = latestAssistantMessageId;
+        if (latestAssistantMessageId) {
+          markRead(latestAssistantMessageId);
+        }
         console.log("[agent] sync.response", { messageCount: synced.length, pendingChunkCount: pendingChunks?.length ?? 0, hadStream: !!streamControllerRef.current });
         if (synced.length > 0) {
           setPendingUserMessage(null);
@@ -271,18 +321,24 @@ export function useCloudflareAgent({
         break;
       }
 
-      case "agent.finish":
+      case "agent.finish": {
+        const finishedMessage = msg.message as UIMessage;
         if (streamControllerRef.current) {
           streamControllerRef.current.close();
           streamControllerRef.current = null;
         }
         // TODO: instead of re-sending the full message here, just use the last message from the accumulated stream in consumeStream();
-        setMessages((prev) => [...prev, msg.message as UIMessage]);
+        setMessages((prev) => [...prev, finishedMessage]);
+        if (finishedMessage.role === "assistant" && !isAbortedMessage(finishedMessage)) {
+          latestAssistantMessageIdRef.current = finishedMessage.id;
+          markRead(finishedMessage.id);
+        }
         setStreamingMessage(null);
         streamingStartedAtRef.current = null;
         setWaitingForResponse(false);
         applyServerActiveTurn(null);
         break;
+      }
 
       case "agent.ready":
         break;
@@ -301,7 +357,7 @@ export function useCloudflareAgent({
         onError?.(new Error(msg.message));
         break;
     }
-  }, [applyServerActiveTurn, onError, resetPendingResponse]);
+  }, [applyServerActiveTurn, markRead, onError, resetPendingResponse]);
 
   // useAgent/PartySocket owns the session WebSocket and reconnect loop.
   const agent = useAgent<ClientState>({
@@ -374,9 +430,26 @@ export function useCloudflareAgent({
     },
   });
 
-  const sendToAgent = useCallback((message: ClientMessage) => {
+  sendToAgentRef.current = (message: ClientMessage) => {
     agent.send(JSON.stringify(message));
-  }, [agent]);
+  };
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!isVisibleDocument()) {
+        return;
+      }
+      const latestAssistantMessageId = latestAssistantMessageIdRef.current;
+      if (latestAssistantMessageId) {
+        markRead(latestAssistantMessageId);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [markRead]);
 
   const sendMessage = useCallback((message: {
     content?: string;

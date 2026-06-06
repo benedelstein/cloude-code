@@ -449,6 +449,8 @@ export function SessionCreationForm() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastMessageAt: new Date().toISOString(),
+        lastAssistantMessageId: null,
+        hasUnread: false,
       });
 
       storeInitialSessionWebSocketToken(session.sessionId, {

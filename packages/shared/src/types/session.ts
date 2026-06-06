@@ -239,5 +239,7 @@ export const SessionSummary = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastMessageAt: z.string().nullable(),
+  lastAssistantMessageId: z.string().nullable(),
+  hasUnread: z.boolean(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;

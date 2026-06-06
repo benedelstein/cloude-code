@@ -25,6 +25,8 @@ describe("SessionSummaryService", () => {
         await writeDeferred.promise;
         operations.push("write:done");
       }),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(),
       updatePushedBranch: vi.fn(),
       setPullRequest: vi.fn(),
       updatePullRequestState: vi.fn(),
@@ -64,6 +66,8 @@ describe("SessionSummaryService", () => {
       updateWorkingState: vi.fn(async () => {
         operations.push("working:write");
       }),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(),
       updatePushedBranch: vi.fn(async () => {
         operations.push("branch:write");
       }),
@@ -99,6 +103,8 @@ describe("SessionSummaryService", () => {
     const queued: Promise<void>[] = [];
     const repository = {
       updateWorkingState: vi.fn(),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(),
       updatePushedBranch: vi.fn(),
       setPullRequest: vi.fn(),
       updatePullRequestState: vi.fn(async () => {
@@ -129,5 +135,80 @@ describe("SessionSummaryService", () => {
       USER_ID,
       SESSION_ID,
     );
+  });
+
+  it("publishes one invalidation after assistant-finished summary persistence", async () => {
+    const operations: string[] = [];
+    const queued: Promise<void>[] = [];
+    const repository = {
+      updateWorkingState: vi.fn(),
+      recordAssistantTurnFinished: vi.fn(async () => {
+        operations.push("assistant-finished:write");
+      }),
+      markRead: vi.fn(),
+      updatePushedBranch: vi.fn(),
+      setPullRequest: vi.fn(),
+      updatePullRequestState: vi.fn(),
+    };
+    const publishSessionSummaryInvalidated = vi.fn(async () => {
+      operations.push("publish");
+    });
+    const service = new SessionSummaryService({
+      repository,
+      getSessionId: () => SESSION_ID,
+      getUserId: () => USER_ID,
+      publishSessionSummaryInvalidated,
+      queueBackgroundWork: (promise) => queued.push(promise),
+      logger: noopLogger,
+    });
+
+    service.persistAssistantTurnFinished({
+      messageId: "assistant-message-1",
+      messageCreatedAt: "2026-06-03T00:00:00.000Z",
+    });
+    await Promise.all(queued);
+
+    expect(repository.recordAssistantTurnFinished).toHaveBeenCalledWith(
+      SESSION_ID,
+      "assistant-message-1",
+      "2026-06-03T00:00:00.000Z",
+    );
+    expect(operations).toEqual(["assistant-finished:write", "publish"]);
+    expect(publishSessionSummaryInvalidated).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks read before publishing summary invalidation", async () => {
+    const operations: string[] = [];
+    const queued: Promise<void>[] = [];
+    const repository = {
+      updateWorkingState: vi.fn(),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(async () => {
+        operations.push("mark-read:write");
+      }),
+      updatePushedBranch: vi.fn(),
+      setPullRequest: vi.fn(),
+      updatePullRequestState: vi.fn(),
+    };
+    const publishSessionSummaryInvalidated = vi.fn(async () => {
+      operations.push("publish");
+    });
+    const service = new SessionSummaryService({
+      repository,
+      getSessionId: () => SESSION_ID,
+      getUserId: () => USER_ID,
+      publishSessionSummaryInvalidated,
+      queueBackgroundWork: (promise) => queued.push(promise),
+      logger: noopLogger,
+    });
+
+    await service.markRead("assistant-message-1");
+    await Promise.all(queued);
+
+    expect(repository.markRead).toHaveBeenCalledWith(
+      SESSION_ID,
+      "assistant-message-1",
+    );
+    expect(operations).toEqual(["mark-read:write", "publish"]);
   });
 });

@@ -52,6 +52,8 @@ function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     createdAt: overrides.createdAt ?? "2026-05-22T00:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-05-22T00:00:00.000Z",
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T00:00:00.000Z",
+    lastAssistantMessageId: overrides.lastAssistantMessageId ?? null,
+    hasUnread: overrides.hasUnread ?? false,
   };
 }
 
@@ -394,6 +396,68 @@ describe("SessionListProvider", () => {
         pushedBranch: null,
         pullRequest: null,
       });
+    });
+  });
+
+  describe("markSessionRead", () => {
+    it("optimistically clears unread only for the matching assistant cursor", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              repoId: 1,
+              sessions: [
+                makeSession({
+                  id: "target",
+                  lastAssistantMessageId: "assistant-message-2",
+                  hasUnread: true,
+                }),
+                makeSession({
+                  id: "other",
+                  lastAssistantMessageId: "assistant-message-2",
+                  hasUnread: true,
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        result.current.markSessionRead("target", "assistant-message-2");
+      });
+
+      const sessions = result.current.groups[0]?.sessions ?? [];
+      expect(sessions.find((s) => s.id === "target")?.hasUnread).toBe(false);
+      expect(sessions.find((s) => s.id === "other")?.hasUnread).toBe(true);
+    });
+
+    it("does not clear unread when the local assistant cursor has advanced", async () => {
+      listSessions.mockResolvedValueOnce(
+        makeResponse({
+          groups: [
+            makeGroup({
+              sessions: [
+                makeSession({
+                  id: "target",
+                  lastAssistantMessageId: "assistant-message-2",
+                  hasUnread: true,
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const { result } = await renderProvider();
+
+      act(() => {
+        result.current.markSessionRead("target", "assistant-message-1");
+      });
+
+      expect(result.current.groups[0]?.sessions[0]?.hasUnread).toBe(true);
     });
   });
 

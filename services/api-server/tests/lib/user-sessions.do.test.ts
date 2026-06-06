@@ -59,6 +59,10 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-05-24 10:00:00",
     updated_at: "2026-05-24 10:01:00",
     last_message_at: "2026-05-24 10:02:00",
+    last_assistant_message_id: null,
+    last_assistant_message_at: null,
+    last_read_message_id: null,
+    last_read_at: null,
     ...overrides,
   };
 }

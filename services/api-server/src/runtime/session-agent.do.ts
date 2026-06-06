@@ -231,7 +231,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       terminateActiveProcess: () => this.processManager.terminateActiveProcess(),
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
-      onTurnFinished: () => this.autoPullRequestService.queueCreateAfterTurnFinish(),
+      onTurnFinished: (turn) => {
+        this.sessionSummaryService.persistAssistantTurnFinished({
+          messageId: turn.message.id,
+          messageCreatedAt: turn.messageCreatedAt,
+        });
+        this.autoPullRequestService.queueCreateAfterTurnFinish();
+      },
     });
     this.syncService = new SessionSyncService({
       messageRepository: this.messageRepository,
@@ -737,6 +743,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       case "sync.request":
         await this.handleSyncRequest(connection);
         break;
+      case "session.mark_read":
+        await this.handleMarkRead(connection, message.messageId);
+        break;
       case "operation.cancel":
         await this.cancelActiveTurnAndClearState();
         break;
@@ -822,6 +831,19 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     }
 
     this.sendMessage(this.syncService.buildSyncResponse(), connection);
+  }
+
+  private async handleMarkRead(
+    connection: Connection,
+    messageId: string,
+  ): Promise<void> {
+    const accessGuard = await this.repoAccessLifecycleService.guardSessionRepoAccess();
+    if (!accessGuard.ok) {
+      this.sendMessage(accessGuard.message, connection);
+      return;
+    }
+
+    await this.sessionSummaryService.markRead(messageId);
   }
 
   private async cancelActiveTurnAndClearState(): Promise<void> {
