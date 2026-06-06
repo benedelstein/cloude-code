@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_AGENT_SETTINGS, failure, success, type ClientState, type Logger } from "@repo/shared";
 import { SessionPullRequestLifecycleService } from "../../src/runtime/session-pull-request-lifecycle.service";
-import type { SessionPullRequestGitHubProvider } from "../../src/modules/sessions/services/session-pull-request.service";
+import {
+  createPullRequestForSessionContext,
+  type SessionPullRequestGitHubProvider,
+} from "../../src/modules/sessions/services/session-pull-request.service";
 import type {
   GitHubAppResult,
   GitHubCompareData,
@@ -80,6 +83,7 @@ function createHarness(overrides: {
     logger: createLogger(),
     github,
     anthropicApiKey: "test-key",
+    createPullRequest: createPullRequestForSessionContext,
     messageRepository,
     sessionSummaryService,
     getServerState: () => serverState,

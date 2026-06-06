@@ -60,6 +60,7 @@ import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provide
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
+import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
 import { assertSessionRepoAccess } from "@/modules/sessions/services/session-repo-access.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
@@ -150,6 +151,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       logger: this.logger,
       github: this.githubAppService,
       anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      createPullRequest: createPullRequestForSessionContext,
       messageRepository: this.messageRepository,
       sessionSummaryService: this.sessionSummaryService,
       getServerState: () => this.serverState,
@@ -164,7 +166,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         sessionId: this.serverState.sessionId,
         repoFullName: this.state.repoFullName,
         pushedBranch: this.state.pushedBranch,
-        hasPullRequest: this.state.pullRequest !== null,
+        pullRequestStatus: this.state.pullRequest?.status ?? null,
       }),
       keepAliveWhile: (callback) => this.keepAliveWhile(callback),
       assertSessionRepoAccess: () => this.assertSessionRepoAccess(),

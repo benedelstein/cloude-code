@@ -11,9 +11,11 @@ import type { UIMessage } from "ai";
 import type { MessageRepository } from "@/modules/session-agent/repositories/message.repository";
 import type { ServerState } from "@/modules/session-agent/repositories/server-state.repository";
 import type { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
-import {
-  createPullRequestForSessionContext,
-  type SessionPullRequestGitHubProvider,
+import type {
+  CreatedPullRequestResult,
+  CreatePullRequestForSessionContextParams,
+  PullRequestCreationError,
+  SessionPullRequestGitHubProvider,
 } from "@/modules/sessions/services/session-pull-request.service";
 import type {
   HandleCreatePullRequestResult,
@@ -44,10 +46,15 @@ type PullRequestCreationContextResult = Result<
   PullRequestCreationContextError
 >;
 
+export type SessionPullRequestCreator = (
+  params: CreatePullRequestForSessionContextParams,
+) => Promise<Result<CreatedPullRequestResult, PullRequestCreationError>>;
+
 export interface SessionPullRequestLifecycleServiceDeps {
   logger: Logger;
   github: SessionPullRequestGitHubProvider;
   anthropicApiKey: string;
+  createPullRequest: SessionPullRequestCreator;
   messageRepository: MessageRepository;
   sessionSummaryService: SessionSummaryService;
   getServerState: () => ServerState;
@@ -59,6 +66,7 @@ export class SessionPullRequestLifecycleService {
   private readonly logger: Logger;
   private readonly github: SessionPullRequestGitHubProvider;
   private readonly anthropicApiKey: string;
+  private readonly createPullRequest: SessionPullRequestCreator;
   private readonly messageRepository: MessageRepository;
   private readonly sessionSummaryService: SessionSummaryService;
   private readonly getServerState: () => ServerState;
@@ -70,6 +78,7 @@ export class SessionPullRequestLifecycleService {
     this.logger = deps.logger.scope("session-pull-request-lifecycle");
     this.github = deps.github;
     this.anthropicApiKey = deps.anthropicApiKey;
+    this.createPullRequest = deps.createPullRequest;
     this.messageRepository = deps.messageRepository;
     this.sessionSummaryService = deps.sessionSummaryService;
     this.getServerState = deps.getServerState;
@@ -84,7 +93,7 @@ export class SessionPullRequestLifecycleService {
     }
 
     this.setPullRequestClientState({ status: "creating" });
-    const creationResult = await createPullRequestForSessionContext({
+    const creationResult = await this.createPullRequest({
       github: this.github,
       anthropicApiKey: this.anthropicApiKey,
       ...contextResult.value,

@@ -24,7 +24,7 @@ function createHarness(overrides: Partial<SessionAutoPullRequestServiceDeps> = {
     sessionId: "session-1",
     repoFullName: "ben/repo",
     pushedBranch: "cloude/change-abcd",
-    hasPullRequest: false,
+    pullRequestStatus: null,
   };
   const createPullRequest = vi.fn<SessionAutoPullRequestServiceDeps["createPullRequest"]>()
     .mockResolvedValue(success({
@@ -69,6 +69,29 @@ describe("SessionAutoPullRequestService", () => {
     service.queueCreateAfterTurnFinish();
 
     expect(keepAliveWhile).not.toHaveBeenCalled();
+  });
+
+  it("retries after a failed pull request creation state", async () => {
+    const { createPullRequest, keepAliveWhile, service, state } = createHarness();
+    state.pullRequestStatus = "failed";
+
+    service.queueCreateAfterTurnFinish();
+    await keepAliveWhile.mock.results[0]!.value;
+
+    expect(createPullRequest).toHaveBeenCalledOnce();
+  });
+
+  it("does not schedule when pull request creation is already creating or created", () => {
+    const creatingHarness = createHarness();
+    creatingHarness.state.pullRequestStatus = "creating";
+    creatingHarness.service.queueCreateAfterTurnFinish();
+
+    const createdHarness = createHarness();
+    createdHarness.state.pullRequestStatus = "created";
+    createdHarness.service.queueCreateAfterTurnFinish();
+
+    expect(creatingHarness.keepAliveWhile).not.toHaveBeenCalled();
+    expect(createdHarness.keepAliveWhile).not.toHaveBeenCalled();
   });
 
   it("enforces access blocking before creating a pull request", async () => {

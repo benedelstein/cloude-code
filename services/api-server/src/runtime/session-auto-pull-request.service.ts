@@ -1,12 +1,14 @@
-import type { Logger } from "@repo/shared";
+import type { ClientState, Logger } from "@repo/shared";
 import type { HandleCreatePullRequestResult } from "@/shared/types/session-agent";
 import type { SessionRepoAccessResult } from "@/shared/types/repo-access";
+
+type AutoPullRequestStatus = NonNullable<ClientState["pullRequest"]>["status"] | null;
 
 interface AutoPullRequestState {
   sessionId: string | null;
   repoFullName: string | null;
   pushedBranch: string | null;
-  hasPullRequest: boolean;
+  pullRequestStatus: AutoPullRequestStatus;
 }
 
 export interface SessionAutoPullRequestServiceDeps {
@@ -43,7 +45,7 @@ export class SessionAutoPullRequestService {
       !state.sessionId ||
       !state.repoFullName ||
       !state.pushedBranch ||
-      state.hasPullRequest
+      isAutoPullRequestBlocked(state.pullRequestStatus)
     ) {
       return;
     }
@@ -72,7 +74,7 @@ export class SessionAutoPullRequestService {
       !state.sessionId ||
       !state.repoFullName ||
       !state.pushedBranch ||
-      state.hasPullRequest
+      isAutoPullRequestBlocked(state.pullRequestStatus)
     ) {
       return;
     }
@@ -133,4 +135,10 @@ export class SessionAutoPullRequestService {
         return;
     }
   }
+}
+
+function isAutoPullRequestBlocked(
+  pullRequestStatus: AutoPullRequestState["pullRequestStatus"],
+): boolean {
+  return pullRequestStatus === "creating" || pullRequestStatus === "created";
 }
