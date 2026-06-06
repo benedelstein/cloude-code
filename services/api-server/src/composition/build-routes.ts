@@ -229,6 +229,7 @@ export function buildSessionsRoutes() {
 
 export function buildDiscordRoutes() {
   return createDiscordRoutes({
+    authMiddleware,
     createDiscordSessionRequestService: (env) =>
       new DiscordSessionRequestService(env, {
         tokenProvider: createUserSessionService(env),
