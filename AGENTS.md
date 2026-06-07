@@ -61,6 +61,41 @@ cd packages/shared
 pnpm build         # tsc --noEmit
 ```
 
+## Cursor Cloud specific instructions
+
+### First-time local config (not in git)
+
+Copy env templates and fill secrets before starting dev servers:
+
+```bash
+cp services/api-server/.env.example services/api-server/.env.local
+cp apps/web/.env.example apps/web/.env.local
+```
+
+Generate `TOKEN_ENCRYPTION_KEY`, `WEBSOCKET_TOKEN_SIGNING_KEY`, and `SESSION_COOKIE_SECRET` with `openssl rand -base64 32`. For smoke tests without real GitHub/Sprites credentials, placeholder values are enough for `/health` and the landing page; full auth and agent sessions need real secrets (see `README.md`).
+
+Apply local D1 migrations once per fresh VM (not in the update script):
+
+```bash
+pnpm --filter @repo/api-server db:migrate
+```
+
+### Running services
+
+| Service | Command | Port |
+|---|---|---|
+| API server | `pnpm dev:api` | 8787 |
+| Web client | `pnpm dev:web` | 3000 |
+| Full stack + tunnel | `pnpm dev:local` | 3000, 8787, cloudflared |
+
+Run API and web in separate tmux sessions for long-lived dev. Quick health check: `curl http://localhost:8787/health` → `{"status":"ok"}`.
+
+### Tooling notes
+
+- **Node**: use Corepack-managed `pnpm@9.15.0` (`packageManager` in root `package.json`).
+- **Bun**: required for `@repo/vm-agent` builds (`pnpm build`); pre-installed on Cloud VMs.
+- **cloudflared**: only needed for `pnpm dev:local` / GitHub webhooks; optional for lint, test, build, and API health checks.
+
 ## Documentation / Further Information
 
 `ARCHITECTURE.md` contains the system overview, package map, key files, tech stack, and environment notes.
