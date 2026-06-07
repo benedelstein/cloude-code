@@ -445,6 +445,7 @@ export function createSessionsRoutes(
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
       githubAccessToken: user.githubAccessToken,
+      executionCtx: c.executionCtx,
     });
 
     if (!result.ok) {
