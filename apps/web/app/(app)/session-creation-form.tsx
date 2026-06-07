@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,9 @@ import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import { SendButton } from "@/components/chat/send-button";
+import { MicButton } from "@/components/chat/mic-button";
+import { VoiceRecordingBar } from "@/components/chat/voice-recording-bar";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import type { AgentMode } from "@repo/shared";
 import {
   BranchSelector,
@@ -402,8 +405,8 @@ export function SessionCreationForm() {
     setShowSigninPanel(true);
   };
 
-  const submitMessage = async () => {
-    const trimmedMessage = message.trim();
+  const submitMessage = useCallback(async (messageOverride?: string) => {
+    const trimmedMessage = (messageOverride ?? message).trim();
     if (
       !selectedProvider
       || !selectedModel
@@ -471,7 +474,48 @@ export function SessionCreationForm() {
       toast.error("Failed to create session. Please try again.", { description: err instanceof Error ? err.message : "Unknown error" });
       setSubmitting(false);
     }
-  };
+  }, [
+    addSession,
+    attachments.length,
+    clearAttachments,
+    hasPendingOrFailedUploads,
+    isProviderConnected,
+    message,
+    router,
+    selectedAgentMode,
+    selectedBranch,
+    selectedEffort,
+    selectedEnvironmentId,
+    selectedModel,
+    selectedProvider,
+    selectedRepo,
+    uploadedDescriptors,
+  ]);
+
+  const insertVoiceTranscript = useCallback((text: string) => {
+    setMessage((current) => current ? `${current}\n${text}` : text);
+  }, []);
+
+  const sendVoiceTranscript = useCallback((text: string) => {
+    const transcript = text.trim();
+    if (!transcript) {
+      return;
+    }
+
+    const combinedMessage = [message.trim(), transcript].filter(Boolean).join("\n");
+    if (hasPendingOrFailedUploads) {
+      toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
+      setMessage(combinedMessage);
+      return;
+    }
+
+    void submitMessage(combinedMessage);
+  }, [hasPendingOrFailedUploads, message, submitMessage]);
+
+  const voiceInput = useVoiceInput({
+    onInsertTranscript: insertVoiceTranscript,
+    onSendTranscript: sendVoiceTranscript,
+  });
 
   const handleSubmit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -485,6 +529,9 @@ export function SessionCreationForm() {
     }
     if (e.key === "Enter") {
       e.preventDefault();
+      if (voiceInput.isActive) {
+        return;
+      }
       handleSubmit(e);
     }
   };
@@ -591,40 +638,58 @@ export function SessionCreationForm() {
             className="w-full overflow-y-auto bg-transparent px-4 pb-2 pt-4 text-sm resize-none outline-none placeholder:text-foreground-secondary/50 disabled:opacity-50"
           />
 
-          <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-2">
-              <ImageAttachButton
-                onFiles={addFiles}
+          <div className="flex min-w-0 items-center justify-between gap-2 px-3 pb-3">
+            {voiceInput.isActive ? (
+              <VoiceRecordingBar
+                state={voiceInput.state}
+                onStop={() => void voiceInput.stopAndInsert()}
+                onSend={() => void voiceInput.stopAndSend()}
+                onRetry={() => void voiceInput.retryLast()}
+                onDiscard={() => void voiceInput.discardDraft()}
                 disabled={isFormInteractionDisabled}
               />
-              <AgentModeToggle
-                agentMode={selectedAgentMode}
-                onToggle={() => setSelectedAgentMode(selectedAgentMode === "plan" ? "edit" : "plan")}
-                disabled={isFormInteractionDisabled}
-              />
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <ImageAttachButton
+                    onFiles={addFiles}
+                    disabled={isFormInteractionDisabled}
+                  />
+                  <AgentModeToggle
+                    agentMode={selectedAgentMode}
+                    onToggle={() => setSelectedAgentMode(selectedAgentMode === "plan" ? "edit" : "plan")}
+                    disabled={isFormInteractionDisabled}
+                  />
+                </div>
 
-            <div className="flex items-center gap-2">
-              <ProviderModelEffortSelector
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                selectedEffort={selectedEffort}
-                providerAuthHandles={providerAuth.handles}
-                onModelSelect={handleProviderModelSelect}
-                onEffortSelect={handleProviderEffortSelect}
-                onConnect={handleProviderConnect}
-                disabled={isFormInteractionDisabled}
-              />
-              <SendButton
-                isStreaming={false}
-                isLoading={submitting || isUploadingAttachments}
-                isUploading={isUploadingAttachments}
-                disabled={isSendDisabled}
-                hasPendingOrFailedUploads={hasPendingOrFailedUploads}
-                hasContent={Boolean(message.trim()) || attachments.length > 0}
-                onTap={() => void submitMessage()}
-              />
-            </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <ProviderModelEffortSelector
+                    selectedProvider={selectedProvider}
+                    selectedModel={selectedModel}
+                    selectedEffort={selectedEffort}
+                    providerAuthHandles={providerAuth.handles}
+                    onModelSelect={handleProviderModelSelect}
+                    onEffortSelect={handleProviderEffortSelect}
+                    onConnect={handleProviderConnect}
+                    disabled={isFormInteractionDisabled}
+                  />
+                  <MicButton
+                    disabled={isFormInteractionDisabled}
+                    unsupported={!voiceInput.isSupported}
+                    onTap={() => void voiceInput.startRecording()}
+                  />
+                  <SendButton
+                    isStreaming={false}
+                    isLoading={submitting || isUploadingAttachments}
+                    isUploading={isUploadingAttachments}
+                    disabled={isSendDisabled}
+                    hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+                    hasContent={Boolean(message.trim()) || attachments.length > 0}
+                    onTap={() => void submitMessage()}
+                  />
+                </div>
+              </>
+            )}
           </div>
       </InputFrame>
 

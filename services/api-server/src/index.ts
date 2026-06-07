@@ -11,6 +11,7 @@ import {
   buildRepoScopedEnvironmentRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
+  buildVoiceRoutes,
   buildUserEnvironmentRoutes,
   buildWebhooksRoutes,
 } from "@/composition/build-routes";
@@ -40,6 +41,8 @@ app.use(
   cors({
     origin: (origin) => origin, // reflect request origin
     credentials: true,
+    allowHeaders: ["Authorization", "Content-Type"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
 
@@ -63,6 +66,7 @@ app.route("/models", buildModelsRoutes());
 app.route("/repos", buildReposRoutes());
 app.route("/repos", buildRepoScopedEnvironmentRoutes());
 app.route("/sessions", buildSessionsRoutes());
+app.route("/voice", buildVoiceRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
 app.route("/environments", buildUserEnvironmentRoutes());
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previews";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
@@ -16,6 +16,9 @@ import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
 import { SendButton } from "@/components/chat/send-button";
+import { MicButton } from "@/components/chat/mic-button";
+import { VoiceRecordingBar } from "@/components/chat/voice-recording-bar";
+import { useVoiceInput } from "@/hooks/use-voice-input";
 import { toast } from "sonner";
 
 interface ChatInputProps {
@@ -112,8 +115,64 @@ export function ChatInput({
     }
   }, [isStreaming]);
 
+  const insertVoiceTranscript = useCallback((text: string) => {
+    setInput((current) => current ? `${current}\n${text}` : text);
+  }, []);
+
+  const sendVoiceTranscript = useCallback((text: string) => {
+    const transcript = text.trim();
+    if (!transcript) {
+      return;
+    }
+
+    const combinedInput = [input.trim(), transcript].filter(Boolean).join("\n");
+    if (disabled || isAuthBlocking || isStreaming) {
+      setInput((current) => current ? `${current}\n${transcript}` : transcript);
+      return;
+    }
+    if (hasPendingOrFailedUploads) {
+      toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
+      setInput(combinedInput);
+      return;
+    }
+
+    onSend({
+      content: combinedInput || undefined,
+      attachments: uploadedDescriptors.map((attachment) => ({
+        attachmentId: attachment.attachmentId,
+      })),
+      optimisticAttachments: uploadedDescriptors,
+    });
+    setInput("");
+    clearAttachments();
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [
+    clearAttachments,
+    disabled,
+    hasPendingOrFailedUploads,
+    input,
+    isAuthBlocking,
+    isStreaming,
+    onSend,
+    uploadedDescriptors,
+  ]);
+
+  const voiceInput = useVoiceInput({
+    onInsertTranscript: insertVoiceTranscript,
+    onSendTranscript: sendVoiceTranscript,
+  });
+
   const submitMessage = () => {
-    if ((!input.trim() && attachments.length === 0) || disabled || isAuthBlocking || isStreaming)
+    if (
+      (!input.trim() && attachments.length === 0)
+      || disabled
+      || isAuthBlocking
+      || isStreaming
+      || voiceInput.isActive
+    )
       { return; }
     if (hasPendingOrFailedUploads) {
       toast.error("Please wait for all attachments to finish uploading (or remove failed uploads).");
@@ -231,44 +290,66 @@ export function ChatInput({
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 px-3 pb-2">
-        <div className="flex shrink-0 items-center gap-2">
-          <ImageAttachButton
-            onFiles={addFiles}
+        {voiceInput.isActive ? (
+          <VoiceRecordingBar
+            state={voiceInput.state}
+            onStop={() => void voiceInput.stopAndInsert()}
+            onSend={() => void voiceInput.stopAndSend()}
+            onRetry={() => void voiceInput.retryLast()}
+            onDiscard={() => void voiceInput.discardDraft()}
             disabled={disabled || isAuthBlocking}
           />
-          {agentMode && onAgentModeChange && (
-            <AgentModeToggle
-              agentMode={agentMode}
-              onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-              disabled={disabled || isAuthBlocking}
-            />
-          )}
-        </div>
-        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-          {selectedProvider && selectedModel && selectedEffort && onProviderModelChange && onProviderEffortChange && (
-            <ProviderModelEffortSelector
-              selectedProvider={selectedProvider}
-              selectedModel={selectedModel}
-              selectedEffort={selectedEffort}
-              providerAuthHandles={providerAuthHandles}
-              onModelSelect={onProviderModelChange}
-              onEffortSelect={onProviderEffortChange}
-              onConnect={() => setManuallyOpenedSigninPanel(true)}
-              allowedProviderIds={[selectedProvider]}
-              disabled={disabled || isAuthBlocking}
-              className="gap-0"
-            />
-          )}
-          <SendButton
-            isStreaming={isStreaming}
-            isCancelling={isCancelling}
-            disabled={disabled || isAuthBlocking}
-            isUploading={isUploading}
-            hasPendingOrFailedUploads={hasPendingOrFailedUploads}
-            hasContent={Boolean(input.trim()) || attachments.length > 0}
-            onTap={isStreaming ? handleStop : submitMessage}
-          />
-        </div>
+        ) : (
+          <>
+            <div className="flex shrink-0 items-center gap-2">
+              <ImageAttachButton
+                onFiles={addFiles}
+                disabled={disabled || isAuthBlocking}
+              />
+              {agentMode && onAgentModeChange && (
+                <AgentModeToggle
+                  agentMode={agentMode}
+                  onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
+                  disabled={disabled || isAuthBlocking}
+                />
+              )}
+            </div>
+            <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
+              {selectedProvider
+                && selectedModel
+                && selectedEffort
+                && onProviderModelChange
+                && onProviderEffortChange && (
+                <ProviderModelEffortSelector
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  selectedEffort={selectedEffort}
+                  providerAuthHandles={providerAuthHandles}
+                  onModelSelect={onProviderModelChange}
+                  onEffortSelect={onProviderEffortChange}
+                  onConnect={() => setManuallyOpenedSigninPanel(true)}
+                  allowedProviderIds={[selectedProvider]}
+                  disabled={disabled || isAuthBlocking}
+                  className="gap-0"
+                />
+              )}
+              <MicButton
+                disabled={disabled || isAuthBlocking || isStreaming}
+                unsupported={!voiceInput.isSupported}
+                onTap={() => void voiceInput.startRecording()}
+              />
+              <SendButton
+                isStreaming={isStreaming}
+                isCancelling={isCancelling}
+                disabled={disabled || isAuthBlocking}
+                isUploading={isUploading}
+                hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+                hasContent={Boolean(input.trim()) || attachments.length > 0}
+                onTap={isStreaming ? handleStop : submitMessage}
+              />
+            </div>
+          </>
+        )}
       </div>
     </form>
   );
