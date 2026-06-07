@@ -7,7 +7,7 @@ import { z } from "zod";
 import { createLogger } from "@/shared/logging";
 
 const TOKEN_TYPE = "voice-transcription";
-const TOKEN_TTL_MS = 90 * 1000;
+const TOKEN_TTL_MS = 45 * 1000;
 export const MAX_VOICE_AUDIO_BYTES = 10 * 1024 * 1024;
 const logger = createLogger("voice-transcription-token.service.ts");
 

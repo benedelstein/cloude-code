@@ -108,7 +108,7 @@ Token payload:
 
 ```ts
 const TOKEN_TYPE = "voice-transcription";
-const TOKEN_TTL_MS = 90 * 1000;
+const TOKEN_TTL_MS = 45 * 1000;
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
 const VoiceTranscriptionTokenPayloadSchema = z.object({
@@ -150,7 +150,7 @@ export async function mintVoiceTranscriptionToken(
 }
 ```
 
-The token is stateless in v1. Replay inside the 90-second TTL is acceptable because the token is minted only for an already-authenticated user, uses a low byte cap, carries no provider secret, and is useless after expiry. If abuse shows up, add a D1/KV consumed-token table keyed by `jti`; do not add that complexity up front.
+The token is stateless in v1. Replay inside the 45-second TTL is acceptable because the token is minted only for an already-authenticated user, uses a low byte cap, carries no provider secret, and is useless after expiry. If abuse shows up, add a D1/KV consumed-token table keyed by `jti`; do not add that complexity up front.
 
 ### Add a dedicated voice API module
 
@@ -512,7 +512,7 @@ Keep the hook UI-agnostic. It exposes recording state and finalize methods; each
 - [Risk] Browser `MediaRecorder` support and MIME behavior differs by browser. -> Mitigation: feature-detect `MediaRecorder`, choose the first supported MIME type, and hide/disable the mic button with a tooltip when unsupported.
 - [Risk] A recording slightly exceeds expected size even with bitrate hints. -> Mitigation: enforce actual `File.size` client-side and server-side, and show a recoverable error with the saved draft.
 - [Risk] The Worker still buffers multipart data during `formData()` parsing. -> Mitigation: keep the cap at 10 MB, reject by `Content-Length` when available, and use direct upload to remove the extra Next/Vercel buffering hop.
-- [Risk] Stateless voice tokens can be replayed briefly. -> Mitigation: use a 90-second TTL, small byte cap, app-origin CORS, Authorization header, and existing authenticated token minting. Add one-time `jti` consumption later only if abuse appears.
+- [Risk] Stateless voice tokens can be replayed briefly. -> Mitigation: use a 45-second TTL, small byte cap, app-origin CORS, Authorization header, and existing authenticated token minting. Add one-time `jti` consumption later only if abuse appears.
 - [Risk] STT mistakes send dangerous instructions to an agent. -> Mitigation: stop inserts transcript for review; only the explicit recording send action auto-submits.
 - [Risk] Users navigate away during upload. -> Mitigation: save local draft before upload and expose retry on return when feasible.
 - [Risk] Direct Worker uploads need CORS coverage. -> Mitigation: explicitly allow `Authorization` and `Content-Type` in API CORS config and add route tests for preflight if the test harness supports it.

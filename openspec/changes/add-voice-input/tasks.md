@@ -7,7 +7,7 @@
 
 ## 2. API Server Voice Module
 
-- [x] 2.1 Create a voice transcription token service with distinct token type `voice-transcription`, 90-second TTL, `userId`, `exp`, `jti`, and `maxBytes` payload fields.
+- [x] 2.1 Create a voice transcription token service with distinct token type `voice-transcription`, 45-second TTL, `userId`, `exp`, `jti`, and `maxBytes` payload fields.
 - [x] 2.2 Add token verification tests for valid, expired, wrong-signature, malformed, and wrong-type voice tokens.
 - [x] 2.3 Add `POST /voice/transcriptions/token` OpenAPI schema and route authenticated through existing app session auth.
 - [x] 2.4 Add `POST /voice/transcriptions` OpenAPI schema and route that verifies the voice bearer token before parsing multipart data.

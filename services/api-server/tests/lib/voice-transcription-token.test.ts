@@ -27,6 +27,15 @@ describe("voice transcription token", () => {
     expect(minted.expiresAt).toMatch(/Z$/u);
   });
 
+  it("expires in less than a minute", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    const minted = await mintVoiceTranscriptionToken(SECRET, { userId: USER_ID });
+
+    expect(Date.parse(minted.expiresAt) - Date.now()).toBe(45_000);
+  });
+
   it("fails with wrong secret", async () => {
     const minted = await mintVoiceTranscriptionToken(SECRET, { userId: USER_ID });
     await expect(verifyVoiceTranscriptionToken("wrong", minted.token)).resolves.toBeNull();
