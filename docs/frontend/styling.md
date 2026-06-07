@@ -33,5 +33,7 @@ The web client uses:
 
 ## Visual Validation
 
-- After visual changes, use a relevant browser tool to validate the affected UI.
+- After visual changes, validate the affected UI with the right Codex browser surface: Chrome plugin for
+  logged-in/profile-dependent flows; in-app Browser for simple local/non-auth rendering checks.
 - Capture a screenshot when the change affects layout, spacing, color, responsive behavior, or interaction state.
+- Do not default to Playwright MCP unless the task specifically requires Playwright automation.

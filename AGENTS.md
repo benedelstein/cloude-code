@@ -38,7 +38,9 @@ pnpm clean
 ### Validating your work
 
 NOTE: After making changes, always make sure to build, lint, and typecheck the repo.
-NOTE: You have access to local browser tools to validate your visual changes. Use them.
+NOTE: For Codex browser validation, use the Chrome plugin when a check depends on the user's Chrome profile,
+logged-in sessions, cookies, extensions, or existing tabs. Use the Codex in-app Browser for simple local/non-auth
+rendering checks. Do not default to Playwright MCP unless the task specifically requires Playwright automation.
 NOTE: If you are tasked with committing to git, prefer concise messages. 
 
 ### Package-specific commands

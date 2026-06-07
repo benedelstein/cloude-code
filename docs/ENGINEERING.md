@@ -11,6 +11,9 @@ This document is the source of truth for repo-wide coding style and engineering 
   - `pnpm typecheck`
   - `pnpm test`
 - For visual changes, use a local browser tool to validate the affected UI and capture a screenshot when useful.
+- In Codex, use the Chrome plugin when a check depends on the user's Chrome profile, logged-in sessions,
+  cookies, extensions, or existing tabs. Use the Codex in-app Browser for simple local/non-auth rendering checks.
+  Do not default to Playwright MCP unless the task specifically requires Playwright automation.
 - Use concise git commit messages.
 - Do not use emojis in git messages or code comments.
 
