@@ -36,6 +36,10 @@ async function waitFor(
   throw new Error("Timed out waiting for expected condition");
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe("WebhookAgentRunner", () => {
   const settings: AgentSettings = {
     provider: "openai-codex",
@@ -55,6 +59,53 @@ describe("WebhookAgentRunner", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+  });
+
+  it("flushes default chunk batches after 200ms", async () => {
+    const chunkConsumed = createDeferred();
+    const releaseStream = createDeferred();
+    const chunkPosts: unknown[] = [];
+
+    globalThis.fetch = vi.fn(async (url, init) => {
+      if (String(url).endsWith("/chunks")) {
+        chunkPosts.push(JSON.parse(String(init?.body)));
+      }
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    mockState.streamText.mockImplementation(() => ({
+      toUIMessageStream: async function* () {
+        yield { type: "text-delta", textDelta: "hello" };
+        chunkConsumed.resolve();
+        await releaseStream.promise;
+        yield { type: "finish", finishReason: "stop" };
+      },
+    }));
+
+    const runner = new WebhookAgentRunner({
+      config: {
+        setup: async () => ({
+          modelId: "gpt-5.3-codex" as const,
+          getModel: () => ({ provider: "mock-model" }),
+        }),
+      },
+      settings,
+      webhookUrl: "https://worker.test/webhook",
+      webhookToken: "token",
+      onShutdown: () => {},
+    });
+
+    runner.queueMessage("user-message-1", { content: "first" });
+    await chunkConsumed.promise;
+
+    await sleep(190);
+    expect(chunkPosts).toHaveLength(0);
+
+    await sleep(30);
+    await waitFor(() => chunkPosts.length === 1);
+
+    releaseStream.resolve();
+    await runner.shutdown();
   });
 
   it("does not let a queued next turn lose its user message id while the prior turn drains", async () => {

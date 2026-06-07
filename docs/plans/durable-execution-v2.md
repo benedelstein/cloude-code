@@ -126,7 +126,7 @@ Configuration (passed via env vars at process start):
 - `SESSION_ID` — session identifier
 - `IDLE_TIMEOUT_MS` — default 60s, overridable
 - `BATCH_MAX_CHUNKS` — default 50
-- `BATCH_MAX_AGE_MS` — default 100
+- `BATCH_MAX_AGE_MS` — default 200
 
 #### vm-agent: ChunkBatcher (new, internal to WebhookAgentRunner)
 
@@ -138,7 +138,7 @@ Bounded-age batcher:
 - On terminal chunk (finish/abort): flush synchronously before the runner reports completion.
 - Chunks carry monotonic sequence numbers.
 
-We explicitly do *not* use debounce (reset-on-new-chunk) because a steady stream with arrival spacing under 100ms could stall for up to `BATCH_MAX_CHUNKS * spacing`. Bounded-age caps per-chunk latency at 100ms regardless of rate.
+We explicitly do *not* use debounce (reset-on-new-chunk) because a steady stream with arrival spacing under 200ms could stall for up to `BATCH_MAX_CHUNKS * spacing`. Bounded-age caps per-chunk latency at 200ms regardless of rate.
 
 HTTP delivery:
 
@@ -410,7 +410,7 @@ export interface WebhookAgentRunnerOptions<S extends AgentSettings> {
   webhookToken: string;
   idleTimeoutMs?: number;   // default 60_000
   batchMaxChunks?: number;  // default 50
-  batchMaxAgeMs?: number;   // default 100
+  batchMaxAgeMs?: number;   // default 200
 }
 
 export class WebhookAgentRunner<S extends AgentSettings> {
@@ -425,7 +425,7 @@ export class WebhookAgentRunner<S extends AgentSettings> {
 
     this.batcher = new ChunkBatcher({
       maxChunks: opts.batchMaxChunks ?? 50,
-      maxAgeMs: opts.batchMaxAgeMs ?? 100,
+      maxAgeMs: opts.batchMaxAgeMs ?? 200,
       flush: (batch) => this.http.post("/chunks", {
         userMessageId: this.activeUserMessageId,
         chunks: batch,
@@ -638,7 +638,7 @@ The webhook approach replaces one class of complexity (workflow coordination, RP
 
 Notable tradeoffs:
 
-- **Latency**: HTTPS webhook from Fly.io edge to CF DO is higher than a VM→CF websocket tunnel. Bounded-age batching (100ms) makes this invisible for streaming UX.
+- **Latency**: HTTPS webhook from Fly.io edge to CF DO is higher than a VM→CF websocket tunnel. Bounded-age batching (200ms) makes this invisible for streaming UX.
 - **Bandwidth**: HTTP framing overhead per batch. Negligible at batch sizes of 5-50.
 - **No shared connection reuse**: each webhook opens a fresh HTTP connection. With HTTP keep-alive in the vm-agent HTTP client, this is fine.
 - **vm-agent complexity**: we now have batching, retries, and lifecycle logic on the VM side. Isolated in `WebhookAgentRunner`, not bleeding into `AgentHarness`.

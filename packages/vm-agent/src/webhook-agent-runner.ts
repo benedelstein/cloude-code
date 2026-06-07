@@ -49,7 +49,7 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
 /** Maximum number of chunks to buffer before flushing. */
 const DEFAULT_BATCH_MAX_CHUNKS = 50;
 /** Maximum age of a chunk batch before flushing. */
-const DEFAULT_BATCH_MAX_AGE_MS = 300;
+const DEFAULT_BATCH_MAX_AGE_MS = 200;
 /** Hard cap on shutdown draining duration so a wedged webhook retry can't block exit. */
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
