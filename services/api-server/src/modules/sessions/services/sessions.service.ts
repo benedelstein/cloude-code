@@ -54,6 +54,10 @@ const logger = createLogger("sessions.service.ts");
 
 const SESSION_CREATION_DAILY_LIMIT = 100;
 
+function isDestroyedSessionAgentError(error: unknown): boolean {
+  return error instanceof Error && error.message === "destroyed";
+}
+
 type SessionMessagesResponse = UIMessage[];
 
 type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
@@ -626,8 +630,8 @@ export class SessionsService {
   }
 
   /**
-   * Deletes a session after terminating its backing Durable Object and queues
-   * attachment cleanup.
+   * Deletes a session row and queues attachment cleanup after authorization,
+   * then tears down the backing Durable Object as best-effort cleanup.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
    * @param params.githubAccessToken - Current GitHub user access token.
@@ -637,20 +641,59 @@ export class SessionsService {
     sessionId: string;
     userId: string;
     githubAccessToken: string;
+    executionCtx?: ExecutionContext;
   }): Promise<SessionsServiceResult<DeleteSessionResponse>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
     if (!authorizedSessionAgent.ok) {
       return authorizedSessionAgent;
     }
 
-    const result = await authorizedSessionAgent.value.handleDeleteSession() as HandleDeleteSessionResult;
-    if (!result.ok) {
-      return failure(this.mapAgentError(result.error));
-    }
-
     await this.sessionsRepository.deleteAndQueueAttachmentGc(params.sessionId);
     await this.publishSessionSummaryRemoved(params.userId, params.sessionId);
+
+    const cleanupPromise = this.cleanupDeletedSessionAgent(
+      params.sessionId,
+      authorizedSessionAgent.value,
+    );
+    if (params.executionCtx) {
+      params.executionCtx.waitUntil(cleanupPromise);
+    } else {
+      await cleanupPromise;
+    }
+
     return success({ deleted: true });
+  }
+
+  private async cleanupDeletedSessionAgent(
+    sessionId: string,
+    sessionAgent: SessionAgentRpc,
+  ): Promise<void> {
+    let result: HandleDeleteSessionResult;
+    try {
+      result = await sessionAgent.handleDeleteSession() as HandleDeleteSessionResult;
+    } catch (error) {
+      if (!isDestroyedSessionAgentError(error)) {
+        logger.warn("Failed to clean up session agent after delete", {
+          error,
+          fields: { sessionId },
+        });
+        return;
+      }
+
+      logger.info("Session agent already destroyed during delete", {
+        fields: { sessionId },
+      });
+      return;
+    }
+
+    if (!result.ok) {
+      logger.info("Session agent was not initialized during delete cleanup", {
+        fields: {
+          sessionId,
+          code: result.error.code,
+        },
+      });
+    }
   }
 
   private async publishSessionSummaryInvalidated(

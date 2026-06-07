@@ -11,8 +11,25 @@ type PreparedStatement = {
   run: () => Promise<void>;
 };
 
-function createMockDatabase() {
+function createSessionAccessRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "session-1",
+    user_id: "user-1",
+    repo_id: 42,
+    installation_id: 456,
+    repo_full_name: "owner/repo",
+    access_blocked_at: null,
+    access_block_reason: null,
+    ...overrides,
+  };
+}
+
+function createMockDatabase(options: {
+  firstRows?: unknown[];
+} = {}) {
   const calls: Array<{ query: string; bindings: unknown[] }> = [];
+  const firstRows = [...(options.firstRows ?? [])];
+  const batch = vi.fn(async () => []);
   const database = {
     prepare(query: string): PreparedStatement {
       const call = { query, bindings: [] as unknown[] };
@@ -23,19 +40,22 @@ function createMockDatabase() {
           return this;
         },
         async first<T>() {
-          return null as T | null;
+          return (firstRows.shift() ?? null) as T | null;
         },
         async run() {},
       };
     },
+    batch,
   } as D1Database;
 
-  return { calls, database };
+  return { batch, calls, database };
 }
 
 function createService(database: D1Database) {
   const userSessionsStub = {
     createSessionSummary: vi.fn(async () => {}),
+    invalidateSessionSummary: vi.fn(async () => {}),
+    removeSessionSummary: vi.fn(async () => {}),
     requestResync: vi.fn(async () => {}),
   };
   const service = new SessionsService({
@@ -144,5 +164,42 @@ describe("SessionsService", () => {
     } finally {
       randomUuid.mockRestore();
     }
+  });
+
+  it("deletes the D1 session row before cleaning up an already-destroyed session agent", async () => {
+    const handleDeleteSession = vi.fn(async () => {
+      throw new Error("destroyed");
+    });
+    vi.mocked(getAgentByName).mockResolvedValue({ handleDeleteSession } as never);
+    const { batch, calls, database } = createMockDatabase({
+      firstRows: [createSessionAccessRow()],
+    });
+    const { service, userSessionsStub } = createService(database);
+
+    const result = await service.deleteSession({
+      sessionId: "session-1",
+      userId: "user-1",
+      githubAccessToken: "token",
+    });
+
+    expect(result).toEqual(success({ deleted: true }));
+    expect(handleDeleteSession).toHaveBeenCalledTimes(1);
+    expect(batch.mock.invocationCallOrder[0]).toBeLessThan(
+      handleDeleteSession.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        query: expect.stringContaining("INSERT INTO attachment_gc_queue"),
+        bindings: ["session-1"],
+      }),
+      expect.objectContaining({
+        query: expect.stringContaining("DELETE FROM sessions WHERE id = ?"),
+        bindings: ["session-1"],
+      }),
+    ]));
+    expect(userSessionsStub.removeSessionSummary).toHaveBeenCalledWith({
+      userId: "user-1",
+      sessionId: "session-1",
+    });
   });
 });
