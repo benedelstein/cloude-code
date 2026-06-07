@@ -263,6 +263,10 @@ Near-term areas of work include:
 - Broader provider support beyond the current Claude Code and OpenAI Codex paths.
 - Better visual validation workflows for agent-produced frontend changes.
 
+## License
+
+Cloude Code is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
+
 ## Contributing
 
 Before changing architecture, session lifecycle, Durable Object behavior, Sprite VM provisioning,
