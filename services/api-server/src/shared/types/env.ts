@@ -17,6 +17,8 @@ export interface Env {
 
   // Secrets
   ANTHROPIC_API_KEY: string;
+  OPENAI_API_KEY: string;
+  OPENAI_TRANSCRIPTION_MODEL?: string;
   SPRITES_API_KEY: string;
   SPRITES_API_URL: string;
   GITHUB_APP_ID: string;
@@ -27,5 +29,6 @@ export interface Env {
   GITHUB_APP_SLUG: string;
   TOKEN_ENCRYPTION_KEY: string;
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
+  VOICE_TOKEN_SIGNING_KEY: string;
   PORT: string;
 }

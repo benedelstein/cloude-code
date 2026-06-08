@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepoEnvironment,
   createSession,
+  createVoiceTranscriptionToken,
   createUserSessionsWebSocketToken,
   deleteSession,
   getUserRepoEnvironment,
@@ -85,6 +86,28 @@ describe("client-api", () => {
 
     expect(vi.mocked(fetch).mock.calls[0]).toMatchObject([
       "/api/sessions/updates/token",
+      { method: "POST" },
+    ]);
+  });
+
+  it("requests voice transcription tokens from the voice endpoint", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      token: "voice-token",
+      expiresAt: "2026-05-29T00:00:00.000Z",
+      maxBytes: 10485760,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    await expect(createVoiceTranscriptionToken()).resolves.toEqual({
+      token: "voice-token",
+      expiresAt: "2026-05-29T00:00:00.000Z",
+      maxBytes: 10485760,
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0]).toMatchObject([
+      "/api/voice/transcriptions/token",
       { method: "POST" },
     ]);
   });

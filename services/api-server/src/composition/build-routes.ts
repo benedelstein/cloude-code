@@ -19,6 +19,8 @@ import { createGitProxyRoutes } from "@/modules/session-agent/routes/git-proxy.r
 import { createInternalRoutes } from "@/modules/session-agent/routes/internal.routes";
 import { createSessionsRoutes } from "@/modules/sessions/routes/sessions.routes";
 import { SessionsService } from "@/modules/sessions/services/sessions.service";
+import { createVoiceRoutes } from "@/modules/voice/routes/voice.routes";
+import { VoiceTranscriptionService } from "@/modules/voice/services/voice-transcription.service";
 import { requestSessionAccessBlockedCleanup } from "@/modules/sessions/services/session-access-block.service";
 import {
   assertSessionRepoAccess,
@@ -170,6 +172,13 @@ export function buildSessionsRoutes() {
         createPullRequestGitHubProvider: () =>
           createGitHubAppService(env, "sessions.service.ts"),
       }),
+  });
+}
+
+export function buildVoiceRoutes() {
+  return createVoiceRoutes({
+    authMiddleware,
+    createVoiceTranscriptionService: (env) => new VoiceTranscriptionService(env),
   });
 }
 

@@ -219,12 +219,14 @@ SESSION_COOKIE_SECRET=<base64-encoded-32-byte-key>
 ```bash
 cd services/api-server
 pnpm wrangler secret put ANTHROPIC_API_KEY # used for ad-hoc generation of session titles, pr descriptions, etc.
+pnpm wrangler secret put OPENAI_API_KEY # used for voice transcription
 pnpm wrangler secret put SPRITES_API_KEY
 pnpm wrangler secret put GITHUB_APP_PRIVATE_KEY
 pnpm wrangler secret put GITHUB_WEBHOOK_SECRET
 pnpm wrangler secret put GITHUB_APP_CLIENT_SECRET
 pnpm wrangler secret put TOKEN_ENCRYPTION_KEY
 pnpm wrangler secret put WEBSOCKET_TOKEN_SIGNING_KEY
+pnpm wrangler secret put VOICE_TOKEN_SIGNING_KEY
 ```
 
 `TOKEN_ENCRYPTION_KEY` must be a base64-encoded 32-byte key; the same format

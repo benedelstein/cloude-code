@@ -41,6 +41,7 @@ import type {
   RepoEnvironmentResponse,
   UpdateRepoEnvironmentRequest,
   UserRepoEnvironmentResponse,
+  VoiceTranscriptionTokenResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -293,6 +294,13 @@ export async function createSessionWebSocketToken(
 
 export async function createUserSessionsWebSocketToken(): Promise<UserSessionsWebSocketTokenResponse> {
   return apiFetch("/sessions/updates/token", {
+    method: "POST",
+    cache: "no-store",
+  });
+}
+
+export async function createVoiceTranscriptionToken(): Promise<VoiceTranscriptionTokenResponse> {
+  return apiFetch("/voice/transcriptions/token", {
     method: "POST",
     cache: "no-store",
   });

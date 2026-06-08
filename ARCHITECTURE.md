@@ -69,11 +69,13 @@ See `docs/api-server/structure.md` for the api-server package file map and modul
 Required secrets for `api-server` are set through `wrangler secret put`:
 
 - `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
 - `SPRITES_API_KEY`
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_WEBHOOK_SECRET`
 - `GITHUB_APP_CLIENT_SECRET`
 - `TOKEN_ENCRYPTION_KEY`
 - `WEBSOCKET_TOKEN_SIGNING_KEY`
+- `VOICE_TOKEN_SIGNING_KEY`
 
 Additional environment bindings and non-secret vars live in `services/api-server/src/shared/types/env.ts` and `services/api-server/wrangler.jsonc`.
