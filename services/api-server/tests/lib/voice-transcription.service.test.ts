@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { VoiceTranscriptionService } from "../../src/modules/voice/services/voice-transcription.service";
 import type { Env } from "../../src/shared/types";
 
@@ -16,6 +16,37 @@ function createAudioFile(): File {
 }
 
 describe("VoiceTranscriptionService", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("transcribes with the default fetch provider", async () => {
+    let service: VoiceTranscriptionService | undefined;
+    let fetchThis: unknown;
+    const fetchProvider = vi.fn(function (this: unknown) {
+      fetchThis = this;
+      return Promise.resolve(new Response(JSON.stringify({
+        text: "hello from default fetch",
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    });
+    vi.stubGlobal("fetch", fetchProvider);
+    service = new VoiceTranscriptionService(createEnv());
+
+    await expect(service.transcribe({
+      audio: createAudioFile(),
+      userId: USER_ID,
+    })).resolves.toEqual({
+      ok: true,
+      value: { text: "hello from default fetch" },
+    });
+
+    expect(fetchProvider).toHaveBeenCalledOnce();
+    expect(fetchThis).not.toBe(service);
+  });
+
   it("builds an OpenAI transcription request with the default model", async () => {
     const fetchProvider = vi.fn(async () => new Response(JSON.stringify({
       text: "hello world",

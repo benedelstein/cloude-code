@@ -16,6 +16,15 @@ const OpenAITranscriptionResponse = z.object({
   text: z.string(),
 });
 
+type FetchProvider = typeof fetch;
+
+function defaultFetchProvider(
+  input: Parameters<FetchProvider>[0],
+  init?: Parameters<FetchProvider>[1],
+): ReturnType<FetchProvider> {
+  return fetch(input, init);
+}
+
 export type VoiceTranscriptionError = {
   status: 500 | 502;
   code: "TRANSCRIPTION_NOT_CONFIGURED" | "TRANSCRIPTION_PROVIDER_FAILED";
@@ -25,7 +34,7 @@ export type VoiceTranscriptionError = {
 export class VoiceTranscriptionService {
   constructor(
     private readonly env: Env,
-    private readonly fetchProvider: typeof fetch = fetch,
+    private readonly fetchProvider: FetchProvider = defaultFetchProvider,
   ) {}
 
   /**
