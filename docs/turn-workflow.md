@@ -6,7 +6,7 @@ How one user turn moves from the browser to the Sprite VM and back. The current 
 
 - `SessionAgentDO` (`services/api-server/src/runtime/session-agent.do.ts`) - source of truth for session state, SQLite repositories, WebSocket clients, and webhook RPC handlers.
 - `SessionChatDispatchService` (`services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts`) - validates chat payloads, persists the user message, registers the active turn, and asks the process manager to dispatch it.
-- `SpriteAgentProcessManager` (`services/api-server/src/modules/session-agent/services/sprite-agent-process-manager.service.ts`) - owns vm-agent process reuse, fresh process spawn, credential sync, cancel, and kill.
+- `SpriteAgentProcessManager` (`services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts`) - owns vm-agent process reuse, fresh process spawn, credential sync, cancel, and kill.
 - `AgentTurnCoordinator` (`services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts`) - owns turn state, WAL replay, chunk accumulation, derived state updates, terminal-chunk finalization, and client broadcasts.
 - `WebhookAgentRunner` (`packages/vm-agent/src/webhook-agent-runner.ts`) - runs inside the Sprite VM, drives the shared agent harness, batches stream chunks, and posts webhook payloads.
 
@@ -70,7 +70,9 @@ Fresh spawn writes the webhook bundle to `~/.cloude/agent-webhook.js`, stages th
 Internal routes in `services/api-server/src/modules/session-agent/routes/internal.routes.ts` authenticate with a per-session bearer token stored as `webhook_token` in `SecretRepository`.
 
 - `POST /internal/session/:sessionId/chunks` accepts `{ userMessageId, chunks: [{ sequence, chunk }] }`.
-- `POST /internal/session/:sessionId/events` accepts `{ event }` for non-stream agent events such as `ready`, `error`, and `sessionId`.
+- `POST /internal/session/:sessionId/events` accepts `{ event }` for non-stream agent events such as `ready`, `error`, `sessionId`, and `process_exit`.
+
+The vm-agent writes `ready`, `stdin_ack`, `cancel_ack`, and heartbeat messages to stdout for Sprite attach callers. It posts `ready`, provider `sessionId`, setup/runtime `error`, and final `process_exit` events to the webhook event route. `debug` and heartbeat outputs are local process/logging signals, not webhook events.
 
 The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` responses with bounded exponential backoff. Non-retryable failures are logged and dropped; DO reconciliation handles missed tail state where possible.
 
@@ -116,7 +118,7 @@ Duplicate webhook batches are deduped by the WAL sequence constraint. Missing ch
 - Dispatch service: [session-chat-dispatch.service.ts](../services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts)
 - Turn coordinator: [agent-turn-coordinator.service.ts](../services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts)
 - Automatic PR queue: [session-auto-pull-request.service.ts](../services/api-server/src/runtime/session-auto-pull-request.service.ts)
-- Process manager: [sprite-agent-process-manager.service.ts](../services/api-server/src/modules/session-agent/services/sprite-agent-process-manager.service.ts)
+- Process manager: [sprite-agent-process-manager.service.ts](../services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts)
 - VM webhook runner: [webhook-agent-runner.ts](../packages/vm-agent/src/webhook-agent-runner.ts)
 - WAL table: [pending-chunk.repository.ts](../services/api-server/src/modules/session-agent/repositories/pending-chunk.repository.ts)
 - Server state: [server-state.repository.ts](../services/api-server/src/modules/session-agent/repositories/server-state.repository.ts)

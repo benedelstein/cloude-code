@@ -91,7 +91,8 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 | `services/api-server/src/modules/repo-environments/services/repo-environments.service.ts` | Repo environment ownership/access checks and session environment snapshot resolution |
 | `services/api-server/src/modules/session-agent/services/session-provision.service.ts` | Sprite provisioning, read-only clone, git remote setup |
 | `services/api-server/src/modules/session-agent/services/session-git-proxy.service.ts` | Session-scoped git proxy auth/access wrapper |
-| `services/api-server/src/modules/sessions/services/session-pull-request.service.ts` | Shared manual and automatic pull request creation flow |
+| `services/api-server/src/modules/sessions/services/session-pull-request.service.ts` | GitHub pull request creation helper used by the DO lifecycle |
+| `services/api-server/src/runtime/session-pull-request-lifecycle.service.ts` | Manual and automatic pull request state, text generation context, and D1 persistence |
 | `services/api-server/src/runtime/session-auto-pull-request.service.ts` | Post-turn automatic pull request queueing from the Durable Object |
 | `services/api-server/src/shared/integrations/sprites/network-policy.ts` | Bootstrap/final Sprite network policy construction |
 | `services/api-server/src/modules/webhooks/routes/webhooks.routes.ts` | `POST /webhooks/github` - receives GitHub webhook events |
