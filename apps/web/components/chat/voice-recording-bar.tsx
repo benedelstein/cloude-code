@@ -104,6 +104,7 @@ export function VoiceRecordingBar({
         className="flex h-8 min-w-0 flex-1 items-center justify-end gap-0.5 overflow-hidden"
         aria-hidden="true"
       >
+        {/* Future optimization: draw the waveform on canvas if DOM bar rendering becomes costly. */}
         {visibleLevels.map((level, index) => {
           const edgeScale = getEdgeScale(index, visibleLevels.length);
           const opacity = isWorking ? 0.35 : 1;
