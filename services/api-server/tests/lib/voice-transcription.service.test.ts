@@ -91,6 +91,43 @@ describe("VoiceTranscriptionService", () => {
     expect(body.get("model")).toBe("gpt-4o-transcribe");
   });
 
+  it("accepts audio types with codec parameters", async () => {
+    const fetchProvider = vi.fn(async () => new Response(JSON.stringify({
+      text: "hello",
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    const service = new VoiceTranscriptionService(createEnv(), fetchProvider);
+
+    await expect(service.transcribe({
+      audio: new File(["voice"], "voice-message.webm", { type: "audio/webm;codecs=opus" }),
+      userId: USER_ID,
+    })).resolves.toEqual({
+      ok: true,
+      value: { text: "hello" },
+    });
+    expect(fetchProvider).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unsupported audio types before calling the provider", async () => {
+    const fetchProvider = vi.fn();
+    const service = new VoiceTranscriptionService(createEnv(), fetchProvider);
+
+    await expect(service.transcribe({
+      audio: new File(["voice"], "voice.txt", { type: "text/plain" }),
+      userId: USER_ID,
+    })).resolves.toEqual({
+      ok: false,
+      error: {
+        status: 400,
+        code: "UNSUPPORTED_AUDIO_TYPE",
+        message: "Unsupported audio type",
+      },
+    });
+    expect(fetchProvider).not.toHaveBeenCalled();
+  });
+
   it("returns not configured when the OpenAI key is missing", async () => {
     const fetchProvider = vi.fn();
     const service = new VoiceTranscriptionService(createEnv({

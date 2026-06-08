@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { MiddlewareHandler } from "hono";
 import { failure, success } from "@repo/shared";
 import { createVoiceRoutes } from "../../src/modules/voice/routes/voice.routes";
-import { mintVoiceTranscriptionToken } from "../../src/modules/voice/services/voice-transcription-token.service";
-import type { VoiceTranscriptionService } from "../../src/modules/voice/services/voice-transcription.service";
+import {
+  mintVoiceTranscriptionToken,
+  type VoiceTranscriptionService,
+} from "../../src/modules/voice/services/voice-transcription.service";
 import type { Env } from "../../src/shared/types";
 import type { AuthUser } from "../../src/shared/types/auth";
 
@@ -155,8 +157,13 @@ describe("voice routes", () => {
     expect(transcribe).not.toHaveBeenCalled();
   });
 
-  it("rejects unsupported audio types", async () => {
-    const { routes, transcribe } = createRoutes();
+  it("maps unsupported audio types from the transcription service to a client error", async () => {
+    const transcribe = vi.fn(async () => failure({
+      status: 400 as const,
+      code: "UNSUPPORTED_AUDIO_TYPE" as const,
+      message: "Unsupported audio type",
+    }));
+    const { routes } = createRoutes(transcribe);
 
     const response = await routes.fetch(
       await createUploadRequest({
@@ -168,7 +175,10 @@ describe("voice routes", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Unsupported audio type" });
-    expect(transcribe).not.toHaveBeenCalled();
+    expect(transcribe).toHaveBeenCalledWith({
+      audio: expect.any(File),
+      userId: USER_ID,
+    });
   });
 
   it("returns transcript text for a valid upload", async () => {

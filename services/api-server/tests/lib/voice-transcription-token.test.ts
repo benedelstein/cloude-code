@@ -3,7 +3,7 @@ import { mintSessionWebSocketToken } from "../../src/modules/sessions/services/s
 import {
   mintVoiceTranscriptionToken,
   verifyVoiceTranscriptionToken,
-} from "../../src/modules/voice/services/voice-transcription-token.service";
+} from "../../src/modules/voice/services/voice-transcription.service";
 
 const SECRET = "top-secret";
 const USER_ID = "123e4567-e89b-12d3-a456-426614174001";

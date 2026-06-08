@@ -3,12 +3,12 @@ import type { MiddlewareHandler } from "hono";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import type { AuthUser } from "@/shared/types/auth";
-import type { VoiceTranscriptionService } from "../services/voice-transcription.service";
 import {
   MAX_VOICE_AUDIO_BYTES,
   mintVoiceTranscriptionToken,
+  type VoiceTranscriptionService,
   verifyVoiceTranscriptionToken,
-} from "../services/voice-transcription-token.service";
+} from "../services/voice-transcription.service";
 import {
   createVoiceTranscriptionTokenRoute,
   transcribeVoiceRoute,
@@ -18,15 +18,6 @@ type VoiceRouteEnv = {
   Bindings: Env;
   Variables: { user: AuthUser };
 };
-
-export const SUPPORTED_VOICE_AUDIO_TYPES = new Set([
-  "audio/webm",
-  "audio/mp4",
-  "audio/mpeg",
-  "audio/mpga",
-  "audio/m4a",
-  "audio/wav",
-]);
 
 export interface VoiceRouteDeps {
   authMiddleware: MiddlewareHandler<VoiceRouteEnv>;
@@ -58,17 +49,13 @@ function isUploadedFile(value: unknown): value is File {
   return value instanceof File;
 }
 
-function normalizeMediaType(mediaType: string): string {
-  return mediaType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-}
-
 export function createVoiceRoutes(
   deps: VoiceRouteDeps,
 ): OpenAPIHono<VoiceRouteEnv> {
   const voiceRoutes = new OpenAPIHono<VoiceRouteEnv>();
   const logger = createLogger("voice.routes.ts");
 
-  voiceRoutes.use("/transcriptions/token", deps.authMiddleware);
+  voiceRoutes.use(createVoiceTranscriptionTokenRoute.getRoutingPath(), deps.authMiddleware);
 
   voiceRoutes.openapi(createVoiceTranscriptionTokenRoute, async (c) => {
     const user = c.get("user");
@@ -116,16 +103,11 @@ export function createVoiceRoutes(
     if (audio.size > maxBytes) {
       return c.json({ error: "Audio file too large" }, 413);
     }
-    const mediaType = normalizeMediaType(audio.type);
-    if (!SUPPORTED_VOICE_AUDIO_TYPES.has(mediaType)) {
-      return c.json({ error: "Unsupported audio type" }, 400);
-    }
-
     logger.info("Transcribing voice upload", {
       fields: {
         userId: tokenPayload.userId,
         sizeBytes: audio.size,
-        mediaType,
+        mediaType: audio.type,
       },
     });
 
@@ -137,12 +119,14 @@ export function createVoiceRoutes(
 
     if (!result.ok) {
       switch (result.error.status) {
+        case 400:
+          return c.json({ error: result.error.message }, 400);
         case 500:
           return c.json({ error: result.error.message }, 500);
         case 502:
           return c.json({ error: result.error.message }, 502);
         default: {
-          const exhaustiveCheck: never = result.error.status;
+          const exhaustiveCheck: never = result.error;
           throw new Error(`Unhandled voice transcription error: ${exhaustiveCheck}`);
         }
       }
