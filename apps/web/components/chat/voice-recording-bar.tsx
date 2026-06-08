@@ -34,7 +34,7 @@ function getEdgeScale(index: number, total: number): number {
   // Taper both edges so a clipped, responsive waveform does not end in hard full-height bars.
   const distanceToEdge = Math.min(index, total - 1 - index);
   const progress = Math.min(1, distanceToEdge / EDGE_ENVELOPE_BAR_COUNT);
-  const eased = progress * progress * (3 - 2 * progress);
+  const eased = 1 - ((1 - progress) * (1 - progress));
   return MIN_EDGE_SCALE + eased * (1 - MIN_EDGE_SCALE);
 }
 
@@ -61,10 +61,12 @@ export function VoiceRecordingBar({
     state.levels.length > 0
       ? state.levels
       : Array.from({ length: VOICE_SIGNAL_BAR_COUNT }, () => 0.15);
+  const visibleStartIndex = Math.max(0, levels.length - visibleBarCount);
   const visibleLevels = useMemo(
-    () => levels.slice(-visibleBarCount),
-    [levels, visibleBarCount],
+    () => levels.slice(visibleStartIndex),
+    [levels, visibleStartIndex],
   );
+  const firstSampleKey = (state.levelFrame ?? 0) - levels.length + visibleStartIndex;
 
   useEffect(() => {
     const waveform = waveformRef.current;
@@ -102,6 +104,7 @@ export function VoiceRecordingBar({
         className="flex h-8 min-w-0 flex-1 items-center justify-end gap-0.5 overflow-hidden"
         aria-hidden="true"
       >
+        {/* Future optimization: draw the waveform on canvas if DOM bar rendering becomes costly. */}
         {visibleLevels.map((level, index) => {
           const edgeScale = getEdgeScale(index, visibleLevels.length);
           const opacity = isWorking ? 0.35 : 1;
@@ -111,9 +114,9 @@ export function VoiceRecordingBar({
           );
           return (
             <span
-              key={index}
+              key={firstSampleKey + index}
               className={cn(
-                "w-0.5 shrink-0 rounded-full bg-accent/75 transition-[height,opacity] duration-150 ease-out motion-reduce:transition-none",
+                "w-0.5 shrink-0 rounded-full bg-accent/75 transition-opacity duration-150 ease-out motion-reduce:transition-none",
                 isError && "bg-danger/75",
               )}
               style={{

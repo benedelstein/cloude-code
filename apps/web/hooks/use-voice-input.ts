@@ -25,13 +25,23 @@ const SUPPORTED_MIME_TYPES = [
   "audio/wav",
 ];
 
+type VoiceInputWaveformState = {
+  levels: number[];
+  levelFrame?: number;
+};
+
 export type VoiceInputState =
-  | { status: "idle"; elapsedMs: 0; levels: number[] }
-  | { status: "requesting-permission"; elapsedMs: 0; levels: number[] }
-  | { status: "recording"; elapsedMs: number; levels: number[] }
-  | { status: "finalizing"; elapsedMs: number; levels: number[] }
-  | { status: "transcribing"; elapsedMs: number; levels: number[] }
-  | { status: "error"; elapsedMs: number; levels: number[]; message: string; canRetry: boolean };
+  | ({ status: "idle"; elapsedMs: 0 } & VoiceInputWaveformState)
+  | ({ status: "requesting-permission"; elapsedMs: 0 } & VoiceInputWaveformState)
+  | ({ status: "recording"; elapsedMs: number } & VoiceInputWaveformState)
+  | ({ status: "finalizing"; elapsedMs: number } & VoiceInputWaveformState)
+  | ({ status: "transcribing"; elapsedMs: number } & VoiceInputWaveformState)
+  | ({
+    status: "error";
+    elapsedMs: number;
+    message: string;
+    canRetry: boolean;
+  } & VoiceInputWaveformState);
 
 type FinalizeAction = "insert" | "send";
 
@@ -121,6 +131,7 @@ export function useVoiceInput({
   const startedAtRef = useRef(0);
   const elapsedMsRef = useRef(0);
   const levelsRef = useRef<number[]>(EMPTY_LEVELS);
+  const levelFrameRef = useRef(0);
   const draftRef = useRef<VoiceDraft | null>(null);
   const maxTimerRef = useRef<number | null>(null);
   const elapsedTimerRef = useRef<number | null>(null);
@@ -172,6 +183,7 @@ export function useVoiceInput({
         status: "error",
         elapsedMs: draft.durationMs,
         levels: levelsRef.current,
+        levelFrame: levelFrameRef.current,
         message: "Recording is too large to transcribe.",
         canRetry: true,
       });
@@ -182,6 +194,7 @@ export function useVoiceInput({
       status: "transcribing",
       elapsedMs: draft.durationMs,
       levels: levelsRef.current,
+      levelFrame: levelFrameRef.current,
     });
 
     try {
@@ -209,6 +222,7 @@ export function useVoiceInput({
         status: "error",
         elapsedMs: draft.durationMs,
         levels: levelsRef.current,
+        levelFrame: levelFrameRef.current,
         message: getErrorMessage(error),
         canRetry: true,
       });
@@ -235,6 +249,7 @@ export function useVoiceInput({
       status: "finalizing",
       elapsedMs: durationMs,
       levels: levelsRef.current,
+      levelFrame: levelFrameRef.current,
     });
 
     const blob = await stopRecorder(recorder, chunksRef.current);
@@ -270,10 +285,12 @@ export function useVoiceInput({
         const amplitude = Math.sqrt(sumSquares / samples.length);
         const nextLevel = Math.max(MIN_VOICE_SIGNAL_LEVEL, Math.min(1, amplitude * 5));
         const levels = [...levelsRef.current.slice(1), nextLevel];
+        const levelFrame = levelFrameRef.current + 1;
         levelsRef.current = levels;
+        levelFrameRef.current = levelFrame;
         const elapsedMs = Math.max(0, Date.now() - startedAtRef.current);
         elapsedMsRef.current = elapsedMs;
-        setState({ status: "recording", elapsedMs, levels });
+        setState({ status: "recording", elapsedMs, levels, levelFrame });
       }
       animationFrameRef.current = window.requestAnimationFrame(updateLevels);
     };
@@ -320,6 +337,7 @@ export function useVoiceInput({
       startedAtRef.current = Date.now();
       elapsedMsRef.current = 0;
       levelsRef.current = EMPTY_LEVELS;
+      levelFrameRef.current = 0;
       draftRef.current = null;
 
       recorder.addEventListener("dataavailable", (event) => {
@@ -334,7 +352,12 @@ export function useVoiceInput({
       elapsedTimerRef.current = window.setInterval(() => {
         const elapsedMs = Math.max(0, Date.now() - startedAtRef.current);
         elapsedMsRef.current = elapsedMs;
-        setState({ status: "recording", elapsedMs, levels: levelsRef.current });
+        setState({
+          status: "recording",
+          elapsedMs,
+          levels: levelsRef.current,
+          levelFrame: levelFrameRef.current,
+        });
       }, 250);
       maxTimerRef.current = window.setTimeout(() => {
         void finalizeRecording("insert", "max-duration");
