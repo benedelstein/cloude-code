@@ -46,6 +46,7 @@ export async function uploadVoiceForTranscription(
   const formData = new FormData();
   formData.append("audio", file, file.name);
 
+  // Send audio directly to the Worker so multi-minute recordings do not buffer through the Next.js proxy first.
   const response = await fetch(`${WS_API_URL}/voice/transcriptions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
