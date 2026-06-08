@@ -164,6 +164,77 @@ export function ChatInput({
     onInsertTranscript: insertVoiceTranscript,
     onSendTranscript: sendVoiceTranscript,
   });
+  const voiceStatus = voiceInput.state.status;
+  const isVoiceRecording = voiceStatus === "recording";
+  const isVoiceWorking =
+    voiceStatus === "requesting-permission"
+    || voiceStatus === "finalizing"
+    || voiceStatus === "transcribing";
+  const isVoiceError = voiceStatus === "error";
+  const canRetryVoice = voiceInput.state.status === "error" && voiceInput.state.canRetry;
+  const voiceMicMode = isVoiceWorking
+    ? "loading"
+    : isVoiceRecording
+      ? "stop"
+      : canRetryVoice
+        ? "retry"
+        : "record";
+  const voiceMicLabel = (() => {
+    if (!voiceInput.isSupported) {
+      return "Voice input unavailable";
+    }
+    if (isVoiceWorking) {
+      return "Transcribing audio...";
+    }
+    if (isVoiceRecording) {
+      return "Stop and transcribe";
+    }
+    if (isVoiceError) {
+      return canRetryVoice ? "Retry transcription" : "Voice recording unavailable";
+    }
+    return "Record voice";
+  })();
+  const sendTooltipOverride = (() => {
+    if (isVoiceRecording) {
+      return "Transcribe and send";
+    }
+    if (isVoiceWorking) {
+      return "Transcribing audio...";
+    }
+    if (isVoiceError) {
+      return "Discard recording";
+    }
+    return undefined;
+  })();
+  const handleVoiceMicTap = () => {
+    if (isVoiceRecording) {
+      void voiceInput.stopAndInsert();
+      return;
+    }
+    if (isVoiceError) {
+      if (!canRetryVoice) {
+        return;
+      }
+      void voiceInput.retryLast();
+      return;
+    }
+    void voiceInput.startRecording();
+  };
+  const handleSendTap = () => {
+    if (isStreaming) {
+      handleStop();
+      return;
+    }
+    if (isVoiceRecording) {
+      void voiceInput.stopAndSend();
+      return;
+    }
+    if (isVoiceError) {
+      void voiceInput.discardDraft();
+      return;
+    }
+    submitMessage();
+  };
 
   const submitMessage = () => {
     if (
@@ -290,66 +361,68 @@ export function ChatInput({
         />
       </div>
       <div className="flex min-w-0 items-center gap-2 px-3 pb-2">
-        {voiceInput.isActive ? (
-          <VoiceRecordingBar
-            state={voiceInput.state}
-            onStop={() => void voiceInput.stopAndInsert()}
-            onSend={() => void voiceInput.stopAndSend()}
-            onRetry={() => void voiceInput.retryLast()}
-            onDiscard={() => void voiceInput.discardDraft()}
-            disabled={disabled || isAuthBlocking}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {voiceInput.isActive ? (
+            <VoiceRecordingBar state={voiceInput.state} />
+          ) : (
+            <>
+              <div className="flex shrink-0 items-center gap-2">
+                <ImageAttachButton
+                  onFiles={addFiles}
+                  disabled={disabled || isAuthBlocking}
+                />
+                {agentMode && onAgentModeChange && (
+                  <AgentModeToggle
+                    agentMode={agentMode}
+                    onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
+                    disabled={disabled || isAuthBlocking}
+                  />
+                )}
+              </div>
+              <div className="ml-auto flex min-w-0 items-center justify-end">
+                {selectedProvider
+                  && selectedModel
+                  && selectedEffort
+                  && onProviderModelChange
+                  && onProviderEffortChange && (
+                  <ProviderModelEffortSelector
+                    selectedProvider={selectedProvider}
+                    selectedModel={selectedModel}
+                    selectedEffort={selectedEffort}
+                    providerAuthHandles={providerAuthHandles}
+                    onModelSelect={onProviderModelChange}
+                    onEffortSelect={onProviderEffortChange}
+                    onConnect={() => setManuallyOpenedSigninPanel(true)}
+                    allowedProviderIds={[selectedProvider]}
+                    disabled={disabled || isAuthBlocking}
+                    className="gap-0"
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <MicButton
+            disabled={disabled || isAuthBlocking || isStreaming || (isVoiceError && !canRetryVoice)}
+            unsupported={!voiceInput.isSupported}
+            mode={voiceMicMode}
+            label={voiceMicLabel}
+            onTap={handleVoiceMicTap}
           />
-        ) : (
-          <>
-            <div className="flex shrink-0 items-center gap-2">
-              <ImageAttachButton
-                onFiles={addFiles}
-                disabled={disabled || isAuthBlocking}
-              />
-              {agentMode && onAgentModeChange && (
-                <AgentModeToggle
-                  agentMode={agentMode}
-                  onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-                  disabled={disabled || isAuthBlocking}
-                />
-              )}
-            </div>
-            <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-              {selectedProvider
-                && selectedModel
-                && selectedEffort
-                && onProviderModelChange
-                && onProviderEffortChange && (
-                <ProviderModelEffortSelector
-                  selectedProvider={selectedProvider}
-                  selectedModel={selectedModel}
-                  selectedEffort={selectedEffort}
-                  providerAuthHandles={providerAuthHandles}
-                  onModelSelect={onProviderModelChange}
-                  onEffortSelect={onProviderEffortChange}
-                  onConnect={() => setManuallyOpenedSigninPanel(true)}
-                  allowedProviderIds={[selectedProvider]}
-                  disabled={disabled || isAuthBlocking}
-                  className="gap-0"
-                />
-              )}
-              <MicButton
-                disabled={disabled || isAuthBlocking || isStreaming}
-                unsupported={!voiceInput.isSupported}
-                onTap={() => void voiceInput.startRecording()}
-              />
-              <SendButton
-                isStreaming={isStreaming}
-                isCancelling={isCancelling}
-                disabled={disabled || isAuthBlocking}
-                isUploading={isUploading}
-                hasPendingOrFailedUploads={hasPendingOrFailedUploads}
-                hasContent={Boolean(input.trim()) || attachments.length > 0}
-                onTap={isStreaming ? handleStop : submitMessage}
-              />
-            </div>
-          </>
-        )}
+          <SendButton
+            isStreaming={isStreaming}
+            isCancelling={isCancelling}
+            disabled={disabled || isAuthBlocking || (voiceInput.isActive && isVoiceWorking)}
+            isUploading={isUploading}
+            hasPendingOrFailedUploads={!voiceInput.isActive && hasPendingOrFailedUploads}
+            hasContent={voiceInput.isActive || Boolean(input.trim()) || attachments.length > 0}
+            tooltipOverride={sendTooltipOverride}
+            icon={isVoiceError ? "trash" : "send"}
+            variant={isVoiceError ? "muted" : undefined}
+            onTap={handleSendTap}
+          />
+        </div>
       </div>
     </form>
   );

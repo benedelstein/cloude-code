@@ -1,8 +1,12 @@
 "use client";
 
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, Square, Trash2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { LoadingSpinner } from "@/components/parts/loading-spinner";
+import { cn } from "@/lib/utils";
+
+type SendButtonIcon = "send" | "trash";
+type SendButtonVariant = "accent" | "danger" | "muted";
 
 interface SendButtonProps {
   isStreaming: boolean;
@@ -14,6 +18,9 @@ interface SendButtonProps {
   isUploading?: boolean;
   hasPendingOrFailedUploads?: boolean;
   hasContent: boolean;
+  tooltipOverride?: string;
+  icon?: SendButtonIcon;
+  variant?: SendButtonVariant;
   onTap: () => void;
 }
 
@@ -25,14 +32,18 @@ export function SendButton({
   isUploading = false,
   hasPendingOrFailedUploads = false,
   hasContent,
+  tooltipOverride,
+  icon = "send",
+  variant,
   onTap,
 }: SendButtonProps) {
   const isActionLoading = isLoading || isCancelling;
   const isSendDisabled = isStreaming
     ? isCancelling
     : disabled || isActionLoading || hasPendingOrFailedUploads || !hasContent;
+  const visualVariant = variant ?? (isStreaming ? "danger" : "accent");
 
-  const tooltipText = (() => {
+  const tooltipText = tooltipOverride ?? (() => {
     if (isCancelling) {
       return "Stopping...";
     }
@@ -55,16 +66,42 @@ export function SendButton({
           type="button"
           disabled={isSendDisabled}
           onClick={onTap}
-          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            isStreaming
-              ? "bg-danger text-white hover:bg-danger/90"
-              : "bg-accent text-accent-foreground hover:bg-accent-hover"
-          }`}
+          className={cn(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            visualVariant === "accent" && "bg-accent text-accent-foreground hover:bg-accent-hover",
+            visualVariant === "danger" && "bg-danger text-white hover:bg-danger/90",
+            visualVariant === "muted" && "bg-muted text-foreground-secondary hover:text-foreground",
+          )}
         >
           <div className="relative h-3.5 w-3.5">
-            <ArrowUp className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${!isStreaming && !isActionLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
-            <Square className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${isStreaming && !isCancelling ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
-            <LoadingSpinner className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-150 ${isActionLoading ? "scale-100 opacity-100" : "scale-0 opacity-0"}`} />
+            <ArrowUp
+              className={cn(
+                "absolute inset-0 h-3.5 w-3.5 transition-all duration-150",
+                !isStreaming && !isActionLoading && icon === "send"
+                  ? "scale-100 opacity-100"
+                  : "scale-0 opacity-0",
+              )}
+            />
+            <Square
+              className={cn(
+                "absolute inset-0 h-3.5 w-3.5 transition-all duration-150",
+                isStreaming && !isCancelling ? "scale-100 opacity-100" : "scale-0 opacity-0",
+              )}
+            />
+            <Trash2
+              className={cn(
+                "absolute inset-0 h-3.5 w-3.5 transition-all duration-150",
+                !isStreaming && !isActionLoading && icon === "trash"
+                  ? "scale-100 opacity-100"
+                  : "scale-0 opacity-0",
+              )}
+            />
+            <LoadingSpinner
+              className={cn(
+                "absolute inset-0 h-3.5 w-3.5 transition-all duration-150",
+                isActionLoading ? "scale-100 opacity-100" : "scale-0 opacity-0",
+              )}
+            />
           </div>
         </button>
       </TooltipTrigger>
