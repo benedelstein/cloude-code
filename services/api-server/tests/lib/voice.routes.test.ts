@@ -190,6 +190,25 @@ describe("voice routes", () => {
     });
   });
 
+  it("accepts valid audio types with codec parameters", async () => {
+    const { routes, transcribe } = createRoutes();
+
+    const response = await routes.fetch(
+      await createUploadRequest({
+        token: await createVoiceToken(),
+        file: new File(["voice"], "voice.webm", { type: "audio/webm;codecs=opus" }),
+      }),
+      createEnv(),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ text: "hello" });
+    expect(transcribe).toHaveBeenCalledWith({
+      audio: expect.any(File),
+      userId: USER_ID,
+    });
+  });
+
   it("maps provider failures to client errors", async () => {
     const transcribe = vi.fn(async () => failure({
       status: 502 as const,

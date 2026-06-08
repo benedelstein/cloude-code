@@ -72,6 +72,10 @@ function isUploadedFile(value: unknown): value is File {
     && typeof candidate.stream === "function";
 }
 
+function normalizeMediaType(mediaType: string): string {
+  return mediaType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
 export function createVoiceRoutes(
   deps: VoiceRouteDeps,
 ): OpenAPIHono<VoiceRouteEnv> {
@@ -126,7 +130,8 @@ export function createVoiceRoutes(
     if (audio.size > maxBytes) {
       return c.json({ error: "Audio file too large" }, 413);
     }
-    if (!SUPPORTED_VOICE_AUDIO_TYPES.has(audio.type)) {
+    const mediaType = normalizeMediaType(audio.type);
+    if (!SUPPORTED_VOICE_AUDIO_TYPES.has(mediaType)) {
       return c.json({ error: "Unsupported audio type" }, 400);
     }
 
@@ -134,7 +139,7 @@ export function createVoiceRoutes(
       fields: {
         userId: tokenPayload.userId,
         sizeBytes: audio.size,
-        mediaType: audio.type,
+        mediaType,
       },
     });
 
