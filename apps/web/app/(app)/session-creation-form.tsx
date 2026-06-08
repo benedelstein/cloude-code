@@ -30,8 +30,7 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { InputFrame } from "@/components/chat/input-frame";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
-import { SendButton } from "@/components/chat/send-button";
-import { MicButton } from "@/components/chat/mic-button";
+import { VoiceComposerControls } from "@/components/chat/voice-composer-controls";
 import { VoiceRecordingBar } from "@/components/chat/voice-recording-bar";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import type { AgentMode } from "@repo/shared";
@@ -516,76 +515,6 @@ export function SessionCreationForm() {
     onInsertTranscript: insertVoiceTranscript,
     onSendTranscript: sendVoiceTranscript,
   });
-  const voiceStatus = voiceInput.state.status;
-  const isVoiceRecording = voiceStatus === "recording";
-  const isVoiceWorking =
-    voiceStatus === "finalizing"
-    || voiceStatus === "transcribing";
-  const isVoiceError = voiceStatus === "error";
-  const canRetryVoice = voiceInput.state.status === "error" && voiceInput.state.canRetry;
-  const isVoiceMicDisabled =
-    isFormInteractionDisabled
-    || voiceStatus === "requesting-permission"
-    || (isVoiceError && !canRetryVoice);
-  const voiceMicMode = isVoiceWorking
-    ? "loading"
-    : isVoiceRecording
-      ? "stop"
-      : canRetryVoice
-        ? "retry"
-        : "record";
-  const voiceMicLabel = (() => {
-    if (!voiceInput.isSupported) {
-      return "Voice input unavailable";
-    }
-    if (isVoiceWorking) {
-      return "Transcribing audio...";
-    }
-    if (isVoiceRecording) {
-      return "Stop and transcribe";
-    }
-    if (isVoiceError) {
-      return canRetryVoice ? "Retry transcription" : "Voice recording unavailable";
-    }
-    return "Record voice";
-  })();
-  const sendTooltipOverride = (() => {
-    if (isVoiceRecording) {
-      return "Transcribe and send";
-    }
-    if (isVoiceWorking) {
-      return "Transcribing audio...";
-    }
-    if (isVoiceError) {
-      return "Discard recording";
-    }
-    return undefined;
-  })();
-  const handleVoiceMicTap = () => {
-    if (isVoiceRecording) {
-      void voiceInput.stopAndInsert();
-      return;
-    }
-    if (isVoiceError) {
-      if (!canRetryVoice) {
-        return;
-      }
-      void voiceInput.retryLast();
-      return;
-    }
-    void voiceInput.startRecording();
-  };
-  const handleSendButtonTap = () => {
-    if (isVoiceRecording) {
-      void voiceInput.stopAndSend();
-      return;
-    }
-    if (isVoiceError) {
-      void voiceInput.discardDraft();
-      return;
-    }
-    void submitMessage();
-  };
 
   const handleSubmit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -742,27 +671,17 @@ export function SessionCreationForm() {
               )}
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <MicButton
-                disabled={isVoiceMicDisabled}
-                unsupported={!voiceInput.isSupported}
-                mode={voiceMicMode}
-                label={voiceMicLabel}
-                onTap={handleVoiceMicTap}
-              />
-              <SendButton
-                isStreaming={false}
-                isLoading={submitting || isUploadingAttachments}
-                isUploading={isUploadingAttachments}
-                disabled={isSendDisabled || (voiceInput.isActive && isVoiceWorking)}
-                hasPendingOrFailedUploads={!voiceInput.isActive && hasPendingOrFailedUploads}
-                hasContent={voiceInput.isActive || Boolean(message.trim()) || attachments.length > 0}
-                tooltipOverride={sendTooltipOverride}
-                icon={isVoiceError ? "trash" : "send"}
-                variant={isVoiceError ? "muted" : undefined}
-                onTap={handleSendButtonTap}
-              />
-            </div>
+            <VoiceComposerControls
+              voiceInput={voiceInput}
+              micDisabled={isFormInteractionDisabled}
+              submitDisabled={isSendDisabled}
+              isLoading={submitting || isUploadingAttachments}
+              isUploading={isUploadingAttachments}
+              hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+              hasContent={Boolean(message.trim()) || attachments.length > 0}
+              className="gap-2"
+              onSubmit={() => void submitMessage()}
+            />
           </div>
       </InputFrame>
 

@@ -31,6 +31,7 @@ function getEdgeScale(index: number, total: number): number {
     return 1;
   }
 
+  // Taper both edges so a clipped, responsive waveform does not end in hard full-height bars.
   const distanceToEdge = Math.min(index, total - 1 - index);
   const progress = Math.min(1, distanceToEdge / EDGE_ENVELOPE_BAR_COUNT);
   const eased = progress * progress * (3 - 2 * progress);

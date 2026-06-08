@@ -15,8 +15,7 @@ import type {
 import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
 import { AgentModeToggle } from "@/components/chat/agent-mode-toggle";
-import { SendButton } from "@/components/chat/send-button";
-import { MicButton } from "@/components/chat/mic-button";
+import { VoiceComposerControls } from "@/components/chat/voice-composer-controls";
 import { VoiceRecordingBar } from "@/components/chat/voice-recording-bar";
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import { toast } from "sonner";
@@ -164,82 +163,6 @@ export function ChatInput({
     onInsertTranscript: insertVoiceTranscript,
     onSendTranscript: sendVoiceTranscript,
   });
-  const voiceStatus = voiceInput.state.status;
-  const isVoiceRecording = voiceStatus === "recording";
-  const isVoiceWorking =
-    voiceStatus === "finalizing"
-    || voiceStatus === "transcribing";
-  const isVoiceError = voiceStatus === "error";
-  const canRetryVoice = voiceInput.state.status === "error" && voiceInput.state.canRetry;
-  const isVoiceMicDisabled =
-    disabled
-    || isAuthBlocking
-    || isStreaming
-    || voiceStatus === "requesting-permission"
-    || (isVoiceError && !canRetryVoice);
-  const voiceMicMode = isVoiceWorking
-    ? "loading"
-    : isVoiceRecording
-      ? "stop"
-      : canRetryVoice
-        ? "retry"
-        : "record";
-  const voiceMicLabel = (() => {
-    if (!voiceInput.isSupported) {
-      return "Voice input unavailable";
-    }
-    if (isVoiceWorking) {
-      return "Transcribing audio...";
-    }
-    if (isVoiceRecording) {
-      return "Stop and transcribe";
-    }
-    if (isVoiceError) {
-      return canRetryVoice ? "Retry transcription" : "Voice recording unavailable";
-    }
-    return "Record voice";
-  })();
-  const sendTooltipOverride = (() => {
-    if (isVoiceRecording) {
-      return "Transcribe and send";
-    }
-    if (isVoiceWorking) {
-      return "Transcribing audio...";
-    }
-    if (isVoiceError) {
-      return "Discard recording";
-    }
-    return undefined;
-  })();
-  const handleVoiceMicTap = () => {
-    if (isVoiceRecording) {
-      void voiceInput.stopAndInsert();
-      return;
-    }
-    if (isVoiceError) {
-      if (!canRetryVoice) {
-        return;
-      }
-      void voiceInput.retryLast();
-      return;
-    }
-    void voiceInput.startRecording();
-  };
-  const handleSendTap = () => {
-    if (isStreaming) {
-      handleStop();
-      return;
-    }
-    if (isVoiceRecording) {
-      void voiceInput.stopAndSend();
-      return;
-    }
-    if (isVoiceError) {
-      void voiceInput.discardDraft();
-      return;
-    }
-    submitMessage();
-  };
 
   const submitMessage = () => {
     if (
@@ -407,27 +330,18 @@ export function ChatInput({
             </>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <MicButton
-            disabled={isVoiceMicDisabled}
-            unsupported={!voiceInput.isSupported}
-            mode={voiceMicMode}
-            label={voiceMicLabel}
-            onTap={handleVoiceMicTap}
-          />
-          <SendButton
-            isStreaming={isStreaming}
-            isCancelling={isCancelling}
-            disabled={disabled || isAuthBlocking || (voiceInput.isActive && isVoiceWorking)}
-            isUploading={isUploading}
-            hasPendingOrFailedUploads={!voiceInput.isActive && hasPendingOrFailedUploads}
-            hasContent={voiceInput.isActive || Boolean(input.trim()) || attachments.length > 0}
-            tooltipOverride={sendTooltipOverride}
-            icon={isVoiceError ? "trash" : "send"}
-            variant={isVoiceError ? "muted" : undefined}
-            onTap={handleSendTap}
-          />
-        </div>
+        <VoiceComposerControls
+          voiceInput={voiceInput}
+          micDisabled={disabled || isAuthBlocking || isStreaming}
+          submitDisabled={disabled || isAuthBlocking}
+          isStreaming={isStreaming}
+          isCancelling={isCancelling}
+          isUploading={isUploading}
+          hasPendingOrFailedUploads={hasPendingOrFailedUploads}
+          hasContent={Boolean(input.trim()) || attachments.length > 0}
+          onSubmit={submitMessage}
+          onStop={handleStop}
+        />
       </div>
     </form>
   );
