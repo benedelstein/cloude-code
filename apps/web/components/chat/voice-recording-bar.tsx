@@ -61,10 +61,12 @@ export function VoiceRecordingBar({
     state.levels.length > 0
       ? state.levels
       : Array.from({ length: VOICE_SIGNAL_BAR_COUNT }, () => 0.15);
+  const visibleStartIndex = Math.max(0, levels.length - visibleBarCount);
   const visibleLevels = useMemo(
-    () => levels.slice(-visibleBarCount),
-    [levels, visibleBarCount],
+    () => levels.slice(visibleStartIndex),
+    [levels, visibleStartIndex],
   );
+  const firstSampleKey = (state.levelFrame ?? 0) - levels.length + visibleStartIndex;
 
   useEffect(() => {
     const waveform = waveformRef.current;
@@ -111,9 +113,9 @@ export function VoiceRecordingBar({
           );
           return (
             <span
-              key={index}
+              key={firstSampleKey + index}
               className={cn(
-                "w-0.5 shrink-0 rounded-full bg-accent/75 transition-[height,opacity] duration-150 ease-out motion-reduce:transition-none",
+                "w-0.5 shrink-0 rounded-full bg-accent/75 transition-opacity duration-150 ease-out motion-reduce:transition-none",
                 isError && "bg-danger/75",
               )}
               style={{
