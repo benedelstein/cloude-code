@@ -55,21 +55,7 @@ function parseContentLength(header: string | null): number | null {
 }
 
 function isUploadedFile(value: unknown): value is File {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const candidate = value as {
-    name?: unknown;
-    size?: unknown;
-    type?: unknown;
-    stream?: unknown;
-  };
-
-  return typeof candidate.name === "string"
-    && typeof candidate.size === "number"
-    && typeof candidate.type === "string"
-    && typeof candidate.stream === "function";
+  return value instanceof File;
 }
 
 function normalizeMediaType(mediaType: string): string {
