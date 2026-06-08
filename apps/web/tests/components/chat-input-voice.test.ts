@@ -24,6 +24,7 @@ const {
 }));
 
 vi.mock("@/hooks/use-voice-input", () => ({
+  VOICE_SIGNAL_BAR_COUNT: 220,
   useVoiceInput,
 }));
 
@@ -132,8 +133,8 @@ describe("ChatInput voice integration", () => {
 
     expect(screen.queryByRole("button", { name: "Record voice" })).toBeNull();
     expect(screen.queryByTestId("provider-selector")).toBeNull();
-    expect(screen.getByRole("button", { name: "Stop recording" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Send recording" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop and transcribe" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Transcribe and send" })).toBeTruthy();
   });
 
   it("inserts voice transcript into the composer", () => {

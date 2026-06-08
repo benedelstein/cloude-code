@@ -63,10 +63,15 @@ class FakeAudioContext {
       fftSize: 128,
       frequencyBinCount: 8,
       getByteFrequencyData: (data: Uint8Array) => data.fill(64),
+      getByteTimeDomainData: (data: Uint8Array) => data.fill(160),
     } as unknown as AnalyserNode;
   }
 
   public close(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  public resume(): Promise<void> {
     return Promise.resolve();
   }
 }
@@ -154,6 +159,34 @@ describe("useVoiceInput", () => {
 
     expect(insertTranscript).toHaveBeenCalledWith("timed out safely");
     expect(result.current.state.status).toBe("idle");
+  });
+
+  it("returns to idle without retry state when no speech is detected", async () => {
+    const insertTranscript = vi.fn();
+    const sendTranscript = vi.fn();
+    const uploadVoice = vi.fn(async () => ({ text: "   " }));
+
+    const { result } = renderHook(() => useVoiceInput({
+      onInsertTranscript: insertTranscript,
+      onSendTranscript: sendTranscript,
+      uploadVoice,
+    }));
+
+    await act(async () => {
+      await result.current.startRecording();
+      await result.current.stopAndInsert();
+      await flushMicrotasks();
+    });
+
+    expect(insertTranscript).not.toHaveBeenCalled();
+    expect(sendTranscript).not.toHaveBeenCalled();
+    expect(saveLatestVoiceDraft).toHaveBeenCalledTimes(1);
+    expect(deleteLatestVoiceDraft).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toEqual({
+      status: "idle",
+      elapsedMs: 0,
+      levels: expect.any(Array),
+    });
   });
 
   it("keeps a retryable draft after upload failure", async () => {

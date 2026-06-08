@@ -13,7 +13,10 @@ import { uploadVoiceForTranscription } from "@/lib/voice-api";
 export const MAX_VOICE_RECORDING_MS = 5 * 60 * 1000;
 export const TARGET_VOICE_AUDIO_BITS_PER_SECOND = 96_000;
 export const MAX_VOICE_AUDIO_BYTES = 10 * 1024 * 1024;
-export const VOICE_WAVEFORM_BAR_COUNT = 28;
+export const VOICE_SIGNAL_BAR_COUNT = 220;
+const VOICE_SIGNAL_SAMPLE_INTERVAL_MS = 16;
+const VOICE_SIGNAL_SAMPLE_COUNT = 512;
+const MIN_VOICE_SIGNAL_LEVEL = 0.08;
 
 const SUPPORTED_MIME_TYPES = [
   "audio/webm;codecs=opus",
@@ -51,7 +54,7 @@ export type UseVoiceInputResult = {
   discardDraft: () => Promise<void>;
 };
 
-const EMPTY_LEVELS = Array.from({ length: VOICE_WAVEFORM_BAR_COUNT }, () => 0.15);
+const EMPTY_LEVELS = Array.from({ length: VOICE_SIGNAL_BAR_COUNT }, () => 0.15);
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Voice transcription failed.";
@@ -185,14 +188,9 @@ export function useVoiceInput({
       const result = await uploadVoice(file);
       const text = result.text.trim();
       if (!text) {
-        draftRef.current = draft;
-        setState({
-          status: "error",
-          elapsedMs: draft.durationMs,
-          levels: levelsRef.current,
-          message: "No speech detected.",
-          canRetry: true,
-        });
+        draftRef.current = null;
+        await deleteLatestVoiceDraft().catch(() => undefined);
+        setState({ status: "idle", elapsedMs: 0, levels: EMPTY_LEVELS });
         return;
       }
 
@@ -253,26 +251,30 @@ export function useVoiceInput({
     audioContextRef.current = audioContext;
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 128;
+    analyser.fftSize = VOICE_SIGNAL_SAMPLE_COUNT;
     source.connect(analyser);
+    void audioContext.resume().catch(() => undefined);
 
-    const data = new Uint8Array(analyser.frequencyBinCount);
+    const samples = new Uint8Array(VOICE_SIGNAL_SAMPLE_COUNT);
+    let lastSampleAt = 0;
     const updateLevels = () => {
-      analyser.getByteFrequencyData(data);
-      const bucketSize = Math.max(1, Math.floor(data.length / VOICE_WAVEFORM_BAR_COUNT));
-      const levels = Array.from({ length: VOICE_WAVEFORM_BAR_COUNT }, (_, index) => {
-        const start = index * bucketSize;
-        const end = Math.min(data.length, start + bucketSize);
-        let total = 0;
-        for (let itemIndex = start; itemIndex < end; itemIndex += 1) {
-          total += data[itemIndex] ?? 0;
+      const now = performance.now();
+      if (now - lastSampleAt >= VOICE_SIGNAL_SAMPLE_INTERVAL_MS) {
+        lastSampleAt = now;
+        analyser.getByteTimeDomainData(samples);
+        let sumSquares = 0;
+        for (let index = 0; index < samples.length; index += 1) {
+          const centeredSample = ((samples[index] ?? 128) - 128) / 128;
+          sumSquares += centeredSample * centeredSample;
         }
-        return Math.max(0.12, Math.min(1, (total / Math.max(1, end - start)) / 255));
-      });
-      levelsRef.current = levels;
-      const elapsedMs = Math.max(0, Date.now() - startedAtRef.current);
-      elapsedMsRef.current = elapsedMs;
-      setState({ status: "recording", elapsedMs, levels });
+        const amplitude = Math.sqrt(sumSquares / samples.length);
+        const nextLevel = Math.max(MIN_VOICE_SIGNAL_LEVEL, Math.min(1, amplitude * 5));
+        const levels = [...levelsRef.current.slice(1), nextLevel];
+        levelsRef.current = levels;
+        const elapsedMs = Math.max(0, Date.now() - startedAtRef.current);
+        elapsedMsRef.current = elapsedMs;
+        setState({ status: "recording", elapsedMs, levels });
+      }
       animationFrameRef.current = window.requestAnimationFrame(updateLevels);
     };
 

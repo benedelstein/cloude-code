@@ -21,10 +21,7 @@ describe("VoiceTranscriptionService", () => {
   });
 
   it("transcribes with the default fetch provider", async () => {
-    let service: VoiceTranscriptionService | undefined;
-    let fetchThis: unknown;
     const fetchProvider = vi.fn(function (this: unknown) {
-      fetchThis = this;
       return Promise.resolve(new Response(JSON.stringify({
         text: "hello from default fetch",
       }), {
@@ -33,7 +30,7 @@ describe("VoiceTranscriptionService", () => {
       }));
     });
     vi.stubGlobal("fetch", fetchProvider);
-    service = new VoiceTranscriptionService(createEnv());
+    const service = new VoiceTranscriptionService(createEnv());
 
     await expect(service.transcribe({
       audio: createAudioFile(),
@@ -44,7 +41,7 @@ describe("VoiceTranscriptionService", () => {
     });
 
     expect(fetchProvider).toHaveBeenCalledOnce();
-    expect(fetchThis).not.toBe(service);
+    expect(fetchProvider.mock.contexts[0]).not.toBe(service);
   });
 
   it("builds an OpenAI transcription request with the default model", async () => {

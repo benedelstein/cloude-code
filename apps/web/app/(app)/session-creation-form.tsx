@@ -519,11 +519,14 @@ export function SessionCreationForm() {
   const voiceStatus = voiceInput.state.status;
   const isVoiceRecording = voiceStatus === "recording";
   const isVoiceWorking =
-    voiceStatus === "requesting-permission"
-    || voiceStatus === "finalizing"
+    voiceStatus === "finalizing"
     || voiceStatus === "transcribing";
   const isVoiceError = voiceStatus === "error";
   const canRetryVoice = voiceInput.state.status === "error" && voiceInput.state.canRetry;
+  const isVoiceMicDisabled =
+    isFormInteractionDisabled
+    || voiceStatus === "requesting-permission"
+    || (isVoiceError && !canRetryVoice);
   const voiceMicMode = isVoiceWorking
     ? "loading"
     : isVoiceRecording
@@ -741,7 +744,7 @@ export function SessionCreationForm() {
 
             <div className="flex shrink-0 items-center gap-2">
               <MicButton
-                disabled={isFormInteractionDisabled || (isVoiceError && !canRetryVoice)}
+                disabled={isVoiceMicDisabled}
                 unsupported={!voiceInput.isSupported}
                 mode={voiceMicMode}
                 label={voiceMicLabel}

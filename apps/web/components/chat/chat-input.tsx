@@ -167,11 +167,16 @@ export function ChatInput({
   const voiceStatus = voiceInput.state.status;
   const isVoiceRecording = voiceStatus === "recording";
   const isVoiceWorking =
-    voiceStatus === "requesting-permission"
-    || voiceStatus === "finalizing"
+    voiceStatus === "finalizing"
     || voiceStatus === "transcribing";
   const isVoiceError = voiceStatus === "error";
   const canRetryVoice = voiceInput.state.status === "error" && voiceInput.state.canRetry;
+  const isVoiceMicDisabled =
+    disabled
+    || isAuthBlocking
+    || isStreaming
+    || voiceStatus === "requesting-permission"
+    || (isVoiceError && !canRetryVoice);
   const voiceMicMode = isVoiceWorking
     ? "loading"
     : isVoiceRecording
@@ -404,7 +409,7 @@ export function ChatInput({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <MicButton
-            disabled={disabled || isAuthBlocking || isStreaming || (isVoiceError && !canRetryVoice)}
+            disabled={isVoiceMicDisabled}
             unsupported={!voiceInput.isSupported}
             mode={voiceMicMode}
             label={voiceMicLabel}

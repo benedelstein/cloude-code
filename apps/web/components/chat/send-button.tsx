@@ -64,6 +64,7 @@ export function SendButton({
       <TooltipTrigger asChild>
         <button
           type="button"
+          aria-label={tooltipText}
           disabled={isSendDisabled}
           onClick={onTap}
           className={cn(

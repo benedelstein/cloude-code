@@ -75,6 +75,7 @@ vi.mock("@/components/providers/session-list-provider", () => ({
 }));
 
 vi.mock("@/hooks/use-voice-input", () => ({
+  VOICE_SIGNAL_BAR_COUNT: 220,
   useVoiceInput,
 }));
 
