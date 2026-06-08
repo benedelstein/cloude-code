@@ -31,8 +31,11 @@ export function SessionTodoListSection({
   const [isExpanded, setIsExpanded] = useState(false);
   const completedTodos = todos?.filter((todo) => todo.status === "completed").length ?? 0;
   const todoItems = getTodoItems(todos ?? []);
-  const minHeight = "min-h-[200px]";
+  const loadingMinHeight = "min-h-[200px]";
   const showExpandButton = todoItems.length > DEFAULT_VISIBLE_TODO_COUNT;
+  const visibleTodoCount = isExpanded
+    ? todoItems.length
+    : Math.min(todoItems.length, DEFAULT_VISIBLE_TODO_COUNT);
 
   useEffect(() => {
     if (todoItems.length <= DEFAULT_VISIBLE_TODO_COUNT) {
@@ -46,7 +49,7 @@ export function SessionTodoListSection({
       meta={!isLoading && todos && todos.length > 0 ? `${completedTodos}/${todos.length} completed` : undefined}
     >
       {isLoading ? (
-        <SessionSidebarCard className={cn(minHeight, "gap-3")}>
+        <SessionSidebarCard className={cn(loadingMinHeight, "gap-3")}>
           <Skeleton className="h-4 w-24" />
           <div className="space-y-3">
             <TodoSkeletonRow />
@@ -55,13 +58,14 @@ export function SessionTodoListSection({
           </div>
         </SessionSidebarCard>
       ) : todos && todos.length > 0 ? (
-        <SessionSidebarCard className={minHeight}>
+        <SessionSidebarCard>
           <div className="flex flex-col">
             {todoItems.map((todoItem, index) => (
               <TodoListItem
                 key={todoItem.key}
                 todo={todoItem.todo}
                 isVisible={isExpanded || index < DEFAULT_VISIBLE_TODO_COUNT}
+                hasBottomMargin={index < visibleTodoCount - 1}
               />
             ))}
           </div>
@@ -69,7 +73,7 @@ export function SessionTodoListSection({
             <button
               type="button"
               onClick={() => setIsExpanded((currentValue) => !currentValue)}
-              className="mt-1 text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground"
+              className="mt-2 self-start text-left text-xs font-medium text-foreground-secondary transition-colors hover:text-foreground"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Show less" : `Show all (${todoItems.length})`}
@@ -77,7 +81,7 @@ export function SessionTodoListSection({
           ) : null}
         </SessionSidebarCard>
       ) : (
-        <SessionSidebarCard variant="empty" className={minHeight}>
+        <SessionSidebarCard variant="empty">
           No todos.
         </SessionSidebarCard>
       )}
@@ -100,9 +104,11 @@ function TodoSkeletonRow() {
 function TodoListItem({
   todo,
   isVisible,
+  hasBottomMargin,
 }: {
   todo: SessionTodo;
   isVisible: boolean;
+  hasBottomMargin: boolean;
 }) {
   const [hasEntered, setHasEntered] = useState(false);
 
@@ -121,7 +127,8 @@ function TodoListItem({
       aria-hidden={!isVisible}
       className={cn(
         "grid overflow-hidden transition-[grid-template-rows,opacity,margin,transform] duration-200 ease-out",
-        isVisible ? "mb-2 grid-rows-[1fr] opacity-100" : "mb-0 grid-rows-[0fr] opacity-0",
+        isVisible ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        hasBottomMargin ? "mb-2" : "mb-0",
         hasEntered ? "translate-y-0" : "-translate-y-1",
       )}
     >
