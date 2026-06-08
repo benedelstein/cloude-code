@@ -73,7 +73,7 @@ export function SessionTodoListSection({
             <button
               type="button"
               onClick={() => setIsExpanded((currentValue) => !currentValue)}
-              className="mt-1 self-start rounded-md bg-sidebar-accent px-2 py-1 text-left text-xs font-medium text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent/80"
+              className="mt-2 self-start rounded-md px-2 py-1 text-left text-xs font-medium text-foreground-secondary transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Show less" : `Show all (${todoItems.length})`}
