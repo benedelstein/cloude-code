@@ -233,7 +233,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           className={`pt-8 ${isRightSidebarResizing ? "" : "transition-[padding] duration-200 ease-linear"}`}
           style={{ paddingRight: rightSidebarInset }}
         >
-          <div className="max-w-4xl min-w-0 mx-auto px-4 pb-2" style={{ background: "linear-gradient(to bottom, transparent, var(--background-secondary) 32px)" }}>
+          <div className="max-w-4xl min-w-0 mx-auto px-4">
             <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
               className: "mb-2 flex justify-center",
             })}>
@@ -255,34 +255,36 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
               pushedBranch={pushedBranch}
               pullRequestState={pullRequestState}
             />
-            <InputFrame>
-              <StatusBanner
-                sessionErrorMessage={sessionErrorMessage}
-              />
-              <ChatInput
-                onSend={(...args) => {
-                  scrollToBottomRef.current?.();
-                  sendMessage(...args);
-                }}
-                onUploadAttachments={(files) => uploadAttachments(files, sessionId)
-                  .then((response) => response.attachments)}
-                onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
-                onStop={stop}
-                disabled={!isReady}
-                isStreaming={isResponding || isStreaming}
-                agentMode={agentMode}
-                onAgentModeChange={setAgentMode}
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                selectedEffort={selectedEffort}
-                onProviderModelChange={handleProviderModelChange}
-                onProviderEffortChange={handleProviderEffortChange}
-                providerAuthHandles={providerAuth.handles}
-                providerAuthRequired={providerAuthRequired}
-                operationErrorMessage={operationError?.message ?? null}
-                disabledPlaceholder={sessionErrorMessage ?? undefined}
-              />
-            </InputFrame>
+            <div className="bg-background-secondary pb-2">
+              <InputFrame>
+                <StatusBanner
+                  sessionErrorMessage={sessionErrorMessage}
+                />
+                <ChatInput
+                  onSend={(...args) => {
+                    scrollToBottomRef.current?.();
+                    sendMessage(...args);
+                  }}
+                  onUploadAttachments={(files) => uploadAttachments(files, sessionId)
+                    .then((response) => response.attachments)}
+                  onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
+                  onStop={stop}
+                  disabled={!isReady}
+                  isStreaming={isResponding || isStreaming}
+                  agentMode={agentMode}
+                  onAgentModeChange={setAgentMode}
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  selectedEffort={selectedEffort}
+                  onProviderModelChange={handleProviderModelChange}
+                  onProviderEffortChange={handleProviderEffortChange}
+                  providerAuthHandles={providerAuth.handles}
+                  providerAuthRequired={providerAuthRequired}
+                  operationErrorMessage={operationError?.message ?? null}
+                  disabledPlaceholder={sessionErrorMessage ?? undefined}
+                />
+              </InputFrame>
+            </div>
           </div>
         </div>
       </div>
