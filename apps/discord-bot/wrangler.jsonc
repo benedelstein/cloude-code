@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-12-18",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
   "vars": {
     "API_BASE_URL": "https://api.cloudecode.dev",
     "DISCORD_PUBLIC_KEY": "78c3ce662077661882ba7b530d5fc3bfddb9dbe032e25638469fb87b45cec7a0"
