@@ -54,6 +54,7 @@ This is a typescript monorepo using pnpm and Turbo. The code is organized like s
 - **[Cloudflare Agents SDK](https://agents.cloudflare.com/)** for managing message state and streaming data between client and server with websockets.
 - **[Fly.io Sprites](https://sprites.dev/)** for stateful sandbox VMs.
 - **Next.js** for the web client.
+- **[Hono](https://hono.dev/)** with [`@hono/zod-openapi`](https://hono.dev/examples/zod-openapi) for API server middleware and routing, with an auto-generated OpenAPI spec.
 - **[AI SDK](https://ai-sdk.dev/)** for abstracting over LLM data types and harnesses.
 - **[Zod](https://zod.dev/)** for runtime type validation.
 
@@ -160,6 +161,11 @@ pnpm --filter @repo/vm-agent build
 pnpm --filter @repo/vm-agent test:live:agent
 pnpm --filter @repo/vm-agent test:live:webhook
 ```
+
+### API Documentation
+
+The API server generates an OpenAPI 3.1 spec from its route schemas. With the API
+server running, the spec is served at `/doc` and an interactive Swagger UI at `/ui`.
 
 ## Self Hosting
 
