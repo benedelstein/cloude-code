@@ -14,7 +14,7 @@ import {
 const CODEX_CHECK_ID = "openai-codex.cli";
 const DEFAULT_CODEX_CLI_VERSION = "0.130.0";
 const CODEX_INSTALL_SCRIPT_URL = "https://chatgpt.com/codex/install.sh";
-const CODEX_SCRIPT_VERSION = "2";
+const CODEX_SCRIPT_VERSION = "3";
 
 function getEffectiveCodexMinVersion(codexMinVersion: string | undefined): string {
   return codexMinVersion?.trim() || DEFAULT_CODEX_CLI_VERSION;
@@ -111,8 +111,10 @@ class CodexCliCheck implements StartupToolchainCheck {
   async ensureReady(
     input: StartupToolchainCheckInput,
   ) {
+    // Use a non-login shell: Sprite login-shell logout cleanup can turn a
+    // successful early exit into exit code 1.
     const result = await input.sprite.execHttp(
-      `bash -lc ${shellQuote(this.startupScript)}`,
+      `bash -c ${shellQuote(this.startupScript)}`,
     );
     if (result.exitCode !== 0) {
       this.logger.warn("Startup toolchain check failed", {

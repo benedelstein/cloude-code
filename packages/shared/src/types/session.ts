@@ -42,6 +42,7 @@ export type StartupScriptSetupTaskSkipReason =
 export type BaseSessionSetupTask = {
   id: string;
   isBlocking: boolean;
+  canRetry: boolean;
   status: SessionSetupTaskStatus;
   startedAt: string | null;
   completedAt: string | null;
@@ -51,16 +52,19 @@ export type BaseSessionSetupTask = {
 export type CloudContainerSetupTask = BaseSessionSetupTask & {
   id: "cloud_container";
   isBlocking: true;
+  canRetry: true;
 };
 
 export type RepositorySetupTask = BaseSessionSetupTask & {
   id: "repository";
   isBlocking: true;
+  canRetry: true;
 };
 
 export type StartupScriptSetupTask = BaseSessionSetupTask & {
   id: "setup_script";
   isBlocking: false;
+  canRetry: false;
   output: SessionSetupTaskOutput | null;
   skipReason: StartupScriptSetupTaskSkipReason | null;
 };
@@ -68,6 +72,7 @@ export type StartupScriptSetupTask = BaseSessionSetupTask & {
 export type NetworkPolicySetupTask = BaseSessionSetupTask & {
   id: "network_policy";
   isBlocking: true;
+  canRetry: true;
 };
 
 export type SessionSetupTask =

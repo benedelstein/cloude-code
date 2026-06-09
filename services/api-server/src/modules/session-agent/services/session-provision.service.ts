@@ -7,6 +7,8 @@ import type {
   SessionStatus,
   StartupScriptSetupTaskSkipReason,
   SessionSetupTaskId,
+  SessionSetupRun,
+  SessionSetupTask,
 } from "@repo/shared";
 import { dedent } from "@repo/shared";
 import type { Env } from "@/shared/types";
@@ -131,15 +133,22 @@ export class SessionProvisionService {
     this.spriteName = this.getServerState().spriteName;
     const setupRun = this.getClientState().sessionSetupRun;
     if (!setupRun) { return; }
-    if (setupRun.status !== "running") {
-      this.logger.debug("Setup run is not running — skipping provision", {
+    if (setupRun.status === "completed") {
+      this.logger.debug("Setup run is completed; skipping provision", {
+        fields: { setupRunStatus: setupRun.status },
+      });
+      return;
+    }
+    if (setupRun.status === "failed" && !hasRetryableFailedProvisionTask(setupRun)) {
+      this.logger.debug("Setup run failure is not retryable; skipping provision", {
         fields: { setupRunStatus: setupRun.status },
       });
       return;
     }
 
     for (const task of setupRun.tasks) {
-      if (isTerminalSetupTask(task)) { continue; }
+      const retryFailedTask = isRetryableFailedProvisionTask(task);
+      if (isTerminalSetupTask(task) && !retryFailedTask) { continue; }
       try {
         this.setupReporter?.startTask(task.id);
         switch (task.id) {
@@ -492,6 +501,18 @@ export class SessionProvisionService {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasRetryableFailedProvisionTask(
+  setupRun: SessionSetupRun,
+): boolean {
+  return setupRun.tasks.some(isRetryableFailedProvisionTask);
+}
+
+function isRetryableFailedProvisionTask(
+  task: SessionSetupTask,
+): boolean {
+  return task.status === "failed" && task.canRetry;
 }
 
 function buildSkippedSetupScriptSkipReason(

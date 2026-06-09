@@ -67,6 +67,16 @@ function completeTask(task: SessionSetupTask): SessionSetupTask {
   };
 }
 
+function failTask(task: SessionSetupTask): SessionSetupTask {
+  return {
+    ...task,
+    status: "failed",
+    startedAt: "2026-06-02T00:00:00.000Z",
+    completedAt: "2026-06-02T00:00:00.000Z",
+    error: "fatal failure",
+  };
+}
+
 function requireSetupRun(clientState: ClientState): SessionSetupRun {
   const setupRun = clientState.sessionSetupRun;
   if (!setupRun) { throw new Error("Expected setup run"); }
@@ -74,15 +84,15 @@ function requireSetupRun(clientState: ClientState): SessionSetupRun {
 }
 
 describe("SessionSetupRunService", () => {
-  it("builds typed setup tasks with task-owned blocking metadata", () => {
+  it("builds typed setup tasks with task-owned setup metadata", () => {
     const { clientState } = createHarness();
 
     const setupRun = requireSetupRun(clientState);
-    expect(setupRun.tasks.map((task) => [task.id, task.isBlocking])).toEqual([
-      ["cloud_container", true],
-      ["repository", true],
-      ["setup_script", false],
-      ["network_policy", true],
+    expect(setupRun.tasks.map((task) => [task.id, task.isBlocking, task.canRetry])).toEqual([
+      ["cloud_container", true, true],
+      ["repository", true, true],
+      ["setup_script", false, false],
+      ["network_policy", true, true],
     ]);
     expect(setupRun.tasks.find((task) => task.id === "setup_script")).toMatchObject({
       output: null,
@@ -160,6 +170,48 @@ describe("SessionSetupRunService", () => {
       .toBe("failed");
   });
 
+  it("reopens a failed setup run when a failed task starts again", () => {
+    const { clientState, service } = createHarness({
+      prepareTask: (task) =>
+        task.id === "cloud_container" ? failTask(task) : task,
+    });
+    clientState.sessionSetupRun = {
+      ...requireSetupRun(clientState),
+      status: "failed",
+      completedAt: "2026-06-02T00:00:00.000Z",
+    };
+
+    service.startTask("cloud_container");
+
+    const setupRun = requireSetupRun(clientState);
+    const cloudContainerTask = setupRun.tasks.find((task) => task.id === "cloud_container");
+    expect(setupRun.status).toBe("running");
+    expect(setupRun.completedAt).toBeNull();
+    expect(cloudContainerTask?.status).toBe("running");
+    expect(cloudContainerTask?.completedAt).toBeNull();
+    expect(cloudContainerTask?.error).toBeNull();
+  });
+
+  it("does not reopen a failed setup run for a non-retryable failed task", () => {
+    const { clientState, service } = createHarness({
+      prepareTask: (task) =>
+        task.id === "setup_script" ? failTask(task) : task,
+    });
+    clientState.sessionSetupRun = {
+      ...requireSetupRun(clientState),
+      status: "failed",
+      completedAt: "2026-06-02T00:00:00.000Z",
+    };
+
+    service.startTask("setup_script");
+
+    const setupRun = requireSetupRun(clientState);
+    const setupScriptTask = setupRun.tasks.find((task) => task.id === "setup_script");
+    expect(setupRun.status).toBe("failed");
+    expect(setupRun.completedAt).not.toBeNull();
+    expect(setupScriptTask?.status).toBe("failed");
+  });
+
   it("repairs older running setup runs by inserting the network policy task", () => {
     const { clientState, service } = createHarness({
       serverState: { finalNetworkPolicyApplied: false },
@@ -182,6 +234,27 @@ describe("SessionSetupRunService", () => {
       .toBe("pending");
   });
 
+  it("repairs older setup runs by backfilling retry metadata", () => {
+    const { clientState, service } = createHarness();
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      tasks: setupRun.tasks.map((task) => {
+        const { canRetry: _canRetry, ...legacyTask } = task;
+        return legacyTask as SessionSetupTask;
+      }),
+    };
+
+    service.repairOnStart();
+
+    expect(requireSetupRun(clientState).tasks.map((task) => [task.id, task.canRetry])).toEqual([
+      ["cloud_container", true],
+      ["repository", true],
+      ["setup_script", false],
+      ["network_policy", true],
+    ]);
+  });
+
   it("marks inserted network policy tasks complete when the checkpoint exists", () => {
     const { clientState, service } = createHarness();
     const setupRun = requireSetupRun(clientState);
@@ -196,65 +269,4 @@ describe("SessionSetupRunService", () => {
       .toBe("completed");
   });
 
-  it("repairs older running setup runs by removing retired agent start tasks", () => {
-    const { clientState, service } = createHarness();
-    const setupRun = requireSetupRun(clientState);
-    clientState.sessionSetupRun = {
-      ...setupRun,
-      tasks: [
-        ...setupRun.tasks.map(completeTask),
-        {
-          id: "initial_agent_start",
-          isBlocking: true,
-          status: "pending",
-          startedAt: null,
-          completedAt: null,
-          error: null,
-        } as unknown as SessionSetupTask,
-      ],
-    };
-
-    service.repairOnStart();
-
-    const repairedRun = requireSetupRun(clientState);
-    expect(repairedRun.tasks.map((task) => task.id)).toEqual([
-      "cloud_container",
-      "repository",
-      "setup_script",
-      "network_policy",
-    ]);
-    expect(repairedRun.status).toBe("completed");
-  });
-
-  it("removes retired agent start tasks from older completed setup runs", () => {
-    const { clientState, service } = createHarness();
-    const setupRun = requireSetupRun(clientState);
-    clientState.sessionSetupRun = {
-      ...setupRun,
-      status: "completed",
-      completedAt: "2026-06-03T00:01:00.000Z",
-      tasks: [
-        ...setupRun.tasks.map(completeTask),
-        {
-          id: "initial_agent_start",
-          isBlocking: true,
-          status: "completed",
-          startedAt: "2026-06-03T00:00:00.000Z",
-          completedAt: "2026-06-03T00:01:00.000Z",
-          error: null,
-        } as unknown as SessionSetupTask,
-      ],
-    };
-
-    service.repairOnStart();
-
-    const repairedRun = requireSetupRun(clientState);
-    expect(repairedRun.status).toBe("completed");
-    expect(repairedRun.tasks.map((task) => task.id)).toEqual([
-      "cloud_container",
-      "repository",
-      "setup_script",
-      "network_policy",
-    ]);
-  });
 });

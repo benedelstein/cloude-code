@@ -13,7 +13,7 @@ import {
 
 const CLAUDE_CHECK_ID = "claude-code.cli";
 const MIN_CLAUDE_CODE_VERSION = "2.1.154";
-const CLAUDE_SCRIPT_VERSION = "1";
+const CLAUDE_SCRIPT_VERSION = "2";
 
 function buildClaudeStartupScript(): string {
   return `
@@ -102,8 +102,10 @@ class ClaudeCliCheck implements StartupToolchainCheck {
   async ensureReady(
     input: StartupToolchainCheckInput,
   ) {
+    // Use a non-login shell: Sprite login-shell logout cleanup can turn a
+    // successful early exit into exit code 1.
     const result = await input.sprite.execHttp(
-      `bash -lc ${shellQuote(this.startupScript)}`,
+      `bash -c ${shellQuote(this.startupScript)}`,
     );
     if (result.exitCode !== 0) {
       this.logger.warn("Startup toolchain check failed", {

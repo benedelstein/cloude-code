@@ -104,6 +104,7 @@ function createSetupTask<Id extends SessionSetupTask["id"], IsBlocking extends b
   return {
     id,
     isBlocking,
+    canRetry: id !== "setup_script",
     status: "pending",
     startedAt: null,
     completedAt: null,
@@ -118,6 +119,16 @@ function completeTask(task: SessionSetupTask): SessionSetupTask {
     startedAt: "2026-06-03T00:00:00.000Z",
     completedAt: "2026-06-03T00:00:00.000Z",
     error: null,
+  };
+}
+
+function failTask(task: SessionSetupTask, error = "fatal failure"): SessionSetupTask {
+  return {
+    ...task,
+    status: "failed",
+    startedAt: "2026-06-03T00:00:00.000Z",
+    completedAt: "2026-06-03T00:00:00.000Z",
+    error,
   };
 }
 
@@ -361,6 +372,84 @@ describe("SessionProvisionService startup toolchain", () => {
       "cloud_container",
       "Codex CLI repair script failed.",
     );
+  });
+
+  it("retries a failed retryable task", async () => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: null,
+    });
+    const clientState = createClientState({
+      prepareTask: (task) =>
+        task.id === "cloud_container"
+          ? failTask(task, "Codex CLI startup script failed.")
+          : task,
+    });
+    clientState.sessionSetupRun = {
+      ...clientState.sessionSetupRun!,
+      status: "failed",
+      completedAt: "2026-06-03T00:00:00.000Z",
+    };
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      clientState,
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(1, "cloud_container");
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
+    expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
+  });
+
+  it.each([
+    "repository",
+    "network_policy",
+  ] as const)("retries a failed %s task", async (taskId) => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+      repoCloned: taskId !== "repository",
+      startupScriptCompleted: true,
+      finalNetworkPolicyApplied: false,
+    });
+    const clientState = createClientState({
+      prepareTask: (task) => {
+        if (task.id === taskId) {
+          return failTask(task);
+        }
+        return task.id === "network_policy" && taskId === "repository"
+          ? task
+          : completeTask(task);
+      },
+    });
+    clientState.sessionSetupRun = {
+      ...clientState.sessionSetupRun!,
+      status: "failed",
+      completedAt: "2026-06-03T00:00:00.000Z",
+    };
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      clientState,
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenCalledWith(taskId);
+    expect(setupReporter.completeTask).toHaveBeenCalledWith(taskId);
   });
 
   it("reports final network policy failures through the network policy task", async () => {

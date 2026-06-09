@@ -9,22 +9,17 @@ import type {
 } from "@repo/shared";
 import type { ServerState } from "../repositories/server-state.repository";
 
-const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
-  "cloud_container",
-  "repository",
-  "setup_script",
-  "network_policy",
-];
+const SETUP_TASK_DEFINITIONS = {
+  cloud_container: { isBlocking: true, canRetry: true },
+  repository: { isBlocking: true, canRetry: true },
+  setup_script: { isBlocking: false, canRetry: false },
+  network_policy: { isBlocking: true, canRetry: true },
+} as const satisfies Record<SessionSetupTaskId, {
+  isBlocking: boolean;
+  canRetry: boolean;
+}>;
 
-type RetiredSessionSetupTask = BaseSessionSetupTask & {
-  id: "initial_agent_start";
-  isBlocking: true;
-};
-
-type StoredSessionSetupTask = SessionSetupTask | RetiredSessionSetupTask;
-type StoredSessionSetupRun = Omit<SessionSetupRun, "tasks"> & {
-  tasks: StoredSessionSetupTask[];
-};
+const CREATE_SETUP_TASK_IDS = Object.keys(SETUP_TASK_DEFINITIONS) as SessionSetupTaskId[];
 
 export interface SessionSetupRunServiceDeps {
   getServerState: () => ServerState;
@@ -59,6 +54,26 @@ export class SessionSetupRunService {
   }
 
   startTask(taskId: SessionSetupTaskId): void {
+    const setupRun = this.getClientState().sessionSetupRun;
+    if (!setupRun) { return; }
+    const task = setupRun.tasks.find((candidate) => candidate.id === taskId);
+    if (!task) { return; }
+    if (setupRun.status === "failed" && task.status === "failed" && task.canRetry) {
+      const now = new Date().toISOString();
+      const retryTask = updateSetupTask(task, {
+        status: "running",
+        startedAt: now,
+        completedAt: null,
+        error: null,
+      });
+      this.updateRun({
+        ...replaceSetupTask(setupRun, retryTask),
+        status: "running",
+        completedAt: null,
+      });
+      return;
+    }
+
     const updatedRun = this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }
       return updateSetupTask(task, {
@@ -140,7 +155,7 @@ export class SessionSetupRunService {
   repairOnStart(): void {
     const setupRun = this.getClientState().sessionSetupRun;
     if (!setupRun) { return; }
-    const currentRun = removeRetiredSetupTasks(setupRun);
+    const currentRun = normalizeSetupTaskMetadata(setupRun);
     if (currentRun.status !== "running") {
       if (currentRun !== setupRun) {
         this.updateRun(currentRun);
@@ -248,44 +263,28 @@ export function isTerminalSetupTask(task: SessionSetupTask): boolean {
 }
 
 function createSetupTask(taskId: SessionSetupTaskId): SessionSetupTask {
-  switch (taskId) {
-    case "cloud_container": {
-      return createBaseSetupTask(taskId, true);
-    }
-    case "repository": {
-      return createBaseSetupTask(taskId, true);
-    }
-    case "setup_script": {
-      return {
-        ...createBaseSetupTask(taskId, false),
-        output: null,
-        skipReason: null,
-      };
-    }
-    case "network_policy": {
-      return createBaseSetupTask(taskId, true);
-    }
-    default: {
-      const exhaustiveCheck: never = taskId;
-      throw new Error(`Unhandled setup task id: ${exhaustiveCheck}`);
-    }
+  const baseTask = createBaseSetupTask(taskId);
+  if (taskId === "setup_script") {
+    return {
+      ...baseTask,
+      output: null,
+      skipReason: null,
+    } as SessionSetupTask;
   }
+  return baseTask as SessionSetupTask;
 }
 
-function createBaseSetupTask<Id extends SessionSetupTaskId, IsBlocking extends boolean>(
-  taskId: Id,
-  isBlocking: IsBlocking,
-): {
-  id: Id;
-  isBlocking: IsBlocking;
+function createBaseSetupTask(taskId: SessionSetupTaskId): BaseSessionSetupTask & {
   status: "pending";
   startedAt: null;
   completedAt: null;
   error: null;
 } {
+  const definition = SETUP_TASK_DEFINITIONS[taskId];
   return {
     id: taskId,
-    isBlocking,
+    isBlocking: definition.isBlocking,
+    canRetry: definition.canRetry,
     status: "pending",
     startedAt: null,
     completedAt: null,
@@ -327,14 +326,20 @@ function ensureNetworkPolicyTaskPresent(
   return { ...setupRun, tasks };
 }
 
-function removeRetiredSetupTasks(setupRun: SessionSetupRun): SessionSetupRun {
-  const storedRun = setupRun as StoredSessionSetupRun;
-  const tasks = storedRun.tasks.filter(
-    (task): task is SessionSetupTask => task.id !== "initial_agent_start",
-  );
-  return tasks.length === storedRun.tasks.length
-    ? setupRun
-    : { ...setupRun, tasks };
+function normalizeSetupTaskMetadata(setupRun: SessionSetupRun): SessionSetupRun {
+  let changed = false;
+  const tasks = setupRun.tasks.map((task) => {
+    const storedTask = task as SessionSetupTask & { canRetry?: boolean };
+    if (typeof storedTask.canRetry === "boolean") {
+      return task;
+    }
+    changed = true;
+    return {
+      ...task,
+      canRetry: SETUP_TASK_DEFINITIONS[task.id].canRetry,
+    } as SessionSetupTask;
+  });
+  return changed ? { ...setupRun, tasks } : setupRun;
 }
 
 function completeSetupTaskForRepair(
