@@ -40,10 +40,12 @@ const LINK_ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const ACCOUNT_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const LINK_TOKEN_BYTES = 32;
 
+// Anthropic structured output rejects numeric minimum/maximum and string
+// maxLength schema keywords, so express the bounds in descriptions instead.
 const repoRoutingSchema = z.object({
   selectedRepoId: z.number().nullable(),
-  confidence: z.number().min(0).max(1),
-  reason: z.string().max(200).optional(),
+  confidence: z.number().describe("Between 0 and 1."),
+  reason: z.string().optional().describe("At most 200 characters."),
 });
 
 const REPO_ROUTER_SYSTEM_PROMPT = dedent`
