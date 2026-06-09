@@ -78,7 +78,7 @@ cd services/api-server
 pnpm wrangler secret put INTEGRATION_SESSION_REQUEST_TOKEN
 ```
 
-`INTEGRATION_SESSION_REQUEST_TOKEN` must match the integration client's `CLOUDE_INTEGRATION_API_TOKEN`.
+Use the same `INTEGRATION_SESSION_REQUEST_TOKEN` value on the API server and every trusted integration client, including the Discord Worker.
 
 Apply the D1 migration before using the feature remotely:
 
@@ -93,7 +93,7 @@ Set this secret on `apps/discord-bot` (`DISCORD_PUBLIC_KEY` is a public Worker v
 
 ```bash
 cd apps/discord-bot
-pnpm wrangler secret put CLOUDE_INTEGRATION_API_TOKEN
+pnpm wrangler secret put INTEGRATION_SESSION_REQUEST_TOKEN
 ```
 
 Deploy:
