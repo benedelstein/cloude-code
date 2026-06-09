@@ -123,16 +123,26 @@ export class IntegrationSessionRequestService {
       githubAccessToken,
     });
     if (!resolution) {
-      const candidates = rankRepos(params.request.prompt, reposResult.value)
+      const ranked = rankRepos(params.request.prompt, reposResult.value)
         .slice(0, 5)
         .map(toIntegrationRepoCandidate);
+      if (ranked.length > 0) {
+        return {
+          ok: false,
+          code: "AMBIGUOUS_REPO_MATCH",
+          message: "I could not confidently choose a repository. Include owner/repo or the exact repo name.",
+          candidates: ranked,
+        };
+      }
+      // Nothing scored: suggest the first few accessible repos so the reply
+      // still tells them what repo hints would work.
       return {
         ok: false,
-        code: candidates.length > 0 ? "AMBIGUOUS_REPO_MATCH" : "NO_REPO_MATCH",
-        message: candidates.length > 0
-          ? "I could not confidently choose a repository. Include owner/repo or the exact repo name."
-          : "I could not find a repository match for that request.",
-        candidates,
+        code: "NO_REPO_MATCH",
+        message: "I could not find a repository match for that request. Include owner/repo or the exact repo name.",
+        candidates: reposResult.value
+          .slice(0, 5)
+          .map((repo) => toIntegrationRepoCandidate({ ...repo, score: 0 })),
       };
     }
 
@@ -140,6 +150,7 @@ export class IntegrationSessionRequestService {
       userId: link.userId,
       githubAccessToken,
       request: this.buildCreateSessionRequest(params.request, resolution.repo),
+      source: externalUser.provider,
     });
     if (!sessionResult.ok) {
       return {

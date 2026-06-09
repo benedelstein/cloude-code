@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, MessageCircleWarning } from "lucide-react";
+import { CheckCircle2, Loader2, LogIn, MessageCircleWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { ApiError, claimIntegrationLink } from "@/lib/client-api";
@@ -88,8 +88,11 @@ function StatusIcon({
   if (!token || claimState.type === "error") {
     return <MessageCircleWarning className="h-12 w-12 text-warning" />;
   }
-  if (loading || claimState.type === "claiming" || !user) {
+  if (loading || claimState.type === "claiming") {
     return <Loader2 className="h-12 w-12 animate-spin text-foreground-secondary" />;
+  }
+  if (!user) {
+    return <LogIn className="h-12 w-12 text-foreground-secondary" />;
   }
   return <CheckCircle2 className="h-12 w-12 text-edit" />;
 }
