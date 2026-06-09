@@ -23,6 +23,7 @@ import type {
   SessionAgentRpcError,
   UpdatePullRequestRequest,
 } from "@/shared/types/session-agent";
+import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
 
 interface PullRequestCreationContext {
   repoFullName: string;
@@ -183,7 +184,7 @@ export class SessionPullRequestLifecycleService {
 
     return success({
       repoFullName,
-      baseBranch: clientState.baseBranch ?? "main",
+      baseBranch: sanitizeGitBranchName(clientState.baseBranch) ?? "main",
       headBranch: clientState.pushedBranch,
       sessionMessages: this.messageRepository
         .getAllBySession(sessionId)

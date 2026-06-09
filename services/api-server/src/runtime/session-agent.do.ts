@@ -39,6 +39,7 @@ import type {
 } from "@/shared/types/session-agent";
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
 import { timingSafeCompare } from "@/shared/utils/crypto";
+import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
 import type {
   AgentEvent,
   SessionStatus,
@@ -678,8 +679,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         message: pendingUserUiMessage,
         attachmentIds: pendingAttachmentIds,
       },
-      // Store the requested base branch; cloneRepo will detect the actual branch and overwrite
-      baseBranch: data.branch ?? null,
+      // Store the requested base branch; cloneRepo will detect the actual branch and overwrite.
+      baseBranch: sanitizeGitBranchName(data.branch),
       sessionSetupRun,
       status: this.synthesizeStatus(sessionSetupRun),
     });

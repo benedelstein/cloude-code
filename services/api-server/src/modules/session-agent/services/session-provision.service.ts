@@ -14,6 +14,7 @@ import { dedent } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SpritesCoordinator } from "@/shared/integrations/sprites/sprites";
 import { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
+import { sanitizeGitBranchName, shellQuote } from "@/shared/utils/git-branch";
 import {
   buildBootstrapNetworkPolicy,
   buildFinalNetworkPolicy,
@@ -415,12 +416,15 @@ export class SessionProvisionService {
       const basicAuth = btoa(`x-access-token:${cloneToken}`);
 
       const cloneStart = Date.now();
-      const baseBranch = clientState.baseBranch;
-      const branchFlag = baseBranch ? `--branch ${baseBranch} ` : "";
-      const cloneResult = await sprite.execHttp(
-        `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone --single-branch ${branchFlag}${githubRemoteUrl} ${WORKSPACE_DIR}`,
-        {},
-      );
+      const baseBranch = sanitizeGitBranchName(clientState.baseBranch);
+      const branchFlag = baseBranch ? `--branch ${shellQuote(baseBranch)} ` : "";
+      const cloneCommand = [
+        `git -c http.extraHeader="Authorization: Basic ${basicAuth}" clone`,
+        "--single-branch",
+        `${branchFlag}${shellQuote(githubRemoteUrl)}`,
+        shellQuote(WORKSPACE_DIR),
+      ].join(" ");
+      const cloneResult = await sprite.execHttp(cloneCommand, {});
       this.logger.info("Clone completed", {
         fields: {
           durationSeconds: Number(
@@ -442,16 +446,17 @@ export class SessionProvisionService {
       `cd ${WORKSPACE_DIR} && git rev-parse --abbrev-ref HEAD`,
       {},
     );
-    const actualBaseBranch = branchResult.stdout.trim() || "main";
-    if (clientState.baseBranch && actualBaseBranch !== clientState.baseBranch) {
+    const actualBaseBranch = sanitizeGitBranchName(branchResult.stdout) ?? "main";
+    const configuredBaseBranch = sanitizeGitBranchName(clientState.baseBranch);
+    if (configuredBaseBranch && actualBaseBranch !== configuredBaseBranch) {
       this.logger.warn("Base branch does not match actual base branch", {
         fields: {
-          configuredBaseBranch: clientState.baseBranch,
+          configuredBaseBranch,
           actualBaseBranch,
         },
       });
     }
-    if (actualBaseBranch !== clientState.baseBranch) {
+    if (actualBaseBranch !== configuredBaseBranch) {
       this.updatePartialState({ baseBranch: actualBaseBranch });
     }
 
