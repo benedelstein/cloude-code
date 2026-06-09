@@ -1,4 +1,5 @@
 import type {
+  BaseSessionSetupTask,
   ClientState,
   SessionSetupRun,
   SessionSetupTask,
@@ -8,12 +9,17 @@ import type {
 } from "@repo/shared";
 import type { ServerState } from "../repositories/server-state.repository";
 
-const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
-  "cloud_container",
-  "repository",
-  "setup_script",
-  "network_policy",
-];
+const SETUP_TASK_DEFINITIONS = {
+  cloud_container: { isBlocking: true, canRetry: true },
+  repository: { isBlocking: true, canRetry: true },
+  setup_script: { isBlocking: false, canRetry: false },
+  network_policy: { isBlocking: true, canRetry: true },
+} as const satisfies Record<SessionSetupTaskId, {
+  isBlocking: boolean;
+  canRetry: boolean;
+}>;
+
+const CREATE_SETUP_TASK_IDS = Object.keys(SETUP_TASK_DEFINITIONS) as SessionSetupTaskId[];
 
 type LegacyInitialAgentStartSetupTask = {
   id: "initial_agent_start";
@@ -266,51 +272,28 @@ export function isTerminalSetupTask(task: SessionSetupTask): boolean {
 }
 
 function createSetupTask(taskId: SessionSetupTaskId): SessionSetupTask {
-  switch (taskId) {
-    case "cloud_container": {
-      return createBaseSetupTask(taskId, true, true);
-    }
-    case "repository": {
-      return createBaseSetupTask(taskId, true, true);
-    }
-    case "setup_script": {
-      return {
-        ...createBaseSetupTask(taskId, false, false),
-        output: null,
-        skipReason: null,
-      };
-    }
-    case "network_policy": {
-      return createBaseSetupTask(taskId, true, true);
-    }
-    default: {
-      const exhaustiveCheck: never = taskId;
-      throw new Error(`Unhandled setup task id: ${exhaustiveCheck}`);
-    }
+  const baseTask = createBaseSetupTask(taskId);
+  if (taskId === "setup_script") {
+    return {
+      ...baseTask,
+      output: null,
+      skipReason: null,
+    } as SessionSetupTask;
   }
+  return baseTask as SessionSetupTask;
 }
 
-function createBaseSetupTask<
-  Id extends SessionSetupTaskId,
-  IsBlocking extends boolean,
-  CanRetry extends boolean,
->(
-  taskId: Id,
-  isBlocking: IsBlocking,
-  canRetry: CanRetry,
-): {
-  id: Id;
-  isBlocking: IsBlocking;
-  canRetry: CanRetry;
+function createBaseSetupTask(taskId: SessionSetupTaskId): BaseSessionSetupTask & {
   status: "pending";
   startedAt: null;
   completedAt: null;
   error: null;
 } {
+  const definition = SETUP_TASK_DEFINITIONS[taskId];
   return {
     id: taskId,
-    isBlocking,
-    canRetry,
+    isBlocking: definition.isBlocking,
+    canRetry: definition.canRetry,
     status: "pending",
     startedAt: null,
     completedAt: null,
@@ -362,25 +345,10 @@ function normalizeSetupTaskMetadata(setupRun: SessionSetupRun): SessionSetupRun 
     changed = true;
     return {
       ...task,
-      canRetry: getDefaultCanRetry(task.id),
+      canRetry: SETUP_TASK_DEFINITIONS[task.id].canRetry,
     } as SessionSetupTask;
   });
   return changed ? { ...setupRun, tasks } : setupRun;
-}
-
-function getDefaultCanRetry(taskId: SessionSetupTaskId): boolean {
-  switch (taskId) {
-    case "cloud_container":
-    case "repository":
-    case "network_policy":
-      return true;
-    case "setup_script":
-      return false;
-    default: {
-      const exhaustiveCheck: never = taskId;
-      throw new Error(`Unhandled setup task id: ${exhaustiveCheck}`);
-    }
-  }
 }
 
 function removeRetiredSetupTasks(setupRun: SessionSetupRun): SessionSetupRun {
