@@ -30,6 +30,7 @@ import type {
 import { generateSessionTitle } from "@/shared/utils/generate-session-title";
 import { createLogger } from "@/shared/logging";
 import { SessionsRepository } from "../repositories/sessions.repository";
+import type { SessionSource } from "../repositories/sessions.repository";
 import {
   getPullRequestStatusForSession,
   type SessionPullRequestGitHubProvider,
@@ -200,6 +201,9 @@ export class SessionsService {
   async createSession(params: {
     userId: string;
     request: CreateSessionRequest;
+    // Creation entry point for monitoring. Set by server-side callers only;
+    // CreateSessionRequest deliberately has no source field.
+    source?: SessionSource;
   }): Promise<SessionsServiceResult<CreateSessionResponse>> {
     const rateLimitResult = await this.assertSessionCreationRateLimit(params.userId);
     if (!rateLimitResult.ok) {
@@ -256,6 +260,7 @@ export class SessionsService {
       repoId: repoAccessResult.value.repoId,
       installationId: repoAccessResult.value.installationId,
       repoFullName: repoAccessResult.value.repoFullName,
+      source: params.source ?? "web",
       sourceEnvironmentId: environmentSnapshot.sourceEnvironmentId,
       sourceEnvironmentName: environmentSnapshot.sourceEnvironmentName,
     });

@@ -1,6 +1,7 @@
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
+  IntegrationProvider,
   Repo,
   Result,
 } from "@repo/shared";
@@ -48,6 +49,7 @@ export interface IntegrationSessionCreator {
     userId: string;
     githubAccessToken: string;
     request: CreateSessionRequest;
+    source: IntegrationProvider;
   }): Promise<Result<CreateSessionResponse, IntegrationSessionCreatorError>>;
 }
 
