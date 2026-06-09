@@ -31,16 +31,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build --filter "@repo/discord-bot"
+        run: pnpm --filter @repo/discord-bot build
 
       - name: Typecheck
-        run: pnpm typecheck --filter "@repo/discord-bot"
+        run: pnpm --filter @repo/discord-bot typecheck
 
       - name: Lint
-        run: pnpm lint --filter "@repo/discord-bot"
+        run: pnpm --filter @repo/discord-bot lint
 
       - name: Test
-        run: pnpm test --filter "@repo/discord-bot"
+        run: pnpm --filter @repo/discord-bot test
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
