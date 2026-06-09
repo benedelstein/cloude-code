@@ -75,9 +75,12 @@ export function ProviderModelSelector({
   const hasSelection = selectedProvider !== null
     && selectedModel !== null
     && (selectedHandle?.connected ?? false);
-  const displayLabel = hasSelection
-    ? getDisplayLabel(selectedProvider, selectedModel)
-    : "Select a model";
+  const showSelectedProvider = selectedProvider !== null && (hasSelection || authRequired);
+  const displayLabel = authRequired && selectedProvider !== null
+    ? `Reconnect ${PROVIDERS[selectedProvider].displayName}`
+    : hasSelection
+      ? getDisplayLabel(selectedProvider, selectedModel)
+      : "Select a model";
   const availableProviders = allowedProviderIds
     ? PROVIDER_LIST.filter((provider) => allowedProviderIds.includes(provider.id))
     : PROVIDER_LIST;
@@ -133,7 +136,7 @@ export function ProviderModelSelector({
             triggerClassName,
           )}
         >
-          {hasSelection && (
+          {showSelectedProvider && (
             <Image
               src={PROVIDER_ICONS[selectedProvider].src}
               alt={PROVIDER_ICONS[selectedProvider].alt}

@@ -53,13 +53,15 @@ export function ProviderModelEffortSelector({
         onAuthRequiredClick={onAuthRequiredClick}
         triggerClassName="rounded-sm"
       />
-      <ProviderEffortSelector
-        selectedProvider={selectedProvider}
-        selectedEffort={selectedEffort}
-        onSelect={onEffortSelect}
-        disabled={disabled || !selectedProvider}
-        triggerClassName="rounded-sm"
-      />
+      {!authRequired && (
+        <ProviderEffortSelector
+          selectedProvider={selectedProvider}
+          selectedEffort={selectedEffort}
+          onSelect={onEffortSelect}
+          disabled={disabled || !selectedProvider}
+          triggerClassName="rounded-sm"
+        />
+      )}
     </div>
   );
 }
