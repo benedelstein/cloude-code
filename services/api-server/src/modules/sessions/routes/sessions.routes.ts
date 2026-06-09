@@ -156,7 +156,6 @@ export function createSessionsRoutes(
     const result = await sessionsService.getSession({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {

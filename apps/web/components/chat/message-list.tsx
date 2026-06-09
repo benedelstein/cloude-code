@@ -24,8 +24,15 @@ import clsx from "clsx";
 import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { MessageItem } from "./message-item";
-import { LoadingSpinner } from "@/components/parts/loading-spinner";
 import { WorkingCloudRow } from "./working-cloud-indicator";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const MESSAGE_HISTORY_SKELETONS = [
+  { role: "assistant", lines: ["w-[82%]", "w-[76%]", "w-[68%]", "w-[74%]"] },
+  { role: "user", lines: ["w-56", "w-40"] },
+  { role: "assistant", lines: ["w-[88%]", "w-[80%]", "w-[84%]", "w-[62%]", "w-[72%]"] },
+  { role: "user", lines: ["w-64"] },
+] as const;
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -201,12 +208,8 @@ export function MessageList({
         </div>
       )}
       {showLoading && (
-        <div className="h-full flex items-center justify-center p-4">
-          <div className="flex items-center gap-2 text-foreground-secondary text-sm">
-            {/* TODO: USE SKELETON */}
-            <LoadingSpinner className="h-4 w-4" />
-            Loading messages...
-          </div>
+        <div role="status" aria-label="Loading messages">
+          <MessageHistorySkeleton />
         </div>
       )}
       {showEmpty && (
@@ -260,6 +263,32 @@ export function MessageList({
           <div ref={bottomRef} />
         </div>
       )}
+    </div>
+  );
+}
+
+function MessageHistorySkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto px-8 space-y-8">
+      {MESSAGE_HISTORY_SKELETONS.map((message, index) => (
+        <div
+          key={index}
+          className={message.role === "user" ? "flex justify-end" : undefined}
+        >
+          <div
+            className={message.role === "user"
+              ? "w-[55%] max-w-md space-y-2"
+              : "w-[85%] max-w-3xl space-y-2"}
+          >
+            {message.lines.map((width, lineIndex) => (
+              <Skeleton
+                key={lineIndex}
+                className={`h-2.5 rounded-full bg-muted ${width} ${message.role === "user" ? "ml-auto" : ""}`}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

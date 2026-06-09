@@ -15,6 +15,7 @@ import {
   type DeleteSessionResponse,
   type Result,
   type SessionEnvironmentSnapshot,
+  type SessionSummary,
 } from "@repo/shared";
 import type { UIMessage } from "ai";
 import { getAgentByName, type Agent } from "agents";
@@ -23,7 +24,6 @@ import type {
   HandleDeleteSessionResult,
   HandleGetMessagesResult,
   HandleGetPlanResult,
-  HandleGetSessionResult,
   HandleInitResult,
   SessionAgentRpcError,
 } from "@/shared/types/session-agent";
@@ -61,6 +61,19 @@ function isDestroyedSessionAgentError(error: unknown): boolean {
 type SessionMessagesResponse = UIMessage[];
 
 type SessionsServiceStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
+
+function toSessionInfoResponse(session: SessionSummary): SessionInfoResponseType {
+  return {
+    sessionId: session.id,
+    title: session.title,
+    status: "ready",
+    repoFullName: session.repoFullName,
+    pushedBranch: session.pushedBranch ?? undefined,
+    pullRequestUrl: session.pullRequest?.url ?? undefined,
+    pullRequestNumber: session.pullRequest?.number ?? undefined,
+    pullRequestState: session.pullRequest?.state ?? undefined,
+  };
+}
 
 export interface SessionsServiceError {
   domain: "sessions";
@@ -340,34 +353,27 @@ export class SessionsService {
   }
 
   /**
-   * Fetches session info after verifying that the caller still has access to
-   * the session repository.
+   * Fetches lightweight session metadata after verifying caller ownership.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session info on success.
    */
   async getSession(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionInfoResponseType>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const session = await this.sessionsRepository.getByIdForUser(
+      params.sessionId,
+      params.userId,
+    );
+    if (!session) {
+      return failure(this.buildError({
+        status: 404,
+        message: "Session not found",
+      }));
     }
 
-    const result = await authorizedSessionAgent.value.handleGetSession() as HandleGetSessionResult;
-    if (!result.ok) {
-      return failure(this.mapAgentError(result.error));
-    }
-
-    const session = await this.sessionsRepository.getById(params.sessionId);
-
-    return success({
-      ...result.value,
-      title: session?.title ?? null,
-    });
+    return success(toSessionInfoResponse(session));
   }
 
   /**

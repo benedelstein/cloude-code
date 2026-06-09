@@ -24,6 +24,35 @@ function createSessionAccessRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createSessionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "session-1",
+    user_id: "user-1",
+    repo_id: 42,
+    installation_id: 456,
+    repo_full_name: "owner/repo",
+    title: "Fix the thing",
+    archived: 0,
+    access_blocked_at: null,
+    access_block_reason: null,
+    working_state: "idle",
+    pushed_branch: "codex/fix-the-thing",
+    pull_request_url: "https://github.com/owner/repo/pull/123",
+    pull_request_number: 123,
+    pull_request_state: "open",
+    source_environment_id: null,
+    source_environment_name: null,
+    created_at: "2026-06-03 00:00:00",
+    updated_at: "2026-06-03 00:00:01",
+    last_message_at: "2026-06-03 00:00:02",
+    last_assistant_message_id: "assistant-1",
+    last_assistant_message_at: "2026-06-03 00:00:02",
+    last_read_message_id: "assistant-1",
+    last_read_at: "2026-06-03 00:00:03",
+    ...overrides,
+  };
+}
+
 function createMockDatabase(options: {
   firstRows?: unknown[];
 } = {}) {
@@ -58,6 +87,26 @@ function createService(database: D1Database) {
     removeSessionSummary: vi.fn(async () => {}),
     requestResync: vi.fn(async () => {}),
   };
+  const repoAccessProviders = {
+    github: {
+      findInstallationForRepoId: vi.fn(async () => success({ id: 456 })),
+      getUserAccessibleInstallationRepoById: vi.fn(async () =>
+        success({
+          id: 42,
+          fullName: "owner/repo",
+          owner: "owner",
+          name: "repo",
+          defaultBranch: "main",
+          private: true,
+        })),
+    },
+    userTokens: {
+      getValidGitHubCredentialByUserId: vi.fn(async () => success({ accessToken: "token" })),
+      forceRefreshGitHubCredentialByUserId: vi.fn(async () => success({ accessToken: "token" })),
+      getValidGitHubAccessTokenByUserId: vi.fn(async () => "token"),
+      forceRefreshGitHubAccessTokenByUserId: vi.fn(async () => null),
+    },
+  };
   const service = new SessionsService({
     env: {
       DB: database,
@@ -72,24 +121,7 @@ function createService(database: D1Database) {
       bindUnboundOwnedToSession: vi.fn(async () => true),
       unbindFromSession: vi.fn(async () => {}),
     },
-    repoAccessProviders: {
-      github: {
-        findInstallationForRepoId: vi.fn(async () => success({ id: 456 })),
-        getUserAccessibleInstallationRepoById: vi.fn(async () =>
-          success({
-            id: 42,
-            fullName: "owner/repo",
-            owner: "owner",
-            name: "repo",
-            defaultBranch: "main",
-            private: true,
-          })),
-      },
-      userTokens: {
-        getValidGitHubAccessTokenByUserId: vi.fn(async () => "token"),
-        forceRefreshGitHubAccessTokenByUserId: vi.fn(async () => null),
-      },
-    },
+    repoAccessProviders,
     repoEnvironmentResolver: {
       resolveEnvironmentSnapshot: vi.fn(async () =>
         success({
@@ -105,13 +137,49 @@ function createService(database: D1Database) {
     },
     createPullRequestGitHubProvider: vi.fn() as never,
   });
-  return { service, userSessionsStub };
+  return { service, userSessionsStub, repoAccessProviders };
 }
 
 describe("SessionsService", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.mocked(getAgentByName).mockReset();
+  });
+
+  it("fetches session metadata from D1 without repo access or a Durable Object call", async () => {
+    const { calls, database } = createMockDatabase({
+      firstRows: [createSessionRow()],
+    });
+    const { service, repoAccessProviders } = createService(database);
+
+    const result = await service.getSession({
+      sessionId: "session-1",
+      userId: "user-1",
+    });
+
+    expect(result).toEqual(success({
+      sessionId: "session-1",
+      title: "Fix the thing",
+      status: "ready",
+      repoFullName: "owner/repo",
+      pushedBranch: "codex/fix-the-thing",
+      pullRequestUrl: "https://github.com/owner/repo/pull/123",
+      pullRequestNumber: 123,
+      pullRequestState: "open",
+    }));
+    expect(
+      repoAccessProviders.github.getUserAccessibleInstallationRepoById,
+    ).not.toHaveBeenCalled();
+    expect(
+      repoAccessProviders.userTokens.getValidGitHubAccessTokenByUserId,
+    ).not.toHaveBeenCalled();
+    expect(getAgentByName).not.toHaveBeenCalled();
+    expect(calls).toEqual([
+      expect.objectContaining({
+        query: expect.stringContaining("SELECT * FROM sessions WHERE id = ? AND user_id = ?"),
+        bindings: ["session-1", "user-1"],
+      }),
+    ]);
   });
 
   it("passes the required structured initial message to the session agent", async () => {

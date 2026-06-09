@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Pencil, Loader2, ArrowDown } from "lucide-react";
 import { useSession } from "@/components/providers/session-provider";
 import { useSessionList, useSessionTitle } from "@/components/providers/session-list-provider";
@@ -22,10 +22,19 @@ import { BranchBar } from "./branch-bar";
 import { SessionActionsButton } from "./editor-button";
 import { InputFrame } from "./input-frame";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ProviderId } from "@repo/shared";
 
 interface ChatContainerProps {
   sessionId: string;
+}
+
+interface ChatScaffoldProps {
+  header: ReactNode;
+  messages: ReactNode;
+  bottom: ReactNode;
+  rightInset?: string;
+  isRightSidebarResizing?: boolean;
 }
 
 export function ChatContainer({ sessionId }: ChatContainerProps) {
@@ -147,8 +156,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <AppHeaderPortal>
+    <ChatScaffold
+      header={(
         <div className="flex min-w-0 w-full items-center justify-between gap-3">
           <div className="min-w-0 flex flex-1 flex-col gap-0 overflow-hidden">
             <div className="group/title flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
@@ -205,10 +214,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
             <SessionActionsButton sessionId={sessionId} />
           </div>
         </div>
-      </AppHeaderPortal>
-
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      )}
+      messages={(
         <MessageList
           messages={messages}
           streamingMessage={streamingMessage}
@@ -225,69 +232,147 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           onHasNewMessages={setShowScrollToBottom}
           scrollToBottomRef={scrollToBottomRef}
         />
+      )}
+      bottom={(
+        <>
+          <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
+            className: "mb-2 flex justify-center",
+          })}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => scrollToBottomRef.current?.()}
+                  className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-secondary hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>New messages</TooltipContent>
+            </Tooltip>
+          </div>
+          <BranchBar
+            sessionId={sessionId}
+            pushedBranch={pushedBranch}
+            pullRequestState={pullRequestState}
+          />
+          <div className="bg-background-secondary pb-2">
+            <InputFrame>
+              <StatusBanner
+                sessionErrorMessage={sessionErrorMessage}
+              />
+              <ChatInput
+                onSend={(...args) => {
+                  scrollToBottomRef.current?.();
+                  sendMessage(...args);
+                }}
+                onUploadAttachments={(files) => uploadAttachments(files, sessionId)
+                  .then((response) => response.attachments)}
+                onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
+                onStop={stop}
+                disabled={!isReady}
+                isStreaming={isResponding || isStreaming}
+                agentMode={agentMode}
+                onAgentModeChange={setAgentMode}
+                selectedProvider={selectedProvider}
+                selectedModel={selectedModel}
+                selectedEffort={selectedEffort}
+                onProviderModelChange={handleProviderModelChange}
+                onProviderEffortChange={handleProviderEffortChange}
+                providerAuthHandles={providerAuth.handles}
+                providerAuthRequired={providerAuthRequired}
+                operationErrorMessage={operationError?.message ?? null}
+                disabledPlaceholder={sessionErrorMessage ?? undefined}
+              />
+            </InputFrame>
+          </div>
+        </>
+      )}
+      rightInset={rightSidebarInset}
+      isRightSidebarResizing={isRightSidebarResizing}
+    />
+  );
+}
+
+export function ChatContainerLoading() {
+  return (
+    <ChatScaffold
+      header={<ChatHeaderSkeleton />}
+      messages={(
+        <MessageList
+          messages={[]}
+          streamingMessage={null}
+          isHistoryLoading
+        />
+      )}
+      bottom={(
+        <div className="bg-background-secondary pb-2">
+          <InputFrame>
+            <ChatInput
+              onSend={() => {}}
+              onUploadAttachments={async () => []}
+              onDeleteAttachment={async () => {}}
+              onStop={() => {}}
+              disabled
+              agentMode="edit"
+              onAgentModeChange={() => {}}
+              selectedProvider={null}
+              selectedModel={null}
+              selectedEffort={null}
+              providerAuthHandles={[]}
+              providerAuthRequired={null}
+              disabledPlaceholder="Loading session..."
+            />
+          </InputFrame>
+        </div>
+      )}
+    />
+  );
+}
+
+function ChatScaffold({
+  header,
+  messages,
+  bottom,
+  rightInset = "0rem",
+  isRightSidebarResizing = false,
+}: ChatScaffoldProps) {
+  return (
+    <div className="h-full flex flex-col">
+      <AppHeaderPortal>
+        {header}
+      </AppHeaderPortal>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {messages}
       </div>
 
-      {/* Branch Bar + Input - floating at bottom */}
       <div className="sticky bottom-0 z-10 h-0 flex flex-col justify-end">
         <div
           className={`pt-8 ${isRightSidebarResizing ? "" : "transition-[padding] duration-200 ease-linear"}`}
-          style={{ paddingRight: rightSidebarInset }}
+          style={{ paddingRight: rightInset }}
         >
           <div className="max-w-4xl min-w-0 mx-auto px-4">
-            <div className={getFadeScaleVisibilityClasses(showScrollToBottom, {
-              className: "mb-2 flex justify-center",
-            })}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => scrollToBottomRef.current?.()}
-                    className="h-8 w-8 flex items-center justify-center rounded-full border border-border bg-background shadow-shadow shadow-md text-foreground-secondary hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>New messages</TooltipContent>
-              </Tooltip>
-            </div>
-            <BranchBar
-              sessionId={sessionId}
-              pushedBranch={pushedBranch}
-              pullRequestState={pullRequestState}
-            />
-            <div className="bg-background-secondary pb-2">
-              <InputFrame>
-                <StatusBanner
-                  sessionErrorMessage={sessionErrorMessage}
-                />
-                <ChatInput
-                  onSend={(...args) => {
-                    scrollToBottomRef.current?.();
-                    sendMessage(...args);
-                  }}
-                  onUploadAttachments={(files) => uploadAttachments(files, sessionId)
-                    .then((response) => response.attachments)}
-                  onDeleteAttachment={(attachmentId) => deleteAttachment(attachmentId)}
-                  onStop={stop}
-                  disabled={!isReady}
-                  isStreaming={isResponding || isStreaming}
-                  agentMode={agentMode}
-                  onAgentModeChange={setAgentMode}
-                  selectedProvider={selectedProvider}
-                  selectedModel={selectedModel}
-                  selectedEffort={selectedEffort}
-                  onProviderModelChange={handleProviderModelChange}
-                  onProviderEffortChange={handleProviderEffortChange}
-                  providerAuthHandles={providerAuth.handles}
-                  providerAuthRequired={providerAuthRequired}
-                  operationErrorMessage={operationError?.message ?? null}
-                  disabledPlaceholder={sessionErrorMessage ?? undefined}
-                />
-              </InputFrame>
-            </div>
+            {bottom}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChatHeaderSkeleton() {
+  return (
+    <div
+      className="flex min-w-0 w-full items-center justify-between gap-3"
+      role="status"
+      aria-label="Loading session"
+    >
+      <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden px-2">
+        <Skeleton className="h-5 w-44 max-w-[55vw]" />
+        <Skeleton className="h-3.5 w-3.5 shrink-0" />
+      </div>
+      <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
     </div>
   );
 }
