@@ -3,6 +3,10 @@ import type {
   GitHubAppResult,
   GitHubRepositoryData,
 } from "@/shared/types/github";
+import type {
+  GitHubCredentialError,
+  GitHubCredentialResult,
+} from "@/shared/types/github-credential";
 import { createLogger } from "@/shared/logging";
 import type {
   RepoAccessValue,
@@ -29,6 +33,44 @@ export type {
   UserRepoAccessResult,
 };
 
+function gitHubCredentialToUserRepoAccessError(
+  error: GitHubCredentialError,
+): Extract<UserRepoAccessError, { code: "GITHUB_AUTH_REQUIRED" | "GITHUB_UNAVAILABLE" }> {
+  switch (error.code) {
+    case "GITHUB_AUTH_REQUIRED":
+      return {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      };
+    case "GITHUB_UNAVAILABLE":
+      return {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      };
+  }
+}
+
+function gitHubCredentialToSessionRepoAccessError(
+  error: GitHubCredentialError,
+): Extract<SessionRepoAccessError, { code: "GITHUB_AUTH_REQUIRED" | "GITHUB_UNAVAILABLE" }> {
+  switch (error.code) {
+    case "GITHUB_AUTH_REQUIRED":
+      return {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      };
+    case "GITHUB_UNAVAILABLE":
+      return {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      };
+  }
+}
+
 export interface SessionRepoAccessGitHubProvider {
   getUserAccessibleInstallationRepoById(
     userId: string,
@@ -43,6 +85,8 @@ export interface SessionRepoAccessGitHubProvider {
 }
 
 export interface SessionRepoAccessUserTokenProvider {
+  getValidGitHubCredentialByUserId(userId: string): Promise<GitHubCredentialResult>;
+  forceRefreshGitHubCredentialByUserId(userId: string): Promise<GitHubCredentialResult>;
   getValidGitHubAccessTokenByUserId(userId: string): Promise<string | null>;
   forceRefreshGitHubAccessTokenByUserId(userId: string): Promise<string | null>;
 }
@@ -191,10 +235,14 @@ async function retryUserRepoAccessAfterTokenRefresh(params: {
     return initialResult;
   }
 
-  const refreshedGitHubAccessToken = await params.userTokens.forceRefreshGitHubAccessTokenByUserId(
+  const refreshedGitHubCredential = await params.userTokens.forceRefreshGitHubCredentialByUserId(
     params.userId,
   );
-  if (!refreshedGitHubAccessToken || refreshedGitHubAccessToken === params.githubAccessToken) {
+  if (!refreshedGitHubCredential.ok) {
+    return failure(gitHubCredentialToUserRepoAccessError(refreshedGitHubCredential.error));
+  }
+
+  if (refreshedGitHubCredential.value.accessToken === params.githubAccessToken) {
     return initialResult;
   }
 
@@ -202,7 +250,7 @@ async function retryUserRepoAccessAfterTokenRefresh(params: {
     fields: { userId: params.userId },
   });
 
-  return params.resolve(refreshedGitHubAccessToken);
+  return params.resolve(refreshedGitHubCredential.value.accessToken);
 }
 
 /**
@@ -218,12 +266,23 @@ export async function assertUserRepoAccess(params: {
   providers: SessionRepoAccessProviders;
   userId: string;
   repoId: number;
-  githubAccessToken: string;
+  githubAccessToken?: string;
 }): Promise<UserRepoAccessResult> {
+  let githubAccessToken = params.githubAccessToken;
+  if (!githubAccessToken) {
+    const credentialResult = await params.providers.userTokens.getValidGitHubCredentialByUserId(
+      params.userId,
+    );
+    if (!credentialResult.ok) {
+      return failure(gitHubCredentialToUserRepoAccessError(credentialResult.error));
+    }
+    githubAccessToken = credentialResult.value.accessToken;
+  }
+
   return retryUserRepoAccessAfterTokenRefresh({
     userTokens: params.providers.userTokens,
     userId: params.userId,
-    githubAccessToken: params.githubAccessToken,
+    githubAccessToken,
     resolve: (githubAccessToken) =>
       resolveAccessibleRepoForRecovery({
         github: params.providers.github,
@@ -262,9 +321,16 @@ export async function assertSessionRepoAccess(params: {
 
   let githubAccessToken = params.githubAccessToken;
   if (!githubAccessToken) {
-    githubAccessToken = await params.providers.userTokens.getValidGitHubAccessTokenByUserId(
+    const credentialResult = await params.providers.userTokens.getValidGitHubCredentialByUserId(
       userId,
-    ) ?? undefined;
+    );
+    if (!credentialResult.ok) {
+      logger.warn("GitHub authentication required to verify session access.", {
+        fields: { userId, sessionId, code: credentialResult.error.code },
+      });
+      return failure(gitHubCredentialToSessionRepoAccessError(credentialResult.error));
+    }
+    githubAccessToken = credentialResult.value.accessToken;
   }
 
   if (!githubAccessToken) {
@@ -330,6 +396,7 @@ export async function assertSessionRepoAccess(params: {
           session.accessBlockReason,
         );
       case "GITHUB_API_ERROR":
+      case "GITHUB_UNAVAILABLE":
         logger.warn("GitHub session repo access check failed without an authoritative block result.", {
           fields: {
             userId,
@@ -341,11 +408,14 @@ export async function assertSessionRepoAccess(params: {
           },
         });
         return failure({
-          code: repoAccessResult.error.code,
+          code: repoAccessResult.error.code === "GITHUB_UNAVAILABLE"
+            ? "GITHUB_UNAVAILABLE"
+            : repoAccessResult.error.code,
           status: 503,
           message: "GitHub repository access could not be verified right now. Please retry.",
         });
       case "GITHUB_AUTH_ERROR":
+      case "GITHUB_AUTH_REQUIRED":
         logger.warn("GitHub user authentication expired during session repo access check.", {
           fields: {
             userId,
@@ -358,7 +428,7 @@ export async function assertSessionRepoAccess(params: {
         return failure({
           code: "GITHUB_AUTH_REQUIRED",
           status: 401,
-          message: "GitHub authentication required to verify session access.",
+          message: "Reconnect GitHub to continue.",
         });
       case "INVALID_REPO":
         return failure({

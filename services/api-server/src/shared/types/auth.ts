@@ -4,5 +4,4 @@ export interface AuthUser {
   githubLogin: string;
   githubName: string | null;
   githubAvatarUrl: string | null;
-  githubAccessToken: string;
 }

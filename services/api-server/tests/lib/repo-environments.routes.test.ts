@@ -15,7 +15,6 @@ const testUser: AuthUser = {
   githubLogin: "ben",
   githubName: "Ben",
   githubAvatarUrl: null,
-  githubAccessToken: "github-token",
 };
 
 type RouteEnv = {
@@ -51,6 +50,8 @@ describe("repo environment route mounts", () => {
     app.route("/repos", createReposRoutes({
       authMiddleware,
       createReposService,
+      getValidGitHubCredentialByUserId: vi.fn(async () =>
+        ({ ok: true, value: { accessToken: "github-token" } })),
     }));
     app.route("/repos", createRepoScopedEnvironmentRoutes({
       authMiddleware,

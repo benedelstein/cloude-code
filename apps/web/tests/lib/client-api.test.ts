@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepoEnvironment,
   createSession,
+  createSessionWebSocketToken,
   createVoiceTranscriptionToken,
   createUserSessionsWebSocketToken,
   deleteSession,
@@ -24,6 +25,26 @@ describe("client-api", () => {
       message: "Unauthorized",
       status: 401,
     });
+  });
+
+  it("does not broadcast global logout for GitHub reauth-required responses", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      error: "Reconnect GitHub to continue.",
+      code: "GITHUB_AUTH_REQUIRED",
+    }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }));
+    const listener = vi.fn();
+    window.addEventListener("auth:unauthorized", listener);
+
+    await expect(createSessionWebSocketToken("session-1")).rejects.toMatchObject({
+      status: 401,
+      code: "GITHUB_AUTH_REQUIRED",
+    });
+
+    expect(listener).not.toHaveBeenCalled();
+    window.removeEventListener("auth:unauthorized", listener);
   });
 
   it("uses plain-text error bodies when present", async () => {

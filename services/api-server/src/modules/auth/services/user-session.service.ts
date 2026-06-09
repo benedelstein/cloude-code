@@ -2,6 +2,11 @@ import { decrypt, encrypt } from "@/shared/utils/crypto";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import type { RefreshedToken } from "@/shared/types/github";
+import type {
+  GitHubCredentialError,
+  GitHubCredentialResult,
+} from "@/shared/types/github-credential";
+import { failure, success } from "@repo/shared";
 import { UserSessionRepository } from "../repositories/user-session.repository";
 
 const logger = createLogger("user-session.service.ts");
@@ -12,7 +17,6 @@ export interface AuthenticatedUserSession {
   githubLogin: string;
   githubName: string | null;
   githubAvatarUrl: string | null;
-  githubAccessToken: string;
 }
 
 export interface GitHubUserTokenRefreshProvider {
@@ -39,7 +43,6 @@ export class UserSessionService {
 
   /**
    * Fetches an authenticated user by session token.
-   * If their github credentials are expired, the token is refreshed.
    * @param sessionToken - The session token, sent from the client
    * @returns The authenticated user session, or null if the session token is invalid or expired.
    */
@@ -51,39 +54,41 @@ export class UserSessionService {
       return null;
     }
 
-    const githubAccessToken = await this.ensureValidGitHubAccessToken({
-      userId: session.id,
-      encryptedGithubAccessToken: session.githubAccessToken,
-      tokenExpiresAt: session.tokenExpiresAt,
-    });
-
-    if (!githubAccessToken) {
-      return null;
-    }
-
     return {
       id: session.id,
       githubId: session.githubId,
       githubLogin: session.githubLogin,
       githubName: session.githubName,
       githubAvatarUrl: session.githubAvatarUrl,
-      githubAccessToken,
     };
+  }
+
+  async getValidGitHubCredentialByUserId(
+    userId: string,
+  ): Promise<GitHubCredentialResult> {
+    const credentials = await this.repository.getGitHubCredentialsByUserId(userId);
+    if (!credentials) {
+      return failure(this.githubAuthRequiredError());
+    }
+
+    return this.ensureValidGitHubCredential({
+      userId,
+      encryptedGithubAccessToken: credentials.encryptedAccessToken,
+      tokenExpiresAt: credentials.accessTokenExpiresAt,
+    });
   }
 
   async getValidGitHubAccessTokenByUserId(
     userId: string,
   ): Promise<string | null> {
-    const credentials = await this.repository.getGitHubCredentialsByUserId(userId);
-    if (!credentials) {
-      return null;
-    }
+    const result = await this.getValidGitHubCredentialByUserId(userId);
+    return result.ok ? result.value.accessToken : null;
+  }
 
-    return this.ensureValidGitHubAccessToken({
-      userId,
-      encryptedGithubAccessToken: credentials.encryptedAccessToken,
-      tokenExpiresAt: credentials.accessTokenExpiresAt,
-    });
+  async forceRefreshGitHubCredentialByUserId(
+    userId: string,
+  ): Promise<GitHubCredentialResult> {
+    return this.refreshGitHubCredential(userId);
   }
 
   /**
@@ -94,11 +99,16 @@ export class UserSessionService {
   async forceRefreshGitHubAccessTokenByUserId(
     userId: string,
   ): Promise<string | null> {
-    return this.refreshGitHubAccessToken(userId);
+    const result = await this.forceRefreshGitHubCredentialByUserId(userId);
+    return result.ok ? result.value.accessToken : null;
   }
 
   async revokeAllSessionsByGithubId(githubId: number): Promise<void> {
     await this.repository.revokeAllSessionsByGithubId(githubId);
+  }
+
+  async revokeGitHubCredentialsByGithubId(githubId: number): Promise<void> {
+    await this.repository.deleteGitHubCredentialsByGithubId(githubId);
   }
 
   // ensures access token is valid, refreshing if needed.
@@ -107,6 +117,15 @@ export class UserSessionService {
     encryptedGithubAccessToken: string;
     tokenExpiresAt: string | null;
   }): Promise<string | null> {
+    const result = await this.ensureValidGitHubCredential(params);
+    return result.ok ? result.value.accessToken : null;
+  }
+
+  private async ensureValidGitHubCredential(params: {
+    userId: string;
+    encryptedGithubAccessToken: string;
+    tokenExpiresAt: string | null;
+  }): Promise<GitHubCredentialResult> {
     const currentAccessToken = await decrypt(
       params.encryptedGithubAccessToken,
       this.env.TOKEN_ENCRYPTION_KEY,
@@ -116,22 +135,27 @@ export class UserSessionService {
       !params.tokenExpiresAt
       || new Date(params.tokenExpiresAt).getTime() > Date.now()
     ) {
-      return currentAccessToken;
+      return success({ accessToken: currentAccessToken });
     }
 
-    return this.refreshGitHubAccessToken(params.userId);
+    return this.refreshGitHubCredential(params.userId);
   }
 
   private async refreshGitHubAccessToken(userId: string): Promise<string | null> {
+    const result = await this.refreshGitHubCredential(userId);
+    return result.ok ? result.value.accessToken : null;
+  }
+
+  private async refreshGitHubCredential(userId: string): Promise<GitHubCredentialResult> {
     const credentials = await this.repository.getGitHubCredentialsByUserId(userId);
     if (!credentials?.encryptedRefreshToken) {
-      return null;
+      return failure(this.githubAuthRequiredError());
     }
     if (!this.githubTokenRefreshProvider) {
       logger.warn("Cannot refresh GitHub user token without refresh provider", {
         fields: { userId },
       });
-      return null;
+      return failure(this.githubAuthRequiredError());
     }
 
     try {
@@ -159,13 +183,44 @@ export class UserSessionService {
         refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt ?? null,
       });
 
-      return refreshed.accessToken;
+      return success({ accessToken: refreshed.accessToken });
     } catch (error) {
       logger.warn("Failed to refresh GitHub user token", {
         error,
         fields: { userId },
       });
-      return null;
+      return failure(this.githubRefreshError(error));
     }
+  }
+
+  private githubAuthRequiredError(): GitHubCredentialError {
+    return {
+      code: "GITHUB_AUTH_REQUIRED",
+      status: 401,
+      message: "Reconnect GitHub to continue.",
+    };
+  }
+
+  private githubRefreshUnavailableError(): GitHubCredentialError {
+    return {
+      code: "GITHUB_UNAVAILABLE",
+      status: 503,
+      message: "GitHub is unavailable. Try again shortly.",
+    };
+  }
+
+  private githubRefreshError(error: unknown): GitHubCredentialError {
+    if (this.isGitHubRefreshAuthFailure(error)) {
+      return this.githubAuthRequiredError();
+    }
+    return this.githubRefreshUnavailableError();
+  }
+
+  private isGitHubRefreshAuthFailure(error: unknown): boolean {
+    if (typeof error !== "object" || error === null || !("status" in error)) {
+      return false;
+    }
+    const status = (error as { status?: unknown }).status;
+    return status === 400 || status === 401;
   }
 }

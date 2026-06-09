@@ -32,6 +32,16 @@ export type UserRepoAccessError =
       code: "GITHUB_AUTH_ERROR";
       status: 401;
       message: string;
+    }
+  | {
+      code: "GITHUB_AUTH_REQUIRED";
+      status: 401;
+      message: string;
+    }
+  | {
+      code: "GITHUB_UNAVAILABLE";
+      status: 503;
+      message: string;
     };
 
 export type UserRepoAccessResult = Result<RepoAccessValue, UserRepoAccessError>;
@@ -45,6 +55,11 @@ export type SessionRepoAccessError =
   | {
       code: "GITHUB_AUTH_REQUIRED";
       status: 401;
+      message: string;
+    }
+  | {
+      code: "GITHUB_UNAVAILABLE";
+      status: 503;
       message: string;
     }
   | {

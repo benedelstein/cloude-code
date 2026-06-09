@@ -181,6 +181,7 @@ export class SessionGitProxyService implements
           },
         );
       case "GITHUB_API_ERROR":
+      case "GITHUB_UNAVAILABLE":
         return new Response(
           JSON.stringify({ error: error.message, code: error.code }),
           {

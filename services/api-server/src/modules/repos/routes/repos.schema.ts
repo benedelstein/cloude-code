@@ -21,6 +21,14 @@ export const listReposRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Invalid pagination cursor",
     },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub authentication required",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub credentials unavailable",
+    },
   },
 });
 
@@ -41,6 +49,14 @@ export const searchReposRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Invalid search request",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub authentication required",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub credentials unavailable",
     },
   },
 });
@@ -63,6 +79,14 @@ export const listBranchesRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Invalid pagination cursor",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub authentication required",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub credentials unavailable",
     },
   },
 });

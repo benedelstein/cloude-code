@@ -243,7 +243,7 @@ export class GitHubWebhookService {
     this.logger.info("GitHub user authorization revoked", {
       fields: { githubUserId },
     });
-    await this.sessionProvider.revokeUserSessionsByGithubId(githubUserId);
+    await this.sessionProvider.revokeUserGitHubCredentialsByGithubId(githubUserId);
   }
 
   private async handleReposRemoved(

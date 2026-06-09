@@ -196,7 +196,6 @@ describe("SessionsService", () => {
     try {
       const result = await service.createSession({
         userId: "123e4567-e89b-12d3-a456-426614174999",
-        githubAccessToken: "token",
         request: {
           repoId: 42,
           initialMessage: {
@@ -247,7 +246,6 @@ describe("SessionsService", () => {
     const result = await service.deleteSession({
       sessionId: "session-1",
       userId: "user-1",
-      githubAccessToken: "token",
     });
 
     expect(result).toEqual(success({ deleted: true }));

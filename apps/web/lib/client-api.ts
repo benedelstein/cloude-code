@@ -21,6 +21,7 @@ import type {
   PullRequestResponse,
   PullRequestStatusResponse,
   GitHubAuthUrlResponse,
+  GitHubReauthTokenResponse,
   LogoutResponse,
   OpenAIStatusResponse,
   OpenAIDisconnectResponse,
@@ -67,6 +68,11 @@ const API_BASE = "/api";
 // /auth/me 401s when there's no session — that's a normal "logged-out check"
 // signal at boot, not a session expiration. Don't broadcast it.
 const UNAUTHORIZED_SUPPRESSED_PATHS = new Set(["/auth/me"]);
+const SESSION_PRESERVING_ERROR_CODES = new Set([
+  "GITHUB_AUTH_REQUIRED",
+  "GITHUB_UNAVAILABLE",
+  "REPO_ACCESS_BLOCKED",
+]);
 
 // Dispatched on the window when any /api/* call returns 401 (except for the
 // suppressed paths above). useAuth listens for this and clears user state.
@@ -107,7 +113,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     // Notify the app shell that our session is no longer valid (e.g. user
     // revoked the GitHub App, or the session was deleted). Listened to by
     // useAuth, which clears local user state and surfaces the login flow.
-    if (res.status === 401 && typeof window !== "undefined" && !UNAUTHORIZED_SUPPRESSED_PATHS.has(path)) {
+    const shouldBroadcastUnauthorized =
+      res.status === 401
+      && typeof window !== "undefined"
+      && !UNAUTHORIZED_SUPPRESSED_PATHS.has(path)
+      && (code ? !SESSION_PRESERVING_ERROR_CODES.has(code) : true);
+    if (shouldBroadcastUnauthorized) {
       window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
     }
 
@@ -372,6 +383,22 @@ export async function getGitHubAuthUrl(): Promise<GitHubAuthUrlResponse> {
   // back to this origin's /api/auth/callback. Required for Vercel previews.
   const origin = encodeURIComponent(window.location.origin);
   return apiFetch(`/auth/github?origin=${origin}`);
+}
+
+export async function startGitHubReauth(): Promise<GitHubAuthUrlResponse> {
+  const origin = encodeURIComponent(window.location.origin);
+  return apiFetch(`/auth/github/reauth/start?origin=${origin}`, { method: "POST" });
+}
+
+export async function exchangeGitHubReauth(
+  code: string,
+  state: string,
+): Promise<GitHubReauthTokenResponse> {
+  return apiFetch("/auth/github/reauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, state }),
+  });
 }
 
 export async function logoutUser(): Promise<LogoutResponse> {

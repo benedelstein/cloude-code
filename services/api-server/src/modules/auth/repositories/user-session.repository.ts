@@ -1,22 +1,18 @@
-export interface AuthSessionUserRecord {
+export interface AuthSessionIdentityRecord {
   id: string;
   githubId: number;
   githubLogin: string;
   githubName: string | null;
   githubAvatarUrl: string | null;
-  githubAccessToken: string;
-  tokenExpiresAt: string | null;
   sessionExpiresAt: string;
 }
 
-interface AuthSessionUserRow {
+interface AuthSessionIdentityRow {
   id: string;
   github_id: number;
   github_login: string;
   github_name: string | null;
   github_avatar_url: string | null;
-  github_access_token: string;
-  token_expires_at: string | null;
   session_expires_at: string;
 }
 
@@ -43,19 +39,16 @@ export class UserSessionRepository {
 
   async getActiveAuthSessionByToken(
     token: string,
-  ): Promise<AuthSessionUserRecord | null> {
+  ): Promise<AuthSessionIdentityRecord | null> {
     const row = await this.database.prepare(
       `SELECT u.id, u.github_id, u.github_login, u.github_name, u.github_avatar_url,
-              credentials.encrypted_access_token AS github_access_token,
-              credentials.access_token_expires_at AS token_expires_at,
               s.expires_at AS session_expires_at
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
-       JOIN user_github_credentials credentials ON credentials.user_id = u.id
        WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')`,
     )
       .bind(token)
-      .first<AuthSessionUserRow>();
+      .first<AuthSessionIdentityRow>();
 
     if (!row) {
       return null;
@@ -67,8 +60,6 @@ export class UserSessionRepository {
       githubLogin: row.github_login,
       githubName: row.github_name,
       githubAvatarUrl: row.github_avatar_url,
-      githubAccessToken: row.github_access_token,
-      tokenExpiresAt: row.token_expires_at,
       sessionExpiresAt: row.session_expires_at,
     };
   }
@@ -256,5 +247,14 @@ export class UserSessionRepository {
         `DELETE FROM user_github_credentials WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
       ).bind(githubId),
     ]);
+  }
+
+  async deleteGitHubCredentialsByGithubId(githubId: number): Promise<void> {
+    await this.database.prepare(
+      `DELETE FROM user_github_credentials
+       WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+    )
+      .bind(githubId)
+      .run();
   }
 }

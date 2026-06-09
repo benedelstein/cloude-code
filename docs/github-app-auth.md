@@ -41,6 +41,10 @@ The repo picker uses those endpoints through `GitHubAppService.listInstallations
 and `GitHubAppService.listInstallationReposForAuthenticatedUser(...)`, so users only see repositories
 inside installations they can access.
 
+The API server stores GitHub App user access/refresh tokens in `user_github_credentials`, encrypted
+with `TOKEN_ENCRYPTION_KEY`. App auth does not load these credentials. GitHub-dependent routes
+explicitly resolve them with `getValidGitHubCredentialByUserId(...)`.
+
 Session creation and existing-session access use the same rule through `assertUserRepoAccess(...)` and
 `assertSessionRepoAccess(...)`. Those checks resolve the repository's installation, then call
 `getUserAccessibleInstallationRepoById(...)`, which lists the repositories visible to the current
@@ -49,6 +53,12 @@ user inside that installation and requires the selected repo id to be present.
 Installation access tokens do not carry the signed-in user's authorization boundary. They are used
 for clone, push, fetch, compare, and pull-request operations only after the API server or Durable
 Object has already checked the user/installation intersection for the session.
+
+If the stored GitHub user credential is missing, revoked, or cannot be refreshed, routes that need
+the user/installation intersection return `GITHUB_AUTH_REQUIRED`. The app cannot mint a GitHub user
+access token from only the GitHub App private key or an installation id; it must either refresh a
+stored refresh token or send the user through the GitHub OAuth flow again. This reauth flow updates
+`user_github_credentials` only and does not replace the app auth session.
 
 References:
 
@@ -60,11 +70,12 @@ References:
 
 When a session is created, repo access is checked by `assertUserRepoAccess(...)` in `services/api-server/src/modules/sessions/services/session-repo-access.service.ts`. GitHub App token minting for clone/push goes through `GitHubAppService`:
 
-1. Resolve the numeric repo id to an installation with `findInstallationForRepoId(...)`.
-2. Verify the current user can access the repo through that installation.
-3. Check D1 token cache (valid if expires > now + 5 minutes).
-4. On cache miss, generate a new token via `octokit App.getInstallationOctokit()`.
-5. Cache the token in D1 and return it.
+1. Resolve or refresh the current user's GitHub user credential from `user_github_credentials`.
+2. Resolve the numeric repo id to an installation with `findInstallationForRepoId(...)`.
+3. Verify the current user can access the repo through that installation.
+4. Check D1 installation token cache (valid if expires > now + 5 minutes).
+5. On cache miss, generate a new installation token via `octokit App.getInstallationOctokit()`.
+6. Cache the installation token in D1 and return it.
 
 If no installation is found in D1, the code falls back to GitHub API installation lookup and records the result.
 
@@ -102,6 +113,7 @@ Git setup lives in `SessionProvisionService.cloneRepo(...)`:
 
 - **`github_installations`** — One row per GitHub App installation. Tracks account, permissions, repo selection mode, suspension status.
 - **`github_installation_repos`** — Tracks which repos are accessible when `repository_selection = "selected"`. When `"all"`, every repo under the account is accessible (no rows needed).
+- **`user_github_credentials`** — Stores encrypted GitHub App user access/refresh tokens separately from app auth sessions.
 - **`installation_token_cache`** — Caches encrypted installation access tokens. Runtime cache keys include the repo id and permission scope, and reads require `expires_at` to be more than 5 minutes in the future.
 - **`github_user_repo_access_cache`** — Caches per-user repo access checks for 5 minutes. This is used by session creation and existing-session access checks.
 - **`repo_environments`** — Stores repo-scoped environment presets. Session creation snapshots the selected environment; provisioning uses the snapshot for final network policy, plain env vars, and startup script behavior.
@@ -118,7 +130,7 @@ The app listens at `POST /webhooks/github` for:
 | `installation.unsuspend` | Clear `suspended_at` |
 | `installation_repositories.added` | Update installation repo rows and invalidate affected repo-access/listing caches |
 | `installation_repositories.removed` | Delete repo rows, invalidate affected caches, and block sessions for removed repos |
-| `github_app_authorization.revoked` | Revoke all auth sessions and stored GitHub credentials for the sender |
+| `github_app_authorization.revoked` | Delete stored GitHub user credentials for the sender without deleting app auth sessions |
 
 Webhook signature verification is handled by `octokit`'s `app.webhooks.verifyAndReceive()`.
 
@@ -132,6 +144,12 @@ Webhook signature verification is handled by `octokit`'s `app.webhooks.verifyAnd
 - `GITHUB_API_ERROR` — GitHub API call failed
 
 Session creation maps these through `SessionsService.createSession(...)`: access denials return **403**, invalid repo input returns **400**, GitHub auth failures return **401**, and temporary GitHub API failures return **503**.
+
+Credential-provider failures use stable route-level codes:
+- `GITHUB_AUTH_REQUIRED` — Stored GitHub user credentials are missing, revoked, or need reauth.
+- `GITHUB_UNAVAILABLE` — GitHub credential refresh/API failed transiently.
+
+The web client treats these GitHub-specific failures as session-preserving: they do not dispatch the global app logout event.
 
 ## Configuration
 

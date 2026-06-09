@@ -67,7 +67,7 @@ export interface GitHubWebhookSessionProvider {
     repoIds: number[];
   }): Promise<string[]>;
   requestAccessBlockedCleanup(sessionIds: string[]): Promise<void>;
-  revokeUserSessionsByGithubId(githubId: number): Promise<void>;
+  revokeUserGitHubCredentialsByGithubId(githubId: number): Promise<void>;
   updatePullRequestFromWebhook(input: {
     installationId: number;
     repoId: number;

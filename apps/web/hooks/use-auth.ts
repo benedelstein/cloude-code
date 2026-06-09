@@ -181,6 +181,10 @@ export function useAuth() {
           cleanup();
           return;
 
+        case githubAuthPopupMessageType.githubReauthSuccess:
+        case githubAuthPopupMessageType.githubReauthError:
+          return;
+
         default: {
           const exhaustiveCheck: never = message;
           return exhaustiveCheck;

@@ -11,6 +11,8 @@ export async function createOauthState(
     expiresAt: string;
     codeVerifier?: string | null;
     redirectOrigin?: string | null;
+    purpose?: string | null;
+    userId?: string | null;
   },
 ): Promise<void> {
   await new OauthStateRepository(env.DB).create(
@@ -18,6 +20,8 @@ export async function createOauthState(
     params.expiresAt,
     params.codeVerifier ?? null,
     params.redirectOrigin ?? null,
+    params.purpose ?? null,
+    params.userId ?? null,
   );
 }
 
@@ -33,4 +37,11 @@ export async function peekOauthRedirectOrigin(
   state: string,
 ): Promise<string | null> {
   return new OauthStateRepository(env.DB).peekRedirectOrigin(state);
+}
+
+export async function peekOauthState(
+  env: Env,
+  state: string,
+): Promise<OauthStateRecord | null> {
+  return new OauthStateRepository(env.DB).peek(state);
 }

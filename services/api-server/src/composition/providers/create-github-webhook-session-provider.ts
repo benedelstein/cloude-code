@@ -45,8 +45,8 @@ export function createGitHubWebhookSessionProvider(
         ),
       );
     },
-    revokeUserSessionsByGithubId(githubId) {
-      return userSessionService.revokeAllSessionsByGithubId(githubId);
+    revokeUserGitHubCredentialsByGithubId(githubId) {
+      return userSessionService.revokeGitHubCredentialsByGithubId(githubId);
     },
     async updatePullRequestFromWebhook(input) {
       const sessions = await findSessionsByPullRequest({

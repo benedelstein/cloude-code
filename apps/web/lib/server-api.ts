@@ -3,6 +3,7 @@ import "server-only";
 import type {
   LogoutResponse,
   SessionInfoResponse,
+  GitHubReauthTokenResponse,
   TokenResponse,
   UserInfo,
   UserRepoEnvironmentResponse,
@@ -47,9 +48,17 @@ async function serverApiFetch<T>(
   });
 
   if (!response.ok) {
-    const text = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
+    let message: string;
+    if (contentType.includes("application/json")) {
+      const body = await response.json() as { error?: string; details?: string };
+      message = body.error ?? body.details ?? `Request failed: ${response.status}`;
+    } else {
+      const text = await response.text();
+      message = text || `Request failed: ${response.status}`;
+    }
     throw new ServerApiError(
-      text || `Request failed: ${response.status}`,
+      message,
       response.status,
     );
   }
@@ -79,6 +88,19 @@ export async function exchangeGitHubCode(
   state: string,
 ): Promise<TokenResponse> {
   return serverApiFetch("/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, state }),
+  });
+}
+
+export async function exchangeGitHubReauthCode(
+  code: string,
+  state: string,
+  token: string,
+): Promise<GitHubReauthTokenResponse> {
+  return serverApiFetch("/auth/github/reauth/token", {
+    token,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, state }),

@@ -90,7 +90,6 @@ export function createSessionsRoutes(
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.createSession({
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       request: c.req.valid("json"),
     });
 
@@ -190,10 +189,18 @@ export function createSessionsRoutes(
     const result = await sessionsService.createSessionWebSocketToken({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {
@@ -254,10 +261,18 @@ export function createSessionsRoutes(
     const result = await sessionsService.getSessionMessages({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {
@@ -292,10 +307,18 @@ export function createSessionsRoutes(
     const result = await sessionsService.getSessionPlan({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {
@@ -331,10 +354,18 @@ export function createSessionsRoutes(
     const result = await sessionsService.createPullRequest({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {
@@ -385,10 +416,18 @@ export function createSessionsRoutes(
     const result = await sessionsService.getPullRequest({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {
@@ -443,11 +482,19 @@ export function createSessionsRoutes(
     const result = await sessionsService.deleteSession({
       sessionId: c.req.valid("param").sessionId,
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       executionCtx: c.executionCtx,
     });
 
     if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
       if (result.error.status === 403) {
         return c.json(
           {

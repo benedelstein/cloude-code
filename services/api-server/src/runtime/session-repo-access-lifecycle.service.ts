@@ -105,6 +105,7 @@ export class SessionRepoAccessLifecycleService {
           },
         };
       case "GITHUB_API_ERROR":
+      case "GITHUB_UNAVAILABLE":
       case "INVALID_REPO":
       case "SESSION_NOT_FOUND":
         return {

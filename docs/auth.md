@@ -17,7 +17,8 @@ Browser                    Next.js (web)                API Server              
   |                            |   ?origin=<window.origin>  # (prod or preview      |
   |                            |                            #  allowlist regex)     |
   |                            |                            # insert oauth_states   |
-  |                            |                            #   { state, redirect_origin }
+  |                            |                            #   { state, redirect_origin,
+  |                            |                            #     purpose }
   |                            |<-- { url, state } ---------|                      |
   |                            |                            |                      |
   |-- Set popup.location = url ------------------------------------------------------|
@@ -58,9 +59,8 @@ Browser                    Next.js proxy (/api/*)       API Server
   |                            |-- GET /sessions ---------->|
   |                            |   Authorization: Bearer <token>
   |                            |                            |
-  |                            |   (middleware validates session,
-  |                            |    decrypts GitHub access token,
-  |                            |    refreshes if expired)
+  |                            |   (middleware validates app session
+  |                            |    and returns user identity only)
   |                            |                            |
   |                            |<-- response ---------------|
   |<-- response ---------------|                            |
@@ -71,12 +71,27 @@ Browser                    Next.js proxy (/api/*)       API Server
 - **HTTP-only cookie**: The session token is stored as an HTTP-only, secure, sameSite=lax cookie. Client JS cannot access it, mitigating XSS token theft.
 - **Server-side sessions**: Session tokens are random UUIDs stored in D1, not JWTs. This makes them revocable (delete the row to log out).
 - **BFF proxy**: The Next.js `/api/[...path]` catch-all extracts the cookie and forwards it as a `Bearer` token. The API server only deals with Bearer auth.
-- **Encrypted GitHub tokens**: GitHub access/refresh tokens are encrypted with `TOKEN_ENCRYPTION_KEY` before storage.
+- **Identity-only app auth**: Auth middleware validates only the app session token and returns user identity (`id`, GitHub profile fields). It does not join, decrypt, validate, or refresh GitHub credentials.
+- **Encrypted GitHub tokens**: GitHub access/refresh tokens are stored separately in `user_github_credentials` and encrypted with `TOKEN_ENCRYPTION_KEY`.
+- **GitHub credential provider**: Routes and services that need GitHub user-scoped access explicitly resolve credentials with `getValidGitHubCredentialByUserId(...)`. Missing, revoked, or unrefreshable credentials return `GITHUB_AUTH_REQUIRED`; transient refresh/API failures return `GITHUB_UNAVAILABLE`.
 - **State token (nonce)**: A random single-use state token with 10-min expiry prevents CSRF on the OAuth callback. Consumed atomically via `DELETE ... RETURNING`.
 - **Origin-bound state**: The state row carries a `redirect_origin` column. The browser passes its `window.location.origin` on `/auth/github`; the server validates it (see allowlist below) and records it against the state. The api-server's `/auth/callback` reads this origin to decide where to 302 the popup. The redirect target is therefore never trusted from URL parameters — only from server-recorded state.
 - **Preview-origin allowlist**: `PREVIEW_ORIGIN_ALLOWLIST_REGEX` pins the Vercel project name *and* team slug as literals (e.g. `^https://cloude-code-[a-z0-9][a-z0-9-]*-benedelsteins-projects\.vercel\.app$`). Vercel team slugs are globally unique, so no other team can produce a URL matching the regex. The prod origin (`WEB_ORIGIN`) is exempt. Validated both on write (when state is created) and on read (at callback time) for defense-in-depth.
 - **Allowlist**: Only GitHub logins in `ALLOWED_GITHUB_LOGINS` can authenticate.
-- **Token refresh**: The auth middleware transparently refreshes expired GitHub access tokens using the stored refresh token.
+- **GitHub reauth without app logout**: Authenticated reauth endpoints (`POST /auth/github/reauth/start`, `POST /auth/github/reauth/token`) run the GitHub OAuth flow again, verify the returned GitHub user id matches the current app user, and update only `user_github_credentials`. They do not create or replace an app auth session.
+
+## GitHub Reauth Flow
+
+GitHub remains the only app identity provider, but app auth and GitHub API credentials are separate runtime concerns.
+
+- Login state uses `purpose = "github_login"` and creates both an app session row and GitHub credential row.
+- Reauth state uses `purpose = "github_reauth"` plus the current `user_id`.
+- `/auth/callback` peeks the state purpose and bounces login callbacks to `/api/auth/finalize`, but reauth callbacks to `/api/auth/github/reauth/finalize`.
+- Login finalize sets the app session cookie. Reauth finalize posts a reauth popup message and does not set the session cookie.
+- Reauth token exchange rejects a GitHub account mismatch before updating credentials.
+- Revoking GitHub App user authorization deletes the stored GitHub credentials, not the app session.
+
+After credentials are missing or revoked, identity-only routes still work: `/auth/me`, `/auth/logout`, sidebar/session list, settings shell, and other routes that need only `user.id`. GitHub-dependent routes return `GITHUB_AUTH_REQUIRED` until the user reauthenticates.
 
 ## Preview Branches
 
@@ -135,19 +150,22 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 
 | File | Purpose |
 |------|---------|
-| `services/api-server/src/modules/auth/routes/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, logout |
-| `services/api-server/src/modules/auth/middleware/auth.middleware.ts` | Session validation, token refresh |
+| `services/api-server/src/modules/auth/routes/auth.routes.ts` | OAuth endpoints: `GET /auth/github`, `GET /auth/callback` (302 bouncer), `POST /auth/token`, GitHub reauth endpoints, logout |
+| `services/api-server/src/modules/auth/middleware/auth.middleware.ts` | App session validation and identity attachment |
+| `services/api-server/src/modules/auth/services/user-session.service.ts` | App session lookup plus explicit GitHub credential resolution/refresh helpers |
 | `services/api-server/src/modules/auth/utils/preview-origin.util.ts` | Validates redirect origin against `WEB_ORIGIN` and `PREVIEW_ORIGIN_ALLOWLIST_REGEX` |
 | `services/api-server/src/modules/session-agent/routes/agent.routes.ts` | Session WebSocket upgrade token validation and repo-access gate |
 | `services/api-server/src/modules/sessions/routes/sessions.routes.ts` | User sessions stream token validation and token mint routes |
 | `services/api-server/src/modules/sessions/services/session-websocket-token.service.ts` | Per-session WebSocket token signing and verification |
 | `services/api-server/src/modules/sessions/services/user-sessions-websocket-token.service.ts` | User-scoped sidebar stream token signing and verification |
 | `services/api-server/src/modules/github/services/github-app.service.ts` | GitHub App OAuth helpers |
-| `services/api-server/src/shared/repositories/oauth-state-repository.ts` | State nonce CRUD; `peekRedirectOrigin` for the api-server callback |
+| `services/api-server/src/shared/repositories/oauth-state-repository.ts` | State nonce CRUD; `peek` for the api-server callback |
 | `services/api-server/src/shared/utils/crypto.ts` | Token encryption/decryption |
 | `apps/web/app/api/auth/finalize/route.ts` | Exchanges code for session token, sets cookie, posts opener |
+| `apps/web/app/api/auth/github/reauth/finalize/route.ts` | Exchanges reauth code, updates GitHub credentials, posts opener without setting app session cookie |
 | `apps/web/app/api/[...path]/route.ts` | BFF proxy, cookie -> Bearer translation |
 | `apps/web/hooks/use-auth.ts` | Client-side auth hook (login, logout, popup management) |
+| `apps/web/hooks/use-github-reauth.ts` | Client-side GitHub reauth popup management |
 | `apps/web/hooks/use-websocket-token.ts` | Shared client token mint/retry lifecycle |
 | `apps/web/hooks/use-session-websocket-token.ts` | Session WebSocket token adapter and initial-token handoff |
 | `apps/web/hooks/use-user-sessions-websocket-token.ts` | User sessions stream token adapter |
@@ -160,6 +178,7 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 - You can only create a session on a repo if you have access to it via its github app installation.
   We first check the installation that the repo is associated with, and then use the user's github access token to verify that the user can access that repo via the installation.
   Even if a user can access a repo, they may not have access to it via the installation.
+- GitHub user access tokens cannot be generated server-side from only the app private key or an installation id. The app can exchange a fresh user authorization code or refresh an existing valid refresh token. If no stored credential exists and no refresh is possible, GitHub user-scoped routes fail with `GITHUB_AUTH_REQUIRED` while the app auth session remains valid.
 - You can only create a repo environment for a repo if the same `assertUserRepoAccess(...)` path confirms access. Session creation resolves the selected environment through `RepoEnvironmentsService.resolveEnvironmentSnapshot(...)` and stores that immutable snapshot in the session Durable Object.
 - You can only view a session if you created it (for now).
 - You can only install the github app on a repo if you have admin access to it (this is a limitation of the github api).

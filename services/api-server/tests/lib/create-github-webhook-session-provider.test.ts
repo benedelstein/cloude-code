@@ -7,6 +7,7 @@ import type { SessionAgentRpc } from "../../src/shared/types/session-agent";
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
   all: <T>() => Promise<{ results: T[] }>;
+  run: () => Promise<{ success: boolean }>;
 };
 
 function createMockDatabase(rows: Array<{ id: string; user_id: string }>) {
@@ -22,6 +23,9 @@ function createMockDatabase(rows: Array<{ id: string; user_id: string }>) {
         },
         async all<T>() {
           return { results: rows as T[] };
+        },
+        async run() {
+          return { success: true };
         },
       };
     },
@@ -118,5 +122,18 @@ describe("createGitHubWebhookSessionProvider", () => {
     expect(calls[0]?.query).not.toContain("UPDATE sessions");
     expect(updatePullRequest).toHaveBeenCalledWith({ state: "closed" });
     expect(userSessionsGetByName).not.toHaveBeenCalled();
+  });
+
+  it("revokes GitHub credentials without deleting app auth sessions", async () => {
+    const { database, calls } = createMockDatabase([]);
+    const env = createEnv({ database });
+    const provider = createGitHubWebhookSessionProvider(env);
+
+    await provider.revokeUserGitHubCredentialsByGithubId(123);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.query).toContain("DELETE FROM user_github_credentials");
+    expect(calls[0]?.query).not.toContain("DELETE FROM auth_sessions");
+    expect(calls[0]?.bindings).toEqual([123]);
   });
 });

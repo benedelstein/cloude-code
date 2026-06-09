@@ -2,12 +2,16 @@ export interface OauthStateRecord {
   state: string;
   codeVerifier: string | null;
   redirectOrigin: string | null;
+  purpose: string | null;
+  userId: string | null;
 }
 
 interface OauthStateRow {
   state: string;
   code_verifier: string | null;
   redirect_origin: string | null;
+  purpose: string | null;
+  user_id: string | null;
 }
 
 /**
@@ -25,11 +29,14 @@ export class OauthStateRepository {
     expiresAt: string,
     codeVerifier: string | null = null,
     redirectOrigin: string | null = null,
+    purpose: string | null = null,
+    userId: string | null = null,
   ): Promise<void> {
     await this.database.prepare(
-      `INSERT INTO oauth_states (state, expires_at, code_verifier, redirect_origin) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO oauth_states (state, expires_at, code_verifier, redirect_origin, purpose, user_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-      .bind(state, expiresAt, codeVerifier, redirectOrigin)
+      .bind(state, expiresAt, codeVerifier, redirectOrigin, purpose, userId)
       .run();
   }
 
@@ -37,7 +44,7 @@ export class OauthStateRepository {
     const row = await this.database.prepare(
       `DELETE FROM oauth_states
        WHERE state = ? AND datetime(expires_at) > datetime('now')
-       RETURNING state, code_verifier, redirect_origin`,
+       RETURNING state, code_verifier, redirect_origin, purpose, user_id`,
     )
       .bind(state)
       .first<OauthStateRow>();
@@ -50,6 +57,30 @@ export class OauthStateRepository {
       state: row.state,
       codeVerifier: row.code_verifier ?? null,
       redirectOrigin: row.redirect_origin ?? null,
+      purpose: row.purpose ?? null,
+      userId: row.user_id ?? null,
+    };
+  }
+
+  async peek(state: string): Promise<OauthStateRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT state, code_verifier, redirect_origin, purpose, user_id
+       FROM oauth_states
+       WHERE state = ? AND datetime(expires_at) > datetime('now')`,
+    )
+      .bind(state)
+      .first<OauthStateRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      state: row.state,
+      codeVerifier: row.code_verifier ?? null,
+      redirectOrigin: row.redirect_origin ?? null,
+      purpose: row.purpose ?? null,
+      userId: row.user_id ?? null,
     };
   }
 
@@ -60,13 +91,6 @@ export class OauthStateRepository {
    * subsequent /auth/token exchange.
    */
   async peekRedirectOrigin(state: string): Promise<string | null> {
-    const row = await this.database.prepare(
-      `SELECT redirect_origin FROM oauth_states
-       WHERE state = ? AND datetime(expires_at) > datetime('now')`,
-    )
-      .bind(state)
-      .first<{ redirect_origin: string | null }>();
-
-    return row?.redirect_origin ?? null;
+    return (await this.peek(state))?.redirectOrigin ?? null;
   }
 }
