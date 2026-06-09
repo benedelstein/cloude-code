@@ -64,13 +64,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     sendMessage,
     stop,
   } = useSession();
-  const {
-    enabled: isRightSidebarEnabled,
-    open: isRightSidebarOpen,
-    widthPx: rightSidebarWidthPx,
-    isResizing: isRightSidebarResizing,
-  } = useAppRightSidebar();
-  const isMobile = useIsMobile();
+  const { rightSidebarInset, isRightSidebarResizing } = useRightSidebarInset();
 
   const { user } = useAuth();
   const providerAuth = useProviderAuth({ sessionId });
@@ -82,9 +76,6 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollToBottomRef = useRef<(() => void) | null>(null);
-  const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
-    ? `var(--app-right-sidebar-width, ${rightSidebarWidthPx}px)`
-    : "0rem";
 
   const displayTitle = sessionTitle ?? repoFullName ?? "Untitled session";
   const canSaveTitle = titleInput.trim().length > 0
@@ -294,7 +285,24 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
   );
 }
 
+function useRightSidebarInset() {
+  const {
+    enabled: isRightSidebarEnabled,
+    open: isRightSidebarOpen,
+    widthPx: rightSidebarWidthPx,
+    isResizing: isRightSidebarResizing,
+  } = useAppRightSidebar();
+  const isMobile = useIsMobile();
+  const rightSidebarInset = !isMobile && isRightSidebarEnabled && isRightSidebarOpen
+    ? `var(--app-right-sidebar-width, ${rightSidebarWidthPx}px)`
+    : "0rem";
+
+  return { rightSidebarInset, isRightSidebarResizing };
+}
+
 export function ChatContainerLoading() {
+  const { rightSidebarInset, isRightSidebarResizing } = useRightSidebarInset();
+
   return (
     <ChatScaffold
       header={<ChatHeaderSkeleton />}
@@ -303,6 +311,8 @@ export function ChatContainerLoading() {
           messages={[]}
           streamingMessage={null}
           isHistoryLoading
+          rightInset={rightSidebarInset}
+          isRightInsetResizing={isRightSidebarResizing}
         />
       )}
       bottom={(
@@ -326,6 +336,8 @@ export function ChatContainerLoading() {
           </InputFrame>
         </div>
       )}
+      rightInset={rightSidebarInset}
+      isRightSidebarResizing={isRightSidebarResizing}
     />
   );
 }
