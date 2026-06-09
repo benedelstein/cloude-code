@@ -12,11 +12,9 @@ import type {
   StartupScriptSetupTask,
 } from "@repo/shared";
 import {
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   Circle,
-  Github,
   Loader2,
   MessageCircle,
   XCircle,
@@ -28,6 +26,7 @@ import { useGitHubReauth } from "@/hooks/use-github-reauth";
 import { MessageItem } from "./message-item";
 import { WorkingCloudRow } from "./working-cloud-indicator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GithubIcon } from "@/components/github-icon";
 
 const MESSAGE_HISTORY_SKELETONS = [
   { role: "assistant", lines: ["w-[82%]", "w-[76%]", "w-[68%]", "w-[74%]"] },
@@ -641,8 +640,8 @@ function BlockedSessionState({
   return (
     <div className="w-full max-w-xl text-center">
       <div className="flex flex-col items-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-danger/8 text-danger">
-          <AlertTriangle className="h-5 w-5" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
+          <GithubIcon className="h-5 w-5" />
         </div>
         <h3 className="mt-4 text-base font-semibold text-foreground">
           {errorCode === "GITHUB_AUTH_REQUIRED"
@@ -650,7 +649,9 @@ function BlockedSessionState({
             : "Repository access blocked"}
         </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-foreground-secondary">
-          {message}
+          {errorCode === "GITHUB_AUTH_REQUIRED"
+            ? "Your GitHub credentials have expired. Please reauthenticate."
+            : message}
         </p>
         {errorCode === "GITHUB_AUTH_REQUIRED" && (
           <button
@@ -666,7 +667,7 @@ function BlockedSessionState({
             {githubReauth.isReauthing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Github className="h-4 w-4" />
+              <GithubIcon className="h-4 w-4" />
             )}
             Reconnect GitHub
           </button>
