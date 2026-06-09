@@ -1,5 +1,9 @@
 # Cloude Code
 
+[![API Server CI](https://github.com/benedelstein/cloude-code/actions/workflows/ci-api-server.yml/badge.svg)](https://github.com/benedelstein/cloude-code/actions/workflows/ci-api-server.yml)
+[![Web CI](https://github.com/benedelstein/cloude-code/actions/workflows/ci-web.yml/badge.svg)](https://github.com/benedelstein/cloude-code/actions/workflows/ci-web.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](./LICENSE)
+
 Cloude Code is a background agent service to manage agent-driven software development teams.  It was inspired by [Ramp's background-agent](https://builders.ramp.com/post/why-we-built-our-background-agent).
 
 It was designed with these ideas in mind:
