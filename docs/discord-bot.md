@@ -89,11 +89,10 @@ pnpm db:migrate:prod
 
 ## Discord Worker configuration
 
-Set these secrets on `apps/discord-bot`:
+Set this secret on `apps/discord-bot` (`DISCORD_PUBLIC_KEY` is a public Worker var in `wrangler.jsonc`):
 
 ```bash
 cd apps/discord-bot
-pnpm wrangler secret put DISCORD_PUBLIC_KEY
 pnpm wrangler secret put CLOUDE_INTEGRATION_API_TOKEN
 ```
 
