@@ -212,6 +212,7 @@ describe("SessionsService", () => {
         42,
         456,
         "owner/repo",
+        "web",
         null,
         null,
       ]);

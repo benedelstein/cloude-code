@@ -1,4 +1,5 @@
 import type {
+  IntegrationProvider,
   PullRequestState,
   SessionAccessBlockReason,
   SessionRepoGroup,
@@ -13,12 +14,17 @@ import {
   encodeSessionCursor,
 } from "./sessions-cursors.repository";
 
+// How a session was created. Set server-side per entry point, never from
+// client input.
+export type SessionSource = "web" | IntegrationProvider;
+
 export interface CreateSessionParams {
   id: string;
   userId: string;
   repoId: number;
   installationId: number;
   repoFullName: string;
+  source: SessionSource;
   sourceEnvironmentId?: string | null;
   sourceEnvironmentName?: string | null;
 }
@@ -110,9 +116,10 @@ export class SessionsRepository {
            repo_id,
            installation_id,
            repo_full_name,
+           source,
            source_environment_id,
            source_environment_name
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
@@ -120,6 +127,7 @@ export class SessionsRepository {
         params.repoId,
         params.installationId,
         params.repoFullName,
+        params.source,
         params.sourceEnvironmentId ?? null,
         params.sourceEnvironmentName ?? null,
       )

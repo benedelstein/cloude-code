@@ -233,6 +233,29 @@ export class GitHubAppService {
     };
   }
 
+  async getRepositoryReadme(params: {
+    accessToken: string;
+    owner: string;
+    repo: string;
+  }): Promise<string | null> {
+    const octokit = new Octokit({ auth: params.accessToken });
+    try {
+      const response = await octokit.rest.repos.getReadme({
+        owner: params.owner,
+        repo: params.repo,
+      });
+      if (Array.isArray(response.data) || response.data.encoding !== "base64") {
+        return null;
+      }
+      return decodeBase64Text(response.data.content);
+    } catch (error) {
+      if (isHttpStatus(error, 404)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   /**
    * Resolve a repo (owner/name) to an installation access token.
    * Checks D1 for installation, verifies repo access, and returns a cached or fresh token.
@@ -936,4 +959,20 @@ function getNextPageCursor(linkHeader?: string): string | null {
   }
 
   return null;
+}
+
+function decodeBase64Text(content: string): string {
+  const binary = atob(content.replace(/\s+/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function isHttpStatus(error: unknown, status: number): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "status" in error
+    && error.status === status;
 }

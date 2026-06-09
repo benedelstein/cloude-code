@@ -43,6 +43,7 @@ import type {
   UpdateRepoEnvironmentRequest,
   UserRepoEnvironmentResponse,
   VoiceTranscriptionTokenResponse,
+  IntegrationLinkClaimResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -403,6 +404,14 @@ export async function exchangeGitHubReauth(
 
 export async function logoutUser(): Promise<LogoutResponse> {
   return apiFetch("/auth/logout", { method: "POST" });
+}
+
+export async function claimIntegrationLink(token: string): Promise<IntegrationLinkClaimResponse> {
+  return apiFetch("/integrations/link/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
 }
 
 // OpenAI Codex device auth

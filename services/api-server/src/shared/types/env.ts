@@ -31,4 +31,5 @@ export interface Env {
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
   VOICE_TOKEN_SIGNING_KEY: string;
   PORT: string;
+  INTEGRATION_SESSION_REQUEST_TOKEN?: string;
 }

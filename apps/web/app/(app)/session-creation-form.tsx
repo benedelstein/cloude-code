@@ -69,7 +69,6 @@ export function SessionCreationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addSession } = useSessionList();
-  const isDevelopment = process.env.NODE_ENV === "development";
   const requestedRepoId = Number(searchParams.get("repoId"));
   const requestedRepoFullName = searchParams.get("repoFullName") ?? null;
   const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
@@ -686,17 +685,6 @@ export function SessionCreationForm() {
       </InputFrame>
 
       <div className="relative flex items-center justify-center mt-3">
-        {isDevelopment && isProviderConnected && (
-          <div className="absolute left-0">
-            <button
-              type="button"
-              onClick={() => void activeHandle?.disconnect()}
-              className="px-2 py-1 text-[11px] font-medium rounded-md border border-border text-foreground-secondary hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            >
-              Debug: Disconnect {selectedProvider ? PROVIDERS[selectedProvider].displayName : "provider"}
-            </button>
-          </div>
-        )}
         <p className="text-xs text-foreground-secondary/60">
           Press Enter to submit, Shift+Enter for new line
         </p>

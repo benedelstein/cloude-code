@@ -6,6 +6,7 @@ import {
   buildAgentRoutes,
   buildAttachmentsRoutes,
   buildAuthRoutes,
+  buildIntegrationsRoutes,
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
@@ -85,6 +86,7 @@ app.route("/repos", buildRepoScopedEnvironmentRoutes());
 app.route("/sessions", buildSessionsRoutes());
 app.route("/voice", buildVoiceRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
+app.route("/integrations", buildIntegrationsRoutes());
 app.route("/environments", buildUserEnvironmentRoutes());
 
 app.route("/webhooks", buildWebhooksRoutes());
