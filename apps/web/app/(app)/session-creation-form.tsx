@@ -69,7 +69,6 @@ export function SessionCreationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addSession } = useSessionList();
-  const isDevelopment = process.env.NODE_ENV === "development";
   const requestedRepoId = Number(searchParams.get("repoId"));
   const requestedRepoFullName = searchParams.get("repoFullName") ?? null;
   const hasRequestedRepo = Number.isFinite(requestedRepoId) && requestedRepoId > 0;
