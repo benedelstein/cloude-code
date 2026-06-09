@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, MessageCircleWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { ApiError, claimDiscordLink } from "@/lib/client-api";
+import { ApiError, claimIntegrationLink } from "@/lib/client-api";
 
 type ClaimState =
   | { type: "idle" }
   | { type: "claiming" }
-  | { type: "success"; expiresAt: string; discordUsername: string | null }
+  | { type: "success"; expiresAt: string; externalUsername: string | null }
   | { type: "error"; message: string };
 
-export function DiscordLinkPageClient({ token }: { token: string | null }) {
+export function IntegrationLinkPageClient({ token }: { token: string | null }) {
   const { user, loading, login, authError } = useAuth();
   const [claimState, setClaimState] = useState<ClaimState>({ type: "idle" });
 
@@ -22,18 +22,18 @@ export function DiscordLinkPageClient({ token }: { token: string | null }) {
     }
 
     setClaimState({ type: "claiming" });
-    claimDiscordLink(token)
+    claimIntegrationLink(token)
       .then((response) => {
         setClaimState({
           type: "success",
           expiresAt: response.expiresAt,
-          discordUsername: response.discordUsername,
+          externalUsername: response.externalUsername,
         });
       })
       .catch((error: unknown) => {
         const message = error instanceof ApiError
           ? error.message
-          : "Failed to link Discord. Request a fresh link from Discord.";
+          : "Failed to link integration. Request a fresh link from the integration.";
         setClaimState({ type: "error", message });
       });
   }, [claimState.type, loading, token, user]);
@@ -65,7 +65,7 @@ export function DiscordLinkPageClient({ token }: { token: string | null }) {
           )}
           {claimState.type === "success" && (
             <Button type="button" variant="outline" onClick={() => window.close()}>
-              Return to Discord
+              Return to integration
             </Button>
           )}
         </div>
@@ -101,10 +101,10 @@ function getTitle(params: {
   claimState: ClaimState;
 }): string {
   if (!params.token) {
-    return "Invalid Discord link";
+    return "Invalid integration link";
   }
   if (params.claimState.type === "success") {
-    return "Discord connected";
+    return "Integration connected";
   }
   if (params.claimState.type === "error") {
     return "Link failed";
@@ -113,9 +113,9 @@ function getTitle(params: {
     return "Checking your session";
   }
   if (!params.user) {
-    return "Sign in to link Discord";
+    return "Sign in to link integration";
   }
-  return "Connecting Discord";
+  return "Connecting integration";
 }
 
 function getDescription(params: {
@@ -125,13 +125,13 @@ function getDescription(params: {
   claimState: ClaimState;
 }): string {
   if (!params.token) {
-    return "This link is missing a token. Request a fresh link from Discord.";
+    return "This link is missing a token. Request a fresh link from the integration.";
   }
   if (params.claimState.type === "success") {
     const expires = new Date(params.claimState.expiresAt).toLocaleDateString();
-    const discordName = params.claimState.discordUsername
-      ? ` Discord user ${params.claimState.discordUsername}`
-      : " Your Discord account";
+    const discordName = params.claimState.externalUsername
+      ? ` Discord user ${params.claimState.externalUsername}`
+      : " Your external account";
     return `${discordName} can create Cloude sessions until ${expires}.`;
   }
   if (params.claimState.type === "error") {
@@ -141,7 +141,7 @@ function getDescription(params: {
     return "One moment while we check whether you are signed in to Cloude.";
   }
   if (!params.user) {
-    return "Sign in with GitHub, then this page will connect your Discord account to Cloude.";
+    return "Sign in with GitHub, then this page will connect your external account to Cloude.";
   }
   return "One moment while we connect your Discord account.";
 }

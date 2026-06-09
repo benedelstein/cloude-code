@@ -28,5 +28,5 @@ export interface Env {
   TOKEN_ENCRYPTION_KEY: string;
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
   PORT: string;
-  DISCORD_SESSION_REQUEST_TOKEN?: string;
+  INTEGRATION_SESSION_REQUEST_TOKEN?: string;
 }

@@ -15,5 +15,5 @@
   }
   // Secrets (set via wrangler secret put):
   // - DISCORD_PUBLIC_KEY
-  // - CLOUDE_DISCORD_API_TOKEN
+  // - CLOUDE_INTEGRATION_API_TOKEN
 }

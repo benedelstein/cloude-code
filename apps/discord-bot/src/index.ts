@@ -1,10 +1,10 @@
-import { DiscordSessionResponse } from "@repo/shared";
+import { IntegrationSessionResponse } from "@repo/shared";
 import { z } from "zod";
 
 interface Env {
   API_BASE_URL: string;
   DISCORD_PUBLIC_KEY: string;
-  CLOUDE_DISCORD_API_TOKEN: string;
+  CLOUDE_INTEGRATION_API_TOKEN: string;
 }
 
 interface DiscordUser {
@@ -110,18 +110,24 @@ async function createSessionAndEditResponse(params: {
   prompt: string;
   user: DiscordUser;
 }): Promise<void> {
-  const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/discord/session-requests`, {
+  const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/integrations/session-requests`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${params.env.CLOUDE_DISCORD_API_TOKEN}`,
+      "Authorization": `Bearer ${params.env.CLOUDE_INTEGRATION_API_TOKEN}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      discordUserId: params.user.id,
-      discordUsername: params.user.global_name ?? params.user.username,
+      externalUser: {
+        provider: "discord",
+        id: params.user.id,
+        displayName: params.user.global_name ?? params.user.username,
+        username: params.user.username,
+      },
       prompt: params.prompt,
-      guildId: params.interaction.guild_id,
-      channelId: params.interaction.channel_id,
+      context: {
+        guildId: params.interaction.guild_id,
+        channelId: params.interaction.channel_id,
+      },
     }),
   });
 
@@ -138,7 +144,7 @@ async function buildDiscordMessage(response: Response): Promise<string> {
     return "I could not create a Cloude session. The API rejected the request.";
   }
 
-  const parsed = DiscordSessionResponse.safeParse(await response.json());
+  const parsed = IntegrationSessionResponse.safeParse(await response.json());
   if (!parsed.success) {
     return "I could not create a Cloude session. The API returned an unexpected response.";
   }
