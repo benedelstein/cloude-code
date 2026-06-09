@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, Link2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, CircleAlert, Link2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
@@ -35,6 +35,9 @@ interface ProviderModelSelectorProps {
   disabled?: boolean;
   triggerClassName?: string;
   hideChevron?: boolean;
+  authRequired?: boolean;
+  authRequiredLabel?: string;
+  onAuthRequiredClick?: () => void;
 }
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
@@ -58,6 +61,9 @@ export function ProviderModelSelector({
   disabled,
   triggerClassName,
   hideChevron = false,
+  authRequired = false,
+  authRequiredLabel = "Reconnect provider to continue",
+  onAuthRequiredClick,
 }: ProviderModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
@@ -69,9 +75,12 @@ export function ProviderModelSelector({
   const hasSelection = selectedProvider !== null
     && selectedModel !== null
     && (selectedHandle?.connected ?? false);
-  const displayLabel = hasSelection
-    ? getDisplayLabel(selectedProvider, selectedModel)
-    : "Select a model";
+  const showSelectedProvider = selectedProvider !== null && (hasSelection || authRequired);
+  const displayLabel = authRequired && selectedProvider !== null
+    ? `Reconnect ${PROVIDERS[selectedProvider].displayName}`
+    : hasSelection
+      ? getDisplayLabel(selectedProvider, selectedModel)
+      : "Select a model";
   const availableProviders = allowedProviderIds
     ? PROVIDER_LIST.filter((provider) => allowedProviderIds.includes(provider.id))
     : PROVIDER_LIST;
@@ -83,6 +92,7 @@ export function ProviderModelSelector({
     })
     : availableProviders;
   const isSearching = modelSearch.trim().length > 0;
+  const visibleOpen = authRequired ? false : open;
 
   useEffect(() => {
     if (!open) {
@@ -92,6 +102,16 @@ export function ProviderModelSelector({
 
     setCollapsedProviderIds(new Set());
   }, [open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen && authRequired) {
+      onAuthRequiredClick?.();
+      setOpen(false);
+      return;
+    }
+
+    setOpen(nextOpen);
+  };
 
   const toggleProviderCollapsed = (providerId: ProviderId) => {
     setCollapsedProviderIds((current) => {
@@ -106,7 +126,7 @@ export function ProviderModelSelector({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={visibleOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild disabled={disabled}>
         <button
           type="button"
@@ -116,7 +136,7 @@ export function ProviderModelSelector({
             triggerClassName,
           )}
         >
-          {hasSelection && (
+          {showSelectedProvider && (
             <Image
               src={PROVIDER_ICONS[selectedProvider].src}
               alt={PROVIDER_ICONS[selectedProvider].alt}
@@ -128,6 +148,12 @@ export function ProviderModelSelector({
           <span className={cn("min-w-0 truncate", !hasSelection && "text-foreground-secondary font-bold")}>
             {displayLabel}
           </span>
+          {authRequired && (
+            <CircleAlert
+              aria-label={authRequiredLabel}
+              className="h-3.5 w-3.5 shrink-0 text-warning"
+            />
+          )}
           {!hideChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />}
         </button>
       </PopoverTrigger>

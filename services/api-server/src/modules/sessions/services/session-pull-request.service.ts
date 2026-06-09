@@ -16,6 +16,7 @@ import type {
   PullRequestData,
 } from "@/shared/types/github";
 import { createLogger } from "@/shared/logging";
+import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
 
 const logger = createLogger("session-pull-request-service.ts");
 
@@ -130,7 +131,8 @@ async function getSessionInfo(sessionStub: SessionAgentStub): Promise<SessionInf
 export async function createPullRequestForSessionContext(
   params: CreatePullRequestForSessionContextParams,
 ): Promise<Result<CreatedPullRequestResult, PullRequestCreationError>> {
-  const { github, anthropicApiKey, repoFullName, baseBranch, headBranch, sessionMessages } = params;
+  const { github, anthropicApiKey, repoFullName, headBranch, sessionMessages } = params;
+  const baseBranch = sanitizeGitBranchName(params.baseBranch) ?? "main";
   const pullRequestContextMessages = buildPullRequestContextMessages(sessionMessages);
 
   let compareData: GitHubCompareData | null = null;
