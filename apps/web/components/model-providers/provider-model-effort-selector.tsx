@@ -16,6 +16,9 @@ interface ProviderModelEffortSelectorProps {
   onConnect: (providerId: ProviderId) => void;
   allowedProviderIds?: ProviderId[];
   disabled?: boolean;
+  authRequired?: boolean;
+  authRequiredLabel?: string;
+  onAuthRequiredClick?: () => void;
   className?: string;
 }
 
@@ -29,6 +32,9 @@ export function ProviderModelEffortSelector({
   onConnect,
   allowedProviderIds,
   disabled,
+  authRequired,
+  authRequiredLabel,
+  onAuthRequiredClick,
   className,
 }: ProviderModelEffortSelectorProps) {
   return (
@@ -42,6 +48,9 @@ export function ProviderModelEffortSelector({
         allowedProviderIds={allowedProviderIds}
         disabled={disabled}
         hideChevron
+        authRequired={authRequired}
+        authRequiredLabel={authRequiredLabel}
+        onAuthRequiredClick={onAuthRequiredClick}
         triggerClassName="rounded-sm"
       />
       <ProviderEffortSelector

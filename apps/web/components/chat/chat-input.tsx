@@ -5,12 +5,13 @@ import { ChatAttachmentPreviews } from "@/components/chat/chat-attachment-previe
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { ProviderModelEffortSelector } from "@/components/model-providers/provider-model-effort-selector";
-import type {
-  AgentMode,
-  MessageAttachmentRef,
-  AttachmentDescriptor,
-  ProviderAuthRequired,
-  ProviderId,
+import {
+  PROVIDERS,
+  type AgentMode,
+  type MessageAttachmentRef,
+  type AttachmentDescriptor,
+  type ProviderAuthRequired,
+  type ProviderId,
 } from "@repo/shared";
 import type { ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
 import { ImageAttachButton } from "@/components/chat/image-attach-button";
@@ -66,6 +67,7 @@ export function ChatInput({
   const [input, setInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [manuallyOpenedSigninPanel, setManuallyOpenedSigninPanel] = useState(false);
+  const [dismissedAuthRequiredKey, setDismissedAuthRequiredKey] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -97,16 +99,35 @@ export function ChatInput({
     }
   }, [input]);
 
+  const providerAuthRequiredKey = providerAuthRequired
+    ? `${providerAuthRequired.providerId}:${providerAuthRequired.state}`
+    : null;
   const signinProviderId = providerAuthRequired?.providerId ?? selectedProvider;
   const signinHandle = signinProviderId
     ? providerAuthHandles.find((handle) => handle.providerId === signinProviderId)
     : undefined;
-  // Open when the session requires auth, or when the user manually opens it
-  // from the provider selector. The server-required open auto-closes when
-  // providerAuthRequired clears (e.g. after reauth).
-  const showSigninPanel =
-    Boolean(signinHandle) && (providerAuthRequired !== null || manuallyOpenedSigninPanel);
-  const isAuthBlocking = showSigninPanel && Boolean(signinProviderId && signinHandle);
+  const isAuthBlocking = providerAuthRequired !== null && Boolean(signinProviderId && signinHandle);
+  const shouldShowRequiredSigninPanel = providerAuthRequired !== null
+    && providerAuthRequiredKey !== dismissedAuthRequiredKey;
+  // Open when the session requires auth, unless the user dismissed that exact
+  // auth-required state, or when the user manually reopens it from the picker.
+  const showSigninPanel = Boolean(signinHandle)
+    && (shouldShowRequiredSigninPanel || manuallyOpenedSigninPanel);
+  const authRequiredLabel = signinProviderId
+    ? `Reconnect ${PROVIDERS[signinProviderId].displayName} to continue`
+    : "Reconnect provider to continue";
+
+  useEffect(() => {
+    if (providerAuthRequiredKey === null) {
+      setDismissedAuthRequiredKey(null);
+      setManuallyOpenedSigninPanel(false);
+      return;
+    }
+
+    setDismissedAuthRequiredKey((current) => (
+      current !== null && current !== providerAuthRequiredKey ? null : current
+    ));
+  }, [providerAuthRequiredKey]);
 
   useEffect(() => {
     if (!isStreaming) {
@@ -211,6 +232,11 @@ export function ChatInput({
     }
   };
 
+  const reopenSigninPanel = () => {
+    setDismissedAuthRequiredKey(null);
+    setManuallyOpenedSigninPanel(true);
+  };
+
   const handleStop = () => {
     if (isCancelling) {
       return;
@@ -225,7 +251,7 @@ export function ChatInput({
       onSubmit={(event) => void handleSubmit(event)}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!disabled && !isAuthBlocking) {
+        if (!disabled) {
           setIsDragging(true);
         }
       }}
@@ -238,7 +264,7 @@ export function ChatInput({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        if (disabled || isAuthBlocking) {
+        if (disabled) {
           return;
         }
         addFiles(Array.from(event.dataTransfer.files));
@@ -255,7 +281,13 @@ export function ChatInput({
           handle={signinHandle}
           open={showSigninPanel}
           onOpenChange={(open) => {
-            if (!open) { setManuallyOpenedSigninPanel(false); }
+            if (open) {
+              return;
+            }
+            setManuallyOpenedSigninPanel(false);
+            if (providerAuthRequiredKey !== null) {
+              setDismissedAuthRequiredKey(providerAuthRequiredKey);
+            }
           }}
         />
       )}
@@ -279,11 +311,11 @@ export function ChatInput({
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            disabled || isAuthBlocking
+            disabled
               ? disabledPlaceholder
               : "Send a message..."
           }
-          disabled={disabled || isAuthBlocking}
+          disabled={disabled}
           rows={1}
           className="w-full resize-none overflow-y-auto bg-transparent px-0 py-1 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -297,13 +329,13 @@ export function ChatInput({
               <div className="flex shrink-0 items-center gap-2">
                 <ImageAttachButton
                   onFiles={addFiles}
-                  disabled={disabled || isAuthBlocking}
+                  disabled={disabled}
                 />
                 {agentMode && onAgentModeChange && (
                   <AgentModeToggle
                     agentMode={agentMode}
                     onToggle={() => onAgentModeChange(agentMode === "plan" ? "edit" : "plan")}
-                    disabled={disabled || isAuthBlocking}
+                    disabled={disabled}
                   />
                 )}
               </div>
@@ -320,9 +352,12 @@ export function ChatInput({
                     providerAuthHandles={providerAuthHandles}
                     onModelSelect={onProviderModelChange}
                     onEffortSelect={onProviderEffortChange}
-                    onConnect={() => setManuallyOpenedSigninPanel(true)}
+                    onConnect={reopenSigninPanel}
                     allowedProviderIds={[selectedProvider]}
-                    disabled={disabled || isAuthBlocking}
+                    disabled={disabled}
+                    authRequired={isAuthBlocking}
+                    authRequiredLabel={authRequiredLabel}
+                    onAuthRequiredClick={reopenSigninPanel}
                     className="gap-0"
                   />
                 )}

@@ -2,6 +2,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UseVoiceInputResult } from "@/hooks/use-voice-input";
+import type { ClaudeAuthHandle } from "@/hooks/use-provider-auth";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const {
@@ -33,11 +34,36 @@ vi.mock("@/hooks/use-image-attachments", () => ({
 }));
 
 vi.mock("@/components/model-providers/provider-model-effort-selector", () => ({
-  ProviderModelEffortSelector: () => React.createElement("div", { "data-testid": "provider-selector" }),
+  ProviderModelEffortSelector: (props: {
+    authRequired?: boolean;
+    onAuthRequiredClick?: () => void;
+  }) => React.createElement(
+    "button",
+    {
+      type: "button",
+      "data-testid": "provider-selector",
+      "data-auth-required": props.authRequired ? "true" : "false",
+      onClick: props.onAuthRequiredClick,
+    },
+    "Provider selector",
+  ),
 }));
 
 vi.mock("@/components/model-providers/provider-signin-panel", () => ({
-  ProviderSigninPanel: () => null,
+  ProviderSigninPanel: (props: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }) => props.open
+    ? React.createElement(
+      "div",
+      { "data-testid": "signin-panel" },
+      React.createElement(
+        "button",
+        { type: "button", onClick: () => props.onOpenChange(false) },
+        "Close auth",
+      ),
+    )
+    : null,
 }));
 
 vi.mock("@/components/chat/chat-attachment-previews", () => ({
@@ -58,6 +84,25 @@ function idleVoiceInput(overrides: Partial<UseVoiceInputResult> = {}): UseVoiceI
     retrySend: vi.fn(async () => undefined),
     retryLast: vi.fn(async () => undefined),
     discardDraft: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
+
+function claudeAuthHandle(overrides: Partial<ClaudeAuthHandle> = {}): ClaudeAuthHandle {
+  return {
+    providerId: "claude-code",
+    connected: false,
+    requiresReauth: true,
+    loading: false,
+    error: null,
+    connect: vi.fn(async () => undefined),
+    disconnect: vi.fn(async () => undefined),
+    awaitingCode: false,
+    code: "",
+    setCode: vi.fn(),
+    submittingCode: false,
+    submitCode: vi.fn(async () => undefined),
+    cancelCodeEntry: vi.fn(),
     ...overrides,
   };
 }
@@ -169,5 +214,36 @@ describe("ChatInput voice integration", () => {
     renderChatInput();
 
     expect((screen.getByRole("button", { name: "Voice input unavailable" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("dismisses required reauth while keeping send blocked and picker reauth available", () => {
+    const onSend = vi.fn();
+    renderChatInput({
+      onSend,
+      providerAuthHandles: [claudeAuthHandle()],
+      providerAuthRequired: { providerId: "claude-code", state: "reauth_required" },
+    });
+
+    expect(screen.getByTestId("signin-panel")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close auth" }));
+
+    expect(screen.queryByTestId("signin-panel")).toBeNull();
+    expect(screen.getByTestId("provider-selector").getAttribute("data-auth-required")).toBe("true");
+
+    fireEvent.change(screen.getByPlaceholderText("Send a message..."), {
+      target: { value: "hello" },
+    });
+    const sendButton = screen.getByRole("button", {
+      name: "Enter to send. Shift+Enter for new line.",
+    }) as HTMLButtonElement;
+
+    expect(sendButton.disabled).toBe(true);
+    fireEvent.click(sendButton);
+    expect(onSend).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("provider-selector"));
+
+    expect(screen.getByTestId("signin-panel")).toBeTruthy();
   });
 });
