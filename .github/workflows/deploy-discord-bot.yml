@@ -1,0 +1,49 @@
+name: Deploy Discord Bot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/discord-bot/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-discord-bot.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build --filter "@repo/discord-bot"
+
+      - name: Typecheck
+        run: pnpm typecheck --filter "@repo/discord-bot"
+
+      - name: Lint
+        run: pnpm lint --filter "@repo/discord-bot"
+
+      - name: Test
+        run: pnpm test --filter "@repo/discord-bot"
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: apps/discord-bot
