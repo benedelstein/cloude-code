@@ -1,5 +1,4 @@
 import type {
-  BaseSessionSetupTask,
   ClientState,
   SessionSetupRun,
   SessionSetupTask,
@@ -16,13 +15,11 @@ const CREATE_SETUP_TASK_IDS: SessionSetupTaskId[] = [
   "network_policy",
 ];
 
-type RetiredSessionSetupTask = BaseSessionSetupTask & {
+type LegacyInitialAgentStartSetupTask = {
   id: "initial_agent_start";
-  isBlocking: true;
-  canRetry: false;
 };
 
-type StoredSessionSetupTask = SessionSetupTask | RetiredSessionSetupTask;
+type StoredSessionSetupTask = SessionSetupTask | LegacyInitialAgentStartSetupTask;
 type StoredSessionSetupRun = Omit<SessionSetupRun, "tasks"> & {
   tasks: StoredSessionSetupTask[];
 };
