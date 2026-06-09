@@ -650,7 +650,7 @@ function BlockedSessionState({
         </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-foreground-secondary">
           {errorCode === "GITHUB_AUTH_REQUIRED"
-            ? "Your GitHub credentials have expired. Please reauthenticate."
+            ? "Your GitHub credentials are no longer available. Please reauthenticate."
             : message}
         </p>
         {errorCode === "GITHUB_AUTH_REQUIRED" && (
