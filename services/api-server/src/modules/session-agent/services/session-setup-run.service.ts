@@ -21,15 +21,6 @@ const SETUP_TASK_DEFINITIONS = {
 
 const CREATE_SETUP_TASK_IDS = Object.keys(SETUP_TASK_DEFINITIONS) as SessionSetupTaskId[];
 
-type LegacyInitialAgentStartSetupTask = {
-  id: "initial_agent_start";
-};
-
-type StoredSessionSetupTask = SessionSetupTask | LegacyInitialAgentStartSetupTask;
-type StoredSessionSetupRun = Omit<SessionSetupRun, "tasks"> & {
-  tasks: StoredSessionSetupTask[];
-};
-
 export interface SessionSetupRunServiceDeps {
   getServerState: () => ServerState;
   getClientState: () => ClientState;
@@ -164,7 +155,7 @@ export class SessionSetupRunService {
   repairOnStart(): void {
     const setupRun = this.getClientState().sessionSetupRun;
     if (!setupRun) { return; }
-    const currentRun = normalizeSetupTaskMetadata(removeRetiredSetupTasks(setupRun));
+    const currentRun = normalizeSetupTaskMetadata(setupRun);
     if (currentRun.status !== "running") {
       if (currentRun !== setupRun) {
         this.updateRun(currentRun);
@@ -349,16 +340,6 @@ function normalizeSetupTaskMetadata(setupRun: SessionSetupRun): SessionSetupRun 
     } as SessionSetupTask;
   });
   return changed ? { ...setupRun, tasks } : setupRun;
-}
-
-function removeRetiredSetupTasks(setupRun: SessionSetupRun): SessionSetupRun {
-  const storedRun = setupRun as StoredSessionSetupRun;
-  const tasks = storedRun.tasks.filter(
-    (task): task is SessionSetupTask => task.id !== "initial_agent_start",
-  );
-  return tasks.length === storedRun.tasks.length
-    ? setupRun
-    : { ...setupRun, tasks };
 }
 
 function completeSetupTaskForRepair(
