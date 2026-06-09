@@ -4,7 +4,7 @@ import { z } from "zod";
 interface Env {
   API_BASE_URL: string;
   DISCORD_PUBLIC_KEY: string;
-  CLOUDE_INTEGRATION_API_TOKEN: string;
+  INTEGRATION_SESSION_REQUEST_TOKEN: string;
 }
 
 interface DiscordUser {
@@ -113,7 +113,7 @@ async function createSessionAndEditResponse(params: {
   const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/integrations/session-requests`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${params.env.CLOUDE_INTEGRATION_API_TOKEN}`,
+      "Authorization": `Bearer ${params.env.INTEGRATION_SESSION_REQUEST_TOKEN}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

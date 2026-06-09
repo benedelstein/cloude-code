@@ -15,5 +15,5 @@
     }
   }
   // Secrets (set via wrangler secret put):
-  // - CLOUDE_INTEGRATION_API_TOKEN
+  // - INTEGRATION_SESSION_REQUEST_TOKEN
 }
