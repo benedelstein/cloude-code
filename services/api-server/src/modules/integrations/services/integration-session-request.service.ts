@@ -1,9 +1,11 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import {
   type CreateSessionRequest,
-  type DiscordLinkClaimResponse,
-  type DiscordRepoCandidate,
-  type DiscordSessionResponse,
+  type IntegrationExternalUser,
+  type IntegrationLinkClaimResponse,
+  type IntegrationProvider,
+  type IntegrationRepoCandidate,
+  type IntegrationSessionResponse,
   type Repo,
   dedent,
   encodeBase64Url,
@@ -16,25 +18,25 @@ import { z } from "zod";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import { sha256 } from "@/shared/utils/crypto";
-import { DiscordAccountLinkRepository } from "../repositories/discord-account-link.repository";
-import { DiscordLinkAttemptRepository } from "../repositories/discord-link-attempt.repository";
+import { IntegrationAccountLinkRepository } from "../repositories/integration-account-link.repository";
+import { IntegrationLinkAttemptRepository } from "../repositories/integration-link-attempt.repository";
 import type {
-  DiscordLinkClaimerError,
-  DiscordRepoResolution,
-  DiscordRepoRoutingCandidate,
-  DiscordSessionRequestDeps,
-  DiscordSessionRequestPayload,
-} from "../types/discord.types";
+  IntegrationLinkClaimerError,
+  IntegrationRepoResolution,
+  IntegrationRepoRoutingCandidate,
+  IntegrationSessionRequestDeps,
+  IntegrationSessionRequestPayload,
+} from "../types/integrations.types";
 
-const logger = createLogger("discord-session-request.service.ts");
+const logger = createLogger("integration-session-request.service.ts");
 const MAX_REPOS_TO_ROUTE = 300;
 const MAX_ROUTING_CANDIDATES = 20;
 const MAX_README_CANDIDATES = 8;
 const MAX_README_CHARS = 1800;
 const MIN_LLM_CONFIDENCE = 0.55;
 const MIN_HEURISTIC_SCORE = 8;
-const DISCORD_LINK_ATTEMPT_TTL_MS = 15 * 60 * 1000;
-const DISCORD_ACCOUNT_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const LINK_ATTEMPT_TTL_MS = 15 * 60 * 1000;
+const ACCOUNT_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const LINK_TOKEN_BYTES = 32;
 
 const STOP_WORDS = new Set([
@@ -68,44 +70,48 @@ const repoRoutingSchema = z.object({
 });
 
 const REPO_ROUTER_SYSTEM_PROMPT = dedent`
-  You route a Discord request to exactly one GitHub repository.
+  You route an external integration request to exactly one GitHub repository.
   Choose from the provided candidates only.
   Use repository names, owner/name, descriptions, and README excerpts.
   If the request names a repo alias, prefer the repository whose name best matches that alias.
   Return null when no candidate is a plausible match or when multiple candidates are equally plausible.
 `;
 
-export class DiscordSessionRequestService {
+export class IntegrationSessionRequestService {
   private readonly env: Env;
-  private readonly deps: DiscordSessionRequestDeps;
-  private readonly accountLinkRepository: DiscordAccountLinkRepository;
-  private readonly linkAttemptRepository: DiscordLinkAttemptRepository;
+  private readonly deps: IntegrationSessionRequestDeps;
+  private readonly accountLinkRepository: IntegrationAccountLinkRepository;
+  private readonly linkAttemptRepository: IntegrationLinkAttemptRepository;
 
-  constructor(env: Env, deps: DiscordSessionRequestDeps) {
+  constructor(env: Env, deps: IntegrationSessionRequestDeps) {
     this.env = env;
     this.deps = deps;
-    this.accountLinkRepository = new DiscordAccountLinkRepository(env.DB);
-    this.linkAttemptRepository = new DiscordLinkAttemptRepository(env.DB);
+    this.accountLinkRepository = new IntegrationAccountLinkRepository(env.DB);
+    this.linkAttemptRepository = new IntegrationLinkAttemptRepository(env.DB);
   }
 
   /**
-   * Resolves the Discord user, routes the prompt to a repository, and creates
-   * a Cloude session with the prompt as the initial user message.
+   * Resolves the external integration user, routes the prompt to a repository,
+   * and creates a Cloude session with the prompt as the initial user message.
    */
-  async createSessionFromDiscord(params: {
-    request: DiscordSessionRequestPayload;
+  async createSessionFromIntegration(params: {
+    request: IntegrationSessionRequestPayload;
     executionCtx: ExecutionContext;
-  }): Promise<DiscordSessionResponse> {
-    const link = await this.accountLinkRepository.getActiveByDiscordUserId(
-      params.request.discordUserId,
-    );
+  }): Promise<IntegrationSessionResponse> {
+    const { externalUser } = params.request;
+    const externalUsername = getExternalUsername(externalUser);
+    const link = await this.accountLinkRepository.getActive({
+      provider: externalUser.provider,
+      externalUserId: externalUser.id,
+    });
     if (!link) {
       return this.createLinkRequiredResponse(params.request);
     }
 
     await this.accountLinkRepository.touchLastUsed({
-      discordUserId: params.request.discordUserId,
-      discordUsername: params.request.discordUsername ?? null,
+      provider: externalUser.provider,
+      externalUserId: externalUser.id,
+      externalUsername,
     });
 
     const githubAccessToken = await this.deps.tokenProvider.getValidGitHubAccessTokenByUserId(link.userId);
@@ -139,7 +145,7 @@ export class DiscordSessionRequestService {
     if (!resolution) {
       const candidates = this.rankRepos(params.request.prompt, reposResult.value)
         .slice(0, 5)
-        .map(toDiscordRepoCandidate);
+        .map(toIntegrationRepoCandidate);
       return {
         ok: false,
         code: candidates.length > 0 ? "AMBIGUOUS_REPO_MATCH" : "NO_REPO_MATCH",
@@ -174,10 +180,10 @@ export class DiscordSessionRequestService {
     };
   }
 
-  async claimDiscordLink(params: {
+  async claimIntegrationLink(params: {
     token: string;
     userId: string;
-  }): Promise<Result<DiscordLinkClaimResponse, DiscordLinkClaimerError>> {
+  }): Promise<Result<IntegrationLinkClaimResponse, IntegrationLinkClaimerError>> {
     const tokenHash = await sha256(params.token);
     const attempt = await this.linkAttemptRepository.consumeValid({
       tokenHash,
@@ -186,58 +192,61 @@ export class DiscordSessionRequestService {
     if (!attempt) {
       return failure({
         status: 400,
-        message: "This Discord link is invalid or expired. Request a new link from Discord.",
+        message: "This integration link is invalid or expired. Request a new link from your integration.",
       });
     }
 
-    const linkExpiresAt = new Date(Date.now() + DISCORD_ACCOUNT_LINK_TTL_MS).toISOString();
+    const linkExpiresAt = new Date(Date.now() + ACCOUNT_LINK_TTL_MS).toISOString();
     await this.accountLinkRepository.upsert({
-      discordUserId: attempt.discordUserId,
+      provider: attempt.provider,
+      externalUserId: attempt.externalUserId,
       userId: params.userId,
-      discordUsername: attempt.discordUsername,
+      externalUsername: attempt.externalUsername,
       expiresAt: linkExpiresAt,
     });
 
     return success({
       ok: true,
-      discordUserId: attempt.discordUserId,
-      discordUsername: attempt.discordUsername,
+      provider: attempt.provider,
+      externalUserId: attempt.externalUserId,
+      externalUsername: attempt.externalUsername,
       expiresAt: linkExpiresAt,
     });
   }
 
   private async createLinkRequiredResponse(
-    request: DiscordSessionRequestPayload,
-  ): Promise<DiscordSessionResponse> {
+    request: IntegrationSessionRequestPayload,
+  ): Promise<IntegrationSessionResponse> {
     const token = createLinkToken();
     const tokenHash = await sha256(token);
-    const expiresAt = new Date(Date.now() + DISCORD_LINK_ATTEMPT_TTL_MS).toISOString();
+    const expiresAt = new Date(Date.now() + LINK_ATTEMPT_TTL_MS).toISOString();
 
     await this.linkAttemptRepository.create({
       tokenHash,
-      discordUserId: request.discordUserId,
-      discordUsername: request.discordUsername ?? null,
-      guildId: request.guildId ?? null,
-      channelId: request.channelId ?? null,
+      provider: request.externalUser.provider,
+      externalUserId: request.externalUser.id,
+      externalUsername: getExternalUsername(request.externalUser),
+      contextJson: JSON.stringify(request.context ?? {}),
       expiresAt,
     });
 
     return {
       ok: false,
-      code: "DISCORD_NOT_LINKED",
-      message: "Link or reconnect your Cloude account to use Cloude from Discord.",
-      linkUrl: this.buildDiscordLinkUrl(token),
+      code: "EXTERNAL_USER_NOT_LINKED",
+      message: "Link or reconnect your Cloude account to use Cloude from this integration.",
+      linkUrl: this.buildIntegrationLinkUrl(token, request.externalUser.provider),
       linkExpiresAt: expiresAt,
     };
   }
 
   private buildCreateSessionRequest(
-    request: DiscordSessionRequestPayload,
-    repo: DiscordRepoRoutingCandidate,
+    request: IntegrationSessionRequestPayload,
+    repo: IntegrationRepoRoutingCandidate,
   ): CreateSessionRequest {
-    const prefix = request.discordUsername
-      ? `Discord request from ${request.discordUsername}:`
-      : "Discord request:";
+    const externalUsername = getExternalUsername(request.externalUser);
+    const prefix = externalUsername
+      ? `${formatProviderName(request.externalUser.provider)} request from ${externalUsername}:`
+      : `${formatProviderName(request.externalUser.provider)} request:`;
     return {
       repoId: repo.id,
       initialMessage: {
@@ -251,9 +260,10 @@ export class DiscordSessionRequestService {
     return origin ? `${origin}/session/${sessionId}` : undefined;
   }
 
-  private buildDiscordLinkUrl(token: string): string {
+  private buildIntegrationLinkUrl(token: string, provider: IntegrationProvider): string {
     const origin = this.env.WEB_ORIGIN.replace(/\/$/, "");
-    const url = new URL("/discord/link", origin);
+    const path = provider === "discord" ? "/discord/link" : "/integrations/link";
+    const url = new URL(path, origin);
     url.searchParams.set("token", token);
     return url.toString();
   }
@@ -262,7 +272,7 @@ export class DiscordSessionRequestService {
     prompt: string;
     repos: Repo[];
     githubAccessToken: string;
-  }): Promise<DiscordRepoResolution | null> {
+  }): Promise<IntegrationRepoResolution | null> {
     const directMatch = findDirectRepoReference(params.prompt, params.repos);
     if (directMatch) {
       return {
@@ -300,7 +310,7 @@ export class DiscordSessionRequestService {
     return null;
   }
 
-  private rankRepos(prompt: string, repos: Repo[]): DiscordRepoRoutingCandidate[] {
+  private rankRepos(prompt: string, repos: Repo[]): IntegrationRepoRoutingCandidate[] {
     const normalizedPrompt = normalizeText(prompt);
     const tokens = tokenize(prompt);
 
@@ -311,9 +321,9 @@ export class DiscordSessionRequestService {
   }
 
   private async addReadmeExcerpts(params: {
-    candidates: DiscordRepoRoutingCandidate[];
+    candidates: IntegrationRepoRoutingCandidate[];
     githubAccessToken: string;
-  }): Promise<DiscordRepoRoutingCandidate[]> {
+  }): Promise<IntegrationRepoRoutingCandidate[]> {
     const enriched = [...params.candidates];
     const readmeCandidates = enriched.slice(0, MAX_README_CANDIDATES);
     const excerpts = await Promise.all(readmeCandidates.map((repo) =>
@@ -335,8 +345,8 @@ export class DiscordSessionRequestService {
 
   private async resolveRepositoryWithLlm(params: {
     prompt: string;
-    candidates: DiscordRepoRoutingCandidate[];
-  }): Promise<DiscordRepoResolution | null> {
+    candidates: IntegrationRepoRoutingCandidate[];
+  }): Promise<IntegrationRepoResolution | null> {
     try {
       const anthropic = createAnthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
       const result = await generateText({
@@ -361,7 +371,7 @@ export class DiscordSessionRequestService {
         reason: result.output.reason,
       };
     } catch (error) {
-      logger.warn("Failed to route Discord request via LLM", { error });
+      logger.warn("Failed to route integration request via LLM", { error });
       return null;
     }
   }
@@ -369,7 +379,7 @@ export class DiscordSessionRequestService {
 
 function buildRoutingPrompt(
   prompt: string,
-  candidates: DiscordRepoRoutingCandidate[],
+  candidates: IntegrationRepoRoutingCandidate[],
 ): string {
   const candidateText = candidates.map((candidate) => dedent`
     - repoId: ${candidate.id}
@@ -391,6 +401,35 @@ function buildRoutingPrompt(
 function createLinkToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(LINK_TOKEN_BYTES));
   return encodeBase64Url(bytes);
+}
+
+function getExternalUsername(externalUser: IntegrationExternalUser): string | null {
+  switch (externalUser.provider) {
+    case "discord":
+      return externalUser.displayName ?? externalUser.username ?? null;
+    case "slack":
+    case "generic":
+      return externalUser.displayName ?? null;
+    default: {
+      const exhaustiveCheck: never = externalUser;
+      throw new Error(`Unhandled integration user: ${JSON.stringify(exhaustiveCheck)}`);
+    }
+  }
+}
+
+function formatProviderName(provider: IntegrationProvider): string {
+  switch (provider) {
+    case "discord":
+      return "Discord";
+    case "slack":
+      return "Slack";
+    case "generic":
+      return "External integration";
+    default: {
+      const exhaustiveCheck: never = provider;
+      throw new Error(`Unhandled integration provider: ${exhaustiveCheck}`);
+    }
+  }
 }
 
 function findDirectRepoReference(prompt: string, repos: Repo[]): Repo | null {
@@ -442,7 +481,7 @@ function normalizeText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9/._-]+/g, " ").trim();
 }
 
-function toDiscordRepoCandidate(repo: DiscordRepoRoutingCandidate): DiscordRepoCandidate {
+function toIntegrationRepoCandidate(repo: IntegrationRepoRoutingCandidate): IntegrationRepoCandidate {
   return {
     repoId: repo.id,
     repoFullName: repo.fullName,

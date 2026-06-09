@@ -43,7 +43,7 @@ import type {
   UpdateRepoEnvironmentRequest,
   UserRepoEnvironmentResponse,
   VoiceTranscriptionTokenResponse,
-  DiscordLinkClaimResponse,
+  IntegrationLinkClaimResponse,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -406,8 +406,8 @@ export async function logoutUser(): Promise<LogoutResponse> {
   return apiFetch("/auth/logout", { method: "POST" });
 }
 
-export async function claimDiscordLink(token: string): Promise<DiscordLinkClaimResponse> {
-  return apiFetch("/discord/link/claim", {
+export async function claimIntegrationLink(token: string): Promise<IntegrationLinkClaimResponse> {
+  return apiFetch("/integrations/link/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
