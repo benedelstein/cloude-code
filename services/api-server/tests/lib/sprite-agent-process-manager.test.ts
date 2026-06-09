@@ -636,10 +636,11 @@ describe("SpriteAgentProcessManager", () => {
     const resultPromise = manager.dispatchMessage({
       userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
     });
-    for (let i = 0; i < 10 && spawnSession.start.mock.calls.length === 0; i++) {
-      await vi.advanceTimersByTimeAsync(0);
-    }
-    expect(spawnSession.start).toHaveBeenCalledOnce();
+    // dispatchMessage awaits a real crypto.subtle digest before spawning, so
+    // poll with waitFor instead of a fixed number of fake-timer flushes.
+    await vi.waitFor(() => {
+      expect(spawnSession.start).toHaveBeenCalledOnce();
+    });
     await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(2_000);
     const result = await resultPromise;
