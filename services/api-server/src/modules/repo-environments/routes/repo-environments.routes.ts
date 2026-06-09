@@ -50,7 +50,6 @@ export function createRepoScopedEnvironmentRoutes(
     const { repoId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).create({
       userId: user.id,
-      githubAccessToken: user.githubAccessToken,
       repoId,
       request: c.req.valid("json"),
     });

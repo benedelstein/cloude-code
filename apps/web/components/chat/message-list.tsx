@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  Github,
   Loader2,
   MessageCircle,
   XCircle,
@@ -23,6 +24,7 @@ import {
 import clsx from "clsx";
 import { listRepos } from "@/lib/client-api";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
+import { useGitHubReauth } from "@/hooks/use-github-reauth";
 import { MessageItem } from "./message-item";
 import { WorkingCloudRow } from "./working-cloud-indicator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -595,6 +597,7 @@ function BlockedSessionState({
   message: string;
   errorCode: string | null;
 }) {
+  const githubReauth = useGitHubReauth();
   const [installUrl, setInstallUrl] = useState<string | null>(() => {
     if (errorCode !== "REPO_ACCESS_BLOCKED") {
       return null;
@@ -642,11 +645,35 @@ function BlockedSessionState({
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="mt-4 text-base font-semibold text-foreground">
-          Repository access blocked
+          {errorCode === "GITHUB_AUTH_REQUIRED"
+            ? "Reconnect GitHub"
+            : "Repository access blocked"}
         </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-foreground-secondary">
           {message}
         </p>
+        {errorCode === "GITHUB_AUTH_REQUIRED" && (
+          <button
+            type="button"
+            onClick={() => void githubReauth.reconnect().then((ok) => {
+              if (ok) {
+                window.location.reload();
+              }
+            })}
+            disabled={githubReauth.isReauthing}
+            className="mt-5 inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-control-background disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {githubReauth.isReauthing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Github className="h-4 w-4" />
+            )}
+            Reconnect GitHub
+          </button>
+        )}
+        {githubReauth.error && (
+          <p className="mt-3 text-xs text-danger">{githubReauth.error}</p>
+        )}
         {errorCode === "REPO_ACCESS_BLOCKED" && installUrl && (
           <Link
             href={installUrl}

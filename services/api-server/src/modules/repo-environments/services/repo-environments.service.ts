@@ -37,7 +37,6 @@ export interface RepoEnvironmentAccessProvider {
     env: Env;
     userId: string;
     repoId: number;
-    githubAccessToken: string;
   }): Promise<Result<{ repoFullName: string }, {
     status: 400 | 401 | 403 | 404 | 503;
     message: string;
@@ -103,7 +102,6 @@ export class RepoEnvironmentsService {
 
   async create(params: {
     userId: string;
-    githubAccessToken: string;
     repoId: number;
     request: CreateRepoEnvironmentRequest;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
@@ -218,7 +216,6 @@ export class RepoEnvironmentsService {
   private async assertAccess(params: {
     userId: string;
     repoId: number;
-    githubAccessToken: string;
   }): Promise<RepoEnvironmentsServiceResult<
     { repoFullName: string },
     400 | 401 | 403 | 404 | 503
@@ -227,7 +224,6 @@ export class RepoEnvironmentsService {
       env: this.env,
       userId: params.userId,
       repoId: params.repoId,
-      githubAccessToken: params.githubAccessToken,
     });
     if (result.ok) {
       return success(result.value);

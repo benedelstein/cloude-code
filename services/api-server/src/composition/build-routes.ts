@@ -122,6 +122,8 @@ export function buildReposRoutes() {
   return createReposRoutes({
     authMiddleware,
     createReposService: (env) => new ReposService(env),
+    getValidGitHubCredentialByUserId: (env, userId) =>
+      createUserSessionService(env).getValidGitHubCredentialByUserId(userId),
   });
 }
 

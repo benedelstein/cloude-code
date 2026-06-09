@@ -18,7 +18,6 @@ const testUser: AuthUser = {
   githubLogin: "ben",
   githubName: "Ben",
   githubAvatarUrl: null,
-  githubAccessToken: "github-token",
 };
 
 type RouteEnv = {

@@ -13,7 +13,6 @@ const testUser: AuthUser = {
   githubLogin: "ben",
   githubName: "Ben",
   githubAvatarUrl: null,
-  githubAccessToken: "github-token",
 };
 
 function createApp(authenticate: AuthenticateSession) {

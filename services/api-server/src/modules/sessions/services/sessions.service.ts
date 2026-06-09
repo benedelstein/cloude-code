@@ -194,13 +194,11 @@ export class SessionsService {
    * Creates a session record, binds requested attachments, initializes the
    * backing Durable Object, and returns a websocket token for the caller.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @param params.request - Session creation payload.
    * @returns Created session metadata on success.
    */
   async createSession(params: {
     userId: string;
-    githubAccessToken: string;
     request: CreateSessionRequest;
   }): Promise<SessionsServiceResult<CreateSessionResponse>> {
     const rateLimitResult = await this.assertSessionCreationRateLimit(params.userId);
@@ -213,7 +211,6 @@ export class SessionsService {
       providers: this.repoAccessProviders,
       userId: params.userId,
       repoId: params.request.repoId,
-      githubAccessToken: params.githubAccessToken,
     });
     if (!repoAccessResult.ok) {
       return failure(this.buildError({
@@ -380,20 +377,17 @@ export class SessionsService {
    * Mints a websocket token for a session after validating current repo access.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Websocket token payload on success.
    */
   async createSessionWebSocketToken(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionWebSocketTokenResponse>> {
     const accessResult = await assertSessionRepoAccess({
       env: this.env,
       providers: this.repoAccessProviders,
       sessionId: params.sessionId,
       userId: params.userId,
-      githubAccessToken: params.githubAccessToken,
     });
 
     if (!accessResult.ok) {
@@ -407,14 +401,17 @@ export class SessionsService {
           }));
 
         case "GITHUB_AUTH_REQUIRED":
-          logger.error("GitHub auth required unexpectedly for websocket token route", {
+          logger.warn("GitHub auth required for websocket token route", {
             fields: { sessionId: params.sessionId, userId: params.userId },
           });
-          throw new Error(
-            "GitHub auth required unexpectedly for websocket token route",
-          );
+          return failure(this.buildError({
+            status: 401,
+            message: accessResult.error.message,
+            code: accessResult.error.code,
+          }));
 
         case "GITHUB_API_ERROR":
+        case "GITHUB_UNAVAILABLE":
           logger.warn("Temporary GitHub failure while minting session websocket token", {
             fields: {
               sessionId: params.sessionId,
@@ -496,13 +493,11 @@ export class SessionsService {
    * Fetches persisted UI messages for a session after repo access validation.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session messages on success.
    */
   async getSessionMessages(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionMessagesResponse>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
     if (!authorizedSessionAgent.ok) {
@@ -521,13 +516,11 @@ export class SessionsService {
    * Fetches the latest stored session plan after repo access validation.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Session plan on success.
    */
   async getSessionPlan(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionPlanResponseType>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
     if (!authorizedSessionAgent.ok) {
@@ -546,13 +539,11 @@ export class SessionsService {
    * Creates a pull request for the session branch after repo access validation.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Pull request metadata on success.
    */
   async createPullRequest(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<PullRequestResponse>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
     if (!authorizedSessionAgent.ok) {
@@ -571,13 +562,11 @@ export class SessionsService {
    * Fetches pull request status for the session after repo access validation.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Pull request status on success.
    */
   async getPullRequest(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<PullRequestStatusResponse>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
     if (!authorizedSessionAgent.ok) {
@@ -640,13 +629,11 @@ export class SessionsService {
    * then tears down the backing Durable Object as best-effort cleanup.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
-   * @param params.githubAccessToken - Current GitHub user access token.
    * @returns Deletion marker on success.
    */
   async deleteSession(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
     executionCtx?: ExecutionContext;
   }): Promise<SessionsServiceResult<DeleteSessionResponse>> {
     const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
@@ -844,14 +831,12 @@ export class SessionsService {
   private async getAuthorizedSessionAgent(params: {
     sessionId: string;
     userId: string;
-    githubAccessToken: string;
   }): Promise<SessionsServiceResult<SessionAgentRpc>> {
     const accessResult = await assertSessionRepoAccess({
       env: this.env,
       providers: this.repoAccessProviders,
       sessionId: params.sessionId,
       userId: params.userId,
-      githubAccessToken: params.githubAccessToken,
     });
     if (!accessResult.ok) {
       if (accessResult.error.code === "REPO_ACCESS_BLOCKED") {
@@ -864,12 +849,14 @@ export class SessionsService {
       }
 
       if (accessResult.error.code === "GITHUB_AUTH_REQUIRED") {
-        logger.error("GitHub auth required unexpectedly for authenticated session route", {
+        logger.warn("GitHub auth required for authenticated session route", {
           fields: { sessionId: params.sessionId, userId: params.userId },
         });
-        throw new Error(
-          "GitHub auth required unexpectedly for authenticated session route",
-        );
+        return failure(this.buildError({
+          status: 401,
+          message: accessResult.error.message,
+          code: accessResult.error.code,
+        }));
       }
 
       if (accessResult.error.status === 503) {

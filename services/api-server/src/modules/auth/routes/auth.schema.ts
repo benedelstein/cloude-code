@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import {
   GitHubAuthUrlResponse,
+  GitHubReauthTokenResponse,
   TokenRequest,
   TokenResponse,
   UserInfo,
@@ -30,6 +31,50 @@ export const getGithubRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Origin is not allowed",
+    },
+  },
+});
+
+export const postGithubReauthStartRoute = createRoute({
+  method: "post",
+  path: "/github/reauth/start",
+  request: {
+    query: z.object({
+      origin: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: GitHubAuthUrlResponse } },
+      description: "GitHub OAuth authorization URL for reconnecting credentials",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Origin is not allowed",
+    },
+  },
+});
+
+export const postGithubReauthTokenRoute = createRoute({
+  method: "post",
+  path: "/github/reauth/token",
+  request: {
+    body: {
+      content: { "application/json": { schema: TokenRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: GitHubReauthTokenResponse } },
+      description: "GitHub credentials refreshed for current app user",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Bad request",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "GitHub account does not match the current app user",
     },
   },
 });

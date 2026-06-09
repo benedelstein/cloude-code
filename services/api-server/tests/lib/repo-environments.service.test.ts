@@ -299,7 +299,6 @@ describe("RepoEnvironmentsService", () => {
 
     await expect(service.create({
       userId: "user-1",
-      githubAccessToken: "token",
       repoId: 42,
       request: {
         name: "Web",
@@ -323,7 +322,6 @@ describe("RepoEnvironmentsService", () => {
 
     await expect(service.create({
       userId: "user-1",
-      githubAccessToken: "token",
       repoId: 42,
       request: {
         name: "Web",
@@ -396,7 +394,6 @@ describe("RepoEnvironmentsService", () => {
 
     const result = await service.create({
       userId: "user-1",
-      githubAccessToken: "token",
       repoId: 42,
       request: {
         name: "Web",
@@ -425,7 +422,6 @@ describe("RepoEnvironmentsService", () => {
     try {
       const result = await service.create({
         userId: "user-1",
-        githubAccessToken: "token",
         repoId: 42,
         request: {
           name: "Web",

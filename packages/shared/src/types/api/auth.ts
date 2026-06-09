@@ -33,6 +33,12 @@ export const LogoutResponse = z.object({
 });
 export type LogoutResponse = z.infer<typeof LogoutResponse>;
 
+export const GitHubReauthTokenResponse = z.object({
+  ok: z.literal(true),
+  installUrl: z.string(),
+});
+export type GitHubReauthTokenResponse = z.infer<typeof GitHubReauthTokenResponse>;
+
 // OpenAI OAuth types
 export const OpenAIAuthUrlResponse = z.object({
   url: z.string(),

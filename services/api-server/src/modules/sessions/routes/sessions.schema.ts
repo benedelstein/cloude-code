@@ -114,6 +114,10 @@ export const getSessionRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
+    },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access blocked for this session",
@@ -139,6 +143,10 @@ export const createSessionWebSocketTokenRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
@@ -221,6 +229,10 @@ export const getSessionMessagesRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
+    },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access blocked for this session",
@@ -250,6 +262,10 @@ export const getSessionPlanRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Plan not found",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
@@ -285,6 +301,10 @@ export const createPullRequestRoute = createRoute({
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
     },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
+    },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
       description: "Repository access blocked for this session",
@@ -318,6 +338,10 @@ export const getPullRequestRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session or PR not found",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
@@ -366,6 +390,10 @@ export const deleteSessionRoute = createRoute({
     404: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Session not found",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
     },
     403: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },
