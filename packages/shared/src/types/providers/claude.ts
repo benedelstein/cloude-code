@@ -3,6 +3,7 @@ import type { ProviderDefinition, ProviderEffortDefinition, ProviderModelDefinit
 
 export const ClaudeModel = z.enum([
   "claude-fable-5",
+  "claude-fable-5[1m]",
   "claude-opus-4-8",
   "claude-opus-4-8[1m]",
   "claude-sonnet-4-6",
@@ -17,6 +18,7 @@ export type ClaudeEffort = z.infer<typeof ClaudeEffort>;
 
 export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
   "claude-fable-5": "Claude Fable 5",
+  "claude-fable-5[1m]": "Claude Fable 5 (1M context)",
   "claude-opus-4-8": "Claude Opus 4.8",
   "claude-opus-4-8[1m]": "Claude Opus 4.8 (1M context)",
   "claude-sonnet-4-6": "Claude Sonnet 4.6",
@@ -44,6 +46,7 @@ export const AgentSettingsClaude = z.object({
 
 const CLAUDE_MODELS: ProviderModelDefinition<ClaudeModel>[] = [
   { id: "claude-fable-5", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-fable-5"], isDefault: false },
+  { id: "claude-fable-5[1m]", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-fable-5[1m]"], isDefault: false },
   { id: "claude-opus-4-8", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-opus-4-8"], isDefault: true },
   { id: "claude-opus-4-8[1m]", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-opus-4-8[1m]"], isDefault: false },
   { id: "claude-sonnet-4-6", displayName: CLAUDE_MODEL_DISPLAY_NAMES["claude-sonnet-4-6"], isDefault: false },
