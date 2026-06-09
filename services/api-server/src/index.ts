@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import type { LogLevel } from "@repo/shared";
 import {
@@ -24,7 +25,7 @@ import { initializeLogger } from "@/shared/logging";
 
 export { SessionAgentDO, UserSessionsDO };
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use("*", async (c, next) => {
   initializeLogger({
@@ -52,6 +53,22 @@ app.get("/", (c) => {
 app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
+
+// OpenAPI docs: spec at /doc, Swagger UI at /ui.
+app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
+  type: "http",
+  scheme: "bearer",
+  description: "User session token",
+});
+app.doc("/doc", {
+  openapi: "3.1.0",
+  info: {
+    title: "cloude-code API",
+    version: "0.0.1",
+    description: "Cloud-hosted agent service API.",
+  },
+});
+app.get("/ui", swaggerUI({ url: "/doc" }));
 
 app.route("/agents", buildAgentRoutes());
 // TODO: Consider moving this under /sessions/:sessionId/git-proxy and rolling
