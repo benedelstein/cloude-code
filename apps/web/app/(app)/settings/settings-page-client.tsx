@@ -14,13 +14,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { PROVIDER_LIST, type ProviderId } from "@repo/shared";
+import { PROVIDER_LIST, type IntegrationLinkInfo, type ProviderId } from "@repo/shared";
 import { AnimatedIconButton } from "@/components/animated-icon-button";
 import { ProviderSigninPanel } from "@/components/model-providers/provider-signin-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { useProviderAuth, type ProviderAuthHandleUnion } from "@/hooks/use-provider-auth";
+import { listIntegrationLinks, revokeIntegrationLink } from "@/lib/client-api";
+import { DISCORD_BOT_INSTALL_URL } from "@/lib/discord-app";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/github-app";
 import { SettingsPageHeader, SettingsShell } from "./settings-shell";
+import { DiscordIcon } from "@/components/discord-icon";
 import { GithubIcon } from "@/components/github-icon";
 
 const PROVIDER_ICONS: Record<ProviderId, { src: string; alt: string }> = {
@@ -189,6 +192,13 @@ export function SettingsPageClient() {
         </SettingsSection>
 
         <SettingsSection
+          title="Integrations"
+          description="Create sessions from external apps."
+        >
+          <DiscordIntegrationRow />
+        </SettingsSection>
+
+        <SettingsSection
           title="Other"
         >
           <SettingsItemRow
@@ -251,6 +261,95 @@ function SettingsLinkRow({
       title={title}
       description={description}
       href={href}
+    />
+  );
+}
+
+function DiscordIntegrationRow() {
+  const [links, setLinks] = useState<IntegrationLinkInfo[] | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listIntegrationLinks()
+      .then((response) => {
+        if (!cancelled) {
+          setLinks(response.links);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLinks([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loading = links === null;
+  const discordLink = links?.find((link) => link.provider === "discord") ?? null;
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await revokeIntegrationLink("discord");
+      setLinks((current) => current?.filter((link) => link.provider !== "discord") ?? []);
+      toast.success("Discord disconnected.");
+    } catch (error) {
+      toast.error("Failed to disconnect Discord", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const statusLabel = loading
+    ? "Checking..."
+    : discordLink
+      ? "Connected"
+      : "Not connected";
+  const description = discordLink
+    ? `Linked${discordLink.externalUsername ? ` as ${discordLink.externalUsername}` : ""} until ${
+      new Date(discordLink.expiresAt).toLocaleDateString()
+    }. Run /cloude in Discord to create sessions.`
+    : "Install the bot in your server, then run /cloude — it replies with a link to connect your account.";
+
+  return (
+    <SettingsItemRow
+      icon={<DiscordIcon className={SETTINGS_ICON_CLASSNAME} />}
+      title="Discord"
+      titleMeta={(
+        <StatusPill tone={discordLink ? "success" : "muted"}>{statusLabel}</StatusPill>
+      )}
+      description={description}
+      action={(
+        <div className="flex flex-row gap-2">
+          <AnimatedIconButton
+            href={DISCORD_BOT_INSTALL_URL}
+            icon={<ArrowUpRight className={ACTION_BUTTON_ICON_CLASSNAME} />}
+            rel="noopener noreferrer"
+            size="sm"
+            target="_blank"
+            variant="outline"
+          >
+            Install bot
+          </AnimatedIconButton>
+          {discordLink && (
+            <AnimatedIconButton
+              icon={<Unplug className={ACTION_BUTTON_ICON_CLASSNAME} />}
+              type="button"
+              variant="destructiveOutline"
+              size="sm"
+              disabled={disconnecting}
+              onClick={() => void handleDisconnect()}
+            >
+              {disconnecting ? "Disconnecting..." : "Disconnect"}
+            </AnimatedIconButton>
+          )}
+        </div>
+      )}
     />
   );
 }

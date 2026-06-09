@@ -3,6 +3,7 @@ import {
   type CreateSessionRequest,
   type IntegrationExternalUser,
   type IntegrationLinkClaimResponse,
+  type IntegrationLinksResponse,
   type IntegrationProvider,
   type IntegrationRepoCandidate,
   type IntegrationSessionRequest,
@@ -180,6 +181,29 @@ export class IntegrationSessionRequestService {
       sessionUrl: this.buildSessionUrl(sessionResult.value.sessionId),
       routingReason: resolution.reason,
     };
+  }
+
+  async listIntegrationLinks(params: { userId: string }): Promise<IntegrationLinksResponse> {
+    const links = await this.accountLinkRepository.listActiveByUserId(params.userId);
+    return {
+      links: links.map((link) => ({
+        provider: link.provider,
+        externalUserId: link.externalUserId,
+        externalUsername: link.externalUsername,
+        expiresAt: link.expiresAt,
+        lastUsedAt: link.lastUsedAt,
+      })),
+    };
+  }
+
+  async revokeIntegrationLink(params: {
+    userId: string;
+    provider: IntegrationProvider;
+  }): Promise<void> {
+    await this.accountLinkRepository.revokeByUserAndProvider(params);
+    logger.info("Revoked integration account link", {
+      fields: { provider: params.provider, userId: params.userId },
+    });
   }
 
   async claimIntegrationLink(params: {
