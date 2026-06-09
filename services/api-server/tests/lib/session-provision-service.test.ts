@@ -121,6 +121,16 @@ function completeTask(task: SessionSetupTask): SessionSetupTask {
   };
 }
 
+function failTask(task: SessionSetupTask, error = "fatal failure"): SessionSetupTask {
+  return {
+    ...task,
+    status: "failed",
+    startedAt: "2026-06-03T00:00:00.000Z",
+    completedAt: "2026-06-03T00:00:00.000Z",
+    error,
+  };
+}
+
 function createServerState(overrides: Partial<ServerState> = {}): ServerState {
   return {
     initialized: true,
@@ -361,6 +371,39 @@ describe("SessionProvisionService startup toolchain", () => {
       "cloud_container",
       "Codex CLI repair script failed.",
     );
+  });
+
+  it("retries a failed startup toolchain task when the sprite already exists", async () => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: null,
+    });
+    const clientState = createClientState({
+      prepareTask: (task) =>
+        task.id === "cloud_container"
+          ? failTask(task, "Codex CLI startup script failed.")
+          : task,
+    });
+    clientState.sessionSetupRun = {
+      ...clientState.sessionSetupRun!,
+      status: "failed",
+      completedAt: "2026-06-03T00:00:00.000Z",
+    };
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      clientState,
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenNthCalledWith(1, "cloud_container");
+    expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
+    expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
   });
 
   it("reports final network policy failures through the network policy task", async () => {

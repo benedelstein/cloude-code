@@ -38,6 +38,9 @@ function createSprite(results: Array<{ stdout: string; stderr?: string; exitCode
       }
       return { stderr: "", ...result };
     }),
+    execWs: vi.fn(async () => {
+      throw new Error("Unexpected execWs call");
+    }),
   } as unknown as WorkersSpriteClient;
 }
 
@@ -143,7 +146,7 @@ describe("Claude Code startup check", () => {
     });
     expect(sprite.execHttp).toHaveBeenCalledOnce();
     expect(sprite.execHttp).toHaveBeenCalledWith(
-      expect.stringContaining("bash -lc"),
+      expect.stringContaining("bash -c"),
     );
     expect(sprite.execHttp).toHaveBeenCalledWith(
       expect.stringContaining(`min_version="${MIN_CLAUDE_CODE_CLI_VERSION}"`),
@@ -221,7 +224,7 @@ describe("OpenAI Codex startup check", () => {
     });
     expect(sprite.execHttp).toHaveBeenCalledOnce();
     expect(sprite.execHttp).toHaveBeenCalledWith(
-      expect.stringContaining("bash -lc"),
+      expect.stringContaining("bash -c"),
     );
     expect(sprite.execHttp).toHaveBeenCalledWith(
       expect.stringContaining(`min_version="${MIN_CODEX_CLI_VERSION}"`),

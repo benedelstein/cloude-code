@@ -67,6 +67,16 @@ function completeTask(task: SessionSetupTask): SessionSetupTask {
   };
 }
 
+function failTask(task: SessionSetupTask): SessionSetupTask {
+  return {
+    ...task,
+    status: "failed",
+    startedAt: "2026-06-02T00:00:00.000Z",
+    completedAt: "2026-06-02T00:00:00.000Z",
+    error: "fatal failure",
+  };
+}
+
 function requireSetupRun(clientState: ClientState): SessionSetupRun {
   const setupRun = clientState.sessionSetupRun;
   if (!setupRun) { throw new Error("Expected setup run"); }
@@ -158,6 +168,28 @@ describe("SessionSetupRunService", () => {
     expect(setupRun.completedAt).not.toBeNull();
     expect(setupRun.tasks.find((task) => task.id === taskId)?.status)
       .toBe("failed");
+  });
+
+  it("reopens a failed setup run when a failed task starts again", () => {
+    const { clientState, service } = createHarness({
+      prepareTask: (task) =>
+        task.id === "cloud_container" ? failTask(task) : task,
+    });
+    clientState.sessionSetupRun = {
+      ...requireSetupRun(clientState),
+      status: "failed",
+      completedAt: "2026-06-02T00:00:00.000Z",
+    };
+
+    service.startTask("cloud_container");
+
+    const setupRun = requireSetupRun(clientState);
+    const cloudContainerTask = setupRun.tasks.find((task) => task.id === "cloud_container");
+    expect(setupRun.status).toBe("running");
+    expect(setupRun.completedAt).toBeNull();
+    expect(cloudContainerTask?.status).toBe("running");
+    expect(cloudContainerTask?.completedAt).toBeNull();
+    expect(cloudContainerTask?.error).toBeNull();
   });
 
   it("repairs older running setup runs by inserting the network policy task", () => {

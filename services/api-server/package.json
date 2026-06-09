@@ -14,7 +14,9 @@
     "db:migrate:prod": "wrangler d1 migrations apply cloude-code-db --remote",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:live:sprite": "tsx scripts/test-sprite.ts"
+    "test:live:sprite": "tsx scripts/test-sprite.ts",
+    "test:live:codex-toolchain-http": "tsx scripts/repro-codex-toolchain-http-exec.ts",
+    "test:live:codex-toolchain-create": "tsx scripts/repro-codex-toolchain-create-sprites.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",

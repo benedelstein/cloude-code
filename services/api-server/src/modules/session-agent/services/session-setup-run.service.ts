@@ -59,6 +59,26 @@ export class SessionSetupRunService {
   }
 
   startTask(taskId: SessionSetupTaskId): void {
+    const setupRun = this.getClientState().sessionSetupRun;
+    if (!setupRun) { return; }
+    const task = setupRun.tasks.find((candidate) => candidate.id === taskId);
+    if (!task) { return; }
+    if (setupRun.status === "failed" && task.status === "failed") {
+      const now = new Date().toISOString();
+      const retryTask = updateSetupTask(task, {
+        status: "running",
+        startedAt: now,
+        completedAt: null,
+        error: null,
+      });
+      this.updateRun({
+        ...replaceSetupTask(setupRun, retryTask),
+        status: "running",
+        completedAt: null,
+      });
+      return;
+    }
+
     const updatedRun = this.updateTask(taskId, (task, now) => {
       if (isTerminalSetupTask(task)) { return task; }
       return updateSetupTask(task, {
