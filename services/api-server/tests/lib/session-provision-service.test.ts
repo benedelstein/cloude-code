@@ -104,6 +104,7 @@ function createSetupTask<Id extends SessionSetupTask["id"], IsBlocking extends b
   return {
     id,
     isBlocking,
+    canRetry: id !== "setup_script",
     status: "pending",
     startedAt: null,
     completedAt: null,
@@ -373,7 +374,7 @@ describe("SessionProvisionService startup toolchain", () => {
     );
   });
 
-  it("retries a failed startup toolchain task when the sprite already exists", async () => {
+  it("retries a failed retryable task", async () => {
     const serverState = createServerState({
       spriteName: "sprite-1",
       startupToolchain: null,
@@ -404,6 +405,51 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(mockState.ensureSpriteStartupToolchain).toHaveBeenCalledOnce();
     expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
     expect(setupReporter.startTask).toHaveBeenCalledWith("repository");
+  });
+
+  it.each([
+    "repository",
+    "network_policy",
+  ] as const)("retries a failed %s task", async (taskId) => {
+    const serverState = createServerState({
+      spriteName: "sprite-1",
+      startupToolchain: {
+        contractHash: "hash-1",
+        checkedAt: 1,
+        results: [],
+      },
+      repoCloned: taskId !== "repository",
+      startupScriptCompleted: true,
+      finalNetworkPolicyApplied: false,
+    });
+    const clientState = createClientState({
+      prepareTask: (task) => {
+        if (task.id === taskId) {
+          return failTask(task);
+        }
+        return task.id === "network_policy" && taskId === "repository"
+          ? task
+          : completeTask(task);
+      },
+    });
+    clientState.sessionSetupRun = {
+      ...clientState.sessionSetupRun!,
+      status: "failed",
+      completedAt: "2026-06-03T00:00:00.000Z",
+    };
+    const setupReporter = createSetupReporter();
+    const { service } = createService(
+      serverState,
+      clientState,
+      {},
+      createEnvironmentSnapshot(),
+      setupReporter,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(setupReporter.startTask).toHaveBeenCalledWith(taskId);
+    expect(setupReporter.completeTask).toHaveBeenCalledWith(taskId);
   });
 
   it("reports final network policy failures through the network policy task", async () => {

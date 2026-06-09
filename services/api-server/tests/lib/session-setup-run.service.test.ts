@@ -84,15 +84,15 @@ function requireSetupRun(clientState: ClientState): SessionSetupRun {
 }
 
 describe("SessionSetupRunService", () => {
-  it("builds typed setup tasks with task-owned blocking metadata", () => {
+  it("builds typed setup tasks with task-owned setup metadata", () => {
     const { clientState } = createHarness();
 
     const setupRun = requireSetupRun(clientState);
-    expect(setupRun.tasks.map((task) => [task.id, task.isBlocking])).toEqual([
-      ["cloud_container", true],
-      ["repository", true],
-      ["setup_script", false],
-      ["network_policy", true],
+    expect(setupRun.tasks.map((task) => [task.id, task.isBlocking, task.canRetry])).toEqual([
+      ["cloud_container", true, true],
+      ["repository", true, true],
+      ["setup_script", false, false],
+      ["network_policy", true, true],
     ]);
     expect(setupRun.tasks.find((task) => task.id === "setup_script")).toMatchObject({
       output: null,
@@ -192,6 +192,26 @@ describe("SessionSetupRunService", () => {
     expect(cloudContainerTask?.error).toBeNull();
   });
 
+  it("does not reopen a failed setup run for a non-retryable failed task", () => {
+    const { clientState, service } = createHarness({
+      prepareTask: (task) =>
+        task.id === "setup_script" ? failTask(task) : task,
+    });
+    clientState.sessionSetupRun = {
+      ...requireSetupRun(clientState),
+      status: "failed",
+      completedAt: "2026-06-02T00:00:00.000Z",
+    };
+
+    service.startTask("setup_script");
+
+    const setupRun = requireSetupRun(clientState);
+    const setupScriptTask = setupRun.tasks.find((task) => task.id === "setup_script");
+    expect(setupRun.status).toBe("failed");
+    expect(setupRun.completedAt).not.toBeNull();
+    expect(setupScriptTask?.status).toBe("failed");
+  });
+
   it("repairs older running setup runs by inserting the network policy task", () => {
     const { clientState, service } = createHarness({
       serverState: { finalNetworkPolicyApplied: false },
@@ -212,6 +232,27 @@ describe("SessionSetupRunService", () => {
     ]);
     expect(requireSetupRun(clientState).tasks.find((task) => task.id === "network_policy")?.status)
       .toBe("pending");
+  });
+
+  it("repairs older setup runs by backfilling retry metadata", () => {
+    const { clientState, service } = createHarness();
+    const setupRun = requireSetupRun(clientState);
+    clientState.sessionSetupRun = {
+      ...setupRun,
+      tasks: setupRun.tasks.map((task) => {
+        const { canRetry: _canRetry, ...legacyTask } = task;
+        return legacyTask as SessionSetupTask;
+      }),
+    };
+
+    service.repairOnStart();
+
+    expect(requireSetupRun(clientState).tasks.map((task) => [task.id, task.canRetry])).toEqual([
+      ["cloud_container", true],
+      ["repository", true],
+      ["setup_script", false],
+      ["network_policy", true],
+    ]);
   });
 
   it("marks inserted network policy tasks complete when the checkpoint exists", () => {

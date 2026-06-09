@@ -27,9 +27,9 @@ function setupTask(id: SessionSetupTask["id"], status: SessionSetupTask["status"
     case "cloud_container":
     case "repository":
     case "network_policy":
-      return { ...base, id, isBlocking: true };
+      return { ...base, id, isBlocking: true, canRetry: true };
     case "setup_script":
-      return { ...base, id, isBlocking: false, output: null, skipReason: null };
+      return { ...base, id, isBlocking: false, canRetry: false, output: null, skipReason: null };
   }
 }
 

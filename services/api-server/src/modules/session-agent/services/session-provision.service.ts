@@ -139,10 +139,7 @@ export class SessionProvisionService {
       });
       return;
     }
-    if (
-      setupRun.status === "failed" &&
-      !hasRetryableFailedProvisionTask(setupRun, this.getServerState())
-    ) {
+    if (setupRun.status === "failed" && !hasRetryableFailedProvisionTask(setupRun)) {
       this.logger.debug("Setup run failure is not retryable; skipping provision", {
         fields: { setupRunStatus: setupRun.status },
       });
@@ -150,7 +147,7 @@ export class SessionProvisionService {
     }
 
     for (const task of setupRun.tasks) {
-      const retryFailedTask = isRetryableFailedProvisionTask(task, this.getServerState());
+      const retryFailedTask = isRetryableFailedProvisionTask(task);
       if (isTerminalSetupTask(task) && !retryFailedTask) { continue; }
       try {
         this.setupReporter?.startTask(task.id);
@@ -508,19 +505,14 @@ function getErrorMessage(error: unknown): string {
 
 function hasRetryableFailedProvisionTask(
   setupRun: SessionSetupRun,
-  serverState: ServerState,
 ): boolean {
-  return setupRun.tasks.some((task) => isRetryableFailedProvisionTask(task, serverState));
+  return setupRun.tasks.some(isRetryableFailedProvisionTask);
 }
 
 function isRetryableFailedProvisionTask(
   task: SessionSetupTask,
-  serverState: ServerState,
 ): boolean {
-  return task.id === "cloud_container" &&
-    task.status === "failed" &&
-    serverState.spriteName !== null &&
-    serverState.startupToolchain === null;
+  return task.status === "failed" && task.canRetry;
 }
 
 function buildSkippedSetupScriptSkipReason(
