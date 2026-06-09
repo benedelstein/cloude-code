@@ -118,9 +118,9 @@ export const AgentCancelAckOutput = z.object({
 });
 
 /**
- * Non-stream agent events. The webhook-mode vm-agent posts stream chunks to
- * /chunks and everything else (ready, error, sessionId, heartbeat, debug,
- * process_exit) to /events as a single event per POST.
+ * Non-stream agent events accepted by the API webhook route. The vm-agent
+ * posts ready, error, sessionId, and process_exit to /events; heartbeat and
+ * debug are local stdout/logging signals.
  */
 export const AgentEvent = z.discriminatedUnion("type", [
   AgentReadyOutput,

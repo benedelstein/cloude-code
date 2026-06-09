@@ -9,6 +9,7 @@ Known differences from this plan:
 - The vm-agent uses `src/index-webhook.ts` and an initial-message file for fresh spawns.
 - `SpriteAgentProcessManager` now attempts warm process reuse via stdin ack before spawning fresh.
 - The DO broadcasts batched `agent.chunks` messages to clients.
+- `WebhookAgentRunner.handleEmit(...)` posts `ready`, `error`, `sessionId`, and `process_exit` events to `/events`, while `stdin_ack`, `cancel_ack`, and heartbeats are stdout signals for Sprite attach callers.
 - Graceful cancel uses stdin `cancel_ack`; failed graceful cancel fences with `SIGTERM`.
 
 ## Context
@@ -115,7 +116,7 @@ Provider setup, `streamText` invocation, abort handling, heartbeat emission — 
 A wrapper around the refactored harness. Responsibilities:
 
 - Drives the harness's input source. stdin remains the transport for user messages: the DO writes the prompt through a short-lived sprite exec session. The common case is that the initial user message is written immediately at process spawn (the prompt pipes into stdin while the process is still starting up); the stdin listener handles that message exactly like any subsequent one. Follow-up turns in the same process come in via the same stdin path. The runner converts stdin lines into `harness.queueMessage(...)` / `harness.cancel()` calls.
-- Provides the harness's `emit` callback. Stream chunks go through `ChunkBatcher` → `/chunks` webhook. All other events (`sessionId`, `error`, `ready`, `heartbeat`, `debug`, and the derived `turn-complete` / `turn-error` signals from lifecycle hooks) go through a single `/events` webhook, one event per POST. There is no stdout/websocket fallback — the DO only listens on the webhook routes.
+- Provides the harness's `emit` callback. Stream chunks go through `ChunkBatcher` -> `/chunks` webhook. `ready`, `error`, provider `sessionId`, and `process_exit` go through `/events`; `ready`, `stdin_ack`, `cancel_ack`, and heartbeats are also written to stdout for Sprite attach callers.
 - Manages process lifecycle via `onTurnEnd`: starts an idle timer. If a new message arrives before the timer expires, cancels it. If the timer fires, flushes any pending batch and exits cleanly.
 - Handles cancellation (SIGINT from the DO's existing sprite-api-based cancel path, or a `cancel` stdin line): calls `harness.cancel()`, waits for the in-flight turn to drain, flushes pending chunks, posts a cancellation event to `/events`, exits.
 
@@ -456,8 +457,8 @@ export class WebhookAgentRunner<S extends AgentSettings> {
       this.batcher.add(output.chunk);
       return;
     }
-    // Everything else is forwarded as-is to /events. These are process-level
-    // events (sessionId, error, ready, heartbeat, debug) — not turn-scoped.
+    // Current implementation routes only ready, error, sessionId, and
+    // process_exit to /events; some local signals stay on stdout/logs.
     this.http.post("/events", { event: output satisfies AgentEvent });
   }
 

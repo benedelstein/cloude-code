@@ -6,7 +6,7 @@ client-visible state is `ClientState` in `packages/shared/src/types/session.ts`;
 server-only Durable Object state is `ServerState` in
 `services/api-server/src/modules/session-agent/repositories/server-state.repository.ts`;
 and vm-agent process coordination lives in
-`services/api-server/src/modules/session-agent/services/sprite-agent-process-manager.service.ts`.
+`services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts`.
 The notes below predate the current module layout, webhook turn path, and
 repo-environment snapshot state.
 
