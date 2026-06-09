@@ -3,10 +3,13 @@ import type { MiddlewareHandler } from "hono";
 import type { IntegrationSessionRequestService } from "../services/integration-session-request.service";
 import type { AuthUser } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
+import { timingSafeCompare } from "@/shared/utils/crypto";
 import {
   claimIntegrationLinkRoute,
   createIntegrationSessionRequestRoute,
 } from "./integrations.schema";
+
+const BEARER_PREFIX = "Bearer ";
 
 type IntegrationsRouteEnv = {
   Bindings: Env;
@@ -26,7 +29,10 @@ export function createIntegrationsRoutes(
   integrationsRoutes.openapi(createIntegrationSessionRequestRoute, async (c) => {
     const configuredToken = c.env.INTEGRATION_SESSION_REQUEST_TOKEN;
     const authHeader = c.req.header("Authorization");
-    if (!configuredToken || authHeader !== `Bearer ${configuredToken}`) {
+    const bearerToken = authHeader?.startsWith(BEARER_PREFIX)
+      ? authHeader.slice(BEARER_PREFIX.length)
+      : null;
+    if (!configuredToken || !bearerToken || !timingSafeCompare(bearerToken, configuredToken)) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 

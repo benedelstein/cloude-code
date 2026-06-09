@@ -26,7 +26,6 @@ export class IntegrationLinkAttemptRepository {
     provider: IntegrationProvider;
     externalUserId: string;
     externalUsername: string | null;
-    contextJson: string;
     expiresAt: string;
   }): Promise<void> {
     await this.database.prepare(
@@ -35,19 +34,29 @@ export class IntegrationLinkAttemptRepository {
          provider,
          external_user_id,
          external_username,
-         context_json,
          expires_at
        )
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?)`,
     )
       .bind(
         params.tokenHash,
         params.provider,
         params.externalUserId,
         params.externalUsername,
-        params.contextJson,
         params.expiresAt,
       )
+      .run();
+  }
+
+  async deleteForExternalUser(params: {
+    provider: IntegrationProvider;
+    externalUserId: string;
+  }): Promise<void> {
+    await this.database.prepare(
+      `DELETE FROM integration_link_attempts
+       WHERE provider = ? AND external_user_id = ?`,
+    )
+      .bind(params.provider, params.externalUserId)
       .run();
   }
 

@@ -19,7 +19,6 @@ CREATE TABLE integration_link_attempts (
   provider TEXT NOT NULL,
   external_user_id TEXT NOT NULL,
   external_username TEXT,
-  context_json TEXT NOT NULL DEFAULT '{}',
   expires_at TEXT NOT NULL,
   claimed_at TEXT,
   claimed_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,

@@ -7,32 +7,6 @@ interface Env {
   INTEGRATION_SESSION_REQUEST_TOKEN: string;
 }
 
-interface DiscordUser {
-  id: string;
-  username?: string;
-  global_name?: string | null;
-}
-
-interface DiscordInteractionOption {
-  name: string;
-  type: number;
-  value?: string;
-}
-
-interface DiscordInteraction {
-  type: number;
-  token?: string;
-  application_id?: string;
-  guild_id?: string;
-  channel_id?: string;
-  user?: DiscordUser;
-  member?: { user?: DiscordUser };
-  data?: {
-    name?: string;
-    options?: DiscordInteractionOption[];
-  };
-}
-
 const DiscordUserSchema = z.object({
   id: z.string(),
   username: z.string().optional(),
@@ -56,6 +30,9 @@ const DiscordInteractionSchema = z.object({
     })).optional(),
   }).optional(),
 });
+
+type DiscordUser = z.infer<typeof DiscordUserSchema>;
+type DiscordInteraction = z.infer<typeof DiscordInteractionSchema>;
 
 const INTERACTION_TYPE_PING = 1;
 const INTERACTION_TYPE_APPLICATION_COMMAND = 2;
@@ -92,11 +69,13 @@ export default {
 
     const prompt = getPrompt(interaction);
     const user = interaction.member?.user ?? interaction.user;
-    if (!prompt || !user || !interaction.application_id || !interaction.token) {
+    const applicationId = interaction.application_id;
+    const interactionToken = interaction.token;
+    if (!prompt || !user || !applicationId || !interactionToken) {
       return jsonResponse(channelMessage("Use `/cloude prompt:<what to change>` to create a session."));
     }
 
-    ctx.waitUntil(createSessionAndEditResponse({ env, interaction, prompt, user }));
+    ctx.waitUntil(createSessionAndEditResponse({ env, prompt, user, applicationId, interactionToken }));
     return jsonResponse({
       type: RESPONSE_TYPE_DEFERRED_CHANNEL_MESSAGE,
       data: { flags: EPHEMERAL_FLAG },
@@ -106,35 +85,37 @@ export default {
 
 async function createSessionAndEditResponse(params: {
   env: Env;
-  interaction: DiscordInteraction;
   prompt: string;
   user: DiscordUser;
+  applicationId: string;
+  interactionToken: string;
 }): Promise<void> {
-  const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/integrations/session-requests`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${params.env.INTEGRATION_SESSION_REQUEST_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      externalUser: {
-        provider: "discord",
-        id: params.user.id,
-        displayName: params.user.global_name ?? params.user.username,
-        username: params.user.username,
+  let message = "I could not create a Cloude session. Something went wrong, please try again.";
+  try {
+    const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/integrations/session-requests`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${params.env.INTEGRATION_SESSION_REQUEST_TOKEN}`,
+        "Content-Type": "application/json",
       },
-      prompt: params.prompt,
-      context: {
-        guildId: params.interaction.guild_id,
-        channelId: params.interaction.channel_id,
-      },
-    }),
-  });
+      body: JSON.stringify({
+        externalUser: {
+          provider: "discord",
+          id: params.user.id,
+          displayName: params.user.global_name ?? params.user.username,
+          username: params.user.username,
+        },
+        prompt: params.prompt,
+      }),
+    });
+    message = await buildDiscordMessage(response);
+  } catch {
+    // Fall through and report the generic failure so the deferred response never hangs.
+  }
 
-  const message = await buildDiscordMessage(response);
   await editOriginalInteractionResponse({
-    applicationId: params.interaction.application_id!,
-    interactionToken: params.interaction.token!,
+    applicationId: params.applicationId,
+    interactionToken: params.interactionToken,
     content: message,
   });
 }

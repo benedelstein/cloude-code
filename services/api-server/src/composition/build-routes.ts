@@ -106,14 +106,19 @@ function createIntegrationRepoCandidateProvider(env: Env): IntegrationRepoCandid
 
       return { ok: true, value: repos };
     },
-    async getReadmeExcerpt(params) {
+    async getReadme(params) {
+      const [owner, repoName] = params.repo.fullName.split("/");
+      if (!owner || !repoName) {
+        return null;
+      }
+
       const github = createGitHubAppService(env, "integration-repo-router.ts");
       try {
-        const readme = await github.getRepositoryReadme({
+        return await github.getRepositoryReadme({
           accessToken: params.githubAccessToken,
-          repoId: params.repo.id,
+          owner,
+          repo: repoName,
         });
-        return readme ? readme.replace(/\s+/g, " ").trim().slice(0, params.maxChars) : null;
       } catch {
         return null;
       }

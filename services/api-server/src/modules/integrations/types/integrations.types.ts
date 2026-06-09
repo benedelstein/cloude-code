@@ -1,8 +1,6 @@
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
-  IntegrationLinkClaimResponse,
-  IntegrationSessionRequest,
   Repo,
   Result,
 } from "@repo/shared";
@@ -29,10 +27,9 @@ export interface IntegrationRepoCandidateProvider {
     executionCtx: ExecutionContext;
     limit: number;
   }): Promise<Result<Repo[], IntegrationRepoCandidateProviderError>>;
-  getReadmeExcerpt(params: {
+  getReadme(params: {
     githubAccessToken: string;
     repo: Repo;
-    maxChars: number;
   }): Promise<string | null>;
 }
 
@@ -64,12 +61,3 @@ export interface IntegrationLinkClaimerError {
   status: 400;
   message: string;
 }
-
-export interface IntegrationLinkClaimer {
-  claimIntegrationLink(params: {
-    token: string;
-    userId: string;
-  }): Promise<Result<IntegrationLinkClaimResponse, IntegrationLinkClaimerError>>;
-}
-
-export type IntegrationSessionRequestPayload = IntegrationSessionRequest;

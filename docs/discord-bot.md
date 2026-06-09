@@ -31,11 +31,7 @@ Content-Type: application/json
     "displayName": "Ben",
     "username": "ben"
   },
-  "prompt": "make a change to the auth in the birthday repo",
-  "context": {
-    "guildId": "9876543210",
-    "channelId": "1234509876"
-  }
+  "prompt": "make a change to the auth in the birthday repo"
 }
 ```
 
@@ -54,7 +50,7 @@ External users are linked to Cloude users with short-lived, single-use link atte
 7. The web app calls `POST /integrations/link/claim` with the token.
 8. The API consumes the link attempt and stores an integration account link for the signed-in Cloude user.
 
-Account links expire after 90 days. Once expired, the next integration request creates a fresh link URL and asks the user to reconnect. Link attempts store only a SHA-256 token hash.
+Account links expire after 90 days. Use does not extend the expiry: `last_used_at` is tracked, but `expires_at` stays fixed from the claim, so even active users must relink every 90 days. Once expired, the next integration request creates a fresh link URL and asks the user to reconnect. Link attempts store only a SHA-256 token hash, and each new link request replaces the user's previous outstanding attempt.
 
 ## Routing design
 

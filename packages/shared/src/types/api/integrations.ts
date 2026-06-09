@@ -33,18 +33,9 @@ export const IntegrationExternalUser = z.discriminatedUnion("provider", [
 ]);
 export type IntegrationExternalUser = z.infer<typeof IntegrationExternalUser>;
 
-export const IntegrationSessionContext = z.object({
-  guildId: z.string().min(1).optional(),
-  channelId: z.string().min(1).optional(),
-  teamId: z.string().min(1).optional(),
-  threadId: z.string().min(1).optional(),
-}).optional();
-export type IntegrationSessionContext = z.infer<typeof IntegrationSessionContext>;
-
 export const IntegrationSessionRequest = z.object({
   externalUser: IntegrationExternalUser,
   prompt: z.string().trim().min(1).max(4000),
-  context: IntegrationSessionContext,
 });
 export type IntegrationSessionRequest = z.infer<typeof IntegrationSessionRequest>;
 
@@ -72,12 +63,11 @@ export const IntegrationSessionErrorResponse = z.object({
   ok: z.literal(false),
   code: z.enum([
     "EXTERNAL_USER_NOT_LINKED",
-    "INTEGRATION_NOT_CONFIGURED",
     "GITHUB_AUTH_REQUIRED",
+    "REPO_LISTING_FAILED",
     "NO_REPO_MATCH",
     "AMBIGUOUS_REPO_MATCH",
     "SESSION_CREATE_FAILED",
-    "UNAUTHORIZED",
   ]),
   message: z.string(),
   candidates: z.array(IntegrationRepoCandidate).optional(),

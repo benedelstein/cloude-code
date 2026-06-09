@@ -5,6 +5,7 @@ import {
   type IntegrationLinkClaimResponse,
   type IntegrationProvider,
   type IntegrationRepoCandidate,
+  type IntegrationSessionRequest,
   type IntegrationSessionResponse,
   type Repo,
   dedent,
@@ -25,8 +26,8 @@ import type {
   IntegrationRepoResolution,
   IntegrationRepoRoutingCandidate,
   IntegrationSessionRequestDeps,
-  IntegrationSessionRequestPayload,
 } from "../types/integrations.types";
+import { findDirectRepoReference, rankRepos } from "../utils/repo-routing.utils";
 
 const logger = createLogger("integration-session-request.service.ts");
 const MAX_REPOS_TO_ROUTE = 300;
@@ -38,30 +39,6 @@ const MIN_HEURISTIC_SCORE = 8;
 const LINK_ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const ACCOUNT_LINK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const LINK_TOKEN_BYTES = 32;
-
-const STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "auth",
-  "bot",
-  "change",
-  "code",
-  "create",
-  "fix",
-  "for",
-  "in",
-  "make",
-  "of",
-  "on",
-  "please",
-  "repo",
-  "repository",
-  "the",
-  "to",
-  "update",
-  "with",
-]);
 
 const repoRoutingSchema = z.object({
   selectedRepoId: z.number().nullable(),
@@ -95,7 +72,7 @@ export class IntegrationSessionRequestService {
    * and creates a Cloude session with the prompt as the initial user message.
    */
   async createSessionFromIntegration(params: {
-    request: IntegrationSessionRequestPayload;
+    request: IntegrationSessionRequest;
     executionCtx: ExecutionContext;
   }): Promise<IntegrationSessionResponse> {
     const { externalUser } = params.request;
@@ -130,10 +107,13 @@ export class IntegrationSessionRequestService {
       limit: MAX_REPOS_TO_ROUTE,
     });
     if (!reposResult.ok) {
+      logger.warn("Failed to list repos for integration request", {
+        fields: { provider: externalUser.provider, userId: link.userId },
+      });
       return {
         ok: false,
-        code: "NO_REPO_MATCH",
-        message: reposResult.error.message,
+        code: "REPO_LISTING_FAILED",
+        message: "I could not load the linked account's repositories. Try again shortly.",
       };
     }
 
@@ -143,7 +123,7 @@ export class IntegrationSessionRequestService {
       githubAccessToken,
     });
     if (!resolution) {
-      const candidates = this.rankRepos(params.request.prompt, reposResult.value)
+      const candidates = rankRepos(params.request.prompt, reposResult.value)
         .slice(0, 5)
         .map(toIntegrationRepoCandidate);
       return {
@@ -168,6 +148,15 @@ export class IntegrationSessionRequestService {
         message: sessionResult.error.message,
       };
     }
+
+    logger.info("Created session from integration request", {
+      fields: {
+        provider: externalUser.provider,
+        userId: link.userId,
+        sessionId: sessionResult.value.sessionId,
+        repoId: resolution.repo.id,
+      },
+    });
 
     return {
       ok: true,
@@ -205,6 +194,14 @@ export class IntegrationSessionRequestService {
       expiresAt: linkExpiresAt,
     });
 
+    logger.info("Claimed integration account link", {
+      fields: {
+        provider: attempt.provider,
+        externalUserId: attempt.externalUserId,
+        userId: params.userId,
+      },
+    });
+
     return success({
       ok: true,
       provider: attempt.provider,
@@ -215,19 +212,30 @@ export class IntegrationSessionRequestService {
   }
 
   private async createLinkRequiredResponse(
-    request: IntegrationSessionRequestPayload,
+    request: IntegrationSessionRequest,
   ): Promise<IntegrationSessionResponse> {
     const token = createLinkToken();
     const tokenHash = await sha256(token);
     const expiresAt = new Date(Date.now() + LINK_ATTEMPT_TTL_MS).toISOString();
 
+    // Only the newest attempt per external user stays valid, which also bounds table growth.
+    await this.linkAttemptRepository.deleteForExternalUser({
+      provider: request.externalUser.provider,
+      externalUserId: request.externalUser.id,
+    });
     await this.linkAttemptRepository.create({
       tokenHash,
       provider: request.externalUser.provider,
       externalUserId: request.externalUser.id,
       externalUsername: getExternalUsername(request.externalUser),
-      contextJson: JSON.stringify(request.context ?? {}),
       expiresAt,
+    });
+
+    logger.info("Created integration link attempt", {
+      fields: {
+        provider: request.externalUser.provider,
+        externalUserId: request.externalUser.id,
+      },
     });
 
     return {
@@ -240,7 +248,7 @@ export class IntegrationSessionRequestService {
   }
 
   private buildCreateSessionRequest(
-    request: IntegrationSessionRequestPayload,
+    request: IntegrationSessionRequest,
     repo: IntegrationRepoRoutingCandidate,
   ): CreateSessionRequest {
     const externalUsername = getExternalUsername(request.externalUser);
@@ -281,7 +289,7 @@ export class IntegrationSessionRequestService {
       };
     }
 
-    const candidates = this.rankRepos(params.prompt, params.repos)
+    const candidates = rankRepos(params.prompt, params.repos)
       .slice(0, MAX_ROUTING_CANDIDATES);
     if (candidates.length === 0) {
       return null;
@@ -310,32 +318,21 @@ export class IntegrationSessionRequestService {
     return null;
   }
 
-  private rankRepos(prompt: string, repos: Repo[]): IntegrationRepoRoutingCandidate[] {
-    const normalizedPrompt = normalizeText(prompt);
-    const tokens = tokenize(prompt);
-
-    return repos
-      .map((repo) => ({ ...repo, score: scoreRepo(repo, normalizedPrompt, tokens) }))
-      .filter((repo) => repo.score > 0)
-      .sort((left, right) => right.score - left.score || left.fullName.localeCompare(right.fullName));
-  }
-
   private async addReadmeExcerpts(params: {
     candidates: IntegrationRepoRoutingCandidate[];
     githubAccessToken: string;
   }): Promise<IntegrationRepoRoutingCandidate[]> {
     const enriched = [...params.candidates];
     const readmeCandidates = enriched.slice(0, MAX_README_CANDIDATES);
-    const excerpts = await Promise.all(readmeCandidates.map((repo) =>
-      this.deps.repoCandidateProvider.getReadmeExcerpt({
+    const readmes = await Promise.all(readmeCandidates.map((repo) =>
+      this.deps.repoCandidateProvider.getReadme({
         githubAccessToken: params.githubAccessToken,
         repo,
-        maxChars: MAX_README_CHARS,
       }),
     ));
 
-    for (let index = 0; index < excerpts.length; index += 1) {
-      const excerpt = excerpts[index];
+    for (let index = 0; index < readmes.length; index += 1) {
+      const excerpt = toReadmeExcerpt(readmes[index] ?? null);
       if (excerpt) {
         enriched[index] = { ...enriched[index]!, readmeExcerpt: excerpt };
       }
@@ -432,53 +429,12 @@ function formatProviderName(provider: IntegrationProvider): string {
   }
 }
 
-function findDirectRepoReference(prompt: string, repos: Repo[]): Repo | null {
-  const normalizedPrompt = normalizeText(prompt);
-  return repos.find((repo) => {
-    const fullName = normalizeText(repo.fullName);
-    return normalizedPrompt.includes(fullName);
-  }) ?? null;
-}
-
-function scoreRepo(repo: Repo, normalizedPrompt: string, tokens: Set<string>): number {
-  const normalizedName = normalizeText(repo.name);
-  const normalizedFullName = normalizeText(repo.fullName);
-  const normalizedDescription = normalizeText(repo.description ?? "");
-  let score = 0;
-
-  if (normalizedPrompt.includes(normalizedFullName)) {
-    score += 100;
+function toReadmeExcerpt(readme: string | null): string | null {
+  if (!readme) {
+    return null;
   }
-  if (normalizedPrompt.includes(normalizedName)) {
-    score += 40;
-  }
-
-  for (const token of tokens) {
-    if (normalizedName.split(" ").includes(token)) {
-      score += 12;
-    } else if (normalizedName.includes(token)) {
-      score += 8;
-    }
-    if (normalizedFullName.includes(token)) {
-      score += 4;
-    }
-    if (normalizedDescription.includes(token)) {
-      score += 2;
-    }
-  }
-
-  return score;
-}
-
-function tokenize(value: string): Set<string> {
-  const normalized = normalizeText(value);
-  return new Set(normalized.split(" ").filter((token) => (
-    token.length > 1 && !STOP_WORDS.has(token)
-  )));
-}
-
-function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9/._-]+/g, " ").trim();
+  const flattened = readme.replace(/\s+/g, " ").trim();
+  return flattened ? flattened.slice(0, MAX_README_CHARS) : null;
 }
 
 function toIntegrationRepoCandidate(repo: IntegrationRepoRoutingCandidate): IntegrationRepoCandidate {
