@@ -107,6 +107,10 @@ export class UserSessionService {
     await this.repository.revokeAllSessionsByGithubId(githubId);
   }
 
+  async revokeGitHubCredentialsByGithubId(githubId: number): Promise<void> {
+    await this.repository.deleteGitHubCredentialsByGithubId(githubId);
+  }
+
   // ensures access token is valid, refreshing if needed.
   private async ensureValidGitHubAccessToken(params: {
     userId: string;

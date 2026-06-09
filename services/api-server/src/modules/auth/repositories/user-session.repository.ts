@@ -248,4 +248,13 @@ export class UserSessionRepository {
       ).bind(githubId),
     ]);
   }
+
+  async deleteGitHubCredentialsByGithubId(githubId: number): Promise<void> {
+    await this.database.prepare(
+      `DELETE FROM user_github_credentials
+       WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+    )
+      .bind(githubId)
+      .run();
+  }
 }
