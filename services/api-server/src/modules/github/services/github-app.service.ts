@@ -235,17 +235,14 @@ export class GitHubAppService {
 
   async getRepositoryReadme(params: {
     accessToken: string;
-    repoId: number;
+    owner: string;
+    repo: string;
   }): Promise<string | null> {
     const octokit = new Octokit({ auth: params.accessToken });
-    const { data: repo } = await octokit.request("GET /repositories/{repository_id}", {
-      repository_id: params.repoId,
-    });
-
     try {
       const response = await octokit.rest.repos.getReadme({
-        owner: repo.owner.login,
-        repo: repo.name,
+        owner: params.owner,
+        repo: params.repo,
       });
       if (Array.isArray(response.data) || response.data.encoding !== "base64") {
         return null;

@@ -638,6 +638,8 @@ describe("SpriteAgentProcessManager", () => {
       const resultPromise = manager.dispatchMessage({
         userMessage: { id: "user-message-3", content: "fresh turn", attachmentIds: [] },
       });
+      // dispatchMessage awaits a real crypto.subtle digest before spawning, so
+      // poll with waitFor instead of a fixed number of fake-timer flushes.
       await vi.waitFor(() => {
         expect(spawnSession.start).toHaveBeenCalledOnce();
       });

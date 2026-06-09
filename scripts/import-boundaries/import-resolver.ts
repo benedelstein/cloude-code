@@ -35,6 +35,10 @@ const workspacePackages = new Map([
     "@repo/web",
     { root: "apps/web", entrypoint: "apps/web/package.json" },
   ],
+  [
+    "@repo/discord-bot",
+    { root: "apps/discord-bot", entrypoint: "apps/discord-bot/src/index.ts" },
+  ],
 ]);
 
 export function resolveImportTarget(
