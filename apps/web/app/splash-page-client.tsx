@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowRight, Github, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -86,12 +86,8 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
         onClick={handleSignIn}
         variant="quiet"
       >
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Github className="h-4 w-4" />
-        )}
         Sign in
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
       </CloudButton>
     );
   };
