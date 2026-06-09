@@ -8,8 +8,8 @@ export const listReposRoute = createRoute({
   path: "/",
   request: {
     query: z.object({
-      limit: z.coerce.number().int().min(1).max(100).optional(),
-      cursor: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional().describe("Max repos per page"),
+      cursor: z.string().optional().describe("Opaque cursor from a previous page's nextCursor"),
     }),
   },
   responses: {
@@ -37,7 +37,7 @@ export const searchReposRoute = createRoute({
   path: "/search",
   request: {
     query: z.object({
-      q: z.string().min(1).max(200),
+      q: z.string().min(1).max(200).describe("Search query matched against repo names"),
       limit: z.coerce.number().int().min(1).max(100).optional(),
     }),
   },
