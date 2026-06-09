@@ -12,14 +12,14 @@ import {
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   title: z.string().nullable(),
-  status: SessionStatus,
-  repoFullName: z.string(),
-  baseBranch: z.string().optional(),
-  pushedBranch: z.string().optional(),
+  status: SessionStatus.describe("preparing: setup in progress or blocked; ready: accepting messages"),
+  repoFullName: z.string().describe("GitHub repo in owner/name form"),
+  baseBranch: z.string().optional().describe("Branch the session was started from"),
+  pushedBranch: z.string().optional().describe("Branch the agent pushed its work to, if any"),
   pullRequestUrl: z.string().optional(),
   pullRequestNumber: z.number().optional(),
   pullRequestState: PullRequestState.optional(),
-  editorUrl: z.string().optional(),
+  editorUrl: z.string().optional().describe("URL of the session's browser-based code editor, if available"),
 });
 export type SessionInfoResponse = z.infer<typeof SessionInfoResponse>;
 
@@ -62,7 +62,7 @@ export type CreateSessionRequest = z.infer<typeof CreateSessionRequest>;
 export const CreateSessionResponse = z.object({
   sessionId: z.uuid(),
   title: z.string().nullable(),
-  websocketToken: z.string(),
+  websocketToken: z.string().describe("Short-lived token for the session WebSocket stream"),
   websocketTokenExpiresAt: z.iso.datetime(),
 });
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
@@ -98,16 +98,16 @@ export const SessionRepoGroup = z.object({
   repoId: z.number(),
   repoFullName: z.string(),
   sessions: z.array(SessionSummary),
-  /** Cursor to fetch the next page of sessions within this repo, or null if none. */
-  nextSessionCursor: z.string().nullable(),
+  nextSessionCursor: z.string().nullable()
+    .describe("Cursor to fetch the next page of sessions within this repo, or null if none"),
 });
 export type SessionRepoGroup = z.infer<typeof SessionRepoGroup>;
 
 /** Paginated response for GET /sessions — sessions grouped by repo. */
 export const ListSessionsResponse = z.object({
   groups: z.array(SessionRepoGroup),
-  /** Cursor to fetch the next page of repo groups, or null if none. */
-  nextRepoCursor: z.string().nullable(),
+  nextRepoCursor: z.string().nullable()
+    .describe("Cursor to fetch the next page of repo groups, or null if none"),
 });
 export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
 
