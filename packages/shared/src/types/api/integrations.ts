@@ -97,3 +97,22 @@ export const IntegrationLinkClaimResponse = z.object({
   expiresAt: z.iso.datetime(),
 });
 export type IntegrationLinkClaimResponse = z.infer<typeof IntegrationLinkClaimResponse>;
+
+export const IntegrationLinkInfo = z.object({
+  provider: IntegrationProvider,
+  externalUserId: z.string(),
+  externalUsername: z.string().nullable(),
+  expiresAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+});
+export type IntegrationLinkInfo = z.infer<typeof IntegrationLinkInfo>;
+
+export const IntegrationLinksResponse = z.object({
+  links: z.array(IntegrationLinkInfo),
+});
+export type IntegrationLinksResponse = z.infer<typeof IntegrationLinksResponse>;
+
+export const IntegrationLinkRevokeResponse = z.object({
+  ok: z.literal(true),
+});
+export type IntegrationLinkRevokeResponse = z.infer<typeof IntegrationLinkRevokeResponse>;

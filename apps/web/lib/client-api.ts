@@ -44,6 +44,9 @@ import type {
   UserRepoEnvironmentResponse,
   VoiceTranscriptionTokenResponse,
   IntegrationLinkClaimResponse,
+  IntegrationLinkRevokeResponse,
+  IntegrationLinksResponse,
+  IntegrationProvider,
 } from "@repo/shared";
 
 // Re-export types that other modules import from this file
@@ -412,6 +415,16 @@ export async function claimIntegrationLink(token: string): Promise<IntegrationLi
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
+}
+
+export async function listIntegrationLinks(): Promise<IntegrationLinksResponse> {
+  return apiFetch("/integrations/links");
+}
+
+export async function revokeIntegrationLink(
+  provider: IntegrationProvider,
+): Promise<IntegrationLinkRevokeResponse> {
+  return apiFetch(`/integrations/links/${provider}`, { method: "DELETE" });
 }
 
 // OpenAI Codex device auth

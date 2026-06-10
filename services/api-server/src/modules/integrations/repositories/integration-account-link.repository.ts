@@ -8,12 +8,28 @@ export interface IntegrationAccountLinkRecord {
   expiresAt: string;
 }
 
+export interface IntegrationAccountLinkSummary {
+  provider: IntegrationProvider;
+  externalUserId: string;
+  externalUsername: string | null;
+  expiresAt: string;
+  lastUsedAt: string | null;
+}
+
 interface IntegrationAccountLinkRow {
   provider: IntegrationProvider;
   external_user_id: string;
   user_id: string;
   external_username: string | null;
   expires_at: string;
+}
+
+interface IntegrationAccountLinkSummaryRow {
+  provider: IntegrationProvider;
+  external_user_id: string;
+  external_username: string | null;
+  expires_at: string;
+  last_used_at: string | null;
 }
 
 export class IntegrationAccountLinkRepository {
@@ -72,6 +88,41 @@ export class IntegrationAccountLinkRepository {
         params.externalUsername,
         params.expiresAt,
       )
+      .run();
+  }
+
+  async listActiveByUserId(userId: string): Promise<IntegrationAccountLinkSummary[]> {
+    const result = await this.database.prepare(
+      `SELECT provider, external_user_id, external_username, expires_at, last_used_at
+       FROM integration_account_links
+       WHERE user_id = ?
+         AND revoked_at IS NULL
+         AND datetime(expires_at) > datetime('now')
+       ORDER BY provider`,
+    )
+      .bind(userId)
+      .all<IntegrationAccountLinkSummaryRow>();
+
+    return result.results.map((row) => ({
+      provider: row.provider,
+      externalUserId: row.external_user_id,
+      externalUsername: row.external_username,
+      expiresAt: row.expires_at,
+      lastUsedAt: row.last_used_at,
+    }));
+  }
+
+  async revokeByUserAndProvider(params: {
+    userId: string;
+    provider: IntegrationProvider;
+  }): Promise<void> {
+    await this.database.prepare(
+      `UPDATE integration_account_links
+       SET revoked_at = datetime('now'),
+           updated_at = datetime('now')
+       WHERE user_id = ? AND provider = ? AND revoked_at IS NULL`,
+    )
+      .bind(params.userId, params.provider)
       .run();
   }
 

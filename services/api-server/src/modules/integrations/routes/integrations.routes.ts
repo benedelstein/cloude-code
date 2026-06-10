@@ -7,6 +7,8 @@ import { timingSafeCompare } from "@/shared/utils/crypto";
 import {
   claimIntegrationLinkRoute,
   createIntegrationSessionRequestRoute,
+  listIntegrationLinksRoute,
+  revokeIntegrationLinkRoute,
 } from "./integrations.schema";
 
 const BEARER_PREFIX = "Bearer ";
@@ -43,6 +45,25 @@ export function createIntegrationsRoutes(
     });
 
     return c.json(response, 200);
+  });
+
+  integrationsRoutes.use("/links", deps.authMiddleware);
+  integrationsRoutes.use("/links/*", deps.authMiddleware);
+  integrationsRoutes.openapi(listIntegrationLinksRoute, async (c) => {
+    const user = c.get("user");
+    const service = deps.createIntegrationSessionRequestService(c.env);
+    const response = await service.listIntegrationLinks({ userId: user.id });
+    return c.json(response, 200);
+  });
+
+  integrationsRoutes.openapi(revokeIntegrationLinkRoute, async (c) => {
+    const user = c.get("user");
+    const service = deps.createIntegrationSessionRequestService(c.env);
+    await service.revokeIntegrationLink({
+      userId: user.id,
+      provider: c.req.valid("param").provider,
+    });
+    return c.json({ ok: true as const }, 200);
   });
 
   integrationsRoutes.use("/link/claim", deps.authMiddleware);
