@@ -2,6 +2,8 @@
 
 SwiftUI iOS client for Cloude Code, using Needle for DI and local Swift packages for compile-time isolation. Bundle ID: `llc.bze.CloudeCode`.
 
+Before module, layering, package-boundary, DI, or persistence changes, read `ARCHITECTURE.md` (in this directory) — it covers package organization, the dependency graph, and layering invariants.
+
 ## Layout
 
 - `Config/` - per-environment xcconfig files. Schemes: `CloudeCode` (Debug/Release configs, prod API, `llc.bze.CloudeCode`) and `CloudeCode Dev` (Development Debug/Release configs, `http://localhost:8787`, `llc.bze.CloudeCode-Dev`). xcconfig values flow through `CloudeCode/Info.plist` (`APIBaseURL`, `BuildEnvironment`) and are read at runtime from `Bundle.main`.
