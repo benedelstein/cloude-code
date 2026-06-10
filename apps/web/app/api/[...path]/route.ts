@@ -1,8 +1,35 @@
-import type { NextRequest} from "next/server";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getSessionTokenFromRequest } from "@/lib/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const HOP_BY_HOP_REQUEST_HEADERS = [
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+];
+
+function stripForwardedRequestHeaders(headers: Headers) {
+  const connectionHeader = headers.get("connection");
+  if (connectionHeader) {
+    for (const headerName of connectionHeader.split(",")) {
+      const normalizedHeaderName = headerName.trim().toLowerCase();
+      if (normalizedHeaderName) {
+        headers.delete(normalizedHeaderName);
+      }
+    }
+  }
+
+  for (const headerName of HOP_BY_HOP_REQUEST_HEADERS) {
+    headers.delete(headerName);
+  }
+  headers.delete("content-length");
+}
 
 async function handler(
   req: NextRequest,
@@ -22,6 +49,7 @@ async function handler(
   // Remove host/cookie — forward only the auth token
   headers.delete("host");
   headers.delete("cookie");
+  stripForwardedRequestHeaders(headers);
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
