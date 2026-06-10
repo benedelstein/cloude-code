@@ -1871,6 +1871,12 @@
       "repoFullName": "sample"
     }
   },
+  "VoiceDriftDemo.autoFull": {
+    "sample": "sample"
+  },
+  "VoiceDriftDemo.autoMinimal": {
+    "sample": "sample"
+  },
   "VoiceTranscriptionResponse.autoFull": {
     "text": "sample"
   },

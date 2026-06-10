@@ -1,12 +1,12 @@
 import Foundation
 
-enum LogLevel: String, CaseIterable {
+public enum LogLevel: String, CaseIterable, Sendable {
     case debug = "DEBUG"
     case info = "INFO"
     case warning = "WARNING"
     case error = "ERROR"
 
-    var severity: Int {
+    public var severity: Int {
         switch self {
         case .debug:
             0
@@ -20,17 +20,17 @@ enum LogLevel: String, CaseIterable {
     }
 }
 
-protocol LogDestination {
+public protocol LogDestination: Sendable {
     func log(_ entry: LogEntry)
 }
 
-struct LogEntry {
-    let message: String
-    let level: LogLevel
-    let file: String
-    let function: String
-    let line: Int
-    let terminator: String
+public struct LogEntry: Sendable {
+    public let message: String
+    public let level: LogLevel
+    public let file: String
+    public let function: String
+    public let line: Int
+    public let terminator: String
 }
 
 private struct LogContext {
@@ -42,8 +42,10 @@ private struct LogContext {
     let line: Int
 }
 
-final class ConsoleLogDestination: LogDestination {
-    func log(_ entry: LogEntry) {
+public struct ConsoleLogDestination: LogDestination {
+    public init() {}
+
+    public func log(_ entry: LogEntry) {
         let fileName = URL(fileURLWithPath: entry.file).deletingPathExtension().lastPathComponent
         Swift.print(
             "[\(entry.level.rawValue)] \(fileName).\(entry.function):\(entry.line) - \(entry.message)",
@@ -52,30 +54,38 @@ final class ConsoleLogDestination: LogDestination {
     }
 }
 
-final class Logger {
-    nonisolated(unsafe) static let shared = Logger()
+/// Process-wide logger. Lives in Domain so every module upstream of the app
+/// target (API, Entities, …) can log through the same destinations.
+/// All mutable state is lock-guarded; safe to call from any isolation.
+public final class Logger: @unchecked Sendable {
+    public static let shared = Logger()
 
-    var minimumLogLevel: LogLevel = .info
+    private let lock = NSLock()
+    private var _minimumLogLevel: LogLevel = .info
+    private var destinations: [any LogDestination] = []
 
-    private var destinations: [LogDestination] = []
+    public var minimumLogLevel: LogLevel {
+        get { lock.withLock { _minimumLogLevel } }
+        set { lock.withLock { _minimumLogLevel = newValue } }
+    }
 
     private init() {
         addDestination(ConsoleLogDestination())
     }
 
-    func setDestinations(_ destinations: [LogDestination]) {
-        self.destinations = destinations
+    public func setDestinations(_ destinations: [any LogDestination]) {
+        lock.withLock { self.destinations = destinations }
     }
 
-    func addDestination(_ destination: LogDestination) {
-        destinations.append(destination)
+    public func addDestination(_ destination: any LogDestination) {
+        lock.withLock { destinations.append(destination) }
     }
 
-    static func setDestinations(_ destinations: [LogDestination]) {
+    public static func setDestinations(_ destinations: [any LogDestination]) {
         shared.setDestinations(destinations)
     }
 
-    static func addDestination(_ destination: LogDestination) {
+    public static func addDestination(_ destination: any LogDestination) {
         shared.addDestination(destination)
     }
 
@@ -83,7 +93,8 @@ final class Logger {
         _ items: [Any?],
         context: LogContext
     ) {
-        guard context.level.severity >= minimumLogLevel.severity else {
+        let (level, currentDestinations) = lock.withLock { (_minimumLogLevel, destinations) }
+        guard context.level.severity >= level.severity else {
             return
         }
 
@@ -97,7 +108,7 @@ final class Logger {
             }
             .joined(separator: context.separator)
 
-        for destination in destinations {
+        for destination in currentDestinations {
             destination.log(LogEntry(
                 message: message,
                 level: context.level,
@@ -109,7 +120,7 @@ final class Logger {
         }
     }
 
-    static func debug(
+    public static func debug(
         _ items: Any?...,
         separator: String = " ",
         terminator: String = "\n",
@@ -130,7 +141,7 @@ final class Logger {
         )
     }
 
-    static func info(
+    public static func info(
         _ items: Any?...,
         separator: String = " ",
         terminator: String = "\n",
@@ -151,7 +162,7 @@ final class Logger {
         )
     }
 
-    static func log(
+    public static func log(
         _ items: Any?...,
         separator: String = " ",
         terminator: String = "\n",
@@ -172,7 +183,7 @@ final class Logger {
         )
     }
 
-    static func warning(
+    public static func warning(
         _ items: Any?...,
         separator: String = " ",
         terminator: String = "\n",
@@ -193,7 +204,7 @@ final class Logger {
         )
     }
 
-    static func error(
+    public static func error(
         _ items: Any?...,
         separator: String = " ",
         terminator: String = "\n",
@@ -214,8 +225,8 @@ final class Logger {
         )
     }
 
-    static func error(
-        _ error: Error,
+    public static func error(
+        _ error: any Error,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line

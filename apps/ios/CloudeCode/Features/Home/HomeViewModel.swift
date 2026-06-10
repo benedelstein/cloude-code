@@ -1,4 +1,5 @@
 import API
+import Domain
 import Entities
 import Foundation
 

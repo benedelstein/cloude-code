@@ -27,6 +27,35 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var sessionsAPI: any SessionsAPIProviding {
+        shared {
+            SessionsAPI(client: apiClient)
+        }
+    }
+
+    /// Sidebar session-list updates stream. Shared: one socket per app.
+    var userSessionsSocket: UserSessionsSocket {
+        shared {
+            UserSessionsSocket(
+                baseURL: apiBaseURL,
+                tokenCache: WebSocketTokenCache { [sessionsAPI] in
+                    try await sessionsAPI.userSessionsWebSocketToken()
+                }
+            )
+        }
+    }
+
+    /// Per-session chat stream. Not shared: each open session owns a socket.
+    func makeSessionSocket(sessionId: UUID) -> SessionSocket {
+        SessionSocket(
+            baseURL: apiBaseURL,
+            sessionId: sessionId,
+            tokenCache: WebSocketTokenCache { [sessionsAPI] in
+                try await sessionsAPI.sessionWebSocketToken(sessionId: sessionId)
+            }
+        )
+    }
+
     var cache: Cache {
         shared {
             do {

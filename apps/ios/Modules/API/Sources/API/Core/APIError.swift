@@ -13,6 +13,7 @@ public enum APIError: Error, LocalizedError, Sendable {
     case unauthenticated
     case httpError(statusCode: Int, code: String?, message: String?)
     case decodingFailed(any Error)
+    case webSocketNotConnected
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +27,8 @@ public enum APIError: Error, LocalizedError, Sendable {
             return message ?? code ?? "Request failed: \(statusCode)"
         case let .decodingFailed(underlying):
             return "Decoding failed: \(underlying.localizedDescription)"
+        case .webSocketNotConnected:
+            return "WebSocket is not connected"
         }
     }
 }
