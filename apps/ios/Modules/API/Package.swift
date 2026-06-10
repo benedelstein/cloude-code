@@ -11,7 +11,19 @@ let package = Package(
             targets: ["API"]
         )
     ],
+    dependencies: [
+        .package(path: "../CoreAPI"),
+        .package(path: "../Domain"),
+        .package(url: "https://github.com/teunlao/swift-ai-sdk.git", from: "0.17.6")
+    ],
     targets: [
-        .target(name: "API")
+        .target(
+            name: "API",
+            dependencies: [
+                .product(name: "CoreAPI", package: "CoreAPI"),
+                .product(name: "Domain", package: "Domain"),
+                .product(name: "SwiftAISDK", package: "swift-ai-sdk")
+            ]
+        )
     ]
 )

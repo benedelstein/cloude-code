@@ -1,15 +1,6 @@
 {
-  "originHash" : "947e4a59344d4eb053b02f4e34b5c936025520d4b4581bd99009000826da440f",
+  "originHash" : "f194b2a2e917f2754be237088d67eb21887df0ef6dfcbbc17e610b0bad075745",
   "pins" : [
-    {
-      "identity" : "needle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/uber/needle.git",
-      "state" : {
-        "revision" : "69f7a889d2736f2621c6083ac29e0a75d158f249",
-        "version" : "0.25.1"
-      }
-    },
     {
       "identity" : "swift-ai-sdk",
       "kind" : "remoteSourceControl",

@@ -29,15 +29,9 @@ struct HomeBuilder {
     }
 }
 
-private struct HomeBuilderKey: EnvironmentKey {
-    static let defaultValue: HomeBuilder? = nil
-}
-
 extension EnvironmentValues {
-    var homeBuilder: HomeBuilder? {
-        get { self[HomeBuilderKey.self] }
-        set { self[HomeBuilderKey.self] = newValue }
-    }
+    @Entry
+    var homeBuilder: HomeBuilder?
 }
 
 struct HomeContainer: View {

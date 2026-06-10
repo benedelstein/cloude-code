@@ -11,7 +11,15 @@ let package = Package(
             targets: ["Cache"]
         )
     ],
+    dependencies: [
+        .package(path: "../Domain")
+    ],
     targets: [
-        .target(name: "Cache")
+        .target(
+            name: "Cache",
+            dependencies: [
+                .product(name: "Domain", package: "Domain")
+            ]
+        )
     ]
 )

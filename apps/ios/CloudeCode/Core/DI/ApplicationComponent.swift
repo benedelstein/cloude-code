@@ -7,7 +7,7 @@ protocol ApplicationDependency: Dependency {}
 final class ApplicationComponent: Component<ApplicationDependency> {
     var greetingAPI: any GreetingAPIProviding {
         shared {
-            APIClient()
+            GreetingAPI()
         }
     }
 
