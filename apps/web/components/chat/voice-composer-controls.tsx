@@ -13,6 +13,7 @@ interface VoiceComposerControlsProps {
   submitDisabled?: boolean;
   isStreaming?: boolean;
   isCancelling?: boolean;
+  interruptDisabled?: boolean;
   isLoading?: boolean;
   isUploading?: boolean;
   hasPendingOrFailedUploads?: boolean;
@@ -48,6 +49,7 @@ export function VoiceComposerControls({
   submitDisabled = false,
   isStreaming = false,
   isCancelling = false,
+  interruptDisabled = false,
   isLoading = false,
   isUploading = false,
   hasPendingOrFailedUploads = false,
@@ -116,6 +118,9 @@ export function VoiceComposerControls({
 
   const handleSendTap = () => {
     if (isStreaming) {
+      if (interruptDisabled) {
+        return;
+      }
       onStop?.();
       return;
     }
@@ -141,6 +146,7 @@ export function VoiceComposerControls({
         <SendButton
           isStreaming={isStreaming}
           isCancelling={isCancelling}
+          interruptDisabled={interruptDisabled}
           isLoading={isLoading}
           isUploading={isUploading}
           disabled={submitDisabled || (voiceInput.isActive && isVoiceWorking)}
