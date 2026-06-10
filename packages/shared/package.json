@@ -9,8 +9,10 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "lint": "eslint src/ tests/",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ tests/ codegen/",
+    "typecheck": "tsc --noEmit && tsc -p codegen --noEmit",
+    "codegen": "tsx codegen/generate.ts",
+    "codegen:check": "tsx codegen/generate.ts --check",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
@@ -20,7 +22,9 @@
     "ai": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

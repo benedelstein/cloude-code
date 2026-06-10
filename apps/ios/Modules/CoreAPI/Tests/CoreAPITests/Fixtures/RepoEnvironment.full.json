@@ -1,0 +1,19 @@
+{
+  "id": "7f0f5c1d-91f1-4f93-b1de-3f37ad2b3a1c",
+  "repoId": 123456,
+  "name": "CI-like",
+  "network": {
+    "mode": "custom",
+    "extraAllowlist": [
+      "registry.npmjs.org"
+    ],
+    "includeDefaultAllowlist": true
+  },
+  "plainEnvVars": {
+    "NODE_ENV": "test",
+    "CI": "1"
+  },
+  "startupScript": "pnpm install",
+  "createdAt": "2026-06-09T12:00:00Z",
+  "updatedAt": "2026-06-09T12:00:00.123Z"
+}

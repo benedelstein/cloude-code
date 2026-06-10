@@ -1,0 +1,7 @@
+{
+  "attemptId": "att_1",
+  "verificationUrl": "https://auth.openai.com/device",
+  "userCode": "ABCD-1234",
+  "intervalSeconds": 5,
+  "expiresAt": "2026-06-09T12:00:00Z"
+}

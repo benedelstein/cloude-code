@@ -1,0 +1,71 @@
+name: iOS CI
+
+on:
+  push:
+    paths:
+      - "apps/ios/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci-ios.yml"
+  pull_request:
+    paths:
+      - "apps/ios/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci-ios.yml"
+
+jobs:
+  ci:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Generated Swift in apps/ios/Modules/CoreAPI must match the Zod schemas
+      # in packages/shared. Fails when someone edits schemas without running
+      # `pnpm --filter @repo/shared codegen` and committing the result.
+      - name: Check generated API types are current
+        run: pnpm --filter @repo/shared codegen:check
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: CoreAPI package tests (wire fixtures)
+        working-directory: apps/ios/Modules/CoreAPI
+        run: swift test
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: SwiftLint
+        working-directory: apps/ios
+        run: swiftlint lint --strict --no-cache
+
+      - name: Build app
+        working-directory: apps/ios
+        run: |
+          xcodebuild -project CloudeCode.xcodeproj -scheme CloudeCode \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath .build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO build

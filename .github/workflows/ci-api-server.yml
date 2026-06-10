@@ -53,6 +53,10 @@ jobs:
       - name: Typecheck
         run: pnpm exec turbo run typecheck --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
+      # Cheap Linux gate: schema edits must ship with regenerated iOS types.
+      - name: Check generated API types are current
+        run: pnpm --filter @repo/shared codegen:check
+
       - name: Lint
         run: pnpm exec turbo run lint --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 

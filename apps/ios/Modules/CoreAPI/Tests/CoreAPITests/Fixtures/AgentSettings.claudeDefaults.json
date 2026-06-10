@@ -1,0 +1,6 @@
+{
+  "provider": "claude-code",
+  "model": "claude-opus-4-8",
+  "effort": "high",
+  "maxTokens": 8192
+}

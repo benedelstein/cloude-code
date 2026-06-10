@@ -125,6 +125,7 @@
 				B6A000000000000000000008 /* API */,
 				B6A000000000000000000009 /* Cache */,
 				B6A00000000000000000000A /* NeedleFoundation */,
+				B6A00000000000000000000C /* CoreAPI */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -211,6 +212,7 @@
 			packageReferences = (
 				B6A000000000000000000005 /* XCLocalSwiftPackageReference "Modules/API" */,
 				B6A000000000000000000006 /* XCLocalSwiftPackageReference "Modules/Cache" */,
+				B6A00000000000000000000B /* XCLocalSwiftPackageReference "Modules/CoreAPI" */,
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -677,6 +679,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Modules/Cache;
 		};
+		B6A00000000000000000000B /* XCLocalSwiftPackageReference "Modules/CoreAPI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Modules/CoreAPI;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -703,6 +709,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */;
 			productName = NeedleFoundation;
+		};
+		B6A00000000000000000000C /* CoreAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CoreAPI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

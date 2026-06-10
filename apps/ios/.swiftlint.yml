@@ -6,11 +6,16 @@ included:
   - CloudeCodeUITests
   - Modules/API/Sources
   - Modules/Cache/Sources
+  - Modules/CoreAPI/Sources
+  - Modules/Domain/Sources
 
 excluded:
   - "**/.build"
   - CloudeCode/Assets.xcassets
   - CloudeCode/Generated
+  # Transpiled from packages/shared Zod schemas; fix style in the generator, not here.
+  - Modules/CoreAPI/Sources/CoreAPI/Generated
+  - Modules/CoreAPI/Tests
 
 disabled_rules:
   - trailing_whitespace

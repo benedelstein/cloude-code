@@ -1,0 +1,5 @@
+{
+  "type": "editor.ready",
+  "url": "https://editor.example.com/s/abc",
+  "token": "edt_123"
+}

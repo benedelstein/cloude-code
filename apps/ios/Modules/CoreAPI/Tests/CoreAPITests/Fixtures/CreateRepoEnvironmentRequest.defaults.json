@@ -1,0 +1,7 @@
+{
+  "name": "Default env",
+  "network": {
+    "mode": "default"
+  },
+  "plainEnvVars": {}
+}

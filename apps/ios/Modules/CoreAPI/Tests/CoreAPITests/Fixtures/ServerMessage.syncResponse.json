@@ -1,0 +1,45 @@
+{
+  "type": "sync.response",
+  "messages": [
+    {
+      "id": "msg_1",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Here is the plan."
+        },
+        {
+          "type": "tool-call",
+          "toolName": "bash",
+          "input": {
+            "command": "ls"
+          },
+          "nested": [
+            1,
+            2.5,
+            true,
+            null
+          ]
+        }
+      ],
+      "metadata": {
+        "custom": {
+          "deeply": [
+            "nested",
+            42
+          ]
+        }
+      }
+    }
+  ],
+  "pendingChunks": [
+    {
+      "type": "text-delta",
+      "delta": "Hel"
+    }
+  ],
+  "activeTurn": {
+    "userMessageId": "msg_1"
+  }
+}
