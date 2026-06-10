@@ -2,30 +2,26 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ManifestEntry } from "./ir";
-import * as providers from "../src/types/providers/index";
-import * as session from "../src/types/session";
-import * as sessionsApi from "../src/types/api/sessions";
-import * as clientState from "../src/types/api/client-state";
-import * as websocketApi from "../src/types/api/websocket-api";
-import * as userSessionsWebsocketApi from "../src/types/api/user-sessions-websocket-api";
-import * as authApi from "../src/types/api/auth";
-import * as reposApi from "../src/types/api/repos";
-import * as modelsApi from "../src/types/api/models";
-import * as attachments from "../src/types/api/attachments";
-import * as repoEnvironmentsApi from "../src/types/api/repo-environments";
-import * as voiceApi from "../src/types/api/voice";
-import * as integrationsApi from "../src/types/api/integrations";
+import * as providers from "../src/providers";
+import * as session from "../src/session";
+import * as sessionsApi from "../src/sessions";
+import * as clientState from "../src/client-state";
+import * as websocketApi from "../src/websocket-api";
+import * as userSessionsWebsocketApi from "../src/user-sessions-websocket-api";
+import * as authApi from "../src/auth";
+import * as reposApi from "../src/repos";
+import * as modelsApi from "../src/models";
+import * as attachments from "../src/attachments";
+import * as repoEnvironmentsApi from "../src/repo-environments";
+import * as voiceApi from "../src/voice";
+import * as integrationsApi from "../src/integrations";
 
 /**
- * Schema selection works like protobuf: pointing the generator at a source
- * module includes EVERY exported Zod schema in it — adding a schema to an
- * included module ships it to Swift with no registration step. Only
- * exceptions are listed here (see EXCLUDE / OVERRIDES below).
- *
- * `src/types/api/` is the client-contract directory: every file in it must be
- * registered here (enforced below — a new file fails codegen until listed).
- * `session.ts` and `providers/` stay explicitly listed because they mix
- * contract schemas with server-side code.
+ * THE PACKAGE IS THE CONTRACT: every exported Zod schema in src/ transpiles
+ * to Swift, like every message in a .proto file. Adding a schema to an
+ * existing file ships it with no registration step; a new src/ file needs one
+ * SOURCES line (enforced below — codegen fails until it's listed). Types that
+ * are not part of the client contract belong in @repo/shared, not here.
  *
  * Aliases dedup by object identity: a schema re-exported under a second name
  * (e.g. `AgentProvider = ProviderId`) generates once, under the name in the
@@ -35,9 +31,9 @@ import * as integrationsApi from "../src/types/api/integrations";
  * this app build doesn't know). Mark `frozen` only for client→server-only
  * types. See docs/api-type-codegen.md.
  */
-const SOURCES: { module: Record<string, unknown>; group: string; file?: string }[] = [
-  { module: providers, group: "Providers" },
-  { module: session, group: "Session" },
+const SOURCES: { module: Record<string, unknown>; group: string; file: string }[] = [
+  { module: providers, group: "Providers", file: "providers.ts" },
+  { module: session, group: "Session", file: "session.ts" },
   { module: sessionsApi, group: "SessionsAPI", file: "sessions.ts" },
   { module: clientState, group: "ClientState", file: "client-state.ts" },
   { module: websocketApi, group: "WebSocket", file: "websocket-api.ts" },
@@ -55,39 +51,22 @@ const SOURCES: { module: Record<string, unknown>; group: string; file?: string }
   { module: integrationsApi, group: "Integrations", file: "integrations.ts" },
 ];
 
-/** Every file in the contract directory must be a registered source. */
-function assertApiDirectoryCovered(): void {
+/** Every file in the package's src/ must be a registered source. */
+function assertContractPackageCovered(): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const apiDir = path.resolve(here, "../src/types/api");
-  const registered = new Set(SOURCES.flatMap((source) => (source.file ? [source.file] : [])));
-  const onDisk = readdirSync(apiDir).filter(
+  const srcDir = path.resolve(here, "../src");
+  const registered = new Set(SOURCES.map((source) => source.file));
+  const onDisk = readdirSync(srcDir).filter(
     (name) => name.endsWith(".ts") && name !== "index.ts",
   );
   const missing = onDisk.filter((name) => !registered.has(name));
   if (missing.length > 0) {
     throw new Error(
-      `src/types/api/ files missing from codegen SOURCES: ${missing.join(", ")}. ` +
-        "Every file in the contract directory must be registered in codegen/manifest.ts.",
+      `src/ files missing from codegen SOURCES: ${missing.join(", ")}. ` +
+        "Every file in the contract package must be registered in codegen/manifest.ts.",
     );
   }
 }
-
-/** Exported schemas that are not an iOS surface. */
-const EXCLUDE = new Set<string>([
-  // Server-internal snapshot persisted in the session DO.
-  "SessionEnvironmentSnapshot",
-  // Bot→server session creation (Discord/Slack), authenticated with bot
-  // tokens; also uses a boolean discriminator the emitter rejects.
-  "IntegrationExternalUser",
-  "DiscordExternalUser",
-  "SlackExternalUser",
-  "GenericExternalUser",
-  "IntegrationSessionRequest",
-  "IntegrationSessionResponse",
-  "IntegrationSessionSuccessResponse",
-  "IntegrationSessionErrorResponse",
-  "IntegrationRepoCandidate",
-]);
 
 /** Per-type exceptions, keyed by export name. */
 const OVERRIDES: Record<string, Partial<Omit<ManifestEntry, "schema" | "group">>> = {
@@ -120,7 +99,7 @@ function isZodSchema(value: unknown): value is ManifestEntry["schema"] {
 }
 
 function buildManifest(): ManifestEntry[] {
-  assertApiDirectoryCovered();
+  assertContractPackageCovered();
   const entries: ManifestEntry[] = [];
   const seenSchemas = new Set<unknown>();
   const seenExports = new Set<string>();
@@ -129,7 +108,7 @@ function buildManifest(): ManifestEntry[] {
     // Module namespace keys are spec-ordered (alphabetical), so output is
     // deterministic regardless of declaration order.
     for (const [exportName, value] of Object.entries(source.module)) {
-      if (!isZodSchema(value) || EXCLUDE.has(exportName)) {
+      if (!isZodSchema(value)) {
         continue;
       }
       seenExports.add(exportName);
@@ -147,16 +126,10 @@ function buildManifest(): ManifestEntry[] {
     }
   }
 
-  // Typo guard: every exception must reference a real export.
-  const allExports = new Set(SOURCES.flatMap((source) => Object.keys(source.module)));
+  // Typo guard: every override must reference a real export.
   for (const name of Object.keys(OVERRIDES)) {
     if (!seenExports.has(name)) {
       throw new Error(`OVERRIDES references unknown export: ${name}`);
-    }
-  }
-  for (const name of EXCLUDE) {
-    if (!allExports.has(name)) {
-      throw new Error(`EXCLUDE references unknown export: ${name}`);
     }
   }
 

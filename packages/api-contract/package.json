@@ -1,5 +1,5 @@
 {
-  "name": "@repo/shared",
+  "name": "@repo/api-contract",
   "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
@@ -9,20 +9,20 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "lint": "eslint src/ tests/",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ tests/ codegen/",
+    "typecheck": "tsc --noEmit && tsc -p codegen --noEmit",
+    "codegen": "tsx codegen/generate.ts",
+    "codegen:check": "tsx codegen/generate.ts --check",
     "clean": "rm -rf dist",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest run"
   },
   "dependencies": {
     "zod": "catalog:",
-    "ai": "catalog:",
-    "@repo/api-contract": "workspace:*"
+    "ai": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

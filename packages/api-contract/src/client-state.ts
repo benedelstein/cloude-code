@@ -8,8 +8,8 @@ import {
   SessionSetupRun,
   SessionStatus,
   SessionTodo,
-} from "../session";
-import { AgentSettings } from "../providers/index";
+} from "./session";
+import { AgentSettings } from "./providers";
 import { UIMessageSchema } from "./websocket-api";
 
 export const PendingUserMessage = z.object({

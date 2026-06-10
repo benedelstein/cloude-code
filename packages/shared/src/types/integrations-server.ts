@@ -1,8 +1,10 @@
 import { z } from "zod";
 
-export const IntegrationProvider = z.enum(["discord", "slack", "generic"]);
-export type IntegrationProvider = z.infer<typeof IntegrationProvider>;
-
+/**
+ * Bot → server session creation (Discord/Slack), authenticated with bot
+ * tokens. Server-side only — not part of the client API contract, hence not
+ * in @repo/api-contract and never transpiled to Swift.
+ */
 const BaseExternalUser = z.object({
   id: z.string().min(1),
   displayName: z.string().min(1).optional(),
@@ -83,36 +85,3 @@ export const IntegrationSessionResponse = z.discriminatedUnion("ok", [
   IntegrationSessionErrorResponse,
 ]);
 export type IntegrationSessionResponse = z.infer<typeof IntegrationSessionResponse>;
-
-export const IntegrationLinkClaimRequest = z.object({
-  token: z.string().min(20).max(256),
-});
-export type IntegrationLinkClaimRequest = z.infer<typeof IntegrationLinkClaimRequest>;
-
-export const IntegrationLinkClaimResponse = z.object({
-  ok: z.literal(true),
-  provider: IntegrationProvider,
-  externalUserId: z.string(),
-  externalUsername: z.string().nullable(),
-  expiresAt: z.iso.datetime(),
-});
-export type IntegrationLinkClaimResponse = z.infer<typeof IntegrationLinkClaimResponse>;
-
-export const IntegrationLinkInfo = z.object({
-  provider: IntegrationProvider,
-  externalUserId: z.string(),
-  externalUsername: z.string().nullable(),
-  expiresAt: z.string(),
-  lastUsedAt: z.string().nullable(),
-});
-export type IntegrationLinkInfo = z.infer<typeof IntegrationLinkInfo>;
-
-export const IntegrationLinksResponse = z.object({
-  links: z.array(IntegrationLinkInfo),
-});
-export type IntegrationLinksResponse = z.infer<typeof IntegrationLinksResponse>;
-
-export const IntegrationLinkRevokeResponse = z.object({
-  ok: z.literal(true),
-});
-export type IntegrationLinkRevokeResponse = z.infer<typeof IntegrationLinkRevokeResponse>;

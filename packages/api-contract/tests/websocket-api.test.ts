@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/api/attachments";
-import { ClientMessage, ServerMessage } from "../../src/types/api/websocket-api";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../src/attachments";
+import { ClientMessage, ServerMessage } from "../src/websocket-api";
 
 describe("websocket api schemas", () => {
   it("parses valid client/server messages", () => {

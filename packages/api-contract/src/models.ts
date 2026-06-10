@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuthMethod, ProviderId } from "../providers/index";
+import { AuthMethod, ProviderId } from "./providers";
 
 export const ProviderCatalogModel = z.object({
   id: z.string(),

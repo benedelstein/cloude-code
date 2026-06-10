@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "apps/ios/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "package.json"
       - "pnpm-workspace.yaml"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "apps/ios/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "package.json"
       - "pnpm-workspace.yaml"
@@ -41,10 +43,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Generated Swift in apps/ios/Modules/CoreAPI must match the Zod schemas
-      # in packages/shared. Fails when someone edits schemas without running
-      # `pnpm --filter @repo/shared codegen` and committing the result.
+      # in packages/api-contract. Fails when someone edits schemas without running
+      # `pnpm --filter @repo/api-contract codegen` and committing the result.
       - name: Check generated API types are current
-        run: pnpm --filter @repo/shared codegen:check
+        run: pnpm --filter @repo/api-contract codegen:check
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "apps/web/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "package.json"
       - "pnpm-workspace.yaml"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "apps/web/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "package.json"
       - "pnpm-workspace.yaml"
@@ -43,13 +45,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm exec turbo run build --filter=@repo/shared --filter=@repo/web
+        run: pnpm exec turbo run build --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/web
 
       - name: Typecheck
-        run: pnpm exec turbo run typecheck --filter=@repo/shared --filter=@repo/web
+        run: pnpm exec turbo run typecheck --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/web
 
       - name: Lint
-        run: pnpm exec turbo run lint --filter=@repo/shared --filter=@repo/web
+        run: pnpm exec turbo run lint --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/web
 
       - name: Test
-        run: pnpm exec turbo run test --filter=@repo/shared --filter=@repo/web
+        run: pnpm exec turbo run test --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/web

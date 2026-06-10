@@ -257,13 +257,13 @@ does not currently include a web deployment workflow.
 
 Near-term areas of work include:
 
-- Faster startup through pre-warmed or reusable Sprite environments.
-- More reliable session recovery after reconnects and restores.
-- Better high-level views for managing sessions across repositories.
-- Push notifications when agent work is ready for review.
+- Better high-level UX for orchestrating sessions across repositories.
+- Exposing more of the VM surface to the agent and user — browser use, local shells, etc.
+- More clients (iOS, mac, cli, slack, etc.)
 - Richer agent interaction primitives, such as file mentions, slash commands, and user-question tools.
-- Broader provider support beyond the current Claude Code and OpenAI Codex paths.
-- Better visual validation workflows for agent-produced frontend changes.
+- Faster startup through pre-warmed or reusable VM environments.
+
+If you'd like to contribute to this repo, see [contributing](#contributing).
 
 ## License
 

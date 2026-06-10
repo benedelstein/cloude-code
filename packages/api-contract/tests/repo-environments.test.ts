@@ -3,9 +3,8 @@ import {
   CreateRepoEnvironmentRequest,
   DefaultNetworkAllowlistResponse,
   ListUserRepoEnvironmentsResponse,
-  SessionEnvironmentSnapshot,
   UserRepoEnvironmentResponse,
-} from "../../src/types/api/repo-environments";
+} from "../src/repo-environments";
 
 describe("repo environment schemas", () => {
   it("accepts custom access with plain env vars and startup script", () => {
@@ -36,19 +35,6 @@ describe("repo environment schemas", () => {
       path: "apps/web",
       secretRefs: [],
     })).toThrow();
-  });
-
-  it("validates immutable environment snapshots", () => {
-    expect(() => SessionEnvironmentSnapshot.parse({
-      sourceEnvironmentId: "123e4567-e89b-12d3-a456-426614174000",
-      sourceEnvironmentName: "API",
-      repoId: 42,
-      network: { mode: "locked" },
-      plainEnvVars: {},
-      startupScript: null,
-      resolvedAt: "2026-05-29T00:00:00.000Z",
-      schemaVersion: 1,
-    })).not.toThrow();
   });
 
   it("validates user environment summaries with repo names", () => {

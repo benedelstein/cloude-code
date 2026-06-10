@@ -6,7 +6,7 @@ import {
   PullRequestState,
   SessionStatus,
   SessionSummary,
-} from "../session";
+} from "./session";
 
 /** Minimal session info returned by API */
 export const SessionInfoResponse = z.object({

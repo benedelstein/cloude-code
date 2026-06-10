@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/api/attachments";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../src/attachments";
 import {
   CreateSessionRequest,
   UserSessionsWebSocketTokenResponse,
-} from "../../src/types/api/sessions";
-import { PullRequestClientState, SessionSummary } from "../../src/types/session";
-import { UserSessionsServerMessage } from "../../src/types/api/user-sessions-websocket-api";
+} from "../src/sessions";
+import { PullRequestClientState, SessionSummary } from "../src/session";
+import { UserSessionsServerMessage } from "../src/user-sessions-websocket-api";
 
 describe("session api schemas", () => {
   it("rejects create-session requests without an initial message", () => {

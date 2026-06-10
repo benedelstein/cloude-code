@@ -1,10 +1,10 @@
 import type { z } from "zod";
-import { SessionSetupRun } from "../src/types/session";
-import { ClientStateSchema } from "../src/types/api/client-state";
-import { ListSessionsResponse } from "../src/types/api/sessions";
-import { ClientMessage, ServerMessage, UIMessageSchema } from "../src/types/api/websocket-api";
-import { ModelsResponse } from "../src/types/api/models";
-import { AgentSettings } from "../src/types/providers/index";
+import { SessionSetupRun } from "../src/session";
+import { ClientStateSchema } from "../src/client-state";
+import { ListSessionsResponse } from "../src/sessions";
+import { ClientMessage, ServerMessage, UIMessageSchema } from "../src/websocket-api";
+import { ModelsResponse } from "../src/models";
+import { AgentSettings } from "../src/providers";
 
 /**
  * Hand-written wire fixtures — realism the synthesizer can't invent.

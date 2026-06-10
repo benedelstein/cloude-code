@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import type { UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
-import { ActiveTurnState, AgentMode, SessionStatus } from "../session";
+import { ActiveTurnState, AgentMode, SessionStatus } from "./session";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MessageAttachmentRef,

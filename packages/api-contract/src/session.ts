@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  AgentSettings,
-  ProviderId,
-} from "./providers/index";
+import { ProviderId } from "./providers";
 
 export const SessionStatus = z.enum([
   /** Session setup is still in progress or blocked. */
@@ -180,8 +177,6 @@ export type AgentMode = z.infer<typeof AgentMode>;
 /** Supported agent providers */
 export const AgentProvider = ProviderId;
 export type AgentProvider = z.infer<typeof AgentProvider>;
-
-export { AgentSettings };
 
 /** Partial settings for create/init requests; validated and merged in the DO */
 export const AgentSettingsInput = z.object({

@@ -1,4 +1,4 @@
-import type { ProviderId } from "../types/providers";
+import type { ProviderId } from "@repo/api-contract";
 import { claudeToolNormalizer } from "./providers/claude";
 import { codexToolNormalizer } from "./providers/codex";
 import type { NormalizableToolUIPart, NormalizedToolAction, ToolPartNormalizer } from "./types";
