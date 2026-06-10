@@ -239,6 +239,22 @@ export function buildIntegrationsRoutes() {
       new IntegrationSessionRequestService(env, {
         tokenProvider: createUserSessionService(env),
         repoCandidateProvider: createIntegrationRepoCandidateProvider(env),
+        environmentProvider: {
+          async getDefaultEnvironmentId(params) {
+            const service = new RepoEnvironmentsService({
+              env,
+              accessProvider: {
+                assertUserRepoAccess: (input) =>
+                  assertUserRepoAccess({
+                    ...input,
+                    providers: createRepoAccessProviders(input.env),
+                  }),
+              },
+            });
+            const result = await service.list(params);
+            return result.ok ? result.value.environments[0]?.id ?? null : null;
+          },
+        },
         sessionCreator: createSessionsService(env),
       }),
   });

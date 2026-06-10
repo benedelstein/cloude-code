@@ -149,10 +149,14 @@ export class IntegrationSessionRequestService {
       };
     }
 
+    const environmentId = await this.resolveDefaultEnvironmentId({
+      userId: link.userId,
+      repoId: resolution.repo.id,
+    });
     const sessionResult = await this.deps.sessionCreator.createSession({
       userId: link.userId,
       githubAccessToken,
-      request: this.buildCreateSessionRequest(params.request, resolution.repo),
+      request: this.buildCreateSessionRequest(params.request, resolution.repo, environmentId),
       source: externalUser.provider,
     });
     if (!sessionResult.ok) {
@@ -287,6 +291,7 @@ export class IntegrationSessionRequestService {
   private buildCreateSessionRequest(
     request: IntegrationSessionRequest,
     repo: IntegrationRepoRoutingCandidate,
+    environmentId: string | null,
   ): CreateSessionRequest {
     const externalUsername = getExternalUsername(request.externalUser);
     const prefix = externalUsername
@@ -297,7 +302,28 @@ export class IntegrationSessionRequestService {
       initialMessage: {
         content: `${prefix}\n\n${request.prompt}`,
       },
+      environmentId: environmentId ?? undefined,
     };
+  }
+
+  // Mirrors the web client, which preselects the repo's most recently updated
+  // environment. Best-effort: a session without an environment beats no session.
+  private async resolveDefaultEnvironmentId(params: {
+    userId: string;
+    repoId: number;
+  }): Promise<string | null> {
+    try {
+      return await this.deps.environmentProvider.getDefaultEnvironmentId(params);
+    } catch (error) {
+      logger.warn("Failed to resolve default environment for integration session", {
+        fields: {
+          userId: params.userId,
+          repoId: params.repoId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return null;
+    }
   }
 
   private buildSessionUrl(sessionId: string): string | undefined {

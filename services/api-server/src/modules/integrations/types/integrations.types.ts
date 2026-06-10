@@ -38,6 +38,13 @@ export interface IntegrationGitHubTokenProvider {
   getValidGitHubAccessTokenByUserId(userId: string): Promise<string | null>;
 }
 
+export interface IntegrationEnvironmentProvider {
+  getDefaultEnvironmentId(params: {
+    userId: string;
+    repoId: number;
+  }): Promise<string | null>;
+}
+
 export interface IntegrationSessionCreatorError {
   status: number;
   message: string;
@@ -56,6 +63,7 @@ export interface IntegrationSessionCreator {
 export interface IntegrationSessionRequestDeps {
   tokenProvider: IntegrationGitHubTokenProvider;
   repoCandidateProvider: IntegrationRepoCandidateProvider;
+  environmentProvider: IntegrationEnvironmentProvider;
   sessionCreator: IntegrationSessionCreator;
 }
 
