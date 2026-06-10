@@ -123,11 +123,17 @@ public actor WebSocketConnection {
     }
 
     private func startPinging(_ task: URLSessionWebSocketTask) {
-        // A sleep loop, not a Timer: Timer needs a RunLoop and fires outside
-        // actor isolation, while Task.sleep cancels instantly via pingTask.
+        // Deadline-based sleeps, not a Timer: advancing `nextPing` from the
+        // schedule (instead of "now + interval") keeps the cadence drift-free
+        // like a repeating Timer, while staying actor-isolated and cancelling
+        // instantly via pingTask.
         pingTask = Task {
+            var nextPing = ContinuousClock.now + Self.pingInterval
             while !Task.isCancelled {
-                try? await Task.sleep(for: Self.pingInterval)
+                // Loose tolerance is fine power-wise; deadlines can't drift
+                // because the next one is anchored to the schedule.
+                try? await Task.sleep(until: nextPing, tolerance: .seconds(2))
+                nextPing += Self.pingInterval
                 guard !Task.isCancelled else { return }
                 // Failures surface through the receive loop; ignore here.
                 try? await Self.awaitPong(task)

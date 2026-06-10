@@ -15,6 +15,3 @@ export const VoiceTranscriptionResponse = z.object({
 export type VoiceTranscriptionResponse = z.infer<
   typeof VoiceTranscriptionResponse
 >;
-
-export const VoiceDriftDemo = z.object({ sample: z.string() });
-export type VoiceDriftDemo = z.infer<typeof VoiceDriftDemo>;

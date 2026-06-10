@@ -3,16 +3,6 @@
 
 import Foundation
 
-public struct VoiceDriftDemo: Codable, Equatable, Sendable {
-    public var sample: String
-
-    public init(
-        sample: String
-    ) {
-        self.sample = sample
-    }
-}
-
 public struct VoiceTranscriptionResponse: Codable, Equatable, Sendable {
     public var text: String
 

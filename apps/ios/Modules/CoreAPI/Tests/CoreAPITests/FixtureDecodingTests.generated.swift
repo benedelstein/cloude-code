@@ -891,14 +891,6 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(UserRepoEnvironmentResponse.self, key: "UserRepoEnvironmentResponse.autoMinimal")
     }
 
-    @Test func voiceDriftDemoAutoFull() throws {
-        try assertAutoRoundTrip(VoiceDriftDemo.self, key: "VoiceDriftDemo.autoFull")
-    }
-
-    @Test func voiceDriftDemoAutoMinimal() throws {
-        try assertAutoRoundTrip(VoiceDriftDemo.self, key: "VoiceDriftDemo.autoMinimal")
-    }
-
     @Test func voiceTranscriptionResponseAutoFull() throws {
         try assertAutoRoundTrip(VoiceTranscriptionResponse.self, key: "VoiceTranscriptionResponse.autoFull")
     }
