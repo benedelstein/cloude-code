@@ -32,6 +32,8 @@ interface ChatInputProps {
   onStop: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  /** Disables the stop button while streaming (e.g. session still starting up). */
+  interruptDisabled?: boolean;
   agentMode?: AgentMode;
   onAgentModeChange?: (mode: AgentMode) => void;
   selectedProvider: ProviderId | null;
@@ -52,6 +54,7 @@ export function ChatInput({
   onStop,
   disabled = false,
   isStreaming = false,
+  interruptDisabled = false,
   agentMode,
   onAgentModeChange,
   selectedProvider,
@@ -371,6 +374,7 @@ export function ChatInput({
           submitDisabled={disabled || isAuthBlocking}
           isStreaming={isStreaming}
           isCancelling={isCancelling}
+          interruptDisabled={interruptDisabled}
           isUploading={isUploading}
           hasPendingOrFailedUploads={hasPendingOrFailedUploads}
           hasContent={Boolean(input.trim()) || attachments.length > 0}

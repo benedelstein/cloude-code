@@ -7,6 +7,11 @@ import { LoadingSpinner } from "@/components/parts/loading-spinner";
 interface SendButtonProps {
   isStreaming: boolean;
   isCancelling?: boolean;
+  /**
+   * Disables the stop button while streaming (e.g. the session is still
+   * starting up, so there is no active turn the server can interrupt).
+   */
+  interruptDisabled?: boolean;
   /** Disables the send button (not applicable in streaming/stop mode). */
   disabled?: boolean;
   /** Shows a spinner and disables the button (e.g. submitting, uploading). */
@@ -21,6 +26,7 @@ interface SendButtonProps {
 export function SendButton({
   isStreaming,
   isCancelling = false,
+  interruptDisabled = false,
   disabled = false,
   isLoading = false,
   isUploading = false,
@@ -31,7 +37,7 @@ export function SendButton({
 }: SendButtonProps) {
   const isActionLoading = isLoading || isCancelling;
   const isSendDisabled = isStreaming
-    ? isCancelling
+    ? isCancelling || interruptDisabled
     : disabled || isActionLoading || hasPendingOrFailedUploads || !hasContent;
 
   const tooltipText = tooltipOverride ?? (() => {
@@ -39,7 +45,7 @@ export function SendButton({
       return "Stopping...";
     }
     if (isStreaming) {
-      return "Interrupt";
+      return interruptDisabled ? "Starting up…" : "Interrupt";
     }
     if (isActionLoading) {
       return isUploading ? "Uploading attachments..." : "Please wait...";

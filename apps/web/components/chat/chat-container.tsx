@@ -263,6 +263,7 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
                 onStop={stop}
                 disabled={!isReady}
                 isStreaming={isResponding || isStreaming}
+                interruptDisabled={!isReady || sessionSetupRun?.status === "running"}
                 agentMode={agentMode}
                 onAgentModeChange={setAgentMode}
                 selectedProvider={selectedProvider}
