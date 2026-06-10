@@ -22,11 +22,12 @@ import type {
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type JSONSchema = Record<string, any>;
+export type JSONSchema = Record<string, any>;
 
 const REF_PREFIX = "defs://";
 
-export function introspect(entries: ManifestEntry[]): Map<string, IRDecl> {
+/** Converts the whole manifest into named JSON Schemas (output mode, cross-references as $refs). */
+export function toJSONSchemas(entries: ManifestEntry[]): Record<string, JSONSchema> {
   const names = new Set<string>();
   for (const entry of entries) {
     if (names.has(entry.swiftName)) {
@@ -44,7 +45,11 @@ export function introspect(entries: ManifestEntry[]): Map<string, IRDecl> {
     uri: (id) => `${REF_PREFIX}${id}`,
     io: "output",
   }) as { schemas: Record<string, JSONSchema> };
+  return schemas;
+}
 
+export function introspect(entries: ManifestEntry[]): Map<string, IRDecl> {
+  const schemas = toJSONSchemas(entries);
   const decls = new Map<string, IRDecl>();
   for (const entry of entries) {
     const node = schemas[entry.swiftName];
@@ -72,7 +77,7 @@ function lowerTopLevel(
     return lowerUnion(entry, node, context, doc);
   }
   if (isStringEnum(node)) {
-    return lowerEnum(entry.swiftName, node, entry.nonFrozen ?? false, doc);
+    return lowerEnum(entry.swiftName, node, !(entry.frozen ?? false), doc);
   }
   if (node.type === "object" && node.properties) {
     return lowerStruct(entry.swiftName, node, context, doc);
@@ -140,7 +145,19 @@ function lowerStruct(
     properties.push(property);
   }
 
+  assertUniqueNames(nested, `Struct ${name}`);
   return { kind: "struct", name, doc, properties, nested };
+}
+
+/** Synthesized nested types must not collide (e.g. two keys camel-casing to one Pascal name). */
+function assertUniqueNames(decls: IRDecl[], where: string): void {
+  const seen = new Set<string>();
+  for (const decl of decls) {
+    if (seen.has(decl.name)) {
+      throw new Error(`${where}: nested type name collision for "${decl.name}"`);
+    }
+    seen.add(decl.name);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +194,8 @@ function lowerUnion(
   doc?: string,
 ): IRUnion {
   // The discriminator key is read off the live Zod schema: it is exact, while
-  // recovering it from JSON Schema would be heuristic.
+  // recovering it from JSON Schema would be heuristic. Zod internal — path
+  // verified against zod 4.3.6; a Zod upgrade that moves it fails loudly below.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const discriminatorKey = (entry.schema as any)._zod?.def?.discriminator as string | undefined;
   if (!discriminatorKey) {
@@ -218,6 +236,7 @@ function lowerUnion(
     }
     seen.add(variant.caseName);
   }
+  assertUniqueNames(nested, `Union ${entry.swiftName}`);
 
   return {
     kind: "union",
@@ -226,7 +245,7 @@ function lowerUnion(
     discriminatorKey,
     variants,
     nested,
-    nonFrozen: entry.nonFrozen ?? false,
+    nonFrozen: !(entry.frozen ?? false),
   };
 }
 
@@ -261,7 +280,12 @@ function resolve(
   const nullableInner = unwrapNullable(node);
   if (nullableInner) {
     const inner = resolve(nullableInner, context, propName, nested);
-    return { type: makeOptional(inner.type), doc: doc ?? inner.doc };
+    return {
+      type: makeOptional(inner.type),
+      doc: doc ?? inner.doc,
+      constValue: inner.constValue,
+      initDefault: inner.initDefault,
+    };
   }
 
   if (node.const !== undefined) {
@@ -303,6 +327,8 @@ function resolve(
       };
     case "array": {
       const element = resolve(node.items ?? {}, context, `${propName}Element`, nested);
+      // Only [] is representable as a Swift init default; non-empty array
+      // defaults are omitted and callers supply the value explicitly.
       return {
         type: { kind: "array", element: element.type },
         doc,
@@ -329,7 +355,8 @@ function resolve(
       return { type: { kind: "json" }, doc };
     }
     case undefined:
-      // Empty schema: z.unknown()/z.any().
+      // Empty schema: z.unknown()/z.any(). A `default` sibling is tolerated but
+      // dropped — a JSONValue default is not representable as a Swift expression.
       if (Object.keys(node).every((key) => key === "description" || key === "default")) {
         return { type: { kind: "json" }, doc };
       }
@@ -382,7 +409,7 @@ function numberDefault(value: unknown): string | undefined {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function refId(node: JSONSchema): string | undefined {
+export function refId(node: JSONSchema): string | undefined {
   const ref = node.$ref as string | undefined;
   if (!ref) {
     return undefined;
@@ -396,8 +423,14 @@ function refId(node: JSONSchema): string | undefined {
 /** `anyOf: [T, {type: "null"}]` (Zod's `.nullable()`) → T, else undefined. */
 function unwrapNullable(node: JSONSchema): JSONSchema | undefined {
   const anyOf = node.anyOf as JSONSchema[] | undefined;
-  if (!anyOf || anyOf.length !== 2) {
+  if (!anyOf) {
     return undefined;
+  }
+  if (anyOf.length !== 2) {
+    throw new Error(
+      `anyOf with ${anyOf.length} branches is not supported (only .nullable()); ` +
+        "use z.discriminatedUnion for unions",
+    );
   }
   const nullBranch = anyOf.find((branch) => branch.type === "null");
   const valueBranch = anyOf.find((branch) => branch !== nullBranch);
@@ -447,6 +480,11 @@ export function pascalCase(value: string): string {
 }
 
 function lowerFirst(value: string): string {
+  // Lowercase a leading acronym run as a unit: "UIMessage" → "uiMessage".
+  const acronym = value.match(/^[A-Z]{2,}(?=[A-Z][a-z]|$)/);
+  if (acronym) {
+    return value.slice(0, acronym[0].length).toLowerCase() + value.slice(acronym[0].length);
+  }
   return value.charAt(0).toLowerCase() + value.slice(1);
 }
 

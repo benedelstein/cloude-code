@@ -3,26 +3,87 @@
 
 import Foundation
 
-public enum ProviderId: RawRepresentable, Codable, Equatable, Sendable {
-    case claudeCode
-    case openaiCodex
-    /// A value this client version doesn't recognize yet.
-    case unknown(String)
+/// Active agent settings, discriminated by provider.
+public enum AgentSettings: Codable, Equatable, Sendable {
+    case openaiCodex(AgentSettingsCodex)
+    case claudeCode(AgentSettingsClaude)
+    /// A variant this client version doesn't recognize yet.
+    case unknown(type: String)
 
-    public init(rawValue: String) {
-        switch rawValue {
-        case "claude-code": self = .claudeCode
-        case "openai-codex": self = .openaiCodex
-        default: self = .unknown(rawValue)
+    private enum DiscriminatorKeys: String, CodingKey {
+        case discriminator = "provider"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: DiscriminatorKeys.self)
+        switch try container.decode(String.self, forKey: .discriminator) {
+        case "openai-codex":
+            self = .openaiCodex(try AgentSettingsCodex(from: decoder))
+        case "claude-code":
+            self = .claudeCode(try AgentSettingsClaude(from: decoder))
+        case let unrecognized:
+            self = .unknown(type: unrecognized)
         }
     }
 
-    public var rawValue: String {
+    public func encode(to encoder: any Encoder) throws {
         switch self {
-        case .claudeCode: "claude-code"
-        case .openaiCodex: "openai-codex"
-        case .unknown(let value): value
+        case .openaiCodex(let payload):
+            try payload.encode(to: encoder)
+        case .claudeCode(let payload):
+            try payload.encode(to: encoder)
+        case .unknown(let type):
+            var container = encoder.container(keyedBy: DiscriminatorKeys.self)
+            try container.encode(type, forKey: .discriminator)
         }
+    }
+}
+
+public struct AgentSettingsClaude: Codable, Equatable, Sendable {
+    public let provider = "claude-code"
+    public var model: ClaudeModel
+    public var effort: ClaudeEffort
+    public var maxTokens: Int
+
+    public init(
+        model: ClaudeModel = .claudeOpus48,
+        effort: ClaudeEffort = .high,
+        maxTokens: Int = 8192
+    ) {
+        self.model = model
+        self.effort = effort
+        self.maxTokens = maxTokens
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case model
+        case effort
+        case maxTokens
+    }
+}
+
+public struct AgentSettingsCodex: Codable, Equatable, Sendable {
+    public let provider = "openai-codex"
+    public var model: OpenAICodexModel
+    public var effort: OpenAICodexEffort
+    public var maxTokens: Int
+
+    public init(
+        model: OpenAICodexModel = .gpt55,
+        effort: OpenAICodexEffort = .high,
+        maxTokens: Int = 8192
+    ) {
+        self.model = model
+        self.effort = effort
+        self.maxTokens = maxTokens
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case model
+        case effort
+        case maxTokens
     }
 }
 
@@ -41,6 +102,38 @@ public enum AuthMethod: RawRepresentable, Codable, Equatable, Sendable {
     public var rawValue: String {
         switch self {
         case .oauth: "oauth"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public enum ClaudeEffort: RawRepresentable, Codable, Equatable, Sendable {
+    case low
+    case medium
+    case high
+    case xhigh
+    case max
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "low": self = .low
+        case "medium": self = .medium
+        case "high": self = .high
+        case "xhigh": self = .xhigh
+        case "max": self = .max
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .low: "low"
+        case .medium: "medium"
+        case .high: "high"
+        case .xhigh: "xhigh"
+        case .max: "max"
         case .unknown(let value): value
         }
     }
@@ -87,12 +180,11 @@ public enum ClaudeModel: RawRepresentable, Codable, Equatable, Sendable {
     }
 }
 
-public enum ClaudeEffort: RawRepresentable, Codable, Equatable, Sendable {
+public enum OpenAICodexEffort: RawRepresentable, Codable, Equatable, Sendable {
     case low
     case medium
     case high
     case xhigh
-    case max
     /// A value this client version doesn't recognize yet.
     case unknown(String)
 
@@ -102,7 +194,6 @@ public enum ClaudeEffort: RawRepresentable, Codable, Equatable, Sendable {
         case "medium": self = .medium
         case "high": self = .high
         case "xhigh": self = .xhigh
-        case "max": self = .max
         default: self = .unknown(rawValue)
         }
     }
@@ -113,33 +204,8 @@ public enum ClaudeEffort: RawRepresentable, Codable, Equatable, Sendable {
         case .medium: "medium"
         case .high: "high"
         case .xhigh: "xhigh"
-        case .max: "max"
         case .unknown(let value): value
         }
-    }
-}
-
-public struct AgentSettingsClaude: Codable, Equatable, Sendable {
-    public let provider = "claude-code"
-    public var model: ClaudeModel
-    public var effort: ClaudeEffort
-    public var maxTokens: Double
-
-    public init(
-        model: ClaudeModel = .claudeOpus48,
-        effort: ClaudeEffort = .high,
-        maxTokens: Double = 8192
-    ) {
-        self.model = model
-        self.effort = effort
-        self.maxTokens = maxTokens
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case provider
-        case model
-        case effort
-        case maxTokens
     }
 }
 
@@ -178,91 +244,25 @@ public enum OpenAICodexModel: RawRepresentable, Codable, Equatable, Sendable {
     }
 }
 
-public enum OpenAICodexEffort: RawRepresentable, Codable, Equatable, Sendable {
-    case low
-    case medium
-    case high
-    case xhigh
+public enum ProviderId: RawRepresentable, Codable, Equatable, Sendable {
+    case claudeCode
+    case openaiCodex
     /// A value this client version doesn't recognize yet.
     case unknown(String)
 
     public init(rawValue: String) {
         switch rawValue {
-        case "low": self = .low
-        case "medium": self = .medium
-        case "high": self = .high
-        case "xhigh": self = .xhigh
+        case "claude-code": self = .claudeCode
+        case "openai-codex": self = .openaiCodex
         default: self = .unknown(rawValue)
         }
     }
 
     public var rawValue: String {
         switch self {
-        case .low: "low"
-        case .medium: "medium"
-        case .high: "high"
-        case .xhigh: "xhigh"
+        case .claudeCode: "claude-code"
+        case .openaiCodex: "openai-codex"
         case .unknown(let value): value
-        }
-    }
-}
-
-public struct AgentSettingsCodex: Codable, Equatable, Sendable {
-    public let provider = "openai-codex"
-    public var model: OpenAICodexModel
-    public var effort: OpenAICodexEffort
-    public var maxTokens: Double
-
-    public init(
-        model: OpenAICodexModel = .gpt55,
-        effort: OpenAICodexEffort = .high,
-        maxTokens: Double = 8192
-    ) {
-        self.model = model
-        self.effort = effort
-        self.maxTokens = maxTokens
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case provider
-        case model
-        case effort
-        case maxTokens
-    }
-}
-
-/// Active agent settings, discriminated by provider.
-public enum AgentSettings: Codable, Equatable, Sendable {
-    case openaiCodex(AgentSettingsCodex)
-    case claudeCode(AgentSettingsClaude)
-    /// A variant this client version doesn't recognize yet.
-    case unknown(type: String)
-
-    private enum DiscriminatorKeys: String, CodingKey {
-        case discriminator = "provider"
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: DiscriminatorKeys.self)
-        switch try container.decode(String.self, forKey: .discriminator) {
-        case "openai-codex":
-            self = .openaiCodex(try AgentSettingsCodex(from: decoder))
-        case "claude-code":
-            self = .claudeCode(try AgentSettingsClaude(from: decoder))
-        case let unrecognized:
-            self = .unknown(type: unrecognized)
-        }
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        switch self {
-        case .openaiCodex(let payload):
-            try payload.encode(to: encoder)
-        case .claudeCode(let payload):
-            try payload.encode(to: encoder)
-        case .unknown(let type):
-            var container = encoder.container(keyedBy: DiscriminatorKeys.self)
-            try container.encode(type, forKey: .discriminator)
         }
     }
 }

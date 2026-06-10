@@ -3,75 +3,186 @@
 
 import Foundation
 
-public enum SessionStatus: RawRepresentable, Codable, Equatable, Sendable {
-    case preparing
-    case ready
+public struct ActiveTurnState: Codable, Equatable, Sendable {
+    public var userMessageId: String
+
+    public init(
+        userMessageId: String
+    ) {
+        self.userMessageId = userMessageId
+    }
+}
+
+public enum AgentMode: RawRepresentable, Codable, Equatable, Sendable {
+    case edit
+    case plan
     /// A value this client version doesn't recognize yet.
     case unknown(String)
 
     public init(rawValue: String) {
         switch rawValue {
-        case "preparing": self = .preparing
-        case "ready": self = .ready
+        case "edit": self = .edit
+        case "plan": self = .plan
         default: self = .unknown(rawValue)
         }
     }
 
     public var rawValue: String {
         switch self {
-        case .preparing: "preparing"
-        case .ready: "ready"
+        case .edit: "edit"
+        case .plan: "plan"
         case .unknown(let value): value
         }
     }
 }
 
-public enum SessionWorkingState: RawRepresentable, Codable, Equatable, Sendable {
-    case idle
-    case responding
-    /// A value this client version doesn't recognize yet.
-    case unknown(String)
+public struct AgentSettingsInput: Codable, Equatable, Sendable {
+    public var provider: ProviderId?
+    public var model: String?
+    public var effort: String?
+    public var maxTokens: Int?
 
-    public init(rawValue: String) {
-        switch rawValue {
-        case "idle": self = .idle
-        case "responding": self = .responding
-        default: self = .unknown(rawValue)
-        }
-    }
-
-    public var rawValue: String {
-        switch self {
-        case .idle: "idle"
-        case .responding: "responding"
-        case .unknown(let value): value
-        }
+    public init(
+        provider: ProviderId? = nil,
+        model: String? = nil,
+        effort: String? = nil,
+        maxTokens: Int? = nil
+    ) {
+        self.provider = provider
+        self.model = model
+        self.effort = effort
+        self.maxTokens = maxTokens
     }
 }
 
-public enum PullRequestState: RawRepresentable, Codable, Equatable, Sendable {
-    case `open`
-    case merged
-    case closed
-    /// A value this client version doesn't recognize yet.
-    case unknown(String)
+public struct CloudContainerSetupTask: Codable, Equatable, Sendable {
+    public var status: SessionSetupTaskStatus
+    public var startedAt: String?
+    public var completedAt: String?
+    public var error: String?
+    public let id = "cloud_container"
+    public let isBlocking = true
+    public let canRetry = true
 
-    public init(rawValue: String) {
-        switch rawValue {
-        case "open": self = .`open`
-        case "merged": self = .merged
-        case "closed": self = .closed
-        default: self = .unknown(rawValue)
+    public init(
+        status: SessionSetupTaskStatus,
+        startedAt: String? = nil,
+        completedAt: String? = nil,
+        error: String? = nil
+    ) {
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.error = error
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case startedAt
+        case completedAt
+        case error
+        case id
+        case isBlocking
+        case canRetry
+    }
+}
+
+public struct Message: Codable, Equatable, Sendable {
+    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
+        case user
+        case assistant
+        /// A value this client version doesn't recognize yet.
+        case unknown(String)
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "user": self = .user
+            case "assistant": self = .assistant
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .user: "user"
+            case .assistant: "assistant"
+            case .unknown(let value): value
+            }
         }
     }
 
-    public var rawValue: String {
-        switch self {
-        case .`open`: "open"
-        case .merged: "merged"
-        case .closed: "closed"
-        case .unknown(let value): value
-        }
+    public var id: UUID
+    public var sessionId: UUID
+    public var role: Role
+    public var content: String
+    public var toolCalls: [JSONValue]?
+    public var streamPosition: Int?
+    public var createdAt: ISODateTimeString
+
+    public init(
+        id: UUID,
+        sessionId: UUID,
+        role: Role,
+        content: String,
+        toolCalls: [JSONValue]? = nil,
+        streamPosition: Int? = nil,
+        createdAt: ISODateTimeString
+    ) {
+        self.id = id
+        self.sessionId = sessionId
+        self.role = role
+        self.content = content
+        self.toolCalls = toolCalls
+        self.streamPosition = streamPosition
+        self.createdAt = createdAt
+    }
+}
+
+public struct NetworkPolicySetupTask: Codable, Equatable, Sendable {
+    public var status: SessionSetupTaskStatus
+    public var startedAt: String?
+    public var completedAt: String?
+    public var error: String?
+    public let id = "network_policy"
+    public let isBlocking = true
+    public let canRetry = true
+
+    public init(
+        status: SessionSetupTaskStatus,
+        startedAt: String? = nil,
+        completedAt: String? = nil,
+        error: String? = nil
+    ) {
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.error = error
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case startedAt
+        case completedAt
+        case error
+        case id
+        case isBlocking
+        case canRetry
+    }
+}
+
+public struct ProviderConnectionState: Codable, Equatable, Sendable {
+    public var provider: ProviderId
+    public var connected: Bool
+    public var requiresReauth: Bool
+
+    public init(
+        provider: ProviderId,
+        connected: Bool,
+        requiresReauth: Bool
+    ) {
+        self.provider = provider
+        self.connected = connected
+        self.requiresReauth = requiresReauth
     }
 }
 
@@ -109,12 +220,12 @@ public enum PullRequestClientState: Codable, Equatable, Sendable {
     public struct Created: Codable, Equatable, Sendable {
         public let status = "created"
         public var url: String
-        public var number: Double
+        public var number: Int
         public var state: PullRequestState
 
         public init(
             url: String,
-            number: Double,
+            number: Int,
             state: PullRequestState
         ) {
             self.url = url
@@ -169,6 +280,64 @@ public enum PullRequestClientState: Codable, Equatable, Sendable {
     }
 }
 
+public enum PullRequestState: RawRepresentable, Codable, Equatable, Sendable {
+    case `open`
+    case merged
+    case closed
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "open": self = .`open`
+        case "merged": self = .merged
+        case "closed": self = .closed
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .`open`: "open"
+        case .merged: "merged"
+        case .closed: "closed"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public struct RepositorySetupTask: Codable, Equatable, Sendable {
+    public var status: SessionSetupTaskStatus
+    public var startedAt: String?
+    public var completedAt: String?
+    public var error: String?
+    public let id = "repository"
+    public let isBlocking = true
+    public let canRetry = true
+
+    public init(
+        status: SessionSetupTaskStatus,
+        startedAt: String? = nil,
+        completedAt: String? = nil,
+        error: String? = nil
+    ) {
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.error = error
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case startedAt
+        case completedAt
+        case error
+        case id
+        case isBlocking
+        case canRetry
+    }
+}
+
 public enum SessionAccessBlockReason: RawRepresentable, Codable, Equatable, Sendable {
     case installationDeleted
     case installationSuspended
@@ -198,6 +367,261 @@ public enum SessionAccessBlockReason: RawRepresentable, Codable, Equatable, Send
     }
 }
 
+public struct SessionPlanMetadata: Codable, Equatable, Sendable {
+    public var lastUpdated: String
+
+    public init(
+        lastUpdated: String
+    ) {
+        self.lastUpdated = lastUpdated
+    }
+}
+
+public struct SessionSetupRun: Codable, Equatable, Sendable {
+    public var id: String
+    public var status: SessionSetupRunStatus
+    public var startedAt: String
+    public var completedAt: String?
+    public var tasks: [SessionSetupTask]
+
+    public init(
+        id: String,
+        status: SessionSetupRunStatus,
+        startedAt: String,
+        completedAt: String? = nil,
+        tasks: [SessionSetupTask]
+    ) {
+        self.id = id
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.tasks = tasks
+    }
+}
+
+public enum SessionSetupRunStatus: RawRepresentable, Codable, Equatable, Sendable {
+    case running
+    case completed
+    case failed
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "running": self = .running
+        case "completed": self = .completed
+        case "failed": self = .failed
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .running: "running"
+        case .completed: "completed"
+        case .failed: "failed"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public enum SessionSetupTask: Codable, Equatable, Sendable {
+    case cloudContainer(CloudContainerSetupTask)
+    case repository(RepositorySetupTask)
+    case setupScript(StartupScriptSetupTask)
+    case networkPolicy(NetworkPolicySetupTask)
+    /// A variant this client version doesn't recognize yet.
+    case unknown(type: String)
+
+    private enum DiscriminatorKeys: String, CodingKey {
+        case discriminator = "id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: DiscriminatorKeys.self)
+        switch try container.decode(String.self, forKey: .discriminator) {
+        case "cloud_container":
+            self = .cloudContainer(try CloudContainerSetupTask(from: decoder))
+        case "repository":
+            self = .repository(try RepositorySetupTask(from: decoder))
+        case "setup_script":
+            self = .setupScript(try StartupScriptSetupTask(from: decoder))
+        case "network_policy":
+            self = .networkPolicy(try NetworkPolicySetupTask(from: decoder))
+        case let unrecognized:
+            self = .unknown(type: unrecognized)
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .cloudContainer(let payload):
+            try payload.encode(to: encoder)
+        case .repository(let payload):
+            try payload.encode(to: encoder)
+        case .setupScript(let payload):
+            try payload.encode(to: encoder)
+        case .networkPolicy(let payload):
+            try payload.encode(to: encoder)
+        case .unknown(let type):
+            var container = encoder.container(keyedBy: DiscriminatorKeys.self)
+            try container.encode(type, forKey: .discriminator)
+        }
+    }
+}
+
+public struct SessionSetupTaskOutput: Codable, Equatable, Sendable {
+    public var stdout: String
+    public var stderr: String
+    public var exitCode: Int?
+    public var truncated: Bool
+
+    public init(
+        stdout: String,
+        stderr: String,
+        exitCode: Int? = nil,
+        truncated: Bool
+    ) {
+        self.stdout = stdout
+        self.stderr = stderr
+        self.exitCode = exitCode
+        self.truncated = truncated
+    }
+}
+
+public enum SessionSetupTaskStatus: RawRepresentable, Codable, Equatable, Sendable {
+    case pending
+    case running
+    case completed
+    case failed
+    case skipped
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "pending": self = .pending
+        case "running": self = .running
+        case "completed": self = .completed
+        case "failed": self = .failed
+        case "skipped": self = .skipped
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .pending: "pending"
+        case .running: "running"
+        case .completed: "completed"
+        case .failed: "failed"
+        case .skipped: "skipped"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public enum SessionStatus: RawRepresentable, Codable, Equatable, Sendable {
+    case preparing
+    case ready
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "preparing": self = .preparing
+        case "ready": self = .ready
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .preparing: "preparing"
+        case .ready: "ready"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public struct SessionSummary: Codable, Equatable, Sendable {
+    public struct PullRequest: Codable, Equatable, Sendable {
+        public var url: String
+        public var number: Int
+        public var state: PullRequestState
+
+        public init(
+            url: String,
+            number: Int,
+            state: PullRequestState
+        ) {
+            self.url = url
+            self.number = number
+            self.state = state
+        }
+    }
+
+    public var id: UUID
+    public var repoId: Int
+    public var repoFullName: String
+    public var title: String?
+    public var archived: Bool
+    public var workingState: SessionWorkingState
+    public var pushedBranch: String?
+    public var pullRequest: PullRequest?
+    public var createdAt: String
+    public var updatedAt: String
+    public var lastMessageAt: String?
+    public var lastAssistantMessageId: String?
+    public var hasUnread: Bool
+
+    public init(
+        id: UUID,
+        repoId: Int,
+        repoFullName: String,
+        title: String? = nil,
+        archived: Bool,
+        workingState: SessionWorkingState,
+        pushedBranch: String? = nil,
+        pullRequest: PullRequest? = nil,
+        createdAt: String,
+        updatedAt: String,
+        lastMessageAt: String? = nil,
+        lastAssistantMessageId: String? = nil,
+        hasUnread: Bool
+    ) {
+        self.id = id
+        self.repoId = repoId
+        self.repoFullName = repoFullName
+        self.title = title
+        self.archived = archived
+        self.workingState = workingState
+        self.pushedBranch = pushedBranch
+        self.pullRequest = pullRequest
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.lastMessageAt = lastMessageAt
+        self.lastAssistantMessageId = lastAssistantMessageId
+        self.hasUnread = hasUnread
+    }
+}
+
+public struct SessionTodo: Codable, Equatable, Sendable {
+    public var content: String
+    public var activeForm: String?
+    public var status: SessionTodoStatus
+
+    public init(
+        content: String,
+        activeForm: String? = nil,
+        status: SessionTodoStatus
+    ) {
+        self.content = content
+        self.activeForm = activeForm
+        self.status = status
+    }
+}
+
 public enum SessionTodoStatus: RawRepresentable, Codable, Equatable, Sendable {
     case pending
     case inProgress
@@ -224,183 +648,136 @@ public enum SessionTodoStatus: RawRepresentable, Codable, Equatable, Sendable {
     }
 }
 
-public struct SessionTodo: Codable, Equatable, Sendable {
-    public var content: String
-    public var activeForm: String?
-    public var status: SessionTodoStatus
-
-    public init(
-        content: String,
-        activeForm: String? = nil,
-        status: SessionTodoStatus
-    ) {
-        self.content = content
-        self.activeForm = activeForm
-        self.status = status
-    }
-}
-
-public struct SessionPlanMetadata: Codable, Equatable, Sendable {
-    public var lastUpdated: String
-
-    public init(
-        lastUpdated: String
-    ) {
-        self.lastUpdated = lastUpdated
-    }
-}
-
-public enum AgentMode: RawRepresentable, Codable, Equatable, Sendable {
-    case edit
-    case plan
+public enum SessionWorkingState: RawRepresentable, Codable, Equatable, Sendable {
+    case idle
+    case responding
     /// A value this client version doesn't recognize yet.
     case unknown(String)
 
     public init(rawValue: String) {
         switch rawValue {
-        case "edit": self = .edit
-        case "plan": self = .plan
+        case "idle": self = .idle
+        case "responding": self = .responding
         default: self = .unknown(rawValue)
         }
     }
 
     public var rawValue: String {
         switch self {
-        case .edit: "edit"
-        case .plan: "plan"
+        case .idle: "idle"
+        case .responding: "responding"
         case .unknown(let value): value
         }
     }
 }
 
-public struct AgentSettingsInput: Codable, Equatable, Sendable {
-    public var provider: ProviderId?
-    public var model: String?
-    public var effort: String?
-    public var maxTokens: Double?
+public struct StartupScriptSetupTask: Codable, Equatable, Sendable {
+    public var status: SessionSetupTaskStatus
+    public var startedAt: String?
+    public var completedAt: String?
+    public var error: String?
+    public let id = "setup_script"
+    public let isBlocking = false
+    public let canRetry = false
+    public var output: SessionSetupTaskOutput?
+    public var skipReason: StartupScriptSetupTaskSkipReason?
 
     public init(
-        provider: ProviderId? = nil,
-        model: String? = nil,
-        effort: String? = nil,
-        maxTokens: Double? = nil
+        status: SessionSetupTaskStatus,
+        startedAt: String? = nil,
+        completedAt: String? = nil,
+        error: String? = nil,
+        output: SessionSetupTaskOutput? = nil,
+        skipReason: StartupScriptSetupTaskSkipReason? = nil
     ) {
-        self.provider = provider
-        self.model = model
-        self.effort = effort
-        self.maxTokens = maxTokens
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.error = error
+        self.output = output
+        self.skipReason = skipReason
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case startedAt
+        case completedAt
+        case error
+        case id
+        case isBlocking
+        case canRetry
+        case output
+        case skipReason
     }
 }
 
-public struct Message: Codable, Equatable, Sendable {
-    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
-        case user
-        case assistant
-        /// A value this client version doesn't recognize yet.
-        case unknown(String)
-
-        public init(rawValue: String) {
-            switch rawValue {
-            case "user": self = .user
-            case "assistant": self = .assistant
-            default: self = .unknown(rawValue)
-            }
-        }
-
-        public var rawValue: String {
-            switch self {
-            case .user: "user"
-            case .assistant: "assistant"
-            case .unknown(let value): value
-            }
-        }
-    }
-
-    public var id: UUID
-    public var sessionId: UUID
-    public var role: Role
-    public var content: String
-    public var toolCalls: [JSONValue]?
-    public var streamPosition: Double?
-    public var createdAt: ISODateTimeString
-
-    public init(
-        id: UUID,
-        sessionId: UUID,
-        role: Role,
-        content: String,
-        toolCalls: [JSONValue]? = nil,
-        streamPosition: Double? = nil,
-        createdAt: ISODateTimeString
-    ) {
-        self.id = id
-        self.sessionId = sessionId
-        self.role = role
-        self.content = content
-        self.toolCalls = toolCalls
-        self.streamPosition = streamPosition
-        self.createdAt = createdAt
-    }
-}
-
-public struct SessionSummary: Codable, Equatable, Sendable {
-    public struct PullRequest: Codable, Equatable, Sendable {
-        public var url: String
-        public var number: Double
-        public var state: PullRequestState
+public enum StartupScriptSetupTaskSkipReason: Codable, Equatable, Sendable {
+    public struct NoEnvironment: Codable, Equatable, Sendable {
+        public let kind = "no_environment"
+        public var repoId: Int
 
         public init(
-            url: String,
-            number: Double,
-            state: PullRequestState
+            repoId: Int
         ) {
-            self.url = url
-            self.number = number
-            self.state = state
+            self.repoId = repoId
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case kind
+            case repoId
         }
     }
 
-    public var id: UUID
-    public var repoId: Double
-    public var repoFullName: String
-    public var title: String?
-    public var archived: Bool
-    public var workingState: SessionWorkingState
-    public var pushedBranch: String?
-    public var pullRequest: PullRequest?
-    public var createdAt: String
-    public var updatedAt: String
-    public var lastMessageAt: String?
-    public var lastAssistantMessageId: String?
-    public var hasUnread: Bool
+    public struct NoScript: Codable, Equatable, Sendable {
+        public let kind = "no_script"
+        public var environmentId: String
+        public var environmentName: String?
 
-    public init(
-        id: UUID,
-        repoId: Double,
-        repoFullName: String,
-        title: String? = nil,
-        archived: Bool,
-        workingState: SessionWorkingState,
-        pushedBranch: String? = nil,
-        pullRequest: PullRequest? = nil,
-        createdAt: String,
-        updatedAt: String,
-        lastMessageAt: String? = nil,
-        lastAssistantMessageId: String? = nil,
-        hasUnread: Bool
-    ) {
-        self.id = id
-        self.repoId = repoId
-        self.repoFullName = repoFullName
-        self.title = title
-        self.archived = archived
-        self.workingState = workingState
-        self.pushedBranch = pushedBranch
-        self.pullRequest = pullRequest
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.lastMessageAt = lastMessageAt
-        self.lastAssistantMessageId = lastAssistantMessageId
-        self.hasUnread = hasUnread
+        public init(
+            environmentId: String,
+            environmentName: String? = nil
+        ) {
+            self.environmentId = environmentId
+            self.environmentName = environmentName
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case kind
+            case environmentId
+            case environmentName
+        }
+    }
+
+    case noEnvironment(NoEnvironment)
+    case noScript(NoScript)
+    /// A variant this client version doesn't recognize yet.
+    case unknown(type: String)
+
+    private enum DiscriminatorKeys: String, CodingKey {
+        case discriminator = "kind"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: DiscriminatorKeys.self)
+        switch try container.decode(String.self, forKey: .discriminator) {
+        case "no_environment":
+            self = .noEnvironment(try NoEnvironment(from: decoder))
+        case "no_script":
+            self = .noScript(try NoScript(from: decoder))
+        case let unrecognized:
+            self = .unknown(type: unrecognized)
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        switch self {
+        case .noEnvironment(let payload):
+            try payload.encode(to: encoder)
+        case .noScript(let payload):
+            try payload.encode(to: encoder)
+        case .unknown(let type):
+            var container = encoder.container(keyedBy: DiscriminatorKeys.self)
+            try container.encode(type, forKey: .discriminator)
+        }
     }
 }

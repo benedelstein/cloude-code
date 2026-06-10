@@ -1,0 +1,127 @@
+{
+  "repoFullName": "bedelstein/cloude-code",
+  "status": "preparing",
+  "sessionSetupRun": {
+    "id": "run_1",
+    "status": "running",
+    "startedAt": "2026-06-09T12:00:00Z",
+    "completedAt": null,
+    "tasks": [
+      {
+        "status": "completed",
+        "startedAt": "2026-06-09T12:00:00Z",
+        "completedAt": "2026-06-09T12:00:00.123Z",
+        "error": null,
+        "id": "cloud_container",
+        "isBlocking": true,
+        "canRetry": true
+      },
+      {
+        "status": "running",
+        "startedAt": "2026-06-09T12:00:00Z",
+        "completedAt": null,
+        "error": null,
+        "id": "repository",
+        "isBlocking": true,
+        "canRetry": true
+      },
+      {
+        "status": "skipped",
+        "startedAt": null,
+        "completedAt": null,
+        "error": null,
+        "id": "setup_script",
+        "isBlocking": false,
+        "canRetry": false,
+        "output": {
+          "stdout": "installed 120 packages",
+          "stderr": "",
+          "exitCode": 0,
+          "truncated": false
+        },
+        "skipReason": {
+          "kind": "no_script",
+          "environmentId": "7f0f5c1d-91f1-4f93-b1de-3f37ad2b3a1c",
+          "environmentName": "CI-like"
+        }
+      },
+      {
+        "status": "failed",
+        "startedAt": "2026-06-09T12:00:00Z",
+        "completedAt": "2026-06-09T12:00:00.123Z",
+        "error": "policy apply failed",
+        "id": "network_policy",
+        "isBlocking": true,
+        "canRetry": true
+      }
+    ]
+  },
+  "agentSettings": {
+    "provider": "claude-code",
+    "model": "claude-opus-4-8",
+    "effort": "high",
+    "maxTokens": 8192
+  },
+  "pullRequest": {
+    "status": "creating"
+  },
+  "pushedBranch": null,
+  "baseBranch": "main",
+  "todos": [
+    {
+      "content": "Scaffold API layer",
+      "status": "in_progress"
+    }
+  ],
+  "plan": {
+    "lastUpdated": "2026-06-09T12:00:00Z"
+  },
+  "pendingUserMessage": {
+    "message": {
+      "id": "msg_1",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Here is the plan."
+        },
+        {
+          "type": "tool-call",
+          "toolName": "bash",
+          "input": {
+            "command": "ls"
+          },
+          "nested": [
+            1,
+            2.5,
+            true,
+            null
+          ]
+        }
+      ],
+      "metadata": {
+        "custom": {
+          "deeply": [
+            "nested",
+            42
+          ]
+        }
+      }
+    },
+    "attachmentIds": [
+      "c1f8ed4e-2d8f-43a5-8a44-cdd2ce19f8f3"
+    ]
+  },
+  "activeTurn": {
+    "userMessageId": "msg_1"
+  },
+  "editorUrl": null,
+  "providerConnection": {
+    "provider": "claude-code",
+    "connected": true,
+    "requiresReauth": false
+  },
+  "agentMode": "edit",
+  "lastError": null,
+  "createdAt": "2026-06-09T12:00:00Z"
+}

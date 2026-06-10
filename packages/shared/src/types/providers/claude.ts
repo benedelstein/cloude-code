@@ -41,7 +41,7 @@ export const AgentSettingsClaude = z.object({
   provider: z.literal(CLAUDE_PROVIDER_ID),
   model: ClaudeModel.default("claude-opus-4-8"),
   effort: ClaudeEffort.default("high"),
-  maxTokens: z.number().default(8192),
+  maxTokens: z.number().int().default(8192),
 });
 
 const CLAUDE_MODELS: ProviderModelDefinition<ClaudeModel>[] = [

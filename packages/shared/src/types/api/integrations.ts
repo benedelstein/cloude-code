@@ -40,7 +40,7 @@ export const IntegrationSessionRequest = z.object({
 export type IntegrationSessionRequest = z.infer<typeof IntegrationSessionRequest>;
 
 export const IntegrationRepoCandidate = z.object({
-  repoId: z.number(),
+  repoId: z.number().int(),
   repoFullName: z.string(),
   reason: z.string().optional(),
 });
@@ -50,7 +50,7 @@ export const IntegrationSessionSuccessResponse = z.object({
   ok: z.literal(true),
   sessionId: z.uuid(),
   title: z.string().nullable(),
-  repoId: z.number(),
+  repoId: z.number().int(),
   repoFullName: z.string(),
   sessionUrl: z.string().url().optional(),
   routingReason: z.string().optional(),

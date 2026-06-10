@@ -1,6 +1,0 @@
-{
-  "provider": "openai-codex",
-  "model": "gpt-5.5",
-  "effort": "xhigh",
-  "maxTokens": 4096
-}

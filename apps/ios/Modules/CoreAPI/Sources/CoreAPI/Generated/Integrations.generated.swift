@@ -3,32 +3,6 @@
 
 import Foundation
 
-public enum IntegrationProvider: RawRepresentable, Codable, Equatable, Sendable {
-    case discord
-    case slack
-    case generic
-    /// A value this client version doesn't recognize yet.
-    case unknown(String)
-
-    public init(rawValue: String) {
-        switch rawValue {
-        case "discord": self = .discord
-        case "slack": self = .slack
-        case "generic": self = .generic
-        default: self = .unknown(rawValue)
-        }
-    }
-
-    public var rawValue: String {
-        switch self {
-        case .discord: "discord"
-        case .slack: "slack"
-        case .generic: "generic"
-        case .unknown(let value): value
-        }
-    }
-}
-
 public struct IntegrationLinkClaimRequest: Codable, Equatable, Sendable {
     public var token: String
 
@@ -89,6 +63,16 @@ public struct IntegrationLinkInfo: Codable, Equatable, Sendable {
     }
 }
 
+public struct IntegrationLinkRevokeResponse: Codable, Equatable, Sendable {
+    public let ok = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+    }
+}
+
 public struct IntegrationLinksResponse: Codable, Equatable, Sendable {
     public var links: [IntegrationLinkInfo]
 
@@ -99,12 +83,28 @@ public struct IntegrationLinksResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct IntegrationLinkRevokeResponse: Codable, Equatable, Sendable {
-    public let ok = true
+public enum IntegrationProvider: RawRepresentable, Codable, Equatable, Sendable {
+    case discord
+    case slack
+    case generic
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
 
-    public init() {}
+    public init(rawValue: String) {
+        switch rawValue {
+        case "discord": self = .discord
+        case "slack": self = .slack
+        case "generic": self = .generic
+        default: self = .unknown(rawValue)
+        }
+    }
 
-    private enum CodingKeys: String, CodingKey {
-        case ok
+    public var rawValue: String {
+        switch self {
+        case .discord: "discord"
+        case .slack: "slack"
+        case .generic: "generic"
+        case .unknown(let value): value
+        }
     }
 }

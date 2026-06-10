@@ -3,16 +3,6 @@
 
 import Foundation
 
-public struct MessageAttachmentRef: Codable, Equatable, Sendable {
-    public var attachmentId: UUID
-
-    public init(
-        attachmentId: UUID
-    ) {
-        self.attachmentId = attachmentId
-    }
-}
-
 public struct AttachmentDescriptor: Codable, Equatable, Sendable {
     public var attachmentId: UUID
     public var filename: String
@@ -40,6 +30,16 @@ public struct AttachmentDescriptor: Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.sessionId = sessionId
         self.contentUrl = contentUrl
+    }
+}
+
+public struct MessageAttachmentRef: Codable, Equatable, Sendable {
+    public var attachmentId: UUID
+
+    public init(
+        attachmentId: UUID
+    ) {
+        self.attachmentId = attachmentId
     }
 }
 

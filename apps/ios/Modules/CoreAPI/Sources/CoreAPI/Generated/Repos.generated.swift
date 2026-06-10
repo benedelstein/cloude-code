@@ -3,70 +3,6 @@
 
 import Foundation
 
-public struct Repo: Codable, Equatable, Sendable {
-    public var id: Double
-    public var name: String
-    public var fullName: String
-    public var owner: String
-    public var isPrivate: Bool
-    public var description: String?
-    public var defaultBranch: String
-
-    public init(
-        id: Double,
-        name: String,
-        fullName: String,
-        owner: String,
-        isPrivate: Bool,
-        description: String? = nil,
-        defaultBranch: String
-    ) {
-        self.id = id
-        self.name = name
-        self.fullName = fullName
-        self.owner = owner
-        self.isPrivate = isPrivate
-        self.description = description
-        self.defaultBranch = defaultBranch
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case fullName
-        case owner
-        case isPrivate = "private"
-        case description
-        case defaultBranch
-    }
-}
-
-public struct ListReposResponse: Codable, Equatable, Sendable {
-    public var repos: [Repo]
-    public var installUrl: String
-    public var cursor: String?
-
-    public init(
-        repos: [Repo],
-        installUrl: String,
-        cursor: String? = nil
-    ) {
-        self.repos = repos
-        self.installUrl = installUrl
-        self.cursor = cursor
-    }
-}
-
-public struct SearchReposResponse: Codable, Equatable, Sendable {
-    public var repos: [Repo]
-
-    public init(
-        repos: [Repo]
-    ) {
-        self.repos = repos
-    }
-}
-
 public struct Branch: Codable, Equatable, Sendable {
     public var name: String
     public var isDefault: Bool
@@ -95,5 +31,69 @@ public struct ListBranchesResponse: Codable, Equatable, Sendable {
     ) {
         self.branches = branches
         self.cursor = cursor
+    }
+}
+
+public struct ListReposResponse: Codable, Equatable, Sendable {
+    public var repos: [Repo]
+    public var installUrl: String
+    public var cursor: String?
+
+    public init(
+        repos: [Repo],
+        installUrl: String,
+        cursor: String? = nil
+    ) {
+        self.repos = repos
+        self.installUrl = installUrl
+        self.cursor = cursor
+    }
+}
+
+public struct Repo: Codable, Equatable, Sendable {
+    public var id: Int
+    public var name: String
+    public var fullName: String
+    public var owner: String
+    public var isPrivate: Bool
+    public var description: String?
+    public var defaultBranch: String
+
+    public init(
+        id: Int,
+        name: String,
+        fullName: String,
+        owner: String,
+        isPrivate: Bool,
+        description: String? = nil,
+        defaultBranch: String
+    ) {
+        self.id = id
+        self.name = name
+        self.fullName = fullName
+        self.owner = owner
+        self.isPrivate = isPrivate
+        self.description = description
+        self.defaultBranch = defaultBranch
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case fullName
+        case owner
+        case isPrivate = "private"
+        case description
+        case defaultBranch
+    }
+}
+
+public struct SearchReposResponse: Codable, Equatable, Sendable {
+    public var repos: [Repo]
+
+    public init(
+        repos: [Repo]
+    ) {
+        self.repos = repos
     }
 }

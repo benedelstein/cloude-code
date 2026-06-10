@@ -1,4 +1,3 @@
-import type { UIMessage } from "ai";
 import { z } from "zod";
 import {
   AgentSettings,
@@ -13,83 +12,101 @@ export const SessionStatus = z.enum([
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
-export type SessionSetupRunStatus = "running" | "completed" | "failed";
-export type SessionSetupTaskStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "skipped";
+export const SessionSetupRunStatus = z.enum(["running", "completed", "failed"]);
+export type SessionSetupRunStatus = z.infer<typeof SessionSetupRunStatus>;
 
-export type SessionSetupTaskOutput = {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  truncated: boolean;
-};
+export const SessionSetupTaskStatus = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+]);
+export type SessionSetupTaskStatus = z.infer<typeof SessionSetupTaskStatus>;
 
-export type StartupScriptSetupTaskSkipReason =
-  | {
-      kind: "no_environment";
-      repoId: number;
-    }
-  | {
-      kind: "no_script";
-      environmentId: string;
-      environmentName: string | null;
-    };
+export const SessionSetupTaskOutput = z.object({
+  stdout: z.string(),
+  stderr: z.string(),
+  exitCode: z.number().int().nullable(),
+  truncated: z.boolean(),
+});
+export type SessionSetupTaskOutput = z.infer<typeof SessionSetupTaskOutput>;
 
-export type BaseSessionSetupTask = {
+export const StartupScriptSetupTaskSkipReason = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("no_environment"),
+    repoId: z.number().int(),
+  }),
+  z.object({
+    kind: z.literal("no_script"),
+    environmentId: z.string(),
+    environmentName: z.string().nullable(),
+  }),
+]);
+export type StartupScriptSetupTaskSkipReason = z.infer<typeof StartupScriptSetupTaskSkipReason>;
+
+const BaseSessionSetupTask = z.object({
+  status: SessionSetupTaskStatus,
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  error: z.string().nullable(),
+});
+
+/** Structural base for setup tasks; the union variants narrow id and the flags to literals. */
+export type BaseSessionSetupTask = z.infer<typeof BaseSessionSetupTask> & {
   id: string;
   isBlocking: boolean;
   canRetry: boolean;
-  status: SessionSetupTaskStatus;
-  startedAt: string | null;
-  completedAt: string | null;
-  error: string | null;
 };
 
-export type CloudContainerSetupTask = BaseSessionSetupTask & {
-  id: "cloud_container";
-  isBlocking: true;
-  canRetry: true;
-};
+export const CloudContainerSetupTask = BaseSessionSetupTask.extend({
+  id: z.literal("cloud_container"),
+  isBlocking: z.literal(true),
+  canRetry: z.literal(true),
+});
+export type CloudContainerSetupTask = z.infer<typeof CloudContainerSetupTask>;
 
-export type RepositorySetupTask = BaseSessionSetupTask & {
-  id: "repository";
-  isBlocking: true;
-  canRetry: true;
-};
+export const RepositorySetupTask = BaseSessionSetupTask.extend({
+  id: z.literal("repository"),
+  isBlocking: z.literal(true),
+  canRetry: z.literal(true),
+});
+export type RepositorySetupTask = z.infer<typeof RepositorySetupTask>;
 
-export type StartupScriptSetupTask = BaseSessionSetupTask & {
-  id: "setup_script";
-  isBlocking: false;
-  canRetry: false;
-  output: SessionSetupTaskOutput | null;
-  skipReason: StartupScriptSetupTaskSkipReason | null;
-};
+export const StartupScriptSetupTask = BaseSessionSetupTask.extend({
+  id: z.literal("setup_script"),
+  isBlocking: z.literal(false),
+  canRetry: z.literal(false),
+  output: SessionSetupTaskOutput.nullable(),
+  skipReason: StartupScriptSetupTaskSkipReason.nullable(),
+});
+export type StartupScriptSetupTask = z.infer<typeof StartupScriptSetupTask>;
 
-export type NetworkPolicySetupTask = BaseSessionSetupTask & {
-  id: "network_policy";
-  isBlocking: true;
-  canRetry: true;
-};
+export const NetworkPolicySetupTask = BaseSessionSetupTask.extend({
+  id: z.literal("network_policy"),
+  isBlocking: z.literal(true),
+  canRetry: z.literal(true),
+});
+export type NetworkPolicySetupTask = z.infer<typeof NetworkPolicySetupTask>;
 
-export type SessionSetupTask =
-  | CloudContainerSetupTask
-  | RepositorySetupTask
-  | StartupScriptSetupTask
-  | NetworkPolicySetupTask;
+export const SessionSetupTask = z.discriminatedUnion("id", [
+  CloudContainerSetupTask,
+  RepositorySetupTask,
+  StartupScriptSetupTask,
+  NetworkPolicySetupTask,
+]);
+export type SessionSetupTask = z.infer<typeof SessionSetupTask>;
 
 export type SessionSetupTaskId = SessionSetupTask["id"];
 
-export type SessionSetupRun = {
-  id: string;
-  status: SessionSetupRunStatus;
-  startedAt: string;
-  completedAt: string | null;
-  tasks: SessionSetupTask[];
-};
+export const SessionSetupRun = z.object({
+  id: z.string(),
+  status: SessionSetupRunStatus,
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+  tasks: z.array(SessionSetupTask),
+});
+export type SessionSetupRun = z.infer<typeof SessionSetupRun>;
 
 export const PullRequestState = z.enum(["open", "merged", "closed"]);
 export type PullRequestState = z.infer<typeof PullRequestState>;
@@ -106,7 +123,7 @@ export const PullRequestClientState = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("created"),
     url: z.string(),
-    number: z.number(),
+    number: z.number().int(),
     state: PullRequestState,
   }),
 ]);
@@ -145,57 +162,17 @@ export const SessionPlanMetadata = z.object({
 });
 export type SessionPlanMetadata = z.infer<typeof SessionPlanMetadata>;
 
-export type ProviderConnectionState = {
-  provider: ProviderId;
-  connected: boolean;
-  requiresReauth: boolean;
-};
+export const ProviderConnectionState = z.object({
+  provider: ProviderId,
+  connected: z.boolean(),
+  requiresReauth: z.boolean(),
+});
+export type ProviderConnectionState = z.infer<typeof ProviderConnectionState>;
 
-export type ActiveTurnState = {
-  userMessageId: string;
-};
-
-/**
- * Durable state synced to clients via Cloudflare Agents SDK.
- * IMPORTANT: ClientState IS PROPAGATED TO CLIENTS. DO NOT PUT SENSITIVE DATA HERE.
- *
- * Fields marked "reset on restart" are overwritten in the DO constructor so they
- * never get stuck from a previous instance's in-progress operation.
- */
-export type ClientState = {
-  repoFullName: string | null;
-  /** Synthesized from ServerState checkpoints — reset on restart */
-  status: SessionStatus;
-  /** Public setup checklist shown while a session is preparing. */
-  sessionSetupRun: SessionSetupRun | null;
-  agentSettings: AgentSettings;
-  pullRequest: PullRequestClientState | null;
-  /** Branch name locked after first push (for "Create PR" flow) */
-  pushedBranch: string | null;
-  /** Branch the session was based off — used as the PR target */
-  baseBranch: string | null;
-  /** Latest streamed todo snapshot from the provider todo tool */
-  todos: SessionTodo[] | null;
-  /** Metadata for the latest persisted plan */
-  plan: SessionPlanMetadata | null;
-  pendingUserMessage: {
-    /** A formatted UIMessage for display to the client. */
-    message: UIMessage;
-    /** Attachments to send with the message. Also found within UIMessage parts but here they are more easily accessible. */
-    attachmentIds: string[];
-  } | null;
-  /** Active agent turn known by the server, even before any assistant chunks exist. */
-  activeTurn: ActiveTurnState | null;
-  /** Public URL for the VS Code editor (set when editor is open) */
-  editorUrl: string | null;
-  /** Auth connection state for the session's fixed provider */
-  providerConnection: ProviderConnectionState | null;
-  /** Agent operational mode: "edit" (default, full access) or "plan" (read-only exploration) */
-  agentMode: AgentMode;
-  /** Last error message from provisioning or agent start — reset on restart. Used moreso for persistent errors - use a stream event for a transient error */
-  lastError: string | null;
-  createdAt: Date;
-};
+export const ActiveTurnState = z.object({
+  userMessageId: z.string().min(1),
+});
+export type ActiveTurnState = z.infer<typeof ActiveTurnState>;
 
 export const AgentMode = z.enum(["edit", "plan"]);
 export type AgentMode = z.infer<typeof AgentMode>;
@@ -211,7 +188,7 @@ export const AgentSettingsInput = z.object({
   provider: ProviderId.optional(),
   model: z.string().optional(),
   effort: z.string().optional(),
-  maxTokens: z.number().optional(),
+  maxTokens: z.number().int().optional(),
 });
 export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
 
@@ -222,7 +199,7 @@ export const Message = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string(),
   toolCalls: z.array(z.unknown()).optional(),
-  streamPosition: z.number().optional(),
+  streamPosition: z.number().int().optional(),
   createdAt: z.iso.datetime(),
 });
 export type Message = z.infer<typeof Message>;
@@ -230,7 +207,7 @@ export type Message = z.infer<typeof Message>;
 /** Summary of a session for the session list */
 export const SessionSummary = z.object({
   id: z.uuid(),
-  repoId: z.number(),
+  repoId: z.number().int(),
   repoFullName: z.string(),
   title: z.string().nullable(),
   archived: z.boolean(),
@@ -238,7 +215,7 @@ export const SessionSummary = z.object({
   pushedBranch: z.string().nullable(),
   pullRequest: z.object({
     url: z.string(),
-    number: z.number(),
+    number: z.number().int(),
     state: PullRequestState,
   }).nullable(),
   createdAt: z.string(),

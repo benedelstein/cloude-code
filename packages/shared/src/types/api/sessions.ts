@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "../attachments";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "./attachments";
 import {
   AgentMode,
   AgentSettingsInput,
@@ -17,7 +17,7 @@ export const SessionInfoResponse = z.object({
   baseBranch: z.string().optional().describe("Branch the session was started from"),
   pushedBranch: z.string().optional().describe("Branch the agent pushed its work to, if any"),
   pullRequestUrl: z.string().optional(),
-  pullRequestNumber: z.number().optional(),
+  pullRequestNumber: z.number().int().optional(),
   pullRequestState: PullRequestState.optional(),
   editorUrl: z.string().optional().describe("URL of the session's browser-based code editor, if available"),
 });
@@ -50,7 +50,7 @@ export type CreateSessionInitialMessage = z.infer<typeof CreateSessionInitialMes
 
 export const CreateSessionRequest = z.object({
   /** Numeric GitHub repo ID */
-  repoId: z.number().describe("Numeric GitHub repo ID"),
+  repoId: z.number().int().describe("Numeric GitHub repo ID"),
   environmentId: z.uuid().optional().describe("Optional repo environment to snapshot for session setup"),
   settings: AgentSettingsInput.optional().describe("Agent settings"),
   agentMode: AgentMode.optional().describe("Agent operational mode"),
@@ -95,7 +95,7 @@ export type UpdateSessionTitleResponse = z.infer<typeof UpdateSessionTitleRespon
 
 /** One repo's group of sessions in the sidebar response. */
 export const SessionRepoGroup = z.object({
-  repoId: z.number(),
+  repoId: z.number().int(),
   repoFullName: z.string(),
   sessions: z.array(SessionSummary),
   nextSessionCursor: z.string().nullable()
@@ -113,14 +113,14 @@ export type ListSessionsResponse = z.infer<typeof ListSessionsResponse>;
 
 export const PullRequestResponse = z.object({
   url: z.string(),
-  number: z.number(),
+  number: z.number().int(),
   state: z.string(),
 });
 export type PullRequestResponse = z.infer<typeof PullRequestResponse>;
 
 export const PullRequestStatusResponse = z.object({
   url: z.string(),
-  number: z.number(),
+  number: z.number().int(),
   state: z.string(),
   merged: z.boolean(),
 });

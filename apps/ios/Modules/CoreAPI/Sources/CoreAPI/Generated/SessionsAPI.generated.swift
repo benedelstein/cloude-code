@@ -3,61 +3,13 @@
 
 import Foundation
 
-public struct SessionInfoResponse: Codable, Equatable, Sendable {
-    public var sessionId: UUID
-    public var title: String?
-    /// preparing: setup in progress or blocked; ready: accepting messages
-    public var status: SessionStatus
-    /// GitHub repo in owner/name form
-    public var repoFullName: String
-    /// Branch the session was started from
-    public var baseBranch: String?
-    /// Branch the agent pushed its work to, if any
-    public var pushedBranch: String?
-    public var pullRequestUrl: String?
-    public var pullRequestNumber: Double?
-    public var pullRequestState: PullRequestState?
-    /// URL of the session's browser-based code editor, if available
-    public var editorUrl: String?
+public struct ArchiveSessionResponse: Codable, Equatable, Sendable {
+    public let archived = true
 
-    public init(
-        sessionId: UUID,
-        title: String? = nil,
-        status: SessionStatus,
-        repoFullName: String,
-        baseBranch: String? = nil,
-        pushedBranch: String? = nil,
-        pullRequestUrl: String? = nil,
-        pullRequestNumber: Double? = nil,
-        pullRequestState: PullRequestState? = nil,
-        editorUrl: String? = nil
-    ) {
-        self.sessionId = sessionId
-        self.title = title
-        self.status = status
-        self.repoFullName = repoFullName
-        self.baseBranch = baseBranch
-        self.pushedBranch = pushedBranch
-        self.pullRequestUrl = pullRequestUrl
-        self.pullRequestNumber = pullRequestNumber
-        self.pullRequestState = pullRequestState
-        self.editorUrl = editorUrl
-    }
-}
+    public init() {}
 
-public struct SessionPlanResponse: Codable, Equatable, Sendable {
-    public var plan: String
-    public var updatedAt: ISODateTimeString
-    public var sourceMessageId: String?
-
-    public init(
-        plan: String,
-        updatedAt: ISODateTimeString,
-        sourceMessageId: String? = nil
-    ) {
-        self.plan = plan
-        self.updatedAt = updatedAt
-        self.sourceMessageId = sourceMessageId
+    private enum CodingKeys: String, CodingKey {
+        case archived
     }
 }
 
@@ -78,7 +30,7 @@ public struct CreateSessionInitialMessage: Codable, Equatable, Sendable {
 
 public struct CreateSessionRequest: Codable, Equatable, Sendable {
     /// Numeric GitHub repo ID
-    public var repoId: Double
+    public var repoId: Int
     /// Optional repo environment to snapshot for session setup
     public var environmentId: UUID?
     /// Agent settings
@@ -91,7 +43,7 @@ public struct CreateSessionRequest: Codable, Equatable, Sendable {
     public var initialMessage: CreateSessionInitialMessage
 
     public init(
-        repoId: Double,
+        repoId: Int,
         environmentId: UUID? = nil,
         settings: AgentSettingsInput? = nil,
         agentMode: AgentMode? = nil,
@@ -127,20 +79,144 @@ public struct CreateSessionResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct SessionWebSocketTokenResponse: Codable, Equatable, Sendable {
-    public var token: String
-    public var expiresAt: ISODateTimeString
+public struct DeleteSessionResponse: Codable, Equatable, Sendable {
+    public let deleted = true
 
-    public init(
-        token: String,
-        expiresAt: ISODateTimeString
-    ) {
-        self.token = token
-        self.expiresAt = expiresAt
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case deleted
     }
 }
 
-public struct UserSessionsWebSocketTokenResponse: Codable, Equatable, Sendable {
+public struct ListSessionsResponse: Codable, Equatable, Sendable {
+    public var groups: [SessionRepoGroup]
+    /// Cursor to fetch the next page of repo groups, or null if none
+    public var nextRepoCursor: String?
+
+    public init(
+        groups: [SessionRepoGroup],
+        nextRepoCursor: String? = nil
+    ) {
+        self.groups = groups
+        self.nextRepoCursor = nextRepoCursor
+    }
+}
+
+public struct PullRequestResponse: Codable, Equatable, Sendable {
+    public var url: String
+    public var number: Int
+    public var state: String
+
+    public init(
+        url: String,
+        number: Int,
+        state: String
+    ) {
+        self.url = url
+        self.number = number
+        self.state = state
+    }
+}
+
+public struct PullRequestStatusResponse: Codable, Equatable, Sendable {
+    public var url: String
+    public var number: Int
+    public var state: String
+    public var merged: Bool
+
+    public init(
+        url: String,
+        number: Int,
+        state: String,
+        merged: Bool
+    ) {
+        self.url = url
+        self.number = number
+        self.state = state
+        self.merged = merged
+    }
+}
+
+public struct SessionInfoResponse: Codable, Equatable, Sendable {
+    public var sessionId: UUID
+    public var title: String?
+    /// preparing: setup in progress or blocked; ready: accepting messages
+    public var status: SessionStatus
+    /// GitHub repo in owner/name form
+    public var repoFullName: String
+    /// Branch the session was started from
+    public var baseBranch: String?
+    /// Branch the agent pushed its work to, if any
+    public var pushedBranch: String?
+    public var pullRequestUrl: String?
+    public var pullRequestNumber: Int?
+    public var pullRequestState: PullRequestState?
+    /// URL of the session's browser-based code editor, if available
+    public var editorUrl: String?
+
+    public init(
+        sessionId: UUID,
+        title: String? = nil,
+        status: SessionStatus,
+        repoFullName: String,
+        baseBranch: String? = nil,
+        pushedBranch: String? = nil,
+        pullRequestUrl: String? = nil,
+        pullRequestNumber: Int? = nil,
+        pullRequestState: PullRequestState? = nil,
+        editorUrl: String? = nil
+    ) {
+        self.sessionId = sessionId
+        self.title = title
+        self.status = status
+        self.repoFullName = repoFullName
+        self.baseBranch = baseBranch
+        self.pushedBranch = pushedBranch
+        self.pullRequestUrl = pullRequestUrl
+        self.pullRequestNumber = pullRequestNumber
+        self.pullRequestState = pullRequestState
+        self.editorUrl = editorUrl
+    }
+}
+
+public struct SessionPlanResponse: Codable, Equatable, Sendable {
+    public var plan: String
+    public var updatedAt: ISODateTimeString
+    public var sourceMessageId: String?
+
+    public init(
+        plan: String,
+        updatedAt: ISODateTimeString,
+        sourceMessageId: String? = nil
+    ) {
+        self.plan = plan
+        self.updatedAt = updatedAt
+        self.sourceMessageId = sourceMessageId
+    }
+}
+
+public struct SessionRepoGroup: Codable, Equatable, Sendable {
+    public var repoId: Int
+    public var repoFullName: String
+    public var sessions: [SessionSummary]
+    /// Cursor to fetch the next page of sessions within this repo, or null if none
+    public var nextSessionCursor: String?
+
+    public init(
+        repoId: Int,
+        repoFullName: String,
+        sessions: [SessionSummary],
+        nextSessionCursor: String? = nil
+    ) {
+        self.repoId = repoId
+        self.repoFullName = repoFullName
+        self.sessions = sessions
+        self.nextSessionCursor = nextSessionCursor
+    }
+}
+
+public struct SessionWebSocketTokenResponse: Codable, Equatable, Sendable {
     public var token: String
     public var expiresAt: ISODateTimeString
 
@@ -173,91 +249,15 @@ public struct UpdateSessionTitleResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct SessionRepoGroup: Codable, Equatable, Sendable {
-    public var repoId: Double
-    public var repoFullName: String
-    public var sessions: [SessionSummary]
-    /// Cursor to fetch the next page of sessions within this repo, or null if none
-    public var nextSessionCursor: String?
+public struct UserSessionsWebSocketTokenResponse: Codable, Equatable, Sendable {
+    public var token: String
+    public var expiresAt: ISODateTimeString
 
     public init(
-        repoId: Double,
-        repoFullName: String,
-        sessions: [SessionSummary],
-        nextSessionCursor: String? = nil
+        token: String,
+        expiresAt: ISODateTimeString
     ) {
-        self.repoId = repoId
-        self.repoFullName = repoFullName
-        self.sessions = sessions
-        self.nextSessionCursor = nextSessionCursor
-    }
-}
-
-public struct ListSessionsResponse: Codable, Equatable, Sendable {
-    public var groups: [SessionRepoGroup]
-    /// Cursor to fetch the next page of repo groups, or null if none
-    public var nextRepoCursor: String?
-
-    public init(
-        groups: [SessionRepoGroup],
-        nextRepoCursor: String? = nil
-    ) {
-        self.groups = groups
-        self.nextRepoCursor = nextRepoCursor
-    }
-}
-
-public struct PullRequestResponse: Codable, Equatable, Sendable {
-    public var url: String
-    public var number: Double
-    public var state: String
-
-    public init(
-        url: String,
-        number: Double,
-        state: String
-    ) {
-        self.url = url
-        self.number = number
-        self.state = state
-    }
-}
-
-public struct PullRequestStatusResponse: Codable, Equatable, Sendable {
-    public var url: String
-    public var number: Double
-    public var state: String
-    public var merged: Bool
-
-    public init(
-        url: String,
-        number: Double,
-        state: String,
-        merged: Bool
-    ) {
-        self.url = url
-        self.number = number
-        self.state = state
-        self.merged = merged
-    }
-}
-
-public struct DeleteSessionResponse: Codable, Equatable, Sendable {
-    public let deleted = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case deleted
-    }
-}
-
-public struct ArchiveSessionResponse: Codable, Equatable, Sendable {
-    public let archived = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case archived
+        self.token = token
+        self.expiresAt = expiresAt
     }
 }

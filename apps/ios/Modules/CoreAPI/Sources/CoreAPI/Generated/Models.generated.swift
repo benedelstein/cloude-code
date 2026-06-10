@@ -3,22 +3,13 @@
 
 import Foundation
 
-public struct ProviderCatalogModel: Codable, Equatable, Sendable {
-    public var id: String
-    public var displayName: String
-    public var isDefault: Bool
-    public var selectable: Bool
+public struct ModelsResponse: Codable, Equatable, Sendable {
+    public var providers: [ProviderCatalogEntry]
 
     public init(
-        id: String,
-        displayName: String,
-        isDefault: Bool,
-        selectable: Bool
+        providers: [ProviderCatalogEntry]
     ) {
-        self.id = id
-        self.displayName = displayName
-        self.isDefault = isDefault
-        self.selectable = selectable
+        self.providers = providers
     }
 }
 
@@ -78,12 +69,21 @@ public struct ProviderCatalogEntry: Codable, Equatable, Sendable {
     }
 }
 
-public struct ModelsResponse: Codable, Equatable, Sendable {
-    public var providers: [ProviderCatalogEntry]
+public struct ProviderCatalogModel: Codable, Equatable, Sendable {
+    public var id: String
+    public var displayName: String
+    public var isDefault: Bool
+    public var selectable: Bool
 
     public init(
-        providers: [ProviderCatalogEntry]
+        id: String,
+        displayName: String,
+        isDefault: Bool,
+        selectable: Bool
     ) {
-        self.providers = providers
+        self.id = id
+        self.displayName = displayName
+        self.isDefault = isDefault
+        self.selectable = selectable
     }
 }

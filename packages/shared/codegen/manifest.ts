@@ -1,313 +1,166 @@
+import { readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ManifestEntry } from "./ir";
-import {
-  AgentMode,
-  AgentSettingsInput,
-  Message,
-  PullRequestClientState,
-  PullRequestState,
-  SessionAccessBlockReason,
-  SessionPlanMetadata,
-  SessionStatus,
-  SessionSummary,
-  SessionTodo,
-  SessionTodoStatus,
-  SessionWorkingState,
-} from "../src/types/session";
-import {
-  ArchiveSessionResponse,
-  CreateSessionInitialMessage,
-  CreateSessionRequest,
-  CreateSessionResponse,
-  DeleteSessionResponse,
-  ListSessionsResponse,
-  PullRequestResponse,
-  PullRequestStatusResponse,
-  SessionInfoResponse,
-  SessionPlanResponse,
-  SessionRepoGroup,
-  SessionWebSocketTokenResponse,
-  UpdateSessionTitleRequest,
-  UpdateSessionTitleResponse,
-  UserSessionsWebSocketTokenResponse,
-} from "../src/types/api/sessions";
-import {
-  AgentChunksEvent,
-  AgentFinishEvent,
-  AgentReadyEvent,
-  ChatMessageEvent,
-  ClientMessage,
-  ConnectedEvent,
-  EditorReadyEvent,
-  OperationCancelEvent,
-  OperationErrorCode,
-  OperationErrorEvent,
-  ServerMessage,
-  SessionMarkReadEvent,
-  SyncRequestEvent,
-  SyncResponseEvent,
-  UIMessageSchema,
-  UserMessageEvent,
-} from "../src/types/websocket-api";
-import {
-  SessionListResyncRequiredEvent,
-  SessionSummaryCreatedEvent,
-  SessionSummaryRemovedEvent,
-  SessionSummaryUpdatedEvent,
-  UserSessionsConnectedEvent,
-  UserSessionsServerMessage,
-} from "../src/types/user-sessions-websocket-api";
-import {
-  ClaudeAuthUrlResponse,
-  ClaudeDisconnectResponse,
-  ClaudeStatusResponse,
-  ClaudeTokenRequest,
-  ClaudeTokenResponse,
-  GitHubAuthUrlResponse,
-  GitHubReauthTokenResponse,
-  LogoutResponse,
-  OpenAIAuthUrlResponse,
-  OpenAIDeviceAttemptResponse,
-  OpenAIDeviceStartResponse,
-  OpenAIDisconnectResponse,
-  OpenAIStatusResponse,
-  OpenAITokenRequest,
-  OpenAITokenResponse,
-  TokenRequest,
-  TokenResponse,
-  UserInfo,
-} from "../src/types/api/auth";
-import {
-  Branch,
-  ListBranchesResponse,
-  ListReposResponse,
-  Repo,
-  SearchReposResponse,
-} from "../src/types/api/repos";
-import {
-  ModelsResponse,
-  ProviderCatalogEffort,
-  ProviderCatalogEntry,
-  ProviderCatalogModel,
-} from "../src/types/api/models";
-import {
-  AttachmentDescriptor,
-  MessageAttachmentRef,
-  UploadAttachmentResponse,
-} from "../src/types/attachments";
-import {
-  AgentSettings,
-  AgentSettingsClaude,
-  AgentSettingsCodex,
-  AuthMethod,
-  ClaudeEffort,
-  ClaudeModel,
-  OpenAICodexEffort,
-  OpenAICodexModel,
-  ProviderId,
-} from "../src/types/providers/index";
-import {
-  CreateRepoEnvironmentRequest,
-  DefaultNetworkAllowlistResponse,
-  DeleteRepoEnvironmentResponse,
-  ListRepoEnvironmentsResponse,
-  ListUserRepoEnvironmentsResponse,
-  NetworkAccessConfig,
-  PlainEnvVars,
-  RepoEnvironment,
-  RepoEnvironmentResponse,
-  RepoEnvironmentSummary,
-  UpdateRepoEnvironmentRequest,
-  UserRepoEnvironmentResponse,
-} from "../src/types/api/repo-environments";
-import {
-  VoiceTranscriptionResponse,
-  VoiceTranscriptionTokenResponse,
-} from "../src/types/api/voice";
-import {
-  IntegrationLinkClaimRequest,
-  IntegrationLinkClaimResponse,
-  IntegrationLinkInfo,
-  IntegrationLinkRevokeResponse,
-  IntegrationLinksResponse,
-  IntegrationProvider,
-} from "../src/types/api/integrations";
+import * as providers from "../src/types/providers/index";
+import * as session from "../src/types/session";
+import * as sessionsApi from "../src/types/api/sessions";
+import * as clientState from "../src/types/api/client-state";
+import * as websocketApi from "../src/types/api/websocket-api";
+import * as userSessionsWebsocketApi from "../src/types/api/user-sessions-websocket-api";
+import * as authApi from "../src/types/api/auth";
+import * as reposApi from "../src/types/api/repos";
+import * as modelsApi from "../src/types/api/models";
+import * as attachments from "../src/types/api/attachments";
+import * as repoEnvironmentsApi from "../src/types/api/repo-environments";
+import * as voiceApi from "../src/types/api/voice";
+import * as integrationsApi from "../src/types/api/integrations";
 
 /**
- * Every schema transpiled into the CoreAPI Swift package, in emission order.
- * One generated Swift file per group. See docs/api-type-codegen.md for the
- * full guide to adding types and how the transpiler works.
+ * Schema selection works like protobuf: pointing the generator at a source
+ * module includes EVERY exported Zod schema in it — adding a schema to an
+ * included module ships it to Swift with no registration step. Only
+ * exceptions are listed here (see EXCLUDE / OVERRIDES below).
  *
- * Inclusion is deliberate (not export-walking): server-internal schemas
- * (vm-agent protocol, webhook bodies, bot-integration session creation) stay
- * out of the iOS surface.
+ * `src/types/api/` is the client-contract directory: every file in it must be
+ * registered here (enforced below — a new file fails codegen until listed).
+ * `session.ts` and `providers/` stay explicitly listed because they mix
+ * contract schemas with server-side code.
  *
- * `nonFrozen` marks server-evolving vocabularies: decoding an unrecognized
- * value yields `.unknown` instead of throwing, so already-shipped app builds
- * survive server additions.
+ * Aliases dedup by object identity: a schema re-exported under a second name
+ * (e.g. `AgentProvider = ProviderId`) generates once, under the name in the
+ * earliest-listed module. Order modules accordingly.
+ *
+ * Enums and unions are decode-tolerant by default (`.unknown` case for values
+ * this app build doesn't know). Mark `frozen` only for client→server-only
+ * types. See docs/api-type-codegen.md.
  */
-export const MANIFEST: ManifestEntry[] = [
-  // --- Session core -------------------------------------------------------
-  { schema: SessionStatus, swiftName: "SessionStatus", group: "Session", nonFrozen: true },
-  { schema: SessionWorkingState, swiftName: "SessionWorkingState", group: "Session", nonFrozen: true },
-  { schema: PullRequestState, swiftName: "PullRequestState", group: "Session", nonFrozen: true },
-  { schema: PullRequestClientState, swiftName: "PullRequestClientState", group: "Session", nonFrozen: true },
-  { schema: SessionAccessBlockReason, swiftName: "SessionAccessBlockReason", group: "Session", nonFrozen: true },
-  { schema: SessionTodoStatus, swiftName: "SessionTodoStatus", group: "Session", nonFrozen: true },
-  { schema: SessionTodo, swiftName: "SessionTodo", group: "Session" },
-  { schema: SessionPlanMetadata, swiftName: "SessionPlanMetadata", group: "Session" },
-  { schema: AgentMode, swiftName: "AgentMode", group: "Session", nonFrozen: true },
-  { schema: AgentSettingsInput, swiftName: "AgentSettingsInput", group: "Session" },
-  { schema: Message, swiftName: "Message", group: "Session" },
-  { schema: SessionSummary, swiftName: "SessionSummary", group: "Session" },
-
-  // --- Sessions API -------------------------------------------------------
-  { schema: SessionInfoResponse, swiftName: "SessionInfoResponse", group: "SessionsAPI" },
-  { schema: SessionPlanResponse, swiftName: "SessionPlanResponse", group: "SessionsAPI" },
-  { schema: CreateSessionInitialMessage, swiftName: "CreateSessionInitialMessage", group: "SessionsAPI" },
-  { schema: CreateSessionRequest, swiftName: "CreateSessionRequest", group: "SessionsAPI" },
-  { schema: CreateSessionResponse, swiftName: "CreateSessionResponse", group: "SessionsAPI" },
-  { schema: SessionWebSocketTokenResponse, swiftName: "SessionWebSocketTokenResponse", group: "SessionsAPI" },
-  { schema: UserSessionsWebSocketTokenResponse, swiftName: "UserSessionsWebSocketTokenResponse", group: "SessionsAPI" },
-  { schema: UpdateSessionTitleRequest, swiftName: "UpdateSessionTitleRequest", group: "SessionsAPI" },
-  { schema: UpdateSessionTitleResponse, swiftName: "UpdateSessionTitleResponse", group: "SessionsAPI" },
-  { schema: SessionRepoGroup, swiftName: "SessionRepoGroup", group: "SessionsAPI" },
-  { schema: ListSessionsResponse, swiftName: "ListSessionsResponse", group: "SessionsAPI" },
-  { schema: PullRequestResponse, swiftName: "PullRequestResponse", group: "SessionsAPI" },
-  { schema: PullRequestStatusResponse, swiftName: "PullRequestStatusResponse", group: "SessionsAPI" },
-  { schema: DeleteSessionResponse, swiftName: "DeleteSessionResponse", group: "SessionsAPI" },
-  { schema: ArchiveSessionResponse, swiftName: "ArchiveSessionResponse", group: "SessionsAPI" },
-
-  // --- Session WebSocket protocol ------------------------------------------
-  { schema: ChatMessageEvent, swiftName: "ChatMessageEvent", group: "WebSocket" },
-  { schema: SyncRequestEvent, swiftName: "SyncRequestEvent", group: "WebSocket" },
-  { schema: SessionMarkReadEvent, swiftName: "SessionMarkReadEvent", group: "WebSocket" },
-  { schema: OperationCancelEvent, swiftName: "OperationCancelEvent", group: "WebSocket" },
+const SOURCES: { module: Record<string, unknown>; group: string; file?: string }[] = [
+  { module: providers, group: "Providers" },
+  { module: session, group: "Session" },
+  { module: sessionsApi, group: "SessionsAPI", file: "sessions.ts" },
+  { module: clientState, group: "ClientState", file: "client-state.ts" },
+  { module: websocketApi, group: "WebSocket", file: "websocket-api.ts" },
   {
-    schema: ClientMessage,
-    swiftName: "ClientMessage",
-    group: "WebSocket",
+    module: userSessionsWebsocketApi,
+    group: "UserSessionsWebSocket",
+    file: "user-sessions-websocket-api.ts",
+  },
+  { module: authApi, group: "Auth", file: "auth.ts" },
+  { module: reposApi, group: "Repos", file: "repos.ts" },
+  { module: modelsApi, group: "Models", file: "models.ts" },
+  { module: attachments, group: "Attachments", file: "attachments.ts" },
+  { module: repoEnvironmentsApi, group: "RepoEnvironments", file: "repo-environments.ts" },
+  { module: voiceApi, group: "Voice", file: "voice.ts" },
+  { module: integrationsApi, group: "Integrations", file: "integrations.ts" },
+];
+
+/** Every file in the contract directory must be a registered source. */
+function assertApiDirectoryCovered(): void {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const apiDir = path.resolve(here, "../src/types/api");
+  const registered = new Set(SOURCES.flatMap((source) => (source.file ? [source.file] : [])));
+  const onDisk = readdirSync(apiDir).filter(
+    (name) => name.endsWith(".ts") && name !== "index.ts",
+  );
+  const missing = onDisk.filter((name) => !registered.has(name));
+  if (missing.length > 0) {
+    throw new Error(
+      `src/types/api/ files missing from codegen SOURCES: ${missing.join(", ")}. ` +
+        "Every file in the contract directory must be registered in codegen/manifest.ts.",
+    );
+  }
+}
+
+/** Exported schemas that are not an iOS surface. */
+const EXCLUDE = new Set<string>([
+  // Server-internal snapshot persisted in the session DO.
+  "SessionEnvironmentSnapshot",
+  // Bot→server session creation (Discord/Slack), authenticated with bot
+  // tokens; also uses a boolean discriminator the emitter rejects.
+  "IntegrationExternalUser",
+  "DiscordExternalUser",
+  "SlackExternalUser",
+  "GenericExternalUser",
+  "IntegrationSessionRequest",
+  "IntegrationSessionResponse",
+  "IntegrationSessionSuccessResponse",
+  "IntegrationSessionErrorResponse",
+  "IntegrationRepoCandidate",
+]);
+
+/** Per-type exceptions, keyed by export name. */
+const OVERRIDES: Record<string, Partial<Omit<ManifestEntry, "schema" | "group">>> = {
+  UIMessageSchema: {
+    swiftName: "UIMessage",
+    doc: "Wire shape of an AI SDK UIMessage; parts stay opaque JSON.",
+  },
+  ClientStateSchema: {
+    swiftName: "ClientState",
+    doc: "Session state synced to clients via the Cloudflare Agents SDK.",
+  },
+  ClientMessage: {
+    // Client→server only: this app never decodes one, so an unknown case
+    // would be dead code. Stays frozen.
+    frozen: true,
     doc: "Client → server session WebSocket messages.",
   },
-  { schema: UIMessageSchema, swiftName: "UIMessage", group: "WebSocket", doc: "Wire shape of an AI SDK UIMessage; parts stay opaque JSON." },
-  { schema: ConnectedEvent, swiftName: "ConnectedEvent", group: "WebSocket" },
-  { schema: SyncResponseEvent, swiftName: "SyncResponseEvent", group: "WebSocket" },
-  { schema: OperationErrorCode, swiftName: "OperationErrorCode", group: "WebSocket", nonFrozen: true },
-  { schema: OperationErrorEvent, swiftName: "OperationErrorEvent", group: "WebSocket" },
-  { schema: AgentChunksEvent, swiftName: "AgentChunksEvent", group: "WebSocket" },
-  { schema: AgentFinishEvent, swiftName: "AgentFinishEvent", group: "WebSocket" },
-  { schema: AgentReadyEvent, swiftName: "AgentReadyEvent", group: "WebSocket" },
-  { schema: UserMessageEvent, swiftName: "UserMessageEvent", group: "WebSocket" },
-  { schema: EditorReadyEvent, swiftName: "EditorReadyEvent", group: "WebSocket" },
-  {
-    schema: ServerMessage,
-    swiftName: "ServerMessage",
-    group: "WebSocket",
-    nonFrozen: true,
-    doc: "Server → client session WebSocket messages.",
-  },
-
-  // --- User-sessions WebSocket protocol ------------------------------------
-  { schema: UserSessionsConnectedEvent, swiftName: "UserSessionsConnectedEvent", group: "UserSessionsWebSocket" },
-  { schema: SessionSummaryCreatedEvent, swiftName: "SessionSummaryCreatedEvent", group: "UserSessionsWebSocket" },
-  { schema: SessionSummaryUpdatedEvent, swiftName: "SessionSummaryUpdatedEvent", group: "UserSessionsWebSocket" },
-  { schema: SessionSummaryRemovedEvent, swiftName: "SessionSummaryRemovedEvent", group: "UserSessionsWebSocket" },
-  { schema: SessionListResyncRequiredEvent, swiftName: "SessionListResyncRequiredEvent", group: "UserSessionsWebSocket" },
-  {
-    schema: UserSessionsServerMessage,
-    swiftName: "UserSessionsServerMessage",
-    group: "UserSessionsWebSocket",
-    nonFrozen: true,
+  ServerMessage: { doc: "Server → client session WebSocket messages." },
+  UserSessionsServerMessage: {
     doc: "Server → client messages on the user-level sessions WebSocket.",
   },
+  AgentSettings: { doc: "Active agent settings, discriminated by provider." },
+  // Swift reserved words.
+  Repo: { renames: { private: "isPrivate" } },
+  Branch: { renames: { default: "isDefault" } },
+};
 
-  // --- Auth -----------------------------------------------------------------
-  { schema: UserInfo, swiftName: "UserInfo", group: "Auth" },
-  { schema: GitHubAuthUrlResponse, swiftName: "GitHubAuthUrlResponse", group: "Auth" },
-  { schema: TokenRequest, swiftName: "TokenRequest", group: "Auth" },
-  { schema: TokenResponse, swiftName: "TokenResponse", group: "Auth" },
-  { schema: LogoutResponse, swiftName: "LogoutResponse", group: "Auth" },
-  { schema: GitHubReauthTokenResponse, swiftName: "GitHubReauthTokenResponse", group: "Auth" },
-  { schema: OpenAIAuthUrlResponse, swiftName: "OpenAIAuthUrlResponse", group: "Auth" },
-  { schema: OpenAITokenRequest, swiftName: "OpenAITokenRequest", group: "Auth" },
-  { schema: OpenAITokenResponse, swiftName: "OpenAITokenResponse", group: "Auth" },
-  { schema: OpenAIStatusResponse, swiftName: "OpenAIStatusResponse", group: "Auth" },
-  { schema: OpenAIDisconnectResponse, swiftName: "OpenAIDisconnectResponse", group: "Auth" },
-  { schema: OpenAIDeviceStartResponse, swiftName: "OpenAIDeviceStartResponse", group: "Auth" },
-  { schema: OpenAIDeviceAttemptResponse, swiftName: "OpenAIDeviceAttemptResponse", group: "Auth" },
-  { schema: ClaudeAuthUrlResponse, swiftName: "ClaudeAuthUrlResponse", group: "Auth" },
-  { schema: ClaudeTokenRequest, swiftName: "ClaudeTokenRequest", group: "Auth" },
-  { schema: ClaudeTokenResponse, swiftName: "ClaudeTokenResponse", group: "Auth" },
-  { schema: ClaudeStatusResponse, swiftName: "ClaudeStatusResponse", group: "Auth" },
-  { schema: ClaudeDisconnectResponse, swiftName: "ClaudeDisconnectResponse", group: "Auth" },
+function isZodSchema(value: unknown): value is ManifestEntry["schema"] {
+  return typeof value === "object" && value !== null && "_zod" in value;
+}
 
-  // --- Repos ----------------------------------------------------------------
-  {
-    schema: Repo,
-    swiftName: "Repo",
-    group: "Repos",
-    renames: { private: "isPrivate" },
-  },
-  { schema: ListReposResponse, swiftName: "ListReposResponse", group: "Repos" },
-  { schema: SearchReposResponse, swiftName: "SearchReposResponse", group: "Repos" },
-  {
-    schema: Branch,
-    swiftName: "Branch",
-    group: "Repos",
-    renames: { default: "isDefault" },
-  },
-  { schema: ListBranchesResponse, swiftName: "ListBranchesResponse", group: "Repos" },
+function buildManifest(): ManifestEntry[] {
+  assertApiDirectoryCovered();
+  const entries: ManifestEntry[] = [];
+  const seenSchemas = new Set<unknown>();
+  const seenExports = new Set<string>();
 
-  // --- Models catalog ---------------------------------------------------------
-  { schema: ProviderCatalogModel, swiftName: "ProviderCatalogModel", group: "Models" },
-  { schema: ProviderCatalogEffort, swiftName: "ProviderCatalogEffort", group: "Models" },
-  { schema: ProviderCatalogEntry, swiftName: "ProviderCatalogEntry", group: "Models" },
-  { schema: ModelsResponse, swiftName: "ModelsResponse", group: "Models" },
+  for (const source of SOURCES) {
+    // Module namespace keys are spec-ordered (alphabetical), so output is
+    // deterministic regardless of declaration order.
+    for (const [exportName, value] of Object.entries(source.module)) {
+      if (!isZodSchema(value) || EXCLUDE.has(exportName)) {
+        continue;
+      }
+      seenExports.add(exportName);
+      if (seenSchemas.has(value)) {
+        continue; // re-export alias; generated under its first name
+      }
+      seenSchemas.add(value);
+      const override = OVERRIDES[exportName];
+      entries.push({
+        schema: value,
+        swiftName: override?.swiftName ?? exportName,
+        group: source.group,
+        ...override,
+      });
+    }
+  }
 
-  // --- Attachments ------------------------------------------------------------
-  { schema: MessageAttachmentRef, swiftName: "MessageAttachmentRef", group: "Attachments" },
-  { schema: AttachmentDescriptor, swiftName: "AttachmentDescriptor", group: "Attachments" },
-  { schema: UploadAttachmentResponse, swiftName: "UploadAttachmentResponse", group: "Attachments" },
+  // Typo guard: every exception must reference a real export.
+  const allExports = new Set(SOURCES.flatMap((source) => Object.keys(source.module)));
+  for (const name of Object.keys(OVERRIDES)) {
+    if (!seenExports.has(name)) {
+      throw new Error(`OVERRIDES references unknown export: ${name}`);
+    }
+  }
+  for (const name of EXCLUDE) {
+    if (!allExports.has(name)) {
+      throw new Error(`EXCLUDE references unknown export: ${name}`);
+    }
+  }
 
-  // --- Providers ----------------------------------------------------------------
-  { schema: ProviderId, swiftName: "ProviderId", group: "Providers", nonFrozen: true },
-  { schema: AuthMethod, swiftName: "AuthMethod", group: "Providers", nonFrozen: true },
-  { schema: ClaudeModel, swiftName: "ClaudeModel", group: "Providers", nonFrozen: true },
-  { schema: ClaudeEffort, swiftName: "ClaudeEffort", group: "Providers", nonFrozen: true },
-  { schema: AgentSettingsClaude, swiftName: "AgentSettingsClaude", group: "Providers" },
-  { schema: OpenAICodexModel, swiftName: "OpenAICodexModel", group: "Providers", nonFrozen: true },
-  { schema: OpenAICodexEffort, swiftName: "OpenAICodexEffort", group: "Providers", nonFrozen: true },
-  { schema: AgentSettingsCodex, swiftName: "AgentSettingsCodex", group: "Providers" },
-  {
-    schema: AgentSettings,
-    swiftName: "AgentSettings",
-    group: "Providers",
-    nonFrozen: true,
-    doc: "Active agent settings, discriminated by provider.",
-  },
+  return entries;
+}
 
-  // --- Repo environments ------------------------------------------------------
-  { schema: NetworkAccessConfig, swiftName: "NetworkAccessConfig", group: "RepoEnvironments", nonFrozen: true },
-  { schema: PlainEnvVars, swiftName: "PlainEnvVars", group: "RepoEnvironments" },
-  { schema: RepoEnvironment, swiftName: "RepoEnvironment", group: "RepoEnvironments" },
-  { schema: RepoEnvironmentSummary, swiftName: "RepoEnvironmentSummary", group: "RepoEnvironments" },
-  { schema: ListRepoEnvironmentsResponse, swiftName: "ListRepoEnvironmentsResponse", group: "RepoEnvironments" },
-  { schema: ListUserRepoEnvironmentsResponse, swiftName: "ListUserRepoEnvironmentsResponse", group: "RepoEnvironments" },
-  { schema: DefaultNetworkAllowlistResponse, swiftName: "DefaultNetworkAllowlistResponse", group: "RepoEnvironments" },
-  { schema: UserRepoEnvironmentResponse, swiftName: "UserRepoEnvironmentResponse", group: "RepoEnvironments" },
-  { schema: CreateRepoEnvironmentRequest, swiftName: "CreateRepoEnvironmentRequest", group: "RepoEnvironments" },
-  { schema: UpdateRepoEnvironmentRequest, swiftName: "UpdateRepoEnvironmentRequest", group: "RepoEnvironments" },
-  { schema: RepoEnvironmentResponse, swiftName: "RepoEnvironmentResponse", group: "RepoEnvironments" },
-  { schema: DeleteRepoEnvironmentResponse, swiftName: "DeleteRepoEnvironmentResponse", group: "RepoEnvironments" },
-
-  // --- Voice --------------------------------------------------------------------
-  { schema: VoiceTranscriptionTokenResponse, swiftName: "VoiceTranscriptionTokenResponse", group: "Voice" },
-  { schema: VoiceTranscriptionResponse, swiftName: "VoiceTranscriptionResponse", group: "Voice" },
-
-  // --- Integrations (link management only; bot APIs are not an iOS surface) ----
-  { schema: IntegrationProvider, swiftName: "IntegrationProvider", group: "Integrations", nonFrozen: true },
-  { schema: IntegrationLinkClaimRequest, swiftName: "IntegrationLinkClaimRequest", group: "Integrations" },
-  { schema: IntegrationLinkClaimResponse, swiftName: "IntegrationLinkClaimResponse", group: "Integrations" },
-  { schema: IntegrationLinkInfo, swiftName: "IntegrationLinkInfo", group: "Integrations" },
-  { schema: IntegrationLinksResponse, swiftName: "IntegrationLinksResponse", group: "Integrations" },
-  { schema: IntegrationLinkRevokeResponse, swiftName: "IntegrationLinkRevokeResponse", group: "Integrations" },
-];
+export const MANIFEST: ManifestEntry[] = buildManifest();

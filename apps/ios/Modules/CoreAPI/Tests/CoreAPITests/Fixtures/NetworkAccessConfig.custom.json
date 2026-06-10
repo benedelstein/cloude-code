@@ -1,8 +1,0 @@
-{
-  "mode": "custom",
-  "extraAllowlist": [
-    "api.example.com",
-    "*.vercel.app"
-  ],
-  "includeDefaultAllowlist": true
-}

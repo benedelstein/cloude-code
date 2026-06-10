@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/attachments";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../src/types/api/attachments";
 import {
   AgentChunksWebhookBody,
   AgentEventsWebhookBody,

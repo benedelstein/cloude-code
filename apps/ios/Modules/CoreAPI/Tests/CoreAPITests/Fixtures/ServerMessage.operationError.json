@@ -1,5 +1,0 @@
-{
-  "type": "operation.error",
-  "code": "GITHUB_AUTH_REQUIRED",
-  "message": "Reconnect GitHub"
-}

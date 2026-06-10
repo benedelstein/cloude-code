@@ -41,20 +41,20 @@ const SWIFT_KEYWORDS = new Set([
 ]);
 
 export function emitSwiftFile(decls: IRDecl[]): string {
-  const rendered = decls.map((decl) => renderDecl(decl, 0));
+  const rendered = decls.map(renderDecl);
   return `${HEADER}\n${rendered.join("\n\n")}\n`;
 }
 
-function renderDecl(decl: IRDecl, depth: number): string {
+function renderDecl(decl: IRDecl): string {
   switch (decl.kind) {
     case "struct":
-      return renderStruct(decl, depth);
+      return renderStruct(decl);
     case "enum":
-      return renderEnum(decl, depth);
+      return renderEnum(decl);
     case "union":
-      return renderUnion(decl, depth);
+      return renderUnion(decl);
     case "alias":
-      return renderAlias(decl, depth);
+      return renderAlias(decl);
   }
 }
 
@@ -62,13 +62,13 @@ function renderDecl(decl: IRDecl, depth: number): string {
 // Structs
 // ---------------------------------------------------------------------------
 
-function renderStruct(decl: IRStruct, depth: number): string {
+function renderStruct(decl: IRStruct): string {
   const lines: string[] = [];
   lines.push(...docLines(decl.doc));
   lines.push(`public struct ${decl.name}: Codable, Equatable, Sendable {`);
 
   for (const nested of decl.nested) {
-    lines.push(...indented(renderDecl(nested, 0)), "");
+    lines.push(...indented(renderDecl(nested)), "");
   }
 
   for (const property of decl.properties) {
@@ -86,7 +86,7 @@ function renderStruct(decl: IRStruct, depth: number): string {
   }
 
   lines.push("}");
-  return indentBlock(lines, depth);
+  return lines.join("\n");
 }
 
 function renderProperty(property: IRProperty): string[] {
@@ -144,11 +144,11 @@ function renderCodingKeys(properties: IRProperty[]): string[] | undefined {
 // Enums
 // ---------------------------------------------------------------------------
 
-function renderEnum(decl: IREnum, depth: number): string {
-  return decl.nonFrozen ? renderNonFrozenEnum(decl, depth) : renderFrozenEnum(decl, depth);
+function renderEnum(decl: IREnum): string {
+  return decl.nonFrozen ? renderNonFrozenEnum(decl) : renderFrozenEnum(decl);
 }
 
-function renderFrozenEnum(decl: IREnum, depth: number): string {
+function renderFrozenEnum(decl: IREnum): string {
   const lines: string[] = [];
   lines.push(...docLines(decl.doc));
   lines.push(`public enum ${decl.name}: String, Codable, CaseIterable, Sendable {`);
@@ -156,10 +156,10 @@ function renderFrozenEnum(decl: IREnum, depth: number): string {
     lines.push(...indented(renderEnumCase(enumCase.name, enumCase.rawValue)));
   }
   lines.push("}");
-  return indentBlock(lines, depth);
+  return lines.join("\n");
 }
 
-function renderNonFrozenEnum(decl: IREnum, depth: number): string {
+function renderNonFrozenEnum(decl: IREnum): string {
   const lines: string[] = [];
   lines.push(...docLines(decl.doc));
   lines.push(`public enum ${decl.name}: RawRepresentable, Codable, Equatable, Sendable {`);
@@ -191,7 +191,7 @@ function renderNonFrozenEnum(decl: IREnum, depth: number): string {
   lines.push("        }");
   lines.push("    }");
   lines.push("}");
-  return indentBlock(lines, depth);
+  return lines.join("\n");
 }
 
 function renderEnumCase(name: string, rawValue: string): string[] {
@@ -205,13 +205,13 @@ function renderEnumCase(name: string, rawValue: string): string[] {
 // Discriminated unions
 // ---------------------------------------------------------------------------
 
-function renderUnion(decl: IRUnion, depth: number): string {
+function renderUnion(decl: IRUnion): string {
   const lines: string[] = [];
   lines.push(...docLines(decl.doc));
   lines.push(`public enum ${decl.name}: Codable, Equatable, Sendable {`);
 
   for (const nested of decl.nested) {
-    lines.push(...indented(renderDecl(nested, 0)), "");
+    lines.push(...indented(renderDecl(nested)), "");
   }
 
   for (const variant of decl.variants) {
@@ -265,17 +265,17 @@ function renderUnion(decl: IRUnion, depth: number): string {
   lines.push("        }");
   lines.push("    }");
   lines.push("}");
-  return indentBlock(lines, depth);
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
 // Aliases, types, helpers
 // ---------------------------------------------------------------------------
 
-function renderAlias(decl: IRTypeAlias, depth: number): string {
+function renderAlias(decl: IRTypeAlias): string {
   const lines = docLines(decl.doc);
   lines.push(`public typealias ${decl.name} = ${renderType(decl.target)}`);
-  return indentBlock(lines, depth);
+  return lines.join("\n");
 }
 
 export function renderType(type: SwiftTypeRef): string {
@@ -325,9 +325,4 @@ function docLines(doc?: string): string[] {
 function indented(lines: string[] | string): string[] {
   const array = typeof lines === "string" ? lines.split("\n") : lines;
   return array.map((line) => (line.length === 0 ? line : `    ${line}`));
-}
-
-function indentBlock(lines: string[], depth: number): string {
-  const prefix = "    ".repeat(depth);
-  return lines.map((line) => (line.length === 0 ? line : `${prefix}${line}`)).join("\n");
 }

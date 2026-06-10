@@ -72,7 +72,7 @@ export const OpenAIDeviceStartResponse = z.object({
   attemptId: z.string(),
   verificationUrl: z.string(),
   userCode: z.string(),
-  intervalSeconds: z.number(),
+  intervalSeconds: z.number().int(),
   expiresAt: z.string(),
 });
 export type OpenAIDeviceStartResponse = z.infer<typeof OpenAIDeviceStartResponse>;

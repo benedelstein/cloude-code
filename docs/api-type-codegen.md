@@ -18,18 +18,24 @@ apps/ios/Modules/CoreAPI/
 
 ## Adding or changing an API type
 
-1. **Edit the schema** in `packages/shared/src/types/` as usual (Zod object/enum/discriminatedUnion with the dual `const Schema` + `type T = z.infer` export pattern).
-2. **Register it** in `packages/shared/codegen/manifest.ts` if it's a new type the iOS app should see. One entry: schema, Swift name, output group (one generated Swift file per group), and flags:
-   - `nonFrozen: true` for any enum or union the **server** may extend while old app builds are live (statuses, error codes, model lists, server→client message unions). Generates an `.unknown` case instead of a decode failure.
-   - `renames: { wireKey: "swiftName" }` for Swift reserved words or style (`private` → `isPrivate`).
-   - Existing types already in the manifest need no manifest change — just edit the schema.
-3. **Add a fixture** in `packages/shared/codegen/fixtures.ts` for new top-level types or new union variants. A fixture is a plain TS value; it is validated with `schema.parse()` at generation time and round-tripped by the Swift tests. Cover each discriminated-union variant once.
+Selection works like protobuf: pointing the generator at a source module includes **every exported Zod schema** in it. There is no per-type registration.
+
+`packages/shared/src/types/api/` is the **client-contract directory** — every file in it must be registered in `SOURCES` (codegen fails listing any file you forgot, so the rule is enforced, not remembered). `session.ts` and `providers/` are also registered sources; they stay outside `api/` because they mix contract schemas with server-side code.
+
+1. **Edit or add the schema** in `packages/shared/src/types/` as usual (Zod object/enum/discriminatedUnion with the dual `const Schema` + `type T = z.infer` export pattern). If the file is already listed in `SOURCES` in `packages/shared/codegen/manifest.ts`, you're done defining — a new export transpiles automatically under its export name.
+2. **Only for exceptions**, touch `manifest.ts`:
+   - New source *file* → one line in `SOURCES` (module + output group; one generated Swift file per group). For files in `types/api/`, codegen reminds you with a hard error.
+   - Type that must **not** ship to iOS (server-internal, bot-only) → `EXCLUDE`.
+   - Swift name overrides, reserved-word `renames` (`private` → `isPrivate`), doc strings → `OVERRIDES`.
+   - Enums/unions are **decode-tolerant by default** (unrecognized server values decode to `.unknown` instead of throwing). Mark `frozen: true` in `OVERRIDES` only for client→server-only unions where an unknown case is dead code (`ClientMessage`).
+   - Re-export aliases dedup by object identity and generate once, under the name in the earliest-listed module.
+3. **Fixtures are synthesized automatically** (`codegen/synthesize-fixtures.ts`): every struct gets `autoFull`/`autoMinimal` samples and every union gets one sample per variant, written to `Fixtures/AutoFixtures.json` and parse-gated against the real Zod schema (so the synthesizer cannot inherit a generator misreading). Hand-written fixtures in `codegen/fixtures.ts` are optional — add one only for realism the synthesizer can't invent (actual AI SDK message parts, populated state).
 4. **Regenerate**: `pnpm --filter @repo/shared codegen`, then commit the schema change *and* the regenerated Swift together.
 5. **Verify**: `cd apps/ios/Modules/CoreAPI && swift test`.
 
-Never edit `*.generated.swift` or fixture JSON by hand — the generator owns those files and deletes orphans. Hand-written support code (`JSONValue`, `ISO8601`) lives in `Sources/CoreAPI/Support/`.
+Net workflow for a type in an existing contract file: edit the schema, run codegen, commit. Nothing else.
 
-Server-internal schemas (vm-agent protocol, webhook bodies, bot-integration session creation) are deliberately **not** in the manifest. Inclusion is explicit, not export-walking.
+Never edit `*.generated.swift` or fixture JSON by hand — the generator owns those files and deletes orphans. Hand-written support code (`JSONValue`, `ISO8601`) lives in `Sources/CoreAPI/Support/`.
 
 ## How the transpiler works
 
@@ -69,11 +75,11 @@ Three layers, all enforced in CI (`ci-ios.yml` on macOS, plus a cheap `codegen:c
 
 1. **Staleness**: `pnpm --filter @repo/shared codegen:check` fails if committed output doesn't match the schemas.
 2. **Validity**: every fixture passes `schema.parse()` at generation time, so fixtures can't drift from the contract.
-3. **Round-trip**: generated Swift tests decode each TS-produced fixture, re-encode, re-decode, and compare. Green means both languages agree on the wire format.
+3. **Round-trip**: generated Swift tests decode each TS-produced fixture, re-encode, re-decode, and compare — and also compare the re-encoded JSON against the original fixture as canonicalized `JSONValue` (object-member nulls stripped, UUID strings case-normalized), so a field the generator silently dropped cannot pass. Green means both languages agree on the wire format.
 
 ## Known limitations
 
 - Discriminator values must be string literals (the one boolean-discriminated union, `IntegrationSessionResponse`, is bot-facing and not in the manifest).
 - No support for `z.lazy` (recursion), transforms, intersections, or non-discriminated unions — the introspector throws if one appears in manifest scope.
-- `ClientState` / `SessionSetupRun` in `session.ts` are plain TS types, not Zod schemas, so they can't be transpiled yet. Schema-ify them before the iOS app consumes the Agents SDK state sync.
+- Library-owned types (AI SDK `UIMessagePart`) cross the wire as opaque JSON: schema-side they are `wireOpaque<T>()` (validates as unknown, infers as `T`), Swift-side `JSONValue`. `ClientState` is fully schema-derived (`z.infer<typeof ClientStateSchema>` in `types/api/client-state.ts`) — there is no hand-written duplicate to keep in sync.
 - Swift's `UUID` re-encodes as uppercase; if a generated type carrying a `UUID` is ever string-compared server-side, confirm the comparison is case-insensitive.

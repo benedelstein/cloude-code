@@ -3,6 +3,65 @@
 
 import Foundation
 
+public struct CreateRepoEnvironmentRequest: Codable, Equatable, Sendable {
+    public var name: String
+    public var network: NetworkAccessConfig
+    public var plainEnvVars: PlainEnvVars
+    public var startupScript: String?
+
+    public init(
+        name: String,
+        network: NetworkAccessConfig,
+        plainEnvVars: PlainEnvVars,
+        startupScript: String? = nil
+    ) {
+        self.name = name
+        self.network = network
+        self.plainEnvVars = plainEnvVars
+        self.startupScript = startupScript
+    }
+}
+
+public struct DefaultNetworkAllowlistResponse: Codable, Equatable, Sendable {
+    public var domains: [String]
+
+    public init(
+        domains: [String]
+    ) {
+        self.domains = domains
+    }
+}
+
+public struct DeleteRepoEnvironmentResponse: Codable, Equatable, Sendable {
+    public let deleted = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case deleted
+    }
+}
+
+public struct ListRepoEnvironmentsResponse: Codable, Equatable, Sendable {
+    public var environments: [RepoEnvironment]
+
+    public init(
+        environments: [RepoEnvironment]
+    ) {
+        self.environments = environments
+    }
+}
+
+public struct ListUserRepoEnvironmentsResponse: Codable, Equatable, Sendable {
+    public var environments: [RepoEnvironmentSummary]
+
+    public init(
+        environments: [RepoEnvironmentSummary]
+    ) {
+        self.environments = environments
+    }
+}
+
 public enum NetworkAccessConfig: Codable, Equatable, Sendable {
     public struct Open: Codable, Equatable, Sendable {
         public let mode = "open"
@@ -102,7 +161,7 @@ public typealias PlainEnvVars = [String: String]
 
 public struct RepoEnvironment: Codable, Equatable, Sendable {
     public var id: UUID
-    public var repoId: Double
+    public var repoId: Int
     public var name: String
     public var network: NetworkAccessConfig
     public var plainEnvVars: PlainEnvVars
@@ -112,7 +171,7 @@ public struct RepoEnvironment: Codable, Equatable, Sendable {
 
     public init(
         id: UUID,
-        repoId: Double,
+        repoId: Int,
         name: String,
         network: NetworkAccessConfig,
         plainEnvVars: PlainEnvVars,
@@ -131,9 +190,48 @@ public struct RepoEnvironment: Codable, Equatable, Sendable {
     }
 }
 
+public enum RepoEnvironmentNetworkMode: RawRepresentable, Codable, Equatable, Sendable {
+    case locked
+    case `default`
+    case custom
+    case `open`
+    /// A value this client version doesn't recognize yet.
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "locked": self = .locked
+        case "default": self = .`default`
+        case "custom": self = .custom
+        case "open": self = .`open`
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .locked: "locked"
+        case .`default`: "default"
+        case .custom: "custom"
+        case .`open`: "open"
+        case .unknown(let value): value
+        }
+    }
+}
+
+public struct RepoEnvironmentResponse: Codable, Equatable, Sendable {
+    public var environment: RepoEnvironment
+
+    public init(
+        environment: RepoEnvironment
+    ) {
+        self.environment = environment
+    }
+}
+
 public struct RepoEnvironmentSummary: Codable, Equatable, Sendable {
     public var id: UUID
-    public var repoId: Double
+    public var repoId: Int
     public var name: String
     public var network: NetworkAccessConfig
     public var plainEnvVars: PlainEnvVars
@@ -144,7 +242,7 @@ public struct RepoEnvironmentSummary: Codable, Equatable, Sendable {
 
     public init(
         id: UUID,
-        repoId: Double,
+        repoId: Int,
         name: String,
         network: NetworkAccessConfig,
         plainEnvVars: PlainEnvVars,
@@ -162,65 +260,6 @@ public struct RepoEnvironmentSummary: Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.repoFullName = repoFullName
-    }
-}
-
-public struct ListRepoEnvironmentsResponse: Codable, Equatable, Sendable {
-    public var environments: [RepoEnvironment]
-
-    public init(
-        environments: [RepoEnvironment]
-    ) {
-        self.environments = environments
-    }
-}
-
-public struct ListUserRepoEnvironmentsResponse: Codable, Equatable, Sendable {
-    public var environments: [RepoEnvironmentSummary]
-
-    public init(
-        environments: [RepoEnvironmentSummary]
-    ) {
-        self.environments = environments
-    }
-}
-
-public struct DefaultNetworkAllowlistResponse: Codable, Equatable, Sendable {
-    public var domains: [String]
-
-    public init(
-        domains: [String]
-    ) {
-        self.domains = domains
-    }
-}
-
-public struct UserRepoEnvironmentResponse: Codable, Equatable, Sendable {
-    public var environment: RepoEnvironmentSummary
-
-    public init(
-        environment: RepoEnvironmentSummary
-    ) {
-        self.environment = environment
-    }
-}
-
-public struct CreateRepoEnvironmentRequest: Codable, Equatable, Sendable {
-    public var name: String
-    public var network: NetworkAccessConfig
-    public var plainEnvVars: PlainEnvVars
-    public var startupScript: String?
-
-    public init(
-        name: String,
-        network: NetworkAccessConfig,
-        plainEnvVars: PlainEnvVars,
-        startupScript: String? = nil
-    ) {
-        self.name = name
-        self.network = network
-        self.plainEnvVars = plainEnvVars
-        self.startupScript = startupScript
     }
 }
 
@@ -243,22 +282,12 @@ public struct UpdateRepoEnvironmentRequest: Codable, Equatable, Sendable {
     }
 }
 
-public struct RepoEnvironmentResponse: Codable, Equatable, Sendable {
-    public var environment: RepoEnvironment
+public struct UserRepoEnvironmentResponse: Codable, Equatable, Sendable {
+    public var environment: RepoEnvironmentSummary
 
     public init(
-        environment: RepoEnvironment
+        environment: RepoEnvironmentSummary
     ) {
         self.environment = environment
-    }
-}
-
-public struct DeleteRepoEnvironmentResponse: Codable, Equatable, Sendable {
-    public let deleted = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case deleted
     }
 }

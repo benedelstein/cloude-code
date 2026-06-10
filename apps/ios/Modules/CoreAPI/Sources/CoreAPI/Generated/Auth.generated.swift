@@ -3,22 +3,71 @@
 
 import Foundation
 
-public struct UserInfo: Codable, Equatable, Sendable {
-    public var id: String
-    public var login: String
-    public var name: String?
-    public var avatarUrl: String?
+public struct ClaudeAuthUrlResponse: Codable, Equatable, Sendable {
+    public var url: String
+    public var state: String
 
     public init(
-        id: String,
-        login: String,
-        name: String? = nil,
-        avatarUrl: String? = nil
+        url: String,
+        state: String
     ) {
-        self.id = id
-        self.login = login
-        self.name = name
-        self.avatarUrl = avatarUrl
+        self.url = url
+        self.state = state
+    }
+}
+
+public struct ClaudeDisconnectResponse: Codable, Equatable, Sendable {
+    public let ok = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+    }
+}
+
+public struct ClaudeStatusResponse: Codable, Equatable, Sendable {
+    public var connected: Bool
+    public var requiresReauth: Bool
+    public var subscriptionType: String?
+    public var rateLimitTier: String?
+
+    public init(
+        connected: Bool,
+        requiresReauth: Bool,
+        subscriptionType: String? = nil,
+        rateLimitTier: String? = nil
+    ) {
+        self.connected = connected
+        self.requiresReauth = requiresReauth
+        self.subscriptionType = subscriptionType
+        self.rateLimitTier = rateLimitTier
+    }
+}
+
+public struct ClaudeTokenRequest: Codable, Equatable, Sendable {
+    public var code: String
+    public var state: String
+    public var sessionId: String?
+
+    public init(
+        code: String,
+        state: String,
+        sessionId: String? = nil
+    ) {
+        self.code = code
+        self.state = state
+        self.sessionId = sessionId
+    }
+}
+
+public struct ClaudeTokenResponse: Codable, Equatable, Sendable {
+    public let ok = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
     }
 }
 
@@ -32,48 +81,6 @@ public struct GitHubAuthUrlResponse: Codable, Equatable, Sendable {
     ) {
         self.url = url
         self.state = state
-    }
-}
-
-public struct TokenRequest: Codable, Equatable, Sendable {
-    public var code: String
-    public var state: String
-
-    public init(
-        code: String,
-        state: String
-    ) {
-        self.code = code
-        self.state = state
-    }
-}
-
-public struct TokenResponse: Codable, Equatable, Sendable {
-    public var token: String
-    public var user: UserInfo
-    public var hasInstallations: Bool
-    public var installUrl: String
-
-    public init(
-        token: String,
-        user: UserInfo,
-        hasInstallations: Bool,
-        installUrl: String
-    ) {
-        self.token = token
-        self.user = user
-        self.hasInstallations = hasInstallations
-        self.installUrl = installUrl
-    }
-}
-
-public struct LogoutResponse: Codable, Equatable, Sendable {
-    public let ok = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case ok
     }
 }
 
@@ -93,6 +100,16 @@ public struct GitHubReauthTokenResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct LogoutResponse: Codable, Equatable, Sendable {
+    public let ok = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+    }
+}
+
 public struct OpenAIAuthUrlResponse: Codable, Equatable, Sendable {
     public var url: String
     public var state: String
@@ -103,74 +120,6 @@ public struct OpenAIAuthUrlResponse: Codable, Equatable, Sendable {
     ) {
         self.url = url
         self.state = state
-    }
-}
-
-public struct OpenAITokenRequest: Codable, Equatable, Sendable {
-    public var code: String
-    public var state: String
-
-    public init(
-        code: String,
-        state: String
-    ) {
-        self.code = code
-        self.state = state
-    }
-}
-
-public struct OpenAITokenResponse: Codable, Equatable, Sendable {
-    public let ok = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case ok
-    }
-}
-
-public struct OpenAIStatusResponse: Codable, Equatable, Sendable {
-    public var connected: Bool
-    public var requiresReauth: Bool
-
-    public init(
-        connected: Bool,
-        requiresReauth: Bool
-    ) {
-        self.connected = connected
-        self.requiresReauth = requiresReauth
-    }
-}
-
-public struct OpenAIDisconnectResponse: Codable, Equatable, Sendable {
-    public let ok = true
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case ok
-    }
-}
-
-public struct OpenAIDeviceStartResponse: Codable, Equatable, Sendable {
-    public var attemptId: String
-    public var verificationUrl: String
-    public var userCode: String
-    public var intervalSeconds: Double
-    public var expiresAt: String
-
-    public init(
-        attemptId: String,
-        verificationUrl: String,
-        userCode: String,
-        intervalSeconds: Double,
-        expiresAt: String
-    ) {
-        self.attemptId = attemptId
-        self.verificationUrl = verificationUrl
-        self.userCode = userCode
-        self.intervalSeconds = intervalSeconds
-        self.expiresAt = expiresAt
     }
 }
 
@@ -210,36 +159,29 @@ public struct OpenAIDeviceAttemptResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct ClaudeAuthUrlResponse: Codable, Equatable, Sendable {
-    public var url: String
-    public var state: String
+public struct OpenAIDeviceStartResponse: Codable, Equatable, Sendable {
+    public var attemptId: String
+    public var verificationUrl: String
+    public var userCode: String
+    public var intervalSeconds: Int
+    public var expiresAt: String
 
     public init(
-        url: String,
-        state: String
+        attemptId: String,
+        verificationUrl: String,
+        userCode: String,
+        intervalSeconds: Int,
+        expiresAt: String
     ) {
-        self.url = url
-        self.state = state
+        self.attemptId = attemptId
+        self.verificationUrl = verificationUrl
+        self.userCode = userCode
+        self.intervalSeconds = intervalSeconds
+        self.expiresAt = expiresAt
     }
 }
 
-public struct ClaudeTokenRequest: Codable, Equatable, Sendable {
-    public var code: String
-    public var state: String
-    public var sessionId: String?
-
-    public init(
-        code: String,
-        state: String,
-        sessionId: String? = nil
-    ) {
-        self.code = code
-        self.state = state
-        self.sessionId = sessionId
-    }
-}
-
-public struct ClaudeTokenResponse: Codable, Equatable, Sendable {
+public struct OpenAIDisconnectResponse: Codable, Equatable, Sendable {
     public let ok = true
 
     public init() {}
@@ -249,31 +191,89 @@ public struct ClaudeTokenResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct ClaudeStatusResponse: Codable, Equatable, Sendable {
+public struct OpenAIStatusResponse: Codable, Equatable, Sendable {
     public var connected: Bool
     public var requiresReauth: Bool
-    public var subscriptionType: String?
-    public var rateLimitTier: String?
 
     public init(
         connected: Bool,
-        requiresReauth: Bool,
-        subscriptionType: String? = nil,
-        rateLimitTier: String? = nil
+        requiresReauth: Bool
     ) {
         self.connected = connected
         self.requiresReauth = requiresReauth
-        self.subscriptionType = subscriptionType
-        self.rateLimitTier = rateLimitTier
     }
 }
 
-public struct ClaudeDisconnectResponse: Codable, Equatable, Sendable {
+public struct OpenAITokenRequest: Codable, Equatable, Sendable {
+    public var code: String
+    public var state: String
+
+    public init(
+        code: String,
+        state: String
+    ) {
+        self.code = code
+        self.state = state
+    }
+}
+
+public struct OpenAITokenResponse: Codable, Equatable, Sendable {
     public let ok = true
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case ok
+    }
+}
+
+public struct TokenRequest: Codable, Equatable, Sendable {
+    public var code: String
+    public var state: String
+
+    public init(
+        code: String,
+        state: String
+    ) {
+        self.code = code
+        self.state = state
+    }
+}
+
+public struct TokenResponse: Codable, Equatable, Sendable {
+    public var token: String
+    public var user: UserInfo
+    public var hasInstallations: Bool
+    public var installUrl: String
+
+    public init(
+        token: String,
+        user: UserInfo,
+        hasInstallations: Bool,
+        installUrl: String
+    ) {
+        self.token = token
+        self.user = user
+        self.hasInstallations = hasInstallations
+        self.installUrl = installUrl
+    }
+}
+
+public struct UserInfo: Codable, Equatable, Sendable {
+    public var id: String
+    public var login: String
+    public var name: String?
+    public var avatarUrl: String?
+
+    public init(
+        id: String,
+        login: String,
+        name: String? = nil,
+        avatarUrl: String? = nil
+    ) {
+        self.id = id
+        self.login = login
+        self.name = name
+        self.avatarUrl = avatarUrl
     }
 }

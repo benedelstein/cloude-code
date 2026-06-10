@@ -3,6 +3,16 @@
 
 import Foundation
 
+public struct VoiceTranscriptionResponse: Codable, Equatable, Sendable {
+    public var text: String
+
+    public init(
+        text: String
+    ) {
+        self.text = text
+    }
+}
+
 public struct VoiceTranscriptionTokenResponse: Codable, Equatable, Sendable {
     public var token: String
     public var expiresAt: ISODateTimeString
@@ -16,15 +26,5 @@ public struct VoiceTranscriptionTokenResponse: Codable, Equatable, Sendable {
         self.token = token
         self.expiresAt = expiresAt
         self.maxBytes = maxBytes
-    }
-}
-
-public struct VoiceTranscriptionResponse: Codable, Equatable, Sendable {
-    public var text: String
-
-    public init(
-        text: String
-    ) {
-        self.text = text
     }
 }

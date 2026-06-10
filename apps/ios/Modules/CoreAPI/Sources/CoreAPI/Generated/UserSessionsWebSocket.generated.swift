@@ -3,8 +3,8 @@
 
 import Foundation
 
-public struct UserSessionsConnectedEvent: Codable, Equatable, Sendable {
-    public let type = "user_sessions.connected"
+public struct SessionListResyncRequiredEvent: Codable, Equatable, Sendable {
+    public let type = "session.list.resync_required"
 
     public init() {}
 
@@ -15,22 +15,6 @@ public struct UserSessionsConnectedEvent: Codable, Equatable, Sendable {
 
 public struct SessionSummaryCreatedEvent: Codable, Equatable, Sendable {
     public let type = "session.summary.created"
-    public var session: SessionSummary
-
-    public init(
-        session: SessionSummary
-    ) {
-        self.session = session
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case session
-    }
-}
-
-public struct SessionSummaryUpdatedEvent: Codable, Equatable, Sendable {
-    public let type = "session.summary.updated"
     public var session: SessionSummary
 
     public init(
@@ -61,8 +45,24 @@ public struct SessionSummaryRemovedEvent: Codable, Equatable, Sendable {
     }
 }
 
-public struct SessionListResyncRequiredEvent: Codable, Equatable, Sendable {
-    public let type = "session.list.resync_required"
+public struct SessionSummaryUpdatedEvent: Codable, Equatable, Sendable {
+    public let type = "session.summary.updated"
+    public var session: SessionSummary
+
+    public init(
+        session: SessionSummary
+    ) {
+        self.session = session
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case session
+    }
+}
+
+public struct UserSessionsConnectedEvent: Codable, Equatable, Sendable {
+    public let type = "user_sessions.connected"
 
     public init() {}
 

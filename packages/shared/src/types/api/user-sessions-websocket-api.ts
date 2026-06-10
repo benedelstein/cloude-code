@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionSummary } from "./session";
+import { SessionSummary } from "../session";
 
 export const UserSessionsConnectedEvent = z.object({
   type: z.literal("user_sessions.connected"),

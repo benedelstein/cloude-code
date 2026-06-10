@@ -6,85 +6,25 @@ import Foundation
 import Testing
 
 /// Round-trips every TypeScript-produced wire fixture through the generated
-/// Swift Codable types: decode → encode → decode → compare. Fixture JSON is
-/// validated against the Zod schemas at generation time, so a green run means
-/// both languages agree on the wire format.
+/// Swift Codable types. Two guarantees per fixture:
+/// 1. decode → encode → decode is stable (Equatable comparison), and
+/// 2. the re-encoded JSON carries the same data as the fixture (compared as
+///    canonicalized JSONValue), so a property the generator silently dropped
+///    cannot pass unnoticed.
+/// Fixture JSON is validated against the Zod schemas at generation time, so a
+/// green run means both languages agree on the wire format.
 @Suite("CoreAPI wire fixtures")
 struct FixtureDecodingTests {
-    @Test func sessionSummaryFull() throws {
-        try assertRoundTrip(SessionSummary.self, fixture: "SessionSummary.full")
-    }
-
-    @Test func sessionSummaryMinimal() throws {
-        try assertRoundTrip(SessionSummary.self, fixture: "SessionSummary.minimal")
-    }
-
-    @Test func messageAssistant() throws {
-        try assertRoundTrip(Message.self, fixture: "Message.assistant")
-    }
-
-    @Test func pullRequestClientStateCreating() throws {
-        try assertRoundTrip(PullRequestClientState.self, fixture: "PullRequestClientState.creating")
-    }
-
-    @Test func pullRequestClientStateFailed() throws {
-        try assertRoundTrip(PullRequestClientState.self, fixture: "PullRequestClientState.failed")
-    }
-
-    @Test func pullRequestClientStateCreated() throws {
-        try assertRoundTrip(PullRequestClientState.self, fixture: "PullRequestClientState.created")
-    }
-
-    @Test func agentSettingsInputPartial() throws {
-        try assertRoundTrip(AgentSettingsInput.self, fixture: "AgentSettingsInput.partial")
-    }
-
-    @Test func sessionInfoResponseFull() throws {
-        try assertRoundTrip(SessionInfoResponse.self, fixture: "SessionInfoResponse.full")
-    }
-
-    @Test func createSessionRequestFull() throws {
-        try assertRoundTrip(CreateSessionRequest.self, fixture: "CreateSessionRequest.full")
-    }
-
-    @Test func createSessionResponseCreated() throws {
-        try assertRoundTrip(CreateSessionResponse.self, fixture: "CreateSessionResponse.created")
-    }
-
-    @Test func listSessionsResponsePaginated() throws {
-        try assertRoundTrip(ListSessionsResponse.self, fixture: "ListSessionsResponse.paginated")
-    }
-
-    @Test func deleteSessionResponseDeleted() throws {
-        try assertRoundTrip(DeleteSessionResponse.self, fixture: "DeleteSessionResponse.deleted")
+    @Test func uiMessageWithParts() throws {
+        try assertRoundTrip(UIMessage.self, fixture: "UIMessage.withParts")
     }
 
     @Test func clientMessageChatMessage() throws {
         try assertRoundTrip(ClientMessage.self, fixture: "ClientMessage.chatMessage")
     }
 
-    @Test func clientMessageSyncRequest() throws {
-        try assertRoundTrip(ClientMessage.self, fixture: "ClientMessage.syncRequest")
-    }
-
-    @Test func clientMessageSessionMarkRead() throws {
-        try assertRoundTrip(ClientMessage.self, fixture: "ClientMessage.sessionMarkRead")
-    }
-
-    @Test func clientMessageOperationCancel() throws {
-        try assertRoundTrip(ClientMessage.self, fixture: "ClientMessage.operationCancel")
-    }
-
-    @Test func serverMessageConnected() throws {
-        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.connected")
-    }
-
     @Test func serverMessageSyncResponse() throws {
         try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.syncResponse")
-    }
-
-    @Test func serverMessageOperationError() throws {
-        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.operationError")
     }
 
     @Test func serverMessageAgentChunks() throws {
@@ -95,116 +35,916 @@ struct FixtureDecodingTests {
         try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.agentFinish")
     }
 
-    @Test func serverMessageAgentReady() throws {
-        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.agentReady")
+    @Test func sessionSetupRunAllTaskVariants() throws {
+        try assertRoundTrip(SessionSetupRun.self, fixture: "SessionSetupRun.allTaskVariants")
     }
 
-    @Test func serverMessageUserMessage() throws {
-        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.userMessage")
-    }
-
-    @Test func serverMessageEditorReady() throws {
-        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.editorReady")
-    }
-
-    @Test func uIMessageWithParts() throws {
-        try assertRoundTrip(UIMessage.self, fixture: "UIMessage.withParts")
-    }
-
-    @Test func userSessionsServerMessageConnected() throws {
-        try assertRoundTrip(UserSessionsServerMessage.self, fixture: "UserSessionsServerMessage.connected")
-    }
-
-    @Test func userSessionsServerMessageSummaryCreated() throws {
-        try assertRoundTrip(UserSessionsServerMessage.self, fixture: "UserSessionsServerMessage.summaryCreated")
-    }
-
-    @Test func userSessionsServerMessageSummaryUpdated() throws {
-        try assertRoundTrip(UserSessionsServerMessage.self, fixture: "UserSessionsServerMessage.summaryUpdated")
-    }
-
-    @Test func userSessionsServerMessageSummaryRemoved() throws {
-        try assertRoundTrip(UserSessionsServerMessage.self, fixture: "UserSessionsServerMessage.summaryRemoved")
-    }
-
-    @Test func userSessionsServerMessageResyncRequired() throws {
-        try assertRoundTrip(UserSessionsServerMessage.self, fixture: "UserSessionsServerMessage.resyncRequired")
-    }
-
-    @Test func tokenResponseFull() throws {
-        try assertRoundTrip(TokenResponse.self, fixture: "TokenResponse.full")
-    }
-
-    @Test func openAIDeviceStartResponseStarted() throws {
-        try assertRoundTrip(OpenAIDeviceStartResponse.self, fixture: "OpenAIDeviceStartResponse.started")
-    }
-
-    @Test func openAIDeviceAttemptResponsePending() throws {
-        try assertRoundTrip(OpenAIDeviceAttemptResponse.self, fixture: "OpenAIDeviceAttemptResponse.pending")
-    }
-
-    @Test func claudeStatusResponseConnected() throws {
-        try assertRoundTrip(ClaudeStatusResponse.self, fixture: "ClaudeStatusResponse.connected")
-    }
-
-    @Test func repoPrivate() throws {
-        try assertRoundTrip(Repo.self, fixture: "Repo.private")
-    }
-
-    @Test func branchDefault() throws {
-        try assertRoundTrip(Branch.self, fixture: "Branch.default")
-    }
-
-    @Test func modelsResponseCatalog() throws {
-        try assertRoundTrip(ModelsResponse.self, fixture: "ModelsResponse.catalog")
-    }
-
-    @Test func attachmentDescriptorImage() throws {
-        try assertRoundTrip(AttachmentDescriptor.self, fixture: "AttachmentDescriptor.image")
-    }
-
-    @Test func uploadAttachmentResponseSingle() throws {
-        try assertRoundTrip(UploadAttachmentResponse.self, fixture: "UploadAttachmentResponse.single")
+    @Test func clientStatePreparing() throws {
+        try assertRoundTrip(ClientState.self, fixture: "ClientState.preparing")
     }
 
     @Test func agentSettingsClaudeDefaults() throws {
         try assertRoundTrip(AgentSettings.self, fixture: "AgentSettings.claudeDefaults")
     }
 
-    @Test func agentSettingsCodex() throws {
-        try assertRoundTrip(AgentSettings.self, fixture: "AgentSettings.codex")
+    @Test func listSessionsResponsePaginated() throws {
+        try assertRoundTrip(ListSessionsResponse.self, fixture: "ListSessionsResponse.paginated")
     }
 
-    @Test func networkAccessConfigOpen() throws {
-        try assertRoundTrip(NetworkAccessConfig.self, fixture: "NetworkAccessConfig.open")
+    @Test func modelsResponseCatalog() throws {
+        try assertRoundTrip(ModelsResponse.self, fixture: "ModelsResponse.catalog")
     }
 
-    @Test func networkAccessConfigLocked() throws {
-        try assertRoundTrip(NetworkAccessConfig.self, fixture: "NetworkAccessConfig.locked")
+    @Test func agentSettingsAutoOpenaiCodex() throws {
+        try assertAutoRoundTrip(AgentSettings.self, key: "AgentSettings.autoOpenaiCodex")
     }
 
-    @Test func networkAccessConfigDefault() throws {
-        try assertRoundTrip(NetworkAccessConfig.self, fixture: "NetworkAccessConfig.default")
+    @Test func agentSettingsAutoClaudeCode() throws {
+        try assertAutoRoundTrip(AgentSettings.self, key: "AgentSettings.autoClaudeCode")
     }
 
-    @Test func networkAccessConfigCustom() throws {
-        try assertRoundTrip(NetworkAccessConfig.self, fixture: "NetworkAccessConfig.custom")
+    @Test func agentSettingsClaudeAutoFull() throws {
+        try assertAutoRoundTrip(AgentSettingsClaude.self, key: "AgentSettingsClaude.autoFull")
     }
 
-    @Test func repoEnvironmentFull() throws {
-        try assertRoundTrip(RepoEnvironment.self, fixture: "RepoEnvironment.full")
+    @Test func agentSettingsClaudeAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentSettingsClaude.self, key: "AgentSettingsClaude.autoMinimal")
     }
 
-    @Test func createRepoEnvironmentRequestDefaults() throws {
-        try assertRoundTrip(CreateRepoEnvironmentRequest.self, fixture: "CreateRepoEnvironmentRequest.defaults")
+    @Test func agentSettingsCodexAutoFull() throws {
+        try assertAutoRoundTrip(AgentSettingsCodex.self, key: "AgentSettingsCodex.autoFull")
     }
 
-    @Test func voiceTranscriptionTokenResponseIssued() throws {
-        try assertRoundTrip(VoiceTranscriptionTokenResponse.self, fixture: "VoiceTranscriptionTokenResponse.issued")
+    @Test func agentSettingsCodexAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentSettingsCodex.self, key: "AgentSettingsCodex.autoMinimal")
     }
 
-    @Test func integrationLinksResponseLinked() throws {
-        try assertRoundTrip(IntegrationLinksResponse.self, fixture: "IntegrationLinksResponse.linked")
+    @Test func activeTurnStateAutoFull() throws {
+        try assertAutoRoundTrip(ActiveTurnState.self, key: "ActiveTurnState.autoFull")
+    }
+
+    @Test func activeTurnStateAutoMinimal() throws {
+        try assertAutoRoundTrip(ActiveTurnState.self, key: "ActiveTurnState.autoMinimal")
+    }
+
+    @Test func agentSettingsInputAutoFull() throws {
+        try assertAutoRoundTrip(AgentSettingsInput.self, key: "AgentSettingsInput.autoFull")
+    }
+
+    @Test func agentSettingsInputAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentSettingsInput.self, key: "AgentSettingsInput.autoMinimal")
+    }
+
+    @Test func cloudContainerSetupTaskAutoFull() throws {
+        try assertAutoRoundTrip(CloudContainerSetupTask.self, key: "CloudContainerSetupTask.autoFull")
+    }
+
+    @Test func cloudContainerSetupTaskAutoMinimal() throws {
+        try assertAutoRoundTrip(CloudContainerSetupTask.self, key: "CloudContainerSetupTask.autoMinimal")
+    }
+
+    @Test func messageAutoFull() throws {
+        try assertAutoRoundTrip(Message.self, key: "Message.autoFull")
+    }
+
+    @Test func messageAutoMinimal() throws {
+        try assertAutoRoundTrip(Message.self, key: "Message.autoMinimal")
+    }
+
+    @Test func networkPolicySetupTaskAutoFull() throws {
+        try assertAutoRoundTrip(NetworkPolicySetupTask.self, key: "NetworkPolicySetupTask.autoFull")
+    }
+
+    @Test func networkPolicySetupTaskAutoMinimal() throws {
+        try assertAutoRoundTrip(NetworkPolicySetupTask.self, key: "NetworkPolicySetupTask.autoMinimal")
+    }
+
+    @Test func providerConnectionStateAutoFull() throws {
+        try assertAutoRoundTrip(ProviderConnectionState.self, key: "ProviderConnectionState.autoFull")
+    }
+
+    @Test func providerConnectionStateAutoMinimal() throws {
+        try assertAutoRoundTrip(ProviderConnectionState.self, key: "ProviderConnectionState.autoMinimal")
+    }
+
+    @Test func pullRequestClientStateAutoCreating() throws {
+        try assertAutoRoundTrip(PullRequestClientState.self, key: "PullRequestClientState.autoCreating")
+    }
+
+    @Test func pullRequestClientStateAutoFailed() throws {
+        try assertAutoRoundTrip(PullRequestClientState.self, key: "PullRequestClientState.autoFailed")
+    }
+
+    @Test func pullRequestClientStateAutoCreated() throws {
+        try assertAutoRoundTrip(PullRequestClientState.self, key: "PullRequestClientState.autoCreated")
+    }
+
+    @Test func repositorySetupTaskAutoFull() throws {
+        try assertAutoRoundTrip(RepositorySetupTask.self, key: "RepositorySetupTask.autoFull")
+    }
+
+    @Test func repositorySetupTaskAutoMinimal() throws {
+        try assertAutoRoundTrip(RepositorySetupTask.self, key: "RepositorySetupTask.autoMinimal")
+    }
+
+    @Test func sessionPlanMetadataAutoFull() throws {
+        try assertAutoRoundTrip(SessionPlanMetadata.self, key: "SessionPlanMetadata.autoFull")
+    }
+
+    @Test func sessionPlanMetadataAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionPlanMetadata.self, key: "SessionPlanMetadata.autoMinimal")
+    }
+
+    @Test func sessionSetupRunAutoFull() throws {
+        try assertAutoRoundTrip(SessionSetupRun.self, key: "SessionSetupRun.autoFull")
+    }
+
+    @Test func sessionSetupRunAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSetupRun.self, key: "SessionSetupRun.autoMinimal")
+    }
+
+    @Test func sessionSetupTaskAutoCloudContainer() throws {
+        try assertAutoRoundTrip(SessionSetupTask.self, key: "SessionSetupTask.autoCloudContainer")
+    }
+
+    @Test func sessionSetupTaskAutoRepository() throws {
+        try assertAutoRoundTrip(SessionSetupTask.self, key: "SessionSetupTask.autoRepository")
+    }
+
+    @Test func sessionSetupTaskAutoSetupScript() throws {
+        try assertAutoRoundTrip(SessionSetupTask.self, key: "SessionSetupTask.autoSetupScript")
+    }
+
+    @Test func sessionSetupTaskAutoNetworkPolicy() throws {
+        try assertAutoRoundTrip(SessionSetupTask.self, key: "SessionSetupTask.autoNetworkPolicy")
+    }
+
+    @Test func sessionSetupTaskOutputAutoFull() throws {
+        try assertAutoRoundTrip(SessionSetupTaskOutput.self, key: "SessionSetupTaskOutput.autoFull")
+    }
+
+    @Test func sessionSetupTaskOutputAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSetupTaskOutput.self, key: "SessionSetupTaskOutput.autoMinimal")
+    }
+
+    @Test func sessionSummaryAutoFull() throws {
+        try assertAutoRoundTrip(SessionSummary.self, key: "SessionSummary.autoFull")
+    }
+
+    @Test func sessionSummaryAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSummary.self, key: "SessionSummary.autoMinimal")
+    }
+
+    @Test func sessionTodoAutoFull() throws {
+        try assertAutoRoundTrip(SessionTodo.self, key: "SessionTodo.autoFull")
+    }
+
+    @Test func sessionTodoAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionTodo.self, key: "SessionTodo.autoMinimal")
+    }
+
+    @Test func startupScriptSetupTaskAutoFull() throws {
+        try assertAutoRoundTrip(StartupScriptSetupTask.self, key: "StartupScriptSetupTask.autoFull")
+    }
+
+    @Test func startupScriptSetupTaskAutoMinimal() throws {
+        try assertAutoRoundTrip(StartupScriptSetupTask.self, key: "StartupScriptSetupTask.autoMinimal")
+    }
+
+    @Test func startupScriptSetupTaskSkipReasonAutoNoEnvironment() throws {
+        try assertAutoRoundTrip(StartupScriptSetupTaskSkipReason.self, key: "StartupScriptSetupTaskSkipReason.autoNoEnvironment")
+    }
+
+    @Test func startupScriptSetupTaskSkipReasonAutoNoScript() throws {
+        try assertAutoRoundTrip(StartupScriptSetupTaskSkipReason.self, key: "StartupScriptSetupTaskSkipReason.autoNoScript")
+    }
+
+    @Test func archiveSessionResponseAutoFull() throws {
+        try assertAutoRoundTrip(ArchiveSessionResponse.self, key: "ArchiveSessionResponse.autoFull")
+    }
+
+    @Test func archiveSessionResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ArchiveSessionResponse.self, key: "ArchiveSessionResponse.autoMinimal")
+    }
+
+    @Test func createSessionInitialMessageAutoFull() throws {
+        try assertAutoRoundTrip(CreateSessionInitialMessage.self, key: "CreateSessionInitialMessage.autoFull")
+    }
+
+    @Test func createSessionRequestAutoFull() throws {
+        try assertAutoRoundTrip(CreateSessionRequest.self, key: "CreateSessionRequest.autoFull")
+    }
+
+    @Test func createSessionResponseAutoFull() throws {
+        try assertAutoRoundTrip(CreateSessionResponse.self, key: "CreateSessionResponse.autoFull")
+    }
+
+    @Test func createSessionResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(CreateSessionResponse.self, key: "CreateSessionResponse.autoMinimal")
+    }
+
+    @Test func deleteSessionResponseAutoFull() throws {
+        try assertAutoRoundTrip(DeleteSessionResponse.self, key: "DeleteSessionResponse.autoFull")
+    }
+
+    @Test func deleteSessionResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(DeleteSessionResponse.self, key: "DeleteSessionResponse.autoMinimal")
+    }
+
+    @Test func listSessionsResponseAutoFull() throws {
+        try assertAutoRoundTrip(ListSessionsResponse.self, key: "ListSessionsResponse.autoFull")
+    }
+
+    @Test func listSessionsResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ListSessionsResponse.self, key: "ListSessionsResponse.autoMinimal")
+    }
+
+    @Test func pullRequestResponseAutoFull() throws {
+        try assertAutoRoundTrip(PullRequestResponse.self, key: "PullRequestResponse.autoFull")
+    }
+
+    @Test func pullRequestResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(PullRequestResponse.self, key: "PullRequestResponse.autoMinimal")
+    }
+
+    @Test func pullRequestStatusResponseAutoFull() throws {
+        try assertAutoRoundTrip(PullRequestStatusResponse.self, key: "PullRequestStatusResponse.autoFull")
+    }
+
+    @Test func pullRequestStatusResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(PullRequestStatusResponse.self, key: "PullRequestStatusResponse.autoMinimal")
+    }
+
+    @Test func sessionInfoResponseAutoFull() throws {
+        try assertAutoRoundTrip(SessionInfoResponse.self, key: "SessionInfoResponse.autoFull")
+    }
+
+    @Test func sessionInfoResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionInfoResponse.self, key: "SessionInfoResponse.autoMinimal")
+    }
+
+    @Test func sessionPlanResponseAutoFull() throws {
+        try assertAutoRoundTrip(SessionPlanResponse.self, key: "SessionPlanResponse.autoFull")
+    }
+
+    @Test func sessionPlanResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionPlanResponse.self, key: "SessionPlanResponse.autoMinimal")
+    }
+
+    @Test func sessionRepoGroupAutoFull() throws {
+        try assertAutoRoundTrip(SessionRepoGroup.self, key: "SessionRepoGroup.autoFull")
+    }
+
+    @Test func sessionRepoGroupAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionRepoGroup.self, key: "SessionRepoGroup.autoMinimal")
+    }
+
+    @Test func sessionWebSocketTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(SessionWebSocketTokenResponse.self, key: "SessionWebSocketTokenResponse.autoFull")
+    }
+
+    @Test func sessionWebSocketTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionWebSocketTokenResponse.self, key: "SessionWebSocketTokenResponse.autoMinimal")
+    }
+
+    @Test func updateSessionTitleRequestAutoFull() throws {
+        try assertAutoRoundTrip(UpdateSessionTitleRequest.self, key: "UpdateSessionTitleRequest.autoFull")
+    }
+
+    @Test func updateSessionTitleRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(UpdateSessionTitleRequest.self, key: "UpdateSessionTitleRequest.autoMinimal")
+    }
+
+    @Test func updateSessionTitleResponseAutoFull() throws {
+        try assertAutoRoundTrip(UpdateSessionTitleResponse.self, key: "UpdateSessionTitleResponse.autoFull")
+    }
+
+    @Test func updateSessionTitleResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(UpdateSessionTitleResponse.self, key: "UpdateSessionTitleResponse.autoMinimal")
+    }
+
+    @Test func userSessionsWebSocketTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(UserSessionsWebSocketTokenResponse.self, key: "UserSessionsWebSocketTokenResponse.autoFull")
+    }
+
+    @Test func userSessionsWebSocketTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(UserSessionsWebSocketTokenResponse.self, key: "UserSessionsWebSocketTokenResponse.autoMinimal")
+    }
+
+    @Test func clientStateAutoFull() throws {
+        try assertAutoRoundTrip(ClientState.self, key: "ClientState.autoFull")
+    }
+
+    @Test func clientStateAutoMinimal() throws {
+        try assertAutoRoundTrip(ClientState.self, key: "ClientState.autoMinimal")
+    }
+
+    @Test func pendingUserMessageAutoFull() throws {
+        try assertAutoRoundTrip(PendingUserMessage.self, key: "PendingUserMessage.autoFull")
+    }
+
+    @Test func pendingUserMessageAutoMinimal() throws {
+        try assertAutoRoundTrip(PendingUserMessage.self, key: "PendingUserMessage.autoMinimal")
+    }
+
+    @Test func agentChunksEventAutoFull() throws {
+        try assertAutoRoundTrip(AgentChunksEvent.self, key: "AgentChunksEvent.autoFull")
+    }
+
+    @Test func agentChunksEventAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentChunksEvent.self, key: "AgentChunksEvent.autoMinimal")
+    }
+
+    @Test func agentFinishEventAutoFull() throws {
+        try assertAutoRoundTrip(AgentFinishEvent.self, key: "AgentFinishEvent.autoFull")
+    }
+
+    @Test func agentFinishEventAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentFinishEvent.self, key: "AgentFinishEvent.autoMinimal")
+    }
+
+    @Test func agentReadyEventAutoFull() throws {
+        try assertAutoRoundTrip(AgentReadyEvent.self, key: "AgentReadyEvent.autoFull")
+    }
+
+    @Test func agentReadyEventAutoMinimal() throws {
+        try assertAutoRoundTrip(AgentReadyEvent.self, key: "AgentReadyEvent.autoMinimal")
+    }
+
+    @Test func chatMessageEventAutoFull() throws {
+        try assertAutoRoundTrip(ChatMessageEvent.self, key: "ChatMessageEvent.autoFull")
+    }
+
+    @Test func clientMessageAutoChatMessage() throws {
+        try assertAutoRoundTrip(ClientMessage.self, key: "ClientMessage.autoChatMessage")
+    }
+
+    @Test func clientMessageAutoSyncRequest() throws {
+        try assertAutoRoundTrip(ClientMessage.self, key: "ClientMessage.autoSyncRequest")
+    }
+
+    @Test func clientMessageAutoSessionMarkRead() throws {
+        try assertAutoRoundTrip(ClientMessage.self, key: "ClientMessage.autoSessionMarkRead")
+    }
+
+    @Test func clientMessageAutoOperationCancel() throws {
+        try assertAutoRoundTrip(ClientMessage.self, key: "ClientMessage.autoOperationCancel")
+    }
+
+    @Test func connectedEventAutoFull() throws {
+        try assertAutoRoundTrip(ConnectedEvent.self, key: "ConnectedEvent.autoFull")
+    }
+
+    @Test func connectedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(ConnectedEvent.self, key: "ConnectedEvent.autoMinimal")
+    }
+
+    @Test func editorReadyEventAutoFull() throws {
+        try assertAutoRoundTrip(EditorReadyEvent.self, key: "EditorReadyEvent.autoFull")
+    }
+
+    @Test func editorReadyEventAutoMinimal() throws {
+        try assertAutoRoundTrip(EditorReadyEvent.self, key: "EditorReadyEvent.autoMinimal")
+    }
+
+    @Test func operationCancelEventAutoFull() throws {
+        try assertAutoRoundTrip(OperationCancelEvent.self, key: "OperationCancelEvent.autoFull")
+    }
+
+    @Test func operationCancelEventAutoMinimal() throws {
+        try assertAutoRoundTrip(OperationCancelEvent.self, key: "OperationCancelEvent.autoMinimal")
+    }
+
+    @Test func operationErrorEventAutoFull() throws {
+        try assertAutoRoundTrip(OperationErrorEvent.self, key: "OperationErrorEvent.autoFull")
+    }
+
+    @Test func operationErrorEventAutoMinimal() throws {
+        try assertAutoRoundTrip(OperationErrorEvent.self, key: "OperationErrorEvent.autoMinimal")
+    }
+
+    @Test func serverMessageAutoConnected() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoConnected")
+    }
+
+    @Test func serverMessageAutoSyncResponse() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoSyncResponse")
+    }
+
+    @Test func serverMessageAutoOperationError() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoOperationError")
+    }
+
+    @Test func serverMessageAutoAgentChunks() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoAgentChunks")
+    }
+
+    @Test func serverMessageAutoAgentFinish() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoAgentFinish")
+    }
+
+    @Test func serverMessageAutoAgentReady() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoAgentReady")
+    }
+
+    @Test func serverMessageAutoUserMessage() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoUserMessage")
+    }
+
+    @Test func serverMessageAutoEditorReady() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoEditorReady")
+    }
+
+    @Test func sessionMarkReadEventAutoFull() throws {
+        try assertAutoRoundTrip(SessionMarkReadEvent.self, key: "SessionMarkReadEvent.autoFull")
+    }
+
+    @Test func sessionMarkReadEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionMarkReadEvent.self, key: "SessionMarkReadEvent.autoMinimal")
+    }
+
+    @Test func syncRequestEventAutoFull() throws {
+        try assertAutoRoundTrip(SyncRequestEvent.self, key: "SyncRequestEvent.autoFull")
+    }
+
+    @Test func syncRequestEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SyncRequestEvent.self, key: "SyncRequestEvent.autoMinimal")
+    }
+
+    @Test func syncResponseEventAutoFull() throws {
+        try assertAutoRoundTrip(SyncResponseEvent.self, key: "SyncResponseEvent.autoFull")
+    }
+
+    @Test func syncResponseEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SyncResponseEvent.self, key: "SyncResponseEvent.autoMinimal")
+    }
+
+    @Test func uiMessageAutoFull() throws {
+        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoFull")
+    }
+
+    @Test func uiMessageAutoMinimal() throws {
+        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoMinimal")
+    }
+
+    @Test func userMessageEventAutoFull() throws {
+        try assertAutoRoundTrip(UserMessageEvent.self, key: "UserMessageEvent.autoFull")
+    }
+
+    @Test func userMessageEventAutoMinimal() throws {
+        try assertAutoRoundTrip(UserMessageEvent.self, key: "UserMessageEvent.autoMinimal")
+    }
+
+    @Test func sessionListResyncRequiredEventAutoFull() throws {
+        try assertAutoRoundTrip(SessionListResyncRequiredEvent.self, key: "SessionListResyncRequiredEvent.autoFull")
+    }
+
+    @Test func sessionListResyncRequiredEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionListResyncRequiredEvent.self, key: "SessionListResyncRequiredEvent.autoMinimal")
+    }
+
+    @Test func sessionSummaryCreatedEventAutoFull() throws {
+        try assertAutoRoundTrip(SessionSummaryCreatedEvent.self, key: "SessionSummaryCreatedEvent.autoFull")
+    }
+
+    @Test func sessionSummaryCreatedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSummaryCreatedEvent.self, key: "SessionSummaryCreatedEvent.autoMinimal")
+    }
+
+    @Test func sessionSummaryRemovedEventAutoFull() throws {
+        try assertAutoRoundTrip(SessionSummaryRemovedEvent.self, key: "SessionSummaryRemovedEvent.autoFull")
+    }
+
+    @Test func sessionSummaryRemovedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSummaryRemovedEvent.self, key: "SessionSummaryRemovedEvent.autoMinimal")
+    }
+
+    @Test func sessionSummaryUpdatedEventAutoFull() throws {
+        try assertAutoRoundTrip(SessionSummaryUpdatedEvent.self, key: "SessionSummaryUpdatedEvent.autoFull")
+    }
+
+    @Test func sessionSummaryUpdatedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSummaryUpdatedEvent.self, key: "SessionSummaryUpdatedEvent.autoMinimal")
+    }
+
+    @Test func userSessionsConnectedEventAutoFull() throws {
+        try assertAutoRoundTrip(UserSessionsConnectedEvent.self, key: "UserSessionsConnectedEvent.autoFull")
+    }
+
+    @Test func userSessionsConnectedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(UserSessionsConnectedEvent.self, key: "UserSessionsConnectedEvent.autoMinimal")
+    }
+
+    @Test func userSessionsServerMessageAutoUserSessionsConnected() throws {
+        try assertAutoRoundTrip(UserSessionsServerMessage.self, key: "UserSessionsServerMessage.autoUserSessionsConnected")
+    }
+
+    @Test func userSessionsServerMessageAutoSessionSummaryCreated() throws {
+        try assertAutoRoundTrip(UserSessionsServerMessage.self, key: "UserSessionsServerMessage.autoSessionSummaryCreated")
+    }
+
+    @Test func userSessionsServerMessageAutoSessionSummaryUpdated() throws {
+        try assertAutoRoundTrip(UserSessionsServerMessage.self, key: "UserSessionsServerMessage.autoSessionSummaryUpdated")
+    }
+
+    @Test func userSessionsServerMessageAutoSessionSummaryRemoved() throws {
+        try assertAutoRoundTrip(UserSessionsServerMessage.self, key: "UserSessionsServerMessage.autoSessionSummaryRemoved")
+    }
+
+    @Test func userSessionsServerMessageAutoSessionListResyncRequired() throws {
+        try assertAutoRoundTrip(UserSessionsServerMessage.self, key: "UserSessionsServerMessage.autoSessionListResyncRequired")
+    }
+
+    @Test func claudeAuthUrlResponseAutoFull() throws {
+        try assertAutoRoundTrip(ClaudeAuthUrlResponse.self, key: "ClaudeAuthUrlResponse.autoFull")
+    }
+
+    @Test func claudeAuthUrlResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ClaudeAuthUrlResponse.self, key: "ClaudeAuthUrlResponse.autoMinimal")
+    }
+
+    @Test func claudeDisconnectResponseAutoFull() throws {
+        try assertAutoRoundTrip(ClaudeDisconnectResponse.self, key: "ClaudeDisconnectResponse.autoFull")
+    }
+
+    @Test func claudeDisconnectResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ClaudeDisconnectResponse.self, key: "ClaudeDisconnectResponse.autoMinimal")
+    }
+
+    @Test func claudeStatusResponseAutoFull() throws {
+        try assertAutoRoundTrip(ClaudeStatusResponse.self, key: "ClaudeStatusResponse.autoFull")
+    }
+
+    @Test func claudeStatusResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ClaudeStatusResponse.self, key: "ClaudeStatusResponse.autoMinimal")
+    }
+
+    @Test func claudeTokenRequestAutoFull() throws {
+        try assertAutoRoundTrip(ClaudeTokenRequest.self, key: "ClaudeTokenRequest.autoFull")
+    }
+
+    @Test func claudeTokenRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(ClaudeTokenRequest.self, key: "ClaudeTokenRequest.autoMinimal")
+    }
+
+    @Test func claudeTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(ClaudeTokenResponse.self, key: "ClaudeTokenResponse.autoFull")
+    }
+
+    @Test func claudeTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ClaudeTokenResponse.self, key: "ClaudeTokenResponse.autoMinimal")
+    }
+
+    @Test func gitHubAuthUrlResponseAutoFull() throws {
+        try assertAutoRoundTrip(GitHubAuthUrlResponse.self, key: "GitHubAuthUrlResponse.autoFull")
+    }
+
+    @Test func gitHubAuthUrlResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(GitHubAuthUrlResponse.self, key: "GitHubAuthUrlResponse.autoMinimal")
+    }
+
+    @Test func gitHubReauthTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(GitHubReauthTokenResponse.self, key: "GitHubReauthTokenResponse.autoFull")
+    }
+
+    @Test func gitHubReauthTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(GitHubReauthTokenResponse.self, key: "GitHubReauthTokenResponse.autoMinimal")
+    }
+
+    @Test func logoutResponseAutoFull() throws {
+        try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoFull")
+    }
+
+    @Test func logoutResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoMinimal")
+    }
+
+    @Test func openAIAuthUrlResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAIAuthUrlResponse.self, key: "OpenAIAuthUrlResponse.autoFull")
+    }
+
+    @Test func openAIAuthUrlResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAIAuthUrlResponse.self, key: "OpenAIAuthUrlResponse.autoMinimal")
+    }
+
+    @Test func openAIDeviceAttemptResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAIDeviceAttemptResponse.self, key: "OpenAIDeviceAttemptResponse.autoFull")
+    }
+
+    @Test func openAIDeviceAttemptResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAIDeviceAttemptResponse.self, key: "OpenAIDeviceAttemptResponse.autoMinimal")
+    }
+
+    @Test func openAIDeviceStartResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAIDeviceStartResponse.self, key: "OpenAIDeviceStartResponse.autoFull")
+    }
+
+    @Test func openAIDeviceStartResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAIDeviceStartResponse.self, key: "OpenAIDeviceStartResponse.autoMinimal")
+    }
+
+    @Test func openAIDisconnectResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAIDisconnectResponse.self, key: "OpenAIDisconnectResponse.autoFull")
+    }
+
+    @Test func openAIDisconnectResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAIDisconnectResponse.self, key: "OpenAIDisconnectResponse.autoMinimal")
+    }
+
+    @Test func openAIStatusResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAIStatusResponse.self, key: "OpenAIStatusResponse.autoFull")
+    }
+
+    @Test func openAIStatusResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAIStatusResponse.self, key: "OpenAIStatusResponse.autoMinimal")
+    }
+
+    @Test func openAITokenRequestAutoFull() throws {
+        try assertAutoRoundTrip(OpenAITokenRequest.self, key: "OpenAITokenRequest.autoFull")
+    }
+
+    @Test func openAITokenRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAITokenRequest.self, key: "OpenAITokenRequest.autoMinimal")
+    }
+
+    @Test func openAITokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(OpenAITokenResponse.self, key: "OpenAITokenResponse.autoFull")
+    }
+
+    @Test func openAITokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(OpenAITokenResponse.self, key: "OpenAITokenResponse.autoMinimal")
+    }
+
+    @Test func tokenRequestAutoFull() throws {
+        try assertAutoRoundTrip(TokenRequest.self, key: "TokenRequest.autoFull")
+    }
+
+    @Test func tokenRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(TokenRequest.self, key: "TokenRequest.autoMinimal")
+    }
+
+    @Test func tokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(TokenResponse.self, key: "TokenResponse.autoFull")
+    }
+
+    @Test func tokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(TokenResponse.self, key: "TokenResponse.autoMinimal")
+    }
+
+    @Test func userInfoAutoFull() throws {
+        try assertAutoRoundTrip(UserInfo.self, key: "UserInfo.autoFull")
+    }
+
+    @Test func userInfoAutoMinimal() throws {
+        try assertAutoRoundTrip(UserInfo.self, key: "UserInfo.autoMinimal")
+    }
+
+    @Test func branchAutoFull() throws {
+        try assertAutoRoundTrip(Branch.self, key: "Branch.autoFull")
+    }
+
+    @Test func branchAutoMinimal() throws {
+        try assertAutoRoundTrip(Branch.self, key: "Branch.autoMinimal")
+    }
+
+    @Test func listBranchesResponseAutoFull() throws {
+        try assertAutoRoundTrip(ListBranchesResponse.self, key: "ListBranchesResponse.autoFull")
+    }
+
+    @Test func listBranchesResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ListBranchesResponse.self, key: "ListBranchesResponse.autoMinimal")
+    }
+
+    @Test func listReposResponseAutoFull() throws {
+        try assertAutoRoundTrip(ListReposResponse.self, key: "ListReposResponse.autoFull")
+    }
+
+    @Test func listReposResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ListReposResponse.self, key: "ListReposResponse.autoMinimal")
+    }
+
+    @Test func repoAutoFull() throws {
+        try assertAutoRoundTrip(Repo.self, key: "Repo.autoFull")
+    }
+
+    @Test func repoAutoMinimal() throws {
+        try assertAutoRoundTrip(Repo.self, key: "Repo.autoMinimal")
+    }
+
+    @Test func searchReposResponseAutoFull() throws {
+        try assertAutoRoundTrip(SearchReposResponse.self, key: "SearchReposResponse.autoFull")
+    }
+
+    @Test func searchReposResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(SearchReposResponse.self, key: "SearchReposResponse.autoMinimal")
+    }
+
+    @Test func modelsResponseAutoFull() throws {
+        try assertAutoRoundTrip(ModelsResponse.self, key: "ModelsResponse.autoFull")
+    }
+
+    @Test func modelsResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ModelsResponse.self, key: "ModelsResponse.autoMinimal")
+    }
+
+    @Test func providerCatalogEffortAutoFull() throws {
+        try assertAutoRoundTrip(ProviderCatalogEffort.self, key: "ProviderCatalogEffort.autoFull")
+    }
+
+    @Test func providerCatalogEffortAutoMinimal() throws {
+        try assertAutoRoundTrip(ProviderCatalogEffort.self, key: "ProviderCatalogEffort.autoMinimal")
+    }
+
+    @Test func providerCatalogEntryAutoFull() throws {
+        try assertAutoRoundTrip(ProviderCatalogEntry.self, key: "ProviderCatalogEntry.autoFull")
+    }
+
+    @Test func providerCatalogEntryAutoMinimal() throws {
+        try assertAutoRoundTrip(ProviderCatalogEntry.self, key: "ProviderCatalogEntry.autoMinimal")
+    }
+
+    @Test func providerCatalogModelAutoFull() throws {
+        try assertAutoRoundTrip(ProviderCatalogModel.self, key: "ProviderCatalogModel.autoFull")
+    }
+
+    @Test func providerCatalogModelAutoMinimal() throws {
+        try assertAutoRoundTrip(ProviderCatalogModel.self, key: "ProviderCatalogModel.autoMinimal")
+    }
+
+    @Test func attachmentDescriptorAutoFull() throws {
+        try assertAutoRoundTrip(AttachmentDescriptor.self, key: "AttachmentDescriptor.autoFull")
+    }
+
+    @Test func attachmentDescriptorAutoMinimal() throws {
+        try assertAutoRoundTrip(AttachmentDescriptor.self, key: "AttachmentDescriptor.autoMinimal")
+    }
+
+    @Test func messageAttachmentRefAutoFull() throws {
+        try assertAutoRoundTrip(MessageAttachmentRef.self, key: "MessageAttachmentRef.autoFull")
+    }
+
+    @Test func messageAttachmentRefAutoMinimal() throws {
+        try assertAutoRoundTrip(MessageAttachmentRef.self, key: "MessageAttachmentRef.autoMinimal")
+    }
+
+    @Test func uploadAttachmentResponseAutoFull() throws {
+        try assertAutoRoundTrip(UploadAttachmentResponse.self, key: "UploadAttachmentResponse.autoFull")
+    }
+
+    @Test func uploadAttachmentResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(UploadAttachmentResponse.self, key: "UploadAttachmentResponse.autoMinimal")
+    }
+
+    @Test func createRepoEnvironmentRequestAutoFull() throws {
+        try assertAutoRoundTrip(CreateRepoEnvironmentRequest.self, key: "CreateRepoEnvironmentRequest.autoFull")
+    }
+
+    @Test func createRepoEnvironmentRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(CreateRepoEnvironmentRequest.self, key: "CreateRepoEnvironmentRequest.autoMinimal")
+    }
+
+    @Test func defaultNetworkAllowlistResponseAutoFull() throws {
+        try assertAutoRoundTrip(DefaultNetworkAllowlistResponse.self, key: "DefaultNetworkAllowlistResponse.autoFull")
+    }
+
+    @Test func defaultNetworkAllowlistResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(DefaultNetworkAllowlistResponse.self, key: "DefaultNetworkAllowlistResponse.autoMinimal")
+    }
+
+    @Test func deleteRepoEnvironmentResponseAutoFull() throws {
+        try assertAutoRoundTrip(DeleteRepoEnvironmentResponse.self, key: "DeleteRepoEnvironmentResponse.autoFull")
+    }
+
+    @Test func deleteRepoEnvironmentResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(DeleteRepoEnvironmentResponse.self, key: "DeleteRepoEnvironmentResponse.autoMinimal")
+    }
+
+    @Test func listRepoEnvironmentsResponseAutoFull() throws {
+        try assertAutoRoundTrip(ListRepoEnvironmentsResponse.self, key: "ListRepoEnvironmentsResponse.autoFull")
+    }
+
+    @Test func listRepoEnvironmentsResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ListRepoEnvironmentsResponse.self, key: "ListRepoEnvironmentsResponse.autoMinimal")
+    }
+
+    @Test func listUserRepoEnvironmentsResponseAutoFull() throws {
+        try assertAutoRoundTrip(ListUserRepoEnvironmentsResponse.self, key: "ListUserRepoEnvironmentsResponse.autoFull")
+    }
+
+    @Test func listUserRepoEnvironmentsResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(ListUserRepoEnvironmentsResponse.self, key: "ListUserRepoEnvironmentsResponse.autoMinimal")
+    }
+
+    @Test func networkAccessConfigAutoOpen() throws {
+        try assertAutoRoundTrip(NetworkAccessConfig.self, key: "NetworkAccessConfig.autoOpen")
+    }
+
+    @Test func networkAccessConfigAutoLocked() throws {
+        try assertAutoRoundTrip(NetworkAccessConfig.self, key: "NetworkAccessConfig.autoLocked")
+    }
+
+    @Test func networkAccessConfigAutoDefault() throws {
+        try assertAutoRoundTrip(NetworkAccessConfig.self, key: "NetworkAccessConfig.autoDefault")
+    }
+
+    @Test func networkAccessConfigAutoCustom() throws {
+        try assertAutoRoundTrip(NetworkAccessConfig.self, key: "NetworkAccessConfig.autoCustom")
+    }
+
+    @Test func repoEnvironmentAutoFull() throws {
+        try assertAutoRoundTrip(RepoEnvironment.self, key: "RepoEnvironment.autoFull")
+    }
+
+    @Test func repoEnvironmentAutoMinimal() throws {
+        try assertAutoRoundTrip(RepoEnvironment.self, key: "RepoEnvironment.autoMinimal")
+    }
+
+    @Test func repoEnvironmentResponseAutoFull() throws {
+        try assertAutoRoundTrip(RepoEnvironmentResponse.self, key: "RepoEnvironmentResponse.autoFull")
+    }
+
+    @Test func repoEnvironmentResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(RepoEnvironmentResponse.self, key: "RepoEnvironmentResponse.autoMinimal")
+    }
+
+    @Test func repoEnvironmentSummaryAutoFull() throws {
+        try assertAutoRoundTrip(RepoEnvironmentSummary.self, key: "RepoEnvironmentSummary.autoFull")
+    }
+
+    @Test func repoEnvironmentSummaryAutoMinimal() throws {
+        try assertAutoRoundTrip(RepoEnvironmentSummary.self, key: "RepoEnvironmentSummary.autoMinimal")
+    }
+
+    @Test func updateRepoEnvironmentRequestAutoFull() throws {
+        try assertAutoRoundTrip(UpdateRepoEnvironmentRequest.self, key: "UpdateRepoEnvironmentRequest.autoFull")
+    }
+
+    @Test func updateRepoEnvironmentRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(UpdateRepoEnvironmentRequest.self, key: "UpdateRepoEnvironmentRequest.autoMinimal")
+    }
+
+    @Test func userRepoEnvironmentResponseAutoFull() throws {
+        try assertAutoRoundTrip(UserRepoEnvironmentResponse.self, key: "UserRepoEnvironmentResponse.autoFull")
+    }
+
+    @Test func userRepoEnvironmentResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(UserRepoEnvironmentResponse.self, key: "UserRepoEnvironmentResponse.autoMinimal")
+    }
+
+    @Test func voiceTranscriptionResponseAutoFull() throws {
+        try assertAutoRoundTrip(VoiceTranscriptionResponse.self, key: "VoiceTranscriptionResponse.autoFull")
+    }
+
+    @Test func voiceTranscriptionResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(VoiceTranscriptionResponse.self, key: "VoiceTranscriptionResponse.autoMinimal")
+    }
+
+    @Test func voiceTranscriptionTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(VoiceTranscriptionTokenResponse.self, key: "VoiceTranscriptionTokenResponse.autoFull")
+    }
+
+    @Test func voiceTranscriptionTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(VoiceTranscriptionTokenResponse.self, key: "VoiceTranscriptionTokenResponse.autoMinimal")
+    }
+
+    @Test func integrationLinkClaimRequestAutoFull() throws {
+        try assertAutoRoundTrip(IntegrationLinkClaimRequest.self, key: "IntegrationLinkClaimRequest.autoFull")
+    }
+
+    @Test func integrationLinkClaimRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(IntegrationLinkClaimRequest.self, key: "IntegrationLinkClaimRequest.autoMinimal")
+    }
+
+    @Test func integrationLinkClaimResponseAutoFull() throws {
+        try assertAutoRoundTrip(IntegrationLinkClaimResponse.self, key: "IntegrationLinkClaimResponse.autoFull")
+    }
+
+    @Test func integrationLinkClaimResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(IntegrationLinkClaimResponse.self, key: "IntegrationLinkClaimResponse.autoMinimal")
+    }
+
+    @Test func integrationLinkInfoAutoFull() throws {
+        try assertAutoRoundTrip(IntegrationLinkInfo.self, key: "IntegrationLinkInfo.autoFull")
+    }
+
+    @Test func integrationLinkInfoAutoMinimal() throws {
+        try assertAutoRoundTrip(IntegrationLinkInfo.self, key: "IntegrationLinkInfo.autoMinimal")
+    }
+
+    @Test func integrationLinkRevokeResponseAutoFull() throws {
+        try assertAutoRoundTrip(IntegrationLinkRevokeResponse.self, key: "IntegrationLinkRevokeResponse.autoFull")
+    }
+
+    @Test func integrationLinkRevokeResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(IntegrationLinkRevokeResponse.self, key: "IntegrationLinkRevokeResponse.autoMinimal")
+    }
+
+    @Test func integrationLinksResponseAutoFull() throws {
+        try assertAutoRoundTrip(IntegrationLinksResponse.self, key: "IntegrationLinksResponse.autoFull")
+    }
+
+    @Test func integrationLinksResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(IntegrationLinksResponse.self, key: "IntegrationLinksResponse.autoMinimal")
     }
 }
 
@@ -223,4 +963,68 @@ private func assertRoundTrip<T: Codable & Equatable>(
     let reencoded = try JSONEncoder().encode(decoded)
     let redecoded = try decoder.decode(T.self, from: reencoded)
     #expect(decoded == redecoded)
+
+    let original = try decoder.decode(JSONValue.self, from: data)
+    let roundTripped = try decoder.decode(JSONValue.self, from: reencoded)
+    #expect(original.canonicalized == roundTripped.canonicalized)
+}
+
+/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.json).
+private let autoFixtures: [String: JSONValue] = {
+    guard
+        let url = Bundle.module.url(
+            forResource: "AutoFixtures",
+            withExtension: "json",
+            subdirectory: "Fixtures"
+        ),
+        let data = try? Data(contentsOf: url),
+        let fixtures = try? JSONDecoder().decode([String: JSONValue].self, from: data)
+    else {
+        fatalError("AutoFixtures.json missing or undecodable")
+    }
+    return fixtures
+}()
+
+private func assertAutoRoundTrip<T: Codable & Equatable>(
+    _ type: T.Type,
+    key: String
+) throws {
+    let original = try #require(autoFixtures[key])
+    let data = try JSONEncoder().encode(original)
+    let decoder = JSONDecoder()
+    let decoded = try decoder.decode(T.self, from: data)
+    let reencoded = try JSONEncoder().encode(decoded)
+    let redecoded = try decoder.decode(T.self, from: reencoded)
+    #expect(decoded == redecoded)
+
+    let roundTripped = try decoder.decode(JSONValue.self, from: reencoded)
+    #expect(original.canonicalized == roundTripped.canonicalized)
+}
+
+private extension JSONValue {
+    /// Canonical form for cross-language comparison:
+    /// - drops object members that are null (TS emits `"field": null` where
+    ///   Swift omits nil optionals; both mean "absent" on this API), and
+    /// - lowercases UUID-shaped strings (Foundation re-encodes UUIDs uppercase).
+    /// Nulls inside arrays are preserved — only object members are dropped.
+    var canonicalized: JSONValue {
+        switch self {
+        case .object(let members):
+            var result: [String: JSONValue] = [:]
+            for (key, value) in members where value != .null {
+                result[key] = value.canonicalized
+            }
+            return .object(result)
+        case .array(let elements):
+            return .array(elements.map { $0 == .null ? .null : $0.canonicalized })
+        case .string(let value):
+            return .string(Self.isUUIDShaped(value) ? value.lowercased() : value)
+        default:
+            return self
+        }
+    }
+
+    private static func isUUIDShaped(_ value: String) -> Bool {
+        value.count == 36 && UUID(uuidString: value) != nil
+    }
 }

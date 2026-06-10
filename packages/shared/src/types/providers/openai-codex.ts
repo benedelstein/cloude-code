@@ -38,7 +38,7 @@ export const AgentSettingsCodex = z.object({
   provider: z.literal(OPENAI_CODEX_PROVIDER_ID),
   model: OpenAICodexModel.default("gpt-5.5"),
   effort: OpenAICodexEffort.default("high"),
-  maxTokens: z.number().default(8192),
+  maxTokens: z.number().int().default(8192),
 });
 
 const OPENAI_CODEX_MODELS: ProviderModelDefinition<OpenAICodexModel>[] = [

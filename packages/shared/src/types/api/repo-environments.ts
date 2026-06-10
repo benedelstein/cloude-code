@@ -40,7 +40,7 @@ export type PlainEnvVars = z.infer<typeof PlainEnvVars>;
 
 export const RepoEnvironment = z.object({
   id: z.uuid(),
-  repoId: z.number(),
+  repoId: z.number().int(),
   name: z.string(),
   network: NetworkAccessConfig,
   plainEnvVars: PlainEnvVars,
@@ -108,7 +108,7 @@ export type DeleteRepoEnvironmentResponse = z.infer<typeof DeleteRepoEnvironment
 export const SessionEnvironmentSnapshot = z.object({
   sourceEnvironmentId: z.uuid().nullable(),
   sourceEnvironmentName: z.string().nullable(),
-  repoId: z.number(),
+  repoId: z.number().int(),
   network: NetworkAccessConfig,
   plainEnvVars: PlainEnvVars,
   startupScript: z.string().nullable(),

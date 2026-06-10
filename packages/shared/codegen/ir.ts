@@ -98,12 +98,13 @@ export type ManifestEntry = {
   /** Output grouping: one generated Swift file per group. */
   group: string;
   /**
-   * Decode-tolerant mode for server-evolving enums/unions: unrecognized raw
-   * values or union variants decode into an `.unknown` case instead of
-   * throwing. Use for everything the server may extend before old app builds
-   * die out. Has no effect on structs.
+   * Enums/unions are decode-tolerant by default: unrecognized raw values or
+   * union variants decode into an `.unknown` case instead of throwing, so the
+   * server can extend vocabularies while old app builds are live. Set frozen
+   * for client→server-only types where an unknown case is meaningless.
+   * Has no effect on structs.
    */
-  nonFrozen?: boolean;
+  frozen?: boolean;
   /** Wire key → Swift property name renames (reserved words, Swift style). */
   renames?: Record<string, string>;
   /** Documentation override; falls back to the schema's `.describe()`. */

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const Repo = z.object({
-  id: z.number(),
+  id: z.number().int(),
   name: z.string(),
   fullName: z.string(),
   owner: z.string(),

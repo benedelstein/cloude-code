@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
-import type { UIMessage, UIMessagePart } from "ai";
-import { AgentMode, SessionStatus } from "./session";
+import type { UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
+import { ActiveTurnState, AgentMode, SessionStatus } from "../session";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MessageAttachmentRef,
@@ -8,6 +8,15 @@ import {
 
 // Re-export AI SDK types for convenience
 export type { UIMessage, UIMessagePart };
+
+/**
+ * Typed pass-through for values owned by another library (the AI SDK):
+ * validates as unknown (the owning library defines the real shape), infers as
+ * T for TypeScript consumers, and transpiles to an opaque JSONValue in Swift.
+ */
+function wireOpaque<T>(): z.ZodType<T> {
+  return z.unknown() as unknown as z.ZodType<T>;
+}
 
 // ------------------------------------------------------------
 // Client → Server messages
@@ -32,7 +41,7 @@ export type ChatMessageEvent = z.infer<typeof ChatMessageEvent>;
 export const SyncRequestEvent = z.object({
   type: z.literal("sync.request"),
   lastMessageId: z.uuid().optional(),
-  lastChunkIndex: z.number().optional(),
+  lastChunkIndex: z.number().int().optional(),
 });
 export type SyncRequestEvent = z.infer<typeof SyncRequestEvent>;
 
@@ -66,11 +75,12 @@ export const ConnectedEvent = z.object({
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
-// Zod schema for UIMessage (runtime validation)
+// Zod schema for UIMessage. Inference matches the AI SDK's UIMessage type, so
+// parsed values are directly usable as UIMessage.
 export const UIMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant", "system"]),
-  parts: z.array(z.unknown()), // UIMessagePart[]
+  parts: z.array(wireOpaque<UIMessagePart<UIDataTypes, UITools>>()),
   metadata: z.unknown().optional(),
 });
 
@@ -78,7 +88,7 @@ export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
   messages: z.array(UIMessageSchema),
   pendingChunks: z.array(z.unknown()).optional(),
-  activeTurn: z.object({ userMessageId: z.string().min(1) }).nullable(),
+  activeTurn: ActiveTurnState.nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
 

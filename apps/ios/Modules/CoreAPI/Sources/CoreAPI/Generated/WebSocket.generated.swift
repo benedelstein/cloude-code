@@ -3,6 +3,48 @@
 
 import Foundation
 
+public struct AgentChunksEvent: Codable, Equatable, Sendable {
+    public let type = "agent.chunks"
+    public var chunks: [JSONValue]
+
+    public init(
+        chunks: [JSONValue]
+    ) {
+        self.chunks = chunks
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case chunks
+    }
+}
+
+public struct AgentFinishEvent: Codable, Equatable, Sendable {
+    public let type = "agent.finish"
+    public var message: UIMessage
+
+    public init(
+        message: UIMessage
+    ) {
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case message
+    }
+}
+
+public struct AgentReadyEvent: Codable, Equatable, Sendable {
+    public let type = "agent.ready"
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+    }
+}
+
 public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public let type = "chat.message"
     public var content: String?
@@ -36,52 +78,6 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
         case model
         case effort
         case agentMode
-    }
-}
-
-public struct SyncRequestEvent: Codable, Equatable, Sendable {
-    public let type = "sync.request"
-    public var lastMessageId: UUID?
-    public var lastChunkIndex: Double?
-
-    public init(
-        lastMessageId: UUID? = nil,
-        lastChunkIndex: Double? = nil
-    ) {
-        self.lastMessageId = lastMessageId
-        self.lastChunkIndex = lastChunkIndex
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case lastMessageId
-        case lastChunkIndex
-    }
-}
-
-public struct SessionMarkReadEvent: Codable, Equatable, Sendable {
-    public let type = "session.mark_read"
-    public var messageId: String
-
-    public init(
-        messageId: String
-    ) {
-        self.messageId = messageId
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case messageId
-    }
-}
-
-public struct OperationCancelEvent: Codable, Equatable, Sendable {
-    public let type = "operation.cancel"
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case type
     }
 }
 
@@ -130,52 +126,6 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     }
 }
 
-/// Wire shape of an AI SDK UIMessage; parts stay opaque JSON.
-public struct UIMessage: Codable, Equatable, Sendable {
-    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
-        case user
-        case assistant
-        case system
-        /// A value this client version doesn't recognize yet.
-        case unknown(String)
-
-        public init(rawValue: String) {
-            switch rawValue {
-            case "user": self = .user
-            case "assistant": self = .assistant
-            case "system": self = .system
-            default: self = .unknown(rawValue)
-            }
-        }
-
-        public var rawValue: String {
-            switch self {
-            case .user: "user"
-            case .assistant: "assistant"
-            case .system: "system"
-            case .unknown(let value): value
-            }
-        }
-    }
-
-    public var id: String
-    public var role: Role
-    public var parts: [JSONValue]
-    public var metadata: JSONValue?
-
-    public init(
-        id: String,
-        role: Role,
-        parts: [JSONValue],
-        metadata: JSONValue? = nil
-    ) {
-        self.id = id
-        self.role = role
-        self.parts = parts
-        self.metadata = metadata
-    }
-}
-
 public struct ConnectedEvent: Codable, Equatable, Sendable {
     public let type = "connected"
     public var sessionId: UUID
@@ -200,37 +150,33 @@ public struct ConnectedEvent: Codable, Equatable, Sendable {
     }
 }
 
-public struct SyncResponseEvent: Codable, Equatable, Sendable {
-    public struct ActiveTurn: Codable, Equatable, Sendable {
-        public var userMessageId: String
-
-        public init(
-            userMessageId: String
-        ) {
-            self.userMessageId = userMessageId
-        }
-    }
-
-    public let type = "sync.response"
-    public var messages: [UIMessage]
-    public var pendingChunks: [JSONValue]?
-    public var activeTurn: ActiveTurn?
+public struct EditorReadyEvent: Codable, Equatable, Sendable {
+    public let type = "editor.ready"
+    public var url: String
+    public var token: String
 
     public init(
-        messages: [UIMessage],
-        pendingChunks: [JSONValue]? = nil,
-        activeTurn: ActiveTurn? = nil
+        url: String,
+        token: String
     ) {
-        self.messages = messages
-        self.pendingChunks = pendingChunks
-        self.activeTurn = activeTurn
+        self.url = url
+        self.token = token
     }
 
     private enum CodingKeys: String, CodingKey {
         case type
-        case messages
-        case pendingChunks
-        case activeTurn
+        case url
+        case token
+    }
+}
+
+public struct OperationCancelEvent: Codable, Equatable, Sendable {
+    public let type = "operation.cancel"
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case type
     }
 }
 
@@ -283,84 +229,6 @@ public struct OperationErrorEvent: Codable, Equatable, Sendable {
         case type
         case code
         case message
-    }
-}
-
-public struct AgentChunksEvent: Codable, Equatable, Sendable {
-    public let type = "agent.chunks"
-    public var chunks: [JSONValue]
-
-    public init(
-        chunks: [JSONValue]
-    ) {
-        self.chunks = chunks
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case chunks
-    }
-}
-
-public struct AgentFinishEvent: Codable, Equatable, Sendable {
-    public let type = "agent.finish"
-    public var message: UIMessage
-
-    public init(
-        message: UIMessage
-    ) {
-        self.message = message
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case message
-    }
-}
-
-public struct AgentReadyEvent: Codable, Equatable, Sendable {
-    public let type = "agent.ready"
-
-    public init() {}
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-    }
-}
-
-public struct UserMessageEvent: Codable, Equatable, Sendable {
-    public let type = "user.message"
-    public var message: UIMessage
-
-    public init(
-        message: UIMessage
-    ) {
-        self.message = message
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case message
-    }
-}
-
-public struct EditorReadyEvent: Codable, Equatable, Sendable {
-    public let type = "editor.ready"
-    public var url: String
-    public var token: String
-
-    public init(
-        url: String,
-        token: String
-    ) {
-        self.url = url
-        self.token = token
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case url
-        case token
     }
 }
 
@@ -427,5 +295,127 @@ public enum ServerMessage: Codable, Equatable, Sendable {
             var container = encoder.container(keyedBy: DiscriminatorKeys.self)
             try container.encode(type, forKey: .discriminator)
         }
+    }
+}
+
+public struct SessionMarkReadEvent: Codable, Equatable, Sendable {
+    public let type = "session.mark_read"
+    public var messageId: String
+
+    public init(
+        messageId: String
+    ) {
+        self.messageId = messageId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case messageId
+    }
+}
+
+public struct SyncRequestEvent: Codable, Equatable, Sendable {
+    public let type = "sync.request"
+    public var lastMessageId: UUID?
+    public var lastChunkIndex: Int?
+
+    public init(
+        lastMessageId: UUID? = nil,
+        lastChunkIndex: Int? = nil
+    ) {
+        self.lastMessageId = lastMessageId
+        self.lastChunkIndex = lastChunkIndex
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case lastMessageId
+        case lastChunkIndex
+    }
+}
+
+public struct SyncResponseEvent: Codable, Equatable, Sendable {
+    public let type = "sync.response"
+    public var messages: [UIMessage]
+    public var pendingChunks: [JSONValue]?
+    public var activeTurn: ActiveTurnState?
+
+    public init(
+        messages: [UIMessage],
+        pendingChunks: [JSONValue]? = nil,
+        activeTurn: ActiveTurnState? = nil
+    ) {
+        self.messages = messages
+        self.pendingChunks = pendingChunks
+        self.activeTurn = activeTurn
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case messages
+        case pendingChunks
+        case activeTurn
+    }
+}
+
+/// Wire shape of an AI SDK UIMessage; parts stay opaque JSON.
+public struct UIMessage: Codable, Equatable, Sendable {
+    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
+        case user
+        case assistant
+        case system
+        /// A value this client version doesn't recognize yet.
+        case unknown(String)
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "user": self = .user
+            case "assistant": self = .assistant
+            case "system": self = .system
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .user: "user"
+            case .assistant: "assistant"
+            case .system: "system"
+            case .unknown(let value): value
+            }
+        }
+    }
+
+    public var id: String
+    public var role: Role
+    public var parts: [JSONValue]
+    public var metadata: JSONValue?
+
+    public init(
+        id: String,
+        role: Role,
+        parts: [JSONValue],
+        metadata: JSONValue? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.parts = parts
+        self.metadata = metadata
+    }
+}
+
+public struct UserMessageEvent: Codable, Equatable, Sendable {
+    public let type = "user.message"
+    public var message: UIMessage
+
+    public init(
+        message: UIMessage
+    ) {
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case message
     }
 }
