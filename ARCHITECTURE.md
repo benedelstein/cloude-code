@@ -10,7 +10,8 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 
 ## Packages
 
-- **@repo/shared** (`packages/shared/`) - Shared types and Zod schemas for data transfer, session state, and vm-agent I/O. All client/server messages are validated through discriminated unions. If a type should be used by multiple packages, put it in shared instead of duplicating the interface.
+- **@repo/api-contract** (`packages/api-contract/`) - The client API contract: every exported Zod schema (HTTP request/response, WebSocket messages, Agents SDK ClientState) is transpiled to Swift (`apps/ios/Modules/CoreAPI`) by `packages/api-contract/codegen` and consumed as `z.infer` types by server/web. Server-internal types do not belong here. See `docs/api-type-codegen.md`.
+- **@repo/shared** (`packages/shared/`) - Server-side shared code: vm-agent I/O schemas, provider registry, logging, utils, tool normalization. Re-exports the entire api-contract, so consumers import everything from `@repo/shared`. If a type is part of the client contract put it in api-contract; otherwise put it here.
 - **@repo/vm-agent** (`packages/vm-agent/`) - Runs inside the Sprite VM. Provides a shared AI SDK agent harness with Claude Code and OpenAI Codex providers. The current deployment path uses the webhook entrypoint; the NDJSON entrypoint remains for the legacy stdin/stdout path. Uses Bun runtime.
 - **@repo/api-server** (`services/api-server/`) - Cloudflare Workers API using Hono. `src/runtime/` contains Worker runtime entrypoints such as the `SessionAgentDO` Durable Object, while `src/modules/` contains route, service, repository, and type code by domain.
 - **@repo/web** (`apps/web/`) - Next.js web client.
@@ -19,14 +20,14 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 
 - `services/api-server/src/runtime/session-agent.do.ts` - Core session management, VM lifecycle, WebSocket handling, and webhook RPC handlers.
 - `packages/vm-agent/src/index-webhook.ts` - Current vm-agent webhook entrypoint.
-- `packages/shared/src/types/websocket-api.ts` - WebSocket message schemas.
+- `packages/api-contract/src/websocket-api.ts` - WebSocket message schemas.
 
 ## Architectural Invariants
 
 - The Durable Object is the session authority. It owns session lifecycle, message state, client WebSocket handling, and VM coordination.
 - The Sprite VM owns the execution runtime. It runs the agent process and submits output back to the Durable Object through authenticated webhooks.
 - Browser clients cannot mutate Durable Object server state directly. Client messages go through typed API or WebSocket messages and are validated before handling.
-- Cross-package contracts live in `packages/shared`. Server, VM, and web packages should not duplicate shared DTOs or protocol types.
+- Cross-package contracts live in `packages/api-contract` (client-facing) and `packages/shared` (server/VM internal). Server, VM, and web packages should not duplicate shared DTOs or protocol types.
 - Web code must not import server or VM runtime code. Server and VM code must not import web UI code.
 - External inputs are parsed at the boundary before entering internal services. This includes HTTP bodies, WebSocket payloads, webhooks, provider responses, database rows, environment variables, and secrets.
 
