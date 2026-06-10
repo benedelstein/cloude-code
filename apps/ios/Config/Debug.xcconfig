@@ -1,0 +1,7 @@
+#include "./Base.xcconfig"
+
+BASE_BUNDLE_IDENTIFIER = llc.bze.CloudeCode
+BUILD_ENVIRONMENT = PRODUCTION
+// escaping workaround: xcconfig treats // as a comment
+SLASH = /
+API_BASE_URL = https:$(SLASH)/api.cloudecode.dev

@@ -5,9 +5,9 @@ included:
   - CloudeCodeTests
   - CloudeCodeUITests
   - Modules/API/Sources
-  - Modules/Cache/Sources
   - Modules/CoreAPI/Sources
   - Modules/Domain/Sources
+  - Modules/Entities/Sources
 
 excluded:
   - "**/.build"

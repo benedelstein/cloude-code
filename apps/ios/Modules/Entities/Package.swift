@@ -3,12 +3,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "Cache",
+    name: "Entities",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(
-            name: "Cache",
-            targets: ["Cache"]
+            name: "Entities",
+            targets: ["Entities"]
         )
     ],
     dependencies: [
@@ -16,10 +16,14 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Cache",
+            name: "Entities",
             dependencies: [
                 .product(name: "Domain", package: "Domain")
             ]
+        ),
+        .testTarget(
+            name: "EntitiesTests",
+            dependencies: ["Entities"]
         )
     ]
 )

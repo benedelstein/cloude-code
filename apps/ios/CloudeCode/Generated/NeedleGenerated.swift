@@ -1,5 +1,5 @@
 import API
-import Cache
+import Entities
 import NeedleFoundation
 
 private let needleDependenciesHash: String? = nil

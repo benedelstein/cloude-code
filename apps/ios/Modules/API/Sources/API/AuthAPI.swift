@@ -1,22 +1,15 @@
+import CoreAPI
 import Domain
 import Foundation
 
-// Wire mirror of @repo/shared UserInfo. Replace with codegen output.
-struct UserInfoDTO: Decodable, Sendable {
-    let id: String
-    let login: String
-    let name: String?
-    let avatarUrl: String?
-}
-
 extension Domain.User {
-    init(from dto: UserInfoDTO) {
-        self.init(id: dto.id, login: dto.login, name: dto.name, avatarUrl: dto.avatarUrl)
+    init(from info: CoreAPI.UserInfo) {
+        self.init(id: info.id, login: info.login, name: info.name, avatarUrl: info.avatarUrl)
     }
 }
 
 private struct GetMe: APIRequest {
-    typealias Response = UserInfoDTO
+    typealias Response = CoreAPI.UserInfo
 
     var path: String { "auth/me" }
     var method: HTTPMethod { .get }
