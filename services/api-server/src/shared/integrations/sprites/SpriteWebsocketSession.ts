@@ -63,6 +63,8 @@ export class SpriteWebsocketSession {
   private done = false;
   private terminalError: Error | null = null;
   private idleTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Scrollback frames received before session_info, replayed after attach when requested. */
+  private pendingHistoricalFrames: Array<string | ArrayBuffer> = [];
   private readonly pendingWaiters = new Set<{
     resolve: (code: number) => void;
     reject: (error: Error) => void;
@@ -144,6 +146,15 @@ export class SpriteWebsocketSession {
       this.handleMessage(event.data);
     });
 
+    // Replay buffered scrollback now that ttyMode is known and handlers can decode it.
+    if (this.pendingHistoricalFrames.length > 0) {
+      const frames = this.pendingHistoricalFrames;
+      this.pendingHistoricalFrames = [];
+      for (const frame of frames) {
+        this.handleMessage(frame);
+      }
+    }
+
     // this signals that the websocket closed, not that the process on the vm finished.
     ws.addEventListener("close", (event) => {
       this.handleWSClose(event);
@@ -201,8 +212,15 @@ export class SpriteWebsocketSession {
       };
 
       const messageHandler = (event: MessageEvent) => {
-        // Binary messages before session_info are historical output - ignore until TTY mode is known
-        if (typeof event.data !== "string") { return; }
+        // Binary messages before session_info are historical output (scrollback).
+        // They cannot be decoded until TTY mode is known; buffer them when replay
+        // is requested, otherwise drop them.
+        if (typeof event.data !== "string") {
+          if (this.config.mode === "attach" && this.config.options.replayHistoricalOutput) {
+            this.pendingHistoricalFrames.push(event.data);
+          }
+          return;
+        }
         try {
           const message: unknown = JSON.parse(event.data);
           const result = SessionInfoMessageSchema.safeParse(message);

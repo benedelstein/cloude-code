@@ -31,7 +31,9 @@ import type {
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
+  HandleGetTerminalTargetResult,
   HandleInitResult,
+  HandleSetTerminalSessionIdResult,
   HandleUpdatePullRequestResult,
   InitSessionAgentRequest,
   SessionAgentRpc,
@@ -700,6 +702,35 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
 
   handleGetPlan(): HandleGetPlanResult {
     return this.queryService.handleGetPlan();
+  }
+
+  /**
+   * RPC entry point: resolves the sprite name and persisted terminal session id
+   * for the session terminal relay.
+   */
+  handleGetTerminalTarget(): HandleGetTerminalTargetResult {
+    if (!this.serverState.initialized) {
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not initialized" });
+    }
+    if (!this.serverState.spriteName) {
+      return failure({ code: "SPRITE_NOT_PROVISIONED", message: "Sprite not provisioned" });
+    }
+    return success({
+      spriteName: this.serverState.spriteName,
+      terminalSessionId: this.serverState.terminalSessionId,
+    });
+  }
+
+  /**
+   * RPC entry point: persists (or clears) the sprite exec-session id of the
+   * user's terminal shell so reconnects can re-attach to the same shell.
+   */
+  handleSetTerminalSessionId(terminalSessionId: number | null): HandleSetTerminalSessionIdResult {
+    if (!this.serverState.initialized) {
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not initialized" });
+    }
+    this.updateServerState({ terminalSessionId });
+    return success(undefined);
   }
 
   async handleCreatePullRequest(): Promise<HandleCreatePullRequestResult> {

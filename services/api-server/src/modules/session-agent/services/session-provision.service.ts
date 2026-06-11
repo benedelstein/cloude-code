@@ -22,10 +22,10 @@ import {
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
+import { SPRITE_WORKSPACE_DIR as WORKSPACE_DIR } from "../utils/sprite-workspace.utils";
 import { isTerminalSetupTask } from "./session-setup-run.service";
 import { SessionStartupScriptService } from "./session-startup-script.service";
 
-const WORKSPACE_DIR = "/home/sprite/workspace";
 
 type ProvisionClientStateUpdate = Partial<
   Pick<ClientState, "baseBranch" | "lastError" | "status">

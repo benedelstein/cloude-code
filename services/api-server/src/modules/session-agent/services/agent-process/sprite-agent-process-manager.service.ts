@@ -21,6 +21,7 @@ import VM_AGENT_WEBHOOK_SCRIPT from "@repo/vm-agent/dist/vm-agent-webhook.bundle
 import { AgentAttachmentService } from "../agent-attachment.service";
 import type { SecretRepository } from "../../repositories/secret.repository";
 import type { ServerState } from "../../repositories/server-state.repository";
+import { SPRITE_WORKSPACE_DIR as WORKSPACE_DIR } from "../../utils/sprite-workspace.utils";
 import type {
   DispatchMessageInput,
   SpriteAgentProcessManagerError,
@@ -44,7 +45,6 @@ import {
 import { writeCredentialFiles, writeVmAgentScript } from "./write-files.service";
 
 const HOME_DIR = "/home/sprite";
-const WORKSPACE_DIR = "/home/sprite/workspace";
 const APP_DIR = `${HOME_DIR}/.cloude`;
 const VM_AGENT_LOG_DIR = `${APP_DIR}/logs`;
 const VM_AGENT_SCRIPT_PATH = `${APP_DIR}/agent-webhook.js`;

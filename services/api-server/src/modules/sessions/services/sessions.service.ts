@@ -767,6 +767,8 @@ export class SessionsService {
         return this.buildError({ status: 500, message: "Session already initialized" });
       case "EDITOR_DISABLED":
         return this.buildError({ status: 503, message: error.message });
+      case "SPRITE_NOT_PROVISIONED":
+        return this.buildError({ status: 409, message: error.message });
       default: {
         const _exhaustiveCheck: never = error;
         throw new Error(`Unhandled DO RPC error: ${JSON.stringify(_exhaustiveCheck)}`);

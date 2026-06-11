@@ -55,6 +55,12 @@ export interface AttachSessionOptions {
     env?: Record<string, string>;
     detachable?: boolean;
     idleTimeoutMs?: number;
+    /**
+     * Replay the session's scrollback buffer (binary frames received before
+     * session_info) through the stdout handlers after attach. If omitted,
+     * historical output is dropped.
+     */
+    replayHistoricalOutput?: boolean;
 }
 
 // Server message types from Sprites exec WebSocket
