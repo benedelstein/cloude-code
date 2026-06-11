@@ -2,11 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>AppGroupIdentifier</key>
+	<key>APP_GROUP_IDENTIFIER</key>
 	<string>$(APP_GROUP_IDENTIFIER)</string>
-	<key>APIBaseURL</key>
+	<key>API_BASE_URL</key>
 	<string>$(API_BASE_URL)</string>
-	<key>BuildEnvironment</key>
+	<key>BUILD_ENVIRONMENT</key>
 	<string>$(BUILD_ENVIRONMENT)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(BASE_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(DEEP_LINK_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
+	<key>OAUTH_REDIRECT_URI</key>
+	<string>$(OAUTH_REDIRECT_URI)</string>
 </dict>
 </plist>

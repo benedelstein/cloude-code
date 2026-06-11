@@ -23,6 +23,10 @@ export const getGithubRoute = createRoute({
       // Must match the configured web origin, a dev loopback origin, or the
       // preview allowlist regex.
       origin: z.string().optional(),
+      // Native clients only: a custom-scheme redirect URI (exact-matched
+      // against a hardcoded allowlist) that the OAuth callback 302s to.
+      // Mutually exclusive with `origin`.
+      redirectUri: z.string().optional(),
     }),
   },
   responses: {

@@ -1,7 +1,10 @@
+import API
+import AuthenticationServices
 import Domain
 import Entities
 import Foundation
 import Observation
+import SwiftUI
 
 /// Auth state for the UI: drives the root view's loading/signedIn/signedOut
 /// switch and exposes the signed-in user.
@@ -15,12 +18,23 @@ final class SessionStore {
 
     private(set) var state: State = .loading
     private(set) var user: UserModel?
+    private(set) var isSigningIn = false
+    private(set) var signInError: String?
     private let coordinator: TokenCoordinator
     private let userStore: UserStore
+    private let signInAPI: any SignInProviding
+    private let oauthRedirectURI: String
 
-    init(coordinator: TokenCoordinator, userStore: UserStore) {
+    init(
+        coordinator: TokenCoordinator,
+        userStore: UserStore,
+        signInAPI: any SignInProviding,
+        oauthRedirectURI: String
+    ) {
         self.coordinator = coordinator
         self.userStore = userStore
+        self.signInAPI = signInAPI
+        self.oauthRedirectURI = oauthRedirectURI
     }
 
     func start() async {
@@ -48,6 +62,42 @@ final class SessionStore {
 
     func signOut() async {
         await coordinator.signOut()
+    }
+
+    /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,
+    /// run the session, verify the echoed state, exchange the code for a
+    /// native token pair, and adopt it (the events loop flips state).
+    func signIn(using webSession: WebAuthenticationSession) async {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        signInError = nil
+        defer { isSigningIn = false }
+
+        do {
+            let page = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
+            guard let scheme = URL(string: oauthRedirectURI)?.scheme else {
+                preconditionFailure("invalid OAUTH_REDIRECT_URI: \(oauthRedirectURI)")
+            }
+            let callback = try await webSession.authenticate(
+                using: page.url,
+                callbackURLScheme: scheme
+            )
+            let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
+            guard
+                let code = query?.first(where: { $0.name == "code" })?.value,
+                let returnedState = query?.first(where: { $0.name == "state" })?.value,
+                returnedState == page.state
+            else {
+                signInError = "Sign-in failed. Please try again."
+                return
+            }
+            let result = try await signInAPI.exchangeCode(code: code, state: returnedState)
+            await coordinator.adopt(result.session)
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            // User dismissed the sheet — not an error.
+        } catch {
+            signInError = "Sign-in failed. Please try again."
+        }
     }
 
     #if DEBUG

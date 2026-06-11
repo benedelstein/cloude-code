@@ -22,6 +22,10 @@ import {
 import { UserRepository } from "../repositories/user.repository";
 import { UserSessionRepository } from "../repositories/user-session.repository";
 import { validateRedirectOrigin } from "../utils/preview-origin.util";
+import {
+  looksLikeNativeRedirectUri,
+  validateNativeRedirectUri,
+} from "../utils/native-redirect.util";
 
 const GITHUB_LOGIN_OAUTH_PURPOSE = "github_login";
 const GITHUB_REAUTH_OAUTH_PURPOSE = "github_reauth";
@@ -101,19 +105,42 @@ export class AuthService {
 
   async createGitHubAuthorizationUrl(params: {
     requestedOrigin?: string;
+    nativeRedirectUri?: string;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubAuthUrlResponse>> {
-    const redirectOrigin = params.requestedOrigin ?? this.env.WEB_ORIGIN;
-    const originResult = validateRedirectOrigin(redirectOrigin, this.env);
-    if (!originResult.ok) {
-      this.logger.warn("Rejecting GitHub OAuth start", {
-        fields: { reason: originResult.error.message },
-      });
-      return failure({
-        domain: "auth",
-        status: 400,
-        code: "INVALID_ORIGIN",
-        message: originResult.error.message,
-      });
+    let redirectTarget: string;
+    if (params.nativeRedirectUri !== undefined) {
+      // Native app flow: the callback 302s straight to a custom scheme.
+      const nativeResult = validateNativeRedirectUri(
+        params.nativeRedirectUri,
+        this.env,
+      );
+      if (!nativeResult.ok) {
+        this.logger.warn("Rejecting native GitHub OAuth start", {
+          fields: { reason: nativeResult.error.message },
+        });
+        return failure({
+          domain: "auth",
+          status: 400,
+          code: "INVALID_ORIGIN",
+          message: nativeResult.error.message,
+        });
+      }
+      redirectTarget = nativeResult.value;
+    } else {
+      const redirectOrigin = params.requestedOrigin ?? this.env.WEB_ORIGIN;
+      const originResult = validateRedirectOrigin(redirectOrigin, this.env);
+      if (!originResult.ok) {
+        this.logger.warn("Rejecting GitHub OAuth start", {
+          fields: { reason: originResult.error.message },
+        });
+        return failure({
+          domain: "auth",
+          status: 400,
+          code: "INVALID_ORIGIN",
+          message: originResult.error.message,
+        });
+      }
+      redirectTarget = originResult.value;
     }
 
     const state = crypto.randomUUID();
@@ -122,7 +149,7 @@ export class AuthService {
     this.logger.info("Starting GitHub OAuth flow", {
       fields: {
         expiresAt,
-        redirectOrigin: originResult.value,
+        redirectOrigin: redirectTarget,
         requestId: params.requestId,
         userAgent: params.userAgent,
       },
@@ -131,7 +158,7 @@ export class AuthService {
     await createOauthState(this.env, {
       state,
       expiresAt,
-      redirectOrigin: originResult.value,
+      redirectOrigin: redirectTarget,
       purpose: GITHUB_LOGIN_OAUTH_PURPOSE,
     });
 
@@ -166,6 +193,30 @@ export class AuthService {
         code: "INVALID_OAUTH_STATE",
         message: "Invalid or expired sign-in session. Try again.",
       });
+    }
+
+    // Native flow: bounce straight to the app's custom scheme. Checked first
+    // because the web origin validator rejects URIs with paths.
+    if (looksLikeNativeRedirectUri(stateRecord.redirectOrigin)) {
+      const nativeResult = validateNativeRedirectUri(
+        stateRecord.redirectOrigin,
+        this.env,
+      );
+      if (!nativeResult.ok) {
+        this.logger.error("OAuth callback rejected stored native redirect URI", {
+          fields: { reason: nativeResult.error.message },
+        });
+        return failure({
+          domain: "auth",
+          status: 400,
+          code: "INVALID_ORIGIN",
+          message: nativeResult.error.message,
+        });
+      }
+      const target = new URL(nativeResult.value);
+      target.searchParams.set("code", params.code);
+      target.searchParams.set("state", params.state);
+      return success({ redirectUrl: target.toString() });
     }
 
     const originResult = validateRedirectOrigin(stateRecord.redirectOrigin, this.env);

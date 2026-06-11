@@ -13,11 +13,25 @@ final class CloudeCodeUITests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchesHomeScreen() throws {
+    func testLaunchesSignedOutScreen() throws {
         let app = XCUIApplication()
         app.launch()
 
-        XCTAssertTrue(app.navigationBars["Cloude Code"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Cloude Code"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSignInOpensSystemAuthentication() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let signInButton = app.buttons["Sign in"].firstMatch
+        XCTAssertTrue(signInButton.waitForExistence(timeout: 5))
+
+        signInButton.tap()
+
+        XCTAssertTrue(waitForSystemAuthPrompt(), "Expected the system authentication prompt to appear.")
     }
 
     @MainActor
@@ -26,5 +40,20 @@ final class CloudeCodeUITests: XCTestCase {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
+    }
+
+    @MainActor
+    private func waitForSystemAuthPrompt(timeout: TimeInterval = 10) -> Bool {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let labels = ["Continue", "Continuar"]
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if labels.contains(where: { springboard.buttons[$0].exists }) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return false
     }
 }

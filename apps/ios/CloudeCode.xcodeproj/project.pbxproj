@@ -35,11 +35,6 @@
 		B50E874D2FCD709D00240B2E /* CloudeCode.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CloudeCode.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B50E875A2FCD709E00240B2E /* CloudeCodeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CloudeCodeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B50E87642FCD709E00240B2E /* CloudeCodeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CloudeCodeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B6C000000000000000000001 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
-		B6C000000000000000000002 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		B6C000000000000000000003 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		B6C000000000000000000004 /* Development-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Development-Debug.xcconfig"; sourceTree = "<group>"; };
-		B6C000000000000000000005 /* Development-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Development-Release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -69,6 +64,11 @@
 		B50E87672FCD709E00240B2E /* CloudeCodeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = CloudeCodeUITests;
+			sourceTree = "<group>";
+		};
+		B5F75E342FDB302400DFA071 /* Config */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -106,7 +106,7 @@
 		B50E87442FCD709D00240B2E = {
 			isa = PBXGroup;
 			children = (
-				B6C000000000000000000006 /* Config */,
+				B5F75E342FDB302400DFA071 /* Config */,
 				B50E874F2FCD709D00240B2E /* CloudeCode */,
 				B50E875D2FCD709E00240B2E /* CloudeCodeTests */,
 				B50E87672FCD709E00240B2E /* CloudeCodeUITests */,
@@ -122,18 +122,6 @@
 				B50E87642FCD709E00240B2E /* CloudeCodeUITests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		B6C000000000000000000006 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				B6C000000000000000000001 /* Base.xcconfig */,
-				B6C000000000000000000002 /* Debug.xcconfig */,
-				B6C000000000000000000003 /* Release.xcconfig */,
-				B6C000000000000000000004 /* Development-Debug.xcconfig */,
-				B6C000000000000000000005 /* Development-Release.xcconfig */,
-			);
-			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -466,7 +454,8 @@
 		};
 		B50E876F2FCD709E00240B2E /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B6C000000000000000000002 /* Debug.xcconfig */;
+			baseConfigurationReferenceAnchor = B5F75E342FDB302400DFA071 /* Config */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -514,7 +503,8 @@
 		};
 		B50E87702FCD709E00240B2E /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B6C000000000000000000003 /* Release.xcconfig */;
+			baseConfigurationReferenceAnchor = B5F75E342FDB302400DFA071 /* Config */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -788,7 +778,8 @@
 		};
 		B6C000000000000000000009 /* Development Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B6C000000000000000000004 /* Development-Debug.xcconfig */;
+			baseConfigurationReferenceAnchor = B5F75E342FDB302400DFA071 /* Config */;
+			baseConfigurationReferenceRelativePath = "Development-Debug.xcconfig";
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -836,7 +827,8 @@
 		};
 		B6C00000000000000000000A /* Development Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B6C000000000000000000005 /* Development-Release.xcconfig */;
+			baseConfigurationReferenceAnchor = B5F75E342FDB302400DFA071 /* Config */;
+			baseConfigurationReferenceRelativePath = "Development-Release.xcconfig";
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

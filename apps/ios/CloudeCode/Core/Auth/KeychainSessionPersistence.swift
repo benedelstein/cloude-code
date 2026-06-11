@@ -4,7 +4,7 @@ import Valet
 
 /// App-group Valet so widgets/extensions can share the session later. The
 /// group ID is per-environment, injected via Config/*.xcconfig → Info.plist
-/// (`AppGroupIdentifier`), same flow as APIBaseURL.
+/// (`APP_GROUP_IDENTIFIER`), same flow as `API_BASE_URL`.
 struct KeychainSessionPersistence: SessionPersisting {
     private let valet: Valet
 

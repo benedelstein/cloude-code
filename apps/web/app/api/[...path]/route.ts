@@ -37,6 +37,7 @@ async function handler(
     method: req.method,
     headers,
     body,
+    redirect: "manual",
   });
 
   const responseHeaders = new Headers(res.headers);

@@ -55,10 +55,11 @@ export function createAuthRoutes(
    * @returns The install + authorize URL and the nonce token
    */
   authRoutes.openapi(getGithubRoute, async (c) => {
-    const { origin: requestedOrigin } = c.req.valid("query");
+    const { origin: requestedOrigin, redirectUri } = c.req.valid("query");
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubAuthorizationUrl({
       requestedOrigin,
+      nativeRedirectUri: redirectUri,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });

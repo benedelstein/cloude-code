@@ -8,25 +8,40 @@ protocol ApplicationDependency: Dependency {}
 final class ApplicationComponent: Component<ApplicationDependency> {
     private var apiBaseURL: URL {
         // Injected per scheme via Config/*.xcconfig -> Info.plist.
-        guard let string = Bundle.main.object(forInfoDictionaryKey: "APIBaseURL") as? String,
+        guard let string = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
               let url = URL(string: string) else {
-            preconditionFailure("missing or invalid APIBaseURL in Info.plist")
+            preconditionFailure("missing or invalid API_BASE_URL in Info.plist")
         }
         return url
     }
 
     private var appGroupIdentifier: String {
         // Injected per scheme via Config/*.xcconfig -> Info.plist.
-        guard let identifier = Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String,
+        guard let identifier = Bundle.main.object(forInfoDictionaryKey: "APP_GROUP_IDENTIFIER") as? String,
               !identifier.isEmpty else {
-            preconditionFailure("missing AppGroupIdentifier in Info.plist")
+            preconditionFailure("missing APP_GROUP_IDENTIFIER in Info.plist")
         }
         return identifier
+    }
+
+    private var oauthRedirectURI: String {
+        // Injected per scheme via Config/*.xcconfig -> Info.plist.
+        guard let uri = Bundle.main.object(forInfoDictionaryKey: "OAUTH_REDIRECT_URI") as? String,
+              !uri.isEmpty else {
+            preconditionFailure("missing OAUTH_REDIRECT_URI in Info.plist")
+        }
+        return uri
     }
 
     var apiClient: APIClient {
         shared {
             APIClient(baseURL: apiBaseURL) // pure transport
+        }
+    }
+
+    var signInAPI: any SignInProviding {
+        shared {
+            SignInAPI(client: apiClient)
         }
     }
 
@@ -53,7 +68,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
 
     @MainActor var sessionStore: SessionStore {
         shared {
-            SessionStore(coordinator: tokenCoordinator, userStore: userStore)
+            SessionStore(
+                coordinator: tokenCoordinator,
+                userStore: userStore,
+                signInAPI: signInAPI,
+                oauthRedirectURI: oauthRedirectURI
+            )
         }
     }
 

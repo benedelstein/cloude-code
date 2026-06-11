@@ -4,7 +4,9 @@
 
 GitHub OAuth via a GitHub App, with server-side session tokens stored in an HTTP-only cookie. The Next.js web app acts as a BFF (backend-for-frontend) proxy so the session token never touches client-side JavaScript.
 
-The GitHub App's "User authorization callback URL" is `https://api.cloudecode.dev/auth/callback` — pinned to the api-server, not the web app. The api-server owns the OAuth state and decides which web origin the popup lands on for cookie-set. This is how sign-in works on Vercel preview branches as well as prod.
+The production GitHub App's "User authorization callback URL" is `https://api.cloudecode.dev/auth/callback` — pinned to the api-server, not the web app. The api-server owns the OAuth state and decides which web origin the popup lands on for cookie-set. This is how sign-in works on Vercel preview branches as well as prod.
+
+Local GitHub Apps used for development can point at a tunnel URL for the web dev server. The web app accepts `/auth/callback` as a compatibility bridge and `/api/auth/callback` through the API proxy; both forward to the api-server and preserve its redirect response. This lets the same API-owned state resolve to either a web finalize URL or a native deep link.
 
 ## Flow
 
@@ -111,6 +113,15 @@ The previous refresh token stays valid for 60 seconds after rotation so a client
 `POST /auth/logout` with a native access token revokes the family (refresh token included). Legacy web tokens keep single-row deletion.
 
 Access tokens stay opaque DB-backed rows for now; a later switch to JWT access tokens would be server-only (clients never decode the token and use `accessTokenExpiresAt` for staleness).
+
+### Native sign-in flow (iOS)
+
+The iOS app signs in with the same GitHub App via `ASWebAuthenticationSession`:
+
+1. `GET /auth/github?redirectUri=cloudecode://auth/callback` — the redirect URI is exact-matched against a hardcoded allowlist (`cloudecode://auth/callback`; `cloudecode-dev://auth/callback` outside production) in `native-redirect.util.ts` and stored as the state's `redirect_origin`. Returns `{ url, state }`.
+2. The app opens `url` in `ASWebAuthenticationSession` with the custom callback scheme.
+3. GitHub redirects to the api-server `GET /auth/callback`, which recognizes the stored native URI (checked before the web origin validator, which rejects URIs with paths) and 302s to `cloudecode://auth/callback?code=X&state=Y`. The app registers the config-owned deep-link scheme in `CFBundleURLTypes`, so the session hands the callback URL back to the app.
+4. The app verifies the returned `state` matches, then calls `POST /auth/token { code, state, client: "native" }` and adopts the returned access/refresh pair.
 
 ### Dev: minting a native session locally
 
