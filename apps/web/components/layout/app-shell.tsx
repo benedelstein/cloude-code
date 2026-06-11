@@ -334,7 +334,7 @@ function FloatingSidebarToggle({
     <div
       className={cn(
         "absolute flex",
-        side === "left" ? "left-3.5" : "right-3.5",
+        side === "left" ? "left-3.5" : "right-5",
         className,
       )}
       style={{ top: FLOATING_SIDEBAR_TOGGLE_TOP_PX }}
