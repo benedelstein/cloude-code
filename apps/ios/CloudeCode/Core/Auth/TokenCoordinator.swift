@@ -2,6 +2,13 @@ import API
 import Domain
 import Foundation
 
+private extension Session {
+    /// Safe-to-log shape of the token lifecycle (no token material).
+    var logDescription: String {
+        "user=\(userId) accessExpires=\(accessTokenExpiresAt) refreshExpires=\(refreshTokenExpiresAt)"
+    }
+}
+
 enum AuthEvent: Sendable {
     case signedIn(Session)
     case refreshed(Session)
@@ -31,11 +38,16 @@ actor TokenCoordinator: AuthTokenProviding {
 
     /// Startup: keychain → nil = signed out; stale access → refresh; valid → arm timer.
     func restore() async -> Session? {
-        guard let stored = try? persistence.load() else { return nil }
+        guard let stored = try? persistence.load() else {
+            Logger.debug("Token restore: nothing in keychain")
+            return nil
+        }
         session = stored
         if stored.isAccessTokenStale() {
+            Logger.debug("Token restore: access token stale, refreshing —", stored.logDescription)
             return try? await refresh() // failure → signedOut event already emitted
         }
+        Logger.debug("Token restore: access token valid —", stored.logDescription)
         scheduleEagerRefresh(for: stored)
         return stored
     }
@@ -57,28 +69,36 @@ actor TokenCoordinator: AuthTokenProviding {
         refreshTask = task
         defer { refreshTask = nil }
         do {
+            Logger.debug("Token refresh: started")
             let fresh = try await task.value
-            adoptInternal(fresh)
+            _adopt(fresh)
+            Logger.debug("Token refresh: succeeded —", fresh.logDescription)
             continuation.yield(.refreshed(fresh))
             return fresh
         } catch APIError.unauthenticated { // refresh token rejected: terminal
+            Logger.warning("Token refresh: refresh token rejected, signing out")
             clearSession()
             continuation.yield(.signedOut)
             throw APIError.unauthenticated
-        } // other errors: transient, session kept
+        } catch { // other errors: transient, session kept
+            Logger.error("Token refresh: transient failure, keeping session —", error)
+            throw error
+        }
     }
 
-    func adopt(_ new: Session) { // dev injection now, real login later
-        adoptInternal(new)
+    func adopt(_ new: Session) {
+        Logger.debug("Token adopt: new session —", new.logDescription)
+        _adopt(new)
         continuation.yield(.signedIn(new))
     }
 
     func signOut() {
+        Logger.debug("Token sign-out: clearing session")
         clearSession()
         continuation.yield(.signedOut)
     }
 
-    private func adoptInternal(_ new: Session) {
+    private func _adopt(_ new: Session) {
         session = new
         try? persistence.save(new)
         scheduleEagerRefresh(for: new)
@@ -96,6 +116,7 @@ actor TokenCoordinator: AuthTokenProviding {
     private func scheduleEagerRefresh(for session: Session) {
         timerTask?.cancel()
         let fireIn = max(1, session.accessTokenExpiresAt.timeIntervalSinceNow - 120)
+        Logger.debug("Token timer: eager refresh in", Int(fireIn), "seconds")
         let deadline = ContinuousClock.now + .seconds(fireIn)
         timerTask = Task { [weak self] in
             try? await Task.sleep(until: deadline)

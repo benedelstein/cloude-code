@@ -1,3 +1,4 @@
+import Entities
 import SwiftUI
 
 struct HomeView: View {
@@ -5,9 +6,9 @@ struct HomeView: View {
     @Environment(\.showToast) private var showToast
 
     @State private var viewModel: HomeViewModel
-    let sessionBuilder: SessionBuilder
+    let sessionBuilder: AgentSessionBuilder
 
-    init(viewModel: HomeViewModel, sessionBuilder: SessionBuilder) {
+    init(viewModel: HomeViewModel, sessionBuilder: AgentSessionBuilder) {
         _viewModel = State(initialValue: viewModel)
         self.sessionBuilder = sessionBuilder
     }
@@ -35,14 +36,14 @@ struct HomeView: View {
                         }
                     }
                     .listStyle(.sidebar)
+                    .refreshable {
+                        await viewModel.refresh()
+                    }
                 }
             }
             .navigationTitle("Cloude Code")
-            .navigationDestination(for: SessionSummary.self) { session in
+            .navigationDestination(for: SessionSummaryModel.self) { session in
                 sessionBuilder.build(session: session)
-            }
-            .task {
-                await viewModel.start()
             }
             .onChange(of: viewModel.errorMessage) { _, errorMessage in
                 guard let errorMessage else {
@@ -54,6 +55,14 @@ struct HomeView: View {
                 )
             }
         }
+        // Outside the NavigationStack: pushes/pops re-evaluate the stack's
+        // content, and we only want to bind once per appearance of Home.
+        .task {
+            await viewModel.start()
+        }
+        .onDisappear {
+            viewModel.unload()
+        }
     }
 }
 
@@ -61,12 +70,12 @@ private struct SessionRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let session: SessionSummary
+    let session: SessionSummaryModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: style.gridSize) {
             HStack(spacing: style.gridSize) {
-                Text(session.title)
+                Text(session.title ?? "Untitled session")
                     .styledFont(.headline)
                     .foregroundStyle(theme.labelColor)
                     .lineLimit(1)
@@ -74,14 +83,14 @@ private struct SessionRow: View {
                 if session.hasUnread {
                     Circle()
                         .fill(theme.accentBlue)
-                        .frame(width: style.gridSize * 2, height: style.gridSize * 2)
+                        .frame(width: style.gridSize, height: style.gridSize)
                 }
             }
 
             HStack(spacing: style.gridSize) {
-                Text(session.repository)
+                Text(session.repoFullName)
                 Text("-")
-                Text(session.status)
+                Text(session.workingState)
             }
             .styledFont(.caption)
             .foregroundStyle(theme.secondaryLabelColor)

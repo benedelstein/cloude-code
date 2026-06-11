@@ -34,6 +34,7 @@ export interface RefreshSessionRecord {
   id: string;
   userId: string;
   refreshExpiresAt: string;
+  /** ISO-8601 UTC (normalized from sqlite datetime in the query). */
   previousRotatedAt: string | null;
   /** Which stored hash the presented token matched. */
   matched: "current" | "previous";
@@ -275,7 +276,8 @@ export class UserSessionRepository {
     tokenHash: string,
   ): Promise<RefreshSessionRecord | null> {
     const row = await this.database.prepare(
-      `SELECT id, user_id, refresh_token_hash, previous_rotated_at, refresh_expires_at
+      `SELECT id, user_id, refresh_token_hash, refresh_expires_at,
+              strftime('%Y-%m-%dT%H:%M:%SZ', previous_rotated_at) AS previous_rotated_at
        FROM auth_refresh_sessions
        WHERE refresh_token_hash = ? OR previous_refresh_token_hash = ?`,
     )

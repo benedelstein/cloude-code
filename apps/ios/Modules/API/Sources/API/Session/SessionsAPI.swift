@@ -170,7 +170,7 @@ public protocol SessionsAPIProviding: Sendable {
         sessionCursor: String?,
         repoLimit: Int?,
         sessionLimit: Int?
-    ) async throws -> ListSessionsResponse
+    ) async throws -> SessionSummaryPage
     func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse
     func session(id: UUID) async throws -> SessionInfoResponse
     func messages(sessionId: UUID) async throws -> [UIMessage]
@@ -185,7 +185,7 @@ public protocol SessionsAPIProviding: Sendable {
 }
 
 public extension SessionsAPIProviding {
-    func listSessions() async throws -> ListSessionsResponse {
+    func listSessions() async throws -> SessionSummaryPage {
         try await listSessions(
             repoId: nil,
             repoCursor: nil,
@@ -211,7 +211,7 @@ public struct SessionsAPI: SessionsAPIProviding {
         sessionCursor: String?,
         repoLimit: Int?,
         sessionLimit: Int?
-    ) async throws -> ListSessionsResponse {
+    ) async throws -> SessionSummaryPage {
         try await client.fetch(ListSessions(
             repoId: repoId,
             repoCursor: repoCursor,
@@ -219,7 +219,7 @@ public struct SessionsAPI: SessionsAPIProviding {
             repoLimit: repoLimit,
             sessionLimit: sessionLimit,
             headers: tokenProvider.bearerHeaders()
-        ))
+        )).summaryPage
     }
 
     public func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse {

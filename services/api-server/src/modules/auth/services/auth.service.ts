@@ -622,9 +622,9 @@ export class AuthService {
       return invalid;
     }
     if (found.matched === "previous") {
-      // previous_rotated_at is sqlite datetime('now'): "YYYY-MM-DD HH:MM:SS" UTC
+      // previousRotatedAt is ISO-8601 (normalized by the repository query)
       const rotatedAt = found.previousRotatedAt
-        ? new Date(`${found.previousRotatedAt.replace(" ", "T")}Z`).getTime()
+        ? new Date(found.previousRotatedAt).getTime()
         : 0;
       if (Date.now() - rotatedAt > ROTATION_GRACE_MS) {
         this.logger.warn("Refresh token reuse detected; revoking family", {

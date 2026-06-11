@@ -164,7 +164,13 @@ class MockD1 {
       const [hash] = args as [string];
       for (const row of this.refreshSessions.values()) {
         if (row.refresh_token_hash === hash || row.previous_refresh_token_hash === hash) {
-          return row;
+          // The real query normalizes previous_rotated_at to ISO via strftime.
+          return {
+            ...row,
+            previous_rotated_at: row.previous_rotated_at
+              ? `${row.previous_rotated_at.replace(" ", "T")}Z`
+              : null,
+          };
         }
       }
       return null;

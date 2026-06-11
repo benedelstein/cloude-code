@@ -1,25 +1,26 @@
+import Entities
 import SwiftUI
 
-struct SessionView: View {
+struct AgentSessionView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    @State private var store: SessionFeatureStore
+    @State private var store: AgentSessionStore
 
-    init(store: SessionFeatureStore) {
+    init(store: AgentSessionStore) {
         _store = State(initialValue: store)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: style.spacing) {
-            Text(store.title)
+            Text(store.session.title ?? "Untitled session")
                 .styledFont(.title2)
                 .foregroundStyle(theme.labelColor)
 
             HStack(spacing: style.gridSize) {
-                Text(store.repository)
+                Text(store.session.repoFullName)
                 Text("-")
-                Text(store.status)
+                Text(store.session.workingState)
             }
             .styledFont(.subheadline)
             .foregroundStyle(theme.secondaryLabelColor)

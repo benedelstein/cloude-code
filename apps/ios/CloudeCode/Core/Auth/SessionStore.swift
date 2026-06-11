@@ -39,23 +39,27 @@ final class SessionStore {
 
     func start() async {
         if let session = await coordinator.restore() {
+            Logger.debug("Session restored for user", session.userId)
             state = .signedIn
             // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
         } else {
+            Logger.debug("No stored session; signed out")
             state = .signedOut
         }
 
         for await event in coordinator.events {
             switch event {
             case .signedIn(let session):
+                Logger.debug("Auth event: signedIn", session.userId)
                 state = .signedIn
                 user = try? await userStore.get([session.userId], scopes: .all).first
             case .signedOut:
+                Logger.debug("Auth event: signedOut")
                 user = nil
                 state = .signedOut
             case .refreshed:
-                break
+                Logger.debug("Auth event: refreshed")
             }
         }
     }
@@ -99,20 +103,4 @@ final class SessionStore {
             signInError = "Sign-in failed. Please try again."
         }
     }
-
-    #if DEBUG
-    /// Adopts a placeholder session with an already-stale access token, then
-    /// refreshes so real tokens replace the placeholder immediately.
-    func injectDevSession(refreshToken: String, userId: String) async {
-        let placeholder = Session(
-            accessToken: "",
-            accessTokenExpiresAt: .distantPast,
-            refreshToken: refreshToken,
-            refreshTokenExpiresAt: Date().addingTimeInterval(60 * 24 * 60 * 60),
-            userId: userId
-        )
-        await coordinator.adopt(placeholder)
-        try? await coordinator.refresh()
-    }
-    #endif
 }

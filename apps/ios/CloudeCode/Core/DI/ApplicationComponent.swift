@@ -125,27 +125,10 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
-    var greetingAPI: any GreetingAPIProviding {
-        shared {
-            GreetingAPI()
-        }
-    }
-
-    var greetingCache: any GreetingCaching {
-        shared {
-            GreetingCache()
-        }
-    }
-
     @MainActor
     var homeComponent: HomeComponent {
         shared {
             HomeComponent(parent: self)
         }
-    }
-
-    @MainActor
-    func makeSessionComponent(session: SessionSummary) -> SessionComponent {
-        SessionComponent(parent: self, session: session)
     }
 }

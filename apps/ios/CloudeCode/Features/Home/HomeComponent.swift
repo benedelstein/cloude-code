@@ -21,31 +21,23 @@ final class HomeComponent: Component<HomeDependency> {
             )
         }
     }
+
+    @MainActor
+    func makeAgentSessionComponent(session: SessionSummaryModel) -> AgentSessionComponent {
+        AgentSessionComponent(parent: self, session: session)
+    }
 }
 
 @MainActor
 struct HomeBuilder {
     let component: HomeComponent
-    let sessionBuilder: SessionBuilder
 
     func build() -> some View {
-        HomeView(viewModel: component.viewModel, sessionBuilder: sessionBuilder)
-    }
-}
-
-extension EnvironmentValues {
-    @Entry
-    var homeBuilder: HomeBuilder?
-}
-
-struct HomeContainer: View {
-    @Environment(\.homeBuilder) private var builder
-
-    var body: some View {
-        if let builder {
-            builder.build()
-        } else {
-            ContentUnavailableView("Missing home builder", systemImage: "exclamationmark.triangle")
-        }
+        HomeView(
+            viewModel: component.viewModel,
+            sessionBuilder: AgentSessionBuilder { [component] session in
+                component.makeAgentSessionComponent(session: session)
+            }
+        )
     }
 }

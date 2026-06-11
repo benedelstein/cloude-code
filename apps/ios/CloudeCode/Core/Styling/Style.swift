@@ -13,10 +13,10 @@ struct Style {
     }
 
     // MARK: Layout
-    let gridSize: CGFloat = 5
-    let horizontalPadding: CGFloat = 25
+    let gridSize: CGFloat = 8
+    let horizontalPadding: CGFloat = 16
     let outlineThickness: CGFloat = 0.5
-    let mainButtonHeight: CGFloat = 55
+    let mainButtonHeight: CGFloat = 56
 
     var spacing: CGFloat {
         gridSize * 2

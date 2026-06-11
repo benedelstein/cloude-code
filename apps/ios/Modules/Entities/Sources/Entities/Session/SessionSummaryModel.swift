@@ -70,4 +70,16 @@ public final class SessionSummaryModel: EntityModel {
     }
 }
 
+// Identity-based equality: the store guarantees one canonical instance per id,
+// so reference identity is the right notion for navigation values and diffing.
+extension SessionSummaryModel: Hashable {
+    public nonisolated static func == (lhs: SessionSummaryModel, rhs: SessionSummaryModel) -> Bool {
+        lhs === rhs
+    }
+
+    public nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
+}
+
 public typealias SessionSummaryStore = EntityStore<SessionSummaryModel>

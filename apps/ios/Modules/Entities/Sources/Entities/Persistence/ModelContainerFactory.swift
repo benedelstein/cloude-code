@@ -31,6 +31,9 @@ public struct ModelContainerFactory: Sendable {
             schema: schema,
             isStoredInMemoryOnly: inMemory,
             allowsSave: true,
+            // Cache lives in the app sandbox. An app group container is only
+            // needed if extensions/widgets ever read this store — switch to
+            // .identifier(appGroup) then.
             groupContainer: .none,
             cloudKitDatabase: .none
         )

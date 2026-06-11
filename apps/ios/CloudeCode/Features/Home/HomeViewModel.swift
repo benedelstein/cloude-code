@@ -1,5 +1,4 @@
 import API
-import CoreAPI
 import Entities
 import Domain
 import Foundation
@@ -7,30 +6,9 @@ import Foundation
 struct HomeSessionGroup: Identifiable, Hashable {
     let repoId: Int
     let repoFullName: String
-    var sessions: [SessionSummary]
+    var sessions: [SessionSummaryModel]
 
     var id: Int { repoId }
-}
-
-struct SessionSummary: Identifiable, Hashable {
-    let id: String
-    let repoId: Int
-    let title: String
-    let repository: String
-    let status: String
-    let hasUnread: Bool
-    let createdAt: String
-
-    @MainActor
-    init(summary: SessionSummaryModel) {
-        id = summary.id
-        repoId = summary.repoId
-        title = summary.title ?? "Untitled session"
-        repository = summary.repoFullName
-        status = summary.workingState
-        hasUnread = summary.hasUnread
-        createdAt = summary.createdAt
-    }
 }
 
 @MainActor
@@ -47,6 +25,9 @@ final class HomeViewModel {
     private(set) var errorMessage: String?
     private(set) var nextRepoCursor: String?
 
+    /// Groups are derived from the store's canonical model instances, so
+    /// cache loads, server refreshes, and socket updates all flow through
+    /// the same objects.
     var groups: [HomeSessionGroup] {
         Self.groups(from: Array(sessionSummaryStore.objectMap.values))
     }
@@ -65,6 +46,8 @@ final class HomeViewModel {
         self.userSessionsSocket = userSessionsSocket
     }
 
+    /// Cache first (groups render immediately from cached models), then a
+    /// server fetch replaces both the on-screen values and the cache.
     func start() async {
         guard !didStart else {
             return
@@ -72,8 +55,19 @@ final class HomeViewModel {
         didStart = true
         listenForSocketEvents()
         await loadCache()
-        await refresh(showLoading: true)
+        await refresh(showLoading: isEmpty)
         await userSessionsSocket.connect()
+    }
+
+    /// Tear down socket bindings; `start()` rebinds on the next appearance.
+    func unload() {
+        socketTask?.cancel()
+        socketTask = nil
+        didStart = false
+        hasConnected = false
+        Task { [userSessionsSocket] in
+            await userSessionsSocket.disconnect()
+        }
     }
 
     func refresh(showLoading: Bool = false) async {
@@ -82,8 +76,8 @@ final class HomeViewModel {
         }
         errorMessage = nil
         do {
-            let response = try await sessionsAPI.listSessions()
-            replaceCachedList(with: response)
+            let page = try await sessionsAPI.listSessions()
+            replaceCachedList(with: page)
         } catch {
             Logger.error(error)
             errorMessage = error.localizedDescription
@@ -123,45 +117,30 @@ final class HomeViewModel {
         }
     }
 
-    private func handle(_ message: UserSessionsServerMessage) async {
+    private func handle(_ message: UserSessionsServerEvent) async {
         switch message {
-        case .userSessionsConnected:
+        case .connected:
             break
-        case .sessionSummaryCreated(let event):
-            add(event.session)
-        case .sessionSummaryUpdated(let event):
-            replaceLoaded(event.session)
-        case .sessionSummaryRemoved(let event):
-            remove(sessionID: event.sessionId.uuidString)
-        case .sessionListResyncRequired:
+        case .summaryCreated(let summary):
+            sessionSummaryStore.putDisk([summary])
+        case .summaryUpdated(let summary):
+            guard sessionSummaryStore[summary.id] != nil else {
+                return
+            }
+            sessionSummaryStore.putDisk([summary])
+        case .summaryRemoved(let id):
+            sessionSummaryStore.delete([id])
+        case .resyncRequired:
             await refresh()
-        case .unknown:
-            break
         }
     }
 
-    private func add(_ summary: CoreAPI.SessionSummary) {
-        sessionSummaryStore.putDisk([summary.domainSummary])
-    }
-
-    private func replaceLoaded(_ summary: CoreAPI.SessionSummary) {
-        guard sessionSummaryStore[summary.id.uuidString] != nil else {
-            return
-        }
-        sessionSummaryStore.putDisk([summary.domainSummary])
-    }
-
-    private func remove(sessionID: String) {
-        sessionSummaryStore.delete([sessionID])
-    }
-
-    private func replaceCachedList(with response: ListSessionsResponse) {
-        nextRepoCursor = response.nextRepoCursor
-        let summaries = response.groups.flatMap(\.sessions).map(\.domainSummary)
-        let freshIDs = Set(summaries.map(\.id))
+    private func replaceCachedList(with page: SessionSummaryPage) {
+        nextRepoCursor = page.nextRepoCursor
+        let freshIDs = Set(page.summaries.map(\.id))
         let staleIDs = Set(sessionSummaryStore.objectMap.keys).subtracting(freshIDs)
         sessionSummaryStore.delete(staleIDs)
-        sessionSummaryStore.putDisk(summaries)
+        sessionSummaryStore.putDisk(page.summaries)
     }
 
     private static func groups(from sessions: [SessionSummaryModel]) -> [HomeSessionGroup] {
@@ -171,43 +150,14 @@ final class HomeViewModel {
                 guard let first = sessions.first else {
                     return nil
                 }
-                let rows = sessions
-                    .sorted { $0.createdAt > $1.createdAt }
-                    .map(SessionSummary.init(summary:))
                 return HomeSessionGroup(
                     repoId: first.repoId,
                     repoFullName: first.repoFullName,
-                    sessions: rows
+                    sessions: sessions.sorted { $0.createdAt > $1.createdAt }
                 )
             }
             .sorted { lhs, rhs in
                 (lhs.sessions.first?.createdAt ?? "") > (rhs.sessions.first?.createdAt ?? "")
             }
-    }
-}
-
-private extension CoreAPI.SessionSummary {
-    var domainSummary: Domain.SessionSummary {
-        Domain.SessionSummary(
-            id: id.uuidString,
-            repoId: repoId,
-            repoFullName: repoFullName,
-            title: title,
-            archived: archived,
-            workingState: workingState.rawValue,
-            pushedBranch: pushedBranch,
-            pullRequest: pullRequest.map {
-                Domain.SessionSummary.PullRequest(
-                    url: $0.url,
-                    number: $0.number,
-                    state: $0.state.rawValue
-                )
-            },
-            createdAt: createdAt,
-            updatedAt: updatedAt,
-            lastMessageAt: lastMessageAt,
-            lastAssistantMessageId: lastAssistantMessageId,
-            hasUnread: hasUnread
-        )
     }
 }

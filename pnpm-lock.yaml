@@ -12,6 +12,9 @@ catalogs:
     '@hono/zod-openapi':
       specifier: ^1.2.2
       version: 1.2.2
+    '@types/node':
+      specifier: ^22.0.0
+      version: 22.19.8
     '@vitest/coverage-v8':
       specifier: ^3.1.1
       version: 3.2.4
@@ -256,7 +259,7 @@ importers:
         version: 4.3.6
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
+        specifier: 'catalog:'
         version: 22.19.8
       '@vitest/coverage-v8':
         specifier: 'catalog:'

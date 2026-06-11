@@ -41,10 +41,10 @@ private func homeDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyOb
     HomeDependencyProvider(applicationComponent: parent1(component) as! ApplicationComponent)
 }
 
-private final class SessionDependencyProvider: SessionDependency {}
+private final class AgentSessionDependencyProvider: AgentSessionDependency {}
 
-private func sessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
-    SessionDependencyProvider()
+private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
+    AgentSessionDependencyProvider()
 }
 
 #endif
@@ -65,6 +65,9 @@ public func registerProviderFactories() {
     registerProviderFactory("^->RootComponent", factoryEmptyDependencyProvider)
     registerProviderFactory("^->RootComponent->ApplicationComponent", applicationDependencyFactory)
     registerProviderFactory("^->RootComponent->ApplicationComponent->HomeComponent", homeDependencyFactory)
-    registerProviderFactory("^->RootComponent->ApplicationComponent->SessionComponent", sessionDependencyFactory)
+    registerProviderFactory(
+        "^->RootComponent->ApplicationComponent->HomeComponent->AgentSessionComponent",
+        agentSessionDependencyFactory
+    )
     #endif
 }
