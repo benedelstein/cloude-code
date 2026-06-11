@@ -4,9 +4,9 @@ import SwiftUI
 protocol SessionDependency: Dependency {}
 
 final class SessionComponent: Component<SessionDependency> {
-    private let session: HomeSessionRow
+    private let session: SessionSummary
 
-    init(parent: Scope, session: HomeSessionRow) {
+    init(parent: Scope, session: SessionSummary) {
         self.session = session
         super.init(parent: parent)
     }
@@ -21,9 +21,9 @@ final class SessionComponent: Component<SessionDependency> {
 
 @MainActor
 struct SessionBuilder {
-    let makeComponent: (HomeSessionRow) -> SessionComponent
+    let makeComponent: (SessionSummary) -> SessionComponent
 
-    func build(session: HomeSessionRow) -> some View {
+    func build(session: SessionSummary) -> some View {
         SessionView(store: makeComponent(session).store)
     }
 }

@@ -99,6 +99,18 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    @MainActor var sessionSummaryStore: SessionSummaryStore {
+        shared {
+            SessionSummaryStore(cache: cache)
+        }
+    }
+
+    var homeSessionEventHub: HomeSessionEventHub {
+        shared {
+            HomeSessionEventHub()
+        }
+    }
+
     var greetingAPI: any GreetingAPIProviding {
         shared {
             GreetingAPI()
@@ -119,7 +131,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     }
 
     @MainActor
-    func makeSessionComponent(session: HomeSessionRow) -> SessionComponent {
+    func makeSessionComponent(session: SessionSummary) -> SessionComponent {
         SessionComponent(parent: self, session: session)
     }
 }

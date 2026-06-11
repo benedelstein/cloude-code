@@ -1,10 +1,14 @@
 import API
+import Entities
 import NeedleFoundation
 import SwiftUI
 
 protocol HomeDependency: Dependency {
     var sessionsAPI: any SessionsAPIProviding { get }
+    @MainActor
+    var sessionSummaryStore: SessionSummaryStore { get }
     var userSessionsSocket: UserSessionsSocket { get }
+    var homeSessionEventHub: HomeSessionEventHub { get }
 }
 
 final class HomeComponent: Component<HomeDependency> {
@@ -13,7 +17,9 @@ final class HomeComponent: Component<HomeDependency> {
         shared {
             HomeViewModel(
                 sessionsAPI: dependency.sessionsAPI,
-                userSessionsSocket: dependency.userSessionsSocket
+                sessionSummaryStore: dependency.sessionSummaryStore,
+                userSessionsSocket: dependency.userSessionsSocket,
+                homeSessionEventHub: dependency.homeSessionEventHub
             )
         }
     }

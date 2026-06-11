@@ -38,7 +38,7 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("Cloude Code")
-            .navigationDestination(for: HomeSessionRow.self) { session in
+            .navigationDestination(for: SessionSummary.self) { session in
                 sessionBuilder.build(session: session)
             }
             .overlay(alignment: .bottom) {
@@ -60,7 +60,7 @@ private struct SessionRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let session: HomeSessionRow
+    let session: SessionSummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: style.gridSize) {

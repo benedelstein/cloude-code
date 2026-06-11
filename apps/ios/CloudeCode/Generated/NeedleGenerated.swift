@@ -1,4 +1,5 @@
 import API
+import Entities
 import NeedleFoundation
 
 private let needleDependenciesHash: String? = nil
@@ -26,8 +27,17 @@ private final class HomeDependencyProvider: HomeDependency {
         applicationComponent.sessionsAPI
     }
 
+    @MainActor
+    var sessionSummaryStore: SessionSummaryStore {
+        applicationComponent.sessionSummaryStore
+    }
+
     var userSessionsSocket: UserSessionsSocket {
         applicationComponent.userSessionsSocket
+    }
+
+    var homeSessionEventHub: HomeSessionEventHub {
+        applicationComponent.homeSessionEventHub
     }
 }
 

@@ -65,4 +65,24 @@ final class CacheTests: XCTestCase {
 
         XCTAssertTrue(fetched.isEmpty)
     }
+
+    func testSessionSummaryRoundTripUpdateAndDelete() async throws {
+        let cache = try makeCache()
+
+        try await cache.put(SessionSummaryEntity.self, snapshots: [
+            testSessionSummary("s1", title: "Draft"),
+        ])
+        try await cache.put(SessionSummaryEntity.self, snapshots: [
+            testSessionSummary("s1", title: "Updated"),
+        ])
+
+        let fetched = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].title, "Updated")
+        XCTAssertEqual(fetched[0].pullRequest?.number, 1)
+
+        try await cache.delete(SessionSummaryEntity.self, ids: ["s1"])
+        let afterDelete = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
+        XCTAssertTrue(afterDelete.isEmpty)
+    }
 }
