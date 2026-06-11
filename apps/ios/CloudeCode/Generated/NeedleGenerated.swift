@@ -35,10 +35,6 @@ private final class HomeDependencyProvider: HomeDependency {
     var userSessionsSocket: UserSessionsSocket {
         applicationComponent.userSessionsSocket
     }
-
-    var homeSessionEventHub: HomeSessionEventHub {
-        applicationComponent.homeSessionEventHub
-    }
 }
 
 private func homeDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {

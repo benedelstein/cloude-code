@@ -39,11 +39,9 @@ final class HomeViewModel {
     private let sessionsAPI: any SessionsAPIProviding
     private let sessionSummaryStore: SessionSummaryStore
     private let userSessionsSocket: UserSessionsSocket
-    private let homeSessionEventHub: HomeSessionEventHub
     private var didStart = false
     private var hasConnected = false
     private var socketTask: Task<Void, Never>?
-    private var localEventTask: Task<Void, Never>?
 
     private(set) var isLoading = false
     private(set) var errorMessage: String?
@@ -60,13 +58,11 @@ final class HomeViewModel {
     init(
         sessionsAPI: any SessionsAPIProviding,
         sessionSummaryStore: SessionSummaryStore,
-        userSessionsSocket: UserSessionsSocket,
-        homeSessionEventHub: HomeSessionEventHub
+        userSessionsSocket: UserSessionsSocket
     ) {
         self.sessionsAPI = sessionsAPI
         self.sessionSummaryStore = sessionSummaryStore
         self.userSessionsSocket = userSessionsSocket
-        self.homeSessionEventHub = homeSessionEventHub
     }
 
     func start() async {
@@ -75,7 +71,6 @@ final class HomeViewModel {
         }
         didStart = true
         listenForSocketEvents()
-        listenForLocalEvents()
         await loadCache()
         await refresh(showLoading: true)
         await userSessionsSocket.connect()
@@ -111,25 +106,6 @@ final class HomeViewModel {
             for await event in userSessionsSocket.events {
                 await self?.handle(event)
             }
-        }
-    }
-
-    private func listenForLocalEvents() {
-        localEventTask = Task { [weak self, homeSessionEventHub] in
-            for await event in await homeSessionEventHub.events() {
-                self?.handle(event)
-            }
-        }
-    }
-
-    private func handle(_ event: HomeSessionEvent) {
-        switch event {
-        case .created(let session):
-            add(session)
-        case .updated(let session):
-            replaceLoaded(session)
-        case .removed(let sessionID):
-            remove(sessionID: sessionID.uuidString)
         }
     }
 

@@ -8,7 +8,6 @@ protocol HomeDependency: Dependency {
     @MainActor
     var sessionSummaryStore: SessionSummaryStore { get }
     var userSessionsSocket: UserSessionsSocket { get }
-    var homeSessionEventHub: HomeSessionEventHub { get }
 }
 
 final class HomeComponent: Component<HomeDependency> {
@@ -18,8 +17,7 @@ final class HomeComponent: Component<HomeDependency> {
             HomeViewModel(
                 sessionsAPI: dependency.sessionsAPI,
                 sessionSummaryStore: dependency.sessionSummaryStore,
-                userSessionsSocket: dependency.userSessionsSocket,
-                homeSessionEventHub: dependency.homeSessionEventHub
+                userSessionsSocket: dependency.userSessionsSocket
             )
         }
     }

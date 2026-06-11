@@ -125,12 +125,6 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
-    var homeSessionEventHub: HomeSessionEventHub {
-        shared {
-            HomeSessionEventHub()
-        }
-    }
-
     var greetingAPI: any GreetingAPIProviding {
         shared {
             GreetingAPI()
