@@ -20,6 +20,8 @@ export type ServerState = {
   agentSessionId: string | null;
   /** Sprite exec-session / process ID for the currently running vm-agent. */
   agentProcessId: number | null;
+  /** Sprite exec-session ID for the user's persistent terminal shell, or null if none. */
+  terminalSessionId: number | null;
   /** Locally generated run id for correlating vm-agent lifecycle webhooks. */
   agentProcessRunId: string | null;
   /** User message id currently being handled by the agent, or null if idle. */
@@ -41,6 +43,7 @@ function defaultServerState(): ServerState {
     repoCloned: false,
     agentSessionId: null,
     agentProcessId: null,
+    terminalSessionId: null,
     agentProcessRunId: null,
     activeUserMessageId: null,
     startupToolchain: null,

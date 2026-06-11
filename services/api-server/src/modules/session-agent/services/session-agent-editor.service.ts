@@ -3,8 +3,8 @@ import { buildNetworkPolicy } from "@/shared/integrations/sprites/network-policy
 import type { Logger } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { SecretRepository } from "../repositories/secret.repository";
+import { SPRITE_WORKSPACE_DIR as WORKSPACE_DIR } from "../utils/sprite-workspace.utils";
 
-const WORKSPACE_DIR = "/home/sprite/workspace";
 const HOME_DIR = "/home/sprite";
 
 type EditorContext = {

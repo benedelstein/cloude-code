@@ -4,6 +4,7 @@ export * from "./attachments";
 export * from "./errors";
 export * from "./websocket-api";
 export * from "./user-sessions-websocket-api";
+export * from "./terminal-websocket-api";
 export * from "./vm-agent";
 export * from "./api";
 export * from "./message-timing";

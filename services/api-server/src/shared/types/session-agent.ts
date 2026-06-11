@@ -44,7 +44,8 @@ export type SessionAgentRpcError =
   | { code: "PULL_REQUEST_CREATE_IN_PROGRESS"; message: string; status: 409 }
   | { code: "INVALID_REPO"; message: string; status: 400 }
   | { code: "PULL_REQUEST_CREATE_FAILED"; message: string; status: 400; details?: string }
-  | { code: "EDITOR_DISABLED"; message: string };
+  | { code: "EDITOR_DISABLED"; message: string }
+  | { code: "SPRITE_NOT_PROVISIONED"; message: string };
 
 export type HandleInitResult = Result<void, Extract<SessionAgentRpcError, { code: "ALREADY_INITIALIZED" }>>;
 export type HandleGetSessionResult = Result<SessionInfoResponse, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
@@ -67,6 +68,20 @@ export type HandleCreatePullRequestResult = Result<
   >
 >;
 export type HandleUpdatePullRequestResult = Result<void, Extract<SessionAgentRpcError, { code: "PULL_REQUEST_NOT_FOUND" }>>;
+/** Connection target for the session terminal relay. */
+export interface SessionTerminalTarget {
+  spriteName: string;
+  /** Persisted sprite exec-session id for the user shell, or null if none is live. */
+  terminalSessionId: number | null;
+}
+export type HandleGetTerminalTargetResult = Result<
+  SessionTerminalTarget,
+  Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" | "SPRITE_NOT_PROVISIONED" }>
+>;
+export type HandleSetTerminalSessionIdResult = Result<
+  void,
+  Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>
+>;
 
 export interface SessionAgentRpc {
   refreshProviderConnection(): Promise<void>;
@@ -83,6 +98,8 @@ export interface SessionAgentRpc {
   handleGetPlan(): HandleGetPlanResult;
   handleDeleteSession(): Promise<HandleDeleteSessionResult>;
   handleCreatePullRequest(): Promise<HandleCreatePullRequestResult>;
+  handleGetTerminalTarget(): HandleGetTerminalTargetResult;
+  handleSetTerminalSessionId(terminalSessionId: number | null): HandleSetTerminalSessionIdResult;
   updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult>;
   enforceSessionAccessBlocked(closeConnections?: boolean): Promise<void>;
 }
