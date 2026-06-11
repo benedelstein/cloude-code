@@ -4,7 +4,17 @@ CloudeCode is the SwiftUI iOS client for cloude-code. It talks to the API server
 
 The app is split into an app target (UI, features, DI wiring) and local Swift packages under `Modules/` that provide compile-time isolation for networking, domain types, and persistence. Dependencies are wired with Needle and flow through child components per feature.
 
-## Package Organization
+## Layout
+
+```text
+CloudeCode
+├── App/ # app entry point, delegate, and root view
+├── Core/ # core app functionality (lifecycle, DI, styling)
+└── Features/ # self-contained features (eg home, chat, settings)
+├── Modules/ # local swift packages for isolated shared functionality (eg api, caching)
+└── Config/ # per-environment xcconfig files
+```
+
 
 Local Swift packages, from lowest layer to highest:
 
@@ -24,6 +34,8 @@ App target (`CloudeCode/`):
 
 `Config/` holds per-environment xcconfig files consumed by the `CloudeCode` (prod) and `CloudeCode Dev` (localhost API) schemes; values flow through `Info.plist` and are read from `Bundle.main` at runtime.
 
+Isolated utility modules should be placed in a local swift package, if possible. Isolated packages are better for compile-time performance in Xcode.
+
 ## Dependency Graph
 
 ```
@@ -41,7 +53,6 @@ Lower layers never import higher ones. Entities does not know about the network;
 - Sendable Domain structs are the only data that crosses actor boundaries (network, disk, sockets).
 - Observable model classes are `@MainActor` and are created/merged only inside stores — never `@unchecked Sendable`.
 - CoreAPI wire types are mapped to Domain types inside `Modules/API` and do not escape it.
-- SwiftData `Entity` instances never leave `Cache`; its public API takes and returns Domain structs.
 - Generated code (`Modules/CoreAPI/Sources/CoreAPI/Generated/`, `CloudeCode/Generated/`) is never edited by hand; change the source schema or generator instead.
 - App source folders are real filesystem folders, not Xcode-only groups. No `xcuserdata/` files in version control.
 
@@ -49,18 +60,18 @@ Lower layers never import higher ones. Entities does not know about the network;
 
 - **App to API server** - All server communication goes through `Modules/API`. Protocol shapes come from CoreAPI, which is generated from the same Zod schemas the server validates against, so client and server cannot drift silently.
 - **Features to dependencies** - Features receive dependencies through Needle child components, not by reaching into globals or constructing shared services themselves.
-- **UI to persistence** - Views observe `@MainActor` models from `EntityStore`s; persistence reads/writes happen on `Cache`'s background model actor and surface as Domain structs.
 
 ## Conventions
 
-- Reusable API, caching, persistence, and shared logic go in local Swift packages under `Modules/`.
+- Reusable API, caching, persistence, and shared logic go in local Swift packages under `Modules/` and are linked to the xcode project via SPM.
 - User-facing screens go in app-target features under `CloudeCode/Features/`.
 - New modules target iOS 17 / macOS 14, Swift tools 6.0, and should keep dependencies minimal (Domain stays at zero).
 
 ## Tech Stack
 
 - **SwiftUI** with the Observation framework for UI.
-- **Needle** for compile-time dependency injection.
+- **Needle** for compile-safe dependency injection. [https://needle-di.io/](https://needle-di.io/)
 - **SwiftData** for on-disk persistence (versioned schema with migration plan).
-- **swift-ai-sdk** for AI SDK message types in the API layer.
+- **swift-ai-sdk** for AI SDK message types in the API layer ([https://github.com/teunlao/swift-ai-sdk](https://github.com/teunlao/swift-ai-sdk))
 - **Local SwiftPM packages** for module boundaries; **xcconfig** files for per-environment build settings.
+

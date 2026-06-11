@@ -10,5 +10,6 @@ struct RootView: View {
     var body: some View {
         HomeContainer()
             .environment(\.homeBuilder, HomeBuilder(component: component.homeComponent))
+            .themedRoot()
     }
 }
