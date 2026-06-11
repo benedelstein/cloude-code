@@ -675,6 +675,22 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(OpenAITokenResponse.self, key: "OpenAITokenResponse.autoMinimal")
     }
 
+    @Test func refreshRequestAutoFull() throws {
+        try assertAutoRoundTrip(RefreshRequest.self, key: "RefreshRequest.autoFull")
+    }
+
+    @Test func refreshRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(RefreshRequest.self, key: "RefreshRequest.autoMinimal")
+    }
+
+    @Test func refreshResponseAutoFull() throws {
+        try assertAutoRoundTrip(RefreshResponse.self, key: "RefreshResponse.autoFull")
+    }
+
+    @Test func refreshResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(RefreshResponse.self, key: "RefreshResponse.autoMinimal")
+    }
+
     @Test func tokenRequestAutoFull() throws {
         try assertAutoRoundTrip(TokenRequest.self, key: "TokenRequest.autoFull")
     }

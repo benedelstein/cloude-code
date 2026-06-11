@@ -17,6 +17,7 @@ export type GitHubAuthUrlResponse = z.infer<typeof GitHubAuthUrlResponse>;
 export const TokenRequest = z.object({
   code: z.string(),
   state: z.string(),
+  client: z.enum(["web", "native"]).optional(),
 });
 export type TokenRequest = z.infer<typeof TokenRequest>;
 
@@ -25,8 +26,25 @@ export const TokenResponse = z.object({
   user: UserInfo,
   hasInstallations: z.boolean(),
   installUrl: z.string(),
+  // Native clients only (client: "native" on the request)
+  accessTokenExpiresAt: z.iso.datetime().optional(),
+  refreshToken: z.string().optional(),
+  refreshTokenExpiresAt: z.iso.datetime().optional(),
 });
 export type TokenResponse = z.infer<typeof TokenResponse>;
+
+export const RefreshRequest = z.object({
+  refreshToken: z.string(),
+});
+export type RefreshRequest = z.infer<typeof RefreshRequest>;
+
+export const RefreshResponse = z.object({
+  accessToken: z.string(),
+  accessTokenExpiresAt: z.iso.datetime(),
+  refreshToken: z.string(),
+  refreshTokenExpiresAt: z.iso.datetime(),
+});
+export type RefreshResponse = z.infer<typeof RefreshResponse>;
 
 export const LogoutResponse = z.object({
   ok: z.literal(true),

@@ -1,27 +1,26 @@
 import Foundation
 
-/// Generic JSON API client. Endpoints are described by `APIRequest` values;
-/// `fetch` encodes the typed body, attaches auth, and decodes the typed response.
+/// Generic JSON API client — pure transport. Endpoints are described by
+/// `APIRequest` values; `fetch` encodes the typed body and decodes the typed
+/// response. Auth is a per-API concern: authed APIs attach their own
+/// `Authorization` header via `APIRequest.headers`.
 public struct APIClient: Sendable {
     private let baseURL: URL
     private let urlSession: URLSession
-    private let authProvider: (any AuthTokenProviding)?
     private let defaultHeaders: [String: String]
 
     public init(
         baseURL: URL,
         urlSession: URLSession = .shared,
-        authProvider: (any AuthTokenProviding)? = nil,
         defaultHeaders: [String: String] = ["Accept": "application/json"]
     ) {
         self.baseURL = baseURL
         self.urlSession = urlSession
-        self.authProvider = authProvider
         self.defaultHeaders = defaultHeaders
     }
 
     public func fetch<R: APIRequest>(_ request: R) async throws -> R.Response {
-        let urlRequest = try await makeURLRequest(for: request)
+        let urlRequest = try makeURLRequest(for: request)
         let (data, response) = try await urlSession.data(for: urlRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -46,7 +45,7 @@ public struct APIClient: Sendable {
         }
     }
 
-    private func makeURLRequest<R: APIRequest>(for request: R) async throws -> URLRequest {
+    private func makeURLRequest<R: APIRequest>(for request: R) throws -> URLRequest {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else {
             throw APIError.invalidURL
         }
@@ -69,10 +68,7 @@ public struct APIClient: Sendable {
         for (key, value) in defaultHeaders {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
-        if let token = try await authProvider?.authToken() {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        // Per-request headers win over defaults and auth.
+        // Per-request headers win over defaults.
         for (key, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }

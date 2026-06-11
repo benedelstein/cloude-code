@@ -3,6 +3,8 @@
  * Key is a base64-encoded 256-bit symmetric key from TOKEN_ENCRYPTION_KEY env var.
  */
 
+import { encodeBase64Url } from "@repo/shared";
+
 const ALG = "AES-GCM";
 const IV_BYTES = 12;
 
@@ -66,6 +68,12 @@ export function timingSafeCompare(a: string, b: string): boolean {
     mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return mismatch === 0;
+}
+
+/** Cryptographically random opaque token: 32 bytes, base64url-encoded. */
+export function generateOpaqueToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return encodeBase64Url(bytes);
 }
 
 /** SHA-256 hash of a string, returned as a lowercase hex string. */

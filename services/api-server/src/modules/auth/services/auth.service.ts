@@ -3,6 +3,7 @@ import {
   type GitHubAuthUrlResponse,
   type GitHubReauthTokenResponse,
   type LogoutResponse,
+  type RefreshResponse,
   type Result,
   success,
   type TokenResponse,
@@ -11,7 +12,7 @@ import {
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import { encrypt } from "@/shared/utils/crypto";
+import { encrypt, generateOpaqueToken, sha256 } from "@/shared/utils/crypto";
 import type { AuthUser } from "../types/auth.types";
 import {
   consumeValidOauthState,
@@ -25,6 +26,11 @@ import { validateRedirectOrigin } from "../utils/preview-origin.util";
 const GITHUB_LOGIN_OAUTH_PURPOSE = "github_login";
 const GITHUB_REAUTH_OAUTH_PURPOSE = "github_reauth";
 
+const WEB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const ACCESS_TOKEN_TTL_MS = 30 * 60 * 1000;
+const REFRESH_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000;
+const ROTATION_GRACE_MS = 60_000;
+
 type AuthServiceStatus = 400 | 401 | 403 | 500;
 
 export interface AuthServiceError {
@@ -37,7 +43,8 @@ export interface AuthServiceError {
     | "INVALID_OAUTH_STATE"
     | "GITHUB_TOKEN_EXCHANGE_FAILED"
     | "GITHUB_ACCOUNT_MISMATCH"
-    | "USER_CREATE_FAILED";
+    | "USER_CREATE_FAILED"
+    | "INVALID_REFRESH_TOKEN";
 }
 
 type AuthServiceResult<T> = Result<T, AuthServiceError>;
@@ -187,6 +194,7 @@ export class AuthService {
   async exchangeGitHubAuthorizationCode(params: {
     code: string;
     state: string;
+    client?: "web" | "native";
   } & RequestLogFields): Promise<AuthServiceResult<TokenResponse>> {
     this.logger.info("Received GitHub OAuth callback", {
       fields: {
@@ -280,20 +288,57 @@ export class AuthService {
       });
     }
 
-    const sessionToken = crypto.randomUUID();
-    const sessionExpiresAt = new Date(
-      Date.now() + 30 * 24 * 60 * 60 * 1000,
-    ).toISOString();
+    let sessionToken: string;
+    let nativeFields: Pick<
+      TokenResponse,
+      "accessTokenExpiresAt" | "refreshToken" | "refreshTokenExpiresAt"
+    > = {};
 
-    await this.userSessionRepository.createAuthSessionWithGitHubCredentials({
-      sessionToken,
-      userId: user.id,
-      sessionExpiresAt,
-      encryptedAccessToken: encryptedAccess,
-      accessTokenExpiresAt: result.expiresAt ?? null,
-      encryptedRefreshToken: encryptedRefresh,
-      refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
-    });
+    if (params.client === "native") {
+      await this.userSessionRepository.upsertGitHubCredentials({
+        userId: user.id,
+        encryptedAccessToken: encryptedAccess,
+        accessTokenExpiresAt: result.expiresAt ?? null,
+        encryptedRefreshToken: encryptedRefresh,
+        refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
+      });
+
+      const accessToken = generateOpaqueToken();
+      const refreshToken = generateOpaqueToken();
+      const accessTokenExpiresAt = new Date(
+        Date.now() + ACCESS_TOKEN_TTL_MS,
+      ).toISOString();
+      const refreshTokenExpiresAt = new Date(
+        Date.now() + REFRESH_TOKEN_TTL_MS,
+      ).toISOString();
+
+      await this.userSessionRepository.createRefreshSessionWithAccessToken({
+        refreshSessionId: crypto.randomUUID(),
+        userId: user.id,
+        refreshTokenHash: await sha256(refreshToken),
+        refreshExpiresAt: refreshTokenExpiresAt,
+        accessToken,
+        accessTokenExpiresAt,
+      });
+
+      sessionToken = accessToken;
+      nativeFields = { accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt };
+    } else {
+      sessionToken = crypto.randomUUID();
+      const sessionExpiresAt = new Date(
+        Date.now() + WEB_SESSION_TTL_MS,
+      ).toISOString();
+
+      await this.userSessionRepository.createAuthSessionWithGitHubCredentials({
+        sessionToken,
+        userId: user.id,
+        sessionExpiresAt,
+        encryptedAccessToken: encryptedAccess,
+        accessTokenExpiresAt: result.expiresAt ?? null,
+        encryptedRefreshToken: encryptedRefresh,
+        refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
+      });
+    }
 
     let hasInstallations = false;
     try {
@@ -304,6 +349,7 @@ export class AuthService {
 
     this.logger.info("GitHub OAuth login succeeded", {
       fields: {
+        client: params.client ?? "web",
         githubLogin: user.githubLogin,
         hasInstallations,
         requestId: params.requestId,
@@ -320,6 +366,7 @@ export class AuthService {
       },
       hasInstallations,
       installUrl: this.github.getInstallUrl(),
+      ...nativeFields,
     });
   }
 
@@ -493,8 +540,89 @@ export class AuthService {
     };
   }
 
+  /**
+   * Rotate a native session: validate the refresh token (current hash, or the
+   * previous hash within the 60s grace window), mint a new access/refresh
+   * pair, and slide the refresh expiry. Reuse of the previous token outside
+   * the grace window revokes the whole session family.
+   */
+  async refreshSession(
+    refreshToken: string,
+  ): Promise<AuthServiceResult<RefreshResponse>> {
+    const invalid = failure<AuthServiceError>({
+      domain: "auth",
+      status: 401,
+      code: "INVALID_REFRESH_TOKEN",
+      message: "Invalid refresh token",
+    });
+
+    const presentedHash = await sha256(refreshToken);
+    const found = await this.userSessionRepository.getRefreshSessionByTokenHash(
+      presentedHash,
+    );
+    if (!found) {
+      this.logger.warn("Refresh rejected: unknown token");
+      return invalid;
+    }
+    if (new Date(found.refreshExpiresAt).getTime() <= Date.now()) {
+      this.logger.warn("Refresh rejected: expired", {
+        fields: { refreshSessionId: found.id },
+      });
+      return invalid;
+    }
+    if (found.matched === "previous") {
+      // previous_rotated_at is sqlite datetime('now'): "YYYY-MM-DD HH:MM:SS" UTC
+      const rotatedAt = found.previousRotatedAt
+        ? new Date(`${found.previousRotatedAt.replace(" ", "T")}Z`).getTime()
+        : 0;
+      if (Date.now() - rotatedAt > ROTATION_GRACE_MS) {
+        this.logger.warn("Refresh token reuse detected; revoking family", {
+          fields: { refreshSessionId: found.id, userId: found.userId },
+        });
+        await this.userSessionRepository.revokeRefreshSession(found.id);
+        return invalid;
+      }
+    }
+
+    const newAccessToken = generateOpaqueToken();
+    const newRefreshToken = generateOpaqueToken();
+    const accessTokenExpiresAt = new Date(
+      Date.now() + ACCESS_TOKEN_TTL_MS,
+    ).toISOString();
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_TTL_MS,
+    ).toISOString();
+
+    await this.userSessionRepository.rotateRefreshSession({
+      refreshSessionId: found.id,
+      userId: found.userId,
+      newRefreshTokenHash: await sha256(newRefreshToken),
+      previousRefreshTokenHash: presentedHash,
+      refreshExpiresAt: refreshTokenExpiresAt,
+      accessToken: newAccessToken,
+      accessTokenExpiresAt,
+    });
+
+    this.logger.info("Refreshed native session", {
+      fields: { refreshSessionId: found.id, userId: found.userId },
+    });
+
+    return success({
+      accessToken: newAccessToken,
+      accessTokenExpiresAt,
+      refreshToken: newRefreshToken,
+      refreshTokenExpiresAt,
+    });
+  }
+
   async logout(sessionToken: string): Promise<LogoutResponse> {
-    await this.userSessionRepository.deleteByToken(sessionToken);
+    const refreshSessionId = await this.userSessionRepository
+      .getRefreshSessionIdByAccessToken(sessionToken);
+    if (refreshSessionId) {
+      await this.userSessionRepository.revokeRefreshSession(refreshSessionId);
+    } else {
+      await this.userSessionRepository.deleteByToken(sessionToken);
+    }
     return { ok: true };
   }
 }

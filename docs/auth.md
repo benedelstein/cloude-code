@@ -80,6 +80,79 @@ Browser                    Next.js proxy (/api/*)       API Server
 - **Allowlist**: Only GitHub logins in `ALLOWED_GITHUB_LOGINS` can authenticate.
 - **GitHub reauth without app logout**: Authenticated reauth endpoints (`POST /auth/github/reauth/start`, `POST /auth/github/reauth/token`) run the GitHub OAuth flow again, verify the returned GitHub user id matches the current app user, and update only `user_github_credentials`. They do not create or replace an app auth session.
 
+## Native Client Sessions (Access + Refresh Tokens)
+
+Native clients (the iOS app) opt in by sending `client: "native"` on `POST /auth/token`. Web behavior is unchanged: requests without the `client` field get the legacy 30-day session token and a byte-identical response shape.
+
+The native path returns a short-lived access token plus a long-lived rotating refresh token:
+
+- `token` — opaque access token, 30-minute TTL (an `auth_sessions` row, validated by the same middleware as web tokens; `accessTokenExpiresAt` is returned alongside).
+- `refreshToken` — opaque 32-byte base64url token, 60-day sliding TTL. Stored only as a SHA-256 hash in `auth_refresh_sessions`; the raw value is returned exactly once per rotation.
+
+A native session is a "family": one `auth_refresh_sessions` row plus the current `auth_sessions` row linked via `auth_sessions.refresh_session_id` (NULL for web sessions).
+
+### Refresh rotation
+
+`POST /auth/refresh` accepts `{ refreshToken }` with no Authorization header (the refresh token is the credential) and is registered without auth middleware. A valid refresh:
+
+1. Rotates the refresh token: the new hash becomes current, the presented hash is kept as `previous_refresh_token_hash` with `previous_rotated_at`.
+2. Replaces the family's access-token row (the old access token stops authenticating immediately).
+3. Extends the refresh expiry (sliding 60 days).
+4. Returns `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt }`.
+
+Invalid, expired, or reused tokens return `401` with `INVALID_REFRESH_TOKEN`.
+
+### Grace window and reuse detection
+
+The previous refresh token stays valid for 60 seconds after rotation so a client that lost the response to a network failure can retry. Presenting the previous token *outside* that window is treated as token theft: the whole family is revoked (refresh token and current access token both die).
+
+### Logout
+
+`POST /auth/logout` with a native access token revokes the family (refresh token included). Legacy web tokens keep single-row deletion.
+
+Access tokens stay opaque DB-backed rows for now; a later switch to JWT access tokens would be server-only (clients never decode the token and use `accessTokenExpiresAt` for staleness).
+
+### Dev: minting a native session locally
+
+The real exchange needs a GitHub OAuth code, so for local testing insert a session family directly into local D1 (server can be running; D1 state is shared):
+
+```bash
+cd services/api-server
+
+# 1. Generate a token pair + hashes
+python3 - <<'EOF'
+import secrets, hashlib, base64, uuid, datetime
+b64url = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+access, refresh = b64url(secrets.token_bytes(32)), b64url(secrets.token_bytes(32))
+now = datetime.datetime.now(datetime.timezone.utc)
+print("access token: ", access)
+print("refresh token:", refresh)
+print("refresh hash: ", hashlib.sha256(refresh.encode()).hexdigest())
+print("family id:    ", uuid.uuid4())
+print("access exp:   ", (now + datetime.timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+print("refresh exp:  ", (now + datetime.timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+EOF
+
+# 2. Find your user id
+pnpm exec wrangler d1 execute cloude-code-db --local \
+  --command "SELECT id, github_login FROM users"
+
+# 3. Insert the family + access row (substitute values from steps 1-2)
+pnpm exec wrangler d1 execute cloude-code-db --local --command "
+INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
+VALUES ('<family-id>', '<user-id>', '<refresh-hash>', '<refresh-exp>');
+INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
+VALUES ('<access-token>', '<user-id>', '<access-exp>', '<family-id>');
+"
+
+# 4. Verify
+curl -s http://localhost:8787/auth/me -H "Authorization: Bearer <access-token>"
+curl -s -X POST http://localhost:8787/auth/refresh \
+  -H "Content-Type: application/json" -d '{"refreshToken":"<refresh-token>"}'
+```
+
+Paste the refresh token + user id into the iOS Dev scheme's signed-out DEBUG form to sign the simulator in (the app refreshes immediately, so the rotated-out raw tokens above stop mattering).
+
 ## GitHub Reauth Flow
 
 GitHub remains the only app identity provider, but app auth and GitHub API credentials are separate runtime concerns.

@@ -227,16 +227,71 @@ public struct OpenAITokenResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct RefreshRequest: Codable, Equatable, Sendable {
+    public var refreshToken: String
+
+    public init(
+        refreshToken: String
+    ) {
+        self.refreshToken = refreshToken
+    }
+}
+
+public struct RefreshResponse: Codable, Equatable, Sendable {
+    public var accessToken: String
+    public var accessTokenExpiresAt: ISODateTimeString
+    public var refreshToken: String
+    public var refreshTokenExpiresAt: ISODateTimeString
+
+    public init(
+        accessToken: String,
+        accessTokenExpiresAt: ISODateTimeString,
+        refreshToken: String,
+        refreshTokenExpiresAt: ISODateTimeString
+    ) {
+        self.accessToken = accessToken
+        self.accessTokenExpiresAt = accessTokenExpiresAt
+        self.refreshToken = refreshToken
+        self.refreshTokenExpiresAt = refreshTokenExpiresAt
+    }
+}
+
 public struct TokenRequest: Codable, Equatable, Sendable {
+    public enum Client: RawRepresentable, Codable, Equatable, Sendable {
+        case web
+        case native
+        /// A value this client version doesn't recognize yet.
+        case unknown(String)
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "web": self = .web
+            case "native": self = .native
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .web: "web"
+            case .native: "native"
+            case .unknown(let value): value
+            }
+        }
+    }
+
     public var code: String
     public var state: String
+    public var client: Client?
 
     public init(
         code: String,
-        state: String
+        state: String,
+        client: Client? = nil
     ) {
         self.code = code
         self.state = state
+        self.client = client
     }
 }
 
@@ -245,17 +300,26 @@ public struct TokenResponse: Codable, Equatable, Sendable {
     public var user: UserInfo
     public var hasInstallations: Bool
     public var installUrl: String
+    public var accessTokenExpiresAt: ISODateTimeString?
+    public var refreshToken: String?
+    public var refreshTokenExpiresAt: ISODateTimeString?
 
     public init(
         token: String,
         user: UserInfo,
         hasInstallations: Bool,
-        installUrl: String
+        installUrl: String,
+        accessTokenExpiresAt: ISODateTimeString? = nil,
+        refreshToken: String? = nil,
+        refreshTokenExpiresAt: ISODateTimeString? = nil
     ) {
         self.token = token
         self.user = user
         self.hasInstallations = hasInstallations
         self.installUrl = installUrl
+        self.accessTokenExpiresAt = accessTokenExpiresAt
+        self.refreshToken = refreshToken
+        self.refreshTokenExpiresAt = refreshTokenExpiresAt
     }
 }
 

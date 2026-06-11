@@ -30,6 +30,23 @@ interface UserGitHubCredentialsRow {
   refresh_token_expires_at: string | null;
 }
 
+export interface RefreshSessionRecord {
+  id: string;
+  userId: string;
+  refreshExpiresAt: string;
+  previousRotatedAt: string | null;
+  /** Which stored hash the presented token matched. */
+  matched: "current" | "previous";
+}
+
+interface RefreshSessionRow {
+  id: string;
+  user_id: string;
+  refresh_token_hash: string;
+  previous_rotated_at: string | null;
+  refresh_expires_at: string;
+}
+
 export class UserSessionRepository {
   private readonly database: D1Database;
 
@@ -213,6 +230,138 @@ export class UserSessionRepository {
         params.userId,
       )
       .run();
+  }
+
+  /**
+   * Create a native refresh-session family plus its initial short-lived
+   * access-token row, linked by refresh_session_id, in one batch.
+   */
+  async createRefreshSessionWithAccessToken(params: {
+    refreshSessionId: string;
+    userId: string;
+    refreshTokenHash: string;
+    refreshExpiresAt: string;
+    accessToken: string;
+    accessTokenExpiresAt: string;
+  }): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
+         VALUES (?, ?, ?, ?)`,
+      ).bind(
+        params.refreshSessionId,
+        params.userId,
+        params.refreshTokenHash,
+        params.refreshExpiresAt,
+      ),
+      this.database.prepare(
+        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
+         VALUES (?, ?, ?, ?)`,
+      ).bind(
+        params.accessToken,
+        params.userId,
+        params.accessTokenExpiresAt,
+        params.refreshSessionId,
+      ),
+    ]);
+  }
+
+  /**
+   * Look up a refresh session by token hash, matching the current hash or the
+   * rotated-out previous hash (grace window / reuse detection). Reports which
+   * one matched so the service can apply grace-window rules.
+   */
+  async getRefreshSessionByTokenHash(
+    tokenHash: string,
+  ): Promise<RefreshSessionRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT id, user_id, refresh_token_hash, previous_rotated_at, refresh_expires_at
+       FROM auth_refresh_sessions
+       WHERE refresh_token_hash = ? OR previous_refresh_token_hash = ?`,
+    )
+      .bind(tokenHash, tokenHash)
+      .first<RefreshSessionRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      userId: row.user_id,
+      refreshExpiresAt: row.refresh_expires_at,
+      previousRotatedAt: row.previous_rotated_at,
+      matched: row.refresh_token_hash === tokenHash ? "current" : "previous",
+    };
+  }
+
+  /**
+   * Rotate a refresh-session family: swap in the new refresh token hash
+   * (keeping the old one for grace-window retries), extend the sliding
+   * refresh expiry, and replace the family's access-token row.
+   */
+  async rotateRefreshSession(params: {
+    refreshSessionId: string;
+    userId: string;
+    newRefreshTokenHash: string;
+    previousRefreshTokenHash: string;
+    refreshExpiresAt: string;
+    accessToken: string;
+    accessTokenExpiresAt: string;
+  }): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `UPDATE auth_refresh_sessions
+         SET refresh_token_hash = ?,
+             previous_refresh_token_hash = ?,
+             previous_rotated_at = datetime('now'),
+             refresh_expires_at = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+      ).bind(
+        params.newRefreshTokenHash,
+        params.previousRefreshTokenHash,
+        params.refreshExpiresAt,
+        params.refreshSessionId,
+      ),
+      this.database.prepare(
+        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
+      ).bind(params.refreshSessionId),
+      this.database.prepare(
+        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
+         VALUES (?, ?, ?, ?)`,
+      ).bind(
+        params.accessToken,
+        params.userId,
+        params.accessTokenExpiresAt,
+        params.refreshSessionId,
+      ),
+    ]);
+  }
+
+  /** Revoke a whole session family: refresh row + all linked access rows. */
+  async revokeRefreshSession(refreshSessionId: string): Promise<void> {
+    await this.database.batch([
+      this.database.prepare(
+        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
+      ).bind(refreshSessionId),
+      this.database.prepare(
+        `DELETE FROM auth_refresh_sessions WHERE id = ?`,
+      ).bind(refreshSessionId),
+    ]);
+  }
+
+  /** Family id for an access token, or null for legacy web sessions. */
+  async getRefreshSessionIdByAccessToken(
+    accessToken: string,
+  ): Promise<string | null> {
+    const row = await this.database.prepare(
+      `SELECT refresh_session_id FROM auth_sessions WHERE token = ?`,
+    )
+      .bind(accessToken)
+      .first<{ refresh_session_id: string | null }>();
+
+    return row?.refresh_session_id ?? null;
   }
 
   async deleteByToken(sessionToken: string): Promise<void> {

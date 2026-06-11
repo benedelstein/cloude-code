@@ -12,6 +12,8 @@ private struct ListSessions: APIRequest {
     var repoLimit: Int?
     var sessionLimit: Int?
 
+    var headers: [String: String]
+
     var path: String { "sessions" }
     var method: HTTPMethod { .get }
     var queryItems: [URLQueryItem] {
@@ -41,6 +43,8 @@ private struct CreateSession: APIRequest {
 
     var body: CreateSessionRequest?
 
+    var headers: [String: String]
+
     var path: String { "sessions" }
     var method: HTTPMethod { .post }
 }
@@ -49,6 +53,8 @@ private struct GetSession: APIRequest {
     typealias Response = SessionInfoResponse
 
     var sessionId: UUID
+
+    var headers: [String: String]
 
     var path: String { "sessions/\(sessionId.uuidString.lowercased())" }
     var method: HTTPMethod { .get }
@@ -59,6 +65,8 @@ private struct GetSessionMessages: APIRequest {
 
     var sessionId: UUID
 
+    var headers: [String: String]
+
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/messages" }
     var method: HTTPMethod { .get }
 }
@@ -67,6 +75,8 @@ private struct GetSessionPlan: APIRequest {
     typealias Response = SessionPlanResponse
 
     var sessionId: UUID
+
+    var headers: [String: String]
 
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/plan" }
     var method: HTTPMethod { .get }
@@ -79,6 +89,8 @@ private struct UpdateSessionTitle: APIRequest {
     var sessionId: UUID
     var body: UpdateSessionTitleRequest?
 
+    var headers: [String: String]
+
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/title" }
     var method: HTTPMethod { .patch }
 }
@@ -87,6 +99,8 @@ private struct CreateSessionPullRequest: APIRequest {
     typealias Response = PullRequestResponse
 
     var sessionId: UUID
+
+    var headers: [String: String]
 
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/pr" }
     var method: HTTPMethod { .post }
@@ -97,6 +111,8 @@ private struct GetSessionPullRequest: APIRequest {
 
     var sessionId: UUID
 
+    var headers: [String: String]
+
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/pr" }
     var method: HTTPMethod { .get }
 }
@@ -105,6 +121,8 @@ private struct ArchiveSession: APIRequest {
     typealias Response = ArchiveSessionResponse
 
     var sessionId: UUID
+
+    var headers: [String: String]
 
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/archive" }
     var method: HTTPMethod { .post }
@@ -115,6 +133,8 @@ private struct DeleteSession: APIRequest {
 
     var sessionId: UUID
 
+    var headers: [String: String]
+
     var path: String { "sessions/\(sessionId.uuidString.lowercased())" }
     var method: HTTPMethod { .delete }
 }
@@ -124,12 +144,16 @@ private struct CreateSessionWebSocketToken: APIRequest {
 
     var sessionId: UUID
 
+    var headers: [String: String]
+
     var path: String { "sessions/\(sessionId.uuidString.lowercased())/websocket-token" }
     var method: HTTPMethod { .post }
 }
 
 private struct CreateUserSessionsWebSocketToken: APIRequest {
     typealias Response = UserSessionsWebSocketTokenResponse
+
+    var headers: [String: String]
 
     var path: String { "sessions/updates/token" }
     var method: HTTPMethod { .post }
@@ -174,9 +198,11 @@ public extension SessionsAPIProviding {
 
 public struct SessionsAPI: SessionsAPIProviding {
     private let client: APIClient
+    private let tokenProvider: any AuthTokenProviding
 
-    public init(client: APIClient) {
+    public init(client: APIClient, tokenProvider: any AuthTokenProviding) {
         self.client = client
+        self.tokenProvider = tokenProvider
     }
 
     public func listSessions(
@@ -191,56 +217,61 @@ public struct SessionsAPI: SessionsAPIProviding {
             repoCursor: repoCursor,
             sessionCursor: sessionCursor,
             repoLimit: repoLimit,
-            sessionLimit: sessionLimit
+            sessionLimit: sessionLimit,
+            headers: tokenProvider.bearerHeaders()
         ))
     }
 
     public func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse {
-        try await client.fetch(CreateSession(body: request))
+        try await client.fetch(CreateSession(body: request, headers: tokenProvider.bearerHeaders()))
     }
 
     public func session(id: UUID) async throws -> SessionInfoResponse {
-        try await client.fetch(GetSession(sessionId: id))
+        try await client.fetch(GetSession(sessionId: id, headers: tokenProvider.bearerHeaders()))
     }
 
     public func messages(sessionId: UUID) async throws -> [UIMessage] {
-        try await client.fetch(GetSessionMessages(sessionId: sessionId))
+        try await client.fetch(GetSessionMessages(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func plan(sessionId: UUID) async throws -> SessionPlanResponse {
-        try await client.fetch(GetSessionPlan(sessionId: sessionId))
+        try await client.fetch(GetSessionPlan(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func updateTitle(sessionId: UUID, title: String) async throws -> UpdateSessionTitleResponse {
         try await client.fetch(UpdateSessionTitle(
             sessionId: sessionId,
-            body: UpdateSessionTitleRequest(title: title)
+            body: UpdateSessionTitleRequest(title: title),
+            headers: tokenProvider.bearerHeaders()
         ))
     }
 
     public func createPullRequest(sessionId: UUID) async throws -> PullRequestResponse {
-        try await client.fetch(CreateSessionPullRequest(sessionId: sessionId))
+        try await client.fetch(CreateSessionPullRequest(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func pullRequest(sessionId: UUID) async throws -> PullRequestStatusResponse {
-        try await client.fetch(GetSessionPullRequest(sessionId: sessionId))
+        try await client.fetch(GetSessionPullRequest(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func archive(sessionId: UUID) async throws {
-        _ = try await client.fetch(ArchiveSession(sessionId: sessionId))
+        _ = try await client.fetch(ArchiveSession(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func delete(sessionId: UUID) async throws {
-        _ = try await client.fetch(DeleteSession(sessionId: sessionId))
+        _ = try await client.fetch(DeleteSession(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
     public func sessionWebSocketToken(sessionId: UUID) async throws -> WebSocketToken {
-        let response = try await client.fetch(CreateSessionWebSocketToken(sessionId: sessionId))
+        let response = try await client.fetch(CreateSessionWebSocketToken(
+            sessionId: sessionId,
+            headers: tokenProvider.bearerHeaders()
+        ))
         return WebSocketToken(token: response.token, expiresAt: response.expiresAt)
     }
 
     public func userSessionsWebSocketToken() async throws -> WebSocketToken {
-        let response = try await client.fetch(CreateUserSessionsWebSocketToken())
+        let response = try await client.fetch(CreateUserSessionsWebSocketToken(headers: tokenProvider.bearerHeaders()))
         return WebSocketToken(token: response.token, expiresAt: response.expiresAt)
     }
 }

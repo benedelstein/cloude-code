@@ -2,6 +2,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   GitHubAuthUrlResponse,
   GitHubReauthTokenResponse,
+  RefreshRequest,
+  RefreshResponse,
   TokenRequest,
   TokenResponse,
   UserInfo,
@@ -103,6 +105,26 @@ export const postTokenRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to create user",
+    },
+  },
+});
+
+export const postRefreshRoute = createRoute({
+  method: "post",
+  path: "/refresh",
+  request: {
+    body: {
+      content: { "application/json": { schema: RefreshRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: RefreshResponse } },
+      description: "Rotated access/refresh token pair",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Invalid, expired, or reused refresh token",
     },
   },
 });

@@ -11,6 +11,8 @@ extension Domain.User {
 private struct GetMe: APIRequest {
     typealias Response = CoreAPI.UserInfo
 
+    var headers: [String: String]
+
     var path: String { "auth/me" }
     var method: HTTPMethod { .get }
 }
@@ -21,12 +23,14 @@ public protocol AuthAPIProviding: Sendable {
 
 public struct AuthAPI: AuthAPIProviding {
     private let client: APIClient
+    private let tokenProvider: any AuthTokenProviding
 
-    public init(client: APIClient) {
+    public init(client: APIClient, tokenProvider: any AuthTokenProviding) {
         self.client = client
+        self.tokenProvider = tokenProvider
     }
 
     public func me() async throws -> User {
-        try await User(from: client.fetch(GetMe()))
+        try await User(from: client.fetch(GetMe(headers: tokenProvider.bearerHeaders())))
     }
 }

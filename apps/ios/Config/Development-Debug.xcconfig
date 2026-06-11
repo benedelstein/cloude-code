@@ -1,6 +1,7 @@
 #include "./Base.xcconfig"
 
 BASE_BUNDLE_IDENTIFIER = llc.bze.CloudeCode-Dev
+APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)
 BUILD_ENVIRONMENT = DEVELOPMENT
 // escaping workaround: xcconfig treats // as a comment
 SLASH = /

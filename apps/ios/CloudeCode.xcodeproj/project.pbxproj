@@ -11,6 +11,7 @@
 		B6A000000000000000000001 /* API in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000008 /* API */; };
 		B6A000000000000000000003 /* NeedleFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000A /* NeedleFoundation */; };
 		B6A00000000000000000000D /* Entities in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000E /* Entities */; };
+		B6A000000000000000000012 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000011 /* Valet */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +82,7 @@
 				B6A000000000000000000001 /* API in Frameworks */,
 				B6A000000000000000000003 /* NeedleFoundation in Frameworks */,
 				B6A00000000000000000000D /* Entities in Frameworks */,
+				B6A000000000000000000012 /* Valet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -159,6 +161,7 @@
 				B6A00000000000000000000A /* NeedleFoundation */,
 				B6A00000000000000000000C /* CoreAPI */,
 				B6A00000000000000000000E /* Entities */,
+				B6A000000000000000000011 /* Valet */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -247,6 +250,7 @@
 				B6A00000000000000000000B /* XCLocalSwiftPackageReference "Modules/CoreAPI" */,
 				B6A00000000000000000000F /* XCLocalSwiftPackageReference "Modules/Entities" */,
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
+				B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B50E874E2FCD709D00240B2E /* Products */;
@@ -466,6 +470,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CloudeCode/CloudeCode.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4ZJWAQAQHL;
@@ -513,6 +518,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CloudeCode/CloudeCode.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4ZJWAQAQHL;
@@ -786,6 +792,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CloudeCode/CloudeCode.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4ZJWAQAQHL;
@@ -833,6 +840,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CloudeCode/CloudeCode.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4ZJWAQAQHL;
@@ -1057,6 +1065,14 @@
 				minimumVersion = 0.25.0;
 			};
 		};
+		B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/square/Valet.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1076,6 +1092,11 @@
 		B6A00000000000000000000E /* Entities */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Entities;
+		};
+		B6A000000000000000000011 /* Valet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */;
+			productName = Valet;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

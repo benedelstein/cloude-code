@@ -15,21 +15,45 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         return url
     }
 
+    private var appGroupIdentifier: String {
+        // Injected per scheme via Config/*.xcconfig -> Info.plist.
+        guard let identifier = Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String,
+              !identifier.isEmpty else {
+            preconditionFailure("missing AppGroupIdentifier in Info.plist")
+        }
+        return identifier
+    }
+
     var apiClient: APIClient {
         shared {
-            APIClient(baseURL: apiBaseURL)
+            APIClient(baseURL: apiBaseURL) // pure transport
+        }
+    }
+
+    var tokenCoordinator: TokenCoordinator {
+        shared {
+            TokenCoordinator(
+                persistence: KeychainSessionPersistence(appGroup: appGroupIdentifier),
+                refresher: SessionRefreshAPI(client: apiClient) // no provider — no cycle
+            )
         }
     }
 
     var authAPI: any AuthAPIProviding {
         shared {
-            AuthAPI(client: apiClient)
+            AuthAPI(client: apiClient, tokenProvider: tokenCoordinator)
         }
     }
 
     var sessionsAPI: any SessionsAPIProviding {
         shared {
-            SessionsAPI(client: apiClient)
+            SessionsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    @MainActor var sessionStore: SessionStore {
+        shared {
+            SessionStore(coordinator: tokenCoordinator, userStore: userStore)
         }
     }
 

@@ -1266,9 +1266,28 @@
   "OpenAITokenResponse.autoMinimal": {
     "ok": true
   },
+  "RefreshRequest.autoFull": {
+    "refreshToken": "sample"
+  },
+  "RefreshRequest.autoMinimal": {
+    "refreshToken": "sample"
+  },
+  "RefreshResponse.autoFull": {
+    "accessToken": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "RefreshResponse.autoMinimal": {
+    "accessToken": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
   "TokenRequest.autoFull": {
     "code": "sample",
-    "state": "sample"
+    "state": "sample",
+    "client": "web"
   },
   "TokenRequest.autoMinimal": {
     "code": "sample",
@@ -1283,7 +1302,10 @@
       "avatarUrl": "sample"
     },
     "hasInstallations": true,
-    "installUrl": "sample"
+    "installUrl": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
   },
   "TokenResponse.autoMinimal": {
     "token": "sample",
