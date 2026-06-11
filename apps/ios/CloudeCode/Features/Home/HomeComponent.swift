@@ -1,11 +1,10 @@
 import API
-import Entities
 import NeedleFoundation
 import SwiftUI
 
 protocol HomeDependency: Dependency {
-    var greetingAPI: any GreetingAPIProviding { get }
-    var greetingCache: any GreetingCaching { get }
+    var sessionsAPI: any SessionsAPIProviding { get }
+    var userSessionsSocket: UserSessionsSocket { get }
 }
 
 final class HomeComponent: Component<HomeDependency> {
@@ -13,8 +12,8 @@ final class HomeComponent: Component<HomeDependency> {
     var viewModel: HomeViewModel {
         shared {
             HomeViewModel(
-                greetingAPI: dependency.greetingAPI,
-                greetingCache: dependency.greetingCache
+                sessionsAPI: dependency.sessionsAPI,
+                userSessionsSocket: dependency.userSessionsSocket
             )
         }
     }
@@ -23,9 +22,10 @@ final class HomeComponent: Component<HomeDependency> {
 @MainActor
 struct HomeBuilder {
     let component: HomeComponent
+    let sessionBuilder: SessionBuilder
 
     func build() -> some View {
-        HomeView(viewModel: component.viewModel)
+        HomeView(viewModel: component.viewModel, sessionBuilder: sessionBuilder)
     }
 }
 

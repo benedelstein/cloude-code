@@ -16,7 +16,15 @@ struct RootView: View {
                 ProgressView()
             case .signedIn:
                 HomeContainer()
-                    .environment(\.homeBuilder, HomeBuilder(component: component.homeComponent))
+                    .environment(
+                        \.homeBuilder,
+                        HomeBuilder(
+                            component: component.homeComponent,
+                            sessionBuilder: SessionBuilder { session in
+                                component.makeSessionComponent(session: session)
+                            }
+                        )
+                    )
             case .signedOut:
                 SignedOutView(sessionStore: sessionStore)
             }

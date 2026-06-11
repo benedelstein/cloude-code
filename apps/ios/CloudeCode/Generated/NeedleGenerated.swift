@@ -1,5 +1,4 @@
 import API
-import Entities
 import NeedleFoundation
 
 private let needleDependenciesHash: String? = nil
@@ -23,17 +22,23 @@ private final class HomeDependencyProvider: HomeDependency {
         self.applicationComponent = applicationComponent
     }
 
-    var greetingAPI: any GreetingAPIProviding {
-        applicationComponent.greetingAPI
+    var sessionsAPI: any SessionsAPIProviding {
+        applicationComponent.sessionsAPI
     }
 
-    var greetingCache: any GreetingCaching {
-        applicationComponent.greetingCache
+    var userSessionsSocket: UserSessionsSocket {
+        applicationComponent.userSessionsSocket
     }
 }
 
 private func homeDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
     HomeDependencyProvider(applicationComponent: parent1(component) as! ApplicationComponent)
+}
+
+private final class SessionDependencyProvider: SessionDependency {}
+
+private func sessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
+    SessionDependencyProvider()
 }
 
 #endif
@@ -54,5 +59,6 @@ public func registerProviderFactories() {
     registerProviderFactory("^->RootComponent", factoryEmptyDependencyProvider)
     registerProviderFactory("^->RootComponent->ApplicationComponent", applicationDependencyFactory)
     registerProviderFactory("^->RootComponent->ApplicationComponent->HomeComponent", homeDependencyFactory)
+    registerProviderFactory("^->RootComponent->ApplicationComponent->SessionComponent", sessionDependencyFactory)
     #endif
 }

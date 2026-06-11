@@ -117,4 +117,9 @@ final class ApplicationComponent: Component<ApplicationDependency> {
             HomeComponent(parent: self)
         }
     }
+
+    @MainActor
+    func makeSessionComponent(session: HomeSessionRow) -> SessionComponent {
+        SessionComponent(parent: self, session: session)
+    }
 }
