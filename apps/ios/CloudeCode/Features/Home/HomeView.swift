@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct HomeView: View {
-    @Environment(\.theme) private var theme
     @Environment(\.style) private var style
+    @Environment(\.showToast) private var showToast
 
     @State private var viewModel: HomeViewModel
     let sessionBuilder: SessionBuilder
@@ -41,16 +41,17 @@ struct HomeView: View {
             .navigationDestination(for: SessionSummary.self) { session in
                 sessionBuilder.build(session: session)
             }
-            .overlay(alignment: .bottom) {
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .styledFont(.footnote)
-                        .foregroundStyle(theme.errorRed)
-                        .padding()
-                }
-            }
             .task {
                 await viewModel.start()
+            }
+            .onChange(of: viewModel.errorMessage) { _, errorMessage in
+                guard let errorMessage else {
+                    return
+                }
+                showToast?(
+                    verbatimTitle: errorMessage,
+                    icon: Image(systemName: "exclamationmark.circle.fill")
+                )
             }
         }
     }
