@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { UIMessage, UIMessageChunk } from "ai";
-import { AgentMode } from "./session";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "./attachments";
+import { AgentMode } from "@repo/api-contract";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@repo/api-contract";
 
 // Re-export AI SDK types
 export type { UIMessage, UIMessageChunk };

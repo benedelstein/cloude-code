@@ -17,9 +17,11 @@
   },
   "dependencies": {
     "zod": "catalog:",
-    "ai": "catalog:"
+    "ai": "catalog:",
+    "@repo/api-contract": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

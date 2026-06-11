@@ -70,7 +70,7 @@ function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
     editorUrl: null,
     providerConnection: null,
     lastError: null,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   };
 }
 

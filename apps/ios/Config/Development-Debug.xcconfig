@@ -1,0 +1,10 @@
+#include "./Base.xcconfig"
+
+BASE_BUNDLE_IDENTIFIER = llc.bze.CloudeCode-Dev
+APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)
+BUILD_ENVIRONMENT = DEVELOPMENT
+// escaping workaround: xcconfig treats // as a comment
+SLASH = /
+API_BASE_URL = http:$(SLASH)/localhost:8787
+DEEP_LINK_SCHEME = cloudecode-dev
+OAUTH_REDIRECT_URI = $(DEEP_LINK_SCHEME):$(SLASH)/auth/callback

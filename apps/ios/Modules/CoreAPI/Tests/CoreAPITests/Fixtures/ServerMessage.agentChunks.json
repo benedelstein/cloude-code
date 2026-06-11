@@ -1,0 +1,12 @@
+{
+  "type": "agent.chunks",
+  "chunks": [
+    {
+      "type": "text-delta",
+      "delta": "lo"
+    },
+    {
+      "type": "finish"
+    }
+  ]
+}

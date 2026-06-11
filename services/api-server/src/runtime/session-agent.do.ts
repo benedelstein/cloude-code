@@ -116,7 +116,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     providerConnection: null,
     lastError: null,
     baseBranch: null,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   };
 
   constructor(ctx: DurableObjectState, env: Env) {

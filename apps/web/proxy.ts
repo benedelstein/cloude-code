@@ -1,18 +1,27 @@
-import type { NextRequest} from "next/server";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getSessionTokenFromRequest } from "@/lib/session";
 
-// The integration link-claim pages must stay reachable while logged out —
-// they render their own sign-in button and claim the link after auth.
-const publicRoutes = ["/", "/github/install/complete", "/discord/link", "/integrations/link"];
+// These routes must stay reachable while logged out.
+const publicExactRoutes = [
+  "/",
+  "/auth/callback",
+];
+
+// Integration link pages render their own sign-in button.
+const publicRoutePrefixes = [
+  "/github/install/complete",
+  "/discord/link",
+  "/integrations/link",
+];
 
 // Optimistic auth check — reads cookie only, no DB call.
 // https://nextjs.org/docs/app/guides/authentication#optimistic-checks-with-proxy-optional
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = publicRoutes.some((route) =>
-    route === "/" ? pathname === "/" : pathname.startsWith(route),
-  );
+  const isPublic =
+    publicExactRoutes.includes(pathname) ||
+    publicRoutePrefixes.some((route) => pathname.startsWith(route));
 
   if (isPublic) {
     return NextResponse.next();

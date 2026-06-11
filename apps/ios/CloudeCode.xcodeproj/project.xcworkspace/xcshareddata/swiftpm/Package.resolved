@@ -1,0 +1,42 @@
+{
+  "originHash" : "2acb445183837d58ef441e3beb4069bd7d98df5be0324f7fb7016bb241f4d18a",
+  "pins" : [
+    {
+      "identity" : "needle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/uber/needle.git",
+      "state" : {
+        "revision" : "69f7a889d2736f2621c6083ac29e0a75d158f249",
+        "version" : "0.25.1"
+      }
+    },
+    {
+      "identity" : "swift-ai-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/teunlao/swift-ai-sdk.git",
+      "state" : {
+        "revision" : "89374cac1b61ba6c6ec4183366a6652fa706f1d9",
+        "version" : "0.17.6"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
+        "version" : "1.8.2"
+      }
+    },
+    {
+      "identity" : "valet",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/square/Valet.git",
+      "state" : {
+        "revision" : "246baf6be3f9e3ff116dc05251a08f69dd7c7b9d",
+        "version" : "5.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

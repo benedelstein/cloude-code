@@ -10,6 +10,7 @@ import {
   postGithubReauthStartRoute,
   postGithubReauthTokenRoute,
   postTokenRoute,
+  postRefreshRoute,
   getMeRoute,
   postLogoutRoute,
 } from "./auth.schema";
@@ -54,10 +55,11 @@ export function createAuthRoutes(
    * @returns The install + authorize URL and the nonce token
    */
   authRoutes.openapi(getGithubRoute, async (c) => {
-    const { origin: requestedOrigin } = c.req.valid("query");
+    const { origin: requestedOrigin, redirectUri } = c.req.valid("query");
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubAuthorizationUrl({
       requestedOrigin,
+      nativeRedirectUri: redirectUri,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
@@ -96,11 +98,12 @@ export function createAuthRoutes(
    * @returns The session token and user info
    */
   authRoutes.openapi(postTokenRoute, async (c) => {
-    const { code, state } = c.req.valid("json");
+    const { code, state, client } = c.req.valid("json");
     const authService = createAuthService(c.env);
     const result = await authService.exchangeGitHubAuthorizationCode({
       code,
       state,
+      client,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
@@ -109,6 +112,21 @@ export function createAuthRoutes(
         { error: result.error.message },
         result.error.status === 500 ? 500 : 400,
       );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/refresh — rotate a native access/refresh token pair.
+   * No auth middleware: the refresh token in the body is the credential.
+   */
+  authRoutes.openapi(postRefreshRoute, async (c) => {
+    const { refreshToken } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    const result = await authService.refreshSession(refreshToken);
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 401);
     }
 
     return c.json(result.value, 200);

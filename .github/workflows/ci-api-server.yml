@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "services/api-server/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "packages/vm-agent/**"
       - "package.json"
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - "services/api-server/**"
+      - "packages/api-contract/**"
       - "packages/shared/**"
       - "packages/vm-agent/**"
       - "package.json"
@@ -48,13 +50,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm exec turbo run build --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
+        run: pnpm exec turbo run build --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
       - name: Typecheck
-        run: pnpm exec turbo run typecheck --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
+        run: pnpm exec turbo run typecheck --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
+
+      # Cheap Linux gate: schema edits must ship with regenerated iOS types.
+      - name: Check generated API types are current
+        run: pnpm --filter @repo/api-contract codegen:check
 
       - name: Lint
-        run: pnpm exec turbo run lint --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
+        run: pnpm exec turbo run lint --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
 
       - name: Test
-        run: pnpm exec turbo run test --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server
+        run: pnpm exec turbo run test --filter=@repo/api-contract --filter=@repo/shared --filter=@repo/vm-agent --filter=@repo/api-server

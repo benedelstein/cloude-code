@@ -1,0 +1,55 @@
+{
+  "id": "run_1",
+  "status": "running",
+  "startedAt": "2026-06-09T12:00:00Z",
+  "completedAt": null,
+  "tasks": [
+    {
+      "status": "completed",
+      "startedAt": "2026-06-09T12:00:00Z",
+      "completedAt": "2026-06-09T12:00:00.123Z",
+      "error": null,
+      "id": "cloud_container",
+      "isBlocking": true,
+      "canRetry": true
+    },
+    {
+      "status": "running",
+      "startedAt": "2026-06-09T12:00:00Z",
+      "completedAt": null,
+      "error": null,
+      "id": "repository",
+      "isBlocking": true,
+      "canRetry": true
+    },
+    {
+      "status": "skipped",
+      "startedAt": null,
+      "completedAt": null,
+      "error": null,
+      "id": "setup_script",
+      "isBlocking": false,
+      "canRetry": false,
+      "output": {
+        "stdout": "installed 120 packages",
+        "stderr": "",
+        "exitCode": 0,
+        "truncated": false
+      },
+      "skipReason": {
+        "kind": "no_script",
+        "environmentId": "7f0f5c1d-91f1-4f93-b1de-3f37ad2b3a1c",
+        "environmentName": "CI-like"
+      }
+    },
+    {
+      "status": "failed",
+      "startedAt": "2026-06-09T12:00:00Z",
+      "completedAt": "2026-06-09T12:00:00.123Z",
+      "error": "policy apply failed",
+      "id": "network_policy",
+      "isBlocking": true,
+      "canRetry": true
+    }
+  ]
+}

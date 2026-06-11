@@ -20,6 +20,10 @@ const assetExtensions = new Set([
 
 const workspacePackages = new Map([
   [
+    "@repo/api-contract",
+    { root: "packages/api-contract", entrypoint: "packages/api-contract/src/index.ts" },
+  ],
+  [
     "@repo/shared",
     { root: "packages/shared", entrypoint: "packages/shared/src/index.ts" },
   ],

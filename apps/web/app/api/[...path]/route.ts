@@ -65,6 +65,10 @@ async function handler(
     method: req.method,
     headers,
     body,
+    // Pass redirects through to the browser instead of following them here:
+    // following would replay the Authorization header against arbitrary
+    // Location targets and return the redirected body under the original URL.
+    redirect: "manual",
   });
 
   const responseHeaders = new Headers(res.headers);

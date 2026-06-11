@@ -1,0 +1,191 @@
+import Foundation
+import Observation
+import os
+import SwiftData
+
+public struct FetchScope: OptionSet, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let memory = FetchScope(rawValue: 1 << 0)
+    public static let disk = FetchScope(rawValue: 1 << 1)
+    public static let network = FetchScope(rawValue: 1 << 2)
+
+    public static let all: FetchScope = [.memory, .disk, .network]
+}
+
+/// Identity-mapped store of `EntityModel`s with a memory → disk → network
+/// fetch cascade.
+///
+/// Disk (via `Cache` and `M.EntityType`) and network sources speak `Snapshot`
+/// (Sendable domain structs), never model classes — struct → class mapping
+/// happens only here, on the main actor. That is what lets models be
+/// `@MainActor` instead of `@unchecked Sendable`.
+@MainActor
+@Observable
+public final class EntityStore<M: EntityModel> {
+    public typealias Snapshot = M.Snapshot
+
+    public private(set) var objectMap: [String: M] = [:]
+
+    @ObservationIgnored private let cache: Cache?
+    @ObservationIgnored private let getAPI: (@Sendable (Set<String>) async throws -> [Snapshot])?
+    @ObservationIgnored private let logger = os.Logger(
+        subsystem: "Entities",
+        category: String(describing: M.self)
+    )
+
+    public init(
+        cache: Cache? = nil,
+        getAPI: (@Sendable (Set<String>) async throws -> [Snapshot])? = nil
+    ) {
+        self.cache = cache
+        self.getAPI = getAPI
+    }
+
+    // MARK: - Getters
+
+    public subscript(_ id: String) -> M? {
+        objectMap[id]
+    }
+
+    public func getFromMemory(_ ids: Set<String>) -> [M] {
+        ids.compactMap { objectMap[$0] }
+    }
+
+    public func getFromDisk(_ ids: Set<String>) async throws -> [M] {
+        guard let cache else { return [] }
+
+        let snapshots = try await cache.fetch(M.EntityType.self, ids: ids)
+        logger.debug("got \(snapshots.count) of \(ids.count) from disk")
+        return putMemory(snapshots)
+    }
+
+    /// Predicate/sort-based disk fetch (e.g. for list screens). Results merge
+    /// into the identity map like any other disk read.
+    public func getFromDisk(
+        predicate: Predicate<M.EntityType>? = nil,
+        sortBy: [SortDescriptor<M.EntityType>] = [],
+        limit: Int? = nil
+    ) async throws -> [M] {
+        guard let cache else { return [] }
+
+        let snapshots = try await cache.fetch(
+            M.EntityType.self,
+            predicate: predicate,
+            sortBy: sortBy,
+            limit: limit
+        )
+        logger.debug("got \(snapshots.count) from disk by predicate")
+        return putMemory(snapshots)
+    }
+
+    /// Loads all cached rows for this entity into the identity map.
+    @discardableResult
+    public func load() async throws -> [M] {
+        try await getFromDisk()
+    }
+
+    public func count(predicate: Predicate<M.EntityType>? = nil) async throws -> Int {
+        guard let cache else { return 0 }
+
+        return try await cache.count(M.EntityType.self, predicate: predicate)
+    }
+
+    public func get(_ ids: Set<String>, scopes: FetchScope = .all) async throws -> [M] {
+        guard !ids.isEmpty, !scopes.isEmpty else { return [] }
+
+        var results: [M] = []
+        var missingIds = ids
+
+        if scopes.contains(.memory) {
+            let fromMemory = getFromMemory(ids)
+            results.append(contentsOf: fromMemory)
+            missingIds.subtract(fromMemory.map(\.id))
+        }
+
+        if !missingIds.isEmpty, scopes.contains(.disk) {
+            let fromDisk = try await getFromDisk(missingIds)
+            results.append(contentsOf: fromDisk)
+            missingIds.subtract(fromDisk.map(\.id))
+        }
+
+        if !missingIds.isEmpty, let getAPI, scopes.contains(.network) {
+            let fromNetwork = try await getAPI(missingIds)
+            results.append(contentsOf: putDisk(fromNetwork))
+            missingIds.subtract(fromNetwork.map(\.id))
+        }
+
+        if !missingIds.isEmpty {
+            logger.warning("missing \(missingIds.count) of \(ids.count) requested")
+        }
+
+        return results
+    }
+
+    // MARK: - Setters
+
+    /// Merges snapshots into the identity map: existing instances are updated
+    /// in place (preserving reference identity), unknown ids are inserted.
+    @discardableResult
+    public func putMemory(_ snapshots: [Snapshot]) -> [M] {
+        guard !snapshots.isEmpty else { return [] }
+
+        for snapshot in snapshots {
+            if let cached = objectMap[snapshot.id] {
+                cached.update(from: snapshot)
+            } else {
+                objectMap[snapshot.id] = M(snapshot)
+            }
+        }
+
+        return snapshots.compactMap { objectMap[$0.id] }
+    }
+
+    /// Puts to memory, then persists to disk in the background.
+    @discardableResult
+    public func putDisk(_ snapshots: [Snapshot]) -> [M] {
+        guard !snapshots.isEmpty else { return [] }
+
+        if let cache {
+            Task { [logger] in
+                do {
+                    try await cache.put(M.EntityType.self, snapshots: snapshots)
+                } catch {
+                    logger.error("disk write failed: \(error)")
+                }
+            }
+        }
+
+        return putMemory(snapshots)
+    }
+
+    /// Persists current model state (e.g. after view-side mutations).
+    public func save(_ models: [M]) {
+        putDisk(models.map(\.snapshot))
+    }
+
+    // MARK: - Delete
+
+    /// Removes from memory and disk.
+    public func delete(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+
+        if let cache {
+            Task { [logger] in
+                do {
+                    try await cache.delete(M.EntityType.self, ids: ids)
+                } catch {
+                    logger.error("disk delete failed: \(error)")
+                }
+            }
+        }
+
+        for id in ids {
+            objectMap.removeValue(forKey: id)
+        }
+    }
+}

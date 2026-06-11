@@ -1,0 +1,1974 @@
+{
+  "AgentSettings.autoOpenaiCodex": {
+    "provider": "openai-codex",
+    "model": "gpt-5.5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "AgentSettings.autoClaudeCode": {
+    "provider": "claude-code",
+    "model": "claude-fable-5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "AgentSettingsClaude.autoFull": {
+    "provider": "claude-code",
+    "model": "claude-fable-5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "AgentSettingsClaude.autoMinimal": {
+    "provider": "claude-code",
+    "model": "claude-fable-5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "AgentSettingsCodex.autoFull": {
+    "provider": "openai-codex",
+    "model": "gpt-5.5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "AgentSettingsCodex.autoMinimal": {
+    "provider": "openai-codex",
+    "model": "gpt-5.5",
+    "effort": "low",
+    "maxTokens": 1
+  },
+  "ActiveTurnState.autoFull": {
+    "userMessageId": "sample"
+  },
+  "ActiveTurnState.autoMinimal": {
+    "userMessageId": "sample"
+  },
+  "AgentSettingsInput.autoFull": {
+    "provider": "claude-code",
+    "model": "sample",
+    "effort": "sample",
+    "maxTokens": 1
+  },
+  "AgentSettingsInput.autoMinimal": {},
+  "CloudContainerSetupTask.autoFull": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "cloud_container",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "CloudContainerSetupTask.autoMinimal": {
+    "status": "pending",
+    "startedAt": null,
+    "completedAt": null,
+    "error": null,
+    "id": "cloud_container",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "Message.autoFull": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "role": "user",
+    "content": "sample",
+    "toolCalls": [
+      {
+        "opaque": true
+      }
+    ],
+    "streamPosition": 1,
+    "createdAt": "2026-06-10T12:00:00Z"
+  },
+  "Message.autoMinimal": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "role": "user",
+    "content": "sample",
+    "createdAt": "2026-06-10T12:00:00Z"
+  },
+  "NetworkPolicySetupTask.autoFull": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "network_policy",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "NetworkPolicySetupTask.autoMinimal": {
+    "status": "pending",
+    "startedAt": null,
+    "completedAt": null,
+    "error": null,
+    "id": "network_policy",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "ProviderConnectionState.autoFull": {
+    "provider": "claude-code",
+    "connected": true,
+    "requiresReauth": true
+  },
+  "ProviderConnectionState.autoMinimal": {
+    "provider": "claude-code",
+    "connected": true,
+    "requiresReauth": true
+  },
+  "PullRequestClientState.autoCreating": {
+    "status": "creating"
+  },
+  "PullRequestClientState.autoFailed": {
+    "status": "failed",
+    "error": "sample",
+    "details": "sample"
+  },
+  "PullRequestClientState.autoCreated": {
+    "status": "created",
+    "url": "sample",
+    "number": 1,
+    "state": "open"
+  },
+  "RepositorySetupTask.autoFull": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "repository",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "RepositorySetupTask.autoMinimal": {
+    "status": "pending",
+    "startedAt": null,
+    "completedAt": null,
+    "error": null,
+    "id": "repository",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "SessionPlanMetadata.autoFull": {
+    "lastUpdated": "sample"
+  },
+  "SessionPlanMetadata.autoMinimal": {
+    "lastUpdated": "sample"
+  },
+  "SessionSetupRun.autoFull": {
+    "id": "sample",
+    "status": "running",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "tasks": [
+      {
+        "status": "pending",
+        "startedAt": "sample",
+        "completedAt": "sample",
+        "error": "sample",
+        "id": "cloud_container",
+        "isBlocking": true,
+        "canRetry": true
+      }
+    ]
+  },
+  "SessionSetupRun.autoMinimal": {
+    "id": "sample",
+    "status": "running",
+    "startedAt": "sample",
+    "completedAt": null,
+    "tasks": [
+      {
+        "status": "pending",
+        "startedAt": null,
+        "completedAt": null,
+        "error": null,
+        "id": "cloud_container",
+        "isBlocking": true,
+        "canRetry": true
+      }
+    ]
+  },
+  "SessionSetupTask.autoCloudContainer": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "cloud_container",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "SessionSetupTask.autoRepository": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "repository",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "SessionSetupTask.autoSetupScript": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "setup_script",
+    "isBlocking": false,
+    "canRetry": false,
+    "output": {
+      "stdout": "sample",
+      "stderr": "sample",
+      "exitCode": 1,
+      "truncated": true
+    },
+    "skipReason": {
+      "kind": "no_environment",
+      "repoId": 1
+    }
+  },
+  "SessionSetupTask.autoNetworkPolicy": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "network_policy",
+    "isBlocking": true,
+    "canRetry": true
+  },
+  "SessionSetupTaskOutput.autoFull": {
+    "stdout": "sample",
+    "stderr": "sample",
+    "exitCode": 1,
+    "truncated": true
+  },
+  "SessionSetupTaskOutput.autoMinimal": {
+    "stdout": "sample",
+    "stderr": "sample",
+    "exitCode": null,
+    "truncated": true
+  },
+  "SessionSummary.autoFull": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "repoFullName": "sample",
+    "title": "sample",
+    "archived": true,
+    "workingState": "idle",
+    "pushedBranch": "sample",
+    "pullRequest": {
+      "url": "sample",
+      "number": 1,
+      "state": "open"
+    },
+    "createdAt": "sample",
+    "updatedAt": "sample",
+    "lastMessageAt": "sample",
+    "lastAssistantMessageId": "sample",
+    "hasUnread": true
+  },
+  "SessionSummary.autoMinimal": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "repoFullName": "sample",
+    "title": null,
+    "archived": true,
+    "workingState": "idle",
+    "pushedBranch": null,
+    "pullRequest": null,
+    "createdAt": "sample",
+    "updatedAt": "sample",
+    "lastMessageAt": null,
+    "lastAssistantMessageId": null,
+    "hasUnread": true
+  },
+  "SessionTodo.autoFull": {
+    "content": "sample",
+    "activeForm": "sample",
+    "status": "pending"
+  },
+  "SessionTodo.autoMinimal": {
+    "content": "sample",
+    "status": "pending"
+  },
+  "StartupScriptSetupTask.autoFull": {
+    "status": "pending",
+    "startedAt": "sample",
+    "completedAt": "sample",
+    "error": "sample",
+    "id": "setup_script",
+    "isBlocking": false,
+    "canRetry": false,
+    "output": {
+      "stdout": "sample",
+      "stderr": "sample",
+      "exitCode": 1,
+      "truncated": true
+    },
+    "skipReason": {
+      "kind": "no_environment",
+      "repoId": 1
+    }
+  },
+  "StartupScriptSetupTask.autoMinimal": {
+    "status": "pending",
+    "startedAt": null,
+    "completedAt": null,
+    "error": null,
+    "id": "setup_script",
+    "isBlocking": false,
+    "canRetry": false,
+    "output": null,
+    "skipReason": null
+  },
+  "StartupScriptSetupTaskSkipReason.autoNoEnvironment": {
+    "kind": "no_environment",
+    "repoId": 1
+  },
+  "StartupScriptSetupTaskSkipReason.autoNoScript": {
+    "kind": "no_script",
+    "environmentId": "sample",
+    "environmentName": "sample"
+  },
+  "ArchiveSessionResponse.autoFull": {
+    "archived": true
+  },
+  "ArchiveSessionResponse.autoMinimal": {
+    "archived": true
+  },
+  "CreateSessionInitialMessage.autoFull": {
+    "content": "sample",
+    "attachmentIds": [
+      "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+    ]
+  },
+  "CreateSessionRequest.autoFull": {
+    "repoId": 1,
+    "environmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "settings": {
+      "provider": "claude-code",
+      "model": "sample",
+      "effort": "sample",
+      "maxTokens": 1
+    },
+    "agentMode": "edit",
+    "branch": "sample",
+    "initialMessage": {
+      "content": "sample",
+      "attachmentIds": [
+        "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+      ]
+    }
+  },
+  "CreateSessionResponse.autoFull": {
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "title": "sample",
+    "websocketToken": "sample",
+    "websocketTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "CreateSessionResponse.autoMinimal": {
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "title": null,
+    "websocketToken": "sample",
+    "websocketTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "DeleteSessionResponse.autoFull": {
+    "deleted": true
+  },
+  "DeleteSessionResponse.autoMinimal": {
+    "deleted": true
+  },
+  "ListSessionsResponse.autoFull": {
+    "groups": [
+      {
+        "repoId": 1,
+        "repoFullName": "sample",
+        "sessions": [
+          {
+            "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+            "repoId": 1,
+            "repoFullName": "sample",
+            "title": "sample",
+            "archived": true,
+            "workingState": "idle",
+            "pushedBranch": "sample",
+            "pullRequest": {
+              "url": "sample",
+              "number": 1,
+              "state": "open"
+            },
+            "createdAt": "sample",
+            "updatedAt": "sample",
+            "lastMessageAt": "sample",
+            "lastAssistantMessageId": "sample",
+            "hasUnread": true
+          }
+        ],
+        "nextSessionCursor": "sample"
+      }
+    ],
+    "nextRepoCursor": "sample"
+  },
+  "ListSessionsResponse.autoMinimal": {
+    "groups": [
+      {
+        "repoId": 1,
+        "repoFullName": "sample",
+        "sessions": [
+          {
+            "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+            "repoId": 1,
+            "repoFullName": "sample",
+            "title": null,
+            "archived": true,
+            "workingState": "idle",
+            "pushedBranch": null,
+            "pullRequest": null,
+            "createdAt": "sample",
+            "updatedAt": "sample",
+            "lastMessageAt": null,
+            "lastAssistantMessageId": null,
+            "hasUnread": true
+          }
+        ],
+        "nextSessionCursor": null
+      }
+    ],
+    "nextRepoCursor": null
+  },
+  "PullRequestResponse.autoFull": {
+    "url": "sample",
+    "number": 1,
+    "state": "sample"
+  },
+  "PullRequestResponse.autoMinimal": {
+    "url": "sample",
+    "number": 1,
+    "state": "sample"
+  },
+  "PullRequestStatusResponse.autoFull": {
+    "url": "sample",
+    "number": 1,
+    "state": "sample",
+    "merged": true
+  },
+  "PullRequestStatusResponse.autoMinimal": {
+    "url": "sample",
+    "number": 1,
+    "state": "sample",
+    "merged": true
+  },
+  "SessionInfoResponse.autoFull": {
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "title": "sample",
+    "status": "preparing",
+    "repoFullName": "sample",
+    "baseBranch": "sample",
+    "pushedBranch": "sample",
+    "pullRequestUrl": "sample",
+    "pullRequestNumber": 1,
+    "pullRequestState": "open",
+    "editorUrl": "sample"
+  },
+  "SessionInfoResponse.autoMinimal": {
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "title": null,
+    "status": "preparing",
+    "repoFullName": "sample"
+  },
+  "SessionPlanResponse.autoFull": {
+    "plan": "sample",
+    "updatedAt": "2026-06-10T12:00:00Z",
+    "sourceMessageId": "sample"
+  },
+  "SessionPlanResponse.autoMinimal": {
+    "plan": "sample",
+    "updatedAt": "2026-06-10T12:00:00Z",
+    "sourceMessageId": null
+  },
+  "SessionRepoGroup.autoFull": {
+    "repoId": 1,
+    "repoFullName": "sample",
+    "sessions": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "repoFullName": "sample",
+        "title": "sample",
+        "archived": true,
+        "workingState": "idle",
+        "pushedBranch": "sample",
+        "pullRequest": {
+          "url": "sample",
+          "number": 1,
+          "state": "open"
+        },
+        "createdAt": "sample",
+        "updatedAt": "sample",
+        "lastMessageAt": "sample",
+        "lastAssistantMessageId": "sample",
+        "hasUnread": true
+      }
+    ],
+    "nextSessionCursor": "sample"
+  },
+  "SessionRepoGroup.autoMinimal": {
+    "repoId": 1,
+    "repoFullName": "sample",
+    "sessions": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "repoFullName": "sample",
+        "title": null,
+        "archived": true,
+        "workingState": "idle",
+        "pushedBranch": null,
+        "pullRequest": null,
+        "createdAt": "sample",
+        "updatedAt": "sample",
+        "lastMessageAt": null,
+        "lastAssistantMessageId": null,
+        "hasUnread": true
+      }
+    ],
+    "nextSessionCursor": null
+  },
+  "SessionWebSocketTokenResponse.autoFull": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "SessionWebSocketTokenResponse.autoMinimal": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "UpdateSessionTitleRequest.autoFull": {
+    "title": "sample"
+  },
+  "UpdateSessionTitleRequest.autoMinimal": {
+    "title": "sample"
+  },
+  "UpdateSessionTitleResponse.autoFull": {
+    "title": "sample"
+  },
+  "UpdateSessionTitleResponse.autoMinimal": {
+    "title": "sample"
+  },
+  "UserSessionsWebSocketTokenResponse.autoFull": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "UserSessionsWebSocketTokenResponse.autoMinimal": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "ClientState.autoFull": {
+    "repoFullName": "sample",
+    "status": "preparing",
+    "sessionSetupRun": {
+      "id": "sample",
+      "status": "running",
+      "startedAt": "sample",
+      "completedAt": "sample",
+      "tasks": [
+        {
+          "status": "pending",
+          "startedAt": "sample",
+          "completedAt": "sample",
+          "error": "sample",
+          "id": "cloud_container",
+          "isBlocking": true,
+          "canRetry": true
+        }
+      ]
+    },
+    "agentSettings": {
+      "provider": "openai-codex",
+      "model": "gpt-5.5",
+      "effort": "low",
+      "maxTokens": 1
+    },
+    "pullRequest": {
+      "status": "creating"
+    },
+    "pushedBranch": "sample",
+    "baseBranch": "sample",
+    "todos": [
+      {
+        "content": "sample",
+        "activeForm": "sample",
+        "status": "pending"
+      }
+    ],
+    "plan": {
+      "lastUpdated": "sample"
+    },
+    "pendingUserMessage": {
+      "message": {
+        "id": "sample",
+        "role": "user",
+        "parts": [
+          {
+            "opaque": true
+          }
+        ],
+        "metadata": {
+          "opaque": true
+        }
+      },
+      "attachmentIds": [
+        "sample"
+      ]
+    },
+    "activeTurn": {
+      "userMessageId": "sample"
+    },
+    "editorUrl": "sample",
+    "providerConnection": {
+      "provider": "claude-code",
+      "connected": true,
+      "requiresReauth": true
+    },
+    "agentMode": "edit",
+    "lastError": "sample",
+    "createdAt": "2026-06-10T12:00:00Z"
+  },
+  "ClientState.autoMinimal": {
+    "repoFullName": null,
+    "status": "preparing",
+    "sessionSetupRun": null,
+    "agentSettings": {
+      "provider": "openai-codex",
+      "model": "gpt-5.5",
+      "effort": "low",
+      "maxTokens": 1
+    },
+    "pullRequest": null,
+    "pushedBranch": null,
+    "baseBranch": null,
+    "todos": null,
+    "plan": null,
+    "pendingUserMessage": null,
+    "activeTurn": null,
+    "editorUrl": null,
+    "providerConnection": null,
+    "agentMode": "edit",
+    "lastError": null,
+    "createdAt": "2026-06-10T12:00:00Z"
+  },
+  "PendingUserMessage.autoFull": {
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ],
+      "metadata": {
+        "opaque": true
+      }
+    },
+    "attachmentIds": [
+      "sample"
+    ]
+  },
+  "PendingUserMessage.autoMinimal": {
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ]
+    },
+    "attachmentIds": [
+      "sample"
+    ]
+  },
+  "AgentChunksEvent.autoFull": {
+    "type": "agent.chunks",
+    "chunks": [
+      {
+        "opaque": true
+      }
+    ]
+  },
+  "AgentChunksEvent.autoMinimal": {
+    "type": "agent.chunks",
+    "chunks": [
+      {
+        "opaque": true
+      }
+    ]
+  },
+  "AgentFinishEvent.autoFull": {
+    "type": "agent.finish",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ],
+      "metadata": {
+        "opaque": true
+      }
+    }
+  },
+  "AgentFinishEvent.autoMinimal": {
+    "type": "agent.finish",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ]
+    }
+  },
+  "AgentReadyEvent.autoFull": {
+    "type": "agent.ready"
+  },
+  "AgentReadyEvent.autoMinimal": {
+    "type": "agent.ready"
+  },
+  "ChatMessageEvent.autoFull": {
+    "type": "chat.message",
+    "content": "sample",
+    "attachments": [
+      {
+        "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+      }
+    ],
+    "messageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "model": "sample",
+    "effort": "sample",
+    "agentMode": "edit"
+  },
+  "ClientMessage.autoChatMessage": {
+    "type": "chat.message",
+    "content": "sample",
+    "attachments": [
+      {
+        "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+      }
+    ],
+    "messageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "model": "sample",
+    "effort": "sample",
+    "agentMode": "edit"
+  },
+  "ClientMessage.autoSyncRequest": {
+    "type": "sync.request",
+    "lastMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "lastChunkIndex": 1
+  },
+  "ClientMessage.autoSessionMarkRead": {
+    "type": "session.mark_read",
+    "messageId": "sample"
+  },
+  "ClientMessage.autoOperationCancel": {
+    "type": "operation.cancel"
+  },
+  "ConnectedEvent.autoFull": {
+    "type": "connected",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "status": "preparing",
+    "lastMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "ConnectedEvent.autoMinimal": {
+    "type": "connected",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "status": "preparing"
+  },
+  "EditorReadyEvent.autoFull": {
+    "type": "editor.ready",
+    "url": "sample",
+    "token": "sample"
+  },
+  "EditorReadyEvent.autoMinimal": {
+    "type": "editor.ready",
+    "url": "sample",
+    "token": "sample"
+  },
+  "OperationCancelEvent.autoFull": {
+    "type": "operation.cancel"
+  },
+  "OperationCancelEvent.autoMinimal": {
+    "type": "operation.cancel"
+  },
+  "OperationErrorEvent.autoFull": {
+    "type": "operation.error",
+    "code": "INVALID_MESSAGE",
+    "message": "sample"
+  },
+  "OperationErrorEvent.autoMinimal": {
+    "type": "operation.error",
+    "code": "INVALID_MESSAGE",
+    "message": "sample"
+  },
+  "ServerMessage.autoConnected": {
+    "type": "connected",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "status": "preparing",
+    "lastMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "ServerMessage.autoSyncResponse": {
+    "type": "sync.response",
+    "messages": [
+      {
+        "id": "sample",
+        "role": "user",
+        "parts": [
+          {
+            "opaque": true
+          }
+        ],
+        "metadata": {
+          "opaque": true
+        }
+      }
+    ],
+    "pendingChunks": [
+      {
+        "opaque": true
+      }
+    ],
+    "activeTurn": {
+      "userMessageId": "sample"
+    }
+  },
+  "ServerMessage.autoOperationError": {
+    "type": "operation.error",
+    "code": "INVALID_MESSAGE",
+    "message": "sample"
+  },
+  "ServerMessage.autoAgentChunks": {
+    "type": "agent.chunks",
+    "chunks": [
+      {
+        "opaque": true
+      }
+    ]
+  },
+  "ServerMessage.autoAgentFinish": {
+    "type": "agent.finish",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ],
+      "metadata": {
+        "opaque": true
+      }
+    }
+  },
+  "ServerMessage.autoAgentReady": {
+    "type": "agent.ready"
+  },
+  "ServerMessage.autoUserMessage": {
+    "type": "user.message",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ],
+      "metadata": {
+        "opaque": true
+      }
+    }
+  },
+  "ServerMessage.autoEditorReady": {
+    "type": "editor.ready",
+    "url": "sample",
+    "token": "sample"
+  },
+  "SessionMarkReadEvent.autoFull": {
+    "type": "session.mark_read",
+    "messageId": "sample"
+  },
+  "SessionMarkReadEvent.autoMinimal": {
+    "type": "session.mark_read",
+    "messageId": "sample"
+  },
+  "SyncRequestEvent.autoFull": {
+    "type": "sync.request",
+    "lastMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "lastChunkIndex": 1
+  },
+  "SyncRequestEvent.autoMinimal": {
+    "type": "sync.request"
+  },
+  "SyncResponseEvent.autoFull": {
+    "type": "sync.response",
+    "messages": [
+      {
+        "id": "sample",
+        "role": "user",
+        "parts": [
+          {
+            "opaque": true
+          }
+        ],
+        "metadata": {
+          "opaque": true
+        }
+      }
+    ],
+    "pendingChunks": [
+      {
+        "opaque": true
+      }
+    ],
+    "activeTurn": {
+      "userMessageId": "sample"
+    }
+  },
+  "SyncResponseEvent.autoMinimal": {
+    "type": "sync.response",
+    "messages": [
+      {
+        "id": "sample",
+        "role": "user",
+        "parts": [
+          {
+            "opaque": true
+          }
+        ]
+      }
+    ],
+    "activeTurn": null
+  },
+  "UIMessage.autoFull": {
+    "id": "sample",
+    "role": "user",
+    "parts": [
+      {
+        "opaque": true
+      }
+    ],
+    "metadata": {
+      "opaque": true
+    }
+  },
+  "UIMessage.autoMinimal": {
+    "id": "sample",
+    "role": "user",
+    "parts": [
+      {
+        "opaque": true
+      }
+    ]
+  },
+  "UserMessageEvent.autoFull": {
+    "type": "user.message",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ],
+      "metadata": {
+        "opaque": true
+      }
+    }
+  },
+  "UserMessageEvent.autoMinimal": {
+    "type": "user.message",
+    "message": {
+      "id": "sample",
+      "role": "user",
+      "parts": [
+        {
+          "opaque": true
+        }
+      ]
+    }
+  },
+  "SessionListResyncRequiredEvent.autoFull": {
+    "type": "session.list.resync_required"
+  },
+  "SessionListResyncRequiredEvent.autoMinimal": {
+    "type": "session.list.resync_required"
+  },
+  "SessionSummaryCreatedEvent.autoFull": {
+    "type": "session.summary.created",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": "sample",
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": "sample",
+      "pullRequest": {
+        "url": "sample",
+        "number": 1,
+        "state": "open"
+      },
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": "sample",
+      "lastAssistantMessageId": "sample",
+      "hasUnread": true
+    }
+  },
+  "SessionSummaryCreatedEvent.autoMinimal": {
+    "type": "session.summary.created",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": null,
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": null,
+      "pullRequest": null,
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": null,
+      "lastAssistantMessageId": null,
+      "hasUnread": true
+    }
+  },
+  "SessionSummaryRemovedEvent.autoFull": {
+    "type": "session.summary.removed",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "SessionSummaryRemovedEvent.autoMinimal": {
+    "type": "session.summary.removed",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "SessionSummaryUpdatedEvent.autoFull": {
+    "type": "session.summary.updated",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": "sample",
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": "sample",
+      "pullRequest": {
+        "url": "sample",
+        "number": 1,
+        "state": "open"
+      },
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": "sample",
+      "lastAssistantMessageId": "sample",
+      "hasUnread": true
+    }
+  },
+  "SessionSummaryUpdatedEvent.autoMinimal": {
+    "type": "session.summary.updated",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": null,
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": null,
+      "pullRequest": null,
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": null,
+      "lastAssistantMessageId": null,
+      "hasUnread": true
+    }
+  },
+  "UserSessionsConnectedEvent.autoFull": {
+    "type": "user_sessions.connected"
+  },
+  "UserSessionsConnectedEvent.autoMinimal": {
+    "type": "user_sessions.connected"
+  },
+  "UserSessionsServerMessage.autoUserSessionsConnected": {
+    "type": "user_sessions.connected"
+  },
+  "UserSessionsServerMessage.autoSessionSummaryCreated": {
+    "type": "session.summary.created",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": "sample",
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": "sample",
+      "pullRequest": {
+        "url": "sample",
+        "number": 1,
+        "state": "open"
+      },
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": "sample",
+      "lastAssistantMessageId": "sample",
+      "hasUnread": true
+    }
+  },
+  "UserSessionsServerMessage.autoSessionSummaryUpdated": {
+    "type": "session.summary.updated",
+    "session": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "repoFullName": "sample",
+      "title": "sample",
+      "archived": true,
+      "workingState": "idle",
+      "pushedBranch": "sample",
+      "pullRequest": {
+        "url": "sample",
+        "number": 1,
+        "state": "open"
+      },
+      "createdAt": "sample",
+      "updatedAt": "sample",
+      "lastMessageAt": "sample",
+      "lastAssistantMessageId": "sample",
+      "hasUnread": true
+    }
+  },
+  "UserSessionsServerMessage.autoSessionSummaryRemoved": {
+    "type": "session.summary.removed",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "UserSessionsServerMessage.autoSessionListResyncRequired": {
+    "type": "session.list.resync_required"
+  },
+  "ClaudeAuthUrlResponse.autoFull": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "ClaudeAuthUrlResponse.autoMinimal": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "ClaudeDisconnectResponse.autoFull": {
+    "ok": true
+  },
+  "ClaudeDisconnectResponse.autoMinimal": {
+    "ok": true
+  },
+  "ClaudeStatusResponse.autoFull": {
+    "connected": true,
+    "requiresReauth": true,
+    "subscriptionType": "sample",
+    "rateLimitTier": "sample"
+  },
+  "ClaudeStatusResponse.autoMinimal": {
+    "connected": true,
+    "requiresReauth": true,
+    "subscriptionType": null,
+    "rateLimitTier": null
+  },
+  "ClaudeTokenRequest.autoFull": {
+    "code": "sample",
+    "state": "sample",
+    "sessionId": "sample"
+  },
+  "ClaudeTokenRequest.autoMinimal": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "ClaudeTokenResponse.autoFull": {
+    "ok": true
+  },
+  "ClaudeTokenResponse.autoMinimal": {
+    "ok": true
+  },
+  "GitHubAuthUrlResponse.autoFull": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "GitHubAuthUrlResponse.autoMinimal": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "GitHubReauthTokenResponse.autoFull": {
+    "ok": true,
+    "installUrl": "sample"
+  },
+  "GitHubReauthTokenResponse.autoMinimal": {
+    "ok": true,
+    "installUrl": "sample"
+  },
+  "LogoutResponse.autoFull": {
+    "ok": true
+  },
+  "LogoutResponse.autoMinimal": {
+    "ok": true
+  },
+  "OpenAIAuthUrlResponse.autoFull": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "OpenAIAuthUrlResponse.autoMinimal": {
+    "url": "sample",
+    "state": "sample"
+  },
+  "OpenAIDeviceAttemptResponse.autoFull": {
+    "status": "pending"
+  },
+  "OpenAIDeviceAttemptResponse.autoMinimal": {
+    "status": "pending"
+  },
+  "OpenAIDeviceStartResponse.autoFull": {
+    "attemptId": "sample",
+    "verificationUrl": "sample",
+    "userCode": "sample",
+    "intervalSeconds": 1,
+    "expiresAt": "sample"
+  },
+  "OpenAIDeviceStartResponse.autoMinimal": {
+    "attemptId": "sample",
+    "verificationUrl": "sample",
+    "userCode": "sample",
+    "intervalSeconds": 1,
+    "expiresAt": "sample"
+  },
+  "OpenAIDisconnectResponse.autoFull": {
+    "ok": true
+  },
+  "OpenAIDisconnectResponse.autoMinimal": {
+    "ok": true
+  },
+  "OpenAIStatusResponse.autoFull": {
+    "connected": true,
+    "requiresReauth": true
+  },
+  "OpenAIStatusResponse.autoMinimal": {
+    "connected": true,
+    "requiresReauth": true
+  },
+  "OpenAITokenRequest.autoFull": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "OpenAITokenRequest.autoMinimal": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "OpenAITokenResponse.autoFull": {
+    "ok": true
+  },
+  "OpenAITokenResponse.autoMinimal": {
+    "ok": true
+  },
+  "RefreshRequest.autoFull": {
+    "refreshToken": "sample"
+  },
+  "RefreshRequest.autoMinimal": {
+    "refreshToken": "sample"
+  },
+  "RefreshResponse.autoFull": {
+    "accessToken": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "RefreshResponse.autoMinimal": {
+    "accessToken": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "TokenRequest.autoFull": {
+    "code": "sample",
+    "state": "sample",
+    "client": "web"
+  },
+  "TokenRequest.autoMinimal": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "TokenResponse.autoFull": {
+    "token": "sample",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": "sample",
+      "avatarUrl": "sample"
+    },
+    "hasInstallations": true,
+    "installUrl": "sample",
+    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+  },
+  "TokenResponse.autoMinimal": {
+    "token": "sample",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": null,
+      "avatarUrl": null
+    },
+    "hasInstallations": true,
+    "installUrl": "sample"
+  },
+  "UserInfo.autoFull": {
+    "id": "sample",
+    "login": "sample",
+    "name": "sample",
+    "avatarUrl": "sample"
+  },
+  "UserInfo.autoMinimal": {
+    "id": "sample",
+    "login": "sample",
+    "name": null,
+    "avatarUrl": null
+  },
+  "Branch.autoFull": {
+    "name": "sample",
+    "default": true
+  },
+  "Branch.autoMinimal": {
+    "name": "sample",
+    "default": true
+  },
+  "ListBranchesResponse.autoFull": {
+    "branches": [
+      {
+        "name": "sample",
+        "default": true
+      }
+    ],
+    "cursor": "sample"
+  },
+  "ListBranchesResponse.autoMinimal": {
+    "branches": [
+      {
+        "name": "sample",
+        "default": true
+      }
+    ],
+    "cursor": null
+  },
+  "ListReposResponse.autoFull": {
+    "repos": [
+      {
+        "id": 1,
+        "name": "sample",
+        "fullName": "sample",
+        "owner": "sample",
+        "private": true,
+        "description": "sample",
+        "defaultBranch": "sample"
+      }
+    ],
+    "installUrl": "sample",
+    "cursor": "sample"
+  },
+  "ListReposResponse.autoMinimal": {
+    "repos": [
+      {
+        "id": 1,
+        "name": "sample",
+        "fullName": "sample",
+        "owner": "sample",
+        "private": true,
+        "description": null,
+        "defaultBranch": "sample"
+      }
+    ],
+    "installUrl": "sample",
+    "cursor": null
+  },
+  "Repo.autoFull": {
+    "id": 1,
+    "name": "sample",
+    "fullName": "sample",
+    "owner": "sample",
+    "private": true,
+    "description": "sample",
+    "defaultBranch": "sample"
+  },
+  "Repo.autoMinimal": {
+    "id": 1,
+    "name": "sample",
+    "fullName": "sample",
+    "owner": "sample",
+    "private": true,
+    "description": null,
+    "defaultBranch": "sample"
+  },
+  "SearchReposResponse.autoFull": {
+    "repos": [
+      {
+        "id": 1,
+        "name": "sample",
+        "fullName": "sample",
+        "owner": "sample",
+        "private": true,
+        "description": "sample",
+        "defaultBranch": "sample"
+      }
+    ]
+  },
+  "SearchReposResponse.autoMinimal": {
+    "repos": [
+      {
+        "id": 1,
+        "name": "sample",
+        "fullName": "sample",
+        "owner": "sample",
+        "private": true,
+        "description": null,
+        "defaultBranch": "sample"
+      }
+    ]
+  },
+  "ModelsResponse.autoFull": {
+    "providers": [
+      {
+        "providerId": "claude-code",
+        "providerName": "sample",
+        "connected": true,
+        "requiresReauth": true,
+        "defaultModel": "sample",
+        "defaultEffort": "sample",
+        "authMethods": [
+          "oauth"
+        ],
+        "models": [
+          {
+            "id": "sample",
+            "displayName": "sample",
+            "isDefault": true,
+            "selectable": true
+          }
+        ],
+        "efforts": [
+          {
+            "id": "sample",
+            "displayName": "sample",
+            "isDefault": true,
+            "selectable": true
+          }
+        ],
+        "metadata": {
+          "key": {
+            "opaque": true
+          }
+        }
+      }
+    ]
+  },
+  "ModelsResponse.autoMinimal": {
+    "providers": [
+      {
+        "providerId": "claude-code",
+        "providerName": "sample",
+        "connected": true,
+        "requiresReauth": true,
+        "defaultModel": "sample",
+        "defaultEffort": "sample",
+        "authMethods": [
+          "oauth"
+        ],
+        "models": [
+          {
+            "id": "sample",
+            "displayName": "sample",
+            "isDefault": true,
+            "selectable": true
+          }
+        ],
+        "efforts": [
+          {
+            "id": "sample",
+            "displayName": "sample",
+            "isDefault": true,
+            "selectable": true
+          }
+        ]
+      }
+    ]
+  },
+  "ProviderCatalogEffort.autoFull": {
+    "id": "sample",
+    "displayName": "sample",
+    "isDefault": true,
+    "selectable": true
+  },
+  "ProviderCatalogEffort.autoMinimal": {
+    "id": "sample",
+    "displayName": "sample",
+    "isDefault": true,
+    "selectable": true
+  },
+  "ProviderCatalogEntry.autoFull": {
+    "providerId": "claude-code",
+    "providerName": "sample",
+    "connected": true,
+    "requiresReauth": true,
+    "defaultModel": "sample",
+    "defaultEffort": "sample",
+    "authMethods": [
+      "oauth"
+    ],
+    "models": [
+      {
+        "id": "sample",
+        "displayName": "sample",
+        "isDefault": true,
+        "selectable": true
+      }
+    ],
+    "efforts": [
+      {
+        "id": "sample",
+        "displayName": "sample",
+        "isDefault": true,
+        "selectable": true
+      }
+    ],
+    "metadata": {
+      "key": {
+        "opaque": true
+      }
+    }
+  },
+  "ProviderCatalogEntry.autoMinimal": {
+    "providerId": "claude-code",
+    "providerName": "sample",
+    "connected": true,
+    "requiresReauth": true,
+    "defaultModel": "sample",
+    "defaultEffort": "sample",
+    "authMethods": [
+      "oauth"
+    ],
+    "models": [
+      {
+        "id": "sample",
+        "displayName": "sample",
+        "isDefault": true,
+        "selectable": true
+      }
+    ],
+    "efforts": [
+      {
+        "id": "sample",
+        "displayName": "sample",
+        "isDefault": true,
+        "selectable": true
+      }
+    ]
+  },
+  "ProviderCatalogModel.autoFull": {
+    "id": "sample",
+    "displayName": "sample",
+    "isDefault": true,
+    "selectable": true
+  },
+  "ProviderCatalogModel.autoMinimal": {
+    "id": "sample",
+    "displayName": "sample",
+    "isDefault": true,
+    "selectable": true
+  },
+  "AttachmentDescriptor.autoFull": {
+    "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "filename": "sample",
+    "mediaType": "sample",
+    "sizeBytes": 1,
+    "createdAt": "sample",
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "contentUrl": "sample"
+  },
+  "AttachmentDescriptor.autoMinimal": {
+    "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "filename": "sample",
+    "mediaType": "sample",
+    "sizeBytes": 1,
+    "createdAt": "sample",
+    "contentUrl": "sample"
+  },
+  "MessageAttachmentRef.autoFull": {
+    "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "MessageAttachmentRef.autoMinimal": {
+    "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
+  },
+  "UploadAttachmentResponse.autoFull": {
+    "attachments": [
+      {
+        "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "filename": "sample",
+        "mediaType": "sample",
+        "sizeBytes": 1,
+        "createdAt": "sample",
+        "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "contentUrl": "sample"
+      }
+    ]
+  },
+  "UploadAttachmentResponse.autoMinimal": {
+    "attachments": [
+      {
+        "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "filename": "sample",
+        "mediaType": "sample",
+        "sizeBytes": 1,
+        "createdAt": "sample",
+        "contentUrl": "sample"
+      }
+    ]
+  },
+  "CreateRepoEnvironmentRequest.autoFull": {
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": "sample"
+  },
+  "CreateRepoEnvironmentRequest.autoMinimal": {
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    }
+  },
+  "DefaultNetworkAllowlistResponse.autoFull": {
+    "domains": [
+      "sample"
+    ]
+  },
+  "DefaultNetworkAllowlistResponse.autoMinimal": {
+    "domains": [
+      "sample"
+    ]
+  },
+  "DeleteRepoEnvironmentResponse.autoFull": {
+    "deleted": true
+  },
+  "DeleteRepoEnvironmentResponse.autoMinimal": {
+    "deleted": true
+  },
+  "ListRepoEnvironmentsResponse.autoFull": {
+    "environments": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "name": "sample",
+        "network": {
+          "mode": "open"
+        },
+        "plainEnvVars": {
+          "sample": "sample"
+        },
+        "startupScript": "sample",
+        "createdAt": "2026-06-10T12:00:00Z",
+        "updatedAt": "2026-06-10T12:00:00Z"
+      }
+    ]
+  },
+  "ListRepoEnvironmentsResponse.autoMinimal": {
+    "environments": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "name": "sample",
+        "network": {
+          "mode": "open"
+        },
+        "plainEnvVars": {
+          "sample": "sample"
+        },
+        "startupScript": null,
+        "createdAt": "2026-06-10T12:00:00Z",
+        "updatedAt": "2026-06-10T12:00:00Z"
+      }
+    ]
+  },
+  "ListUserRepoEnvironmentsResponse.autoFull": {
+    "environments": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "name": "sample",
+        "network": {
+          "mode": "open"
+        },
+        "plainEnvVars": {
+          "sample": "sample"
+        },
+        "startupScript": "sample",
+        "createdAt": "2026-06-10T12:00:00Z",
+        "updatedAt": "2026-06-10T12:00:00Z",
+        "repoFullName": "sample"
+      }
+    ]
+  },
+  "ListUserRepoEnvironmentsResponse.autoMinimal": {
+    "environments": [
+      {
+        "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+        "repoId": 1,
+        "name": "sample",
+        "network": {
+          "mode": "open"
+        },
+        "plainEnvVars": {
+          "sample": "sample"
+        },
+        "startupScript": null,
+        "createdAt": "2026-06-10T12:00:00Z",
+        "updatedAt": "2026-06-10T12:00:00Z",
+        "repoFullName": "sample"
+      }
+    ]
+  },
+  "NetworkAccessConfig.autoOpen": {
+    "mode": "open"
+  },
+  "NetworkAccessConfig.autoLocked": {
+    "mode": "locked"
+  },
+  "NetworkAccessConfig.autoDefault": {
+    "mode": "default"
+  },
+  "NetworkAccessConfig.autoCustom": {
+    "mode": "custom",
+    "extraAllowlist": [
+      "sample"
+    ],
+    "includeDefaultAllowlist": true
+  },
+  "RepoEnvironment.autoFull": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": "sample",
+    "createdAt": "2026-06-10T12:00:00Z",
+    "updatedAt": "2026-06-10T12:00:00Z"
+  },
+  "RepoEnvironment.autoMinimal": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": null,
+    "createdAt": "2026-06-10T12:00:00Z",
+    "updatedAt": "2026-06-10T12:00:00Z"
+  },
+  "RepoEnvironmentResponse.autoFull": {
+    "environment": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "name": "sample",
+      "network": {
+        "mode": "open"
+      },
+      "plainEnvVars": {
+        "sample": "sample"
+      },
+      "startupScript": "sample",
+      "createdAt": "2026-06-10T12:00:00Z",
+      "updatedAt": "2026-06-10T12:00:00Z"
+    }
+  },
+  "RepoEnvironmentResponse.autoMinimal": {
+    "environment": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "name": "sample",
+      "network": {
+        "mode": "open"
+      },
+      "plainEnvVars": {
+        "sample": "sample"
+      },
+      "startupScript": null,
+      "createdAt": "2026-06-10T12:00:00Z",
+      "updatedAt": "2026-06-10T12:00:00Z"
+    }
+  },
+  "RepoEnvironmentSummary.autoFull": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": "sample",
+    "createdAt": "2026-06-10T12:00:00Z",
+    "updatedAt": "2026-06-10T12:00:00Z",
+    "repoFullName": "sample"
+  },
+  "RepoEnvironmentSummary.autoMinimal": {
+    "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "repoId": 1,
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": null,
+    "createdAt": "2026-06-10T12:00:00Z",
+    "updatedAt": "2026-06-10T12:00:00Z",
+    "repoFullName": "sample"
+  },
+  "UpdateRepoEnvironmentRequest.autoFull": {
+    "name": "sample",
+    "network": {
+      "mode": "open"
+    },
+    "plainEnvVars": {
+      "sample": "sample"
+    },
+    "startupScript": "sample"
+  },
+  "UpdateRepoEnvironmentRequest.autoMinimal": {
+    "network": {
+      "mode": "default"
+    },
+    "plainEnvVars": {}
+  },
+  "UserRepoEnvironmentResponse.autoFull": {
+    "environment": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "name": "sample",
+      "network": {
+        "mode": "open"
+      },
+      "plainEnvVars": {
+        "sample": "sample"
+      },
+      "startupScript": "sample",
+      "createdAt": "2026-06-10T12:00:00Z",
+      "updatedAt": "2026-06-10T12:00:00Z",
+      "repoFullName": "sample"
+    }
+  },
+  "UserRepoEnvironmentResponse.autoMinimal": {
+    "environment": {
+      "id": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+      "repoId": 1,
+      "name": "sample",
+      "network": {
+        "mode": "open"
+      },
+      "plainEnvVars": {
+        "sample": "sample"
+      },
+      "startupScript": null,
+      "createdAt": "2026-06-10T12:00:00Z",
+      "updatedAt": "2026-06-10T12:00:00Z",
+      "repoFullName": "sample"
+    }
+  },
+  "VoiceTranscriptionResponse.autoFull": {
+    "text": "sample"
+  },
+  "VoiceTranscriptionResponse.autoMinimal": {
+    "text": "sample"
+  },
+  "VoiceTranscriptionTokenResponse.autoFull": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z",
+    "maxBytes": 1
+  },
+  "VoiceTranscriptionTokenResponse.autoMinimal": {
+    "token": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z",
+    "maxBytes": 1
+  },
+  "IntegrationLinkClaimRequest.autoFull": {
+    "token": "samplexxxxxxxxxxxxxx"
+  },
+  "IntegrationLinkClaimRequest.autoMinimal": {
+    "token": "samplexxxxxxxxxxxxxx"
+  },
+  "IntegrationLinkClaimResponse.autoFull": {
+    "ok": true,
+    "provider": "discord",
+    "externalUserId": "sample",
+    "externalUsername": "sample",
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "IntegrationLinkClaimResponse.autoMinimal": {
+    "ok": true,
+    "provider": "discord",
+    "externalUserId": "sample",
+    "externalUsername": null,
+    "expiresAt": "2026-06-10T12:00:00Z"
+  },
+  "IntegrationLinkInfo.autoFull": {
+    "provider": "discord",
+    "externalUserId": "sample",
+    "externalUsername": "sample",
+    "expiresAt": "sample",
+    "lastUsedAt": "sample"
+  },
+  "IntegrationLinkInfo.autoMinimal": {
+    "provider": "discord",
+    "externalUserId": "sample",
+    "externalUsername": null,
+    "expiresAt": "sample",
+    "lastUsedAt": null
+  },
+  "IntegrationLinkRevokeResponse.autoFull": {
+    "ok": true
+  },
+  "IntegrationLinkRevokeResponse.autoMinimal": {
+    "ok": true
+  },
+  "IntegrationLinksResponse.autoFull": {
+    "links": [
+      {
+        "provider": "discord",
+        "externalUserId": "sample",
+        "externalUsername": "sample",
+        "expiresAt": "sample",
+        "lastUsedAt": "sample"
+      }
+    ]
+  },
+  "IntegrationLinksResponse.autoMinimal": {
+    "links": [
+      {
+        "provider": "discord",
+        "externalUserId": "sample",
+        "externalUsername": null,
+        "expiresAt": "sample",
+        "lastUsedAt": null
+      }
+    ]
+  }
+}
