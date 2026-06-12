@@ -11,6 +11,8 @@ describe("buildSystemPromptAppend", () => {
     expect(prompt).toContain("automatically creates a pull request");
     expect(prompt).toContain("`TaskCreate`");
     expect(prompt).toContain("`TaskUpdate`");
+    expect(prompt).toContain("`TaskList`");
+    expect(prompt).toContain("`TaskGet`");
   });
 
   it("mentions update_plan for Codex", () => {

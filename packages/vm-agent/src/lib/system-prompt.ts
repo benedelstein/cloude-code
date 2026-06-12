@@ -14,7 +14,7 @@ export function getTodoToolNameForProvider(providerId: ProviderId): TodoToolName
 
 function formatTodoToolInstruction(todoToolName: TodoToolName): string {
   return todoToolName === "TaskCreate"
-    ? "the `TaskCreate` and `TaskUpdate` tools"
+    ? "the `TaskCreate`, `TaskUpdate`, `TaskList`, and `TaskGet` tools"
     : `the \`${todoToolName}\` tool`;
 }
 
