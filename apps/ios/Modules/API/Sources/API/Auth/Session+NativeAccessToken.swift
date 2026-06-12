@@ -11,7 +11,7 @@ extension Session {
         refreshToken: String,
         refreshTokenExpiresAt refreshExpiryString: CoreAPI.ISODateTimeString
     ) throws {
-        let claims = try NativeAccessTokenClaims(accessToken: accessToken)
+        let claims = try AccessTokenClaims(accessToken: accessToken)
         guard let refreshExpiry = ISO8601.date(from: refreshExpiryString) else {
             throw APIError.decodingFailed(NativeAccessTokenSessionError.invalidRefreshExpiry)
         }
@@ -26,7 +26,7 @@ extension Session {
     }
 }
 
-private struct NativeAccessTokenClaims: Decodable {
+private struct AccessTokenClaims: Decodable {
     let sub: String
     let exp: TimeInterval
 
