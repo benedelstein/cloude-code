@@ -294,7 +294,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "case \"${CONFIGURATION}\" in\n    *Debug*) ;;\n    *)\n        echo \"Non-Debug configuration ${CONFIGURATION}; skipping SwiftLint.\"\n        exit 0\n        ;;\nesac\n\nif which swiftlint > /dev/null 2>&1\nthen\n    swiftlint --no-cache\nelse\n    echo \"warning: `swiftlint` command not found - See https://github.com/realm/SwiftLint#installation for installation instructions.\"\nfi\n";
+			shellScript = "if [ \"${CI:-}\" = \"true\" ]\nthen\n    echo \"CI=true; skipping SwiftLint build phase.\"\n    exit 0\nfi\n\ncase \"${CONFIGURATION}\" in\n    *Debug*) ;;\n    *)\n        echo \"Non-Debug configuration ${CONFIGURATION}; skipping SwiftLint.\"\n        exit 0\n        ;;\nesac\n\nif which swiftlint > /dev/null 2>&1\nthen\n    swiftlint --no-cache\nelse\n    echo \"warning: `swiftlint` command not found - See https://github.com/realm/SwiftLint#installation for installation instructions.\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

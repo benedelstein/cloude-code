@@ -2,6 +2,8 @@ name: API Server CI
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "services/api-server/**"
       - "packages/api-contract/**"
