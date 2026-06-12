@@ -22,16 +22,11 @@ interface TodoToolPartProps {
 export function TodoToolPart({ action }: TodoToolPartProps) {
   const rawTodos = action.todos;
   const todos: TodoItem[] = Array.isArray(rawTodos) ? (rawTodos as TodoItem[]) : [];
-  const total = todos.length;
-  const completed = todos.filter((todo) => isCompleted(todo)).length;
-  const summary = total > 0
-    ? `Updated todos (${completed}/${total})`
-    : "Updated todos";
 
   return (
     <ExpandableSummary
       icon={<ListChecks className="w-3.5 h-3.5" />}
-      summary={summary}
+      summary="Updated todos"
       detail={
         todos.length > 0 ? (
           <div className="my-1 rounded-md border border-border bg-background-secondary px-3 py-2">
