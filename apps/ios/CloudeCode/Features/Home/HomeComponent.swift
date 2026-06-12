@@ -12,12 +12,34 @@ protocol HomeDependency: Dependency {
 
 final class HomeComponent: Component<HomeDependency> {
     @MainActor
+    var archiveSessionAction: ArchiveSessionAction {
+        shared {
+            ArchiveSessionAction(
+                sessionsAPI: dependency.sessionsAPI,
+                sessionSummaryStore: dependency.sessionSummaryStore
+            )
+        }
+    }
+
+    @MainActor
+    var deleteSessionAction: DeleteSessionAction {
+        shared {
+            DeleteSessionAction(
+                sessionsAPI: dependency.sessionsAPI,
+                sessionSummaryStore: dependency.sessionSummaryStore
+            )
+        }
+    }
+
+    @MainActor
     var viewModel: HomeViewModel {
         shared {
             HomeViewModel(
                 sessionsAPI: dependency.sessionsAPI,
                 sessionSummaryStore: dependency.sessionSummaryStore,
-                userSessionsSocket: dependency.userSessionsSocket
+                userSessionsSocket: dependency.userSessionsSocket,
+                archiveSessionAction: archiveSessionAction,
+                deleteSessionAction: deleteSessionAction
             )
         }
     }

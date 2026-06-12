@@ -17,6 +17,8 @@ final class HomeViewModel {
     private let sessionsAPI: any SessionsAPIProviding
     private let sessionSummaryStore: SessionSummaryStore
     private let userSessionsSocket: UserSessionsSocket
+    private let archiveSessionAction: ArchiveSessionAction
+    private let deleteSessionAction: DeleteSessionAction
     private var didStart = false
     private var hasConnected = false
     private var socketTask: Task<Void, Never>?
@@ -39,11 +41,15 @@ final class HomeViewModel {
     init(
         sessionsAPI: any SessionsAPIProviding,
         sessionSummaryStore: SessionSummaryStore,
-        userSessionsSocket: UserSessionsSocket
+        userSessionsSocket: UserSessionsSocket,
+        archiveSessionAction: ArchiveSessionAction,
+        deleteSessionAction: DeleteSessionAction
     ) {
         self.sessionsAPI = sessionsAPI
         self.sessionSummaryStore = sessionSummaryStore
         self.userSessionsSocket = userSessionsSocket
+        self.archiveSessionAction = archiveSessionAction
+        self.deleteSessionAction = deleteSessionAction
     }
 
     /// Cache first (groups render immediately from cached models), then a
@@ -84,6 +90,26 @@ final class HomeViewModel {
         }
         if showLoading {
             isLoading = false
+        }
+    }
+
+    func archive(_ session: SessionSummaryModel) async {
+        errorMessage = nil
+        do {
+            try await archiveSessionAction(session)
+        } catch {
+            Logger.error(error)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func delete(_ session: SessionSummaryModel) async {
+        errorMessage = nil
+        do {
+            try await deleteSessionAction(session)
+        } catch {
+            Logger.error(error)
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -144,7 +170,7 @@ final class HomeViewModel {
     }
 
     private static func groups(from sessions: [SessionSummaryModel]) -> [HomeSessionGroup] {
-        let grouped = Dictionary(grouping: sessions) { $0.repoId }
+        let grouped = Dictionary(grouping: sessions.filter { !$0.archived }) { $0.repoId }
         return grouped.values
             .compactMap { sessions in
                 guard let first = sessions.first else {
