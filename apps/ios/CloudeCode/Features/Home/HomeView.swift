@@ -36,21 +36,23 @@ struct HomeView: View {
                                 NavigationLink(value: session) {
                                     SessionRow(session: session)
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         sessionPendingDelete = session
                                     } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Label("", systemImage: "trash")
                                     }
+                                    .accessibilityLabel("Delete")
 
                                     Button {
                                         Task {
                                             await viewModel.archive(session)
                                         }
                                     } label: {
-                                        Label("Archive", systemImage: "archivebox")
+                                        Label("", systemImage: "archivebox")
                                     }
                                     .tint(.gray)
+                                    .accessibilityLabel("Archive")
                                 }
                             }
                         } header: {
@@ -159,79 +161,119 @@ private struct SessionRow: View {
     let session: SessionSummaryModel
 
     var body: some View {
-        HStack(alignment: .center, spacing: style.spacing) {
-            VStack(alignment: .leading, spacing: style.gridSize) {
+        HStack(alignment: .center, spacing: style.gridSize * 1.5) {
+            SessionArtifactIcon(session: session)
+                .frame(width: style.gridSize * 2.5, height: style.gridSize * 2.5)
+
+            VStack(alignment: .leading, spacing: style.gridSize / 2) {
                 Text(session.title ?? "Untitled session")
                     .styledFont(.headline)
                     .foregroundStyle(theme.labelColor)
-                    .lineLimit(2)
+                    .lineLimit(1)
 
-                HStack(spacing: style.gridSize) {
-                    BranchMetadata(session: session)
-
-                    if let pullRequest = session.pullRequest {
-                        PullRequestMetadata(pullRequest: pullRequest)
-                    }
+                if let pushedBranch = session.pushedBranch {
+                    Text(pushedBranch)
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+                        .lineLimit(1)
                 }
-                .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: style.gridSize)
 
-            VStack(alignment: .trailing, spacing: style.gridSize) {
-                HStack(spacing: style.gridSize) {
-                    if session.hasUnread {
-                        Circle()
-                            .fill(theme.accentBlue)
-                            .frame(width: style.gridSize, height: style.gridSize)
-                    }
-
-                    Text(session.workingState)
-                        .styledFont(.caption)
-                        .foregroundStyle(theme.secondaryLabelColor)
-                }
-
-                Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.secondaryLabelColor)
-            }
+            SessionAttentionSlot(session: session)
+                .frame(minWidth: style.gridSize * 4.5, alignment: .trailing)
         }
         .padding(.vertical, style.gridSize * 1.5)
     }
 }
 
-private struct BranchMetadata: View {
+private struct SessionArtifactIcon: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
     let session: SessionSummaryModel
 
     var body: some View {
-        HStack(spacing: style.gridSize / 2) {
-            Image(systemName: "arrow.triangle.branch")
-                .foregroundStyle(theme.moneyGreen)
+        if let icon = artifactIcon {
+            Image(systemName: icon.systemName)
+                .font(.system(size: style.gridSize * 1.75, weight: .medium))
+                .foregroundStyle(icon.color)
+                .accessibilityLabel(icon.accessibilityLabel)
+        } else {
+            Color.clear
+        }
+    }
 
-            Text(session.pushedBranch ?? "No branch")
-                .styledFont(.caption)
-                .foregroundStyle(theme.secondaryLabelColor)
+    private var artifactIcon: ArtifactIcon? {
+        if let pullRequest = session.pullRequest {
+            return icon(for: pullRequest)
+        }
+
+        if session.pushedBranch != nil {
+            return ArtifactIcon(
+                systemName: "arrow.triangle.branch",
+                color: theme.secondaryLabelColor,
+                accessibilityLabel: "Pushed branch"
+            )
+        }
+
+        return nil
+    }
+
+    private func icon(for pullRequest: Domain.SessionSummary.PullRequest) -> ArtifactIcon {
+        switch pullRequest.state {
+        case "merged":
+            return ArtifactIcon(
+                systemName: "arrow.triangle.merge",
+                color: .purple,
+                accessibilityLabel: "Merged pull request"
+            )
+        case "closed":
+            return ArtifactIcon(
+                systemName: "arrow.triangle.pull",
+                color: theme.errorRed,
+                accessibilityLabel: "Closed pull request"
+            )
+        default:
+            return ArtifactIcon(
+                systemName: "arrow.triangle.pull",
+                color: theme.moneyGreen,
+                accessibilityLabel: "Open pull request"
+            )
         }
     }
 }
 
-private struct PullRequestMetadata: View {
+private struct ArtifactIcon {
+    let systemName: String
+    let color: Color
+    let accessibilityLabel: String
+}
+
+private struct SessionAttentionSlot: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let pullRequest: Domain.SessionSummary.PullRequest
+    let session: SessionSummaryModel
 
     var body: some View {
-        HStack(spacing: style.gridSize / 2) {
-            Image(systemName: "arrow.triangle.pull")
-                .foregroundStyle(theme.accentBlue)
-
-            Text("#\(pullRequest.number) \(pullRequest.state)")
+        if session.workingState == "responding" {
+            ProgressView()
+                .controlSize(.small)
+                .tint(theme.secondaryLabelColor)
+                .accessibilityLabel("Responding")
+        } else if session.hasUnread {
+            Circle()
+                .fill(theme.accentBlue)
+                .frame(width: style.gridSize, height: style.gridSize)
+                .accessibilityLabel("Unread message")
+        } else {
+            Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
                 .styledFont(.caption)
                 .foregroundStyle(theme.secondaryLabelColor)
+                .lineLimit(1)
         }
     }
 }
