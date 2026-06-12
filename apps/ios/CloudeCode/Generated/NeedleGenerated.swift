@@ -1,5 +1,6 @@
 import API
 import Entities
+import Foundation
 import NeedleFoundation
 
 private let needleDependenciesHash: String? = nil
@@ -41,10 +42,20 @@ private func homeDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyOb
     HomeDependencyProvider(applicationComponent: parent1(component) as! ApplicationComponent)
 }
 
-private final class AgentSessionDependencyProvider: AgentSessionDependency {}
+private final class AgentSessionDependencyProvider: AgentSessionDependency {
+    private let applicationComponent: ApplicationComponent
+
+    init(applicationComponent: ApplicationComponent) {
+        self.applicationComponent = applicationComponent
+    }
+
+    func makeSessionSocket(sessionId: UUID) -> SessionSocket {
+        applicationComponent.makeSessionSocket(sessionId: sessionId)
+    }
+}
 
 private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
-    AgentSessionDependencyProvider()
+    AgentSessionDependencyProvider(applicationComponent: parent1(parent1(component)) as! ApplicationComponent)
 }
 
 #endif

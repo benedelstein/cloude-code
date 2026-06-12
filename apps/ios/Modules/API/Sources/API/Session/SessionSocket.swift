@@ -5,10 +5,15 @@ import Foundation
 /// Events emitted by `SessionSocket`.
 public enum SessionSocketEvent: Sendable {
     case connectionChanged(WebSocketConnectionState)
-    /// A protocol message broadcast by the session Durable Object.
-    case server(ServerMessage)
-    /// A `cf_agent_state` state-sync frame from the Cloudflare Agents SDK.
-    case state(ClientState)
+    case connected(status: String)
+    case syncResponse(SessionSyncSnapshot)
+    case operationError(SessionSocketOperationError)
+    case agentChunks([AgentStreamChunk])
+    case agentFinish(AgentUIMessage)
+    case agentReady
+    case userMessage(AgentUIMessage)
+    case editorReady(url: String)
+    case liveState(SessionSocketLiveState)
 }
 
 /// Typed client for the session WebSocket at `/agents/session/{sessionId}`.
@@ -60,7 +65,22 @@ public actor SessionSocket {
         pumpTask = nil
     }
 
-    public func send(_ message: ClientMessage) async throws {
+    public func requestSync(lastMessageId: UUID? = nil, lastChunkIndex: Int? = nil) async throws {
+        try await send(.syncRequest(SyncRequestEvent(
+            lastMessageId: lastMessageId,
+            lastChunkIndex: lastChunkIndex
+        )))
+    }
+
+    public func sendChat(content: String) async throws {
+        try await send(.chatMessage(ChatMessageEvent(content: content)))
+    }
+
+    public func markRead(messageId: String) async throws {
+        try await send(.sessionMarkRead(SessionMarkReadEvent(messageId: messageId)))
+    }
+
+    private func send(_ message: ClientMessage) async throws {
         let data = try JSONEncoder().encode(message)
         guard let text = String(data: data, encoding: .utf8) else {
             throw APIError.webSocketNotConnected
@@ -89,15 +109,64 @@ public actor SessionSocket {
             let decoder = JSONDecoder()
             let probe = try decoder.decode(TypeProbe.self, from: data)
             if probe.type == "cf_agent_state" {
-                return .state(try decoder.decode(AgentStateFrame.self, from: data).state)
+                let frame = try decoder.decode(AgentStateFrame.self, from: data)
+                return .liveState(SessionSocketLiveState(frame.state))
             }
             if probe.type.hasPrefix("cf_") {
                 // Other Agents SDK control frames (identity, RPC, …) are unused.
                 return nil
             }
-            return .server(try decoder.decode(ServerMessage.self, from: data))
+            return event(from: try decoder.decode(ServerMessage.self, from: data))
         } catch {
             Logger.warning("Dropping undecodable session frame:", error)
+            return nil
+        }
+    }
+
+    private static func event(from message: ServerMessage) -> SessionSocketEvent? {
+        switch message {
+        case .agentReady:
+            return .agentReady
+        case .setupOutputChunks, .unknown:
+            return nil
+        case .connected, .operationError, .editorReady:
+            return lifecycleEvent(from: message)
+        case .syncResponse, .agentChunks, .agentFinish, .userMessage:
+            return transcriptEvent(from: message)
+        }
+    }
+
+    private static func lifecycleEvent(from message: ServerMessage) -> SessionSocketEvent? {
+        switch message {
+        case .connected(let event):
+            return .connected(status: event.status.rawValue)
+        case .operationError(let event):
+            return .operationError(SessionSocketOperationError(
+                code: event.code.rawValue,
+                message: event.message
+            ))
+        case .editorReady(let event):
+            return .editorReady(url: event.url)
+        case .syncResponse, .agentChunks, .agentFinish, .agentReady, .userMessage, .setupOutputChunks, .unknown:
+            return nil
+        }
+    }
+
+    private static func transcriptEvent(from message: ServerMessage) -> SessionSocketEvent? {
+        switch message {
+        case .syncResponse(let event):
+            return .syncResponse(SessionSyncSnapshot(
+                messages: event.messages.map(AgentUIMessage.init),
+                pendingChunks: (event.pendingChunks ?? []).map(AgentStreamChunk.init),
+                activeTurnUserMessageId: event.activeTurn?.userMessageId
+            ))
+        case .agentChunks(let event):
+            return .agentChunks(event.chunks.map(AgentStreamChunk.init))
+        case .agentFinish(let event):
+            return .agentFinish(AgentUIMessage(event.message))
+        case .userMessage(let event):
+            return .userMessage(AgentUIMessage(event.message))
+        case .connected, .operationError, .agentReady, .editorReady, .setupOutputChunks, .unknown:
             return nil
         }
     }

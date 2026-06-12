@@ -1,8 +1,12 @@
+import API
 import Entities
+import Foundation
 import NeedleFoundation
 import SwiftUI
 
-protocol AgentSessionDependency: Dependency {}
+protocol AgentSessionDependency: Dependency {
+    func makeSessionSocket(sessionId: UUID) -> SessionSocket
+}
 
 /// Child of `HomeComponent`: agent sessions can only be opened from the
 /// authenticated Home screen.
@@ -17,7 +21,13 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     @MainActor
     var store: AgentSessionStore {
         shared {
-            AgentSessionStore(session: session)
+            guard let sessionId = UUID(uuidString: session.id) else {
+                preconditionFailure("Invalid session id: \(session.id)")
+            }
+            return AgentSessionStore(
+                session: session,
+                socket: dependency.makeSessionSocket(sessionId: sessionId)
+            )
         }
     }
 }
