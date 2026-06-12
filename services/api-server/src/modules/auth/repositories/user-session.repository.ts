@@ -1,3 +1,5 @@
+import { sha256 } from "@/shared/utils/crypto";
+
 export interface AuthSessionIdentityRecord {
   id: string;
   githubId: number;
@@ -58,14 +60,15 @@ export class UserSessionRepository {
   async getActiveAuthSessionByToken(
     token: string,
   ): Promise<AuthSessionIdentityRecord | null> {
+    const tokenHash = await sha256(token);
     const row = await this.database.prepare(
       `SELECT u.id, u.github_id, u.github_login, u.github_name, u.github_avatar_url,
               s.expires_at AS session_expires_at
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')`,
+       WHERE s.token_hash = ? AND datetime(s.expires_at) > datetime('now')`,
     )
-      .bind(token)
+      .bind(tokenHash)
       .first<AuthSessionIdentityRow>();
 
     if (!row) {
@@ -111,11 +114,12 @@ export class UserSessionRepository {
     userId: string,
     expiresAt: string,
   ): Promise<void> {
+    const sessionTokenHash = await sha256(sessionToken);
     await this.database.prepare(
-      `INSERT INTO auth_sessions (token, user_id, expires_at)
+      `INSERT INTO auth_sessions (token_hash, user_id, expires_at)
        VALUES (?, ?, ?)`,
     )
-      .bind(sessionToken, userId, expiresAt)
+      .bind(sessionTokenHash, userId, expiresAt)
       .run();
   }
 
@@ -128,12 +132,13 @@ export class UserSessionRepository {
     encryptedRefreshToken: string | null;
     refreshTokenExpiresAt: string | null;
   }): Promise<void> {
+    const sessionTokenHash = await sha256(params.sessionToken);
     await this.database.batch([
       this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at)
+        `INSERT INTO auth_sessions (token_hash, user_id, expires_at)
          VALUES (?, ?, ?)`,
       ).bind(
-        params.sessionToken,
+        sessionTokenHash,
         params.userId,
         params.sessionExpiresAt,
       ),
@@ -329,18 +334,23 @@ export class UserSessionRepository {
   async getRefreshSessionIdByAccessToken(
     accessToken: string,
   ): Promise<string | null> {
+    const accessTokenHash = await sha256(accessToken);
     const row = await this.database.prepare(
-      `SELECT refresh_session_id FROM auth_sessions WHERE token = ?`,
+      `SELECT refresh_session_id FROM auth_sessions WHERE token_hash = ?`,
     )
-      .bind(accessToken)
+      .bind(accessTokenHash)
       .first<{ refresh_session_id: string | null }>();
 
     return row?.refresh_session_id ?? null;
   }
 
   async deleteByToken(sessionToken: string): Promise<void> {
-    await this.database.prepare(`DELETE FROM auth_sessions WHERE token = ?`)
-      .bind(sessionToken)
+    const sessionTokenHash = await sha256(sessionToken);
+    await this.database.prepare(
+      `DELETE FROM auth_sessions
+       WHERE token_hash = ? OR (token_hash IS NULL AND token = ?)`,
+    )
+      .bind(sessionTokenHash, sessionToken)
       .run();
   }
 

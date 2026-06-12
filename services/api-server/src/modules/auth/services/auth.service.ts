@@ -271,7 +271,7 @@ export class AuthService {
     }
 
     const { oauth, user, encryptedAccess, encryptedRefresh } = exchanged.value;
-    const sessionToken = crypto.randomUUID();
+    const sessionToken = generateOpaqueToken();
     const sessionExpiresAt = new Date(
       Date.now() + WEB_SESSION_TTL_MS,
     ).toISOString();

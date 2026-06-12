@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { UserSessionService } from "../../src/modules/auth/services/user-session.service";
-import { encrypt } from "../../src/shared/utils/crypto";
+import { encrypt, sha256 } from "../../src/shared/utils/crypto";
 import type { Env } from "../../src/shared/types";
 import type { RefreshedToken } from "../../src/shared/types/github";
 
@@ -54,6 +54,58 @@ function createRefreshProvider(refreshUserToken: () => Promise<RefreshedToken>) 
     refreshUserToken: vi.fn(refreshUserToken),
   };
 }
+
+describe("UserSessionService web sessions", () => {
+  it("looks up web sessions by session token hash", async () => {
+    const rawToken = "raw-web-session-token";
+    const tokenHash = await sha256(rawToken);
+    let boundArgs: unknown[] = [];
+    const database = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          boundArgs = args;
+          return {
+            first: vi.fn(async () => {
+              if (
+                sql.includes("FROM auth_sessions")
+                && args[0] === tokenHash
+              ) {
+                return {
+                  id: "user-1",
+                  github_id: 123,
+                  github_login: "octocat",
+                  github_name: "Octo Cat",
+                  github_avatar_url: "https://a",
+                  session_expires_at: "2099-01-01T00:00:00.000Z",
+                };
+              }
+              return null;
+            }),
+            run: vi.fn(async () => ({ success: true })),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+    const service = new UserSessionService({
+      env: {
+        DB: database,
+        TOKEN_ENCRYPTION_KEY,
+      } as Env,
+    });
+
+    const user = await service.getAuthenticatedUserBySessionToken(rawToken);
+
+    expect(user).toEqual({
+      id: "user-1",
+      githubId: 123,
+      githubLogin: "octocat",
+      githubName: "Octo Cat",
+      githubAvatarUrl: "https://a",
+    });
+    expect(boundArgs).toEqual([tokenHash]);
+    expect(boundArgs).not.toEqual([rawToken]);
+  });
+});
 
 describe("UserSessionService GitHub credentials", () => {
   it("returns a valid stored access token without refreshing", async () => {

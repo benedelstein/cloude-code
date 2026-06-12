@@ -71,7 +71,7 @@ Browser                    Next.js proxy (/api/*)       API Server
 ## Key Design Decisions
 
 - **HTTP-only cookie**: The session token is stored as an HTTP-only, secure, sameSite=lax cookie. Client JS cannot access it, mitigating XSS token theft.
-- **Server-side sessions**: Session tokens are random UUIDs stored in D1, not JWTs. This makes them revocable (delete the row to log out).
+- **Server-side sessions**: Session tokens are random opaque bearer tokens, not JWTs. D1 stores only a SHA-256 verifier hash, so the raw cookie value is not recoverable from the database; sessions remain revocable by deleting the hashed row.
 - **BFF proxy**: The Next.js `/api/[...path]` catch-all extracts the cookie and forwards it as a `Bearer` token. The API server only deals with Bearer auth.
 - **Identity-only app auth**: Auth middleware validates only the app session token and returns user identity (`id`, GitHub profile fields). It does not join, decrypt, validate, or refresh GitHub credentials.
 - **Encrypted GitHub tokens**: GitHub access/refresh tokens are stored separately in `user_github_credentials` and encrypted with `TOKEN_ENCRYPTION_KEY`.
