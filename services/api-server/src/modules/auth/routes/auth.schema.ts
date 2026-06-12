@@ -188,6 +188,10 @@ export const getMeRoute = createRoute({
       content: { "application/json": { schema: UserInfo } },
       description: "Current user info",
     },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "User not found",
+    },
   },
 });
 

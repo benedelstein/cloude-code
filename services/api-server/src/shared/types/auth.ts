@@ -1,3 +1,7 @@
+export interface AuthContext {
+  userId: string;
+}
+
 export interface AuthUser {
   id: string;
   githubId: number;

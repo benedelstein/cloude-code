@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from "hono";
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import type { AuthUser } from "../types/auth.types";
+import type { AuthContext } from "../types/auth.types";
 import { AuthService, type AuthGitHubClient } from "../services/auth.service";
 import {
   getGithubRoute,
@@ -19,7 +19,7 @@ import {
 
 type AuthRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface AuthRouteDeps {
@@ -170,9 +170,10 @@ export function createAuthRoutes(
 
   authRoutes.openapi(postGithubReauthStartRoute, async (c) => {
     const { origin: requestedOrigin } = c.req.valid("query");
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubReauthAuthorizationUrl({
-      user: c.get("user"),
+      userId: auth.userId,
       requestedOrigin,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
@@ -186,9 +187,10 @@ export function createAuthRoutes(
 
   authRoutes.openapi(postGithubReauthTokenRoute, async (c) => {
     const { code, state } = c.req.valid("json");
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
     const result = await authService.exchangeGitHubReauthCode({
-      user: c.get("user"),
+      userId: auth.userId,
       code,
       state,
       requestId: c.req.header("cf-ray") ?? null,
@@ -207,8 +209,14 @@ export function createAuthRoutes(
   // GET /auth/me — returns current user info
   authRoutes.use("/me", deps.authMiddleware);
   authRoutes.openapi(getMeRoute, async (c) => {
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
-    return c.json(authService.getCurrentUser(c.get("user")), 200);
+    const result = await authService.getCurrentUser(auth.userId);
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 401);
+    }
+
+    return c.json(result.value, 200);
   });
 
   // POST /auth/logout — deletes auth session

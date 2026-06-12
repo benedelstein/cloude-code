@@ -4,22 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { createRepoScopedEnvironmentRoutes, createUserEnvironmentRoutes } from "../../src/modules/repo-environments/routes/repo-environments.routes";
 import type { RepoEnvironmentsService } from "../../src/modules/repo-environments/services/repo-environments.service";
 import { createReposRoutes, type ReposRouteService } from "../../src/modules/repos/routes/repos.routes";
-import type { AuthUser } from "../../src/shared/types/auth";
+import type { AuthContext } from "../../src/shared/types/auth";
 import type { Env } from "../../src/shared/types";
 
 const USER_ID = "123e4567-e89b-12d3-a456-426614174001";
 
-const testUser: AuthUser = {
-  id: USER_ID,
-  githubId: 123,
-  githubLogin: "ben",
-  githubName: "Ben",
-  githubAvatarUrl: null,
-};
+const testAuth: AuthContext = { userId: USER_ID };
 
 type RouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 function createAuthMiddleware(): MiddlewareHandler<RouteEnv> {
@@ -28,7 +22,7 @@ function createAuthMiddleware(): MiddlewareHandler<RouteEnv> {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    c.set("user", testUser);
+    c.set("auth", testAuth);
     await next();
   };
 }

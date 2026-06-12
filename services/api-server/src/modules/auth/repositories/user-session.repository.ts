@@ -1,21 +1,11 @@
 import { sha256 } from "@/shared/utils/crypto";
 
-export interface AuthSessionIdentityRecord {
-  id: string;
-  githubId: number;
-  githubLogin: string;
-  githubName: string | null;
-  githubAvatarUrl: string | null;
-  sessionExpiresAt: string;
+export interface AuthSessionUserIdRecord {
+  userId: string;
 }
 
-interface AuthSessionIdentityRow {
-  id: string;
-  github_id: number;
-  github_login: string;
-  github_name: string | null;
-  github_avatar_url: string | null;
-  session_expires_at: string;
+interface AuthSessionUserIdRow {
+  user_id: string;
 }
 
 export interface UserGitHubCredentialsRecord {
@@ -57,32 +47,23 @@ export class UserSessionRepository {
     this.database = database;
   }
 
-  async getActiveAuthSessionByToken(
+  async getActiveAuthSessionUserIdByToken(
     token: string,
-  ): Promise<AuthSessionIdentityRecord | null> {
+  ): Promise<AuthSessionUserIdRecord | null> {
     const tokenHash = await sha256(token);
     const row = await this.database.prepare(
-      `SELECT u.id, u.github_id, u.github_login, u.github_name, u.github_avatar_url,
-              s.expires_at AS session_expires_at
-       FROM auth_sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ? AND datetime(s.expires_at) > datetime('now')`,
+      `SELECT user_id
+       FROM auth_sessions
+       WHERE token_hash = ? AND datetime(expires_at) > datetime('now')`,
     )
       .bind(tokenHash)
-      .first<AuthSessionIdentityRow>();
+      .first<AuthSessionUserIdRow>();
 
     if (!row) {
       return null;
     }
 
-    return {
-      id: row.id,
-      githubId: row.github_id,
-      githubLogin: row.github_login,
-      githubName: row.github_name,
-      githubAvatarUrl: row.github_avatar_url,
-      sessionExpiresAt: row.session_expires_at,
-    };
+    return { userId: row.user_id };
   }
 
   async getGitHubCredentialsByUserId(
@@ -318,30 +299,11 @@ export class UserSessionRepository {
     ).run();
   }
 
-  /** Revoke a whole session family plus any legacy linked access rows. */
+  /** Revoke a native refresh-token family. */
   async revokeRefreshSession(refreshSessionId: string): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
-      ).bind(refreshSessionId),
-      this.database.prepare(
-        `DELETE FROM auth_refresh_sessions WHERE id = ?`,
-      ).bind(refreshSessionId),
-    ]);
-  }
-
-  /** Family id for an access token, or null for legacy web sessions. */
-  async getRefreshSessionIdByAccessToken(
-    accessToken: string,
-  ): Promise<string | null> {
-    const accessTokenHash = await sha256(accessToken);
-    const row = await this.database.prepare(
-      `SELECT refresh_session_id FROM auth_sessions WHERE token_hash = ?`,
-    )
-      .bind(accessTokenHash)
-      .first<{ refresh_session_id: string | null }>();
-
-    return row?.refresh_session_id ?? null;
+    await this.database.prepare(
+      `DELETE FROM auth_refresh_sessions WHERE id = ?`,
+    ).bind(refreshSessionId).run();
   }
 
   async deleteByToken(sessionToken: string): Promise<void> {

@@ -28,7 +28,6 @@ interface AuthSessionRow {
   token_hash: string;
   user_id: string;
   expires_at: string;
-  refresh_session_id: string | null;
 }
 
 interface RefreshSessionRow {
@@ -190,29 +189,12 @@ class MockD1 {
       return null;
     }
     if (sql.includes("INSERT INTO auth_sessions")) {
-      const [tokenHash, userId, expiresAt, refreshSessionId] = args as [
-        string, string, string, string | undefined,
-      ];
+      const [tokenHash, userId, expiresAt] = args as [string, string, string];
       this.authSessions.set(tokenHash, {
         token_hash: tokenHash,
         user_id: userId,
         expires_at: expiresAt,
-        refresh_session_id: refreshSessionId ?? null,
       });
-      return null;
-    }
-    if (sql.includes("SELECT refresh_session_id FROM auth_sessions")) {
-      const [tokenHash] = args as [string];
-      const row = this.authSessions.get(tokenHash);
-      return row ? { refresh_session_id: row.refresh_session_id } : null;
-    }
-    if (sql.includes("DELETE FROM auth_sessions WHERE refresh_session_id")) {
-      const [refreshSessionId] = args as [string];
-      for (const [token, row] of this.authSessions) {
-        if (row.refresh_session_id === refreshSessionId) {
-          this.authSessions.delete(token);
-        }
-      }
       return null;
     }
     if (
@@ -309,7 +291,6 @@ describe("AuthService native token refresh", () => {
     const sessionTokenHash = await sha256(result.value.token);
     const session = db.authSessions.get(sessionTokenHash);
     expect(sessionTokenHash).not.toBe(result.value.token);
-    expect(session?.refresh_session_id).toBeNull();
     expect(db.refreshSessions.size).toBe(0);
     // ~30-day expiry
     const ttlMs = new Date(session!.expires_at).getTime() - Date.now();

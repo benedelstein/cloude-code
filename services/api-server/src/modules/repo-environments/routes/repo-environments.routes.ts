@@ -1,6 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
 import { getDefaultNetworkAllowlistDomains } from "@/shared/integrations/sprites/network-policy";
 import type { RepoEnvironmentsService } from "../services/repo-environments.service";
@@ -17,7 +17,7 @@ import {
 
 type RepoEnvironmentsRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface RepoEnvironmentsRouteDeps {
@@ -33,10 +33,10 @@ export function createRepoScopedEnvironmentRoutes(
   routes.use("*", deps.authMiddleware);
 
   routes.openapi(listRepoEnvironmentsRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).list({
-      userId: user.id,
+      userId: auth.userId,
       repoId,
     });
     if (!result.ok) {
@@ -46,10 +46,10 @@ export function createRepoScopedEnvironmentRoutes(
   });
 
   routes.openapi(createRepoEnvironmentRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).create({
-      userId: user.id,
+      userId: auth.userId,
       repoId,
       request: c.req.valid("json"),
     });
@@ -60,11 +60,11 @@ export function createRepoScopedEnvironmentRoutes(
   });
 
   routes.openapi(getRepoEnvironmentRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId, environmentId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).get({
       id: environmentId,
-      userId: user.id,
+      userId: auth.userId,
       repoId,
     });
     if (!result.ok) {
@@ -74,11 +74,11 @@ export function createRepoScopedEnvironmentRoutes(
   });
 
   routes.openapi(updateRepoEnvironmentRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId, environmentId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).update({
       id: environmentId,
-      userId: user.id,
+      userId: auth.userId,
       repoId,
       request: c.req.valid("json"),
     });
@@ -89,11 +89,11 @@ export function createRepoScopedEnvironmentRoutes(
   });
 
   routes.openapi(deleteRepoEnvironmentRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId, environmentId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).delete({
       id: environmentId,
-      userId: user.id,
+      userId: auth.userId,
       repoId,
     });
     if (!result.ok) {
@@ -113,9 +113,9 @@ export function createUserEnvironmentRoutes(
   routes.use("*", deps.authMiddleware);
 
   routes.openapi(listUserRepoEnvironmentsRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const result = await deps.createRepoEnvironmentsService(c.env).listAll({
-      userId: user.id,
+      userId: auth.userId,
     });
     if (!result.ok) {
       return errorResponse(c, result.error);
@@ -128,11 +128,11 @@ export function createUserEnvironmentRoutes(
   );
 
   routes.openapi(getUserRepoEnvironmentRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { environmentId } = c.req.valid("param");
     const result = await deps.createRepoEnvironmentsService(c.env).getOwned({
       id: environmentId,
-      userId: user.id,
+      userId: auth.userId,
     });
     if (!result.ok) {
       return errorResponse(c, result.error);

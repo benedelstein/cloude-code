@@ -56,7 +56,7 @@ function createRefreshProvider(refreshUserToken: () => Promise<RefreshedToken>) 
 }
 
 describe("UserSessionService web sessions", () => {
-  it("looks up web sessions by session token hash", async () => {
+  it("looks up web session user ids by session token hash", async () => {
     const rawToken = "raw-web-session-token";
     const tokenHash = await sha256(rawToken);
     let boundArgs: unknown[] = [];
@@ -66,18 +66,13 @@ describe("UserSessionService web sessions", () => {
           boundArgs = args;
           return {
             first: vi.fn(async () => {
+              expect(sql).toContain("FROM auth_sessions");
+              expect(sql).not.toContain("JOIN users");
               if (
                 sql.includes("FROM auth_sessions")
                 && args[0] === tokenHash
               ) {
-                return {
-                  id: "user-1",
-                  github_id: 123,
-                  github_login: "octocat",
-                  github_name: "Octo Cat",
-                  github_avatar_url: "https://a",
-                  session_expires_at: "2099-01-01T00:00:00.000Z",
-                };
+                return { user_id: "user-1" };
               }
               return null;
             }),
@@ -93,15 +88,9 @@ describe("UserSessionService web sessions", () => {
       } as Env,
     });
 
-    const user = await service.getAuthenticatedUserBySessionToken(rawToken);
+    const auth = await service.getAuthenticatedUserIdBySessionToken(rawToken);
 
-    expect(user).toEqual({
-      id: "user-1",
-      githubId: 123,
-      githubLogin: "octocat",
-      githubName: "Octo Cat",
-      githubAvatarUrl: "https://a",
-    });
+    expect(auth).toEqual({ userId: "user-1" });
     expect(boundArgs).toEqual([tokenHash]);
     expect(boundArgs).not.toEqual([rawToken]);
   });

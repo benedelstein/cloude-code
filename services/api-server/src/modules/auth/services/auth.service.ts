@@ -14,7 +14,6 @@ import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import { encrypt, generateOpaqueToken, sha256 } from "@/shared/utils/crypto";
-import type { AuthUser } from "../types/auth.types";
 import {
   consumeValidOauthState,
   createOauthState,
@@ -49,6 +48,7 @@ export interface AuthServiceError {
     | "GITHUB_TOKEN_EXCHANGE_FAILED"
     | "GITHUB_ACCOUNT_MISMATCH"
     | "USER_CREATE_FAILED"
+    | "USER_NOT_FOUND"
     | "INVALID_REFRESH_TOKEN";
 }
 
@@ -549,14 +549,14 @@ export class AuthService {
   }
 
   async createGitHubReauthAuthorizationUrl(params: {
-    user: AuthUser;
+    userId: string;
     requestedOrigin?: string;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubAuthUrlResponse>> {
     const redirectOrigin = params.requestedOrigin ?? this.env.WEB_ORIGIN;
     const originResult = validateRedirectOrigin(redirectOrigin, this.env);
     if (!originResult.ok) {
       this.logger.warn("Rejecting GitHub reauth start", {
-        fields: { reason: originResult.error.message, userId: params.user.id },
+        fields: { reason: originResult.error.message, userId: params.userId },
       });
       return failure({
         domain: "auth",
@@ -575,7 +575,7 @@ export class AuthService {
         redirectOrigin: originResult.value,
         requestId: params.requestId,
         userAgent: params.userAgent,
-        userId: params.user.id,
+        userId: params.userId,
       },
     });
 
@@ -584,7 +584,7 @@ export class AuthService {
       expiresAt,
       redirectOrigin: originResult.value,
       purpose: GITHUB_REAUTH_OAUTH_PURPOSE,
-      userId: params.user.id,
+      userId: params.userId,
     });
 
     return success({
@@ -594,7 +594,7 @@ export class AuthService {
   }
 
   async exchangeGitHubReauthCode(params: {
-    user: AuthUser;
+    userId: string;
     code: string;
     state: string;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubReauthTokenResponse>> {
@@ -604,7 +604,7 @@ export class AuthService {
           hasCode: Boolean(params.code),
           hasState: Boolean(params.state),
           requestId: params.requestId,
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -619,13 +619,13 @@ export class AuthService {
     if (
       !stateRecord
       || stateRecord.purpose !== GITHUB_REAUTH_OAUTH_PURPOSE
-      || stateRecord.userId !== params.user.id
+      || stateRecord.userId !== params.userId
     ) {
       this.logger.error("GitHub reauth callback rejected: invalid or expired state", {
         fields: {
           requestId: params.requestId,
           statePrefix: params.state.slice(0, 8),
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -633,6 +633,22 @@ export class AuthService {
         status: 400,
         code: "INVALID_OAUTH_STATE",
         message: "Invalid or expired state",
+      });
+    }
+
+    const currentUser = await this.userRepository.getById(params.userId);
+    if (!currentUser) {
+      this.logger.warn("GitHub reauth callback rejected: user not found", {
+        fields: {
+          requestId: params.requestId,
+          userId: params.userId,
+        },
+      });
+      return failure({
+        domain: "auth",
+        status: 401,
+        code: "USER_NOT_FOUND",
+        message: "User not found",
       });
     }
 
@@ -645,7 +661,7 @@ export class AuthService {
         fields: {
           requestId: params.requestId,
           statePrefix: params.state.slice(0, 8),
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -656,12 +672,12 @@ export class AuthService {
       });
     }
 
-    if (result.user.id !== params.user.githubId) {
+    if (result.user.id !== currentUser.githubId) {
       this.logger.warn("GitHub reauth account mismatch", {
         fields: {
-          expectedGithubId: params.user.githubId,
+          expectedGithubId: currentUser.githubId,
           actualGithubId: result.user.id,
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -688,7 +704,7 @@ export class AuthService {
       githubAvatarUrl: result.user.avatarUrl,
     });
     await this.userSessionRepository.upsertGitHubCredentials({
-      userId: params.user.id,
+      userId: params.userId,
       encryptedAccessToken: encryptedGitHubAccessToken,
       accessTokenExpiresAt: result.expiresAt ?? null,
       encryptedRefreshToken: encryptedGitHubRefreshToken,
@@ -699,7 +715,7 @@ export class AuthService {
       fields: {
         githubLogin: result.user.login,
         requestId: params.requestId,
-        userId: params.user.id,
+        userId: params.userId,
       },
     });
 
@@ -709,13 +725,23 @@ export class AuthService {
     });
   }
 
-  getCurrentUser(user: AuthUser): UserInfo {
-    return {
+  async getCurrentUser(userId: string): Promise<AuthServiceResult<UserInfo>> {
+    const user = await this.userRepository.getById(userId);
+    if (!user) {
+      return failure({
+        domain: "auth",
+        status: 401,
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    return success({
       id: user.id,
       login: user.githubLogin,
       name: user.githubName,
       avatarUrl: user.githubAvatarUrl,
-    };
+    });
   }
 
   /**

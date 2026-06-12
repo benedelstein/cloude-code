@@ -1,7 +1,7 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "@/shared/types";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "../services/attachment.service";
 import {
   uploadAttachmentRoute,
@@ -12,7 +12,7 @@ import { createLogger } from "@/shared/logging";
 
 type AttachmentsRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface AttachmentsRouteDeps {
@@ -29,9 +29,9 @@ const logger = createLogger("attachments.routes.ts");
 attachmentsRoutes.use("*", deps.authMiddleware);
 
 attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   logger.info("Uploading attachments for user", {
-    fields: { userId: user.id },
+    fields: { userId: auth.userId },
   });
   const formData = await c.req.raw.formData();
   const sessionIdRaw = formData.get("sessionId");
@@ -45,7 +45,7 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
 
   const sessionId = parsedSessionId.data;
   if (sessionId) {
-    const canAccessSession = await deps.isSessionOwnedByUser(c.env, sessionId, user.id);
+    const canAccessSession = await deps.isSessionOwnedByUser(c.env, sessionId, auth.userId);
     if (!canAccessSession) {
       return c.json({ error: "Session not found" }, 404);
     }
@@ -100,7 +100,7 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
 
       const record = await attachmentService.create({
         id: attachmentId,
-        uploaderUserId: user.id,
+        uploaderUserId: auth.userId,
         objectKey,
         filename: file.name || "image",
         mediaType: file.type,
@@ -127,7 +127,7 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
 });
 
 attachmentsRoutes.openapi(getAttachmentContentRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const { attachmentId } = c.req.valid("param");
   const attachmentService = new AttachmentService(c.env.DB);
 
@@ -136,9 +136,9 @@ attachmentsRoutes.openapi(getAttachmentContentRoute, async (c) => {
     return c.json({ error: "Attachment not found" }, 404);
   }
 
-  const uploaderCanView = record.uploaderUserId === user.id;
+  const uploaderCanView = record.uploaderUserId === auth.userId;
   const sessionMemberCanView = record.sessionId
-    ? await deps.isSessionOwnedByUser(c.env, record.sessionId, user.id)
+    ? await deps.isSessionOwnedByUser(c.env, record.sessionId, auth.userId)
     : false;
   if (!uploaderCanView && !sessionMemberCanView) {
     return c.json({ error: "Forbidden" }, 403);
@@ -159,20 +159,20 @@ attachmentsRoutes.openapi(getAttachmentContentRoute, async (c) => {
 });
 
 attachmentsRoutes.openapi(deleteAttachmentRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const { attachmentId } = c.req.valid("param");
   const attachmentService = new AttachmentService(c.env.DB);
   const record = await attachmentService.getById(attachmentId);
   if (!record) {
     return c.json({ error: "Attachment not found" }, 404);
   }
-  if (record.uploaderUserId !== user.id) {
+  if (record.uploaderUserId !== auth.userId) {
     return c.json({ error: "Forbidden" }, 403);
   }
 
   try {
     await c.env.ATTACHMENTS_BUCKET.delete(record.objectKey);
-    await attachmentService.deleteForUploader(attachmentId, user.id);
+    await attachmentService.deleteForUploader(attachmentId, auth.userId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete attachment";
     return c.json({ error: message }, 500);

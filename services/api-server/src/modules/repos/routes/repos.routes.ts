@@ -6,7 +6,7 @@ import type {
   SearchReposResponse,
 } from "@repo/shared";
 import type { MiddlewareHandler } from "hono";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import type { GitHubCredentialResult } from "@/shared/types/github-credential";
 import type { Env } from "@/shared/types";
 import {
@@ -17,7 +17,7 @@ import {
 
 type ReposRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface ReposRouteDeps {
@@ -67,9 +67,9 @@ export function createReposRoutes(
   reposRoutes.use("*", deps.authMiddleware);
 
   reposRoutes.openapi(listReposRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { limit, cursor } = c.req.valid("query");
-    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, user.id);
+    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, auth.userId);
     if (!credentialResult.ok) {
       return c.json(
         { error: credentialResult.error.message, code: credentialResult.error.code },
@@ -78,7 +78,7 @@ export function createReposRoutes(
     }
     const reposService = deps.createReposService(c.env);
     const result = await reposService.listRepos({
-      userId: user.id,
+      userId: auth.userId,
       githubAccessToken: credentialResult.value.accessToken,
       executionCtx: c.executionCtx,
       limit,
@@ -93,9 +93,9 @@ export function createReposRoutes(
   });
 
   reposRoutes.openapi(searchReposRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { q, limit } = c.req.valid("query");
-    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, user.id);
+    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, auth.userId);
     if (!credentialResult.ok) {
       return c.json(
         { error: credentialResult.error.message, code: credentialResult.error.code },
@@ -104,7 +104,7 @@ export function createReposRoutes(
     }
     const reposService = deps.createReposService(c.env);
     const result = await reposService.searchRepos({
-      userId: user.id,
+      userId: auth.userId,
       githubAccessToken: credentialResult.value.accessToken,
       executionCtx: c.executionCtx,
       query: q,
@@ -119,10 +119,10 @@ export function createReposRoutes(
   });
 
   reposRoutes.openapi(listBranchesRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId } = c.req.valid("param");
     const { limit, cursor } = c.req.valid("query");
-    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, user.id);
+    const credentialResult = await deps.getValidGitHubCredentialByUserId(c.env, auth.userId);
     if (!credentialResult.ok) {
       return c.json(
         { error: credentialResult.error.message, code: credentialResult.error.code },

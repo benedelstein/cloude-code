@@ -133,7 +133,7 @@ function createIntegrationRepoCandidateProvider(env: Env): IntegrationRepoCandid
 
 const authMiddleware = createAuthMiddleware((env, token) =>
   authenticateBearerToken(env, token, (sessionEnv, sessionToken) =>
-    createUserSessionService(sessionEnv).getAuthenticatedUserBySessionToken(
+    createUserSessionService(sessionEnv).getAuthenticatedUserIdBySessionToken(
       sessionToken,
     )
   ),
