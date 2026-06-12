@@ -19,6 +19,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>OAUTH_REDIRECT_URI</key>
 	<string>$(OAUTH_REDIRECT_URI)</string>
 </dict>
