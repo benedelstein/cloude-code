@@ -42,6 +42,7 @@ import {
   waitForSessionSignals,
 } from "../../utils/agent-process-manager.utils";
 import { writeCredentialFiles, writeVmAgentScript } from "./write-files.service";
+import { buildEgressProxyAgentEnv } from "./egress-proxy.constants";
 
 const HOME_DIR = "/home/sprite";
 const WORKSPACE_DIR = "/home/sprite/workspace";
@@ -431,6 +432,7 @@ export class SpriteAgentProcessManager {
           detachable: true,
           env: {
             ...environmentSnapshot.plainEnvVars,
+            ...buildEgressProxyAgentEnv(environmentSnapshot),
             ...credentialSnapshot.envVars,
             ...(this.env.CODEX_MIN_VERSION
               ? { CODEX_MIN_VERSION: this.env.CODEX_MIN_VERSION }

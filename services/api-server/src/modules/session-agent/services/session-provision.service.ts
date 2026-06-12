@@ -21,9 +21,19 @@ import {
 } from "@/shared/integrations/sprites/network-policy";
 import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/startup-toolchain";
 import type { GitHubAppResult } from "@/shared/types/github";
+import SPRITE_PROXY_SCRIPT from "@repo/sprite-proxy/dist/sprite-proxy.bundle.js";
 import type { ServerState } from "../repositories/server-state.repository";
 import { isTerminalSetupTask } from "./session-setup-run.service";
 import { SessionStartupScriptService } from "./session-startup-script.service";
+import {
+  buildConnectorHostMap,
+  EGRESS_PROXY_CA_CERT_PATH,
+  EGRESS_PROXY_CA_KEY_PATH,
+  EGRESS_PROXY_CONFIG_PATH,
+  EGRESS_PROXY_DIR,
+  EGRESS_PROXY_PORT,
+  EGRESS_PROXY_SCRIPT_PATH,
+} from "./agent-process/egress-proxy.constants";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -64,6 +74,7 @@ export interface SessionProvisionServiceDeps {
   updatePartialState: (partial: ProvisionClientStateUpdate) => void;
   synthesizeStatus: () => SessionStatus;
   ensureGitProxySecret: () => string;
+  ensureConnectorSecret: () => string;
   githubTokenProvider: {
     getReadOnlyTokenForRepo(
       repoFullName: string,
@@ -92,6 +103,7 @@ export class SessionProvisionService {
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
+  private readonly ensureConnectorSecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
   private readonly setupReporter: SessionProvisionServiceDeps["setupReporter"];
   private readonly startupScriptService: SessionStartupScriptService;
@@ -111,6 +123,7 @@ export class SessionProvisionService {
     this.updatePartialState = deps.updatePartialState;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
+    this.ensureConnectorSecret = deps.ensureConnectorSecret;
     this.githubTokenProvider = deps.githubTokenProvider;
     this.setupReporter = deps.setupReporter;
     this.startupScriptService = new SessionStartupScriptService(this.logger);
@@ -308,7 +321,102 @@ export class SessionProvisionService {
       await this.applyFinalNetworkPolicy(spriteName);
       this.updateServerState({ finalNetworkPolicyApplied: true });
     }
+    await this.ensureEgressProxy(spriteName);
     this.updatePartialState({ status: this.synthesizeStatus() });
+  }
+
+  /**
+   * Provisions the on-sprite transparent egress proxy when the session has
+   * connectors. Mints a per-sprite CA (its key is harmless on the sprite — it
+   * only signs the proxy's own interception, the real upstream keys live in the
+   * worker), installs the CA into the trust store, writes the proxy bundle +
+   * config, and starts the proxy. No-op for sessions without connectors.
+   *
+   * NOTE: the proxy runs as a detachable session, so it does not survive a
+   * sprite reboot — a follow-up should promote it to a sprite service.
+   */
+  private async ensureEgressProxy(spriteName: string): Promise<void> {
+    const snapshot = this.getEnvironmentSnapshot();
+    if (snapshot.connectors.length === 0) {
+      return;
+    }
+    const sessionId = this.getServerState().sessionId;
+    if (!sessionId) {
+      return;
+    }
+
+    const sprite = new WorkersSpriteClient(
+      spriteName,
+      this.env.SPRITES_API_KEY,
+      this.env.SPRITES_API_URL,
+    );
+
+    // 1. Mint the per-sprite CA and trust it (idempotent: skip if it exists).
+    await sprite.execHttp(
+      dedent`
+      set -e
+      mkdir -p ${EGRESS_PROXY_DIR}
+      if [ ! -f ${EGRESS_PROXY_CA_KEY_PATH} ]; then
+        openssl req -x509 -newkey rsa:2048 -nodes \
+          -keyout ${EGRESS_PROXY_CA_KEY_PATH} \
+          -out ${EGRESS_PROXY_CA_CERT_PATH} \
+          -days 3650 -subj "/CN=cloude-egress-proxy" 2>/dev/null
+        chmod 600 ${EGRESS_PROXY_CA_KEY_PATH}
+        sudo cp ${EGRESS_PROXY_CA_CERT_PATH} /usr/local/share/ca-certificates/cloude-egress.crt
+        sudo update-ca-certificates >/dev/null 2>&1
+      fi
+      `,
+      {},
+    );
+
+    // 2. Write the proxy bundle + per-session config (config holds only the
+    //    bearer the sprite presents to the worker, never a real upstream key).
+    await sprite.writeFile(EGRESS_PROXY_SCRIPT_PATH, SPRITE_PROXY_SCRIPT);
+    const config = {
+      port: EGRESS_PROXY_PORT,
+      connectorBaseUrl: `${this.env.WORKER_URL}/connector/${sessionId}`,
+      connectorSecret: this.ensureConnectorSecret(),
+      caCertPath: EGRESS_PROXY_CA_CERT_PATH,
+      caKeyPath: EGRESS_PROXY_CA_KEY_PATH,
+      hostMap: buildConnectorHostMap(snapshot),
+    };
+    await sprite.writeFile(
+      EGRESS_PROXY_CONFIG_PATH,
+      JSON.stringify(config),
+      { mode: "0600" },
+    );
+
+    // 3. Start the proxy as a detachable session.
+    const session = sprite.createSession(
+      "bash",
+      [
+        "-c",
+        `bun "$@"`,
+        "sprite-proxy",
+        "run",
+        EGRESS_PROXY_SCRIPT_PATH,
+        "--config",
+        EGRESS_PROXY_CONFIG_PATH,
+      ],
+      {
+        cwd: EGRESS_PROXY_DIR,
+        tty: true,
+        detachable: true,
+        env: {},
+        idleTimeoutMs: 45_000,
+      },
+    );
+    try {
+      await session.start();
+      // Give the listener a moment to bind before the agent starts using it.
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+    } finally {
+      try {
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close egress proxy setup websocket", { error });
+      }
+    }
   }
 
   private requireSpriteName(): string {

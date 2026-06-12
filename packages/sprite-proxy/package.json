@@ -1,0 +1,17 @@
+{
+  "name": "@repo/sprite-proxy",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/sprite-proxy.bundle.js",
+  "scripts": {
+    "build": "bun build src/index.ts --outfile=dist/sprite-proxy.bundle.js --target=bun --minify",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-forge": "^1.3.1"
+  },
+  "devDependencies": {
+    "@types/node-forge": "^1.3.11"
+  }
+}

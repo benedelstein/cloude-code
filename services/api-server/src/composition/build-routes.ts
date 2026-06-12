@@ -20,6 +20,7 @@ import { ReposService } from "@/modules/github/services/repo-listing.service";
 import { createReposRoutes } from "@/modules/repos/routes/repos.routes";
 import { createAgentRoutes } from "@/modules/session-agent/routes/agent.routes";
 import { createGitProxyRoutes } from "@/modules/session-agent/routes/git-proxy.routes";
+import { createConnectorProxyRoutes } from "@/modules/session-agent/routes/connector-proxy.routes";
 import { createInternalRoutes } from "@/modules/session-agent/routes/internal.routes";
 import { createSessionsRoutes } from "@/modules/sessions/routes/sessions.routes";
 import { SessionsService } from "@/modules/sessions/services/sessions.service";
@@ -180,6 +181,10 @@ export function buildAuthRoutes() {
 
 export function buildGitProxyRoutes() {
   return createGitProxyRoutes();
+}
+
+export function buildConnectorProxyRoutes() {
+  return createConnectorProxyRoutes();
 }
 
 export function buildInternalRoutes() {

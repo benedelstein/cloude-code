@@ -1,6 +1,8 @@
 import {
   failure,
   RepoEnvironmentNetworkMode,
+  type Connector,
+  type ConnectorWithSecret,
   type Result,
   type NetworkAccessConfig,
   type PlainEnvVars,
@@ -18,6 +20,7 @@ export interface CreateRepoEnvironmentParams {
   name: string;
   network: NetworkAccessConfig;
   plainEnvVars: PlainEnvVars;
+  connectors: ConnectorWithSecret[];
   startupScript: string | null;
 }
 
@@ -28,6 +31,7 @@ export interface UpdateRepoEnvironmentParams {
   name?: string;
   network?: NetworkAccessConfig;
   plainEnvVars?: PlainEnvVars;
+  connectors?: ConnectorWithSecret[];
   startupScript?: string | null;
 }
 
@@ -53,9 +57,23 @@ interface RepoEnvironmentRow {
   network_extra_allowlist_json: string;
   network_include_default_allowlist: number | null;
   plain_env_vars_json: string;
+  connectors_json: string | null;
   startup_script: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function connectorsWithSecretsFromRow(row: RepoEnvironmentRow): ConnectorWithSecret[] {
+  if (!row.connectors_json) {
+    return [];
+  }
+  return JSON.parse(row.connectors_json) as ConnectorWithSecret[];
+}
+
+/** Strip the encrypted key so the public shape never carries secret material. */
+function toPublicConnector(connector: ConnectorWithSecret): Connector {
+  const { encryptedKey: _encryptedKey, ...rest } = connector;
+  return rest;
 }
 
 function rowToEnvironment(row: RepoEnvironmentRow): RepoEnvironment {
@@ -72,6 +90,7 @@ function rowToEnvironment(row: RepoEnvironmentRow): RepoEnvironment {
     name: row.name,
     network,
     plainEnvVars: JSON.parse(row.plain_env_vars_json) as PlainEnvVars,
+    connectors: connectorsWithSecretsFromRow(row).map(toPublicConnector),
     startupScript: row.startup_script,
     createdAt: fromSqliteDatetime(row.created_at),
     updatedAt: fromSqliteDatetime(row.updated_at),
@@ -189,6 +208,23 @@ export class RepoEnvironmentsRepository {
     return row ? rowToEnvironmentSummary(row) : null;
   }
 
+  /** Returns connectors with their encrypted keys intact, for server-side snapshotting. */
+  async getConnectorsWithSecretsForRepo(params: {
+    id: string;
+    userId: string;
+    repoId: number;
+  }): Promise<ConnectorWithSecret[]> {
+    const row = await this.database
+      .prepare(
+        `SELECT * FROM repo_environments
+         WHERE id = ? AND user_id = ? AND repo_id = ?`,
+      )
+      .bind(params.id, params.userId, params.repoId)
+      .first<RepoEnvironmentRow>();
+
+    return row ? connectorsWithSecretsFromRow(row) : [];
+  }
+
   async create(params: CreateRepoEnvironmentParams): Promise<CreateRepoEnvironmentResult> {
     const result = await this.database
       .prepare(
@@ -202,8 +238,9 @@ export class RepoEnvironmentsRepository {
          network_extra_allowlist_json,
          network_include_default_allowlist,
          plain_env_vars_json,
+         connectors_json,
          startup_script
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, repo_id, name) DO NOTHING`,
       )
       .bind(
@@ -216,6 +253,7 @@ export class RepoEnvironmentsRepository {
         extraAllowlistJson(params.network),
         includeDefaultAllowlist(params.network),
         JSON.stringify(params.plainEnvVars),
+        JSON.stringify(params.connectors),
         params.startupScript,
       )
       .run();
@@ -247,6 +285,12 @@ export class RepoEnvironmentsRepository {
 
     const nextNetwork = params.network ?? current.network;
     const nextPlainEnvVars = params.plainEnvVars ?? current.plainEnvVars;
+    const nextConnectors = params.connectors
+      ?? await this.getConnectorsWithSecretsForRepo({
+        id: params.id,
+        userId: params.userId,
+        repoId: params.repoId,
+      });
     const result = await this.database
       .prepare(
         `UPDATE OR IGNORE repo_environments
@@ -255,6 +299,7 @@ export class RepoEnvironmentsRepository {
              network_extra_allowlist_json = ?,
              network_include_default_allowlist = ?,
              plain_env_vars_json = ?,
+             connectors_json = ?,
              startup_script = ?,
              updated_at = datetime('now')
          WHERE id = ? AND user_id = ? AND repo_id = ?`,
@@ -265,6 +310,7 @@ export class RepoEnvironmentsRepository {
         extraAllowlistJson(nextNetwork),
         includeDefaultAllowlist(nextNetwork),
         JSON.stringify(nextPlainEnvVars),
+        JSON.stringify(nextConnectors),
         params.startupScript !== undefined
           ? params.startupScript
           : current.startupScript,

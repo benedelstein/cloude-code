@@ -8,6 +8,7 @@ import {
   buildAuthRoutes,
   buildIntegrationsRoutes,
   buildGitProxyRoutes,
+  buildConnectorProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
   buildRepoScopedEnvironmentRoutes,
@@ -75,6 +76,7 @@ app.route("/agents", buildAgentRoutes());
 // TODO: Consider moving this under /sessions/:sessionId/git-proxy and rolling
 // it into the sessions route tree. Keep existing active session remotes in mind.
 app.route("/git-proxy", buildGitProxyRoutes());
+app.route("/connector", buildConnectorProxyRoutes());
 app.route("/internal", buildInternalRoutes());
 
 app.route("/auth", buildAuthRoutes());

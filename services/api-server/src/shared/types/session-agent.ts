@@ -71,6 +71,7 @@ export type HandleUpdatePullRequestResult = Result<void, Extract<SessionAgentRpc
 export interface SessionAgentRpc {
   refreshProviderConnection(): Promise<void>;
   handleGitProxy(request: Request): Promise<Response>;
+  handleConnectorProxy(request: Request): Promise<Response>;
   handleWebhookChunks(
     token: string,
     userMessageId: string,

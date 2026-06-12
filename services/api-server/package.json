@@ -22,6 +22,7 @@
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "catalog:",
     "@repo/shared": "workspace:*",
+    "@repo/sprite-proxy": "workspace:*",
     "@repo/vm-agent": "workspace:*",
     "agents": "catalog:",
     "ai": "catalog:",

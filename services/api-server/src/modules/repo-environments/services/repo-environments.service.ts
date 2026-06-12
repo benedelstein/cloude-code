@@ -1,6 +1,8 @@
 import {
   createDefaultSessionEnvironmentSnapshot,
   failure,
+  type ConnectorInput,
+  type ConnectorWithSecret,
   type CreateRepoEnvironmentRequest,
   type DeleteRepoEnvironmentResponse,
   type ListRepoEnvironmentsResponse,
@@ -13,6 +15,7 @@ import {
   type UpdateRepoEnvironmentRequest,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
+import { encrypt } from "@/shared/utils/crypto";
 import { RepoEnvironmentsRepository } from "../repositories/repo-environments.repository";
 
 type RepoEnvironmentsErrorStatus = 400 | 401 | 403 | 404 | 409 | 503;
@@ -118,6 +121,7 @@ export class RepoEnvironmentsService {
       name: params.request.name,
       network: params.request.network,
       plainEnvVars: params.request.plainEnvVars,
+      connectors: await this.encryptConnectors(params.request.connectors ?? []),
       startupScript: params.request.startupScript ?? null,
     });
     if (result.ok) {
@@ -141,11 +145,15 @@ export class RepoEnvironmentsService {
     repoId: number;
     request: UpdateRepoEnvironmentRequest;
   }): Promise<RepoEnvironmentsServiceResult<RepoEnvironmentResponse>> {
+    const { connectors: connectorInputs, ...rest } = params.request;
     const result = await this.repository.update({
       id: params.id,
       userId: params.userId,
       repoId: params.repoId,
-      ...params.request,
+      ...rest,
+      ...(connectorInputs !== undefined
+        ? { connectors: await this.encryptConnectors(connectorInputs) }
+        : {}),
     });
     if (result.ok) {
       return success({ environment: result.value });
@@ -201,16 +209,39 @@ export class RepoEnvironmentsService {
       return failure(this.error(400, "Repo environment does not belong to the selected repository"));
     }
 
+    const connectors = await this.repository.getConnectorsWithSecretsForRepo({
+      id: params.environmentId,
+      userId: params.userId,
+      repoId: params.repoId,
+    });
+
     return success({
       sourceEnvironmentId: environment.id,
       sourceEnvironmentName: environment.name,
       repoId: environment.repoId,
       network: environment.network,
       plainEnvVars: environment.plainEnvVars,
+      connectors,
       startupScript: environment.startupScript,
       resolvedAt,
       schemaVersion: 1,
     });
+  }
+
+  /** Assign ids and encrypt the plaintext key for each connector before storage. */
+  private async encryptConnectors(
+    inputs: ConnectorInput[],
+  ): Promise<ConnectorWithSecret[]> {
+    return Promise.all(
+      inputs.map(async (input): Promise<ConnectorWithSecret> => {
+        const { key, ...config } = input;
+        return {
+          ...config,
+          id: crypto.randomUUID(),
+          encryptedKey: await encrypt(key, this.env.TOKEN_ENCRYPTION_KEY),
+        };
+      }),
+    );
   }
 
   private async assertAccess(params: {

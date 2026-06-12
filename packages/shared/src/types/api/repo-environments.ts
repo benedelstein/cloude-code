@@ -38,12 +38,68 @@ export const PlainEnvVars = z.record(
 ).default({});
 export type PlainEnvVars = z.infer<typeof PlainEnvVars>;
 
+const ConnectorHostname = z.string()
+  .trim()
+  .min(1)
+  .max(253)
+  .regex(/^[a-zA-Z0-9.-]+$/, "Use a hostname such as api.openai.com");
+
+const HttpHeaderName = z.string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9-]+$/, "Use a valid HTTP header name such as Authorization");
+
+/**
+ * A connector transparently injects a stored secret into outbound requests to
+ * one or more upstream hosts. The on-sprite proxy intercepts `matchHosts`,
+ * rewrites the request to the worker connector endpoint, and the worker injects
+ * the real key — which never reaches the sprite. This is the public shape
+ * returned to the API/UI; it never contains the secret.
+ */
+export const Connector = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(80),
+  /** Real upstream base URL the worker forwards to, e.g. https://api.openai.com */
+  upstreamBaseUrl: z.url(),
+  /** Hostnames the on-sprite proxy intercepts and routes through this connector. */
+  matchHosts: z.array(ConnectorHostname).min(1).max(20),
+  /** Header the worker injects the secret into. */
+  headerName: HttpHeaderName.default("Authorization"),
+  /** Prefix prepended to the secret to form the header value, e.g. "Bearer ". */
+  headerValuePrefix: z.string().max(32).default("Bearer "),
+});
+export type Connector = z.infer<typeof Connector>;
+
+/**
+ * Internal connector shape persisted at rest and carried in the session
+ * snapshot. `encryptedKey` is AES-GCM encrypted with `TOKEN_ENCRYPTION_KEY` and
+ * is only ever decrypted inside the worker at request time — it is never sent
+ * to the sprite.
+ */
+export const ConnectorWithSecret = Connector.extend({
+  encryptedKey: z.string(),
+});
+export type ConnectorWithSecret = z.infer<typeof ConnectorWithSecret>;
+
+/** Connector create/update input. Carries the plaintext key, which the service encrypts before storage. */
+export const ConnectorInput = z.object({
+  name: z.string().trim().min(1).max(80),
+  upstreamBaseUrl: z.url(),
+  matchHosts: z.array(ConnectorHostname).min(1).max(20),
+  headerName: HttpHeaderName.default("Authorization"),
+  headerValuePrefix: z.string().max(32).default("Bearer "),
+  key: z.string().min(1).max(8192),
+});
+export type ConnectorInput = z.infer<typeof ConnectorInput>;
+
 export const RepoEnvironment = z.object({
   id: z.uuid(),
   repoId: z.number(),
   name: z.string(),
   network: NetworkAccessConfig,
   plainEnvVars: PlainEnvVars,
+  connectors: z.array(Connector).default([]),
   startupScript: z.string().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -85,6 +141,7 @@ export const CreateRepoEnvironmentRequest = z.object({
     mode: "default",
   }),
   plainEnvVars: PlainEnvVars,
+  connectors: z.array(ConnectorInput).max(20).optional(),
   startupScript: z.string().max(20000).nullable().optional(),
 }).strict();
 export type CreateRepoEnvironmentRequest = z.infer<typeof CreateRepoEnvironmentRequest>;
@@ -111,6 +168,8 @@ export const SessionEnvironmentSnapshot = z.object({
   repoId: z.number(),
   network: NetworkAccessConfig,
   plainEnvVars: PlainEnvVars,
+  /** Server-only: carries encrypted connector keys, never sent to the sprite. */
+  connectors: z.array(ConnectorWithSecret).default([]),
   startupScript: z.string().nullable(),
   resolvedAt: z.iso.datetime(),
   schemaVersion: z.literal(1),
@@ -129,6 +188,7 @@ export function createDefaultSessionEnvironmentSnapshot(args: {
       mode: "default",
     },
     plainEnvVars: {},
+    connectors: [],
     startupScript: null,
     resolvedAt: args.resolvedAt,
     schemaVersion: 1,

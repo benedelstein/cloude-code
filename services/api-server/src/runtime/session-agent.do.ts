@@ -52,6 +52,7 @@ import { SessionChatDispatchService } from "@/modules/session-agent/services/ses
 import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
+import { SessionConnectorProxyService } from "@/modules/session-agent/services/session-connector-proxy.service";
 import { SessionQueryService } from "@/modules/session-agent/services/session-query.service";
 import { SessionSummaryService } from "@/modules/session-agent/services/session-summary.service";
 import { SessionSyncService } from "@/modules/session-agent/services/session-sync.service";
@@ -91,6 +92,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly setupRunService: SessionSetupRunService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
+  private readonly connectorProxyService: SessionConnectorProxyService;
   private readonly queryService: SessionQueryService;
   private readonly sessionSummaryService: SessionSummaryService;
   private readonly syncService: SessionSyncService;
@@ -272,6 +274,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
+      ensureConnectorSecret: () => this.connectorProxyService.ensureConnectorSecret(),
       githubTokenProvider: this.githubAppService,
       setupReporter: {
         startTask: (taskId) => this.setupRunService.startTask(taskId),
@@ -320,6 +323,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         this.repoAccessLifecycleService.assertSessionRepoAccess(),
       enforceSessionAccessBlocked: () => this.enforceSessionAccessBlocked(),
       githubTokenProvider: this.githubAppService,
+    });
+
+    this.connectorProxyService = new SessionConnectorProxyService({
+      logger: this.logger,
+      env: this.env,
+      secretRepository: this.secretRepository,
+      getEnvironmentSnapshot: () => this.environmentSnapshotRepository.get(),
     });
 
     this.logger.info("Constructed agent DO", {
@@ -452,6 +462,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    */
   async handleGitProxy(request: Request): Promise<Response> {
     return this.gitProxyService.handleRequest(request);
+  }
+
+  /**
+   * Forwards an intercepted egress request from the on-sprite proxy. Injects
+   * the connector's real secret server-side; the sprite only ever presents the
+   * per-session connector bearer.
+   */
+  async handleConnectorProxy(request: Request): Promise<Response> {
+    return this.connectorProxyService.handleRequest(request);
   }
 
   // WebSocket lifecycle (Agents SDK)
