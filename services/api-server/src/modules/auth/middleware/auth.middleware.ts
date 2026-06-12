@@ -1,7 +1,10 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "@/shared/types";
 import { UserSessionService } from "../services/user-session.service";
-import { NativeAccessTokenService } from "../services/native-access-token.service";
+import {
+  looksLikeJwt,
+  NativeAccessTokenService,
+} from "../services/native-access-token.service";
 import type { AuthUser } from "../types/auth.types";
 
 type AuthEnv = {
@@ -25,7 +28,7 @@ export async function authenticateBearerToken(
       sessionToken,
     ),
 ): Promise<AuthUser | null> {
-  if (NativeAccessTokenService.looksLikeJwt(token)) {
+  if (looksLikeJwt(token)) {
     const identity = await new NativeAccessTokenService(env).verify(token);
     return identity?.user ?? null;
   }

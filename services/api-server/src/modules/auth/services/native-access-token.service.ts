@@ -20,15 +20,15 @@ export interface NativeAccessTokenIdentity {
   refreshSessionId: string;
 }
 
+export function looksLikeJwt(token: string): boolean {
+  return token.split(".").length === 3;
+}
+
 export class NativeAccessTokenService {
   private readonly env: Env;
 
   constructor(env: Env) {
     this.env = env;
-  }
-
-  static looksLikeJwt(token: string): boolean {
-    return token.split(".").length === 3;
   }
 
   async sign(params: {

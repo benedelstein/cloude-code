@@ -83,8 +83,8 @@ interface GitHubLoginExchange {
     githubName: string | null;
     githubAvatarUrl: string | null;
   };
-  encryptedAccess: string;
-  encryptedRefresh: string | null;
+  encryptedGitHubAccessToken: string;
+  encryptedGitHubRefreshToken: string | null;
 }
 
 /** Contract for github functions needed for auth */
@@ -270,7 +270,12 @@ export class AuthService {
       return exchanged;
     }
 
-    const { oauth, user, encryptedAccess, encryptedRefresh } = exchanged.value;
+    const {
+      oauth,
+      user,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
+    } = exchanged.value;
     const sessionToken = generateOpaqueToken();
     const sessionExpiresAt = new Date(
       Date.now() + WEB_SESSION_TTL_MS,
@@ -280,9 +285,9 @@ export class AuthService {
       sessionToken,
       userId: user.id,
       sessionExpiresAt,
-      encryptedAccessToken: encryptedAccess,
+      encryptedAccessToken: encryptedGitHubAccessToken,
       accessTokenExpiresAt: oauth.expiresAt ?? null,
-      encryptedRefreshToken: encryptedRefresh,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
       refreshTokenExpiresAt: oauth.refreshTokenExpiresAt ?? null,
     });
 
@@ -322,12 +327,17 @@ export class AuthService {
       return exchanged;
     }
 
-    const { oauth, user, encryptedAccess, encryptedRefresh } = exchanged.value;
+    const {
+      oauth,
+      user,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
+    } = exchanged.value;
     await this.userSessionRepository.upsertGitHubCredentials({
       userId: user.id,
-      encryptedAccessToken: encryptedAccess,
+      encryptedAccessToken: encryptedGitHubAccessToken,
       accessTokenExpiresAt: oauth.expiresAt ?? null,
-      encryptedRefreshToken: encryptedRefresh,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
       refreshTokenExpiresAt: oauth.refreshTokenExpiresAt ?? null,
     });
 
@@ -495,15 +505,15 @@ export class AuthService {
       });
     }
 
-    const encryptedAccess = await encrypt(
+    const encryptedGitHubAccessToken = await encrypt(
       oauth.accessToken,
       this.env.TOKEN_ENCRYPTION_KEY,
     );
-    const encryptedRefresh = oauth.refreshToken
+    const encryptedGitHubRefreshToken = oauth.refreshToken
       ? await encrypt(oauth.refreshToken, this.env.TOKEN_ENCRYPTION_KEY)
       : null;
 
-    await this.userRepository.upsertGitHubUser({
+    await this.userRepository.upsertFromGitHubIdentity({
       id: crypto.randomUUID(),
       githubId: oauth.user.id,
       githubLogin: oauth.user.login,
@@ -524,8 +534,8 @@ export class AuthService {
     return success({
       oauth,
       user,
-      encryptedAccess,
-      encryptedRefresh,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
     });
   }
 
@@ -662,15 +672,15 @@ export class AuthService {
       });
     }
 
-    const encryptedAccess = await encrypt(
+    const encryptedGitHubAccessToken = await encrypt(
       result.accessToken,
       this.env.TOKEN_ENCRYPTION_KEY,
     );
-    const encryptedRefresh = result.refreshToken
+    const encryptedGitHubRefreshToken = result.refreshToken
       ? await encrypt(result.refreshToken, this.env.TOKEN_ENCRYPTION_KEY)
       : null;
 
-    await this.userRepository.upsertGitHubUser({
+    await this.userRepository.upsertFromGitHubIdentity({
       id: crypto.randomUUID(),
       githubId: result.user.id,
       githubLogin: result.user.login,
@@ -679,9 +689,9 @@ export class AuthService {
     });
     await this.userSessionRepository.upsertGitHubCredentials({
       userId: params.user.id,
-      encryptedAccessToken: encryptedAccess,
+      encryptedAccessToken: encryptedGitHubAccessToken,
       accessTokenExpiresAt: result.expiresAt ?? null,
-      encryptedRefreshToken: encryptedRefresh,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
       refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
     });
 

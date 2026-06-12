@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AuthService, type AuthGitHubClient } from "../../src/modules/auth/services/auth.service";
-import { NativeAccessTokenService } from "../../src/modules/auth/services/native-access-token.service";
+import { looksLikeJwt } from "../../src/modules/auth/services/native-access-token.service";
 import { sha256 } from "../../src/shared/utils/crypto";
 import type { Env } from "../../src/shared/types";
 
@@ -322,7 +322,7 @@ describe("AuthService native token refresh", () => {
 
     const value = await exchangeNative(db, service);
 
-    expect(NativeAccessTokenService.looksLikeJwt(value.accessToken)).toBe(true);
+    expect(looksLikeJwt(value.accessToken)).toBe(true);
     expect(value.refreshToken).toBeDefined();
     expect(value.refreshTokenExpiresAt).toBeDefined();
     expect(db.authSessions.size).toBe(0);
@@ -380,7 +380,7 @@ describe("AuthService native token refresh", () => {
     if (!result.ok) { return; }
     expect(result.value.accessToken).not.toBe(issued.accessToken);
     expect(result.value.refreshToken).not.toBe(issued.refreshToken);
-    expect(NativeAccessTokenService.looksLikeJwt(result.value.accessToken)).toBe(true);
+    expect(looksLikeJwt(result.value.accessToken)).toBe(true);
     expect(db.authSessions.size).toBe(0);
   });
 
