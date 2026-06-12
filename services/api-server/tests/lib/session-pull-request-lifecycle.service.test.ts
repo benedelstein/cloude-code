@@ -84,6 +84,7 @@ function createHarness(overrides: {
     logger: createLogger(),
     github,
     anthropicApiKey: "test-key",
+    webOrigin: "https://cloudecode.dev/",
     createPullRequest: createPullRequestForSessionContext,
     messageRepository,
     sessionSummaryService,
@@ -118,7 +119,7 @@ describe("SessionPullRequestLifecycleService", () => {
       .toEqual(["creating", "created"]);
     expect(github.createPullRequest).toHaveBeenCalledWith("ben/repo", {
       title: "Change",
-      body: "",
+      body: "Cloud Code session: https://cloudecode.dev/session/session-1",
       head: "cloude/change-abcd",
       base: "main",
     });

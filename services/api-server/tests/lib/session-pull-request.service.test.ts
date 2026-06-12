@@ -81,6 +81,41 @@ describe("createPullRequestForSessionContext", () => {
     });
   });
 
+  it("appends the Cloud Code session link to the pull request body", async () => {
+    const github: SessionPullRequestGitHubProvider = {
+      compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
+        .mockResolvedValue(failure({
+          code: "GITHUB_API_ERROR",
+          message: "Compare failed",
+        })),
+      createPullRequest: vi.fn<SessionPullRequestGitHubProvider["createPullRequest"]>()
+        .mockResolvedValue(success({
+          number: 58,
+          url: "https://github.com/benedelstein/cloude-code/pull/58",
+          state: "open",
+          merged: false,
+        })),
+      getPullRequest: vi.fn<SessionPullRequestGitHubProvider["getPullRequest"]>(),
+    };
+
+    await createPullRequestForSessionContext({
+      github,
+      anthropicApiKey: "test-key",
+      repoFullName: "benedelstein/cloude-code",
+      baseBranch: "main",
+      headBranch: "cloude/mobile-scroll-fix-bafd",
+      sessionMessages: [],
+      sessionUrl: "https://cloudecode.dev/session/session-1",
+    });
+
+    expect(github.createPullRequest).toHaveBeenCalledWith("benedelstein/cloude-code", {
+      title: "Mobile scroll fix",
+      body: "Cloud Code session: https://cloudecode.dev/session/session-1",
+      head: "cloude/mobile-scroll-fix-bafd",
+      base: "main",
+    });
+  });
+
   it("includes provider details when pull request creation fails", async () => {
     const github: SessionPullRequestGitHubProvider = {
       compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()

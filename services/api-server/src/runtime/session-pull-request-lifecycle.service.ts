@@ -30,6 +30,7 @@ interface PullRequestCreationContext {
   baseBranch: string;
   headBranch: string;
   sessionMessages: UIMessage[];
+  sessionUrl?: string;
 }
 
 type PullRequestCreationContextError = Extract<
@@ -57,6 +58,7 @@ export interface SessionPullRequestLifecycleServiceDeps {
   logger: Logger;
   github: SessionPullRequestGitHubProvider;
   anthropicApiKey: string;
+  webOrigin: string;
   createPullRequest: SessionPullRequestCreator;
   messageRepository: MessageRepository;
   sessionSummaryService: SessionSummaryService;
@@ -69,6 +71,7 @@ export class SessionPullRequestLifecycleService {
   private readonly logger: Logger;
   private readonly github: SessionPullRequestGitHubProvider;
   private readonly anthropicApiKey: string;
+  private readonly webOrigin: string;
   private readonly createPullRequest: SessionPullRequestCreator;
   private readonly messageRepository: MessageRepository;
   private readonly sessionSummaryService: SessionSummaryService;
@@ -81,6 +84,7 @@ export class SessionPullRequestLifecycleService {
     this.logger = deps.logger.scope("session-pull-request-lifecycle");
     this.github = deps.github;
     this.anthropicApiKey = deps.anthropicApiKey;
+    this.webOrigin = deps.webOrigin;
     this.createPullRequest = deps.createPullRequest;
     this.messageRepository = deps.messageRepository;
     this.sessionSummaryService = deps.sessionSummaryService;
@@ -189,7 +193,17 @@ export class SessionPullRequestLifecycleService {
       sessionMessages: this.messageRepository
         .getAllBySession(sessionId)
         .map((message) => message.message),
+      ...this.buildSessionUrl(sessionId),
     });
+  }
+
+  private buildSessionUrl(sessionId: string): { sessionUrl?: string } {
+    const origin = this.webOrigin.trim().replace(/\/$/, "");
+    if (!origin) {
+      return {};
+    }
+
+    return { sessionUrl: `${origin}/session/${encodeURIComponent(sessionId)}` };
   }
 
   private async persistPullRequest(pullRequest: PullRequestResponse): Promise<void> {

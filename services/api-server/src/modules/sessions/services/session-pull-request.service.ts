@@ -32,6 +32,7 @@ export interface CreatePullRequestForSessionContextParams {
   baseBranch: string;
   headBranch: string;
   sessionMessages: UIMessage[];
+  sessionUrl?: string;
 }
 
 export interface CreatedPullRequestResult {
@@ -116,6 +117,16 @@ function buildPullRequestContextMessages(messages: UIMessage[]): string[] {
     .filter((message): message is string => Boolean(message));
 }
 
+function appendSessionLinkToPullRequestBody(body: string, sessionUrl?: string): string {
+  if (!sessionUrl) {
+    return body;
+  }
+
+  const footer = `Cloud Code session: ${sessionUrl}`;
+  const trimmedBody = body.trimEnd();
+  return trimmedBody ? `${trimmedBody}\n\n${footer}` : footer;
+}
+
 async function getSessionInfo(sessionStub: SessionAgentStub): Promise<SessionInfoResponse> {
   const result = (await sessionStub.handleGetSession()) as HandleGetSessionResult;
   if (!result.ok) {
@@ -131,7 +142,7 @@ async function getSessionInfo(sessionStub: SessionAgentStub): Promise<SessionInf
 export async function createPullRequestForSessionContext(
   params: CreatePullRequestForSessionContextParams,
 ): Promise<Result<CreatedPullRequestResult, PullRequestCreationError>> {
-  const { github, anthropicApiKey, repoFullName, headBranch, sessionMessages } = params;
+  const { github, anthropicApiKey, repoFullName, headBranch, sessionMessages, sessionUrl } = params;
   const baseBranch = sanitizeGitBranchName(params.baseBranch) ?? "main";
   const pullRequestContextMessages = buildPullRequestContextMessages(sessionMessages);
 
@@ -182,7 +193,7 @@ export async function createPullRequestForSessionContext(
 
   const createPullRequestResult = await github.createPullRequest(repoFullName, {
     title: pullRequestTitle,
-    body: pullRequestBody,
+    body: appendSessionLinkToPullRequestBody(pullRequestBody, sessionUrl),
     head: headBranch,
     base: baseBranch,
   });

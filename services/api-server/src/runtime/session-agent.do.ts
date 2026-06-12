@@ -177,6 +177,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       logger: this.logger,
       github: this.githubAppService,
       anthropicApiKey: this.env.ANTHROPIC_API_KEY,
+      webOrigin: this.env.WEB_ORIGIN,
       createPullRequest: createPullRequestForSessionContext,
       messageRepository: this.messageRepository,
       sessionSummaryService: this.sessionSummaryService,
