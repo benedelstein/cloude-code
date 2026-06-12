@@ -49,7 +49,8 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         shared {
             TokenCoordinator(
                 persistence: KeychainSessionPersistence(appGroup: appGroupIdentifier),
-                refresher: SessionRefreshAPI(client: apiClient) // no provider — no cycle
+                refresher: SessionRefreshAPI(client: apiClient), // no provider — no cycle
+                revoker: SessionLogoutAPI(client: apiClient)
             )
         }
     }
