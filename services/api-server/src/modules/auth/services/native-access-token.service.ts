@@ -1,5 +1,4 @@
 import { SignJWT, jwtVerify } from "jose";
-import type { AuthUser } from "../types/auth.types";
 import type { Env } from "@/shared/types";
 
 const NATIVE_ACCESS_TOKEN_AUDIENCE = "cloudecode-api";
@@ -7,16 +6,8 @@ const NATIVE_ACCESS_TOKEN_TYPE = "at+jwt";
 const NATIVE_ACCESS_TOKEN_ALGORITHM = "HS256";
 const NATIVE_ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 
-export interface NativeAccessTokenUser {
-  id: string;
-  githubId: number;
-  githubLogin: string;
-  githubName: string | null;
-  githubAvatarUrl: string | null;
-}
-
 export interface NativeAccessTokenIdentity {
-  user: AuthUser;
+  userId: string;
   refreshSessionId: string;
 }
 
@@ -32,17 +23,13 @@ export class NativeAccessTokenService {
   }
 
   async sign(params: {
-    user: NativeAccessTokenUser;
+    userId: string;
     refreshSessionId: string;
   }): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
 
     return await new SignJWT({
       sid: params.refreshSessionId,
-      github_id: params.user.githubId,
-      github_login: params.user.githubLogin,
-      github_name: params.user.githubName,
-      github_avatar_url: params.user.githubAvatarUrl,
     })
       .setProtectedHeader({
         alg: NATIVE_ACCESS_TOKEN_ALGORITHM,
@@ -50,7 +37,7 @@ export class NativeAccessTokenService {
       })
       .setIssuer(this.issuer())
       .setAudience(NATIVE_ACCESS_TOKEN_AUDIENCE)
-      .setSubject(params.user.id)
+      .setSubject(params.userId)
       .setIssuedAt(now)
       .setExpirationTime(now + NATIVE_ACCESS_TOKEN_TTL_SECONDS)
       .setJti(crypto.randomUUID())
@@ -75,19 +62,11 @@ export class NativeAccessTokenService {
 
       const refreshSessionId = this.readStringClaim(payload.sid);
       const subject = this.readStringClaim(payload.sub);
-      const githubId = this.readNumberClaim(payload.github_id);
-      const githubLogin = this.readStringClaim(payload.github_login);
-      const githubName = this.readNullableStringClaim(payload.github_name);
-      const githubAvatarUrl = this.readNullableStringClaim(payload.github_avatar_url);
       const jwtId = this.readStringClaim(payload.jti);
 
       if (
         !refreshSessionId
         || !subject
-        || githubId === null
-        || !githubLogin
-        || githubName === undefined
-        || githubAvatarUrl === undefined
         || !jwtId
       ) {
         return null;
@@ -95,13 +74,7 @@ export class NativeAccessTokenService {
 
       return {
         refreshSessionId,
-        user: {
-          id: subject,
-          githubId,
-          githubLogin,
-          githubName,
-          githubAvatarUrl,
-        },
+        userId: subject,
       };
     } catch {
       return null;
@@ -124,14 +97,4 @@ export class NativeAccessTokenService {
     return typeof value === "string" && value.length > 0 ? value : null;
   }
 
-  private readNullableStringClaim(value: unknown): string | null | undefined {
-    if (value === null) {
-      return null;
-    }
-    return typeof value === "string" ? value : undefined;
-  }
-
-  private readNumberClaim(value: unknown): number | null {
-    return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
-  }
 }

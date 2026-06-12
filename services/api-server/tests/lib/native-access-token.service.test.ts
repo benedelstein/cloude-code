@@ -1,4 +1,4 @@
-import { SignJWT } from "jose";
+import { decodeJwt, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { NativeAccessTokenService } from "../../src/modules/auth/services/native-access-token.service";
 import type { Env } from "../../src/shared/types";
@@ -12,10 +12,6 @@ const env = {
 
 const user = {
   id: "user-1",
-  githubId: 123,
-  githubLogin: "octocat",
-  githubName: "Octo Cat",
-  githubAvatarUrl: "https://avatar.test/octocat.png",
 };
 
 function key(secret = SIGNING_KEY): Uint8Array {
@@ -31,10 +27,6 @@ async function signWithOverrides(overrides: {
   const now = Math.floor(Date.now() / 1000);
   return await new SignJWT({
     sid: "refresh-session-1",
-    github_id: user.githubId,
-    github_login: user.githubLogin,
-    github_name: user.githubName,
-    github_avatar_url: user.githubAvatarUrl,
   })
     .setProtectedHeader({ alg: "HS256", typ: overrides.type ?? "at+jwt" })
     .setIssuer(overrides.issuer ?? "https://api.test")
@@ -50,7 +42,7 @@ describe("NativeAccessTokenService", () => {
   it("signs and verifies native access tokens", async () => {
     const service = new NativeAccessTokenService(env);
     const token = await service.sign({
-      user,
+      userId: user.id,
       refreshSessionId: "refresh-session-1",
     });
 
@@ -58,14 +50,18 @@ describe("NativeAccessTokenService", () => {
 
     expect(identity).toEqual({
       refreshSessionId: "refresh-session-1",
-      user: {
-        id: "user-1",
-        githubId: 123,
-        githubLogin: "octocat",
-        githubName: "Octo Cat",
-        githubAvatarUrl: "https://avatar.test/octocat.png",
-      },
+      userId: "user-1",
     });
+
+    const payload = decodeJwt(token);
+    expect(payload).toMatchObject({
+      sid: "refresh-session-1",
+      sub: "user-1",
+    });
+    expect(payload.github_id).toBeUndefined();
+    expect(payload.github_login).toBeUndefined();
+    expect(payload.github_name).toBeUndefined();
+    expect(payload.github_avatar_url).toBeUndefined();
   });
 
   it("rejects tokens with the wrong issuer, audience, type, or signature", async () => {

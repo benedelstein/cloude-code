@@ -5,6 +5,7 @@ import {
   looksLikeJwt,
   NativeAccessTokenService,
 } from "../services/native-access-token.service";
+import { UserRepository } from "../repositories/user.repository";
 import type { AuthUser } from "../types/auth.types";
 
 type AuthEnv = {
@@ -17,6 +18,11 @@ export type AuthenticateSession = (
   token: string,
 ) => Promise<AuthUser | null>;
 
+export type AuthenticateUserById = (
+  env: Env,
+  userId: string,
+) => Promise<AuthUser | null>;
+
 const authenticateSession: AuthenticateSession = (env, token) =>
   authenticateBearerToken(env, token);
 
@@ -27,10 +33,15 @@ export async function authenticateBearerToken(
     new UserSessionService(sessionEnv).getAuthenticatedUserBySessionToken(
       sessionToken,
     ),
+  authenticateUserById: AuthenticateUserById = (sessionEnv, userId) =>
+    new UserRepository(sessionEnv.DB).getById(userId),
 ): Promise<AuthUser | null> {
   if (looksLikeJwt(token)) {
     const identity = await new NativeAccessTokenService(env).verify(token);
-    return identity?.user ?? null;
+    if (!identity) {
+      return null;
+    }
+    return await authenticateUserById(env, identity.userId);
   }
 
   return await authenticateOpaqueSession(env, token);

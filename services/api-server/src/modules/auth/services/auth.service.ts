@@ -355,7 +355,7 @@ export class AuthService {
     });
 
     const accessToken = await this.nativeAccessTokenService.sign({
-      user,
+      userId: user.id,
       refreshSessionId,
     });
     const hasInstallations = await this.checkHasInstallations(oauth.accessToken);
@@ -783,7 +783,7 @@ export class AuthService {
       refreshExpiresAt: refreshTokenExpiresAt,
     });
     const accessToken = await this.nativeAccessTokenService.sign({
-      user,
+      userId: user.id,
       refreshSessionId: found.id,
     });
 
