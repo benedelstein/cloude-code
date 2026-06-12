@@ -24,6 +24,7 @@ import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
 import { isTerminalSetupTask } from "./session-setup-run.service";
 import { SessionStartupScriptService } from "./session-startup-script.service";
+import type { SessionSetupOutputCollector } from "./session-setup-output.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -70,6 +71,7 @@ export interface SessionProvisionServiceDeps {
     ): Promise<GitHubAppResult<string>>;
   };
   setupReporter?: SessionSetupTaskReporter;
+  setupOutputCollector?: SessionSetupOutputCollector;
 }
 
 /**
@@ -94,6 +96,7 @@ export class SessionProvisionService {
   private readonly ensureGitProxySecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
   private readonly setupReporter: SessionProvisionServiceDeps["setupReporter"];
+  private readonly setupOutputCollector: SessionProvisionServiceDeps["setupOutputCollector"];
   private readonly startupScriptService: SessionStartupScriptService;
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
@@ -113,6 +116,7 @@ export class SessionProvisionService {
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
     this.githubTokenProvider = deps.githubTokenProvider;
     this.setupReporter = deps.setupReporter;
+    this.setupOutputCollector = deps.setupOutputCollector;
     this.startupScriptService = new SessionStartupScriptService(this.logger);
   }
 
@@ -270,11 +274,13 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
+    this.setupOutputCollector?.beginRun();
     const result = await this.startupScriptService.run({
       sprite,
       script: environmentSnapshot.startupScript,
       workspaceDir: WORKSPACE_DIR,
       env: environmentSnapshot.plainEnvVars,
+      onOutput: (stream, data) => this.setupOutputCollector?.append(stream, data),
     }).finally(() => {
       this.updateServerState({ startupScriptCompleted: true });
     });
@@ -289,15 +295,26 @@ export class SessionProvisionService {
     }
     switch (result.status) {
       case "completed":
-        this.setupReporter?.completeTask(task.id, result.output);
+        this.setupReporter?.completeTask(task.id, this.buildSetupScriptOutput(result.exitCode));
         break;
       case "failed":
-        this.setupReporter?.failTask(task.id, result.errorMessage, result.output);
+        this.setupReporter?.failTask(task.id, result.errorMessage, this.buildSetupScriptOutput(result.exitCode));
         break;
       case "skipped":
         this.setupReporter?.skipTask(task.id, buildSkippedSetupScriptSkipReason(this.getEnvironmentSnapshot()));
         break;
     }
+  }
+
+  /** Builds the task's output metadata; full output lives in the setup-output store. */
+  private buildSetupScriptOutput(exitCode: number | null): SessionSetupTaskOutput {
+    const outputInfo = this.setupOutputCollector?.finish();
+    return {
+      exitCode,
+      truncated: outputInfo?.truncated ?? false,
+      stdoutLength: outputInfo?.stdoutLength ?? 0,
+      stderrLength: outputInfo?.stderrLength ?? 0,
+    };
   }
 
   private async ensureNetworkPolicyTask(

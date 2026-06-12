@@ -20,6 +20,8 @@ import type {
   ProviderConnectionState,
   SessionStatus,
   SessionSetupRun,
+  SessionSetupOutputResponse,
+  SetupOutputChunksEvent,
   SessionWebSocketTokenResponse,
   ClientMessage,
   ProviderAuthRequired,
@@ -40,6 +42,36 @@ const DEFAULT_API_HOST = resolveDefaultApiHost();
 
 function keepPreviousIfDeepEqual<T>(previous: T, next: T): T {
   return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+}
+
+/** Live setup-script output accumulated from setup.output.chunks events. */
+export interface SetupScriptOutputState {
+  /** Server-assigned id of the script run the output belongs to. */
+  epoch: string;
+  stdout: string;
+  stderr: string;
+}
+
+function applySetupOutputChunks(
+  previous: SetupScriptOutputState | null,
+  event: SetupOutputChunksEvent,
+): SetupScriptOutputState {
+  // A new epoch means the script (re)started; discard prior output.
+  let next = previous && previous.epoch === event.epoch
+    ? previous
+    : { epoch: event.epoch, stdout: "", stderr: "" };
+  for (const chunk of event.chunks) {
+    const current = next[chunk.stream];
+    if (chunk.offset + chunk.data.length <= current.length) {
+      // Already applied (e.g. covered by a fetched snapshot).
+      continue;
+    }
+    const data = chunk.offset <= current.length
+      ? chunk.data.slice(current.length - chunk.offset)
+      : chunk.data;
+    next = { ...next, [chunk.stream]: current + data };
+  }
+  return next;
 }
 
 function withLiveStartedAt(message: UIMessage, startedAt: number): UIMessage {
@@ -94,6 +126,8 @@ export interface UseCloudflareAgentReturn {
   sessionErrorMessage: string | null;
   sessionErrorCode: string | null;
   sessionSetupRun: SessionSetupRun | null;
+  setupScriptOutput: SetupScriptOutputState | null;
+  hydrateSetupOutput: (snapshot: SessionSetupOutputResponse) => void;
   operationError: OperationErrorEvent | null;
   isHistoryLoading: boolean;
   hasHydratedState: boolean;
@@ -142,6 +176,7 @@ export function useCloudflareAgent({
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [sessionErrorMessage, setSessionErrorMessage] = useState<string | null>(null);
   const [sessionSetupRun, setSessionSetupRun] = useState<SessionSetupRun | null>(null);
+  const [setupScriptOutput, setSetupScriptOutput] = useState<SetupScriptOutputState | null>(null);
   const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
@@ -337,6 +372,10 @@ export function useCloudflareAgent({
       case "agent.ready":
         break;
 
+      case "setup.output.chunks":
+        setSetupScriptOutput((prev) => applySetupOutputChunks(prev, msg));
+        break;
+
       case "user.message":
         setOperationError(null);
         setPendingUserMessage(null);
@@ -504,6 +543,21 @@ export function useCloudflareAgent({
     sendToAgent({ type: "operation.cancel" });
   }, [sendToAgent]);
 
+  // Merges a fetched setup-output snapshot with chunks already streamed live.
+  const hydrateSetupOutput = useCallback((snapshot: SessionSetupOutputResponse) => {
+    setSetupScriptOutput((prev) => {
+      if (!prev || prev.epoch !== snapshot.epoch) {
+        return { epoch: snapshot.epoch, stdout: snapshot.stdout, stderr: snapshot.stderr };
+      }
+      // Same run: keep whichever side has seen more of each stream.
+      return {
+        epoch: prev.epoch,
+        stdout: snapshot.stdout.length >= prev.stdout.length ? snapshot.stdout : prev.stdout,
+        stderr: snapshot.stderr.length >= prev.stderr.length ? snapshot.stderr : prev.stderr,
+      };
+    });
+  }, []);
+
   const selectedProvider = agentSettings?.provider ?? null;
 
   return {
@@ -516,6 +570,8 @@ export function useCloudflareAgent({
     sessionErrorMessage,
     sessionErrorCode: null,
     sessionSetupRun,
+    setupScriptOutput,
+    hydrateSetupOutput,
     operationError,
     isHistoryLoading,
     hasHydratedState,

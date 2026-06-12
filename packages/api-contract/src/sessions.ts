@@ -30,6 +30,18 @@ export const SessionPlanResponse = z.object({
 });
 export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
 
+/** Full accumulated setup-script output, fetched on demand. */
+export const SessionSetupOutputResponse = z.object({
+  taskId: z.literal("setup_script"),
+  /** Unique per script run; matches the epoch on streamed setup.output.chunks events. */
+  epoch: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
+  truncated: z.boolean().describe("True when output hit the per-stream storage cap"),
+  completed: z.boolean().describe("False while the script is still running"),
+});
+export type SessionSetupOutputResponse = z.infer<typeof SessionSetupOutputResponse>;
+
 export const CreateSessionInitialMessage = z.object({
   content: z.string().trim().min(1).optional().describe("Initial text content for the session"),
   attachmentIds: z.array(z.uuid())

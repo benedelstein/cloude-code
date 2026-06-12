@@ -8,6 +8,7 @@ import {
   type PullRequestStatusResponse,
   type SessionInfoResponse as SessionInfoResponseType,
   type SessionPlanResponse as SessionPlanResponseType,
+  type SessionSetupOutputResponse as SessionSetupOutputResponseType,
   type SessionWebSocketTokenResponse,
   type UserSessionsWebSocketTokenResponse,
   success,
@@ -24,6 +25,7 @@ import type {
   HandleDeleteSessionResult,
   HandleGetMessagesResult,
   HandleGetPlanResult,
+  HandleGetSetupOutputResult,
   HandleInitResult,
   SessionAgentRpcError,
 } from "@/shared/types/session-agent";
@@ -541,6 +543,29 @@ export class SessionsService {
   }
 
   /**
+   * Fetches the accumulated setup-script output after repo access validation.
+   * @param params.sessionId - Session id.
+   * @param params.userId - Authenticated user id.
+   * @returns Full setup-script stdout/stderr on success.
+   */
+  async getSessionSetupOutput(params: {
+    sessionId: string;
+    userId: string;
+  }): Promise<SessionsServiceResult<SessionSetupOutputResponseType>> {
+    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
+    if (!authorizedSessionAgent.ok) {
+      return authorizedSessionAgent;
+    }
+
+    const result = await authorizedSessionAgent.value.handleGetSetupOutput() as HandleGetSetupOutputResult;
+    if (!result.ok) {
+      return failure(this.mapAgentError(result.error));
+    }
+
+    return success(result.value);
+  }
+
+  /**
    * Creates a pull request for the session branch after repo access validation.
    * @param params.sessionId - Session id.
    * @param params.userId - Authenticated user id.
@@ -751,6 +776,8 @@ export class SessionsService {
         return this.buildError({ status: 404, message: "Session not found" });
       case "PLAN_NOT_FOUND":
         return this.buildError({ status: 404, message: "Plan not found" });
+      case "SETUP_OUTPUT_NOT_FOUND":
+        return this.buildError({ status: 404, message: "Setup output not found" });
       case "PULL_REQUEST_NOT_FOUND":
         return this.buildError({ status: 404, message: "Pull request not found" });
       case "BRANCH_NOT_PUSHED":

@@ -216,6 +216,40 @@ public struct SessionRepoGroup: Codable, Equatable, Sendable {
     }
 }
 
+public struct SessionSetupOutputResponse: Codable, Equatable, Sendable {
+    public let taskId = "setup_script"
+    public var epoch: String
+    public var stdout: String
+    public var stderr: String
+    /// True when output hit the per-stream storage cap
+    public var truncated: Bool
+    /// False while the script is still running
+    public var completed: Bool
+
+    public init(
+        epoch: String,
+        stdout: String,
+        stderr: String,
+        truncated: Bool,
+        completed: Bool
+    ) {
+        self.epoch = epoch
+        self.stdout = stdout
+        self.stderr = stderr
+        self.truncated = truncated
+        self.completed = completed
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case taskId
+        case epoch
+        case stdout
+        case stderr
+        case truncated
+        case completed
+    }
+}
+
 public struct SessionWebSocketTokenResponse: Codable, Equatable, Sendable {
     public var token: String
     public var expiresAt: ISODateTimeString

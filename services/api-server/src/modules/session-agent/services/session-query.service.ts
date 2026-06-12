@@ -4,19 +4,27 @@ import {
   type ClientState,
   type SessionInfoResponse,
   type SessionPlanResponse,
+  type SessionSetupOutputResponse,
 } from "@repo/shared";
 import type {
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
+  HandleGetSetupOutputResult,
 } from "@/shared/types/session-agent";
 import type { LatestPlanRepository } from "../repositories/latest-plan.repository";
 import type { MessageRepository } from "../repositories/message.repository";
+import {
+  SETUP_OUTPUT_STORE_CAP,
+  type SetupOutputRepository,
+} from "../repositories/setup-output.repository";
 import type { ServerState } from "../repositories/server-state.repository";
 
 export interface SessionQueryServiceDeps {
   messageRepository: MessageRepository;
   latestPlanRepository: LatestPlanRepository;
+  setupOutputRepository: SetupOutputRepository;
+  getSetupOutputEpoch: () => string;
   getServerState: () => ServerState;
   getClientState: () => ClientState;
 }
@@ -24,12 +32,16 @@ export interface SessionQueryServiceDeps {
 export class SessionQueryService {
   private readonly messageRepository: MessageRepository;
   private readonly latestPlanRepository: LatestPlanRepository;
+  private readonly setupOutputRepository: SetupOutputRepository;
+  private readonly getSetupOutputEpoch: () => string;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
 
   constructor(deps: SessionQueryServiceDeps) {
     this.messageRepository = deps.messageRepository;
     this.latestPlanRepository = deps.latestPlanRepository;
+    this.setupOutputRepository = deps.setupOutputRepository;
+    this.getSetupOutputEpoch = deps.getSetupOutputEpoch;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
   }
@@ -86,5 +98,32 @@ export class SessionQueryService {
       updatedAt: latestPlan.updatedAt,
       sourceMessageId: latestPlan.sourceMessageId,
     } satisfies SessionPlanResponse);
+  }
+
+  handleGetSetupOutput(): HandleGetSetupOutputResult {
+    const serverState = this.getServerState();
+    if (!serverState.sessionId) {
+      return failure({ code: "SESSION_NOT_INITIALIZED", message: "Session not found" });
+    }
+
+    const completed = serverState.startupScriptCompleted;
+    // Completed runs with no stored output: either the script never produced
+    // output or it predates output streaming (legacy inline output).
+    if (completed && !this.setupOutputRepository.hasOutput()) {
+      return failure({ code: "SETUP_OUTPUT_NOT_FOUND", message: "Setup output not found" });
+    }
+
+    const stdout = this.setupOutputRepository.read("stdout");
+    const stderr = this.setupOutputRepository.read("stderr");
+    return success({
+      taskId: "setup_script",
+      epoch: this.getSetupOutputEpoch(),
+      stdout,
+      stderr,
+      truncated:
+        stdout.length >= SETUP_OUTPUT_STORE_CAP
+        || stderr.length >= SETUP_OUTPUT_STORE_CAP,
+      completed,
+    } satisfies SessionSetupOutputResponse);
   }
 }

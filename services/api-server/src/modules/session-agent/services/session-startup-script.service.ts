@@ -2,28 +2,21 @@ import type { Logger, PlainEnvVars } from "@repo/shared";
 import type { WorkersSpriteClient } from "@/shared/integrations/sprites/WorkersSpriteClient";
 
 const STARTUP_SCRIPT_TIMEOUT_SECONDS = 300;
-const STARTUP_SCRIPT_OUTPUT_LIMIT = 8000;
+const STARTUP_SCRIPT_LOG_LIMIT = 2000;
 
 export type SessionStartupScriptRunResult =
   | { status: "skipped" }
   | {
       status: "completed";
-      output: SessionStartupScriptOutput;
+      exitCode: number | null;
       durationMs: number;
     }
   | {
       status: "failed";
       errorMessage: string;
-      output: SessionStartupScriptOutput;
+      exitCode: number | null;
       durationMs: number;
     };
-
-export type SessionStartupScriptOutput = {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  truncated: boolean;
-};
 
 export class SessionStartupScriptService {
   private readonly logger: Logger;
@@ -37,6 +30,8 @@ export class SessionStartupScriptService {
     script: string | null;
     workspaceDir: string;
     env: PlainEnvVars;
+    /** Receives raw output chunks as the script runs. */
+    onOutput?: (stream: "stdout" | "stderr", data: string) => void;
   }): Promise<SessionStartupScriptRunResult> {
     const script = args.script?.trim();
     if (!script) {
@@ -63,25 +58,26 @@ export class SessionStartupScriptService {
       {
         cwd: args.workspaceDir,
         env: args.env,
+        onStdout: (data) => args.onOutput?.("stdout", data),
+        onStderr: (data) => args.onOutput?.("stderr", data),
       },
     );
     const durationMs = Date.now() - d0;
-    const output = buildStartupScriptOutput(result);
 
     if (result.exitCode !== 0) {
       this.logger.warn("Session startup script failed", {
         fields: {
           exitCode: result.exitCode,
           durationMs,
-          stdout: output.stdout,
-          stderr: output.stderr,
+          stdoutTail: result.stdout.slice(-STARTUP_SCRIPT_LOG_LIMIT),
+          stderrTail: result.stderr.slice(-STARTUP_SCRIPT_LOG_LIMIT),
         },
       });
       const error = new SessionStartupScriptError(result.exitCode, durationMs);
       return {
         status: "failed",
         errorMessage: error.message,
-        output,
+        exitCode: result.exitCode,
         durationMs,
       };
     }
@@ -93,7 +89,7 @@ export class SessionStartupScriptService {
         stderrBytes: result.stderr.length,
       },
     });
-    return { status: "completed", output, durationMs };
+    return { status: "completed", exitCode: result.exitCode, durationMs };
   }
 }
 
@@ -106,25 +102,4 @@ class SessionStartupScriptError extends Error {
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function truncateOutput(value: string): string {
-  return value.length > STARTUP_SCRIPT_OUTPUT_LIMIT
-    ? `${value.slice(0, STARTUP_SCRIPT_OUTPUT_LIMIT)}...`
-    : value;
-}
-
-function buildStartupScriptOutput(result: {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-}): SessionStartupScriptOutput {
-  return {
-    stdout: truncateOutput(result.stdout),
-    stderr: truncateOutput(result.stderr),
-    exitCode: result.exitCode,
-    truncated:
-      result.stdout.length > STARTUP_SCRIPT_OUTPUT_LIMIT
-      || result.stderr.length > STARTUP_SCRIPT_OUTPUT_LIMIT,
-  };
 }

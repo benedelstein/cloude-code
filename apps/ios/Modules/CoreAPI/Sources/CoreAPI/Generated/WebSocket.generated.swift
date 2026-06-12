@@ -242,6 +242,7 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case agentReady(AgentReadyEvent)
     case userMessage(UserMessageEvent)
     case editorReady(EditorReadyEvent)
+    case setupOutputChunks(SetupOutputChunksEvent)
     /// A variant this client version doesn't recognize yet.
     case unknown(type: String)
 
@@ -268,6 +269,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
             self = .userMessage(try UserMessageEvent(from: decoder))
         case "editor.ready":
             self = .editorReady(try EditorReadyEvent(from: decoder))
+        case "setup.output.chunks":
+            self = .setupOutputChunks(try SetupOutputChunksEvent(from: decoder))
         case let unrecognized:
             self = .unknown(type: unrecognized)
         }
@@ -291,6 +294,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
             try payload.encode(to: encoder)
         case .editorReady(let payload):
             try payload.encode(to: encoder)
+        case .setupOutputChunks(let payload):
+            try payload.encode(to: encoder)
         case .unknown(let type):
             var container = encoder.container(keyedBy: DiscriminatorKeys.self)
             try container.encode(type, forKey: .discriminator)
@@ -311,6 +316,67 @@ public struct SessionMarkReadEvent: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case type
         case messageId
+    }
+}
+
+public struct SetupOutputChunk: Codable, Equatable, Sendable {
+    public enum Stream: RawRepresentable, Codable, Equatable, Sendable {
+        case stdout
+        case stderr
+        /// A value this client version doesn't recognize yet.
+        case unknown(String)
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "stdout": self = .stdout
+            case "stderr": self = .stderr
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .stdout: "stdout"
+            case .stderr: "stderr"
+            case .unknown(let value): value
+            }
+        }
+    }
+
+    public var stream: Stream
+    public var data: String
+    public var offset: Int
+
+    public init(
+        stream: Stream,
+        data: String,
+        offset: Int
+    ) {
+        self.stream = stream
+        self.data = data
+        self.offset = offset
+    }
+}
+
+public struct SetupOutputChunksEvent: Codable, Equatable, Sendable {
+    public let type = "setup.output.chunks"
+    public let taskId = "setup_script"
+    public var epoch: String
+    public var chunks: [SetupOutputChunk]
+
+    public init(
+        epoch: String,
+        chunks: [SetupOutputChunk]
+    ) {
+        self.epoch = epoch
+        self.chunks = chunks
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case taskId
+        case epoch
+        case chunks
     }
 }
 

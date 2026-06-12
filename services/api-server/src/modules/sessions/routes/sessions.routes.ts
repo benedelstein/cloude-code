@@ -14,6 +14,7 @@ import {
   getPullRequestRoute,
   getSessionMessagesRoute,
   getSessionPlanRoute,
+  getSessionSetupOutputRoute,
   getSessionRoute,
   getUserSessionsUpdatesRoute,
   listSessionsRoute,
@@ -305,6 +306,52 @@ export function createSessionsRoutes(
     const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.getSessionPlan({
+      sessionId: c.req.valid("param").sessionId,
+      userId: auth.userId,
+    });
+
+    if (!result.ok) {
+      if (result.error.status === 401) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_AUTH_REQUIRED",
+          },
+          401,
+        );
+      }
+      if (result.error.status === 403) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "REPO_ACCESS_BLOCKED",
+          },
+          403,
+        );
+      }
+      if (result.error.status === 503) {
+        return c.json(
+          {
+            error: result.error.message,
+            code: result.error.code ?? "GITHUB_API_ERROR",
+          },
+          503,
+        );
+      }
+      if (result.error.status === 500) {
+        return c.json({ error: result.error.message }, 500);
+      }
+
+      return c.json({ error: result.error.message }, 404);
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  sessionsRoutes.openapi(getSessionSetupOutputRoute, async (c) => {
+    const auth = c.get("auth");
+    const sessionsService = deps.createSessionsService(c.env);
+    const result = await sessionsService.getSessionSetupOutput({
       sessionId: c.req.valid("param").sessionId,
       userId: auth.userId,
     });

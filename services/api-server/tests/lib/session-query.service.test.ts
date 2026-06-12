@@ -3,6 +3,7 @@ import { DEFAULT_AGENT_SETTINGS, type ClientState } from "@repo/shared";
 import type { UIMessage } from "ai";
 import type { LatestPlanRepository } from "../../src/modules/session-agent/repositories/latest-plan.repository";
 import type { MessageRepository } from "../../src/modules/session-agent/repositories/message.repository";
+import type { SetupOutputRepository } from "../../src/modules/session-agent/repositories/setup-output.repository";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import { SessionQueryService } from "../../src/modules/session-agent/services/session-query.service";
 
@@ -56,6 +57,7 @@ function createService(overrides: {
     sourceMessageId: string | null;
     updatedAt: string;
   } | null;
+  setupOutput?: { stdout: string; stderr: string };
 } = {}) {
   const messageRepository = {
     getAllBySession: vi.fn(() => (overrides.messages ?? []).map((message) => ({
@@ -77,14 +79,21 @@ function createService(overrides: {
       return { sessionId, ...plan };
     }),
   } as unknown as LatestPlanRepository;
+  const setupOutput = overrides.setupOutput ?? { stdout: "", stderr: "" };
+  const setupOutputRepository = {
+    read: vi.fn((stream: "stdout" | "stderr") => setupOutput[stream]),
+    hasOutput: vi.fn(() => setupOutput.stdout.length > 0 || setupOutput.stderr.length > 0),
+  } as unknown as SetupOutputRepository;
   const service = new SessionQueryService({
     messageRepository,
     latestPlanRepository,
+    setupOutputRepository,
+    getSetupOutputEpoch: () => "epoch-1",
     getServerState: () => createServerState(overrides.serverState),
     getClientState: () => createClientState(overrides.clientState),
   });
 
-  return { latestPlanRepository, messageRepository, service };
+  return { latestPlanRepository, messageRepository, setupOutputRepository, service };
 }
 
 describe("SessionQueryService", () => {
@@ -168,6 +177,55 @@ describe("SessionQueryService", () => {
     expect(service.handleGetPlan()).toEqual({
       ok: false,
       error: { code: "PLAN_NOT_FOUND", message: "Plan not found" },
+    });
+  });
+
+  it("returns stored setup output while the script is running", () => {
+    const { service } = createService({
+      serverState: { startupScriptCompleted: false },
+      setupOutput: { stdout: "installing...\n", stderr: "" },
+    });
+
+    expect(service.handleGetSetupOutput()).toEqual({
+      ok: true,
+      value: {
+        taskId: "setup_script",
+        epoch: "epoch-1",
+        stdout: "installing...\n",
+        stderr: "",
+        truncated: false,
+        completed: false,
+      },
+    });
+  });
+
+  it("returns completed setup output after the script finishes", () => {
+    const { service } = createService({
+      serverState: { startupScriptCompleted: true },
+      setupOutput: { stdout: "done\n", stderr: "warn\n" },
+    });
+
+    expect(service.handleGetSetupOutput()).toEqual({
+      ok: true,
+      value: {
+        taskId: "setup_script",
+        epoch: "epoch-1",
+        stdout: "done\n",
+        stderr: "warn\n",
+        truncated: false,
+        completed: true,
+      },
+    });
+  });
+
+  it("returns setup output not found for completed runs with no stored output", () => {
+    const { service } = createService({
+      serverState: { startupScriptCompleted: true },
+    });
+
+    expect(service.handleGetSetupOutput()).toEqual({
+      ok: false,
+      error: { code: "SETUP_OUTPUT_NOT_FOUND", message: "Setup output not found" },
     });
   });
 });

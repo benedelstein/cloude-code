@@ -471,21 +471,27 @@ public enum SessionSetupTask: Codable, Equatable, Sendable {
 }
 
 public struct SessionSetupTaskOutput: Codable, Equatable, Sendable {
-    public var stdout: String
-    public var stderr: String
     public var exitCode: Int?
     public var truncated: Bool
+    public var stdoutLength: Int?
+    public var stderrLength: Int?
+    public var stdout: String?
+    public var stderr: String?
 
     public init(
-        stdout: String,
-        stderr: String,
         exitCode: Int? = nil,
-        truncated: Bool
+        truncated: Bool,
+        stdoutLength: Int? = nil,
+        stderrLength: Int? = nil,
+        stdout: String? = nil,
+        stderr: String? = nil
     ) {
-        self.stdout = stdout
-        self.stderr = stderr
         self.exitCode = exitCode
         self.truncated = truncated
+        self.stdoutLength = stdoutLength
+        self.stderrLength = stderrLength
+        self.stdout = stdout
+        self.stderr = stderr
     }
 }
 

@@ -44,6 +44,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     sessionErrorMessage,
     sessionErrorCode,
     sessionSetupRun,
+    setupScriptOutput,
+    hydrateSetupOutput,
     operationError,
     isHistoryLoading,
     isReady,
@@ -213,7 +215,10 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           isHistoryLoading={isHistoryLoading}
           sessionErrorMessage={sessionErrorMessage}
           sessionErrorCode={sessionErrorCode}
+          sessionId={sessionId}
           sessionSetupRun={sessionSetupRun}
+          setupScriptOutput={setupScriptOutput}
+          onHydrateSetupOutput={hydrateSetupOutput}
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
           userAvatarUrl={user?.avatarUrl}
