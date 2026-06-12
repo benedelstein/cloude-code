@@ -345,7 +345,7 @@ function FloatingSidebarToggle({
             type="button"
             variant="ghost"
             size="icon"
-            className="pointer-events-auto h-7 w-7 text-foreground-secondary hover:bg-transparent hover:text-foreground"
+            className="pointer-events-auto h-7 w-7 text-foreground-secondary transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground"
             onClick={onClick}
           >
             <Icon className="h-4 w-4" />
@@ -371,6 +371,8 @@ function LeftSidebarResizeHandle({
   onPreviewWidthChange: (widthPx: number) => void;
   onResizeStateChange: (isResizing: boolean) => void;
 }) {
+  const [isResizing, setIsResizing] = useState(false);
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) {
       return;
@@ -384,6 +386,7 @@ function LeftSidebarResizeHandle({
     const previousUserSelect = document.body.style.userSelect;
 
     onResizeStateChange(true);
+    setIsResizing(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
 
@@ -396,6 +399,7 @@ function LeftSidebarResizeHandle({
     const stopResizing = () => {
       onWidthChange(nextWidthPx);
       onResizeStateChange(false);
+      setIsResizing(false);
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener("pointermove", handlePointerMove);
@@ -413,6 +417,7 @@ function LeftSidebarResizeHandle({
       type="button"
       aria-label="Resize left sidebar"
       title="Resize left sidebar"
+      data-resizing={isResizing}
       onPointerDown={handlePointerDown}
       onKeyDown={(event) => {
         switch (event.key) {
@@ -436,8 +441,13 @@ function LeftSidebarResizeHandle({
             break;
         }
       }}
-      className="absolute right-0 top-0 z-20 hidden h-full w-3 translate-x-1/2 cursor-col-resize! touch-none md:block after:absolute after:inset-y-2 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-sidebar-border focus-visible:outline-none focus-visible:after:bg-sidebar-ring"
-    />
+      className="group absolute right-0 top-0 z-20 hidden h-full w-3 translate-x-1/2 cursor-col-resize! touch-none md:block focus-visible:outline-none"
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-y-px right-[calc(50%-1px)] w-6 rounded-r-md border-y border-r border-foreground-tertiary/45 opacity-0 [mask-image:linear-gradient(to_left,black_35%,transparent_100%)] transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[resizing=true]:opacity-100"
+      />
+    </button>
   );
 }
 
@@ -463,6 +473,8 @@ function RightSidebarResizeHandle({
   onPreviewWidthChange: (widthPx: number) => void;
   onResizeStateChange: (isResizing: boolean) => void;
 }) {
+  const [isResizing, setIsResizing] = useState(false);
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) {
       return;
@@ -476,6 +488,7 @@ function RightSidebarResizeHandle({
     const previousUserSelect = document.body.style.userSelect;
 
     onResizeStateChange(true);
+    setIsResizing(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
 
@@ -488,6 +501,7 @@ function RightSidebarResizeHandle({
     const stopResizing = () => {
       onWidthChange(nextWidthPx);
       onResizeStateChange(false);
+      setIsResizing(false);
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener("pointermove", handlePointerMove);
@@ -505,6 +519,7 @@ function RightSidebarResizeHandle({
       type="button"
       aria-label="Resize right sidebar"
       title="Resize right sidebar"
+      data-resizing={isResizing}
       onPointerDown={handlePointerDown}
       onKeyDown={(event) => {
         switch (event.key) {
@@ -528,7 +543,12 @@ function RightSidebarResizeHandle({
             break;
         }
       }}
-      className="absolute left-0 top-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize! touch-none md:block after:absolute after:inset-y-2 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-sidebar-border focus-visible:outline-none focus-visible:after:bg-sidebar-ring"
-    />
+      className="group absolute left-0 top-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize! touch-none md:block focus-visible:outline-none"
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-y-px left-[calc(50%-1px)] w-6 rounded-l-md border-y border-l border-foreground-tertiary/45 opacity-0 [mask-image:linear-gradient(to_right,black_35%,transparent_100%)] transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[resizing=true]:opacity-100"
+      />
+    </button>
   );
 }

@@ -106,11 +106,13 @@ Invalid, expired, or reused tokens return `401` with `INVALID_REFRESH_TOKEN`.
 
 ### Grace window and reuse detection
 
-The previous refresh token stays valid for 60 seconds after rotation so a client that lost the response to a network failure can retry. Presenting the previous token *outside* that window is treated as token theft: the whole family is revoked (refresh token and current access token both die).
+The previous refresh token stays valid for 60 seconds after rotation so a client that lost the response to a network failure can retry. Presenting the previous token *outside* that window is treated as token theft: the refresh-token family is revoked, so no token in that family can mint future access tokens.
+
+Native access tokens are intentionally stateless JWTs. Revoking a refresh-token family does not perform a per-request database lookup or invalidate access JWTs already minted from that family; those remain accepted until their 15-minute `exp`. This is the explicit tradeoff for native auth: immediate refresh revocation, bounded access-token lifetime.
 
 ### Logout
 
-`POST /auth/native/logout` accepts `{ refreshToken }` and revokes the family. `POST /auth/logout` remains web-only and deletes the opaque web session row.
+`POST /auth/native/logout` accepts `{ refreshToken }` and revokes the refresh-token family. Already minted native access JWTs may remain valid until their 15-minute expiry. `POST /auth/logout` remains web-only and deletes the opaque web session row.
 
 ### Native sign-in flow (iOS)
 
