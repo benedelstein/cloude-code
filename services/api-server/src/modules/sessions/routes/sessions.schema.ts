@@ -8,6 +8,7 @@ import {
   UpdateSessionTitleResponse,
   SessionInfoResponse,
   SessionPlanResponse,
+  SessionSetupOutputResponse,
   ListSessionsResponse,
   PullRequestResponse,
   PullRequestStatusResponse,
@@ -273,6 +274,40 @@ export const getSessionPlanRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to get plan",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access could not be verified due to a GitHub dependency failure",
+    },
+  },
+});
+
+export const getSessionSetupOutputRoute = createRoute({
+  method: "get",
+  path: "/{sessionId}/setup-output",
+  request: {
+    params: z.object({ sessionId: z.uuid() }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: SessionSetupOutputResponse } },
+      description: "Accumulated setup-script output",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Setup output not found",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "GitHub authentication required",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorWithCodeResponse } },
+      description: "Repository access blocked for this session",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to get setup output",
     },
     503: {
       content: { "application/json": { schema: ErrorWithCodeResponse } },

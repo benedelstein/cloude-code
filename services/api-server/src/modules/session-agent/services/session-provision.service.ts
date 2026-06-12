@@ -23,7 +23,14 @@ import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/star
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
 import { isTerminalSetupTask } from "./session-setup-run.service";
-import { SessionStartupScriptService } from "./session-startup-script.service";
+import {
+  SessionStartupScriptService,
+  type SessionStartupScriptRunResult,
+} from "./session-startup-script.service";
+import type {
+  SessionSetupOutputCollector,
+  SetupOutputFinishResult,
+} from "./session-setup-output.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -70,6 +77,7 @@ export interface SessionProvisionServiceDeps {
     ): Promise<GitHubAppResult<string>>;
   };
   setupReporter?: SessionSetupTaskReporter;
+  setupOutputCollector?: SessionSetupOutputCollector;
 }
 
 /**
@@ -94,6 +102,7 @@ export class SessionProvisionService {
   private readonly ensureGitProxySecret: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
   private readonly setupReporter: SessionProvisionServiceDeps["setupReporter"];
+  private readonly setupOutputCollector: SessionProvisionServiceDeps["setupOutputCollector"];
   private readonly startupScriptService: SessionStartupScriptService;
 
   /** Mutex for durable provisioning steps (sprite creation, repo clone). */
@@ -113,6 +122,7 @@ export class SessionProvisionService {
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
     this.githubTokenProvider = deps.githubTokenProvider;
     this.setupReporter = deps.setupReporter;
+    this.setupOutputCollector = deps.setupOutputCollector;
     this.startupScriptService = new SessionStartupScriptService(this.logger);
   }
 
@@ -270,14 +280,34 @@ export class SessionProvisionService {
       this.env.SPRITES_API_URL,
     );
 
-    const result = await this.startupScriptService.run({
-      sprite,
-      script: environmentSnapshot.startupScript,
-      workspaceDir: WORKSPACE_DIR,
-      env: environmentSnapshot.plainEnvVars,
-    }).finally(() => {
+    this.setupOutputCollector?.beginRun();
+    let result: SessionStartupScriptRunResult;
+    try {
+      result = await this.startupScriptService.run({
+        sprite,
+        script: environmentSnapshot.startupScript,
+        workspaceDir: WORKSPACE_DIR,
+        env: environmentSnapshot.plainEnvVars,
+        onOutput: (stream, data) => this.setupOutputCollector?.append(stream, data),
+      });
+    } catch (error) {
+      // Exec transport failures (not script exit codes). Finishing the
+      // collector flushes pending output and stops its timer, and the task
+      // keeps whatever output was captured before the failure.
       this.updateServerState({ startupScriptCompleted: true });
-    });
+      const outputInfo = this.setupOutputCollector?.finish();
+      const errorMessage = getErrorMessage(error);
+      this.logger.warn("Session startup script errored", {
+        fields: {
+          sessionId: this.getServerState().sessionId,
+          errorMessage,
+        },
+      });
+      this.setupReporter?.failTask(task.id, errorMessage, buildSetupScriptOutput(null, outputInfo));
+      return;
+    }
+    this.updateServerState({ startupScriptCompleted: true });
+    const outputInfo = this.setupOutputCollector?.finish();
 
     if (result.status === "failed") {
       this.logger.warn("Session startup script failed", {
@@ -289,10 +319,10 @@ export class SessionProvisionService {
     }
     switch (result.status) {
       case "completed":
-        this.setupReporter?.completeTask(task.id, result.output);
+        this.setupReporter?.completeTask(task.id, buildSetupScriptOutput(result.exitCode, outputInfo));
         break;
       case "failed":
-        this.setupReporter?.failTask(task.id, result.errorMessage, result.output);
+        this.setupReporter?.failTask(task.id, result.errorMessage, buildSetupScriptOutput(result.exitCode, outputInfo));
         break;
       case "skipped":
         this.setupReporter?.skipTask(task.id, buildSkippedSetupScriptSkipReason(this.getEnvironmentSnapshot()));
@@ -506,6 +536,19 @@ export class SessionProvisionService {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Builds the setup task's output metadata; full output lives in the setup-output store. */
+function buildSetupScriptOutput(
+  exitCode: number | null,
+  outputInfo: SetupOutputFinishResult | undefined,
+): SessionSetupTaskOutput {
+  return {
+    exitCode,
+    truncated: outputInfo?.truncated ?? false,
+    stdoutLength: outputInfo?.stdoutLength ?? 0,
+    stderrLength: outputInfo?.stderrLength ?? 0,
+  };
 }
 
 function hasRetryableFailedProvisionTask(

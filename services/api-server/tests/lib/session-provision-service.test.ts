@@ -12,6 +12,9 @@ import {
   SessionProvisionService,
   type SessionSetupTaskReporter,
 } from "../../src/modules/session-agent/services/session-provision.service";
+import type {
+  SessionSetupOutputCollector,
+} from "../../src/modules/session-agent/services/session-setup-output.service";
 
 const mockState = vi.hoisted(() => ({
   events: [] as string[],
@@ -181,6 +184,7 @@ function createService(
   envOverrides: Partial<Env> = {},
   environmentSnapshot: SessionEnvironmentSnapshot = createEnvironmentSnapshot(),
   setupReporter?: SessionSetupTaskReporter,
+  setupOutputCollector?: SessionSetupOutputCollector,
 ) {
   const updateServerState = vi.fn((partial: Partial<ServerState>) => {
     Object.assign(serverState, partial);
@@ -213,6 +217,7 @@ function createService(
       getReadOnlyTokenForRepo: mockState.getReadOnlyTokenForRepo,
     },
     setupReporter,
+    setupOutputCollector,
   });
 
   return { service, updateServerState, spritesCoordinator };
@@ -652,12 +657,107 @@ describe("SessionProvisionService startup toolchain", () => {
     expect(setupReporter.completeTask).toHaveBeenCalledWith("cloud_container");
     expect(setupReporter.completeTask).toHaveBeenCalledWith("repository");
     expect(setupReporter.completeTask).toHaveBeenCalledWith("setup_script", {
-      stdout: "setup ok",
-      stderr: "",
       exitCode: 0,
       truncated: false,
+      stdoutLength: 0,
+      stderrLength: 0,
     });
     expect(setupReporter.completeTask).toHaveBeenCalledWith("network_policy");
+  });
+
+  it("streams startup script output through the setup output collector", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const events: string[] = [];
+    const setupOutputCollector = {
+      beginRun: vi.fn(() => events.push("beginRun")),
+      append: vi.fn(() => events.push("append")),
+      finish: vi.fn(() => {
+        events.push("finish");
+        return { stdoutLength: 9, stderrLength: 7, truncated: false };
+      }),
+    };
+    mockState.execWs.mockImplementation(async (
+      command: string,
+      options: {
+        onStdout?: (data: string) => void;
+        onStderr?: (data: string) => void;
+      } = {},
+    ) => {
+      if (command.includes("timeout")) {
+        options.onStdout?.("setup ok\n");
+        options.onStderr?.("warned\n");
+      }
+      return { stdout: "setup ok", stderr: "warned", exitCode: 0 };
+    });
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({ startupScript: "echo setup" }),
+      setupReporter,
+      setupOutputCollector,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(events).toEqual(["beginRun", "append", "append", "finish"]);
+    expect(setupOutputCollector.append).toHaveBeenNthCalledWith(1, "stdout", "setup ok\n");
+    expect(setupOutputCollector.append).toHaveBeenNthCalledWith(2, "stderr", "warned\n");
+    expect(setupReporter.completeTask).toHaveBeenCalledWith("setup_script", {
+      exitCode: 0,
+      truncated: false,
+      stdoutLength: 9,
+      stderrLength: 7,
+    });
+  });
+
+  it("reports exec failures with collected output metadata and continues", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const events: string[] = [];
+    const setupOutputCollector = {
+      beginRun: vi.fn(() => events.push("beginRun")),
+      append: vi.fn(() => events.push("append")),
+      finish: vi.fn(() => {
+        events.push("finish");
+        return { stdoutLength: 8, stderrLength: 0, truncated: false };
+      }),
+    };
+    mockState.execWs.mockImplementation(async (
+      command: string,
+      options: { onStdout?: (data: string) => void } = {},
+    ) => {
+      if (command.includes("timeout")) {
+        options.onStdout?.("partial\n");
+        throw new Error("exec websocket dropped");
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({ startupScript: "echo hi" }),
+      setupReporter,
+      setupOutputCollector,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(events).toEqual(["beginRun", "append", "finish"]);
+    expect(setupReporter.failTask).toHaveBeenCalledExactlyOnceWith(
+      "setup_script",
+      "exec websocket dropped",
+      {
+        exitCode: null,
+        truncated: false,
+        stdoutLength: 8,
+        stderrLength: 0,
+      },
+    );
+    expect(serverState.startupScriptCompleted).toBe(true);
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
   });
 
   it("reports cloud container task when the sprite exists but toolchain is missing", async () => {
@@ -861,10 +961,10 @@ describe("SessionProvisionService startup toolchain", () => {
       "setup_script",
       expect.stringMatching(/^Startup script failed with exit code 1 after \d+ms$/),
       {
-        stdout: "",
-        stderr: "setup failed",
         exitCode: 1,
         truncated: false,
+        stdoutLength: 0,
+        stderrLength: 0,
       },
     );
     expect(serverState.finalNetworkPolicyApplied).toBe(true);

@@ -19,6 +19,12 @@ vi.mock("agents/react", () => ({
   }),
 }));
 
+const mockGetSessionSetupOutput = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/client-api", () => ({
+  getSessionSetupOutput: mockGetSessionSetupOutput,
+}));
+
 function renderAgent({
   expiresAt = new Date(Date.now() + 60_000).toISOString(),
   refreshWebSocketToken,
@@ -78,6 +84,8 @@ describe("useCloudflareAgent", () => {
   beforeEach(() => {
     mockAgentState.send.mockClear();
     mockAgentState.options = null;
+    mockGetSessionSetupOutput.mockReset();
+    mockGetSessionSetupOutput.mockResolvedValue(null);
     setDocumentVisibility("visible");
   });
 
@@ -315,4 +323,138 @@ describe("useCloudflareAgent", () => {
       messageId: "assistant-message-1",
     });
   });
+
+  it("accumulates setup output chunks per stream", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 1\n", offset: 0 },
+        { stream: "stderr", data: "warn 1\n", offset: 0 },
+      ]);
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 2\n", offset: 7 },
+      ]);
+    });
+
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\n",
+      stderr: "warn 1\n",
+    });
+  });
+
+  it("resets accumulated setup output when the epoch changes", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "old run\n", offset: 0 },
+      ]);
+      emitSetupOutputChunks("epoch-2", [
+        { stream: "stdout", data: "new run\n", offset: 0 },
+      ]);
+    });
+
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-2",
+      stdout: "new run\n",
+      stderr: "",
+    });
+  });
+
+  it("drops gap chunks and resyncs from the fetch endpoint", async () => {
+    mockGetSessionSetupOutput.mockResolvedValue({
+      taskId: "setup_script",
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\n",
+      stderr: "",
+      truncated: false,
+      completed: false,
+    });
+    const { result } = renderAgent();
+
+    await act(async () => {
+      // Joined mid-run: this chunk starts past the applied prefix.
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 2\n", offset: 7 },
+      ]);
+    });
+
+    expect(mockGetSessionSetupOutput).toHaveBeenCalledWith(
+      "123e4567-e89b-12d3-a456-426614174000",
+    );
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\n",
+      stderr: "",
+    });
+  });
+
+  it("dedupes streamed chunks already covered by a hydrated snapshot", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      result.current.hydrateSetupOutput({
+        taskId: "setup_script",
+        epoch: "epoch-1",
+        stdout: "line 1\nline 2\n",
+        stderr: "",
+        truncated: false,
+        completed: false,
+      });
+      // Fully covered by the snapshot — must not duplicate.
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 2\n", offset: 7 },
+      ]);
+      // Overlaps the snapshot tail — only the unseen part applies.
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 2\nline 3\n", offset: 7 },
+      ]);
+    });
+
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\nline 3\n",
+      stderr: "",
+    });
+  });
+
+  it("replaces accumulated setup output when hydrating a different epoch", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "stale\n", offset: 0 },
+      ]);
+      result.current.hydrateSetupOutput({
+        taskId: "setup_script",
+        epoch: "epoch-2",
+        stdout: "fresh\n",
+        stderr: "warn\n",
+        truncated: false,
+        completed: true,
+      });
+    });
+
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-2",
+      stdout: "fresh\n",
+      stderr: "warn\n",
+    });
+  });
 });
+
+function emitSetupOutputChunks(
+  epoch: string,
+  chunks: Array<{ stream: "stdout" | "stderr"; data: string; offset: number }>,
+): void {
+  mockAgentState.options?.onMessage({
+    data: JSON.stringify({
+      type: "setup.output.chunks",
+      taskId: "setup_script",
+      epoch,
+      chunks,
+    }),
+  });
+}

@@ -213,10 +213,12 @@
     "isBlocking": false,
     "canRetry": false,
     "output": {
-      "stdout": "sample",
-      "stderr": "sample",
       "exitCode": 1,
-      "truncated": true
+      "truncated": true,
+      "stdoutLength": 1,
+      "stderrLength": 1,
+      "stdout": "sample",
+      "stderr": "sample"
     },
     "skipReason": {
       "kind": "no_environment",
@@ -233,14 +235,14 @@
     "canRetry": true
   },
   "SessionSetupTaskOutput.autoFull": {
-    "stdout": "sample",
-    "stderr": "sample",
     "exitCode": 1,
-    "truncated": true
+    "truncated": true,
+    "stdoutLength": 1,
+    "stderrLength": 1,
+    "stdout": "sample",
+    "stderr": "sample"
   },
   "SessionSetupTaskOutput.autoMinimal": {
-    "stdout": "sample",
-    "stderr": "sample",
     "exitCode": null,
     "truncated": true
   },
@@ -296,10 +298,12 @@
     "isBlocking": false,
     "canRetry": false,
     "output": {
-      "stdout": "sample",
-      "stderr": "sample",
       "exitCode": 1,
-      "truncated": true
+      "truncated": true,
+      "stdoutLength": 1,
+      "stderrLength": 1,
+      "stdout": "sample",
+      "stderr": "sample"
     },
     "skipReason": {
       "kind": "no_environment",
@@ -529,6 +533,22 @@
       }
     ],
     "nextSessionCursor": null
+  },
+  "SessionSetupOutputResponse.autoFull": {
+    "taskId": "setup_script",
+    "epoch": "sample",
+    "stdout": "sample",
+    "stderr": "sample",
+    "truncated": true,
+    "completed": true
+  },
+  "SessionSetupOutputResponse.autoMinimal": {
+    "taskId": "setup_script",
+    "epoch": "sample",
+    "stdout": "sample",
+    "stderr": "sample",
+    "truncated": true,
+    "completed": true
   },
   "SessionWebSocketTokenResponse.autoFull": {
     "token": "sample",
@@ -889,6 +909,18 @@
     "url": "sample",
     "token": "sample"
   },
+  "ServerMessage.autoSetupOutputChunks": {
+    "type": "setup.output.chunks",
+    "taskId": "setup_script",
+    "epoch": "sample",
+    "chunks": [
+      {
+        "stream": "stdout",
+        "data": "sample",
+        "offset": 1
+      }
+    ]
+  },
   "SessionMarkReadEvent.autoFull": {
     "type": "session.mark_read",
     "messageId": "sample"
@@ -896,6 +928,40 @@
   "SessionMarkReadEvent.autoMinimal": {
     "type": "session.mark_read",
     "messageId": "sample"
+  },
+  "SetupOutputChunk.autoFull": {
+    "stream": "stdout",
+    "data": "sample",
+    "offset": 1
+  },
+  "SetupOutputChunk.autoMinimal": {
+    "stream": "stdout",
+    "data": "sample",
+    "offset": 1
+  },
+  "SetupOutputChunksEvent.autoFull": {
+    "type": "setup.output.chunks",
+    "taskId": "setup_script",
+    "epoch": "sample",
+    "chunks": [
+      {
+        "stream": "stdout",
+        "data": "sample",
+        "offset": 1
+      }
+    ]
+  },
+  "SetupOutputChunksEvent.autoMinimal": {
+    "type": "setup.output.chunks",
+    "taskId": "setup_script",
+    "epoch": "sample",
+    "chunks": [
+      {
+        "stream": "stdout",
+        "data": "sample",
+        "offset": 1
+      }
+    ]
   },
   "SyncRequestEvent.autoFull": {
     "type": "sync.request",

@@ -22,10 +22,15 @@ export const SessionSetupTaskStatus = z.enum([
 export type SessionSetupTaskStatus = z.infer<typeof SessionSetupTaskStatus>;
 
 export const SessionSetupTaskOutput = z.object({
-  stdout: z.string(),
-  stderr: z.string(),
   exitCode: z.number().int().nullable(),
+  /** True when the stored output hit the per-stream storage cap. */
   truncated: z.boolean(),
+  /** Total stored output chars per stream. Absent on runs from before output streaming. */
+  stdoutLength: z.number().int().optional(),
+  stderrLength: z.number().int().optional(),
+  /** Inline output from runs before output streaming. New runs never write these; full output is fetched on demand. */
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
 });
 export type SessionSetupTaskOutput = z.infer<typeof SessionSetupTaskOutput>;
 

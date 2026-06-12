@@ -5,6 +5,10 @@ import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { buildOptimisticUserMessage } from "@/lib/session-pending-user-message";
+import {
+  useSetupScriptOutput,
+  type SetupScriptOutputState,
+} from "@/hooks/use-setup-script-output";
 import { normalizeHost } from "@/lib/utils";
 import { isWebSocketTokenExpiredOrExpiring } from "@/lib/websocket-token";
 import type {
@@ -20,6 +24,7 @@ import type {
   ProviderConnectionState,
   SessionStatus,
   SessionSetupRun,
+  SessionSetupOutputResponse,
   SessionWebSocketTokenResponse,
   ClientMessage,
   ProviderAuthRequired,
@@ -94,6 +99,8 @@ export interface UseCloudflareAgentReturn {
   sessionErrorMessage: string | null;
   sessionErrorCode: string | null;
   sessionSetupRun: SessionSetupRun | null;
+  setupScriptOutput: SetupScriptOutputState | null;
+  hydrateSetupOutput: (snapshot: SessionSetupOutputResponse) => void;
   operationError: OperationErrorEvent | null;
   isHistoryLoading: boolean;
   hasHydratedState: boolean;
@@ -142,6 +149,11 @@ export function useCloudflareAgent({
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [sessionErrorMessage, setSessionErrorMessage] = useState<string | null>(null);
   const [sessionSetupRun, setSessionSetupRun] = useState<SessionSetupRun | null>(null);
+  const {
+    setupScriptOutput,
+    hydrateSetupOutput,
+    applySetupOutputEvent,
+  } = useSetupScriptOutput(sessionId);
   const [operationError, setOperationError] = useState<OperationErrorEvent | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasHydratedState, setHasHydratedState] = useState(false);
@@ -337,6 +349,10 @@ export function useCloudflareAgent({
       case "agent.ready":
         break;
 
+      case "setup.output.chunks":
+        applySetupOutputEvent(msg);
+        break;
+
       case "user.message":
         setOperationError(null);
         setPendingUserMessage(null);
@@ -351,7 +367,7 @@ export function useCloudflareAgent({
         onError?.(new Error(msg.message));
         break;
     }
-  }, [applyServerActiveTurn, markRead, onError, resetPendingResponse]);
+  }, [applyServerActiveTurn, applySetupOutputEvent, markRead, onError, resetPendingResponse]);
 
   // useAgent/PartySocket owns the session WebSocket and reconnect loop.
   const agent = useAgent<ClientState>({
@@ -516,6 +532,8 @@ export function useCloudflareAgent({
     sessionErrorMessage,
     sessionErrorCode: null,
     sessionSetupRun,
+    setupScriptOutput,
+    hydrateSetupOutput,
     operationError,
     isHistoryLoading,
     hasHydratedState,

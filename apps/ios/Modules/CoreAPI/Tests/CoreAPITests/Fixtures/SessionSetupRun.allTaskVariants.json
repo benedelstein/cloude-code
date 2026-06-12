@@ -31,10 +31,10 @@
       "isBlocking": false,
       "canRetry": false,
       "output": {
-        "stdout": "installed 120 packages",
-        "stderr": "",
         "exitCode": 0,
-        "truncated": false
+        "truncated": false,
+        "stdout": "installed 120 packages",
+        "stderr": ""
       },
       "skipReason": {
         "kind": "no_script",

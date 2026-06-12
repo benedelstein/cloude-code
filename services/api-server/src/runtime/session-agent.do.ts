@@ -22,6 +22,7 @@ import {
   type ServerState,
 } from "@/modules/session-agent/repositories/server-state.repository";
 import { SessionEnvironmentSnapshotRepository } from "@/modules/session-agent/repositories/session-environment-snapshot.repository";
+import { SetupOutputRepository } from "@/modules/session-agent/repositories/setup-output.repository";
 import { migrateAll } from "@/modules/session-agent/repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
 import type { UIMessageChunk } from "ai";
@@ -31,6 +32,7 @@ import type {
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
+  HandleGetSetupOutputResult,
   HandleInitResult,
   HandleUpdatePullRequestResult,
   InitSessionAgentRequest,
@@ -50,6 +52,7 @@ import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-tur
 import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
 import { SessionChatDispatchService } from "@/modules/session-agent/services/session-chat-dispatch.service";
 import { SessionSetupRunService } from "@/modules/session-agent/services/session-setup-run.service";
+import { SessionSetupOutputService } from "@/modules/session-agent/services/session-setup-output.service";
 import { SessionProviderConnectionService } from "@/modules/session-agent/services/session-provider-connection.service";
 import { SessionGitProxyService } from "@/modules/session-agent/services/session-git-proxy.service";
 import { SessionQueryService } from "@/modules/session-agent/services/session-query.service";
@@ -81,6 +84,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly serverStateRepository: ServerStateRepository;
   private readonly environmentSnapshotRepository: SessionEnvironmentSnapshotRepository;
   private readonly pendingChunkRepository: PendingChunkRepository;
+  private readonly setupOutputRepository: SetupOutputRepository;
   private readonly attachmentService: SessionAgentAttachmentProvider;
   /** In-memory ServerState mirror — written through via updateServerState() */
   private serverState: ServerState;
@@ -89,6 +93,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly provisionService: SessionProvisionService;
   private readonly chatDispatchService: SessionChatDispatchService;
   private readonly setupRunService: SessionSetupRunService;
+  private readonly setupOutputService: SessionSetupOutputService;
   private readonly providerConnectionService: SessionProviderConnectionService;
   private readonly gitProxyService: SessionGitProxyService;
   private readonly queryService: SessionQueryService;
@@ -137,6 +142,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.serverStateRepository = new ServerStateRepository(sql);
     this.environmentSnapshotRepository = new SessionEnvironmentSnapshotRepository(sql);
     this.pendingChunkRepository = new PendingChunkRepository(sql);
+    this.setupOutputRepository = new SetupOutputRepository(sql);
+    this.setupOutputService = new SessionSetupOutputService({
+      logger: this.logger,
+      repository: this.setupOutputRepository,
+      broadcastMessage: (msg) => this.broadcastMessage(msg),
+    });
     this.spritesCoordinator = new SpritesCoordinator({
       apiKey: this.env.SPRITES_API_KEY,
     });
@@ -157,6 +168,8 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.queryService = new SessionQueryService({
       messageRepository: this.messageRepository,
       latestPlanRepository: this.latestPlanRepository,
+      setupOutputRepository: this.setupOutputRepository,
+      getSetupOutputEpoch: () => this.setupOutputService.getEpoch(),
       getServerState: () => this.serverState,
       getClientState: () => this.state,
     });
@@ -202,6 +215,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       this.serverStateRepository,
       this.environmentSnapshotRepository,
       this.pendingChunkRepository,
+      this.setupOutputRepository,
     ]);
 
     // Load server state from SQLite
@@ -279,6 +293,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         failTask: (taskId, error, output) => this.setupRunService.failTask(taskId, error, output),
         skipTask: (taskId, skipReason) => this.setupRunService.skipTask(taskId, skipReason),
       },
+      setupOutputCollector: this.setupOutputService,
     });
 
     this.chatDispatchService = new SessionChatDispatchService({
@@ -700,6 +715,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
 
   handleGetPlan(): HandleGetPlanResult {
     return this.queryService.handleGetPlan();
+  }
+
+  handleGetSetupOutput(): HandleGetSetupOutputResult {
+    return this.queryService.handleGetSetupOutput();
   }
 
   async handleCreatePullRequest(): Promise<HandleCreatePullRequestResult> {

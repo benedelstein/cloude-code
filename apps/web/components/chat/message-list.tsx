@@ -6,9 +6,9 @@ import type { UIMessage } from "ai";
 import type {
   ListReposResponse,
   ProviderId,
+  SessionSetupOutputResponse,
   SessionSetupRun,
   SessionSetupTask,
-  SessionSetupTaskOutput,
   StartupScriptSetupTask,
 } from "@repo/shared";
 import {
@@ -20,7 +20,8 @@ import {
   XCircle,
 } from "lucide-react";
 import clsx from "clsx";
-import { listRepos } from "@/lib/client-api";
+import { getSessionSetupOutput, listRepos } from "@/lib/client-api";
+import type { SetupScriptOutputState } from "@/hooks/use-setup-script-output";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { useGitHubReauth } from "@/hooks/use-github-reauth";
 import { MessageItem } from "./message-item";
@@ -41,7 +42,10 @@ interface MessageListProps {
   isHistoryLoading?: boolean;
   sessionErrorMessage?: string | null;
   sessionErrorCode?: string | null;
+  sessionId?: string | null;
   sessionSetupRun?: SessionSetupRun | null;
+  setupScriptOutput?: SetupScriptOutputState | null;
+  onHydrateSetupOutput?: (snapshot: SessionSetupOutputResponse) => void;
   isResponding?: boolean;
   pendingUserMessage?: UIMessage | null;
   userAvatarUrl?: string | null;
@@ -58,7 +62,10 @@ export function MessageList({
   isHistoryLoading = false,
   sessionErrorMessage = null,
   sessionErrorCode = null,
+  sessionId = null,
   sessionSetupRun = null,
+  setupScriptOutput = null,
+  onHydrateSetupOutput,
   isResponding,
   pendingUserMessage,
   userAvatarUrl,
@@ -233,6 +240,9 @@ export function MessageList({
               {shouldRenderSetupRun && sessionSetupRun && message.id === firstAssistantMessageId && (
                 <SessionSetupRunIndicator
                   setupRun={sessionSetupRun}
+                  sessionId={sessionId}
+                  liveOutput={setupScriptOutput}
+                  onHydrateOutput={onHydrateSetupOutput}
                 />
               )}
               <MessageItem
@@ -258,6 +268,9 @@ export function MessageList({
           {shouldRenderSetupRun && sessionSetupRun && firstAssistantMessageId === null && (
             <SessionSetupRunIndicator
               setupRun={sessionSetupRun}
+              sessionId={sessionId}
+              liveOutput={setupScriptOutput}
+              onHydrateOutput={onHydrateSetupOutput}
             />
           )}
           <PersistentWorkingCloud active={isPersistentWorkingCloudActive} />
@@ -313,8 +326,14 @@ function findLastMessageIndex(messages: UIMessage[], role: UIMessage["role"]) {
 
 function SessionSetupRunIndicator({
   setupRun,
+  sessionId,
+  liveOutput,
+  onHydrateOutput,
 }: {
   setupRun: SessionSetupRun;
+  sessionId: string | null;
+  liveOutput: SetupScriptOutputState | null;
+  onHydrateOutput?: (snapshot: SessionSetupOutputResponse) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(setupRun.status !== "completed");
 
@@ -353,6 +372,9 @@ function SessionSetupRunIndicator({
               <SessionSetupTaskRow
                 key={task.id}
                 task={task}
+                sessionId={sessionId}
+                liveOutput={liveOutput}
+                onHydrateOutput={onHydrateOutput}
               />
             ))}
           </div>
@@ -364,19 +386,81 @@ function SessionSetupRunIndicator({
 
 function SessionSetupTaskRow({
   task,
+  sessionId,
+  liveOutput,
+  onHydrateOutput,
 }: {
   task: SessionSetupTask;
+  sessionId: string | null;
+  liveOutput: SetupScriptOutputState | null;
+  onHydrateOutput?: (snapshot: SessionSetupOutputResponse) => void;
 }) {
   const [isOutputOpen, setIsOutputOpen] = useState(false);
+  const [fetchedOutput, setFetchedOutput] = useState<SessionSetupOutputResponse | null>(null);
+  const [isOutputLoading, setIsOutputLoading] = useState(false);
   const setupScriptTask = getSetupScriptTask(task);
+  const isScriptRunning = setupScriptTask?.status === "running";
+
+  const taskOutput = setupScriptTask?.output ?? null;
+  // Inline output only exists on runs from before output streaming.
+  const hasLegacyOutput = Boolean(taskOutput && (taskOutput.stdout || taskOutput.stderr));
+  const hasStoredOutput =
+    (taskOutput?.stdoutLength ?? 0) > 0 || (taskOutput?.stderrLength ?? 0) > 0;
+  const hasLiveOutput =
+    liveOutput !== null && (liveOutput.stdout.length > 0 || liveOutput.stderr.length > 0);
+  // Terminal tasks repaired after a server restart can have stored output but
+  // no metadata; offer the expand-and-fetch path for those too.
+  const mayHaveUnknownOutput = taskOutput === null
+    && (setupScriptTask?.status === "completed" || setupScriptTask?.status === "failed");
   const hasOutput =
     setupScriptTask !== null
-    && setupScriptTask.output !== null
-    && (setupScriptTask.output.stdout || setupScriptTask.output.stderr);
+    && (isScriptRunning || hasLiveOutput || hasStoredOutput || hasLegacyOutput || mayHaveUnknownOutput);
 
+  // Auto-open the output while the script runs and hydrate any output
+  // produced before this client connected; live chunks fill in the rest.
   useEffect(() => {
-    setIsOutputOpen(false);
-  }, [task.id]);
+    if (!isScriptRunning) { return; }
+    setIsOutputOpen(true);
+    if (!sessionId || !onHydrateOutput) { return; }
+    let cancelled = false;
+    getSessionSetupOutput(sessionId)
+      .then((snapshot) => {
+        if (!cancelled && snapshot) {
+          onHydrateOutput(snapshot);
+        }
+      })
+      .catch((error) => console.warn("Failed to hydrate setup output", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [isScriptRunning, sessionId, onHydrateOutput]);
+
+  const toggleOutput = () => {
+    const nextOpen = !isOutputOpen;
+    setIsOutputOpen(nextOpen);
+    const needsFetch = nextOpen
+      && !isScriptRunning
+      && !hasLiveOutput
+      && !hasLegacyOutput
+      && !fetchedOutput
+      && (hasStoredOutput || mayHaveUnknownOutput)
+      && sessionId !== null;
+    if (needsFetch) {
+      setIsOutputLoading(true);
+      getSessionSetupOutput(sessionId)
+        .then((snapshot) => setFetchedOutput(snapshot))
+        .catch((error) => console.warn("Failed to fetch setup output", error))
+        .finally(() => setIsOutputLoading(false));
+    }
+  };
+
+  const displayOutput = hasLiveOutput && liveOutput
+    ? { stdout: liveOutput.stdout, stderr: liveOutput.stderr }
+    : fetchedOutput
+      ? { stdout: fetchedOutput.stdout, stderr: fetchedOutput.stderr }
+      : hasLegacyOutput && taskOutput
+        ? { stdout: taskOutput.stdout ?? "", stderr: taskOutput.stderr ?? "" }
+        : null;
 
   const taskLabel = getSetupTaskLabel(task);
 
@@ -389,7 +473,7 @@ function SessionSetupTaskRow({
             {hasOutput ? (
               <button
                 type="button"
-                onClick={() => setIsOutputOpen((current) => !current)}
+                onClick={toggleOutput}
                 className="inline-flex min-w-0 items-center gap-1 text-[13px] text-foreground-secondary transition-colors hover:text-foreground"
                 aria-expanded={isOutputOpen}
               >
@@ -413,12 +497,17 @@ function SessionSetupTaskRow({
           {setupScriptTask?.status === "skipped" && setupScriptTask.skipReason && (
             <SetupScriptSkippedReason skipReason={setupScriptTask.skipReason} />
           )}
-          {hasOutput && setupScriptTask?.output && (
+          {hasOutput && (
             <div
               className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOutputOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
             >
               <div className="min-h-0 overflow-hidden">
-                <SessionSetupOutput output={setupScriptTask.output} />
+                <SessionSetupOutput
+                  output={displayOutput}
+                  exitCode={taskOutput?.exitCode ?? null}
+                  isLoading={isOutputLoading}
+                  isRunning={isScriptRunning}
+                />
               </div>
             </div>
           )}
@@ -483,31 +572,75 @@ function SetupTaskStatusIcon({ task }: { task: SessionSetupTask }) {
   }
 }
 
-function SessionSetupOutput({ output }: { output: SessionSetupTaskOutput }) {
+function SessionSetupOutput({
+  output,
+  exitCode,
+  isLoading,
+  isRunning,
+}: {
+  output: { stdout: string; stderr: string } | null;
+  exitCode: number | null;
+  isLoading: boolean;
+  isRunning: boolean;
+}) {
   return (
     <div className="my-1 overflow-hidden rounded-md border border-border bg-background text-xs">
-      {output.stdout && (
-        <SetupOutputBlock label="stdout" value={output.stdout} />
+      {isLoading && (
+        <div className="space-y-1.5 px-3 py-2" role="status" aria-label="Loading setup output">
+          <Skeleton className="h-2.5 w-3/4 rounded-full bg-muted" />
+          <Skeleton className="h-2.5 w-1/2 rounded-full bg-muted" />
+          <Skeleton className="h-2.5 w-2/3 rounded-full bg-muted" />
+        </div>
       )}
-      {output.stderr && (
-        <SetupOutputBlock label="stderr" value={output.stderr} />
+      {!isLoading && !output && (
+        <div className="px-3 py-2 font-mono text-foreground-tertiary">
+          {isRunning ? "Waiting for output..." : "No output"}
+        </div>
       )}
-      {output.exitCode !== null && (
+      {output?.stdout && (
+        <SetupOutputBlock label="stdout" value={output.stdout} followTail={isRunning} />
+      )}
+      {output?.stderr && (
+        <SetupOutputBlock label="stderr" value={output.stderr} followTail={isRunning} />
+      )}
+      {exitCode !== null && (
         <div className="border-t border-border bg-muted/30 px-3 py-1.5 font-mono text-foreground-secondary">
-          exit {output.exitCode}
+          exit {exitCode}
         </div>
       )}
     </div>
   );
 }
 
-function SetupOutputBlock({ label, value }: { label: string; value: string }) {
+function SetupOutputBlock({
+  label,
+  value,
+  followTail = false,
+}: {
+  label: string;
+  value: string;
+  followTail?: boolean;
+}) {
+  const preRef = useRef<HTMLPreElement>(null);
+
+  // Keep the live tail pinned to the newest output while the script runs.
+  useEffect(() => {
+    if (!followTail) { return; }
+    const pre = preRef.current;
+    if (pre) {
+      pre.scrollTop = pre.scrollHeight;
+    }
+  }, [followTail, value]);
+
   return (
     <div className="border-b border-border last:border-b-0">
       <div className="border-b border-border bg-muted/30 px-3 py-1.5 font-mono text-foreground-secondary">
         {label.toUpperCase()}
       </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word px-3 py-2 font-mono leading-relaxed text-foreground-secondary">
+      <pre
+        ref={preRef}
+        className="max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word px-3 py-2 font-mono leading-relaxed text-foreground-secondary"
+      >
         {value}
       </pre>
     </div>

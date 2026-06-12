@@ -299,6 +299,14 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(SessionRepoGroup.self, key: "SessionRepoGroup.autoMinimal")
     }
 
+    @Test func sessionSetupOutputResponseAutoFull() throws {
+        try assertAutoRoundTrip(SessionSetupOutputResponse.self, key: "SessionSetupOutputResponse.autoFull")
+    }
+
+    @Test func sessionSetupOutputResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(SessionSetupOutputResponse.self, key: "SessionSetupOutputResponse.autoMinimal")
+    }
+
     @Test func sessionWebSocketTokenResponseAutoFull() throws {
         try assertAutoRoundTrip(SessionWebSocketTokenResponse.self, key: "SessionWebSocketTokenResponse.autoFull")
     }
@@ -455,12 +463,32 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoEditorReady")
     }
 
+    @Test func serverMessageAutoSetupOutputChunks() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoSetupOutputChunks")
+    }
+
     @Test func sessionMarkReadEventAutoFull() throws {
         try assertAutoRoundTrip(SessionMarkReadEvent.self, key: "SessionMarkReadEvent.autoFull")
     }
 
     @Test func sessionMarkReadEventAutoMinimal() throws {
         try assertAutoRoundTrip(SessionMarkReadEvent.self, key: "SessionMarkReadEvent.autoMinimal")
+    }
+
+    @Test func setupOutputChunkAutoFull() throws {
+        try assertAutoRoundTrip(SetupOutputChunk.self, key: "SetupOutputChunk.autoFull")
+    }
+
+    @Test func setupOutputChunkAutoMinimal() throws {
+        try assertAutoRoundTrip(SetupOutputChunk.self, key: "SetupOutputChunk.autoMinimal")
+    }
+
+    @Test func setupOutputChunksEventAutoFull() throws {
+        try assertAutoRoundTrip(SetupOutputChunksEvent.self, key: "SetupOutputChunksEvent.autoFull")
+    }
+
+    @Test func setupOutputChunksEventAutoMinimal() throws {
+        try assertAutoRoundTrip(SetupOutputChunksEvent.self, key: "SetupOutputChunksEvent.autoMinimal")
     }
 
     @Test func syncRequestEventAutoFull() throws {

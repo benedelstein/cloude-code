@@ -14,6 +14,7 @@ import type {
   ArchiveSessionResponse,
   SessionInfoResponse,
   SessionPlanResponse,
+  SessionSetupOutputResponse,
   ListSessionsResponse,
   SessionRepoGroup,
   SessionSummary,
@@ -324,6 +325,19 @@ export async function createVoiceTranscriptionToken(): Promise<VoiceTranscriptio
 export async function getSessionPlan(sessionId: string): Promise<SessionPlanResponse | null> {
   try {
     return await apiFetch(`/sessions/${sessionId}/plan`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function getSessionSetupOutput(
+  sessionId: string,
+): Promise<SessionSetupOutputResponse | null> {
+  try {
+    return await apiFetch(`/sessions/${sessionId}/setup-output`, { cache: "no-store" });
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null;

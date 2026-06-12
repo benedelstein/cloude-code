@@ -8,6 +8,7 @@ import type {
   Result,
   SessionInfoResponse,
   SessionPlanResponse,
+  SessionSetupOutputResponse,
   SessionEnvironmentSnapshot,
 } from "@repo/shared";
 import type { UIMessage, UIMessageChunk } from "ai";
@@ -38,6 +39,7 @@ export type SessionAgentRpcError =
   | { code: "SESSION_NOT_INITIALIZED"; message: string }
   | { code: "ALREADY_INITIALIZED"; message: string; status: 400 }
   | { code: "PLAN_NOT_FOUND"; message: string }
+  | { code: "SETUP_OUTPUT_NOT_FOUND"; message: string }
   | { code: "PULL_REQUEST_NOT_FOUND"; message: string }
   | { code: "BRANCH_NOT_PUSHED"; message: string; status: 400 }
   | { code: "PULL_REQUEST_ALREADY_EXISTS"; message: string; status: 409; url: string }
@@ -50,6 +52,10 @@ export type HandleInitResult = Result<void, Extract<SessionAgentRpcError, { code
 export type HandleGetSessionResult = Result<SessionInfoResponse, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
 export type HandleGetMessagesResult = Result<UIMessage[], Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
 export type HandleGetPlanResult = Result<SessionPlanResponse, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" | "PLAN_NOT_FOUND" }>>;
+export type HandleGetSetupOutputResult = Result<
+  SessionSetupOutputResponse,
+  Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" | "SETUP_OUTPUT_NOT_FOUND" }>
+>;
 export type HandleDeleteSessionResult = Result<void, Extract<SessionAgentRpcError, { code: "SESSION_NOT_INITIALIZED" }>>;
 export type HandleCreatePullRequestResult = Result<
   PullRequestResponse,
@@ -81,6 +87,7 @@ export interface SessionAgentRpc {
   handleGetSession(): HandleGetSessionResult;
   handleGetMessages(): HandleGetMessagesResult;
   handleGetPlan(): HandleGetPlanResult;
+  handleGetSetupOutput(): HandleGetSetupOutputResult;
   handleDeleteSession(): Promise<HandleDeleteSessionResult>;
   handleCreatePullRequest(): Promise<HandleCreatePullRequestResult>;
   updatePullRequest(data: UpdatePullRequestRequest): Promise<HandleUpdatePullRequestResult>;

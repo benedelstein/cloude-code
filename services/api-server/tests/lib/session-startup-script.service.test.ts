@@ -73,12 +73,7 @@ describe("SessionStartupScriptService", () => {
     })).resolves.toEqual({
       status: "failed",
       errorMessage: "Startup script failed with exit code -1 after 6500ms",
-      output: {
-        stdout: "install output",
-        stderr: "",
-        exitCode: -1,
-        truncated: false,
-      },
+      exitCode: -1,
       durationMs: 6_500,
     });
 
@@ -86,9 +81,45 @@ describe("SessionStartupScriptService", () => {
       fields: {
         exitCode: -1,
         durationMs: 6_500,
-        stdout: "install output",
-        stderr: "",
+        stdoutTail: "install output",
+        stderrTail: "",
       },
     });
+  });
+
+  it("forwards raw output chunks to onOutput", async () => {
+    const { logger } = createLogger();
+    const sprite = {
+      execWs: vi.fn(async (
+        _command: string,
+        options: {
+          onStdout?: (data: string) => void;
+          onStderr?: (data: string) => void;
+        },
+      ) => {
+        options.onStdout?.("line 1\n");
+        options.onStderr?.("warn 1\n");
+        options.onStdout?.("line 2\n");
+        return { stdout: "line 1\nline 2", stderr: "warn 1", exitCode: 0 };
+      }),
+    } as unknown as WorkersSpriteClient;
+
+    const service = new SessionStartupScriptService(logger);
+    const onOutput = vi.fn();
+
+    const result = await service.run({
+      sprite,
+      script: "pnpm install",
+      workspaceDir: "/workspace",
+      env: {},
+      onOutput,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(onOutput.mock.calls).toEqual([
+      ["stdout", "line 1\n"],
+      ["stderr", "warn 1\n"],
+      ["stdout", "line 2\n"],
+    ]);
   });
 });

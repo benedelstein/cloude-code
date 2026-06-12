@@ -143,6 +143,24 @@ export const EditorReadyEvent = z.object({
 });
 export type EditorReadyEvent = z.infer<typeof EditorReadyEvent>;
 
+// Live setup-script output (batched stdout/stderr, broadcast while the script runs)
+export const SetupOutputChunk = z.object({
+  stream: z.enum(["stdout", "stderr"]),
+  data: z.string(),
+  /** Char offset of this chunk within its stream; lets clients dedup against a fetched snapshot. */
+  offset: z.number().int(),
+});
+export type SetupOutputChunk = z.infer<typeof SetupOutputChunk>;
+
+export const SetupOutputChunksEvent = z.object({
+  type: z.literal("setup.output.chunks"),
+  taskId: z.literal("setup_script"),
+  /** Unique per script run; clients reset accumulated output when it changes. */
+  epoch: z.string(),
+  chunks: z.array(SetupOutputChunk),
+});
+export type SetupOutputChunksEvent = z.infer<typeof SetupOutputChunksEvent>;
+
 export const ServerMessage = z.discriminatedUnion("type", [
   ConnectedEvent,
   SyncResponseEvent,
@@ -152,5 +170,6 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentReadyEvent,
   UserMessageEvent,
   EditorReadyEvent,
+  SetupOutputChunksEvent,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
