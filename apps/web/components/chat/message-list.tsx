@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { getSessionSetupOutput, listRepos } from "@/lib/client-api";
-import type { SetupScriptOutputState } from "@/hooks/use-cloudflare-agent";
+import type { SetupScriptOutputState } from "@/hooks/use-setup-script-output";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { useGitHubReauth } from "@/hooks/use-github-reauth";
 import { MessageItem } from "./message-item";
