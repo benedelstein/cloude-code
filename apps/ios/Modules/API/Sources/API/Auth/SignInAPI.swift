@@ -15,12 +15,12 @@ private struct GetGitHubAuthURL: APIRequest {
 }
 
 private struct PostToken: APIRequest {
-    typealias Body = CoreAPI.TokenRequest
-    typealias Response = CoreAPI.TokenResponse
+    typealias Body = CoreAPI.NativeTokenRequest
+    typealias Response = CoreAPI.NativeTokenResponse
 
-    var body: CoreAPI.TokenRequest?
+    var body: CoreAPI.NativeTokenRequest?
 
-    var path: String { "auth/token" }
+    var path: String { "auth/native/token" }
     var method: HTTPMethod { .post }
     // No auth header: this is how a session is first obtained.
 }
@@ -62,27 +62,11 @@ public struct SignInAPI: SignInProviding {
     }
 
     public func exchangeCode(code: String, state: String) async throws -> SignInResult {
-        let response = try await client.fetch(PostToken(
-            body: .init(code: code, state: state, client: .native)
-        ))
-        // The native fields are optional on the shared TokenResponse (web
-        // omits them); for a native exchange their absence is a server bug —
-        // fail rather than fabricate a session.
-        guard
-            let accessExpiryString = response.accessTokenExpiresAt,
-            let refreshToken = response.refreshToken,
-            let refreshExpiryString = response.refreshTokenExpiresAt,
-            let accessExpiry = ISO8601.date(from: accessExpiryString),
-            let refreshExpiry = ISO8601.date(from: refreshExpiryString)
-        else {
-            throw APIError.decodingFailed(SignInResponseError.missingNativeTokenFields)
-        }
-        let session = Session(
-            accessToken: response.token,
-            accessTokenExpiresAt: accessExpiry,
-            refreshToken: refreshToken,
-            refreshTokenExpiresAt: refreshExpiry,
-            userId: response.user.id
+        let response = try await client.fetch(PostToken(body: .init(code: code, state: state)))
+        let session = try Session(
+            nativeAccessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+            refreshTokenExpiresAt: response.refreshTokenExpiresAt
         )
         return SignInResult(session: session, user: User(from: response.user))
     }
@@ -90,14 +74,11 @@ public struct SignInAPI: SignInProviding {
 
 private enum SignInResponseError: Error, CustomStringConvertible {
     case invalidAuthorizeURL
-    case missingNativeTokenFields
 
     var description: String {
         switch self {
         case .invalidAuthorizeURL:
             return "Unparseable authorize URL in /auth/github response"
-        case .missingNativeTokenFields:
-            return "Missing or unparseable native token fields in /auth/token response"
         }
     }
 }

@@ -1,5 +1,6 @@
 export interface GitHubUserRecord {
   id: string;
+  githubId: number;
   githubLogin: string;
   githubName: string | null;
   githubAvatarUrl: string | null;
@@ -7,6 +8,7 @@ export interface GitHubUserRecord {
 
 interface GitHubUserRow {
   id: string;
+  github_id: number;
   github_login: string;
   github_name: string | null;
   github_avatar_url: string | null;
@@ -49,7 +51,7 @@ export class UserRepository {
 
   async getByGitHubId(githubId: number): Promise<GitHubUserRecord | null> {
     const row = await this.database.prepare(
-      `SELECT id, github_login, github_name, github_avatar_url FROM users WHERE github_id = ?`,
+      `SELECT id, github_id, github_login, github_name, github_avatar_url FROM users WHERE github_id = ?`,
     )
       .bind(githubId)
       .first<GitHubUserRow>();
@@ -60,6 +62,27 @@ export class UserRepository {
 
     return {
       id: row.id,
+      githubId: row.github_id,
+      githubLogin: row.github_login,
+      githubName: row.github_name,
+      githubAvatarUrl: row.github_avatar_url,
+    };
+  }
+
+  async getById(userId: string): Promise<GitHubUserRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT id, github_id, github_login, github_name, github_avatar_url FROM users WHERE id = ?`,
+    )
+      .bind(userId)
+      .first<GitHubUserRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      githubId: row.github_id,
       githubLogin: row.github_login,
       githubName: row.github_name,
       githubAvatarUrl: row.github_avatar_url,

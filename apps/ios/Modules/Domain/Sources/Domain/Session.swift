@@ -4,8 +4,8 @@ import Foundation
 /// access token with the rotating refresh token that renews it. Issued,
 /// rotated, and revoked together, so they persist as one atomic value.
 ///
-/// The access token is opaque — staleness comes only from
-/// `accessTokenExpiresAt`, never from decoding token contents.
+/// The native access token is a server-verified JWT. The client decodes only
+/// `sub` and `exp` for cache lookup and refresh timing.
 public struct Session: Sendable, Equatable, Codable {
     public let accessToken: String
     public let accessTokenExpiresAt: Date

@@ -234,37 +234,24 @@ export class UserSessionRepository {
   }
 
   /**
-   * Create a native refresh-session family plus its initial short-lived
-   * access-token row, linked by refresh_session_id, in one batch.
+   * Create a native refresh-session family. Native access tokens are stateless
+   * JWTs, so only the rotating refresh token family is stored.
    */
-  async createRefreshSessionWithAccessToken(params: {
+  async createRefreshSession(params: {
     refreshSessionId: string;
     userId: string;
     refreshTokenHash: string;
     refreshExpiresAt: string;
-    accessToken: string;
-    accessTokenExpiresAt: string;
   }): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.refreshSessionId,
-        params.userId,
-        params.refreshTokenHash,
-        params.refreshExpiresAt,
-      ),
-      this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.accessToken,
-        params.userId,
-        params.accessTokenExpiresAt,
-        params.refreshSessionId,
-      ),
-    ]);
+    await this.database.prepare(
+      `INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
+       VALUES (?, ?, ?, ?)`,
+    ).bind(
+      params.refreshSessionId,
+      params.userId,
+      params.refreshTokenHash,
+      params.refreshExpiresAt,
+    ).run();
   }
 
   /**
@@ -299,8 +286,9 @@ export class UserSessionRepository {
 
   /**
    * Rotate a refresh-session family: swap in the new refresh token hash
-   * (keeping the old one for grace-window retries), extend the sliding
-   * refresh expiry, and replace the family's access-token row.
+   * (keeping the old one for grace-window retries) and extend the sliding
+   * refresh expiry. Native access tokens are stateless JWTs and are minted
+   * after this write succeeds.
    */
   async rotateRefreshSession(params: {
     refreshSessionId: string;
@@ -308,40 +296,24 @@ export class UserSessionRepository {
     newRefreshTokenHash: string;
     previousRefreshTokenHash: string;
     refreshExpiresAt: string;
-    accessToken: string;
-    accessTokenExpiresAt: string;
   }): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `UPDATE auth_refresh_sessions
-         SET refresh_token_hash = ?,
-             previous_refresh_token_hash = ?,
-             previous_rotated_at = datetime('now'),
-             refresh_expires_at = ?,
-             updated_at = datetime('now')
-         WHERE id = ?`,
-      ).bind(
-        params.newRefreshTokenHash,
-        params.previousRefreshTokenHash,
-        params.refreshExpiresAt,
-        params.refreshSessionId,
-      ),
-      this.database.prepare(
-        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
-      ).bind(params.refreshSessionId),
-      this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.accessToken,
-        params.userId,
-        params.accessTokenExpiresAt,
-        params.refreshSessionId,
-      ),
-    ]);
+    await this.database.prepare(
+      `UPDATE auth_refresh_sessions
+       SET refresh_token_hash = ?,
+           previous_refresh_token_hash = ?,
+           previous_rotated_at = datetime('now'),
+           refresh_expires_at = ?,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+    ).bind(
+      params.newRefreshTokenHash,
+      params.previousRefreshTokenHash,
+      params.refreshExpiresAt,
+      params.refreshSessionId,
+    ).run();
   }
 
-  /** Revoke a whole session family: refresh row + all linked access rows. */
+  /** Revoke a whole session family plus any legacy linked access rows. */
   async revokeRefreshSession(refreshSessionId: string): Promise<void> {
     await this.database.batch([
       this.database.prepare(
@@ -380,6 +352,7 @@ export class UserSessionRepository {
   async revokeAllSessionsForUser(userId: string): Promise<void> {
     await this.database.batch([
       this.database.prepare(`DELETE FROM auth_sessions WHERE user_id = ?`).bind(userId),
+      this.database.prepare(`DELETE FROM auth_refresh_sessions WHERE user_id = ?`).bind(userId),
       this.database.prepare(`DELETE FROM user_github_credentials WHERE user_id = ?`).bind(userId),
     ]);
   }
@@ -393,6 +366,9 @@ export class UserSessionRepository {
     await this.database.batch([
       this.database.prepare(
         `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+      ).bind(githubId),
+      this.database.prepare(
+        `DELETE FROM auth_refresh_sessions WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
       ).bind(githubId),
       this.database.prepare(
         `DELETE FROM user_github_credentials WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,

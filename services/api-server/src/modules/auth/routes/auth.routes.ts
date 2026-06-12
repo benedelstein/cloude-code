@@ -10,7 +10,9 @@ import {
   postGithubReauthStartRoute,
   postGithubReauthTokenRoute,
   postTokenRoute,
-  postRefreshRoute,
+  postNativeTokenRoute,
+  postNativeRefreshRoute,
+  postNativeLogoutRoute,
   getMeRoute,
   postLogoutRoute,
 } from "./auth.schema";
@@ -98,12 +100,11 @@ export function createAuthRoutes(
    * @returns The session token and user info
    */
   authRoutes.openapi(postTokenRoute, async (c) => {
-    const { code, state, client } = c.req.valid("json");
+    const { code, state } = c.req.valid("json");
     const authService = createAuthService(c.env);
     const result = await authService.exchangeGitHubAuthorizationCode({
       code,
       state,
-      client,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
@@ -118,10 +119,33 @@ export function createAuthRoutes(
   });
 
   /**
-   * POST /auth/refresh — rotate a native access/refresh token pair.
+   * POST /auth/native/token — exchange code for a native JWT access token and
+   * opaque rotating refresh token.
+   */
+  authRoutes.openapi(postNativeTokenRoute, async (c) => {
+    const { code, state } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    const result = await authService.exchangeNativeGitHubAuthorizationCode({
+      code,
+      state,
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: result.error.message },
+        result.error.status === 500 ? 500 : 400,
+      );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/native/refresh — rotate a native access/refresh token pair.
    * No auth middleware: the refresh token in the body is the credential.
    */
-  authRoutes.openapi(postRefreshRoute, async (c) => {
+  authRoutes.openapi(postNativeRefreshRoute, async (c) => {
     const { refreshToken } = c.req.valid("json");
     const authService = createAuthService(c.env);
     const result = await authService.refreshSession(refreshToken);
@@ -130,6 +154,16 @@ export function createAuthRoutes(
     }
 
     return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/native/logout — revoke the native refresh-token family.
+   * No auth middleware: the refresh token in the body is the credential.
+   */
+  authRoutes.openapi(postNativeLogoutRoute, async (c) => {
+    const { refreshToken } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    return c.json(await authService.logoutNative(refreshToken), 200);
   });
 
   authRoutes.use("/github/reauth/*", deps.authMiddleware);

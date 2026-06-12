@@ -64,7 +64,7 @@ actor TokenCoordinator: AuthTokenProviding {
         if let inFlight = refreshTask { return try await inFlight.value } // idempotent
         guard let current = session else { throw APIError.unauthenticated }
         let task = Task { [refresher] in
-            try await refresher.refresh(refreshToken: current.refreshToken, userId: current.userId)
+            try await refresher.refresh(refreshToken: current.refreshToken)
         }
         refreshTask = task
         defer { refreshTask = nil }
