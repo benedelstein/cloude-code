@@ -26,6 +26,7 @@
     "agents": "catalog:",
     "ai": "catalog:",
     "hono": "^4.6.0",
+    "jose": "^6.2.3",
     "octokit": "catalog:",
     "zod": "catalog:"
   },

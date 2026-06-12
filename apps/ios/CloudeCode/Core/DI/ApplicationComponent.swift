@@ -39,9 +39,9 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
-    var signInAPI: any SignInProviding {
+    var unauthenticatedAuthAPI: any UnauthenticatedAuthAPIProviding {
         shared {
-            SignInAPI(client: apiClient)
+            UnauthenticatedAuthAPI(client: apiClient)
         }
     }
 
@@ -49,7 +49,8 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         shared {
             TokenCoordinator(
                 persistence: KeychainSessionPersistence(appGroup: appGroupIdentifier),
-                refresher: SessionRefreshAPI(client: apiClient) // no provider — no cycle
+                refresher: unauthenticatedAuthAPI,
+                revoker: unauthenticatedAuthAPI
             )
         }
     }
@@ -71,7 +72,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
             SessionStore(
                 coordinator: tokenCoordinator,
                 userStore: userStore,
-                signInAPI: signInAPI,
+                signInAPI: unauthenticatedAuthAPI,
                 oauthRedirectURI: oauthRedirectURI
             )
         }

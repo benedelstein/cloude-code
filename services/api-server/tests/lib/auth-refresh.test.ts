@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { AuthService, type AuthGitHubClient } from "../../src/modules/auth/services/auth.service";
+import { looksLikeJwt } from "../../src/modules/auth/services/native-access-token.service";
 import { sha256 } from "../../src/shared/utils/crypto";
 import type { Env } from "../../src/shared/types";
 
 const TOKEN_ENCRYPTION_KEY = btoa("12345678901234567890123456789012");
+const NATIVE_ACCESS_TOKEN_SIGNING_KEY = "native-access-token-test-signing-key";
 
 interface OauthStateRow {
   state: string;
@@ -23,10 +25,9 @@ interface UserRow {
 }
 
 interface AuthSessionRow {
-  token: string;
+  token_hash: string;
   user_id: string;
   expires_at: string;
-  refresh_session_id: string | null;
 }
 
 interface RefreshSessionRow {
@@ -105,6 +106,14 @@ class MockD1 {
       this.oauthStates.delete(state);
       return row;
     }
+    if (sql.includes("FROM oauth_states")) {
+      const [state] = args as [string];
+      const row = this.oauthStates.get(state);
+      if (!row || new Date(row.expires_at).getTime() <= Date.now()) {
+        return null;
+      }
+      return row;
+    }
     if (sql.includes("INSERT INTO users")) {
       const [id, githubId, login, name, avatarUrl] = args as [
         string, number, string, string | null, string | null,
@@ -122,6 +131,10 @@ class MockD1 {
     if (sql.includes("FROM users WHERE github_id")) {
       const [githubId] = args as [number];
       return this.users.get(githubId) ?? null;
+    }
+    if (sql.includes("FROM users WHERE id")) {
+      const [userId] = args as [string];
+      return [...this.users.values()].find((user) => user.id === userId) ?? null;
     }
     if (sql.includes("INSERT INTO user_github_credentials")) {
       const [userId] = args as [string];
@@ -176,34 +189,20 @@ class MockD1 {
       return null;
     }
     if (sql.includes("INSERT INTO auth_sessions")) {
-      const [token, userId, expiresAt, refreshSessionId] = args as [
-        string, string, string, string | undefined,
-      ];
-      this.authSessions.set(token, {
-        token,
+      const [tokenHash, userId, expiresAt] = args as [string, string, string];
+      this.authSessions.set(tokenHash, {
+        token_hash: tokenHash,
         user_id: userId,
         expires_at: expiresAt,
-        refresh_session_id: refreshSessionId ?? null,
       });
       return null;
     }
-    if (sql.includes("SELECT refresh_session_id FROM auth_sessions")) {
-      const [token] = args as [string];
-      const row = this.authSessions.get(token);
-      return row ? { refresh_session_id: row.refresh_session_id } : null;
-    }
-    if (sql.includes("DELETE FROM auth_sessions WHERE refresh_session_id")) {
-      const [refreshSessionId] = args as [string];
-      for (const [token, row] of this.authSessions) {
-        if (row.refresh_session_id === refreshSessionId) {
-          this.authSessions.delete(token);
-        }
-      }
-      return null;
-    }
-    if (sql.includes("DELETE FROM auth_sessions WHERE token")) {
-      const [token] = args as [string];
-      this.authSessions.delete(token);
+    if (
+      sql.includes("DELETE FROM auth_sessions")
+      && sql.includes("token_hash = ?")
+    ) {
+      const [tokenHash] = args as [string];
+      this.authSessions.delete(tokenHash);
       return null;
     }
     throw new Error(`MockD1: unhandled SQL: ${sql}`);
@@ -230,29 +229,34 @@ function createService(db: MockD1): AuthService {
     env: {
       DB: db.asD1(),
       TOKEN_ENCRYPTION_KEY,
+      NATIVE_ACCESS_TOKEN_SIGNING_KEY,
+      WORKER_URL: "https://api.test",
       WEB_ORIGIN: "https://web.test",
     } as Env,
     github: createGitHubClient(),
   });
 }
 
-function seedOauthState(db: MockD1, state: string): void {
+function seedOauthState(
+  db: MockD1,
+  state: string,
+  redirectOrigin = "https://web.test",
+): void {
   db.oauthStates.set(state, {
     state,
     expires_at: "2099-01-01T00:00:00.000Z",
     code_verifier: null,
-    redirect_origin: "https://web.test",
+    redirect_origin: redirectOrigin,
     purpose: "github_login",
     user_id: null,
   });
 }
 
 async function exchangeNative(db: MockD1, service: AuthService) {
-  seedOauthState(db, "state-native");
-  const result = await service.exchangeGitHubAuthorizationCode({
+  seedOauthState(db, "state-native", "cloudecode-dev://auth/callback");
+  const result = await service.exchangeNativeGitHubAuthorizationCode({
     code: "code-1",
     state: "state-native",
-    client: "native",
     requestId: null,
     userAgent: null,
   });
@@ -284,39 +288,69 @@ describe("AuthService native token refresh", () => {
       "token",
       "user",
     ]);
-    const session = db.authSessions.get(result.value.token);
-    expect(session?.refresh_session_id).toBeNull();
+    const sessionTokenHash = await sha256(result.value.token);
+    const session = db.authSessions.get(sessionTokenHash);
+    expect(sessionTokenHash).not.toBe(result.value.token);
     expect(db.refreshSessions.size).toBe(0);
     // ~30-day expiry
     const ttlMs = new Date(session!.expires_at).getTime() - Date.now();
     expect(ttlMs).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
   });
 
-  it("issues an access/refresh pair for native clients, storing only the hash", async () => {
+  it("issues a JWT access token and stores only the refresh hash for native clients", async () => {
     const db = new MockD1();
     const service = createService(db);
 
     const value = await exchangeNative(db, service);
 
-    expect(value.accessTokenExpiresAt).toBeDefined();
+    expect(looksLikeJwt(value.accessToken)).toBe(true);
     expect(value.refreshToken).toBeDefined();
     expect(value.refreshTokenExpiresAt).toBeDefined();
+    expect(db.authSessions.size).toBe(0);
 
-    const session = db.authSessions.get(value.token);
-    expect(session?.refresh_session_id).not.toBeNull();
-
-    const family = db.refreshSessions.get(session!.refresh_session_id!);
+    const family = [...db.refreshSessions.values()][0];
     expect(family).toBeDefined();
-    expect(family!.refresh_token_hash).toBe(await sha256(value.refreshToken!));
+    expect(family!.refresh_token_hash).toBe(await sha256(value.refreshToken));
     expect(family!.refresh_token_hash).not.toBe(value.refreshToken);
-
-    // ~30-minute access expiry
-    const ttlMs = new Date(value.accessTokenExpiresAt!).getTime() - Date.now();
-    expect(ttlMs).toBeLessThanOrEqual(30 * 60 * 1000);
-    expect(ttlMs).toBeGreaterThan(29 * 60 * 1000);
   });
 
-  it("rotates tokens on refresh and invalidates the old access token", async () => {
+  it("rejects native token exchange for a web-started state", async () => {
+    const db = new MockD1();
+    const service = createService(db);
+    seedOauthState(db, "state-web");
+
+    const result = await service.exchangeNativeGitHubAuthorizationCode({
+      code: "code-1",
+      state: "state-web",
+      requestId: null,
+      userAgent: null,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(db.oauthStates.has("state-web")).toBe(true);
+    expect(db.authSessions.size).toBe(0);
+    expect(db.refreshSessions.size).toBe(0);
+  });
+
+  it("rejects web token exchange for a native-started state", async () => {
+    const db = new MockD1();
+    const service = createService(db);
+    seedOauthState(db, "state-native", "cloudecode-dev://auth/callback");
+
+    const result = await service.exchangeGitHubAuthorizationCode({
+      code: "code-1",
+      state: "state-native",
+      requestId: null,
+      userAgent: null,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(db.oauthStates.has("state-native")).toBe(true);
+    expect(db.authSessions.size).toBe(0);
+    expect(db.refreshSessions.size).toBe(0);
+  });
+
+  it("rotates tokens on refresh without storing native access tokens", async () => {
     const db = new MockD1();
     const service = createService(db);
     const issued = await exchangeNative(db, service);
@@ -325,10 +359,10 @@ describe("AuthService native token refresh", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) { return; }
-    expect(result.value.accessToken).not.toBe(issued.token);
+    expect(result.value.accessToken).not.toBe(issued.accessToken);
     expect(result.value.refreshToken).not.toBe(issued.refreshToken);
-    expect(db.authSessions.has(issued.token)).toBe(false);
-    expect(db.authSessions.has(result.value.accessToken)).toBe(true);
+    expect(looksLikeJwt(result.value.accessToken)).toBe(true);
+    expect(db.authSessions.size).toBe(0);
   });
 
   it("accepts the previous refresh token within the grace window", async () => {
@@ -363,9 +397,8 @@ describe("AuthService native token refresh", () => {
     expect(reuse.error.status).toBe(401);
     expect(reuse.error.code).toBe("INVALID_REFRESH_TOKEN");
 
-    // Family fully revoked: current tokens are dead too.
+    // Family fully revoked: the current refresh token dies too.
     expect(db.refreshSessions.size).toBe(0);
-    expect(db.authSessions.has(first.value.accessToken)).toBe(false);
     const current = await service.refreshSession(first.value.refreshToken);
     expect(current.ok).toBe(false);
   });
@@ -399,9 +432,9 @@ describe("AuthService native token refresh", () => {
     const service = createService(db);
     const issued = await exchangeNative(db, service);
 
-    await service.logout(issued.token);
+    await service.logoutNative(issued.refreshToken);
 
-    expect(db.authSessions.has(issued.token)).toBe(false);
+    expect(db.authSessions.size).toBe(0);
     expect(db.refreshSessions.size).toBe(0);
     const refresh = await service.refreshSession(issued.refreshToken!);
     expect(refresh.ok).toBe(false);
@@ -420,7 +453,8 @@ describe("AuthService native token refresh", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) { return; }
 
+    const sessionTokenHash = await sha256(result.value.token);
     await service.logout(result.value.token);
-    expect(db.authSessions.has(result.value.token)).toBe(false);
+    expect(db.authSessions.has(sessionTokenHash)).toBe(false);
   });
 });

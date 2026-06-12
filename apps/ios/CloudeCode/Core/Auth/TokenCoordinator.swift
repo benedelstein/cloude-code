@@ -15,6 +15,10 @@ enum AuthEvent: Sendable {
     case signedOut
 }
 
+private enum TokenCoordinatorError: Error {
+    case staleRefreshResult
+}
+
 /// Owns the session value, keychain writes, the eager refresh timer, and the
 /// single-flight refresh mutex. Both refresh paths (timer + on-demand from
 /// `authToken()`) converge on `refresh()`; concurrent callers await the same
@@ -24,15 +28,21 @@ enum AuthEvent: Sendable {
 actor TokenCoordinator: AuthTokenProviding {
     private let persistence: any SessionPersisting
     private let refresher: any SessionRefreshing
+    private let revoker: any SessionRevoking
     private var session: Session?
     private var refreshTask: Task<Session, any Error>?
     private var timerTask: Task<Void, Never>?
     private let continuation: AsyncStream<AuthEvent>.Continuation
     nonisolated let events: AsyncStream<AuthEvent>
 
-    init(persistence: any SessionPersisting, refresher: any SessionRefreshing) {
+    init(
+        persistence: any SessionPersisting,
+        refresher: any SessionRefreshing,
+        revoker: any SessionRevoking
+    ) {
         self.persistence = persistence
         self.refresher = refresher
+        self.revoker = revoker
         (events, continuation) = AsyncStream.makeStream()
     }
 
@@ -64,17 +74,23 @@ actor TokenCoordinator: AuthTokenProviding {
         if let inFlight = refreshTask { return try await inFlight.value } // idempotent
         guard let current = session else { throw APIError.unauthenticated }
         let task = Task { [refresher] in
-            try await refresher.refresh(refreshToken: current.refreshToken, userId: current.userId)
+            try await refresher.refresh(refreshToken: current.refreshToken)
         }
         refreshTask = task
         defer { refreshTask = nil }
         do {
             Logger.debug("Token refresh: started")
             let fresh = try await task.value
+            guard session?.refreshToken == current.refreshToken else {
+                throw TokenCoordinatorError.staleRefreshResult
+            }
             _adopt(fresh)
             Logger.debug("Token refresh: succeeded —", fresh.logDescription)
             continuation.yield(.refreshed(fresh))
             return fresh
+        } catch TokenCoordinatorError.staleRefreshResult {
+            Logger.debug("Token refresh: discarded stale result")
+            throw APIError.unauthenticated
         } catch APIError.unauthenticated { // refresh token rejected: terminal
             Logger.warning("Token refresh: refresh token rejected, signing out")
             clearSession()
@@ -92,10 +108,18 @@ actor TokenCoordinator: AuthTokenProviding {
         continuation.yield(.signedIn(new))
     }
 
-    func signOut() {
+    func signOut() async {
+        let refreshToken = session?.refreshToken
         Logger.debug("Token sign-out: clearing session")
         clearSession()
         continuation.yield(.signedOut)
+        guard let refreshToken else { return }
+        do {
+            try await revoker.logout(refreshToken: refreshToken)
+            Logger.debug("Token sign-out: revoked server session")
+        } catch {
+            Logger.warning("Token sign-out: server revocation failed; local session already cleared", error)
+        }
     }
 
     private func _adopt(_ new: Session) {
@@ -107,6 +131,8 @@ actor TokenCoordinator: AuthTokenProviding {
     private func clearSession() {
         session = nil
         try? persistence.clear()
+        refreshTask?.cancel()
+        refreshTask = nil
         timerTask?.cancel()
         timerTask = nil
     }

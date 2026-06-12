@@ -6,7 +6,7 @@ import {
   ClaudeOAuthError,
   getClaudeOAuthProvider,
 } from "../services/provider-auth.service";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import {
   getClaudeAuthRoute,
   postClaudeTokenRoute,
@@ -16,7 +16,7 @@ import {
 
 type ClaudeRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface ClaudeAuthRouteDeps {
@@ -46,7 +46,7 @@ claudeAuthRoutes.use("/claude/disconnect", deps.authMiddleware);
 
 claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
   const { code, state, sessionId } = c.req.valid("json");
-  const user = c.get("user");
+  const auth = c.get("auth");
   const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
 
   if (!code || !state) {
@@ -55,7 +55,7 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
 
   try {
     await claudeOAuthService.exchangeAuthorizationCode({
-      userId: user.id,
+      userId: auth.userId,
       code,
       state,
     });
@@ -74,16 +74,16 @@ claudeAuthRoutes.openapi(postClaudeTokenRoute, async (c) => {
 });
 
 claudeAuthRoutes.openapi(getClaudeStatusRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
-  const status = await claudeOAuthService.getConnectionStatus(user.id);
+  const status = await claudeOAuthService.getConnectionStatus(auth.userId);
   return c.json(status, 200);
 });
 
 claudeAuthRoutes.openapi(postClaudeDisconnectRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const claudeOAuthService = getClaudeOAuthProvider(c.env, logger);
-  await claudeOAuthService.disconnect(user.id);
+  await claudeOAuthService.disconnect(auth.userId);
   return c.json({ ok: true as const }, 200);
 });
 

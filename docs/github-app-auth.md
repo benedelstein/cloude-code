@@ -169,6 +169,7 @@ Set these via `wrangler secret put`:
 | `GITHUB_WEBHOOK_SECRET` | Webhook secret configured in GitHub App settings |
 | `GITHUB_APP_CLIENT_SECRET` | OAuth client secret |
 | `TOKEN_ENCRYPTION_KEY` | Encrypts GitHub OAuth tokens and cached installation tokens |
+| `NATIVE_ACCESS_TOKEN_SIGNING_KEY` | Signs short-lived native JWT access tokens |
 
 ## Setup
 
@@ -183,5 +184,6 @@ Set these via `wrangler secret put`:
    wrangler secret put GITHUB_WEBHOOK_SECRET
    wrangler secret put GITHUB_APP_CLIENT_SECRET
    wrangler secret put TOKEN_ENCRYPTION_KEY
+   wrangler secret put NATIVE_ACCESS_TOKEN_SIGNING_KEY
    ```
 7. Install the app on the target org/user account

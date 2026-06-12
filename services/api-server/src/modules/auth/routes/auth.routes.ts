@@ -3,21 +3,23 @@ import type { MiddlewareHandler } from "hono";
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import type { AuthUser } from "../types/auth.types";
+import type { AuthContext } from "../types/auth.types";
 import { AuthService, type AuthGitHubClient } from "../services/auth.service";
 import {
   getGithubRoute,
   postGithubReauthStartRoute,
   postGithubReauthTokenRoute,
   postTokenRoute,
-  postRefreshRoute,
+  postNativeTokenRoute,
+  postNativeRefreshRoute,
+  postNativeLogoutRoute,
   getMeRoute,
   postLogoutRoute,
 } from "./auth.schema";
 
 type AuthRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface AuthRouteDeps {
@@ -98,12 +100,11 @@ export function createAuthRoutes(
    * @returns The session token and user info
    */
   authRoutes.openapi(postTokenRoute, async (c) => {
-    const { code, state, client } = c.req.valid("json");
+    const { code, state } = c.req.valid("json");
     const authService = createAuthService(c.env);
     const result = await authService.exchangeGitHubAuthorizationCode({
       code,
       state,
-      client,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
@@ -118,10 +119,33 @@ export function createAuthRoutes(
   });
 
   /**
-   * POST /auth/refresh — rotate a native access/refresh token pair.
+   * POST /auth/native/token — exchange code for a native JWT access token and
+   * opaque rotating refresh token.
+   */
+  authRoutes.openapi(postNativeTokenRoute, async (c) => {
+    const { code, state } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    const result = await authService.exchangeNativeGitHubAuthorizationCode({
+      code,
+      state,
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: result.error.message },
+        result.error.status === 500 ? 500 : 400,
+      );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/native/refresh — rotate a native access/refresh token pair.
    * No auth middleware: the refresh token in the body is the credential.
    */
-  authRoutes.openapi(postRefreshRoute, async (c) => {
+  authRoutes.openapi(postNativeRefreshRoute, async (c) => {
     const { refreshToken } = c.req.valid("json");
     const authService = createAuthService(c.env);
     const result = await authService.refreshSession(refreshToken);
@@ -132,13 +156,24 @@ export function createAuthRoutes(
     return c.json(result.value, 200);
   });
 
+  /**
+   * POST /auth/native/logout — revoke the native refresh-token family.
+   * No auth middleware: the refresh token in the body is the credential.
+   */
+  authRoutes.openapi(postNativeLogoutRoute, async (c) => {
+    const { refreshToken } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    return c.json(await authService.logoutNative(refreshToken), 200);
+  });
+
   authRoutes.use("/github/reauth/*", deps.authMiddleware);
 
   authRoutes.openapi(postGithubReauthStartRoute, async (c) => {
     const { origin: requestedOrigin } = c.req.valid("query");
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubReauthAuthorizationUrl({
-      user: c.get("user"),
+      userId: auth.userId,
       requestedOrigin,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
@@ -152,9 +187,10 @@ export function createAuthRoutes(
 
   authRoutes.openapi(postGithubReauthTokenRoute, async (c) => {
     const { code, state } = c.req.valid("json");
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
     const result = await authService.exchangeGitHubReauthCode({
-      user: c.get("user"),
+      userId: auth.userId,
       code,
       state,
       requestId: c.req.header("cf-ray") ?? null,
@@ -173,8 +209,14 @@ export function createAuthRoutes(
   // GET /auth/me — returns current user info
   authRoutes.use("/me", deps.authMiddleware);
   authRoutes.openapi(getMeRoute, async (c) => {
+    const auth = c.get("auth");
     const authService = createAuthService(c.env);
-    return c.json(authService.getCurrentUser(c.get("user")), 200);
+    const result = await authService.getCurrentUser(auth.userId);
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 401);
+    }
+
+    return c.json(result.value, 200);
   });
 
   // POST /auth/logout — deletes auth session

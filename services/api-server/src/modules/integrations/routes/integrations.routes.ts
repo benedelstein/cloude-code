@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { IntegrationSessionRequestService } from "../services/integration-session-request.service";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
 import { timingSafeCompare } from "@/shared/utils/crypto";
 import {
@@ -15,7 +15,7 @@ const BEARER_PREFIX = "Bearer ";
 
 type IntegrationsRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface IntegrationsRoutesDeps {
@@ -50,17 +50,17 @@ export function createIntegrationsRoutes(
   integrationsRoutes.use("/links", deps.authMiddleware);
   integrationsRoutes.use("/links/*", deps.authMiddleware);
   integrationsRoutes.openapi(listIntegrationLinksRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const service = deps.createIntegrationSessionRequestService(c.env);
-    const response = await service.listIntegrationLinks({ userId: user.id });
+    const response = await service.listIntegrationLinks({ userId: auth.userId });
     return c.json(response, 200);
   });
 
   integrationsRoutes.openapi(revokeIntegrationLinkRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const service = deps.createIntegrationSessionRequestService(c.env);
     await service.revokeIntegrationLink({
-      userId: user.id,
+      userId: auth.userId,
       provider: c.req.valid("param").provider,
     });
     return c.json({ ok: true as const }, 200);
@@ -68,11 +68,11 @@ export function createIntegrationsRoutes(
 
   integrationsRoutes.use("/link/claim", deps.authMiddleware);
   integrationsRoutes.openapi(claimIntegrationLinkRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const service = deps.createIntegrationSessionRequestService(c.env);
     const result = await service.claimIntegrationLink({
       token: c.req.valid("json").token,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {

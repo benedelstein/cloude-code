@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import { createLogger } from "@/shared/logging";
 import { getProviderAuthService } from "../services/provider-auth.service";
 import type { Env } from "@/shared/types";
@@ -23,7 +23,7 @@ const getModelsRoute = createRoute({
 
 type ModelsRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface ModelsRouteDeps {
@@ -37,13 +37,13 @@ const logger = createLogger("models.routes.ts");
 modelsRoutes.use("*", deps.authMiddleware);
 
 modelsRoutes.openapi(getModelsRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const providers: ProviderCatalogEntry[] = [];
 
   for (const provider of PROVIDER_LIST) {
     const service = getProviderAuthService(provider.id, c.env, logger);
     // todo: parallel
-    const status = await service.getConnectionStatus(user.id);
+    const status = await service.getConnectionStatus(auth.userId);
 
     providers.push({
       providerId: provider.id,

@@ -110,6 +110,54 @@ public struct LogoutResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct NativeLogoutRequest: Codable, Equatable, Sendable {
+    public var refreshToken: String
+
+    public init(
+        refreshToken: String
+    ) {
+        self.refreshToken = refreshToken
+    }
+}
+
+public struct NativeTokenRequest: Codable, Equatable, Sendable {
+    public var code: String
+    public var state: String
+
+    public init(
+        code: String,
+        state: String
+    ) {
+        self.code = code
+        self.state = state
+    }
+}
+
+public struct NativeTokenResponse: Codable, Equatable, Sendable {
+    public var accessToken: String
+    public var refreshToken: String
+    public var refreshTokenExpiresAt: ISODateTimeString
+    public var user: UserInfo
+    public var hasInstallations: Bool
+    public var installUrl: String
+
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        refreshTokenExpiresAt: ISODateTimeString,
+        user: UserInfo,
+        hasInstallations: Bool,
+        installUrl: String
+    ) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.refreshTokenExpiresAt = refreshTokenExpiresAt
+        self.user = user
+        self.hasInstallations = hasInstallations
+        self.installUrl = installUrl
+    }
+}
+
 public struct OpenAIAuthUrlResponse: Codable, Equatable, Sendable {
     public var url: String
     public var state: String
@@ -239,59 +287,30 @@ public struct RefreshRequest: Codable, Equatable, Sendable {
 
 public struct RefreshResponse: Codable, Equatable, Sendable {
     public var accessToken: String
-    public var accessTokenExpiresAt: ISODateTimeString
     public var refreshToken: String
     public var refreshTokenExpiresAt: ISODateTimeString
 
     public init(
         accessToken: String,
-        accessTokenExpiresAt: ISODateTimeString,
         refreshToken: String,
         refreshTokenExpiresAt: ISODateTimeString
     ) {
         self.accessToken = accessToken
-        self.accessTokenExpiresAt = accessTokenExpiresAt
         self.refreshToken = refreshToken
         self.refreshTokenExpiresAt = refreshTokenExpiresAt
     }
 }
 
 public struct TokenRequest: Codable, Equatable, Sendable {
-    public enum Client: RawRepresentable, Codable, Equatable, Sendable {
-        case web
-        case native
-        /// A value this client version doesn't recognize yet.
-        case unknown(String)
-
-        public init(rawValue: String) {
-            switch rawValue {
-            case "web": self = .web
-            case "native": self = .native
-            default: self = .unknown(rawValue)
-            }
-        }
-
-        public var rawValue: String {
-            switch self {
-            case .web: "web"
-            case .native: "native"
-            case .unknown(let value): value
-            }
-        }
-    }
-
     public var code: String
     public var state: String
-    public var client: Client?
 
     public init(
         code: String,
-        state: String,
-        client: Client? = nil
+        state: String
     ) {
         self.code = code
         self.state = state
-        self.client = client
     }
 }
 
@@ -300,26 +319,17 @@ public struct TokenResponse: Codable, Equatable, Sendable {
     public var user: UserInfo
     public var hasInstallations: Bool
     public var installUrl: String
-    public var accessTokenExpiresAt: ISODateTimeString?
-    public var refreshToken: String?
-    public var refreshTokenExpiresAt: ISODateTimeString?
 
     public init(
         token: String,
         user: UserInfo,
         hasInstallations: Bool,
-        installUrl: String,
-        accessTokenExpiresAt: ISODateTimeString? = nil,
-        refreshToken: String? = nil,
-        refreshTokenExpiresAt: ISODateTimeString? = nil
+        installUrl: String
     ) {
         self.token = token
         self.user = user
         self.hasInstallations = hasInstallations
         self.installUrl = installUrl
-        self.accessTokenExpiresAt = accessTokenExpiresAt
-        self.refreshToken = refreshToken
-        self.refreshTokenExpiresAt = refreshTokenExpiresAt
     }
 }
 

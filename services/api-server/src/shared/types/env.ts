@@ -28,6 +28,7 @@ export interface Env {
   GITHUB_APP_CLIENT_SECRET: string;
   GITHUB_APP_SLUG: string;
   TOKEN_ENCRYPTION_KEY: string;
+  NATIVE_ACCESS_TOKEN_SIGNING_KEY: string;
   WEBSOCKET_TOKEN_SIGNING_KEY: string;
   VOICE_TOKEN_SIGNING_KEY: string;
   PORT: string;

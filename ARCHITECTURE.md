@@ -77,6 +77,7 @@ Required secrets for `api-server` are set through `wrangler secret put`:
 - `GITHUB_WEBHOOK_SECRET`
 - `GITHUB_APP_CLIENT_SECRET`
 - `TOKEN_ENCRYPTION_KEY`
+- `NATIVE_ACCESS_TOKEN_SIGNING_KEY`
 - `WEBSOCKET_TOKEN_SIGNING_KEY`
 - `VOICE_TOKEN_SIGNING_KEY`
 

@@ -8,7 +8,10 @@ import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createIntegrationsRoutes } from "@/modules/integrations/routes/integrations.routes";
 import { IntegrationSessionRequestService } from "@/modules/integrations/services/integration-session-request.service";
 import type { IntegrationRepoCandidateProvider } from "@/modules/integrations/types/integrations.types";
-import { createAuthMiddleware } from "@/modules/auth/middleware/auth.middleware";
+import {
+  authenticateBearerToken,
+  createAuthMiddleware,
+} from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import {
@@ -129,7 +132,11 @@ function createIntegrationRepoCandidateProvider(env: Env): IntegrationRepoCandid
 }
 
 const authMiddleware = createAuthMiddleware((env, token) =>
-  createUserSessionService(env).getAuthenticatedUserBySessionToken(token),
+  authenticateBearerToken(env, token, (sessionEnv, sessionToken) =>
+    createUserSessionService(sessionEnv).getAuthenticatedUserIdBySessionToken(
+      sessionToken,
+    )
+  ),
 );
 
 export function buildAgentRoutes() {

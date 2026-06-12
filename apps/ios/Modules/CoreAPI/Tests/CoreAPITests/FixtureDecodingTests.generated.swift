@@ -619,6 +619,30 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoMinimal")
     }
 
+    @Test func nativeLogoutRequestAutoFull() throws {
+        try assertAutoRoundTrip(NativeLogoutRequest.self, key: "NativeLogoutRequest.autoFull")
+    }
+
+    @Test func nativeLogoutRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeLogoutRequest.self, key: "NativeLogoutRequest.autoMinimal")
+    }
+
+    @Test func nativeTokenRequestAutoFull() throws {
+        try assertAutoRoundTrip(NativeTokenRequest.self, key: "NativeTokenRequest.autoFull")
+    }
+
+    @Test func nativeTokenRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeTokenRequest.self, key: "NativeTokenRequest.autoMinimal")
+    }
+
+    @Test func nativeTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(NativeTokenResponse.self, key: "NativeTokenResponse.autoFull")
+    }
+
+    @Test func nativeTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeTokenResponse.self, key: "NativeTokenResponse.autoMinimal")
+    }
+
     @Test func openAIAuthUrlResponseAutoFull() throws {
         try assertAutoRoundTrip(OpenAIAuthUrlResponse.self, key: "OpenAIAuthUrlResponse.autoFull")
     }

@@ -1210,6 +1210,46 @@
   "LogoutResponse.autoMinimal": {
     "ok": true
   },
+  "NativeLogoutRequest.autoFull": {
+    "refreshToken": "sample"
+  },
+  "NativeLogoutRequest.autoMinimal": {
+    "refreshToken": "sample"
+  },
+  "NativeTokenRequest.autoFull": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "NativeTokenRequest.autoMinimal": {
+    "code": "sample",
+    "state": "sample"
+  },
+  "NativeTokenResponse.autoFull": {
+    "accessToken": "sample",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": "sample",
+      "avatarUrl": "sample"
+    },
+    "hasInstallations": true,
+    "installUrl": "sample"
+  },
+  "NativeTokenResponse.autoMinimal": {
+    "accessToken": "sample",
+    "refreshToken": "sample",
+    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": null,
+      "avatarUrl": null
+    },
+    "hasInstallations": true,
+    "installUrl": "sample"
+  },
   "OpenAIAuthUrlResponse.autoFull": {
     "url": "sample",
     "state": "sample"
@@ -1274,20 +1314,17 @@
   },
   "RefreshResponse.autoFull": {
     "accessToken": "sample",
-    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
     "refreshToken": "sample",
     "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
   },
   "RefreshResponse.autoMinimal": {
     "accessToken": "sample",
-    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
     "refreshToken": "sample",
     "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
   },
   "TokenRequest.autoFull": {
     "code": "sample",
-    "state": "sample",
-    "client": "web"
+    "state": "sample"
   },
   "TokenRequest.autoMinimal": {
     "code": "sample",
@@ -1302,10 +1339,7 @@
       "avatarUrl": "sample"
     },
     "hasInstallations": true,
-    "installUrl": "sample",
-    "accessTokenExpiresAt": "2026-06-10T12:00:00Z",
-    "refreshToken": "sample",
-    "refreshTokenExpiresAt": "2026-06-10T12:00:00Z"
+    "installUrl": "sample"
   },
   "TokenResponse.autoMinimal": {
     "token": "sample",

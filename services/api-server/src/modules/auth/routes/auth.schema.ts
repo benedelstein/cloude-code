@@ -2,6 +2,9 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   GitHubAuthUrlResponse,
   GitHubReauthTokenResponse,
+  NativeLogoutRequest,
+  NativeTokenRequest,
+  NativeTokenResponse,
   RefreshRequest,
   RefreshResponse,
   TokenRequest,
@@ -113,9 +116,37 @@ export const postTokenRoute = createRoute({
   },
 });
 
-export const postRefreshRoute = createRoute({
+export const postNativeTokenRoute = createRoute({
   method: "post",
-  path: "/refresh",
+  path: "/native/token",
+  request: {
+    body: {
+      content: { "application/json": { schema: NativeTokenRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: NativeTokenResponse } },
+      description: "Native JWT access token, refresh token, and user info",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Bad request",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "User not allowed",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Failed to create user",
+    },
+  },
+});
+
+export const postNativeRefreshRoute = createRoute({
+  method: "post",
+  path: "/native/refresh",
   request: {
     body: {
       content: { "application/json": { schema: RefreshRequest } },
@@ -133,6 +164,22 @@ export const postRefreshRoute = createRoute({
   },
 });
 
+export const postNativeLogoutRoute = createRoute({
+  method: "post",
+  path: "/native/logout",
+  request: {
+    body: {
+      content: { "application/json": { schema: NativeLogoutRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: LogoutResponse } },
+      description: "Native logout success",
+    },
+  },
+});
+
 export const getMeRoute = createRoute({
   method: "get",
   path: "/me",
@@ -140,6 +187,10 @@ export const getMeRoute = createRoute({
     200: {
       content: { "application/json": { schema: UserInfo } },
       description: "Current user info",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "User not found",
     },
   },
 });

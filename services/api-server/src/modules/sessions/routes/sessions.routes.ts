@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { SessionsService } from "../services/sessions.service";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import type { Env } from "@/shared/types";
 import { USER_SESSIONS_USER_ID_HEADER } from "@/shared/types/user-sessions";
 import {
@@ -22,7 +22,7 @@ import {
 
 type SessionsRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface SessionsRouteDeps {
@@ -67,13 +67,13 @@ export function createSessionsRoutes(
 
   // List sessions for the current user, grouped by repo for the sidebar.
   sessionsRoutes.openapi(listSessionsRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { repoId, repoCursor, sessionCursor, repoLimit, sessionLimit } =
       c.req.valid("query");
     const sessionsService = deps.createSessionsService(c.env);
 
     const response = await sessionsService.listSessions({
-      userId: user.id,
+      userId: auth.userId,
       repoId,
       repoCursor,
       sessionCursor,
@@ -86,10 +86,10 @@ export function createSessionsRoutes(
 
   // Create a new session
   sessionsRoutes.openapi(createSessionRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.createSession({
-      userId: user.id,
+      userId: auth.userId,
       request: c.req.valid("json"),
     });
 
@@ -150,11 +150,11 @@ export function createSessionsRoutes(
 
   // Get session info
   sessionsRoutes.openapi(getSessionRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.getSession({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -184,11 +184,11 @@ export function createSessionsRoutes(
   });
 
   sessionsRoutes.openapi(createSessionWebSocketTokenRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.createSessionWebSocketToken({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -226,10 +226,10 @@ export function createSessionsRoutes(
   });
 
   sessionsRoutes.openapi(createUserSessionsWebSocketTokenRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const token = await sessionsService.createUserSessionsWebSocketToken({
-      userId: user.id,
+      userId: auth.userId,
     });
 
     return c.json(token, 200);
@@ -237,13 +237,13 @@ export function createSessionsRoutes(
 
   // Update session title
   sessionsRoutes.openapi(updateSessionTitleRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const { sessionId } = c.req.valid("param");
     const { title } = c.req.valid("json");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.updateSessionTitle({
       sessionId,
-      userId: user.id,
+      userId: auth.userId,
       title,
     });
 
@@ -256,11 +256,11 @@ export function createSessionsRoutes(
 
   // Get messages for a session
   sessionsRoutes.openapi(getSessionMessagesRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.getSessionMessages({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -302,11 +302,11 @@ export function createSessionsRoutes(
   });
 
   sessionsRoutes.openapi(getSessionPlanRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.getSessionPlan({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -349,11 +349,11 @@ export function createSessionsRoutes(
 
   // Create a pull request for a session's pushed branch
   sessionsRoutes.openapi(createPullRequestRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.createPullRequest({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -411,11 +411,11 @@ export function createSessionsRoutes(
 
   // Check pull request status
   sessionsRoutes.openapi(getPullRequestRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.getPullRequest({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -461,11 +461,11 @@ export function createSessionsRoutes(
 
   // Archive a session (hide from list but preserve data)
   sessionsRoutes.openapi(archiveSessionRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.archiveSession({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
     });
 
     if (!result.ok) {
@@ -477,11 +477,11 @@ export function createSessionsRoutes(
 
   // Delete a session
   sessionsRoutes.openapi(deleteSessionRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const sessionsService = deps.createSessionsService(c.env);
     const result = await sessionsService.deleteSession({
       sessionId: c.req.valid("param").sessionId,
-      userId: user.id,
+      userId: auth.userId,
       executionCtx: c.executionCtx,
     });
 

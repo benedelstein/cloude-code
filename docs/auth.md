@@ -71,7 +71,7 @@ Browser                    Next.js proxy (/api/*)       API Server
 ## Key Design Decisions
 
 - **HTTP-only cookie**: The session token is stored as an HTTP-only, secure, sameSite=lax cookie. Client JS cannot access it, mitigating XSS token theft.
-- **Server-side sessions**: Session tokens are random UUIDs stored in D1, not JWTs. This makes them revocable (delete the row to log out).
+- **Server-side sessions**: Session tokens are random opaque bearer tokens, not JWTs. D1 stores only a SHA-256 verifier hash, so the raw cookie value is not recoverable from the database; sessions remain revocable by deleting the hashed row.
 - **BFF proxy**: The Next.js `/api/[...path]` catch-all extracts the cookie and forwards it as a `Bearer` token. The API server only deals with Bearer auth.
 - **Identity-only app auth**: Auth middleware validates only the app session token and returns user identity (`id`, GitHub profile fields). It does not join, decrypt, validate, or refresh GitHub credentials.
 - **Encrypted GitHub tokens**: GitHub access/refresh tokens are stored separately in `user_github_credentials` and encrypted with `TOKEN_ENCRYPTION_KEY`.
@@ -84,35 +84,35 @@ Browser                    Next.js proxy (/api/*)       API Server
 
 ## Native Client Sessions (Access + Refresh Tokens)
 
-Native clients (the iOS app) opt in by sending `client: "native"` on `POST /auth/token`. Web behavior is unchanged: requests without the `client` field get the legacy 30-day session token and a byte-identical response shape.
+Native clients (the iOS app) use `/auth/native/*` routes. Web behavior is unchanged: `POST /auth/token` returns the 30-day opaque web session token used by the BFF cookie flow.
 
 The native path returns a short-lived access token plus a long-lived rotating refresh token:
 
-- `token` — opaque access token, 30-minute TTL (an `auth_sessions` row, validated by the same middleware as web tokens; `accessTokenExpiresAt` is returned alongside).
+- `accessToken` — stateless JWT access token, 15-minute TTL, signed with `NATIVE_ACCESS_TOKEN_SIGNING_KEY`. The server verifies issuer, audience, type, signature, and expiry. The iOS app decodes only `sub` and `exp` for local cache lookup and refresh scheduling.
 - `refreshToken` — opaque 32-byte base64url token, 60-day sliding TTL. Stored only as a SHA-256 hash in `auth_refresh_sessions`; the raw value is returned exactly once per rotation.
 
-A native session is a "family": one `auth_refresh_sessions` row plus the current `auth_sessions` row linked via `auth_sessions.refresh_session_id` (NULL for web sessions).
+A native session is a "family": one `auth_refresh_sessions` row plus stateless JWT access tokens minted from that family. `auth_sessions` stores web sessions only.
 
 ### Refresh rotation
 
-`POST /auth/refresh` accepts `{ refreshToken }` with no Authorization header (the refresh token is the credential) and is registered without auth middleware. A valid refresh:
+`POST /auth/native/refresh` accepts `{ refreshToken }` with no Authorization header (the refresh token is the credential) and is registered without auth middleware. A valid refresh:
 
 1. Rotates the refresh token: the new hash becomes current, the presented hash is kept as `previous_refresh_token_hash` with `previous_rotated_at`.
-2. Replaces the family's access-token row (the old access token stops authenticating immediately).
+2. Mints a new JWT access token.
 3. Extends the refresh expiry (sliding 60 days).
-4. Returns `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt }`.
+4. Returns `{ accessToken, refreshToken, refreshTokenExpiresAt }`.
 
 Invalid, expired, or reused tokens return `401` with `INVALID_REFRESH_TOKEN`.
 
 ### Grace window and reuse detection
 
-The previous refresh token stays valid for 60 seconds after rotation so a client that lost the response to a network failure can retry. Presenting the previous token *outside* that window is treated as token theft: the whole family is revoked (refresh token and current access token both die).
+The previous refresh token stays valid for 60 seconds after rotation so a client that lost the response to a network failure can retry. Presenting the previous token *outside* that window is treated as token theft: the refresh-token family is revoked, so no token in that family can mint future access tokens.
+
+Native access tokens are intentionally stateless JWTs. Revoking a refresh-token family does not perform a per-request database lookup or invalidate access JWTs already minted from that family; those remain accepted until their 15-minute `exp`. This is the explicit tradeoff for native auth: immediate refresh revocation, bounded access-token lifetime.
 
 ### Logout
 
-`POST /auth/logout` with a native access token revokes the family (refresh token included). Legacy web tokens keep single-row deletion.
-
-Access tokens stay opaque DB-backed rows for now; a later switch to JWT access tokens would be server-only (clients never decode the token and use `accessTokenExpiresAt` for staleness).
+`POST /auth/native/logout` accepts `{ refreshToken }` and revokes the refresh-token family. Already minted native access JWTs may remain valid until their 15-minute expiry. `POST /auth/logout` remains web-only and deletes the opaque web session row.
 
 ### Native sign-in flow (iOS)
 
@@ -121,7 +121,7 @@ The iOS app signs in with the same GitHub App via `ASWebAuthenticationSession`:
 1. `GET /auth/github?redirectUri=cloudecode://auth/callback` — the redirect URI is exact-matched against a hardcoded allowlist (`cloudecode://auth/callback`; `cloudecode-dev://auth/callback` outside production) in `native-redirect.util.ts` and stored as the state's `redirect_origin`. Returns `{ url, state }`.
 2. The app opens `url` in `ASWebAuthenticationSession` with the custom callback scheme.
 3. GitHub redirects to the api-server `GET /auth/callback`, which recognizes the stored native URI (checked before the web origin validator, which rejects URIs with paths) and 302s to `cloudecode://auth/callback?code=X&state=Y`. The app registers the config-owned deep-link scheme in `CFBundleURLTypes`, so the session hands the callback URL back to the app.
-4. The app verifies the returned `state` matches, then calls `POST /auth/token { code, state, client: "native" }` and adopts the returned access/refresh pair.
+4. The app verifies the returned `state` matches, then calls `POST /auth/native/token { code, state }` and adopts the returned access/refresh pair.
 
 ### Dev: minting a native session locally
 
@@ -148,17 +148,14 @@ EOF
 pnpm exec wrangler d1 execute cloude-code-db --local \
   --command "SELECT id, github_login FROM users"
 
-# 3. Insert the family + access row (substitute values from steps 1-2)
+# 3. Insert the refresh family (substitute values from steps 1-2)
 pnpm exec wrangler d1 execute cloude-code-db --local --command "
 INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
 VALUES ('<family-id>', '<user-id>', '<refresh-hash>', '<refresh-exp>');
-INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
-VALUES ('<access-token>', '<user-id>', '<access-exp>', '<family-id>');
 "
 
 # 4. Verify
-curl -s http://localhost:8787/auth/me -H "Authorization: Bearer <access-token>"
-curl -s -X POST http://localhost:8787/auth/refresh \
+curl -s -X POST http://localhost:8787/auth/native/refresh \
   -H "Content-Type: application/json" -d '{"refreshToken":"<refresh-token>"}'
 ```
 

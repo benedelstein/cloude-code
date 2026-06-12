@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import {
   MAX_VOICE_AUDIO_BYTES,
   mintVoiceTranscriptionToken,
@@ -16,7 +16,7 @@ import {
 
 type VoiceRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface VoiceRouteDeps {
@@ -58,10 +58,10 @@ export function createVoiceRoutes(
   voiceRoutes.use(createVoiceTranscriptionTokenRoute.getRoutingPath(), deps.authMiddleware);
 
   voiceRoutes.openapi(createVoiceTranscriptionTokenRoute, async (c) => {
-    const user = c.get("user");
+    const auth = c.get("auth");
     const token = await mintVoiceTranscriptionToken(
       c.env.VOICE_TOKEN_SIGNING_KEY,
-      { userId: user.id },
+      { userId: auth.userId },
     );
 
     return c.json(token, 200);

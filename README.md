@@ -227,12 +227,14 @@ pnpm wrangler secret put GITHUB_APP_PRIVATE_KEY
 pnpm wrangler secret put GITHUB_WEBHOOK_SECRET
 pnpm wrangler secret put GITHUB_APP_CLIENT_SECRET
 pnpm wrangler secret put TOKEN_ENCRYPTION_KEY
+pnpm wrangler secret put NATIVE_ACCESS_TOKEN_SIGNING_KEY
 pnpm wrangler secret put WEBSOCKET_TOKEN_SIGNING_KEY
 pnpm wrangler secret put VOICE_TOKEN_SIGNING_KEY
 ```
 
 `TOKEN_ENCRYPTION_KEY` must be a base64-encoded 32-byte key; the same format
-is useful for the web app's `SESSION_COOKIE_SECRET`.
+is useful for `NATIVE_ACCESS_TOKEN_SIGNING_KEY` and the web app's
+`SESSION_COOKIE_SECRET`.
 
 ```bash
 openssl rand -base64 32 | pbcopy

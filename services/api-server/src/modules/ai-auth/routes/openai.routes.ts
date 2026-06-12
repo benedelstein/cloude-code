@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "@/shared/types";
 import { createLogger } from "@/shared/logging";
-import type { AuthUser } from "@/shared/types/auth";
+import type { AuthContext } from "@/shared/types/auth";
 import { getOpenAICodexAuthProvider } from "../services/provider-auth.service";
 import {
   postOpenAIDeviceStartRoute,
@@ -13,7 +13,7 @@ import {
 
 type OpenAIRouteEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export interface OpenAIAuthRouteDeps {
@@ -37,10 +37,10 @@ openaiAuthRoutes.use("*", deps.authMiddleware);
  * POST /auth/openai/device/start — Start device-code authorization.
  */
 openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
 
-  const result = await openAICodexAuthService.startDeviceAuthorization(user.id);
+  const result = await openAICodexAuthService.startDeviceAuthorization(auth.userId);
   if (!result.ok) {
     logger.error("OpenAI Codex device auth start error", { error: result.error });
     switch (result.error.status) {
@@ -60,11 +60,11 @@ openaiAuthRoutes.openapi(postOpenAIDeviceStartRoute, async (c) => {
  * GET /auth/openai/device/attempts/:attemptId — Poll device-code authorization.
  */
 openaiAuthRoutes.openapi(getOpenAIDeviceAttemptRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const { attemptId } = c.req.valid("param");
   const { sessionId } = c.req.valid("query");
   const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
-  const result = await openAICodexAuthService.pollDeviceAuthorization(user.id, attemptId);
+  const result = await openAICodexAuthService.pollDeviceAuthorization(auth.userId, attemptId);
   if (result.status === "completed" && sessionId) {
     await deps.requestSessionProviderConnectionRefresh(c.env, sessionId, logger);
   }
@@ -75,9 +75,9 @@ openaiAuthRoutes.openapi(getOpenAIDeviceAttemptRoute, async (c) => {
  * GET /auth/openai/status — Check if user has connected OpenAI
  */
 openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
-  const status = await openAICodexAuthService.getConnectionStatus(user.id);
+  const status = await openAICodexAuthService.getConnectionStatus(auth.userId);
   return c.json(status, 200);
 });
 
@@ -85,9 +85,9 @@ openaiAuthRoutes.openapi(getOpenAIStatusRoute, async (c) => {
  * POST /auth/openai/disconnect — Remove OpenAI tokens
  */
 openaiAuthRoutes.openapi(postOpenAIDisconnectRoute, async (c) => {
-  const user = c.get("user");
+  const auth = c.get("auth");
   const openAICodexAuthService = getOpenAICodexAuthProvider(c.env, logger);
-  await openAICodexAuthService.disconnect(user.id);
+  await openAICodexAuthService.disconnect(auth.userId);
   return c.json({ ok: true as const }, 200);
 });
 

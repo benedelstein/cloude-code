@@ -1,19 +1,11 @@
-export interface AuthSessionIdentityRecord {
-  id: string;
-  githubId: number;
-  githubLogin: string;
-  githubName: string | null;
-  githubAvatarUrl: string | null;
-  sessionExpiresAt: string;
+import { sha256 } from "@/shared/utils/crypto";
+
+export interface AuthSessionUserIdRecord {
+  userId: string;
 }
 
-interface AuthSessionIdentityRow {
-  id: string;
-  github_id: number;
-  github_login: string;
-  github_name: string | null;
-  github_avatar_url: string | null;
-  session_expires_at: string;
+interface AuthSessionUserIdRow {
+  user_id: string;
 }
 
 export interface UserGitHubCredentialsRecord {
@@ -55,31 +47,23 @@ export class UserSessionRepository {
     this.database = database;
   }
 
-  async getActiveAuthSessionByToken(
+  async getActiveAuthSessionUserIdByToken(
     token: string,
-  ): Promise<AuthSessionIdentityRecord | null> {
+  ): Promise<AuthSessionUserIdRecord | null> {
+    const tokenHash = await sha256(token);
     const row = await this.database.prepare(
-      `SELECT u.id, u.github_id, u.github_login, u.github_name, u.github_avatar_url,
-              s.expires_at AS session_expires_at
-       FROM auth_sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')`,
+      `SELECT user_id
+       FROM auth_sessions
+       WHERE token_hash = ? AND datetime(expires_at) > datetime('now')`,
     )
-      .bind(token)
-      .first<AuthSessionIdentityRow>();
+      .bind(tokenHash)
+      .first<AuthSessionUserIdRow>();
 
     if (!row) {
       return null;
     }
 
-    return {
-      id: row.id,
-      githubId: row.github_id,
-      githubLogin: row.github_login,
-      githubName: row.github_name,
-      githubAvatarUrl: row.github_avatar_url,
-      sessionExpiresAt: row.session_expires_at,
-    };
+    return { userId: row.user_id };
   }
 
   async getGitHubCredentialsByUserId(
@@ -111,11 +95,12 @@ export class UserSessionRepository {
     userId: string,
     expiresAt: string,
   ): Promise<void> {
+    const sessionTokenHash = await sha256(sessionToken);
     await this.database.prepare(
-      `INSERT INTO auth_sessions (token, user_id, expires_at)
+      `INSERT INTO auth_sessions (token_hash, user_id, expires_at)
        VALUES (?, ?, ?)`,
     )
-      .bind(sessionToken, userId, expiresAt)
+      .bind(sessionTokenHash, userId, expiresAt)
       .run();
   }
 
@@ -128,12 +113,13 @@ export class UserSessionRepository {
     encryptedRefreshToken: string | null;
     refreshTokenExpiresAt: string | null;
   }): Promise<void> {
+    const sessionTokenHash = await sha256(params.sessionToken);
     await this.database.batch([
       this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at)
+        `INSERT INTO auth_sessions (token_hash, user_id, expires_at)
          VALUES (?, ?, ?)`,
       ).bind(
-        params.sessionToken,
+        sessionTokenHash,
         params.userId,
         params.sessionExpiresAt,
       ),
@@ -234,37 +220,24 @@ export class UserSessionRepository {
   }
 
   /**
-   * Create a native refresh-session family plus its initial short-lived
-   * access-token row, linked by refresh_session_id, in one batch.
+   * Create a native refresh-session family. Native access tokens are stateless
+   * JWTs, so only the rotating refresh token family is stored.
    */
-  async createRefreshSessionWithAccessToken(params: {
+  async createRefreshSession(params: {
     refreshSessionId: string;
     userId: string;
     refreshTokenHash: string;
     refreshExpiresAt: string;
-    accessToken: string;
-    accessTokenExpiresAt: string;
   }): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.refreshSessionId,
-        params.userId,
-        params.refreshTokenHash,
-        params.refreshExpiresAt,
-      ),
-      this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.accessToken,
-        params.userId,
-        params.accessTokenExpiresAt,
-        params.refreshSessionId,
-      ),
-    ]);
+    await this.database.prepare(
+      `INSERT INTO auth_refresh_sessions (id, user_id, refresh_token_hash, refresh_expires_at)
+       VALUES (?, ?, ?, ?)`,
+    ).bind(
+      params.refreshSessionId,
+      params.userId,
+      params.refreshTokenHash,
+      params.refreshExpiresAt,
+    ).run();
   }
 
   /**
@@ -299,8 +272,9 @@ export class UserSessionRepository {
 
   /**
    * Rotate a refresh-session family: swap in the new refresh token hash
-   * (keeping the old one for grace-window retries), extend the sliding
-   * refresh expiry, and replace the family's access-token row.
+   * (keeping the old one for grace-window retries) and extend the sliding
+   * refresh expiry. Native access tokens are stateless JWTs and are minted
+   * after this write succeeds.
    */
   async rotateRefreshSession(params: {
     refreshSessionId: string;
@@ -308,67 +282,37 @@ export class UserSessionRepository {
     newRefreshTokenHash: string;
     previousRefreshTokenHash: string;
     refreshExpiresAt: string;
-    accessToken: string;
-    accessTokenExpiresAt: string;
   }): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `UPDATE auth_refresh_sessions
-         SET refresh_token_hash = ?,
-             previous_refresh_token_hash = ?,
-             previous_rotated_at = datetime('now'),
-             refresh_expires_at = ?,
-             updated_at = datetime('now')
-         WHERE id = ?`,
-      ).bind(
-        params.newRefreshTokenHash,
-        params.previousRefreshTokenHash,
-        params.refreshExpiresAt,
-        params.refreshSessionId,
-      ),
-      this.database.prepare(
-        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
-      ).bind(params.refreshSessionId),
-      this.database.prepare(
-        `INSERT INTO auth_sessions (token, user_id, expires_at, refresh_session_id)
-         VALUES (?, ?, ?, ?)`,
-      ).bind(
-        params.accessToken,
-        params.userId,
-        params.accessTokenExpiresAt,
-        params.refreshSessionId,
-      ),
-    ]);
+    await this.database.prepare(
+      `UPDATE auth_refresh_sessions
+       SET refresh_token_hash = ?,
+           previous_refresh_token_hash = ?,
+           previous_rotated_at = datetime('now'),
+           refresh_expires_at = ?,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+    ).bind(
+      params.newRefreshTokenHash,
+      params.previousRefreshTokenHash,
+      params.refreshExpiresAt,
+      params.refreshSessionId,
+    ).run();
   }
 
-  /** Revoke a whole session family: refresh row + all linked access rows. */
+  /** Revoke a native refresh-token family. */
   async revokeRefreshSession(refreshSessionId: string): Promise<void> {
-    await this.database.batch([
-      this.database.prepare(
-        `DELETE FROM auth_sessions WHERE refresh_session_id = ?`,
-      ).bind(refreshSessionId),
-      this.database.prepare(
-        `DELETE FROM auth_refresh_sessions WHERE id = ?`,
-      ).bind(refreshSessionId),
-    ]);
-  }
-
-  /** Family id for an access token, or null for legacy web sessions. */
-  async getRefreshSessionIdByAccessToken(
-    accessToken: string,
-  ): Promise<string | null> {
-    const row = await this.database.prepare(
-      `SELECT refresh_session_id FROM auth_sessions WHERE token = ?`,
-    )
-      .bind(accessToken)
-      .first<{ refresh_session_id: string | null }>();
-
-    return row?.refresh_session_id ?? null;
+    await this.database.prepare(
+      `DELETE FROM auth_refresh_sessions WHERE id = ?`,
+    ).bind(refreshSessionId).run();
   }
 
   async deleteByToken(sessionToken: string): Promise<void> {
-    await this.database.prepare(`DELETE FROM auth_sessions WHERE token = ?`)
-      .bind(sessionToken)
+    const sessionTokenHash = await sha256(sessionToken);
+    await this.database.prepare(
+      `DELETE FROM auth_sessions
+       WHERE token_hash = ? OR (token_hash IS NULL AND token = ?)`,
+    )
+      .bind(sessionTokenHash, sessionToken)
       .run();
   }
 
@@ -380,6 +324,7 @@ export class UserSessionRepository {
   async revokeAllSessionsForUser(userId: string): Promise<void> {
     await this.database.batch([
       this.database.prepare(`DELETE FROM auth_sessions WHERE user_id = ?`).bind(userId),
+      this.database.prepare(`DELETE FROM auth_refresh_sessions WHERE user_id = ?`).bind(userId),
       this.database.prepare(`DELETE FROM user_github_credentials WHERE user_id = ?`).bind(userId),
     ]);
   }
@@ -393,6 +338,9 @@ export class UserSessionRepository {
     await this.database.batch([
       this.database.prepare(
         `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
+      ).bind(githubId),
+      this.database.prepare(
+        `DELETE FROM auth_refresh_sessions WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,
       ).bind(githubId),
       this.database.prepare(
         `DELETE FROM user_github_credentials WHERE user_id IN (SELECT id FROM users WHERE github_id = ?)`,

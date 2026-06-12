@@ -1,20 +1,43 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "@/shared/types";
 import { UserSessionService } from "../services/user-session.service";
-import type { AuthUser } from "../types/auth.types";
+import {
+  looksLikeJwt,
+  NativeAccessTokenService,
+} from "../services/native-access-token.service";
+import type { AuthContext } from "../types/auth.types";
 
 type AuthEnv = {
   Bindings: Env;
-  Variables: { user: AuthUser };
+  Variables: { auth: AuthContext };
 };
 
 export type AuthenticateSession = (
   env: Env,
   token: string,
-) => Promise<AuthUser | null>;
+) => Promise<AuthContext | null>;
 
 const authenticateSession: AuthenticateSession = (env, token) =>
-  new UserSessionService(env).getAuthenticatedUserBySessionToken(token);
+  authenticateBearerToken(env, token);
+
+export async function authenticateBearerToken(
+  env: Env,
+  token: string,
+  authenticateOpaqueSession: AuthenticateSession = (sessionEnv, sessionToken) =>
+    new UserSessionService(sessionEnv).getAuthenticatedUserIdBySessionToken(
+      sessionToken,
+    ),
+): Promise<AuthContext | null> {
+  if (looksLikeJwt(token)) {
+    const identity = await new NativeAccessTokenService(env).verify(token);
+    if (!identity) {
+      return null;
+    }
+    return { userId: identity.userId };
+  }
+
+  return await authenticateOpaqueSession(env, token);
+}
 
 export function createAuthMiddleware(
   authenticate: AuthenticateSession = authenticateSession,
@@ -26,15 +49,15 @@ export function createAuthMiddleware(
     }
 
     const token = authHeader.slice(7);
-    const user = await authenticate(c.env, token);
-    if (!user) {
+    const auth = await authenticate(c.env, token);
+    if (!auth) {
       return c.json({ error: "Unauthorized" }, 401);
     }
-    c.set("user", user);
+    c.set("auth", auth);
 
     await next();
   });
 }
 
 export const authMiddleware = createAuthMiddleware();
-export type { AuthUser };
+export type { AuthContext };

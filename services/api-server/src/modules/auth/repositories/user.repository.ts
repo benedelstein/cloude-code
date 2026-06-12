@@ -1,18 +1,20 @@
-export interface GitHubUserRecord {
+export interface UserRecord {
   id: string;
+  githubId: number;
   githubLogin: string;
   githubName: string | null;
   githubAvatarUrl: string | null;
 }
 
-interface GitHubUserRow {
+interface UserRow {
   id: string;
+  github_id: number;
   github_login: string;
   github_name: string | null;
   github_avatar_url: string | null;
 }
 
-interface UpsertGitHubUserInput {
+interface UpsertUserFromGitHubIdentityInput {
   id: string;
   githubId: number;
   githubLogin: string;
@@ -27,7 +29,9 @@ export class UserRepository {
     this.database = database;
   }
 
-  async upsertGitHubUser(input: UpsertGitHubUserInput): Promise<void> {
+  async upsertFromGitHubIdentity(
+    input: UpsertUserFromGitHubIdentityInput,
+  ): Promise<void> {
     await this.database.prepare(
       `INSERT INTO users (id, github_id, github_login, github_name, github_avatar_url)
        VALUES (?, ?, ?, ?, ?)
@@ -47,12 +51,12 @@ export class UserRepository {
       .run();
   }
 
-  async getByGitHubId(githubId: number): Promise<GitHubUserRecord | null> {
+  async getByGitHubId(githubId: number): Promise<UserRecord | null> {
     const row = await this.database.prepare(
-      `SELECT id, github_login, github_name, github_avatar_url FROM users WHERE github_id = ?`,
+      `SELECT id, github_id, github_login, github_name, github_avatar_url FROM users WHERE github_id = ?`,
     )
       .bind(githubId)
-      .first<GitHubUserRow>();
+      .first<UserRow>();
 
     if (!row) {
       return null;
@@ -60,6 +64,27 @@ export class UserRepository {
 
     return {
       id: row.id,
+      githubId: row.github_id,
+      githubLogin: row.github_login,
+      githubName: row.github_name,
+      githubAvatarUrl: row.github_avatar_url,
+    };
+  }
+
+  async getById(userId: string): Promise<UserRecord | null> {
+    const row = await this.database.prepare(
+      `SELECT id, github_id, github_login, github_name, github_avatar_url FROM users WHERE id = ?`,
+    )
+      .bind(userId)
+      .first<UserRow>();
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      githubId: row.github_id,
       githubLogin: row.github_login,
       githubName: row.github_name,
       githubAvatarUrl: row.github_avatar_url,

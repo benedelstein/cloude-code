@@ -1,6 +1,7 @@
 import { decrypt, encrypt } from "@/shared/utils/crypto";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
+import type { AuthContext } from "@/shared/types/auth";
 import type { RefreshedToken } from "@/shared/types/github";
 import type {
   GitHubCredentialError,
@@ -10,14 +11,6 @@ import { failure, success } from "@repo/shared";
 import { UserSessionRepository } from "../repositories/user-session.repository";
 
 const logger = createLogger("user-session.service.ts");
-
-export interface AuthenticatedUserSession {
-  id: string;
-  githubId: number;
-  githubLogin: string;
-  githubName: string | null;
-  githubAvatarUrl: string | null;
-}
 
 export interface GitHubUserTokenRefreshProvider {
   refreshUserToken(refreshToken: string): Promise<RefreshedToken>;
@@ -41,26 +34,10 @@ export class UserSessionService {
     this.repository = new UserSessionRepository(this.env.DB);
   }
 
-  /**
-   * Fetches an authenticated user by session token.
-   * @param sessionToken - The session token, sent from the client
-   * @returns The authenticated user session, or null if the session token is invalid or expired.
-   */
-  async getAuthenticatedUserBySessionToken(
+  async getAuthenticatedUserIdBySessionToken(
     sessionToken: string,
-  ): Promise<AuthenticatedUserSession | null> {
-    const session = await this.repository.getActiveAuthSessionByToken(sessionToken);
-    if (!session) {
-      return null;
-    }
-
-    return {
-      id: session.id,
-      githubId: session.githubId,
-      githubLogin: session.githubLogin,
-      githubName: session.githubName,
-      githubAvatarUrl: session.githubAvatarUrl,
-    };
+  ): Promise<AuthContext | null> {
+    return await this.repository.getActiveAuthSessionUserIdByToken(sessionToken);
   }
 
   async getValidGitHubCredentialByUserId(

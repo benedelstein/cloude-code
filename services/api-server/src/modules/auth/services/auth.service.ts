@@ -3,6 +3,7 @@ import {
   type GitHubAuthUrlResponse,
   type GitHubReauthTokenResponse,
   type LogoutResponse,
+  type NativeTokenResponse,
   type RefreshResponse,
   type Result,
   success,
@@ -13,7 +14,6 @@ import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
 import { encrypt, generateOpaqueToken, sha256 } from "@/shared/utils/crypto";
-import type { AuthUser } from "../types/auth.types";
 import {
   consumeValidOauthState,
   createOauthState,
@@ -26,12 +26,12 @@ import {
   looksLikeNativeRedirectUri,
   validateNativeRedirectUri,
 } from "../utils/native-redirect.util";
+import { NativeAccessTokenService } from "./native-access-token.service";
 
 const GITHUB_LOGIN_OAUTH_PURPOSE = "github_login";
 const GITHUB_REAUTH_OAUTH_PURPOSE = "github_reauth";
 
 const WEB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const ACCESS_TOKEN_TTL_MS = 30 * 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 const ROTATION_GRACE_MS = 60_000;
 
@@ -48,6 +48,7 @@ export interface AuthServiceError {
     | "GITHUB_TOKEN_EXCHANGE_FAILED"
     | "GITHUB_ACCOUNT_MISMATCH"
     | "USER_CREATE_FAILED"
+    | "USER_NOT_FOUND"
     | "INVALID_REFRESH_TOKEN";
 }
 
@@ -73,6 +74,19 @@ interface GitHubOAuthTokenResult {
   user: GitHubOAuthUser;
 }
 
+interface GitHubLoginExchange {
+  oauth: GitHubOAuthTokenResult;
+  user: {
+    id: string;
+    githubId: number;
+    githubLogin: string;
+    githubName: string | null;
+    githubAvatarUrl: string | null;
+  };
+  encryptedGitHubAccessToken: string;
+  encryptedGitHubRefreshToken: string | null;
+}
+
 /** Contract for github functions needed for auth */
 export interface AuthGitHubClient {
   getAuthUrl(state: string): string;
@@ -93,6 +107,7 @@ export class AuthService {
   private readonly logger: Logger;
   private readonly userRepository: UserRepository;
   private readonly userSessionRepository: UserSessionRepository;
+  private readonly nativeAccessTokenService: NativeAccessTokenService;
 
   constructor(deps: AuthServiceDeps) {
     const logger = deps.logger ?? createLogger("auth.service.ts");
@@ -101,6 +116,7 @@ export class AuthService {
     this.logger = logger.scope("auth.service.ts");
     this.userRepository = new UserRepository(deps.env.DB);
     this.userSessionRepository = new UserSessionRepository(deps.env.DB);
+    this.nativeAccessTokenService = new NativeAccessTokenService(deps.env);
   }
 
   async createGitHubAuthorizationUrl(params: {
@@ -245,8 +261,134 @@ export class AuthService {
   async exchangeGitHubAuthorizationCode(params: {
     code: string;
     state: string;
-    client?: "web" | "native";
   } & RequestLogFields): Promise<AuthServiceResult<TokenResponse>> {
+    const exchanged = await this.exchangeGitHubLoginCode({
+      ...params,
+      client: "web",
+    });
+    if (!exchanged.ok) {
+      return exchanged;
+    }
+
+    const {
+      oauth,
+      user,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
+    } = exchanged.value;
+    const sessionToken = generateOpaqueToken();
+    const sessionExpiresAt = new Date(
+      Date.now() + WEB_SESSION_TTL_MS,
+    ).toISOString();
+
+    await this.userSessionRepository.createAuthSessionWithGitHubCredentials({
+      sessionToken,
+      userId: user.id,
+      sessionExpiresAt,
+      encryptedAccessToken: encryptedGitHubAccessToken,
+      accessTokenExpiresAt: oauth.expiresAt ?? null,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
+      refreshTokenExpiresAt: oauth.refreshTokenExpiresAt ?? null,
+    });
+
+    const hasInstallations = await this.checkHasInstallations(oauth.accessToken);
+
+    this.logger.info("GitHub OAuth login succeeded", {
+      fields: {
+        client: "web",
+        githubLogin: user.githubLogin,
+        hasInstallations,
+        requestId: params.requestId,
+      },
+    });
+
+    return success({
+      token: sessionToken,
+      user: {
+        id: user.id,
+        login: user.githubLogin,
+        name: user.githubName,
+        avatarUrl: user.githubAvatarUrl,
+      },
+      hasInstallations,
+      installUrl: this.github.getInstallUrl(),
+    });
+  }
+
+  async exchangeNativeGitHubAuthorizationCode(params: {
+    code: string;
+    state: string;
+  } & RequestLogFields): Promise<AuthServiceResult<NativeTokenResponse>> {
+    const exchanged = await this.exchangeGitHubLoginCode({
+      ...params,
+      client: "native",
+    });
+    if (!exchanged.ok) {
+      return exchanged;
+    }
+
+    const {
+      oauth,
+      user,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
+    } = exchanged.value;
+    await this.userSessionRepository.upsertGitHubCredentials({
+      userId: user.id,
+      encryptedAccessToken: encryptedGitHubAccessToken,
+      accessTokenExpiresAt: oauth.expiresAt ?? null,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
+      refreshTokenExpiresAt: oauth.refreshTokenExpiresAt ?? null,
+    });
+
+    const refreshToken = generateOpaqueToken();
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_TTL_MS,
+    ).toISOString();
+    const refreshSessionId = crypto.randomUUID();
+
+    await this.userSessionRepository.createRefreshSession({
+      refreshSessionId,
+      userId: user.id,
+      refreshTokenHash: await sha256(refreshToken),
+      refreshExpiresAt: refreshTokenExpiresAt,
+    });
+
+    const accessToken = await this.nativeAccessTokenService.sign({
+      userId: user.id,
+      refreshSessionId,
+    });
+    const hasInstallations = await this.checkHasInstallations(oauth.accessToken);
+
+    this.logger.info("GitHub OAuth login succeeded", {
+      fields: {
+        client: "native",
+        githubLogin: user.githubLogin,
+        hasInstallations,
+        requestId: params.requestId,
+      },
+    });
+
+    return success({
+      accessToken,
+      refreshToken,
+      refreshTokenExpiresAt,
+      user: {
+        id: user.id,
+        login: user.githubLogin,
+        name: user.githubName,
+        avatarUrl: user.githubAvatarUrl,
+      },
+      hasInstallations,
+      installUrl: this.github.getInstallUrl(),
+    });
+  }
+
+  private async exchangeGitHubLoginCode(params: {
+    code: string;
+    state: string;
+    client: "web" | "native";
+  } & RequestLogFields): Promise<AuthServiceResult<GitHubLoginExchange>> {
     this.logger.info("Received GitHub OAuth callback", {
       fields: {
         hasCode: Boolean(params.code),
@@ -272,7 +414,7 @@ export class AuthService {
       });
     }
 
-    const stateRecord = await consumeValidOauthState(this.env, params.state);
+    const stateRecord = await peekOauthState(this.env, params.state);
     if (
       !stateRecord
       || (
@@ -293,10 +435,60 @@ export class AuthService {
         message: "Invalid or expired state",
       });
     }
+    const redirectOrigin = stateRecord.redirectOrigin;
+    const stateIsNative = redirectOrigin !== null
+      && looksLikeNativeRedirectUri(redirectOrigin);
+    if (params.client === "native") {
+      if (
+        redirectOrigin === null
+        || !validateNativeRedirectUri(redirectOrigin, this.env).ok
+      ) {
+        this.logger.error("Native OAuth callback rejected: non-native state", {
+          fields: {
+            requestId: params.requestId,
+            statePrefix: params.state.slice(0, 8),
+          },
+        });
+        return failure({
+          domain: "auth",
+          status: 400,
+          code: "INVALID_OAUTH_STATE",
+          message: "Invalid or expired state",
+        });
+      }
+    } else if (stateIsNative) {
+      this.logger.error("Web OAuth callback rejected: native state", {
+        fields: {
+          requestId: params.requestId,
+          statePrefix: params.state.slice(0, 8),
+        },
+      });
+      return failure({
+        domain: "auth",
+        status: 400,
+        code: "INVALID_OAUTH_STATE",
+        message: "Invalid or expired state",
+      });
+    }
+    const consumedStateRecord = await consumeValidOauthState(this.env, params.state);
+    if (!consumedStateRecord) {
+      this.logger.error("GitHub OAuth callback rejected: state already consumed", {
+        fields: {
+          requestId: params.requestId,
+          statePrefix: params.state.slice(0, 8),
+        },
+      });
+      return failure({
+        domain: "auth",
+        status: 400,
+        code: "INVALID_OAUTH_STATE",
+        message: "Invalid or expired state",
+      });
+    }
 
-    let result;
+    let oauth: GitHubOAuthTokenResult;
     try {
-      result = await this.github.exchangeOAuthCode(params.code);
+      oauth = await this.github.exchangeOAuthCode(params.code);
     } catch (error) {
       this.logger.error("GitHub OAuth code exchange failed", {
         error,
@@ -313,23 +505,23 @@ export class AuthService {
       });
     }
 
-    const encryptedAccess = await encrypt(
-      result.accessToken,
+    const encryptedGitHubAccessToken = await encrypt(
+      oauth.accessToken,
       this.env.TOKEN_ENCRYPTION_KEY,
     );
-    const encryptedRefresh = result.refreshToken
-      ? await encrypt(result.refreshToken, this.env.TOKEN_ENCRYPTION_KEY)
+    const encryptedGitHubRefreshToken = oauth.refreshToken
+      ? await encrypt(oauth.refreshToken, this.env.TOKEN_ENCRYPTION_KEY)
       : null;
 
-    await this.userRepository.upsertGitHubUser({
+    await this.userRepository.upsertFromGitHubIdentity({
       id: crypto.randomUUID(),
-      githubId: result.user.id,
-      githubLogin: result.user.login,
-      githubName: result.user.name,
-      githubAvatarUrl: result.user.avatarUrl,
+      githubId: oauth.user.id,
+      githubLogin: oauth.user.login,
+      githubName: oauth.user.name,
+      githubAvatarUrl: oauth.user.avatarUrl,
     });
 
-    const user = await this.userRepository.getByGitHubId(result.user.id);
+    const user = await this.userRepository.getByGitHubId(oauth.user.id);
     if (!user) {
       return failure({
         domain: "auth",
@@ -339,97 +531,32 @@ export class AuthService {
       });
     }
 
-    let sessionToken: string;
-    let nativeFields: Pick<
-      TokenResponse,
-      "accessTokenExpiresAt" | "refreshToken" | "refreshTokenExpiresAt"
-    > = {};
-
-    if (params.client === "native") {
-      await this.userSessionRepository.upsertGitHubCredentials({
-        userId: user.id,
-        encryptedAccessToken: encryptedAccess,
-        accessTokenExpiresAt: result.expiresAt ?? null,
-        encryptedRefreshToken: encryptedRefresh,
-        refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
-      });
-
-      const accessToken = generateOpaqueToken();
-      const refreshToken = generateOpaqueToken();
-      const accessTokenExpiresAt = new Date(
-        Date.now() + ACCESS_TOKEN_TTL_MS,
-      ).toISOString();
-      const refreshTokenExpiresAt = new Date(
-        Date.now() + REFRESH_TOKEN_TTL_MS,
-      ).toISOString();
-
-      await this.userSessionRepository.createRefreshSessionWithAccessToken({
-        refreshSessionId: crypto.randomUUID(),
-        userId: user.id,
-        refreshTokenHash: await sha256(refreshToken),
-        refreshExpiresAt: refreshTokenExpiresAt,
-        accessToken,
-        accessTokenExpiresAt,
-      });
-
-      sessionToken = accessToken;
-      nativeFields = { accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt };
-    } else {
-      sessionToken = crypto.randomUUID();
-      const sessionExpiresAt = new Date(
-        Date.now() + WEB_SESSION_TTL_MS,
-      ).toISOString();
-
-      await this.userSessionRepository.createAuthSessionWithGitHubCredentials({
-        sessionToken,
-        userId: user.id,
-        sessionExpiresAt,
-        encryptedAccessToken: encryptedAccess,
-        accessTokenExpiresAt: result.expiresAt ?? null,
-        encryptedRefreshToken: encryptedRefresh,
-        refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
-      });
-    }
-
-    let hasInstallations = false;
-    try {
-      hasInstallations = await this.github.hasInstallations(result.accessToken);
-    } catch (error) {
-      this.logger.error("Failed to check for GitHub app installations", { error });
-    }
-
-    this.logger.info("GitHub OAuth login succeeded", {
-      fields: {
-        client: params.client ?? "web",
-        githubLogin: user.githubLogin,
-        hasInstallations,
-        requestId: params.requestId,
-      },
-    });
-
     return success({
-      token: sessionToken,
-      user: {
-        id: user.id,
-        login: user.githubLogin,
-        name: user.githubName,
-        avatarUrl: user.githubAvatarUrl,
-      },
-      hasInstallations,
-      installUrl: this.github.getInstallUrl(),
-      ...nativeFields,
+      oauth,
+      user,
+      encryptedGitHubAccessToken,
+      encryptedGitHubRefreshToken,
     });
   }
 
+  private async checkHasInstallations(accessToken: string): Promise<boolean> {
+    try {
+      return await this.github.hasInstallations(accessToken);
+    } catch (error) {
+      this.logger.error("Failed to check for GitHub app installations", { error });
+      return false;
+    }
+  }
+
   async createGitHubReauthAuthorizationUrl(params: {
-    user: AuthUser;
+    userId: string;
     requestedOrigin?: string;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubAuthUrlResponse>> {
     const redirectOrigin = params.requestedOrigin ?? this.env.WEB_ORIGIN;
     const originResult = validateRedirectOrigin(redirectOrigin, this.env);
     if (!originResult.ok) {
       this.logger.warn("Rejecting GitHub reauth start", {
-        fields: { reason: originResult.error.message, userId: params.user.id },
+        fields: { reason: originResult.error.message, userId: params.userId },
       });
       return failure({
         domain: "auth",
@@ -448,7 +575,7 @@ export class AuthService {
         redirectOrigin: originResult.value,
         requestId: params.requestId,
         userAgent: params.userAgent,
-        userId: params.user.id,
+        userId: params.userId,
       },
     });
 
@@ -457,7 +584,7 @@ export class AuthService {
       expiresAt,
       redirectOrigin: originResult.value,
       purpose: GITHUB_REAUTH_OAUTH_PURPOSE,
-      userId: params.user.id,
+      userId: params.userId,
     });
 
     return success({
@@ -467,7 +594,7 @@ export class AuthService {
   }
 
   async exchangeGitHubReauthCode(params: {
-    user: AuthUser;
+    userId: string;
     code: string;
     state: string;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubReauthTokenResponse>> {
@@ -477,7 +604,7 @@ export class AuthService {
           hasCode: Boolean(params.code),
           hasState: Boolean(params.state),
           requestId: params.requestId,
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -492,13 +619,13 @@ export class AuthService {
     if (
       !stateRecord
       || stateRecord.purpose !== GITHUB_REAUTH_OAUTH_PURPOSE
-      || stateRecord.userId !== params.user.id
+      || stateRecord.userId !== params.userId
     ) {
       this.logger.error("GitHub reauth callback rejected: invalid or expired state", {
         fields: {
           requestId: params.requestId,
           statePrefix: params.state.slice(0, 8),
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -506,6 +633,22 @@ export class AuthService {
         status: 400,
         code: "INVALID_OAUTH_STATE",
         message: "Invalid or expired state",
+      });
+    }
+
+    const currentUser = await this.userRepository.getById(params.userId);
+    if (!currentUser) {
+      this.logger.warn("GitHub reauth callback rejected: user not found", {
+        fields: {
+          requestId: params.requestId,
+          userId: params.userId,
+        },
+      });
+      return failure({
+        domain: "auth",
+        status: 401,
+        code: "USER_NOT_FOUND",
+        message: "User not found",
       });
     }
 
@@ -518,7 +661,7 @@ export class AuthService {
         fields: {
           requestId: params.requestId,
           statePrefix: params.state.slice(0, 8),
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -529,12 +672,12 @@ export class AuthService {
       });
     }
 
-    if (result.user.id !== params.user.githubId) {
+    if (result.user.id !== currentUser.githubId) {
       this.logger.warn("GitHub reauth account mismatch", {
         fields: {
-          expectedGithubId: params.user.githubId,
+          expectedGithubId: currentUser.githubId,
           actualGithubId: result.user.id,
-          userId: params.user.id,
+          userId: params.userId,
         },
       });
       return failure({
@@ -545,15 +688,15 @@ export class AuthService {
       });
     }
 
-    const encryptedAccess = await encrypt(
+    const encryptedGitHubAccessToken = await encrypt(
       result.accessToken,
       this.env.TOKEN_ENCRYPTION_KEY,
     );
-    const encryptedRefresh = result.refreshToken
+    const encryptedGitHubRefreshToken = result.refreshToken
       ? await encrypt(result.refreshToken, this.env.TOKEN_ENCRYPTION_KEY)
       : null;
 
-    await this.userRepository.upsertGitHubUser({
+    await this.userRepository.upsertFromGitHubIdentity({
       id: crypto.randomUUID(),
       githubId: result.user.id,
       githubLogin: result.user.login,
@@ -561,10 +704,10 @@ export class AuthService {
       githubAvatarUrl: result.user.avatarUrl,
     });
     await this.userSessionRepository.upsertGitHubCredentials({
-      userId: params.user.id,
-      encryptedAccessToken: encryptedAccess,
+      userId: params.userId,
+      encryptedAccessToken: encryptedGitHubAccessToken,
       accessTokenExpiresAt: result.expiresAt ?? null,
-      encryptedRefreshToken: encryptedRefresh,
+      encryptedRefreshToken: encryptedGitHubRefreshToken,
       refreshTokenExpiresAt: result.refreshTokenExpiresAt ?? null,
     });
 
@@ -572,7 +715,7 @@ export class AuthService {
       fields: {
         githubLogin: result.user.login,
         requestId: params.requestId,
-        userId: params.user.id,
+        userId: params.userId,
       },
     });
 
@@ -582,13 +725,23 @@ export class AuthService {
     });
   }
 
-  getCurrentUser(user: AuthUser): UserInfo {
-    return {
+  async getCurrentUser(userId: string): Promise<AuthServiceResult<UserInfo>> {
+    const user = await this.userRepository.getById(userId);
+    if (!user) {
+      return failure({
+        domain: "auth",
+        status: 401,
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    return success({
       id: user.id,
       login: user.githubLogin,
       name: user.githubName,
       avatarUrl: user.githubAvatarUrl,
-    };
+    });
   }
 
   /**
@@ -635,14 +788,18 @@ export class AuthService {
       }
     }
 
-    const newAccessToken = generateOpaqueToken();
     const newRefreshToken = generateOpaqueToken();
-    const accessTokenExpiresAt = new Date(
-      Date.now() + ACCESS_TOKEN_TTL_MS,
-    ).toISOString();
     const refreshTokenExpiresAt = new Date(
       Date.now() + REFRESH_TOKEN_TTL_MS,
     ).toISOString();
+    const user = await this.userRepository.getById(found.userId);
+    if (!user) {
+      this.logger.warn("Refresh rejected: user missing", {
+        fields: { refreshSessionId: found.id, userId: found.userId },
+      });
+      await this.userSessionRepository.revokeRefreshSession(found.id);
+      return invalid;
+    }
 
     await this.userSessionRepository.rotateRefreshSession({
       refreshSessionId: found.id,
@@ -650,8 +807,10 @@ export class AuthService {
       newRefreshTokenHash: await sha256(newRefreshToken),
       previousRefreshTokenHash: presentedHash,
       refreshExpiresAt: refreshTokenExpiresAt,
-      accessToken: newAccessToken,
-      accessTokenExpiresAt,
+    });
+    const accessToken = await this.nativeAccessTokenService.sign({
+      userId: user.id,
+      refreshSessionId: found.id,
     });
 
     this.logger.info("Refreshed native session", {
@@ -659,20 +818,22 @@ export class AuthService {
     });
 
     return success({
-      accessToken: newAccessToken,
-      accessTokenExpiresAt,
+      accessToken,
       refreshToken: newRefreshToken,
       refreshTokenExpiresAt,
     });
   }
 
   async logout(sessionToken: string): Promise<LogoutResponse> {
-    const refreshSessionId = await this.userSessionRepository
-      .getRefreshSessionIdByAccessToken(sessionToken);
-    if (refreshSessionId) {
-      await this.userSessionRepository.revokeRefreshSession(refreshSessionId);
-    } else {
-      await this.userSessionRepository.deleteByToken(sessionToken);
+    await this.userSessionRepository.deleteByToken(sessionToken);
+    return { ok: true };
+  }
+
+  async logoutNative(refreshToken: string): Promise<LogoutResponse> {
+    const refreshSession = await this.userSessionRepository
+      .getRefreshSessionByTokenHash(await sha256(refreshToken));
+    if (refreshSession) {
+      await this.userSessionRepository.revokeRefreshSession(refreshSession.id);
     }
     return { ok: true };
   }
