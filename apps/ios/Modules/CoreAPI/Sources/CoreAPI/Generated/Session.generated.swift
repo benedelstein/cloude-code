@@ -613,15 +613,18 @@ public struct SessionSummary: Codable, Equatable, Sendable {
 }
 
 public struct SessionTodo: Codable, Equatable, Sendable {
+    public var id: String?
     public var content: String
     public var activeForm: String?
     public var status: SessionTodoStatus
 
     public init(
+        id: String? = nil,
         content: String,
         activeForm: String? = nil,
         status: SessionTodoStatus
     ) {
+        self.id = id
         self.content = content
         self.activeForm = activeForm
         self.status = status

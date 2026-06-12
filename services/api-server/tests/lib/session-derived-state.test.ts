@@ -25,6 +25,66 @@ describe("extractDerivedStateFromPart", () => {
     });
   });
 
+  it("extracts Claude TaskCreate as a pending todo", () => {
+    const part = {
+      type: "dynamic-tool",
+      toolName: "TaskCreate",
+      input: {
+        subject: "Inspect bug",
+        description: "Find the broken path",
+        activeForm: "Inspecting bug",
+      },
+      output: "Task #3 created successfully: Inspect bug",
+    } as MessagePart;
+
+    expect(extractDerivedStateFromPart(part)).toEqual({
+      todos: [
+        { id: "3", content: "Inspect bug", status: "pending", activeForm: "Inspecting bug" },
+      ],
+    });
+  });
+
+  it("applies Claude TaskUpdate to the current todo snapshot", () => {
+    const part = {
+      type: "dynamic-tool",
+      toolName: "TaskUpdate",
+      input: {
+        taskId: "2",
+        status: "in_progress",
+      },
+    } as MessagePart;
+
+    expect(extractDerivedStateFromPart(part, [
+      { id: "1", content: "Inspect bug", status: "completed" },
+      { id: "2", content: "Add test", status: "pending" },
+    ])).toEqual({
+      todos: [
+        { id: "1", content: "Inspect bug", status: "completed" },
+        { id: "2", content: "Add test", status: "in_progress" },
+      ],
+    });
+  });
+
+  it("applies Claude TaskUpdate deletion to the current todo snapshot", () => {
+    const part = {
+      type: "dynamic-tool",
+      toolName: "TaskUpdate",
+      input: {
+        taskId: "1",
+        status: "deleted",
+      },
+    } as MessagePart;
+
+    expect(extractDerivedStateFromPart(part, [
+      { id: "1", content: "Inspect bug", status: "pending" },
+      { id: "2", content: "Add test", status: "pending" },
+    ])).toEqual({
+      todos: [
+        { id: "2", content: "Add test", status: "pending" },
+      ],
+    });
+  });
+
   it("extracts Codex update_plan todos from args", () => {
     const part = {
       type: "dynamic-tool",

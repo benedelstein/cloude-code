@@ -140,6 +140,78 @@ describe("claudeToolNormalizer", () => {
     expect(result[0]!.kind).toBe("todo");
   });
 
+  it("TaskCreate maps to todo", () => {
+    const result = normalizeToolPart(
+      part({
+        toolName: "TaskCreate",
+        input: { subject: "Inspect bug", activeForm: "Inspecting bug" },
+      }),
+      "claude-code",
+    );
+    expect(result[0]!.kind).toBe("todo");
+    if (result[0]!.kind === "todo") {
+      expect(result[0]!.payload.todos).toEqual([
+        { content: "Inspect bug", activeForm: "Inspecting bug", status: "pending" },
+      ]);
+    }
+  });
+
+  it("TaskUpdate maps to todo", () => {
+    const result = normalizeToolPart(
+      part({
+        toolName: "TaskUpdate",
+        input: { taskId: "2", status: "completed" },
+      }),
+      "claude-code",
+    );
+    expect(result[0]!.kind).toBe("todo");
+    if (result[0]!.kind === "todo") {
+      expect(result[0]!.payload.todos).toEqual([
+        { id: "2", content: "Task #2", status: "completed" },
+      ]);
+    }
+  });
+
+  it("TaskList maps to todo with output tasks", () => {
+    const result = normalizeToolPart(
+      part({
+        toolName: "TaskList",
+        input: {},
+        output: {
+          tasks: [
+            { id: "1", subject: "Inspect bug", status: "completed" },
+            { id: "2", subject: "Add test", status: "in_progress" },
+          ],
+        },
+      }),
+      "claude-code",
+    );
+    expect(result[0]!.kind).toBe("todo");
+    if (result[0]!.kind === "todo") {
+      expect(result[0]!.payload.todos).toEqual([
+        { id: "1", content: "Inspect bug", status: "completed" },
+        { id: "2", content: "Add test", status: "in_progress" },
+      ]);
+    }
+  });
+
+  it("TaskGet maps to todo with output task", () => {
+    const result = normalizeToolPart(
+      part({
+        toolName: "TaskGet",
+        input: { taskId: "1" },
+        output: { id: "1", subject: "Inspect bug", status: "pending" },
+      }),
+      "claude-code",
+    );
+    expect(result[0]!.kind).toBe("todo");
+    if (result[0]!.kind === "todo") {
+      expect(result[0]!.payload.todos).toEqual([
+        { id: "1", content: "Inspect bug", status: "pending" },
+      ]);
+    }
+  });
+
   it("ExitPlanMode maps to plan", () => {
     const result = normalizeToolPart(
       part({ toolName: "ExitPlanMode", input: { plan: "## Plan\n..." } }),

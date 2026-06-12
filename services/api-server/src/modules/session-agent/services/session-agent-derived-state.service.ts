@@ -6,6 +6,7 @@ import type { LatestPlanRepository } from "../repositories/latest-plan.repositor
 export type DerivedStateContext = {
   sessionId: string;
   latestPlanRepository: LatestPlanRepository;
+  getTodos?: () => ClientState["todos"];
   updatePartialState: (partial: Partial<Pick<ClientState, "todos" | "plan">>) => void;
 };
 
@@ -19,16 +20,18 @@ export function applyDerivedStateFromParts(
   }
 
   let nextTodos: SessionTodo[] | null | undefined;
+  let workingTodos = context.getTodos?.() ?? null;
   let nextPlanLastUpdated: string | null = null;
 
   for (const completedPart of completedParts) {
-    const derivedState = extractDerivedStateFromPart(completedPart);
+    const derivedState = extractDerivedStateFromPart(completedPart, workingTodos);
     if (!derivedState) {
       continue;
     }
 
     if (derivedState.todos !== undefined) {
       nextTodos = derivedState.todos;
+      workingTodos = derivedState.todos;
     }
 
     if (derivedState.plan) {

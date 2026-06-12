@@ -281,6 +281,7 @@
     "hasUnread": true
   },
   "SessionTodo.autoFull": {
+    "id": "sample",
     "content": "sample",
     "activeForm": "sample",
     "status": "pending"
@@ -611,6 +612,7 @@
     "baseBranch": "sample",
     "todos": [
       {
+        "id": "sample",
         "content": "sample",
         "activeForm": "sample",
         "status": "pending"

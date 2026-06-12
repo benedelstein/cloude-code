@@ -132,6 +132,7 @@ export class AgentTurnCoordinator {
           {
             sessionId,
             latestPlanRepository: this.latestPlanRepository,
+            getTodos: () => this.getClientState().todos,
             updatePartialState: (partial) => {
               lastTodos = partial.todos;
               lastPlan = partial.plan;
@@ -426,6 +427,7 @@ export class AgentTurnCoordinator {
       {
         sessionId: serverState.sessionId!,
         latestPlanRepository: this.latestPlanRepository,
+        getTodos: () => this.getClientState().todos,
         updatePartialState: (partial) => this.updatePartialState(partial),
       },
       completedParts,

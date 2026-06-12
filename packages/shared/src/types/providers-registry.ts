@@ -83,7 +83,7 @@ export const CLAUDE_PROVIDER: ProviderDefinition<typeof CLAUDE_PROVIDER_ID, Clau
   defaultModel: "claude-opus-4-8",
   defaultEffort: "high",
   authMethods: ["oauth"],
-  todoToolName: "TodoWrite",
+  todoToolName: "TaskCreate",
   models: CLAUDE_MODELS,
   efforts: CLAUDE_EFFORTS,
 };

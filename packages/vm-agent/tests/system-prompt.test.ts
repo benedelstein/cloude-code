@@ -3,13 +3,14 @@ import { buildSystemPromptAppend } from "../src/lib/system-prompt";
 
 describe("buildSystemPromptAppend", () => {
   it("includes sprite context, branch naming instructions, and Claude todo guidance", () => {
-    const prompt = buildSystemPromptAppend("abcd", "Sprite-specific context", "TodoWrite");
+    const prompt = buildSystemPromptAppend("abcd", "Sprite-specific context", "TaskCreate");
 
     expect(prompt).toContain("Sprite-specific context");
     expect(prompt).toContain("cloude/<descriptive-slug>-abcd");
     expect(prompt).toContain("NEVER push to `main`");
     expect(prompt).toContain("automatically creates a pull request");
-    expect(prompt).toContain("`TodoWrite`");
+    expect(prompt).toContain("`TaskCreate`");
+    expect(prompt).toContain("`TaskUpdate`");
   });
 
   it("mentions update_plan for Codex", () => {

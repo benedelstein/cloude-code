@@ -33,6 +33,49 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function asTaskId(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
+
+function taskStatus(value: unknown): string {
+  const status = asString(value);
+  return status === "pending" || status === "in_progress" || status === "completed"
+    ? status
+    : "pending";
+}
+
+function taskTodo(input: Record<string, unknown>): Record<string, unknown> {
+  const taskId = asTaskId(input.taskId ?? input.id);
+  const subject = asString(input.subject);
+  const content = subject || (taskId ? `Task #${taskId}` : "Task");
+  return {
+    ...(taskId ? { id: taskId } : {}),
+    content,
+    ...(asString(input.activeForm) ? { activeForm: asString(input.activeForm) } : {}),
+    status: taskStatus(input.status),
+  };
+}
+
+function taskListTodos(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => (item && typeof item === "object" ? taskTodo(item as Record<string, unknown>) : item));
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const tasks = record.tasks ?? record.todos;
+    if (Array.isArray(tasks)) {
+      return taskListTodos(tasks);
+    }
+    if (record.subject || record.content || record.taskId || record.id) {
+      return [taskTodo({
+        ...record,
+        subject: record.subject ?? record.content,
+      })];
+    }
+  }
+  return [];
+}
+
 function asPositiveInteger(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
     return undefined;
@@ -175,6 +218,44 @@ const handlers: Record<string, (part: NormalizableToolUIPart) => NormalizedToolA
       kind: "todo",
       ...ctx(part),
       payload: { todos: input.todos },
+    }];
+  },
+
+  TaskCreate: (part) => {
+    const input = getInput(part);
+    return [{
+      kind: "todo",
+      ...ctx(part),
+      payload: { todos: [taskTodo(input)] },
+    }];
+  },
+
+  TaskUpdate: (part) => {
+    const input = getInput(part);
+    return [{
+      kind: "todo",
+      ...ctx(part),
+      payload: { todos: [taskTodo(input)] },
+    }];
+  },
+
+  TaskList: (part) => {
+    const input = getInput(part);
+    const outputTodos = taskListTodos(getOutput(part));
+    return [{
+      kind: "todo",
+      ...ctx(part),
+      payload: { todos: outputTodos.length > 0 ? outputTodos : taskListTodos(input.tasks ?? input.todos) },
+    }];
+  },
+
+  TaskGet: (part) => {
+    const input = getInput(part);
+    const outputTodos = taskListTodos(getOutput(part));
+    return [{
+      kind: "todo",
+      ...ctx(part),
+      payload: { todos: outputTodos.length > 0 ? outputTodos : [taskTodo(input)] },
     }];
   },
 

@@ -12,6 +12,12 @@ export function getTodoToolNameForProvider(providerId: ProviderId): TodoToolName
   return getProviderTodoToolName(providerId);
 }
 
+function formatTodoToolInstruction(todoToolName: TodoToolName): string {
+  return todoToolName === "TaskCreate"
+    ? "the `TaskCreate` and `TaskUpdate` tools"
+    : `the \`${todoToolName}\` tool`;
+}
+
 /**
  * System prompt appended to the provider preset/base instructions for the vm-agent.
  * Provides context about the environment and workflow instructions.
@@ -57,7 +63,7 @@ After you push the branch and finish your turn, the service automatically create
 </git-workflow>
 
 <other-information>
-For multi-step tasks, you should use the \`${todoToolName}\` tool to track your progress and surface information to the user.
+For multi-step tasks, you should use ${formatTodoToolInstruction(todoToolName)} to track your progress and surface information to the user.
 For complex tasks, you can enter plan mode to get a better understanding of the task and plan your approach. \`EnterPlanMode\`
 </other-information>
 `;

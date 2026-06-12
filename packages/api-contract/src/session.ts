@@ -153,6 +153,7 @@ export const SessionTodoStatus = z.enum(["pending", "in_progress", "completed"])
 export type SessionTodoStatus = z.infer<typeof SessionTodoStatus>;
 
 export const SessionTodo = z.object({
+  id: z.string().optional(),
   content: z.string(),
   activeForm: z.string().optional(),
   status: SessionTodoStatus,
