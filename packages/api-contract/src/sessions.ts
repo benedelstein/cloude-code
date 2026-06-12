@@ -33,7 +33,11 @@ export type SessionPlanResponse = z.infer<typeof SessionPlanResponse>;
 /** Full accumulated setup-script output, fetched on demand. */
 export const SessionSetupOutputResponse = z.object({
   taskId: z.literal("setup_script"),
-  /** Unique per script run; matches the epoch on streamed setup.output.chunks events. */
+  /**
+   * Identifies the script run the output belongs to. Matches the epoch on
+   * streamed setup.output.chunks events from the same server instance; may
+   * differ for completed runs after a server restart.
+   */
   epoch: z.string(),
   stdout: z.string(),
   stderr: z.string(),

@@ -408,9 +408,13 @@ function SessionSetupTaskRow({
     (taskOutput?.stdoutLength ?? 0) > 0 || (taskOutput?.stderrLength ?? 0) > 0;
   const hasLiveOutput =
     liveOutput !== null && (liveOutput.stdout.length > 0 || liveOutput.stderr.length > 0);
+  // Terminal tasks repaired after a server restart can have stored output but
+  // no metadata; offer the expand-and-fetch path for those too.
+  const mayHaveUnknownOutput = taskOutput === null
+    && (setupScriptTask?.status === "completed" || setupScriptTask?.status === "failed");
   const hasOutput =
     setupScriptTask !== null
-    && (isScriptRunning || hasLiveOutput || hasStoredOutput || hasLegacyOutput);
+    && (isScriptRunning || hasLiveOutput || hasStoredOutput || hasLegacyOutput || mayHaveUnknownOutput);
 
   // Auto-open the output while the script runs and hydrate any output
   // produced before this client connected; live chunks fill in the rest.
@@ -439,7 +443,7 @@ function SessionSetupTaskRow({
       && !hasLiveOutput
       && !hasLegacyOutput
       && !fetchedOutput
-      && hasStoredOutput
+      && (hasStoredOutput || mayHaveUnknownOutput)
       && sessionId !== null;
     if (needsFetch) {
       setIsOutputLoading(true);

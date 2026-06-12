@@ -19,6 +19,12 @@ vi.mock("agents/react", () => ({
   }),
 }));
 
+const mockGetSessionSetupOutput = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/client-api", () => ({
+  getSessionSetupOutput: mockGetSessionSetupOutput,
+}));
+
 function renderAgent({
   expiresAt = new Date(Date.now() + 60_000).toISOString(),
   refreshWebSocketToken,
@@ -78,6 +84,8 @@ describe("useCloudflareAgent", () => {
   beforeEach(() => {
     mockAgentState.send.mockClear();
     mockAgentState.options = null;
+    mockGetSessionSetupOutput.mockReset();
+    mockGetSessionSetupOutput.mockResolvedValue(null);
     setDocumentVisibility("visible");
   });
 
@@ -351,6 +359,34 @@ describe("useCloudflareAgent", () => {
     expect(result.current.setupScriptOutput).toEqual({
       epoch: "epoch-2",
       stdout: "new run\n",
+      stderr: "",
+    });
+  });
+
+  it("drops gap chunks and resyncs from the fetch endpoint", async () => {
+    mockGetSessionSetupOutput.mockResolvedValue({
+      taskId: "setup_script",
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\n",
+      stderr: "",
+      truncated: false,
+      completed: false,
+    });
+    const { result } = renderAgent();
+
+    await act(async () => {
+      // Joined mid-run: this chunk starts past the applied prefix.
+      emitSetupOutputChunks("epoch-1", [
+        { stream: "stdout", data: "line 2\n", offset: 7 },
+      ]);
+    });
+
+    expect(mockGetSessionSetupOutput).toHaveBeenCalledWith(
+      "123e4567-e89b-12d3-a456-426614174000",
+    );
+    expect(result.current.setupScriptOutput).toEqual({
+      epoch: "epoch-1",
+      stdout: "line 1\nline 2\n",
       stderr: "",
     });
   });

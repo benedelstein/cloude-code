@@ -23,8 +23,14 @@ import { ensureSpriteStartupToolchain } from "@/shared/integrations/sprites/star
 import type { GitHubAppResult } from "@/shared/types/github";
 import type { ServerState } from "../repositories/server-state.repository";
 import { isTerminalSetupTask } from "./session-setup-run.service";
-import { SessionStartupScriptService } from "./session-startup-script.service";
-import type { SessionSetupOutputCollector } from "./session-setup-output.service";
+import {
+  SessionStartupScriptService,
+  type SessionStartupScriptRunResult,
+} from "./session-startup-script.service";
+import type {
+  SessionSetupOutputCollector,
+  SetupOutputFinishResult,
+} from "./session-setup-output.service";
 
 const WORKSPACE_DIR = "/home/sprite/workspace";
 
@@ -275,15 +281,33 @@ export class SessionProvisionService {
     );
 
     this.setupOutputCollector?.beginRun();
-    const result = await this.startupScriptService.run({
-      sprite,
-      script: environmentSnapshot.startupScript,
-      workspaceDir: WORKSPACE_DIR,
-      env: environmentSnapshot.plainEnvVars,
-      onOutput: (stream, data) => this.setupOutputCollector?.append(stream, data),
-    }).finally(() => {
+    let result: SessionStartupScriptRunResult;
+    try {
+      result = await this.startupScriptService.run({
+        sprite,
+        script: environmentSnapshot.startupScript,
+        workspaceDir: WORKSPACE_DIR,
+        env: environmentSnapshot.plainEnvVars,
+        onOutput: (stream, data) => this.setupOutputCollector?.append(stream, data),
+      });
+    } catch (error) {
+      // Exec transport failures (not script exit codes). Finishing the
+      // collector flushes pending output and stops its timer, and the task
+      // keeps whatever output was captured before the failure.
       this.updateServerState({ startupScriptCompleted: true });
-    });
+      const outputInfo = this.setupOutputCollector?.finish();
+      const errorMessage = getErrorMessage(error);
+      this.logger.warn("Session startup script errored", {
+        fields: {
+          sessionId: this.getServerState().sessionId,
+          errorMessage,
+        },
+      });
+      this.setupReporter?.failTask(task.id, errorMessage, buildSetupScriptOutput(null, outputInfo));
+      return;
+    }
+    this.updateServerState({ startupScriptCompleted: true });
+    const outputInfo = this.setupOutputCollector?.finish();
 
     if (result.status === "failed") {
       this.logger.warn("Session startup script failed", {
@@ -295,26 +319,15 @@ export class SessionProvisionService {
     }
     switch (result.status) {
       case "completed":
-        this.setupReporter?.completeTask(task.id, this.buildSetupScriptOutput(result.exitCode));
+        this.setupReporter?.completeTask(task.id, buildSetupScriptOutput(result.exitCode, outputInfo));
         break;
       case "failed":
-        this.setupReporter?.failTask(task.id, result.errorMessage, this.buildSetupScriptOutput(result.exitCode));
+        this.setupReporter?.failTask(task.id, result.errorMessage, buildSetupScriptOutput(result.exitCode, outputInfo));
         break;
       case "skipped":
         this.setupReporter?.skipTask(task.id, buildSkippedSetupScriptSkipReason(this.getEnvironmentSnapshot()));
         break;
     }
-  }
-
-  /** Builds the task's output metadata; full output lives in the setup-output store. */
-  private buildSetupScriptOutput(exitCode: number | null): SessionSetupTaskOutput {
-    const outputInfo = this.setupOutputCollector?.finish();
-    return {
-      exitCode,
-      truncated: outputInfo?.truncated ?? false,
-      stdoutLength: outputInfo?.stdoutLength ?? 0,
-      stderrLength: outputInfo?.stderrLength ?? 0,
-    };
   }
 
   private async ensureNetworkPolicyTask(
@@ -523,6 +536,19 @@ export class SessionProvisionService {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Builds the setup task's output metadata; full output lives in the setup-output store. */
+function buildSetupScriptOutput(
+  exitCode: number | null,
+  outputInfo: SetupOutputFinishResult | undefined,
+): SessionSetupTaskOutput {
+  return {
+    exitCode,
+    truncated: outputInfo?.truncated ?? false,
+    stdoutLength: outputInfo?.stdoutLength ?? 0,
+    stderrLength: outputInfo?.stderrLength ?? 0,
+  };
 }
 
 function hasRetryableFailedProvisionTask(

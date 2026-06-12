@@ -127,6 +127,27 @@ describe("SessionSetupOutputService", () => {
     expect(totalAppended).toBe(SETUP_OUTPUT_STORE_CAP);
   });
 
+  it("does not split a surrogate pair at the storage cap", () => {
+    const { broadcasts, service } = createService();
+    service.beginRun();
+
+    // The pair straddles the cap; the lone high surrogate must be dropped.
+    service.append("stdout", "x".repeat(SETUP_OUTPUT_STORE_CAP - 1) + "\u{1F600}");
+    const result = service.finish();
+
+    const data = setupOutputEvents(broadcasts)
+      .flatMap((event) => event.chunks)
+      .map((chunk) => chunk.data)
+      .join("");
+    expect(data).toHaveLength(SETUP_OUTPUT_STORE_CAP - 1);
+    expect(data.at(-1)).toBe("x");
+    expect(result).toEqual({
+      stdoutLength: SETUP_OUTPUT_STORE_CAP,
+      stderrLength: 0,
+      truncated: true,
+    });
+  });
+
   it("flushes pending output and compacts on finish", () => {
     const { broadcasts, repository, service } = createService();
     service.beginRun();

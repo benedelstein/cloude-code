@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { SetupOutputRepository } from "../../src/modules/session-agent/repositories/setup-output.repository";
+import {
+  SETUP_OUTPUT_COMPACT_MAX_CHARS,
+  SetupOutputRepository,
+} from "../../src/modules/session-agent/repositories/setup-output.repository";
 import type { SqlFn } from "../../src/modules/session-agent/repositories/repository.types";
 
 interface OutputRow {
@@ -112,6 +115,31 @@ describe("SetupOutputRepository", () => {
     expect(rows.filter((row) => row.stream === "stdout")).toHaveLength(1);
     expect(repository.read("stdout")).toBe("ab");
     expect(repository.read("stderr")).toBe("x");
+  });
+
+  it("splits large appends into row-size-safe segments", () => {
+    const { rows, sql } = createSql();
+    const repository = new SetupOutputRepository(sql);
+    const data = "a".repeat(130_000);
+
+    repository.append("stdout", data);
+
+    expect(rows.filter((row) => row.stream === "stdout")).toHaveLength(3);
+    expect(repository.read("stdout")).toBe(data);
+  });
+
+  it("skips compaction for streams above the row-size-safe limit", () => {
+    const { rows, sql } = createSql();
+    const repository = new SetupOutputRepository(sql);
+    const data = "a".repeat(SETUP_OUTPUT_COMPACT_MAX_CHARS + 1);
+
+    repository.append("stdout", data);
+    const rowCountBefore = rows.length;
+    repository.compact("stdout");
+
+    expect(rowCountBefore).toBeGreaterThan(1);
+    expect(rows).toHaveLength(rowCountBefore);
+    expect(repository.read("stdout")).toBe(data);
   });
 
   it("clears all stored output", () => {

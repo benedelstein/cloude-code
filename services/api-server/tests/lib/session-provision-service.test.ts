@@ -712,6 +712,54 @@ describe("SessionProvisionService startup toolchain", () => {
     });
   });
 
+  it("reports exec failures with collected output metadata and continues", async () => {
+    const serverState = createServerState();
+    const setupReporter = createSetupReporter();
+    const events: string[] = [];
+    const setupOutputCollector = {
+      beginRun: vi.fn(() => events.push("beginRun")),
+      append: vi.fn(() => events.push("append")),
+      finish: vi.fn(() => {
+        events.push("finish");
+        return { stdoutLength: 8, stderrLength: 0, truncated: false };
+      }),
+    };
+    mockState.execWs.mockImplementation(async (
+      command: string,
+      options: { onStdout?: (data: string) => void } = {},
+    ) => {
+      if (command.includes("timeout")) {
+        options.onStdout?.("partial\n");
+        throw new Error("exec websocket dropped");
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    const { service } = createService(
+      serverState,
+      createClientState(),
+      {},
+      createEnvironmentSnapshot({ startupScript: "echo hi" }),
+      setupReporter,
+      setupOutputCollector,
+    );
+
+    await service.ensureProvisioned();
+
+    expect(events).toEqual(["beginRun", "append", "finish"]);
+    expect(setupReporter.failTask).toHaveBeenCalledExactlyOnceWith(
+      "setup_script",
+      "exec websocket dropped",
+      {
+        exitCode: null,
+        truncated: false,
+        stdoutLength: 8,
+        stderrLength: 0,
+      },
+    );
+    expect(serverState.startupScriptCompleted).toBe(true);
+    expect(serverState.finalNetworkPolicyApplied).toBe(true);
+  });
+
   it("reports cloud container task when the sprite exists but toolchain is missing", async () => {
     const serverState = createServerState({
       spriteName: "sprite-1",

@@ -1,5 +1,6 @@
 import type { Logger, ServerMessage, SetupOutputChunk } from "@repo/shared";
 import {
+  isHighSurrogate,
   SETUP_OUTPUT_STORE_CAP,
   type SetupOutputRepository,
   type SetupOutputStream,
@@ -81,12 +82,22 @@ export class SessionSetupOutputService implements SessionSetupOutputCollector {
     }
     // Drop output beyond the cap for both storage and broadcast so the fetch
     // endpoint and the live stream always agree.
-    const accepted = data.length > remaining ? data.slice(0, remaining) : data;
-    if (accepted.length < data.length) {
+    let accepted = data;
+    if (data.length > remaining) {
+      accepted = data.slice(0, remaining);
+      // Don't split a surrogate pair at the cap.
+      if (isHighSurrogate(accepted.charCodeAt(accepted.length - 1))) {
+        accepted = accepted.slice(0, -1);
+      }
       this.truncated = true;
     }
-    this.pendingChunks.push({ stream, data: accepted, offset: this.offsets[stream] });
-    this.offsets[stream] += accepted.length;
+    if (accepted.length > 0) {
+      this.pendingChunks.push({ stream, data: accepted, offset: this.offsets[stream] });
+    }
+    // A truncated append closes the stream: report the cap as its final length.
+    this.offsets[stream] = data.length > remaining
+      ? SETUP_OUTPUT_STORE_CAP
+      : this.offsets[stream] + accepted.length;
     this.pendingChars += accepted.length;
 
     if (this.pendingChars >= FLUSH_MAX_CHARS) {

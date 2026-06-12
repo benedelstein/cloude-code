@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useAgent } from "agents/react";
 import { readUIMessageStream } from "ai";
 import type { UIMessage, UIMessageChunk } from "ai";
+import { getSessionSetupOutput } from "@/lib/client-api";
 import { buildOptimisticUserMessage } from "@/lib/session-pending-user-message";
 import { normalizeHost } from "@/lib/utils";
 import { isWebSocketTokenExpiredOrExpiring } from "@/lib/websocket-token";
@@ -52,26 +53,36 @@ export interface SetupScriptOutputState {
   stderr: string;
 }
 
+/**
+ * Applies streamed chunks while keeping each accumulated stream an exact
+ * prefix of the server-side stream: only contiguous chunks are appended.
+ * Chunks past the applied prefix (missed while disconnected or before this
+ * client joined) are dropped and reported as a gap so the caller can resync
+ * from the fetch endpoint instead of splicing output together incorrectly.
+ */
 function applySetupOutputChunks(
   previous: SetupScriptOutputState | null,
   event: SetupOutputChunksEvent,
-): SetupScriptOutputState {
+): { state: SetupScriptOutputState; gapDetected: boolean } {
   // A new epoch means the script (re)started; discard prior output.
   let next = previous && previous.epoch === event.epoch
     ? previous
     : { epoch: event.epoch, stdout: "", stderr: "" };
+  let gapDetected = false;
   for (const chunk of event.chunks) {
     const current = next[chunk.stream];
+    if (chunk.offset > current.length) {
+      gapDetected = true;
+      continue;
+    }
     if (chunk.offset + chunk.data.length <= current.length) {
       // Already applied (e.g. covered by a fetched snapshot).
       continue;
     }
-    const data = chunk.offset <= current.length
-      ? chunk.data.slice(current.length - chunk.offset)
-      : chunk.data;
+    const data = chunk.data.slice(current.length - chunk.offset);
     next = { ...next, [chunk.stream]: current + data };
   }
-  return next;
+  return { state: next, gapDetected };
 }
 
 function withLiveStartedAt(message: UIMessage, startedAt: number): UIMessage {
@@ -196,6 +207,10 @@ export function useCloudflareAgent({
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
 
+  // Mirrors setupScriptOutput so the message handler can read/update it
+  // synchronously (state updaters are not safe for the gap side effect).
+  const setupOutputRef = useRef<SetupScriptOutputState | null>(null);
+  const setupOutputResyncInFlightRef = useRef(false);
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
   const streamingStartedAtRef = useRef<number | null>(null);
@@ -285,6 +300,40 @@ export function useCloudflareAgent({
     }
   }, []);
 
+  // Merges a fetched setup-output snapshot with chunks already streamed live.
+  // Both sides are prefixes of the same stream, so the longer one wins.
+  const hydrateSetupOutput = useCallback((snapshot: SessionSetupOutputResponse) => {
+    const prev = setupOutputRef.current;
+    const next = !prev || prev.epoch !== snapshot.epoch
+      ? { epoch: snapshot.epoch, stdout: snapshot.stdout, stderr: snapshot.stderr }
+      : {
+          epoch: prev.epoch,
+          stdout: snapshot.stdout.length >= prev.stdout.length ? snapshot.stdout : prev.stdout,
+          stderr: snapshot.stderr.length >= prev.stderr.length ? snapshot.stderr : prev.stderr,
+        };
+    setupOutputRef.current = next;
+    setSetupScriptOutput(next);
+  }, []);
+
+  // Fills holes left by missed chunks (mid-run join, WS reconnect) from the
+  // fetch endpoint. Gaps re-trigger this until the streams are contiguous.
+  const resyncSetupOutput = useCallback(() => {
+    if (setupOutputResyncInFlightRef.current) {
+      return;
+    }
+    setupOutputResyncInFlightRef.current = true;
+    getSessionSetupOutput(sessionId)
+      .then((snapshot) => {
+        if (snapshot) {
+          hydrateSetupOutput(snapshot);
+        }
+      })
+      .catch((error) => console.warn("Failed to resync setup output", error))
+      .finally(() => {
+        setupOutputResyncInFlightRef.current = false;
+      });
+  }, [hydrateSetupOutput, sessionId]);
+
   const handleServerMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case "connected":
@@ -372,9 +421,15 @@ export function useCloudflareAgent({
       case "agent.ready":
         break;
 
-      case "setup.output.chunks":
-        setSetupScriptOutput((prev) => applySetupOutputChunks(prev, msg));
+      case "setup.output.chunks": {
+        const { state, gapDetected } = applySetupOutputChunks(setupOutputRef.current, msg);
+        setupOutputRef.current = state;
+        setSetupScriptOutput(state);
+        if (gapDetected) {
+          resyncSetupOutput();
+        }
         break;
+      }
 
       case "user.message":
         setOperationError(null);
@@ -390,7 +445,7 @@ export function useCloudflareAgent({
         onError?.(new Error(msg.message));
         break;
     }
-  }, [applyServerActiveTurn, markRead, onError, resetPendingResponse]);
+  }, [applyServerActiveTurn, markRead, onError, resetPendingResponse, resyncSetupOutput]);
 
   // useAgent/PartySocket owns the session WebSocket and reconnect loop.
   const agent = useAgent<ClientState>({
@@ -542,21 +597,6 @@ export function useCloudflareAgent({
   const stop = useCallback(() => {
     sendToAgent({ type: "operation.cancel" });
   }, [sendToAgent]);
-
-  // Merges a fetched setup-output snapshot with chunks already streamed live.
-  const hydrateSetupOutput = useCallback((snapshot: SessionSetupOutputResponse) => {
-    setSetupScriptOutput((prev) => {
-      if (!prev || prev.epoch !== snapshot.epoch) {
-        return { epoch: snapshot.epoch, stdout: snapshot.stdout, stderr: snapshot.stderr };
-      }
-      // Same run: keep whichever side has seen more of each stream.
-      return {
-        epoch: prev.epoch,
-        stdout: snapshot.stdout.length >= prev.stdout.length ? snapshot.stdout : prev.stdout,
-        stderr: snapshot.stderr.length >= prev.stderr.length ? snapshot.stderr : prev.stderr,
-      };
-    });
-  }, []);
 
   const selectedProvider = agentSettings?.provider ?? null;
 
