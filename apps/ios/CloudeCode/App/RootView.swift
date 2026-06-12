@@ -20,6 +20,7 @@ struct RootView: View {
                 SignedOutView(sessionStore: sessionStore)
             }
         }
+        .transition(.opacity.animation(.easeIn(duration: 0.3)))
         .task { await sessionStore.start() }
         .themedRoot()
     }
