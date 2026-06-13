@@ -169,11 +169,19 @@ private final class OneShotContinuation: @unchecked Sendable {
     }
 
     func resume() {
-        take()?.resume()
+        guard let continuation = take() else {
+            Logger.warning("WebSocket ping completion fired after continuation was already resumed")
+            return
+        }
+        continuation.resume()
     }
 
     func resume(throwing error: any Error) {
-        take()?.resume(throwing: error)
+        guard let continuation = take() else {
+            Logger.warning("WebSocket ping completion fired after continuation was already resumed", error)
+            return
+        }
+        continuation.resume(throwing: error)
     }
 
     private func take() -> CheckedContinuation<Void, any Error>? {
