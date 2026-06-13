@@ -35,7 +35,7 @@ struct AgentSessionView: View {
             PromptComposerView(
                 text: $store.draftText,
                 focused: $composerFocused,
-                placeholder: store.isConnected ? "Send a message..." : "Connecting...",
+                placeholder: store.composerPlaceholder,
                 isSubmitDisabled: !store.canSubmitDraft,
                 isSubmitting: store.isSending,
                 onSubmit: store.submitDraft

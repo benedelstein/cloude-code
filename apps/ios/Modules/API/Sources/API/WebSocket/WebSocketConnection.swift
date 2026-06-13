@@ -79,12 +79,12 @@ public actor WebSocketConnection {
         while !Task.isCancelled, !isStopped {
             continuation.yield(.stateChanged(.connecting))
             do {
-                let task = urlSession.webSocketTask(with: try await makeURL())
+                let url = try await makeURL()
+                Logger.debug("websocket connecting to", url.sanitizedWebSocketLogString)
+                let task = urlSession.webSocketTask(with: url)
                 task.resume()
                 socketTask = task
-                // A pong round-trip confirms the upgrade actually succeeded.
-                try await Self.awaitPong(task)
-                Logger.debug("websocket connect succeeded")
+                Logger.debug("websocket task resumed")
                 retryCount = 0
                 continuation.yield(.stateChanged(.connected))
                 startPinging(task)
@@ -190,6 +190,18 @@ private final class OneShotContinuation: @unchecked Sendable {
             continuation = nil
             return result
         }
+    }
+}
+
+private extension URL {
+    var sanitizedWebSocketLogString: String {
+        guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+            return absoluteString
+        }
+        components.queryItems = components.queryItems?.map { item in
+            item.name == "token" ? URLQueryItem(name: item.name, value: "<redacted>") : item
+        }
+        return components.string ?? absoluteString
     }
 }
 

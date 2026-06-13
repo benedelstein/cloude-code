@@ -1,4 +1,5 @@
 import API
+import Domain
 import Entities
 import Foundation
 
@@ -28,6 +29,17 @@ final class AgentSessionStore {
 
     var isConnected: Bool {
         connectionState == .connected
+    }
+
+    var composerPlaceholder: String {
+        switch connectionState {
+        case .connecting:
+            "Connecting..."
+        case .connected:
+            "Send a message..."
+        case .disconnected:
+            "Reconnecting..."
+        }
     }
 
     init(session: SessionSummaryModel, socket: SessionSocket) {
@@ -84,6 +96,7 @@ final class AgentSessionStore {
     private func handle(_ event: SessionSocketEvent) async {
         switch event {
         case .connectionChanged(let state):
+            Logger.debug("Agent session socket state changed:", "\(state)")
             connectionState = state
             if state == .connected {
                 await requestSync()
@@ -144,6 +157,7 @@ final class AgentSessionStore {
 
     private func requestSync() async {
         do {
+            Logger.debug("Requesting agent session sync")
             try await socket.requestSync()
         } catch {
             record(error)
