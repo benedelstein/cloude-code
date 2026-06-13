@@ -5,6 +5,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(\.style) private var style
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.showToast) private var showToast
 
     @State private var viewModel: HomeViewModel
@@ -19,53 +20,9 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.isEmpty {
-                    ContentUnavailableView(
-                        "No sessions",
-                        systemImage: "sidebar.left",
-                        description: Text("Create a session to see it here.")
-                    )
-                } else {
-                    List(viewModel.groups) { group in
-                        Section(isExpanded: expandedBinding(for: group)) {
-                            ForEach(group.sessions) { session in
-                                NavigationLink(value: session) {
-                                    SessionRow(session: session)
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        sessionPendingDelete = session
-                                    } label: {
-                                        Label("", systemImage: "trash")
-                                    }
-                                    .accessibilityLabel("Delete")
-
-                                    Button {
-                                        Task {
-                                            await viewModel.archive(session)
-                                        }
-                                    } label: {
-                                        Label("", systemImage: "archivebox")
-                                    }
-                                    .tint(.gray)
-                                    .accessibilityLabel("Archive")
-                                }
-                            }
-                        } header: {
-                            RepoSectionHeader(group: group)
-                        }
-                    }
-                    .listStyle(.sidebar)
-                    .refreshable {
-                        await viewModel.refresh()
-                    }
-                }
-            }
+            content
             .navigationTitle("Cloude Code")
+            .toolbar { settingsToolbar }
             .navigationDestination(for: SessionSummaryModel.self) { session in
                 sessionBuilder.build(session: session)
             }
@@ -102,6 +59,76 @@ struct HomeView: View {
         }
         .onDisappear {
             viewModel.unload()
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.isLoading {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.isEmpty {
+            ContentUnavailableView(
+                "No sessions",
+                systemImage: "sidebar.left",
+                description: Text("Create a session to see it here.")
+            )
+        } else {
+            sessionsList
+        }
+    }
+
+    private var sessionsList: some View {
+        List(viewModel.groups) { group in
+            Section(isExpanded: expandedBinding(for: group)) {
+                ForEach(group.sessions) { session in
+                    sessionLink(for: session)
+                }
+            } header: {
+                RepoSectionHeader(group: group)
+            }
+        }
+        .listStyle(.sidebar)
+        .refreshable {
+            await viewModel.refresh()
+        }
+    }
+
+    private func sessionLink(for session: SessionSummaryModel) -> some View {
+        NavigationLink(value: session) {
+            SessionRow(session: session)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                sessionPendingDelete = session
+            } label: {
+                Label("", systemImage: "trash")
+            }
+            .accessibilityLabel("Delete")
+
+            Button {
+                Task {
+                    await viewModel.archive(session)
+                }
+            } label: {
+                Label("", systemImage: "archivebox")
+            }
+            .tint(.gray)
+            .accessibilityLabel("Archive")
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var settingsToolbar: some ToolbarContent {
+        if let openSettings {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    openSettings()
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                }
+                .accessibilityLabel("Settings")
+            }
         }
     }
 

@@ -3,9 +3,12 @@ import SwiftUI
 struct RootView: View {
     private let component: ApplicationComponent
     private let sessionStore: SessionStore
+    private let logStore: AppLogStore
+    @State private var isSettingsPresented = false
 
-    init(component: ApplicationComponent) {
+    init(component: ApplicationComponent, logStore: AppLogStore) {
         self.component = component
+        self.logStore = logStore
         sessionStore = component.sessionStore
     }
 
@@ -21,6 +24,12 @@ struct RootView: View {
             }
         }
         .transition(.opacity.animation(.easeIn(duration: 0.3)))
+        .environment(\.openSettings, OpenSettingsAction {
+            isSettingsPresented = true
+        })
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsView(logStore: logStore)
+        }
         .task { await sessionStore.start() }
         .themedRoot()
     }
