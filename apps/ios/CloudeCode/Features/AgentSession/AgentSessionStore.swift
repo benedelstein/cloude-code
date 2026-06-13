@@ -98,9 +98,6 @@ final class AgentSessionStore {
         case .connectionChanged(let state):
             Logger.debug("Agent session socket state changed:", "\(state)")
             connectionState = state
-            if state == .connected {
-                await requestSync()
-            }
         case .operationError(let operationError):
             errorMessage = operationError.message
             stream = AgentSessionStreamState()
@@ -152,15 +149,6 @@ final class AgentSessionStore {
             markTranscriptChanged()
         case .connectionChanged, .connected, .operationError, .agentReady, .editorReady, .liveState:
             break
-        }
-    }
-
-    private func requestSync() async {
-        do {
-            Logger.debug("Requesting agent session sync")
-            try await socket.requestSync()
-        } catch {
-            record(error)
         }
     }
 

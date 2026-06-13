@@ -7,6 +7,7 @@ const mockAgentState = vi.hoisted(() => ({
   send: vi.fn(),
   options: null as null | {
     onMessage: (_event: { data: string }) => void;
+    onOpen?: () => void;
     onClose?: () => void;
     onStateUpdate: (_state: ClientState) => void;
   },
@@ -225,6 +226,18 @@ describe("useCloudflareAgent", () => {
     });
 
     expect(refreshWebSocketToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not request transcript sync on socket open", () => {
+    renderAgent();
+
+    act(() => {
+      mockAgentState.options?.onOpen?.();
+    });
+
+    expect(mockAgentState.send).not.toHaveBeenCalledWith(JSON.stringify({
+      type: "sync.request",
+    }));
   });
 
   it("marks the latest assistant message read after visible sync", () => {

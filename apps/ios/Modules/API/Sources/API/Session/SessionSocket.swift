@@ -23,8 +23,9 @@ public enum SessionSocketEvent: Sendable {
 /// the SDK's own `cf_agent_*` control frames — of which only `cf_agent_state`
 /// (full `ClientState` snapshots) is meaningful to us; the rest are dropped.
 /// Reconnection and token refresh are owned by the underlying
-/// `WebSocketConnection`; after a reconnect, callers should send a
-/// `sync.request` to recover missed messages. `events` is single-consumer.
+/// `WebSocketConnection`. The server sends `connected` and `sync.response` on
+/// each connection; `sync.request` is reserved for explicit recovery flows.
+/// `events` is single-consumer.
 public actor SessionSocket {
     public nonisolated let events: AsyncStream<SessionSocketEvent>
 
