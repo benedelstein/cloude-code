@@ -76,7 +76,3 @@ function todoStatus(todo: TodoItem): string {
   if (status === "done") { return "completed"; }
   return status;
 }
-
-function isCompleted(todo: TodoItem): boolean {
-  return todoStatus(todo) === "completed";
-}
