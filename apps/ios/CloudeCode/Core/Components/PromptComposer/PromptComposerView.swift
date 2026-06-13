@@ -62,8 +62,10 @@ struct PromptComposerView: View {
             .accessibilityLabel("Send")
         }
         .padding(style.gridSize)
-        .background(theme.secondaryBackgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: style.gridSize * 1.5, style: .continuous))
+        .promptComposerGlassBackground(
+            in: RoundedRectangle(cornerRadius: style.gridSize * 2.5, style: .continuous),
+            fallbackColor: theme.secondaryBackgroundColor
+        )
         .padding(.horizontal, style.horizontalPadding)
         .padding(.vertical, style.gridSize)
         .background(theme.backgroundColor)
@@ -96,6 +98,20 @@ struct PromptComposerView: View {
                 .frame(minHeight: style.gridSize * 5, maxHeight: style.gridSize * 15)
                 .padding(.horizontal, -style.gridSize / 2)
                 .background(Color.clear)
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func promptComposerGlassBackground<S: Shape>(
+        in shape: S,
+        fallbackColor: Color
+    ) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else {
+            background(shape.fill(fallbackColor))
         }
     }
 }
