@@ -24,6 +24,13 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         return identifier
     }
 
+    private var bundleIdentifier: String {
+        guard let identifier = Bundle.main.bundleIdentifier, !identifier.isEmpty else {
+            preconditionFailure("missing bundle identifier")
+        }
+        return identifier
+    }
+
     private var oauthRedirectURI: String {
         // Injected per scheme via Config/*.xcconfig -> Info.plist.
         guard let uri = Bundle.main.object(forInfoDictionaryKey: "OAUTH_REDIRECT_URI") as? String,
@@ -48,7 +55,10 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     var tokenCoordinator: TokenCoordinator {
         shared {
             TokenCoordinator(
-                persistence: KeychainSessionPersistence(appGroup: appGroupIdentifier),
+                persistence: KeychainSessionPersistence(
+                    bundleIdentifier: bundleIdentifier,
+                    legacyAppGroup: appGroupIdentifier
+                ),
                 refresher: unauthenticatedAuthAPI,
                 revoker: unauthenticatedAuthAPI
             )

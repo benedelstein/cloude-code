@@ -48,7 +48,14 @@ actor TokenCoordinator: AuthTokenProviding {
 
     /// Startup: keychain → nil = signed out; stale access → refresh; valid → arm timer.
     func restore() async -> Session? {
-        guard let stored = try? persistence.load() else {
+        let stored: Session?
+        do {
+            stored = try persistence.load()
+        } catch {
+            Logger.warning("Token restore: failed to load persisted session", error)
+            return nil
+        }
+        guard let stored else {
             Logger.debug("Token restore: nothing in keychain")
             return nil
         }
@@ -124,13 +131,21 @@ actor TokenCoordinator: AuthTokenProviding {
 
     private func _adopt(_ new: Session) {
         session = new
-        try? persistence.save(new)
+        do {
+            try persistence.save(new)
+        } catch {
+            Logger.warning("Token persistence: failed to save session", error)
+        }
         scheduleEagerRefresh(for: new)
     }
 
     private func clearSession() {
         session = nil
-        try? persistence.clear()
+        do {
+            try persistence.clear()
+        } catch {
+            Logger.warning("Token persistence: failed to clear session", error)
+        }
         refreshTask?.cancel()
         refreshTask = nil
         timerTask?.cancel()

@@ -91,7 +91,7 @@ public actor WebSocketConnection {
                 try await receiveLoop(on: task)
             } catch {
                 // Fall through to backoff; covers failed upgrades and drops.
-                Logger.warning("WebSocket connection lost:", error.localizedDescription)
+                Logger.warning("WebSocket connection lost:", error)
             }
             stopPinging()
             socketTask?.cancel(with: .normalClosure, reason: nil)
@@ -148,13 +148,39 @@ public actor WebSocketConnection {
 
     private static func awaitPong(_ task: URLSessionWebSocketTask) async throws {
         try await withCheckedThrowingContinuation { (checked: CheckedContinuation<Void, any Error>) in
+            let continuation = OneShotContinuation(checked)
             task.sendPing { error in
                 if let error {
-                    checked.resume(throwing: error)
+                    continuation.resume(throwing: error)
                 } else {
-                    checked.resume()
+                    continuation.resume()
                 }
             }
+        }
+    }
+}
+
+private final class OneShotContinuation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, any Error>?
+
+    init(_ continuation: CheckedContinuation<Void, any Error>) {
+        self.continuation = continuation
+    }
+
+    func resume() {
+        take()?.resume()
+    }
+
+    func resume(throwing error: any Error) {
+        take()?.resume(throwing: error)
+    }
+
+    private func take() -> CheckedContinuation<Void, any Error>? {
+        lock.withLock {
+            let result = continuation
+            continuation = nil
+            return result
         }
     }
 }

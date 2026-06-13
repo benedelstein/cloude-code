@@ -9,7 +9,6 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>$(APP_GROUP_IDENTIFIER)</string>
-		<string>group.llc.bze.CloudeCode-Dev</string>
 	</array>
 </dict>
 </plist>
