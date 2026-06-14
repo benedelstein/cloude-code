@@ -25,7 +25,7 @@ import { SessionEnvironmentSnapshotRepository } from "@/modules/session-agent/re
 import { SetupOutputRepository } from "@/modules/session-agent/repositories/setup-output.repository";
 import { migrateAll } from "@/modules/session-agent/repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
-import type { UIMessageChunk } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import type {
   HandleDeleteSessionResult,
   HandleCreatePullRequestResult,
@@ -42,6 +42,7 @@ import type {
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
 import { timingSafeCompare } from "@/shared/utils/crypto";
 import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
+import { extractUiMessageText } from "@/shared/utils/uimessage-utils";
 import type {
   AgentEvent,
   SessionStatus,
@@ -64,6 +65,7 @@ import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
 import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
+import { NotificationPublisher } from "@/modules/notifications/services/notification-publisher.service";
 import { SessionAgentAttachmentProvider } from "./session-agent-attachment-provider";
 import { SpriteAgentProcessManager } from "@/modules/session-agent/services/agent-process/sprite-agent-process-manager.service";
 import { normalizePullRequestState } from "@/modules/session-agent/utils/session-agent-pull-request-state.utils";
@@ -103,6 +105,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly pullRequestLifecycleService: SessionPullRequestLifecycleService;
   private readonly repoAccessLifecycleService: SessionRepoAccessLifecycleService;
   private readonly autoPullRequestService: SessionAutoPullRequestService;
+  private readonly notificationPublisher: NotificationPublisher;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
   initialState: ClientState = {
@@ -153,6 +156,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     });
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
     this.githubAppService = new GitHubAppService(this.env, this.logger);
+    this.notificationPublisher = new NotificationPublisher(this.env);
     const userSessionsPublisher = createUserSessionsPublisher(
       this.env,
       this.logger.scope("user-sessions-publisher"),
@@ -247,7 +251,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updateWorkingState: (state) =>
         this.sessionSummaryService.persistWorkingState(state),
       onTurnFinished: (turn) => {
-        this.sessionSummaryService.persistAssistantTurnFinished({
+        const summaryPersistence = this.sessionSummaryService.persistAssistantTurnFinished({
           messageId: turn.message.id,
           messageCreatedAt: turn.messageCreatedAt,
           aborted: turn.aborted,
@@ -255,6 +259,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         if (turn.aborted) {
           return;
         }
+        void summaryPersistence
+          .then(() => this.publishTurnFinishedNotification(turn.message))
+          .catch((error: unknown) => {
+            this.logger.error("Failed to enqueue turn finished notification", {
+              fields: {
+                sessionId: this.serverState.sessionId,
+                userId: this.serverState.userId,
+                messageId: turn.message.id,
+              },
+              error,
+            });
+          });
         this.autoPullRequestService.queueCreateAfterTurnFinish();
       },
     });
@@ -394,6 +410,32 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       : setupRun;
     if (!this.serverState.initialized) { return "preparing"; }
     return effectiveSetupRun?.status === "completed" ? "ready" : "preparing";
+  }
+
+  private async publishTurnFinishedNotification(message: UIMessage): Promise<void> {
+    const sessionId = this.serverState.sessionId;
+    const userId = this.serverState.userId;
+    const repoFullName = this.state.repoFullName;
+    const messageId = message.id;
+    if (!sessionId || !userId || !repoFullName) {
+      this.logger.warn("Skipping turn finished notification with missing session state", {
+        fields: {
+          sessionId,
+          userId,
+          repoFullName,
+          messageId,
+        },
+      });
+      return;
+    }
+
+    await this.notificationPublisher.publishTurnFinished({
+      toUserId: userId,
+      sessionId,
+      messageId,
+      repoFullName,
+      messagePreview: extractUiMessageText(message),
+    });
   }
 
   /**

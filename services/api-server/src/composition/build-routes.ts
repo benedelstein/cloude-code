@@ -8,6 +8,8 @@ import { createAuthRoutes } from "@/modules/auth/routes/auth.routes";
 import { createIntegrationsRoutes } from "@/modules/integrations/routes/integrations.routes";
 import { IntegrationSessionRequestService } from "@/modules/integrations/services/integration-session-request.service";
 import type { IntegrationRepoCandidateProvider } from "@/modules/integrations/types/integrations.types";
+import { createNotificationsRoutes } from "@/modules/notifications/routes/notifications.routes";
+import { FcmTokenRepository } from "@/modules/notifications/repositories/fcm-token.repository";
 import {
   authenticateBearerToken,
   createAuthMiddleware,
@@ -195,6 +197,13 @@ export function buildInternalRoutes() {
 
 export function buildModelsRoutes() {
   return createModelsRoutes({ authMiddleware });
+}
+
+export function buildNotificationsRoutes() {
+  return createNotificationsRoutes({
+    authMiddleware,
+    createFcmTokenRepository: (database) => new FcmTokenRepository(database),
+  });
 }
 
 export function buildReposRoutes() {

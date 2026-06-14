@@ -64,6 +64,22 @@
       "bucket_name": "cloude-code-attachments"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "TURN_NOTIFICATION_QUEUE",
+        "queue": "turn-notifications"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "turn-notifications",
+        "max_batch_size": 10,
+        "max_retries": 3,
+        "dead_letter_queue": "turn-notifications-dlq"
+      }
+    ]
+  },
   "routes": [
     {
       "pattern": "api.cloudecode.dev",
@@ -93,5 +109,6 @@
   // - NATIVE_ACCESS_TOKEN_SIGNING_KEY
   // - WEBSOCKET_TOKEN_SIGNING_KEY
   // - VOICE_TOKEN_SIGNING_KEY
+  // - FIREBASE_SERVICE_ACCOUNT_JSON_BASE64
   // - INTEGRATION_SESSION_REQUEST_TOKEN
 }

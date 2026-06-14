@@ -839,6 +839,34 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(ProviderCatalogModel.self, key: "ProviderCatalogModel.autoMinimal")
     }
 
+    @Test func notificationPayloadAutoTurnFinished() throws {
+        try assertAutoRoundTrip(NotificationPayload.self, key: "NotificationPayload.autoTurnFinished")
+    }
+
+    @Test func registerFcmTokenRequestAutoFull() throws {
+        try assertAutoRoundTrip(RegisterFcmTokenRequest.self, key: "RegisterFcmTokenRequest.autoFull")
+    }
+
+    @Test func registerFcmTokenRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(RegisterFcmTokenRequest.self, key: "RegisterFcmTokenRequest.autoMinimal")
+    }
+
+    @Test func registerFcmTokenResponseAutoFull() throws {
+        try assertAutoRoundTrip(RegisterFcmTokenResponse.self, key: "RegisterFcmTokenResponse.autoFull")
+    }
+
+    @Test func registerFcmTokenResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(RegisterFcmTokenResponse.self, key: "RegisterFcmTokenResponse.autoMinimal")
+    }
+
+    @Test func turnFinishedNotificationPayloadAutoFull() throws {
+        try assertAutoRoundTrip(TurnFinishedNotificationPayload.self, key: "TurnFinishedNotificationPayload.autoFull")
+    }
+
+    @Test func turnFinishedNotificationPayloadAutoMinimal() throws {
+        try assertAutoRoundTrip(TurnFinishedNotificationPayload.self, key: "TurnFinishedNotificationPayload.autoMinimal")
+    }
+
     @Test func attachmentDescriptorAutoFull() throws {
         try assertAutoRoundTrip(AttachmentDescriptor.self, key: "AttachmentDescriptor.autoFull")
     }

@@ -56,6 +56,22 @@ export const getUserMessageTextContent = (
   return text || undefined;
 };
 
+export function extractUiMessageText(message: UIMessage): string {
+  const messageParts = Array.isArray(message.parts) ? message.parts : [];
+  const textParts: string[] = [];
+
+  for (const part of messageParts) {
+    if (part.type === "text" && typeof part.text === "string") {
+      const normalizedText = part.text.replace(/\s+/g, " ").trim();
+      if (normalizedText) {
+        textParts.push(normalizedText);
+      }
+    }
+  }
+
+  return textParts.join(" ").trim();
+}
+
 export const buildAttachmentContentUrl = (attachmentId: string): string => {
   return `/attachments/${attachmentId}/content`;
 };

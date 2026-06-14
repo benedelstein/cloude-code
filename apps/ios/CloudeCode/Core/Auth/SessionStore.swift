@@ -1,5 +1,6 @@
 import API
 import AuthenticationServices
+import Combine
 import Domain
 import Entities
 import Foundation
@@ -12,11 +13,24 @@ import SwiftUI
 final class SessionStore {
     enum State: Equatable {
         case loading
-        case signedIn
+        case signedIn(userId: String)
         case signedOut
+
+        fileprivate var authUserId: String? {
+            switch self {
+            case .loading, .signedOut:
+                nil
+            case .signedIn(let userId):
+                userId
+            }
+        }
     }
 
-    private(set) var state: State = .loading
+    private(set) var state: State = .loading {
+        didSet {
+            authUserSubject.send(state.authUserId)
+        }
+    }
     private(set) var user: UserModel?
     private(set) var isSigningIn = false
     private(set) var signInError: String?
@@ -24,6 +38,11 @@ final class SessionStore {
     private let userStore: UserStore
     private let signInAPI: any SignInProviding
     private let oauthRedirectURI: String
+    private let authUserSubject = CurrentValueSubject<String?, Never>(nil)
+
+    var authUserPublisher: AnyPublisher<String?, Never> {
+        authUserSubject.eraseToAnyPublisher()
+    }
 
     init(
         coordinator: TokenCoordinator,
@@ -40,7 +59,7 @@ final class SessionStore {
     func start() async {
         if let session = await coordinator.restore() {
             Logger.debug("Session restored for user", session.userId)
-            state = .signedIn
+            state = .signedIn(userId: session.userId)
             // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
         } else {
@@ -52,7 +71,7 @@ final class SessionStore {
             switch event {
             case .signedIn(let session):
                 Logger.debug("Auth event: signedIn", session.userId)
-                state = .signedIn
+                state = .signedIn(userId: session.userId)
                 user = try? await userStore.get([session.userId], scopes: .all).first
             case .signedOut:
                 Logger.debug("Auth event: signedOut")

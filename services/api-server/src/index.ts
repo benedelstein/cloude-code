@@ -10,6 +10,7 @@ import {
   buildGitProxyRoutes,
   buildInternalRoutes,
   buildModelsRoutes,
+  buildNotificationsRoutes,
   buildRepoScopedEnvironmentRoutes,
   buildReposRoutes,
   buildSessionsRoutes,
@@ -22,6 +23,11 @@ import { UserSessionsDO } from "@/runtime/user-sessions.do";
 import { handleScheduled } from "@/composition/scheduled";
 import type { Env } from "@/shared/types";
 import { initializeLogger } from "@/shared/logging";
+import { createLogger } from "@/shared/logging";
+import { FcmTokenRepository } from "@/modules/notifications/repositories/fcm-token.repository";
+import { FcmProvider } from "@/modules/notifications/providers/fcm.provider";
+import { NotificationQueueConsumer } from "@/modules/notifications/services/notification-queue-consumer.service";
+import type { NotificationQueueMessage } from "@/modules/notifications/types/notification.types";
 // import { requestLoggerMiddleware } from "@/shared/middleware/request-logger.middleware";
 
 export { SessionAgentDO, UserSessionsDO };
@@ -84,6 +90,7 @@ app.route("/models", buildModelsRoutes());
 app.route("/repos", buildReposRoutes());
 app.route("/repos", buildRepoScopedEnvironmentRoutes());
 app.route("/sessions", buildSessionsRoutes());
+app.route("/notifications", buildNotificationsRoutes());
 app.route("/voice", buildVoiceRoutes());
 app.route("/attachments", buildAttachmentsRoutes());
 app.route("/integrations", buildIntegrationsRoutes());
@@ -99,5 +106,23 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     handleScheduled(env, ctx);
+  },
+  async queue(
+    batch: MessageBatch<NotificationQueueMessage>,
+    env: Env,
+  ): Promise<void> {
+    initializeLogger({
+      format: env.ENVIRONMENT === "production" ? "json" : "pretty",
+      level: env.LOG_LEVEL as LogLevel,
+    });
+    const consumer = new NotificationQueueConsumer({
+      logger: createLogger("notifications.queue.ts"),
+      tokenRepository: new FcmTokenRepository(env.DB),
+      fcmProvider: new FcmProvider(env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64),
+    });
+
+    await Promise.all(
+      batch.messages.map((message) => consumer.handleMessage(message.body)),
+    );
   },
 };

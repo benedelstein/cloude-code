@@ -1682,6 +1682,43 @@
     "isDefault": true,
     "selectable": true
   },
+  "NotificationPayload.autoTurnFinished": {
+    "type": "TURN_FINISHED",
+    "version": 1,
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "messageId": "sample",
+    "repoFullName": "sample"
+  },
+  "RegisterFcmTokenRequest.autoFull": {
+    "deviceId": "sample",
+    "token": "sample",
+    "platform": "ios"
+  },
+  "RegisterFcmTokenRequest.autoMinimal": {
+    "deviceId": "sample",
+    "token": "sample",
+    "platform": "ios"
+  },
+  "RegisterFcmTokenResponse.autoFull": {
+    "registered": true
+  },
+  "RegisterFcmTokenResponse.autoMinimal": {
+    "registered": true
+  },
+  "TurnFinishedNotificationPayload.autoFull": {
+    "type": "TURN_FINISHED",
+    "version": 1,
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "messageId": "sample",
+    "repoFullName": "sample"
+  },
+  "TurnFinishedNotificationPayload.autoMinimal": {
+    "type": "TURN_FINISHED",
+    "version": 1,
+    "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "messageId": "sample",
+    "repoFullName": "sample"
+  },
   "AttachmentDescriptor.autoFull": {
     "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
     "filename": "sample",

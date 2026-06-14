@@ -80,5 +80,6 @@ Required secrets for `api-server` are set through `wrangler secret put`:
 - `NATIVE_ACCESS_TOKEN_SIGNING_KEY`
 - `WEBSOCKET_TOKEN_SIGNING_KEY`
 - `VOICE_TOKEN_SIGNING_KEY`
+- `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`
 
 Additional environment bindings and non-secret vars live in `services/api-server/src/shared/types/env.ts` and `services/api-server/wrangler.jsonc`.
