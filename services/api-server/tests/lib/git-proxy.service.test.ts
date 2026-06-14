@@ -56,8 +56,18 @@ function createRequest(path: string, init: RequestInit = {}): Request {
   });
 }
 
+const ZERO_SHA = "0000000000000000000000000000000000000000";
+const ONE_SHA = "1111111111111111111111111111111111111111";
+
+/** Frames a payload as a git pkt-line (4-hex length prefix + payload). */
+function pktLine(payload: string): string {
+  return (payload.length + 4).toString(16).padStart(4, "0") + payload;
+}
+
+/** Builds a receive-pack command list: one ref update + flush packet. */
 function createPushBody(branch: string): string {
-  return `0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/${branch}\0 report-status`;
+  const command = `${ZERO_SHA} ${ONE_SHA} refs/heads/${branch}\0 report-status`;
+  return pktLine(`${command}\n`) + "0000";
 }
 
 describe("GitProxyService", () => {
@@ -142,6 +152,76 @@ describe("GitProxyService", () => {
 
     expect(result.response.status).toBe(403);
     await expect(result.response.text()).resolves.toContain("branch must start");
+  });
+
+  it("rejects a second ref-update smuggled behind a padded capability list", async () => {
+    // The allowed branch is the first command, with capabilities padded past
+    // the old 2 KiB scan window, followed by a disallowed second command.
+    const padding = "x".repeat(4096);
+    const allowed = `${ZERO_SHA} ${ONE_SHA} refs/heads/cloude/work-abcd\0 report-status ${padding}`;
+    const smuggled = `${ZERO_SHA} ${ONE_SHA} refs/heads/main`;
+    const body = pktLine(`${allowed}\n`) + pktLine(`${smuggled}\n`) + "0000";
+
+    const result = await createService().handleRequest(
+      createRequest("/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack", {
+        method: "POST",
+        body,
+      }),
+      "/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack",
+    );
+
+    expect(result.response.status).toBe(403);
+    await expect(result.response.text()).resolves.toContain("branch must start");
+  });
+
+  it("does not scan ref-like bytes in the packfile after the flush packet", async () => {
+    // A legitimate command list, a flush, then packfile bytes that look like a
+    // forbidden ref-update. The packfile must never be parsed as a command.
+    const command = `${ZERO_SHA} ${ONE_SHA} refs/heads/cloude/work-abcd\0 report-status`;
+    const packfileLookalike = `${ZERO_SHA} ${ONE_SHA} refs/heads/main`;
+    const body = pktLine(`${command}\n`) + "0000" + packfileLookalike;
+
+    const result = await createService().handleRequest(
+      createRequest("/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack", {
+        method: "POST",
+        body,
+      }),
+      "/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack",
+    );
+
+    expect(result.response.status).toBe(200);
+  });
+
+  it("rejects pushes to non-branch refs such as tags", async () => {
+    const command = `${ZERO_SHA} ${ONE_SHA} refs/tags/v1.0.0\0 report-status`;
+    const body = pktLine(`${command}\n`) + "0000";
+
+    const result = await createService().handleRequest(
+      createRequest("/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack", {
+        method: "POST",
+        body,
+      }),
+      "/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack",
+    );
+
+    expect(result.response.status).toBe(403);
+    await expect(result.response.text()).resolves.toContain("only branch updates are allowed");
+  });
+
+  it("rejects a push body with no flush packet", async () => {
+    const command = `${ZERO_SHA} ${ONE_SHA} refs/heads/cloude/work-abcd\0 report-status`;
+    const body = pktLine(`${command}\n`); // truncated: missing flush
+
+    const result = await createService().handleRequest(
+      createRequest("/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack", {
+        method: "POST",
+        body,
+      }),
+      "/git-proxy/abcd-session/github.com/ben/repo.git/git-receive-pack",
+    );
+
+    expect(result.response.status).toBe(403);
+    await expect(result.response.text()).resolves.toContain("flush packet");
   });
 });
 

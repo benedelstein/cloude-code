@@ -169,24 +169,103 @@ function validatePush(
 ): { allowed: boolean; reason?: string; branch?: string } {
   const sessionSuffix = sessionId ? sessionId.slice(0, 4) : null;
 
-  // Git pkt-line format: "oldsha newsha refs/heads/branch\0capabilities..."
-  const preamble = new TextDecoder().decode(body.slice(0, 2048));
-  const refPattern = /[0-9a-f]{40} [0-9a-f]{40} refs\/heads\/([^\s\0]+)/g;
-  let match;
+  const parsed = parseReceivePackCommands(body);
+  if (!parsed.ok) {
+    return { allowed: false, reason: parsed.reason };
+  }
+  if (parsed.refs.length === 0) {
+    return { allowed: false, reason: "no ref updates found in push" };
+  }
+
+  const headsPrefix = "refs/heads/";
   let detectedBranch: string | undefined;
-  while ((match = refPattern.exec(preamble)) !== null) {
-    const branch = match[1]!;
+  for (const ref of parsed.refs) {
+    // Only branch updates are allowed; tags and arbitrary refs bypass the
+    // branch policy and must be rejected.
+    if (!ref.startsWith(headsPrefix)) {
+      return { allowed: false, reason: `only branch updates are allowed, got ref '${ref}'` };
+    }
+    const branch = ref.slice(headsPrefix.length);
     if (!branch.startsWith("cloude/")) {
       return { allowed: false, reason: `branch must start with 'cloude/', got '${branch}'` };
     }
     if (sessionSuffix && !branch.endsWith(sessionSuffix)) {
       return { allowed: false, reason: `branch must end with '${sessionSuffix}', got '${branch}'` };
     }
-    // Enforce branch lock: subsequent pushes must target the same branch
+    // Enforce branch lock: subsequent pushes must target the same branch.
     if (lockedBranch && branch !== lockedBranch) {
       return { allowed: false, reason: `branch locked to '${lockedBranch}', got '${branch}'` };
+    }
+    // A single push may not target multiple branches at once.
+    if (detectedBranch && branch !== detectedBranch) {
+      return {
+        allowed: false,
+        reason: `push targets multiple branches ('${detectedBranch}' and '${branch}')`,
+      };
     }
     detectedBranch = branch;
   }
   return { allowed: true, branch: detectedBranch };
+}
+
+/**
+ * Parses the command list of a git receive-pack request from its pkt-line
+ * framing and returns every updated ref.
+ *
+ * The body is `*PKT-LINE(command) flush-pkt PACK...`. Each pkt-line is prefixed
+ * with a 4-hex-digit length covering the prefix itself; `0000` is the flush
+ * packet that terminates the command list. We stop at the flush and never read
+ * into the packfile, so payload bytes that happen to look like ref-updates
+ * cannot smuggle a command past validation. Any framing error fails closed.
+ */
+function parseReceivePackCommands(
+  body: Uint8Array,
+): { ok: true; refs: string[] } | { ok: false; reason: string } {
+  const decoder = new TextDecoder();
+  const refs: string[] = [];
+  let offset = 0;
+
+  while (offset + 4 <= body.length) {
+    const lengthHex = decoder.decode(body.subarray(offset, offset + 4));
+    if (!/^[0-9a-f]{4}$/i.test(lengthHex)) {
+      return { ok: false, reason: "malformed pkt-line length" };
+    }
+    const pktLength = parseInt(lengthHex, 16);
+
+    // Flush packet: end of the command list, packfile follows.
+    if (pktLength === 0) {
+      return { ok: true, refs };
+    }
+    // 0001/0002 are delimiter/response-end markers, invalid in a command list.
+    if (pktLength < 4) {
+      return { ok: false, reason: "unexpected pkt-line marker in command list" };
+    }
+    if (offset + pktLength > body.length) {
+      return { ok: false, reason: "truncated pkt-line in push" };
+    }
+
+    let line = decoder.decode(body.subarray(offset + 4, offset + pktLength));
+    offset += pktLength;
+
+    // Capabilities are appended to the first command after a NUL byte.
+    const nulIndex = line.indexOf("\0");
+    if (nulIndex !== -1) {
+      line = line.slice(0, nulIndex);
+    }
+    line = line.replace(/\n$/, "");
+
+    // Pushes from a shallow clone prefix the commands with shallow lines.
+    if (line.startsWith("shallow ")) {
+      continue;
+    }
+
+    const match = line.match(/^[0-9a-f]{40} [0-9a-f]{40} (.+)$/);
+    if (!match) {
+      return { ok: false, reason: "unparseable ref-update command" };
+    }
+    refs.push(match[1]!);
+  }
+
+  // Ran out of body before the flush packet: the command list was truncated.
+  return { ok: false, reason: "push ended without flush packet" };
 }
