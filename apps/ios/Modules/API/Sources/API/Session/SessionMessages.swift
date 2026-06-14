@@ -2,7 +2,7 @@ import CoreAPI
 import Domain
 
 extension SessionMessage {
-    init(_ message: CoreAPI.UIMessage) {
+    init(_ message: CoreAPI.WireUIMessage) {
         self.init(
             id: message.id,
             role: Role(rawValue: message.role.rawValue),
@@ -10,7 +10,7 @@ extension SessionMessage {
         )
     }
 
-    private static func text(from parts: [CoreAPI.UIMessagePart]) -> String {
+    private static func text(from parts: [CoreAPI.WireUIMessagePart]) -> String {
         parts.compactMap { part -> String? in
             guard case .text(let payload) = part else {
                 return nil

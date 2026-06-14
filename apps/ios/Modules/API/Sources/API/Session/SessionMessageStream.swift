@@ -74,9 +74,9 @@ public enum SessionMessageStreamReader {
 }
 
 public struct SessionStreamChunk: Sendable, Equatable {
-    let value: CoreAPI.UIMessageChunk
+    let value: CoreAPI.WireUIMessageChunk
 
-    init(_ value: CoreAPI.UIMessageChunk) {
+    init(_ value: CoreAPI.WireUIMessageChunk) {
         self.value = value
     }
 

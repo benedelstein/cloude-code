@@ -62,7 +62,7 @@ private struct GetSession: APIRequest {
 }
 
 private struct GetSessionMessages: APIRequest {
-    typealias Response = [UIMessage]
+    typealias Response = [WireUIMessage]
 
     var sessionId: UUID
 

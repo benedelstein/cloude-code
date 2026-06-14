@@ -713,7 +713,7 @@
   "ToolApproval.autoMinimal": {
     "id": "sample"
   },
-  "UIMessagePart.autoText": {
+  "WireUIMessagePart.autoText": {
     "type": "text",
     "text": "sample",
     "state": "streaming",
@@ -725,7 +725,7 @@
       }
     }
   },
-  "UIMessagePart.autoReasoning": {
+  "WireUIMessagePart.autoReasoning": {
     "type": "reasoning",
     "text": "sample",
     "state": "streaming",
@@ -737,7 +737,7 @@
       }
     }
   },
-  "UIMessagePart.autoSourceUrl": {
+  "WireUIMessagePart.autoSourceUrl": {
     "type": "source-url",
     "sourceId": "sample",
     "url": "sample",
@@ -750,7 +750,7 @@
       }
     }
   },
-  "UIMessagePart.autoSourceDocument": {
+  "WireUIMessagePart.autoSourceDocument": {
     "type": "source-document",
     "sourceId": "sample",
     "mediaType": "sample",
@@ -764,7 +764,7 @@
       }
     }
   },
-  "UIMessagePart.autoFile": {
+  "WireUIMessagePart.autoFile": {
     "type": "file",
     "mediaType": "sample",
     "filename": "sample",
@@ -777,10 +777,10 @@
       }
     }
   },
-  "UIMessagePart.autoStepStart": {
+  "WireUIMessagePart.autoStepStart": {
     "type": "step-start"
   },
-  "UIMessagePart.autoDynamicTool": {
+  "WireUIMessagePart.autoDynamicTool": {
     "type": "dynamic-tool",
     "toolName": "sample",
     "toolCallId": "sample",
@@ -815,14 +815,14 @@
       "reason": "sample"
     }
   },
-  "UIMessagePart.autoData": {
+  "WireUIMessagePart.autoData": {
     "type": "data-sample",
     "id": "sample",
     "data": {
       "opaque": true
     }
   },
-  "UIMessagePart.autoTool": {
+  "WireUIMessagePart.autoTool": {
     "type": "tool-sample",
     "toolCallId": "sample",
     "title": "sample",
@@ -859,13 +859,13 @@
       "reason": "sample"
     }
   },
-  "UIMessagePart.autoUnknown": {
+  "WireUIMessagePart.autoUnknown": {
     "type": "future-variant",
     "payload": {
       "opaque": true
     }
   },
-  "UIMessageChunk.autoTextStart": {
+  "WireUIMessageChunk.autoTextStart": {
     "type": "text-start",
     "id": "sample",
     "providerMetadata": {
@@ -876,7 +876,7 @@
       }
     }
   },
-  "UIMessageChunk.autoTextDelta": {
+  "WireUIMessageChunk.autoTextDelta": {
     "type": "text-delta",
     "id": "sample",
     "delta": "sample",
@@ -888,7 +888,7 @@
       }
     }
   },
-  "UIMessageChunk.autoTextEnd": {
+  "WireUIMessageChunk.autoTextEnd": {
     "type": "text-end",
     "id": "sample",
     "providerMetadata": {
@@ -899,7 +899,7 @@
       }
     }
   },
-  "UIMessageChunk.autoReasoningStart": {
+  "WireUIMessageChunk.autoReasoningStart": {
     "type": "reasoning-start",
     "id": "sample",
     "providerMetadata": {
@@ -910,7 +910,7 @@
       }
     }
   },
-  "UIMessageChunk.autoReasoningDelta": {
+  "WireUIMessageChunk.autoReasoningDelta": {
     "type": "reasoning-delta",
     "id": "sample",
     "delta": "sample",
@@ -922,7 +922,7 @@
       }
     }
   },
-  "UIMessageChunk.autoReasoningEnd": {
+  "WireUIMessageChunk.autoReasoningEnd": {
     "type": "reasoning-end",
     "id": "sample",
     "providerMetadata": {
@@ -933,11 +933,11 @@
       }
     }
   },
-  "UIMessageChunk.autoError": {
+  "WireUIMessageChunk.autoError": {
     "type": "error",
     "errorText": "sample"
   },
-  "UIMessageChunk.autoToolInputStart": {
+  "WireUIMessageChunk.autoToolInputStart": {
     "type": "tool-input-start",
     "toolCallId": "sample",
     "toolName": "sample",
@@ -952,12 +952,12 @@
     "dynamic": true,
     "title": "sample"
   },
-  "UIMessageChunk.autoToolInputDelta": {
+  "WireUIMessageChunk.autoToolInputDelta": {
     "type": "tool-input-delta",
     "toolCallId": "sample",
     "inputTextDelta": "sample"
   },
-  "UIMessageChunk.autoToolInputAvailable": {
+  "WireUIMessageChunk.autoToolInputAvailable": {
     "type": "tool-input-available",
     "toolCallId": "sample",
     "toolName": "sample",
@@ -975,7 +975,7 @@
     "dynamic": true,
     "title": "sample"
   },
-  "UIMessageChunk.autoToolInputError": {
+  "WireUIMessageChunk.autoToolInputError": {
     "type": "tool-input-error",
     "toolCallId": "sample",
     "toolName": "sample",
@@ -994,12 +994,12 @@
     "errorText": "sample",
     "title": "sample"
   },
-  "UIMessageChunk.autoToolApprovalRequest": {
+  "WireUIMessageChunk.autoToolApprovalRequest": {
     "type": "tool-approval-request",
     "approvalId": "sample",
     "toolCallId": "sample"
   },
-  "UIMessageChunk.autoToolOutputAvailable": {
+  "WireUIMessageChunk.autoToolOutputAvailable": {
     "type": "tool-output-available",
     "toolCallId": "sample",
     "output": {
@@ -1009,18 +1009,18 @@
     "dynamic": true,
     "preliminary": true
   },
-  "UIMessageChunk.autoToolOutputError": {
+  "WireUIMessageChunk.autoToolOutputError": {
     "type": "tool-output-error",
     "toolCallId": "sample",
     "errorText": "sample",
     "providerExecuted": true,
     "dynamic": true
   },
-  "UIMessageChunk.autoToolOutputDenied": {
+  "WireUIMessageChunk.autoToolOutputDenied": {
     "type": "tool-output-denied",
     "toolCallId": "sample"
   },
-  "UIMessageChunk.autoSourceUrl": {
+  "WireUIMessageChunk.autoSourceUrl": {
     "type": "source-url",
     "sourceId": "sample",
     "url": "sample",
@@ -1033,7 +1033,7 @@
       }
     }
   },
-  "UIMessageChunk.autoSourceDocument": {
+  "WireUIMessageChunk.autoSourceDocument": {
     "type": "source-document",
     "sourceId": "sample",
     "mediaType": "sample",
@@ -1047,7 +1047,7 @@
       }
     }
   },
-  "UIMessageChunk.autoFile": {
+  "WireUIMessageChunk.autoFile": {
     "type": "file",
     "url": "sample",
     "mediaType": "sample",
@@ -1059,37 +1059,37 @@
       }
     }
   },
-  "UIMessageChunk.autoStartStep": {
+  "WireUIMessageChunk.autoStartStep": {
     "type": "start-step"
   },
-  "UIMessageChunk.autoFinishStep": {
+  "WireUIMessageChunk.autoFinishStep": {
     "type": "finish-step"
   },
-  "UIMessageChunk.autoStart": {
+  "WireUIMessageChunk.autoStart": {
     "type": "start",
     "messageId": "sample",
     "messageMetadata": {
       "opaque": true
     }
   },
-  "UIMessageChunk.autoFinish": {
+  "WireUIMessageChunk.autoFinish": {
     "type": "finish",
     "finishReason": "length",
     "messageMetadata": {
       "opaque": true
     }
   },
-  "UIMessageChunk.autoAbort": {
+  "WireUIMessageChunk.autoAbort": {
     "type": "abort",
     "reason": "sample"
   },
-  "UIMessageChunk.autoMessageMetadata": {
+  "WireUIMessageChunk.autoMessageMetadata": {
     "type": "message-metadata",
     "messageMetadata": {
       "opaque": true
     }
   },
-  "UIMessageChunk.autoData": {
+  "WireUIMessageChunk.autoData": {
     "type": "data-sample",
     "id": "sample",
     "data": {
@@ -1097,13 +1097,13 @@
     },
     "transient": true
   },
-  "UIMessageChunk.autoUnknown": {
+  "WireUIMessageChunk.autoUnknown": {
     "type": "future-variant",
     "payload": {
       "opaque": true
     }
   },
-  "UIMessage.autoFull": {
+  "WireUIMessage.autoFull": {
     "id": "sample",
     "role": "user",
     "parts": [
@@ -1115,7 +1115,7 @@
       "opaque": true
     }
   },
-  "UIMessage.autoMinimal": {
+  "WireUIMessage.autoMinimal": {
     "id": "sample",
     "role": "user",
     "parts": [

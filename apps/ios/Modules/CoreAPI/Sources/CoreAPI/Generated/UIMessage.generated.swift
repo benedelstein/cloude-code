@@ -66,7 +66,7 @@ public enum ToolInvocationState: RawRepresentable, Codable, Equatable, Sendable 
 }
 
 /// Wire shape of an AI SDK-compatible UI message part.
-public enum UIMessagePart: Codable, Equatable, Sendable {
+public enum WireUIMessagePart: Codable, Equatable, Sendable {
     public struct TextUIMessagePart: Codable, Equatable, Sendable {
         public enum State: RawRepresentable, Codable, Equatable, Sendable {
             case streaming
@@ -561,7 +561,7 @@ public enum UIMessagePart: Codable, Equatable, Sendable {
 }
 
 /// Wire shape of an AI SDK-compatible UI message stream chunk.
-public enum UIMessageChunk: Codable, Equatable, Sendable {
+public enum WireUIMessageChunk: Codable, Equatable, Sendable {
     public struct TextStartUIMessageChunk: Codable, Equatable, Sendable {
         public let type = "text-start"
         public var id: String
@@ -1324,7 +1324,7 @@ public enum UIMessageChunk: Codable, Equatable, Sendable {
 }
 
 /// Wire shape of an AI SDK-compatible UIMessage.
-public struct UIMessage: Codable, Equatable, Sendable {
+public struct WireUIMessage: Codable, Equatable, Sendable {
     public enum Role: RawRepresentable, Codable, Equatable, Sendable {
         case user
         case assistant
@@ -1353,13 +1353,13 @@ public struct UIMessage: Codable, Equatable, Sendable {
 
     public var id: String
     public var role: Role
-    public var parts: [UIMessagePart]
+    public var parts: [WireUIMessagePart]
     public var metadata: JSONValue?
 
     public init(
         id: String,
         role: Role,
-        parts: [UIMessagePart],
+        parts: [WireUIMessagePart],
         metadata: JSONValue? = nil
     ) {
         self.id = id

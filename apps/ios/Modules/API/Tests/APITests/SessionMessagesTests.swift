@@ -6,7 +6,7 @@ import Testing
 @Suite("Session messages")
 struct SessionMessagesTests {
     @Test func uiMessageMapsToDomainMessageWithTextPartsOnly() {
-        let message = UIMessage(
+        let message = WireUIMessage(
             id: "msg_1",
             role: .assistant,
             parts: [
@@ -94,7 +94,7 @@ struct SessionMessagesTests {
             ],
             plan: SessionPlanMetadata(lastUpdated: "2026-06-13T00:01:00.000Z"),
             pendingUserMessage: PendingUserMessage(
-                message: UIMessage(
+                message: WireUIMessage(
                     id: "pending_1",
                     role: .user,
                     parts: [

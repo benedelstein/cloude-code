@@ -97,17 +97,17 @@ const OVERRIDES: Record<string, Partial<Omit<ManifestEntry, "schema" | "group">>
     doc: "Broad state discriminator for AI SDK-compatible tool UI parts.",
   },
   UIMessagePartSchema: {
-    swiftName: "UIMessagePart",
+    swiftName: "WireUIMessagePart",
     doc: "Wire shape of an AI SDK-compatible UI message part.",
     openUnion: uiMessageParts.UI_MESSAGE_PART_OPEN_UNION,
   },
   UIMessageChunkSchema: {
-    swiftName: "UIMessageChunk",
+    swiftName: "WireUIMessageChunk",
     doc: "Wire shape of an AI SDK-compatible UI message stream chunk.",
     openUnion: uiMessageChunks.UI_MESSAGE_CHUNK_OPEN_UNION,
   },
   UIMessageSchema: {
-    swiftName: "UIMessage",
+    swiftName: "WireUIMessage",
     doc: "Wire shape of an AI SDK-compatible UIMessage.",
   },
   ClientStateSchema: {

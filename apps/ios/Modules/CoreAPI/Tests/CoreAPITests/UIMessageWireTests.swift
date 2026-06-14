@@ -5,7 +5,7 @@ import Testing
 @Suite("UI message wire unions")
 struct UIMessageWireTests {
     @Test func exactChunkDecodesAndReencodes() throws {
-        let chunk = try decode(UIMessageChunk.self, from: #"{"type":"text-delta","id":"text-1","delta":"Hi"}"#)
+        let chunk = try decode(WireUIMessageChunk.self, from: #"{"type":"text-delta","id":"text-1","delta":"Hi"}"#)
 
         guard case .textDelta(let payload) = chunk else {
             Issue.record("Expected textDelta chunk")
@@ -17,7 +17,7 @@ struct UIMessageWireTests {
 
     @Test func prefixChunkDecodesAndReencodesOriginalType() throws {
         let chunk = try decode(
-            UIMessageChunk.self,
+            WireUIMessageChunk.self,
             from: #"{"type":"data-progress","id":"progress-1","data":{"percent":50}}"#
         )
 
@@ -31,7 +31,7 @@ struct UIMessageWireTests {
 
     @Test func unknownChunkPreservesRawJSON() throws {
         let chunk = try decode(
-            UIMessageChunk.self,
+            WireUIMessageChunk.self,
             from: #"{"type":"future-chunk","payload":{"opaque":true}}"#
         )
 
@@ -46,14 +46,14 @@ struct UIMessageWireTests {
 
     @Test func malformedKnownChunkThrows() {
         do {
-            _ = try decode(UIMessageChunk.self, from: #"{"type":"text-delta","id":"text-1"}"#)
+            _ = try decode(WireUIMessageChunk.self, from: #"{"type":"text-delta","id":"text-1"}"#)
             Issue.record("Expected malformed text-delta to fail decoding")
         } catch {}
     }
 
     @Test func prefixPartDecodesAndReencodesOriginalType() throws {
         let part = try decode(
-            UIMessagePart.self,
+            WireUIMessagePart.self,
             from: #"{"type":"tool-bash","toolCallId":"call-1","state":"output-available","output":"ok"}"#
         )
 

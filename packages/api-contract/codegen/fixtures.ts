@@ -130,7 +130,7 @@ const sessionSetupRun = {
 };
 
 export const FIXTURES: Fixture[] = [
-  { schema: UIMessageSchema, typeName: "UIMessage", caseName: "withParts", value: uiMessage },
+  { schema: UIMessageSchema, typeName: "WireUIMessage", caseName: "withParts", value: uiMessage },
   {
     schema: ClientMessage,
     typeName: "ClientMessage",

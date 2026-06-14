@@ -15,8 +15,8 @@ import Testing
 /// green run means both languages agree on the wire format.
 @Suite("CoreAPI wire fixtures")
 struct FixtureDecodingTests {
-    @Test func uiMessageWithParts() throws {
-        try assertRoundTrip(UIMessage.self, fixture: "UIMessage.withParts")
+    @Test func wireUIMessageWithParts() throws {
+        try assertRoundTrip(WireUIMessage.self, fixture: "WireUIMessage.withParts")
     }
 
     @Test func clientMessageChatMessage() throws {
@@ -363,156 +363,156 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(ToolApproval.self, key: "ToolApproval.autoMinimal")
     }
 
-    @Test func uiMessagePartAutoText() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoText")
+    @Test func wireUIMessagePartAutoText() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoText")
     }
 
-    @Test func uiMessagePartAutoReasoning() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoReasoning")
+    @Test func wireUIMessagePartAutoReasoning() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoReasoning")
     }
 
-    @Test func uiMessagePartAutoSourceUrl() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoSourceUrl")
+    @Test func wireUIMessagePartAutoSourceUrl() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoSourceUrl")
     }
 
-    @Test func uiMessagePartAutoSourceDocument() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoSourceDocument")
+    @Test func wireUIMessagePartAutoSourceDocument() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoSourceDocument")
     }
 
-    @Test func uiMessagePartAutoFile() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoFile")
+    @Test func wireUIMessagePartAutoFile() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoFile")
     }
 
-    @Test func uiMessagePartAutoStepStart() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoStepStart")
+    @Test func wireUIMessagePartAutoStepStart() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoStepStart")
     }
 
-    @Test func uiMessagePartAutoDynamicTool() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoDynamicTool")
+    @Test func wireUIMessagePartAutoDynamicTool() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoDynamicTool")
     }
 
-    @Test func uiMessagePartAutoData() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoData")
+    @Test func wireUIMessagePartAutoData() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoData")
     }
 
-    @Test func uiMessagePartAutoTool() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoTool")
+    @Test func wireUIMessagePartAutoTool() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoTool")
     }
 
-    @Test func uiMessagePartAutoUnknown() throws {
-        try assertAutoRoundTrip(UIMessagePart.self, key: "UIMessagePart.autoUnknown")
+    @Test func wireUIMessagePartAutoUnknown() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoUnknown")
     }
 
-    @Test func uiMessageChunkAutoTextStart() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoTextStart")
+    @Test func wireUIMessageChunkAutoTextStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextStart")
     }
 
-    @Test func uiMessageChunkAutoTextDelta() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoTextDelta")
+    @Test func wireUIMessageChunkAutoTextDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextDelta")
     }
 
-    @Test func uiMessageChunkAutoTextEnd() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoTextEnd")
+    @Test func wireUIMessageChunkAutoTextEnd() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextEnd")
     }
 
-    @Test func uiMessageChunkAutoReasoningStart() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoReasoningStart")
+    @Test func wireUIMessageChunkAutoReasoningStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningStart")
     }
 
-    @Test func uiMessageChunkAutoReasoningDelta() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoReasoningDelta")
+    @Test func wireUIMessageChunkAutoReasoningDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningDelta")
     }
 
-    @Test func uiMessageChunkAutoReasoningEnd() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoReasoningEnd")
+    @Test func wireUIMessageChunkAutoReasoningEnd() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningEnd")
     }
 
-    @Test func uiMessageChunkAutoError() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoError")
+    @Test func wireUIMessageChunkAutoError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoError")
     }
 
-    @Test func uiMessageChunkAutoToolInputStart() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolInputStart")
+    @Test func wireUIMessageChunkAutoToolInputStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputStart")
     }
 
-    @Test func uiMessageChunkAutoToolInputDelta() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolInputDelta")
+    @Test func wireUIMessageChunkAutoToolInputDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputDelta")
     }
 
-    @Test func uiMessageChunkAutoToolInputAvailable() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolInputAvailable")
+    @Test func wireUIMessageChunkAutoToolInputAvailable() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputAvailable")
     }
 
-    @Test func uiMessageChunkAutoToolInputError() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolInputError")
+    @Test func wireUIMessageChunkAutoToolInputError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputError")
     }
 
-    @Test func uiMessageChunkAutoToolApprovalRequest() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolApprovalRequest")
+    @Test func wireUIMessageChunkAutoToolApprovalRequest() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolApprovalRequest")
     }
 
-    @Test func uiMessageChunkAutoToolOutputAvailable() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolOutputAvailable")
+    @Test func wireUIMessageChunkAutoToolOutputAvailable() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputAvailable")
     }
 
-    @Test func uiMessageChunkAutoToolOutputError() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolOutputError")
+    @Test func wireUIMessageChunkAutoToolOutputError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputError")
     }
 
-    @Test func uiMessageChunkAutoToolOutputDenied() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoToolOutputDenied")
+    @Test func wireUIMessageChunkAutoToolOutputDenied() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputDenied")
     }
 
-    @Test func uiMessageChunkAutoSourceUrl() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoSourceUrl")
+    @Test func wireUIMessageChunkAutoSourceUrl() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoSourceUrl")
     }
 
-    @Test func uiMessageChunkAutoSourceDocument() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoSourceDocument")
+    @Test func wireUIMessageChunkAutoSourceDocument() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoSourceDocument")
     }
 
-    @Test func uiMessageChunkAutoFile() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoFile")
+    @Test func wireUIMessageChunkAutoFile() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFile")
     }
 
-    @Test func uiMessageChunkAutoStartStep() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoStartStep")
+    @Test func wireUIMessageChunkAutoStartStep() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoStartStep")
     }
 
-    @Test func uiMessageChunkAutoFinishStep() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoFinishStep")
+    @Test func wireUIMessageChunkAutoFinishStep() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFinishStep")
     }
 
-    @Test func uiMessageChunkAutoStart() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoStart")
+    @Test func wireUIMessageChunkAutoStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoStart")
     }
 
-    @Test func uiMessageChunkAutoFinish() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoFinish")
+    @Test func wireUIMessageChunkAutoFinish() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFinish")
     }
 
-    @Test func uiMessageChunkAutoAbort() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoAbort")
+    @Test func wireUIMessageChunkAutoAbort() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoAbort")
     }
 
-    @Test func uiMessageChunkAutoMessageMetadata() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoMessageMetadata")
+    @Test func wireUIMessageChunkAutoMessageMetadata() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoMessageMetadata")
     }
 
-    @Test func uiMessageChunkAutoData() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoData")
+    @Test func wireUIMessageChunkAutoData() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoData")
     }
 
-    @Test func uiMessageChunkAutoUnknown() throws {
-        try assertAutoRoundTrip(UIMessageChunk.self, key: "UIMessageChunk.autoUnknown")
+    @Test func wireUIMessageChunkAutoUnknown() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoUnknown")
     }
 
-    @Test func uiMessageAutoFull() throws {
-        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoFull")
+    @Test func wireUIMessageAutoFull() throws {
+        try assertAutoRoundTrip(WireUIMessage.self, key: "WireUIMessage.autoFull")
     }
 
-    @Test func uiMessageAutoMinimal() throws {
-        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoMinimal")
+    @Test func wireUIMessageAutoMinimal() throws {
+        try assertAutoRoundTrip(WireUIMessage.self, key: "WireUIMessage.autoMinimal")
     }
 
     @Test func agentChunksEventAutoFull() throws {

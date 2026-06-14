@@ -5,10 +5,10 @@ import Foundation
 
 public struct AgentChunksEvent: Codable, Equatable, Sendable {
     public let type = "agent.chunks"
-    public var chunks: [UIMessageChunk]
+    public var chunks: [WireUIMessageChunk]
 
     public init(
-        chunks: [UIMessageChunk]
+        chunks: [WireUIMessageChunk]
     ) {
         self.chunks = chunks
     }
@@ -21,10 +21,10 @@ public struct AgentChunksEvent: Codable, Equatable, Sendable {
 
 public struct AgentFinishEvent: Codable, Equatable, Sendable {
     public let type = "agent.finish"
-    public var message: UIMessage
+    public var message: WireUIMessage
 
     public init(
-        message: UIMessage
+        message: WireUIMessage
     ) {
         self.message = message
     }
@@ -402,13 +402,13 @@ public struct SyncRequestEvent: Codable, Equatable, Sendable {
 
 public struct SyncResponseEvent: Codable, Equatable, Sendable {
     public let type = "sync.response"
-    public var messages: [UIMessage]
-    public var pendingChunks: [UIMessageChunk]?
+    public var messages: [WireUIMessage]
+    public var pendingChunks: [WireUIMessageChunk]?
     public var activeTurn: ActiveTurnState?
 
     public init(
-        messages: [UIMessage],
-        pendingChunks: [UIMessageChunk]? = nil,
+        messages: [WireUIMessage],
+        pendingChunks: [WireUIMessageChunk]? = nil,
         activeTurn: ActiveTurnState? = nil
     ) {
         self.messages = messages
@@ -426,10 +426,10 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
 
 public struct UserMessageEvent: Codable, Equatable, Sendable {
     public let type = "user.message"
-    public var message: UIMessage
+    public var message: WireUIMessage
 
     public init(
-        message: UIMessage
+        message: WireUIMessage
     ) {
         self.message = message
     }
