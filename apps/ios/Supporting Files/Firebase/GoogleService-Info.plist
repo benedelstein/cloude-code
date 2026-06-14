@@ -3,28 +3,28 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>REPLACE_WITH_FIREBASE_API_KEY</string>
+	<string>AIzaSyBDluKGJ1gi_EJP9PoC-ST7EvK0nIvmudM</string>
 	<key>BUNDLE_ID</key>
 	<string>llc.bze.CloudeCode</string>
 	<key>GCM_SENDER_ID</key>
-	<string>REPLACE_WITH_GCM_SENDER_ID</string>
+	<string>857206446935</string>
 	<key>GOOGLE_APP_ID</key>
-	<string>REPLACE_WITH_GOOGLE_APP_ID</string>
+	<string>1:857206446935:ios:e6c4b4ea5be231179abc12</string>
 	<key>IS_ADS_ENABLED</key>
 	<false/>
 	<key>IS_ANALYTICS_ENABLED</key>
 	<false/>
 	<key>IS_APPINVITE_ENABLED</key>
-	<false/>
+	<true/>
 	<key>IS_GCM_ENABLED</key>
 	<true/>
 	<key>IS_SIGNIN_ENABLED</key>
-	<false/>
+	<true/>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>PROJECT_ID</key>
-	<string>REPLACE_WITH_FIREBASE_PROJECT_ID</string>
+	<string>cloude-code-34f95</string>
 	<key>STORAGE_BUCKET</key>
-	<string>REPLACE_WITH_FIREBASE_STORAGE_BUCKET</string>
+	<string>cloude-code-34f95.firebasestorage.app</string>
 </dict>
 </plist>
