@@ -1,22 +1,11 @@
 import { z } from "zod/v4";
-import type { UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
 import { ActiveTurnState, AgentMode, SessionStatus } from "./session";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MessageAttachmentRef,
 } from "./attachments";
-
-// Re-export AI SDK types for convenience
-export type { UIMessage, UIMessagePart };
-
-/**
- * Typed pass-through for values owned by another library (the AI SDK):
- * validates as unknown (the owning library defines the real shape), infers as
- * T for TypeScript consumers, and transpiles to an opaque JSONValue in Swift.
- */
-function wireOpaque<T>(): z.ZodType<T> {
-  return z.unknown() as unknown as z.ZodType<T>;
-}
+import { UIMessageSchema } from "./ui-message";
+import { UIMessageChunkSchema } from "./ui-message-chunks";
 
 // ------------------------------------------------------------
 // Client → Server messages
@@ -75,19 +64,10 @@ export const ConnectedEvent = z.object({
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
-// Zod schema for UIMessage. Inference matches the AI SDK's UIMessage type, so
-// parsed values are directly usable as UIMessage.
-export const UIMessageSchema = z.object({
-  id: z.string(),
-  role: z.enum(["user", "assistant", "system"]),
-  parts: z.array(wireOpaque<UIMessagePart<UIDataTypes, UITools>>()),
-  metadata: z.unknown().optional(),
-});
-
 export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
   messages: z.array(UIMessageSchema),
-  pendingChunks: z.array(z.unknown()).optional(),
+  pendingChunks: z.array(UIMessageChunkSchema).optional(),
   activeTurn: ActiveTurnState.nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
@@ -114,7 +94,7 @@ export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 // AI SDK UIMessageStream chunks (for real-time streaming, batched per webhook delivery)
 export const AgentChunksEvent = z.object({
   type: z.literal("agent.chunks"),
-  chunks: z.array(z.unknown()), // UIMessageStreamPart[] from AI SDK
+  chunks: z.array(UIMessageChunkSchema),
 });
 export type AgentChunksEvent = z.infer<typeof AgentChunksEvent>;
 

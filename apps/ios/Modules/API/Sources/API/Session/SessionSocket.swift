@@ -8,12 +8,12 @@ public enum SessionSocketEvent: Sendable {
     case connected(status: String)
     case syncResponse(SessionSyncSnapshot)
     case operationError(SessionSocketOperationError)
-    case agentChunks([AgentStreamChunk])
-    case agentFinish(AgentUIMessage)
+    case agentChunks([SessionStreamChunk])
+    case agentFinish(SessionMessage)
     case agentReady
-    case userMessage(AgentUIMessage)
+    case userMessage(SessionMessage)
     case editorReady(url: String)
-    case liveState(SessionSocketLiveState)
+    case liveState(SessionClientState)
 }
 
 /// Typed client for the session WebSocket at `/agents/session/{sessionId}`.
@@ -111,7 +111,7 @@ public actor SessionSocket {
             let probe = try decoder.decode(TypeProbe.self, from: data)
             if probe.type == "cf_agent_state" {
                 let frame = try decoder.decode(AgentStateFrame.self, from: data)
-                return .liveState(SessionSocketLiveState(frame.state))
+                return .liveState(SessionClientState(frame.state))
             }
             if probe.type.hasPrefix("cf_") {
                 // Other Agents SDK control frames (identity, RPC, …) are unused.
@@ -157,16 +157,16 @@ public actor SessionSocket {
         switch message {
         case .syncResponse(let event):
             return .syncResponse(SessionSyncSnapshot(
-                messages: event.messages.map(AgentUIMessage.init),
-                pendingChunks: (event.pendingChunks ?? []).map(AgentStreamChunk.init),
+                messages: event.messages.map(SessionMessage.init),
+                pendingChunks: (event.pendingChunks ?? []).map(SessionStreamChunk.init),
                 activeTurnUserMessageId: event.activeTurn?.userMessageId
             ))
         case .agentChunks(let event):
-            return .agentChunks(event.chunks.map(AgentStreamChunk.init))
+            return .agentChunks(event.chunks.map(SessionStreamChunk.init))
         case .agentFinish(let event):
-            return .agentFinish(AgentUIMessage(event.message))
+            return .agentFinish(SessionMessage(event.message))
         case .userMessage(let event):
-            return .userMessage(AgentUIMessage(event.message))
+            return .userMessage(SessionMessage(event.message))
         case .connected, .operationError, .agentReady, .editorReady, .setupOutputChunks, .unknown:
             return nil
         }

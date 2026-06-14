@@ -73,6 +73,9 @@ function lowerTopLevel(
     owner: entry.swiftName,
   };
 
+  if (entry.openUnion) {
+    return lowerOpenUnion(entry, context, doc);
+  }
   if (node.oneOf) {
     return lowerUnion(entry, node, context, doc);
   }
@@ -91,6 +94,14 @@ function lowerTopLevel(
         kind: "dictionary",
         value: resolve(node.additionalProperties, context, entry.swiftName).type,
       },
+    };
+  }
+  if (isUnknownSchema(node)) {
+    return {
+      kind: "alias",
+      name: entry.swiftName,
+      doc,
+      target: { kind: "json" },
     };
   }
   throw new Error(
@@ -226,6 +237,7 @@ function lowerUnion(
       caseName: swiftCaseName(constValue),
       typeName,
       discriminatorValue: constValue,
+      match: { kind: "literal" as const, value: constValue },
     };
   });
 
@@ -246,7 +258,81 @@ function lowerUnion(
     variants,
     nested,
     nonFrozen: !(entry.frozen ?? false),
+    unknownRawValue: false,
   };
+}
+
+function lowerOpenUnion(
+  entry: ManifestEntry,
+  context: Context,
+  doc?: string,
+): IRUnion {
+  const config = entry.openUnion;
+  if (!config) {
+    throw new Error(`Open union ${entry.swiftName}: missing openUnion config`);
+  }
+
+  const nested: IRDecl[] = [];
+  const variants = [
+    ...config.exactCases.map((variant) => {
+      nested.push(lowerOpenUnionPayload(entry, context, variant.typeName, variant.schema));
+      return {
+        caseName: variant.caseName ?? swiftCaseName(variant.discriminatorValue),
+        typeName: variant.typeName,
+        discriminatorValue: variant.discriminatorValue,
+        match: { kind: "literal" as const, value: variant.discriminatorValue },
+      };
+    }),
+    ...config.prefixCases.map((variant) => {
+      nested.push(lowerOpenUnionPayload(entry, context, variant.typeName, variant.schema));
+      return {
+        caseName: variant.caseName,
+        typeName: variant.typeName,
+        discriminatorValue: variant.prefix,
+        match: { kind: "prefix" as const, value: variant.prefix },
+      };
+    }),
+  ];
+
+  const seenCases = new Set<string>();
+  const seenTypes = new Set<string>();
+  for (const variant of variants) {
+    if (seenCases.has(variant.caseName)) {
+      throw new Error(`Open union ${entry.swiftName}: case name collision for "${variant.caseName}"`);
+    }
+    if (seenTypes.has(variant.typeName)) {
+      throw new Error(`Open union ${entry.swiftName}: payload type collision for "${variant.typeName}"`);
+    }
+    seenCases.add(variant.caseName);
+    seenTypes.add(variant.typeName);
+  }
+  assertUniqueNames(nested, `Open union ${entry.swiftName}`);
+
+  return {
+    kind: "union",
+    name: entry.swiftName,
+    doc,
+    discriminatorKey: config.discriminatorKey,
+    variants,
+    nested,
+    nonFrozen: !(entry.frozen ?? false),
+    unknownRawValue: config.unknownRawValue,
+  };
+}
+
+function lowerOpenUnionPayload(
+  entry: ManifestEntry,
+  context: Context,
+  typeName: string,
+  schema: z.ZodType,
+): IRStruct {
+  const node = z.toJSONSchema(schema, { io: "output" }) as JSONSchema;
+  if (node.type !== "object" || !node.properties) {
+    throw new Error(
+      `Open union ${entry.swiftName}.${typeName}: variant is not an object schema: ${JSON.stringify(node)}`,
+    );
+  }
+  return lowerStruct(typeName, node, context, node.description);
 }
 
 // ---------------------------------------------------------------------------
@@ -438,6 +524,12 @@ function unwrapNullable(node: JSONSchema): JSONSchema | undefined {
     return undefined;
   }
   return valueBranch;
+}
+
+function isUnknownSchema(node: JSONSchema): boolean {
+  return Object.keys(node).every((key) =>
+    key === "$id" || key === "$schema" || key === "description" || key === "default",
+  );
 }
 
 function makeOptional(type: SwiftTypeRef): SwiftTypeRef {

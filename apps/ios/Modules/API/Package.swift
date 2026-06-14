@@ -22,7 +22,15 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreAPI", package: "CoreAPI"),
                 .product(name: "Domain", package: "Domain"),
+                .product(name: "AISDKProvider", package: "swift-ai-sdk"),
                 .product(name: "SwiftAISDK", package: "swift-ai-sdk")
+            ]
+        ),
+        .testTarget(
+            name: "APITests",
+            dependencies: [
+                "API",
+                .product(name: "CoreAPI", package: "CoreAPI")
             ]
         )
     ]

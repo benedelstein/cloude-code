@@ -1,3 +1,5 @@
+import API
+import Domain
 import Entities
 import SwiftUI
 
@@ -24,9 +26,16 @@ struct AgentSessionView: View {
             SessionTranscriptScaffold(
                 messages: store.messages,
                 stream: store.stream,
+                isResponding: store.isResponding,
                 scrollTarget: $scrollTarget
             )
-            .onChange(of: store.transcriptRevision) { _, _ in
+            .onChange(of: store.messages) { _, _ in
+                scrollTarget = .bottom
+            }
+            .onChange(of: store.stream) { _, _ in
+                scrollTarget = .bottom
+            }
+            .onChange(of: store.isResponding) { _, _ in
                 scrollTarget = .bottom
             }
 
@@ -37,7 +46,7 @@ struct AgentSessionView: View {
                 focused: $composerFocused,
                 placeholder: store.composerPlaceholder,
                 isSubmitDisabled: !store.canSubmitDraft,
-                isSubmitting: store.isSending,
+                isSubmitting: store.isResponding,
                 onSubmit: store.submitDraft
             )
         }
@@ -65,7 +74,7 @@ struct AgentSessionView: View {
 
                 Text(store.clientState.status)
 
-                if store.clientState.activeTurnUserMessageId != nil {
+                if store.isResponding {
                     ProgressView()
                         .controlSize(.small)
                         .tint(theme.secondaryLabelColor)
@@ -88,27 +97,34 @@ private struct SessionTranscriptScaffold: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let messages: [AgentSessionMessage]
-    let stream: AgentSessionStreamState
+    let messages: [SessionMessage]
+    let stream: SessionMessageStreamState
+    let isResponding: Bool
     @Binding var scrollTarget: SessionScrollTarget?
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: style.spacing) {
-                if messages.isEmpty, !stream.isActive {
+                let visibleMessages = messages.filter { !$0.text.isEmpty }
+                let streamingText = stream.text
+
+                if visibleMessages.isEmpty, streamingText.isEmpty, !isResponding {
                     ContentUnavailableView(
                         "No messages yet",
                         systemImage: "text.bubble"
                     )
                     .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
                 } else {
-                    ForEach(messages) { message in
-                        MessageScaffoldRow(message: message)
-                            .id(SessionScrollTarget.message(message.id))
+                    ForEach(visibleMessages) { message in
+                        MessageTextRow(
+                            text: message.text,
+                            isUser: message.isUser
+                        )
+                        .id(SessionScrollTarget.message(message.id))
                     }
 
-                    if stream.isActive {
-                        StreamingMessageScaffold(chunkCount: stream.chunkCount)
+                    if !streamingText.isEmpty {
+                        MessageTextRow(text: streamingText, isUser: false)
                             .id(SessionScrollTarget.stream)
                     }
                 }
@@ -127,55 +143,35 @@ private struct SessionTranscriptScaffold: View {
     }
 }
 
-private struct MessageScaffoldRow: View {
+private struct MessageTextRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let message: AgentSessionMessage
+    let text: String
+    let isUser: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: style.gridSize / 2) {
-            Text(message.roleLabel)
-                .styledFont(.caption)
-                .foregroundStyle(theme.secondaryLabelColor)
-
-            RoundedRectangle(cornerRadius: style.gridSize)
-                .fill(theme.secondaryBackgroundColor)
-                .frame(height: style.gridSize * 6)
-                .overlay {
-                    VStack(alignment: .leading, spacing: style.gridSize / 2) {
-                        Capsule()
-                            .fill(theme.loadingBackgroundColor)
-                            .frame(width: style.gridSize * 18, height: style.gridSize)
-                        Capsule()
-                            .fill(theme.loadingBackgroundColor)
-                            .frame(width: style.gridSize * 11, height: style.gridSize)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        if isUser {
+            HStack(alignment: .top) {
+                Spacer(minLength: style.gridSize * 5)
+                Text(verbatim: text)
+                    .styledFont(.body)
+                    .foregroundStyle(theme.labelColor)
+                    .textSelection(.enabled)
                     .padding(style.gridSize)
-                }
+                    .background(theme.secondaryBackgroundColor)
+                    .clipShape(userMessageShape)
+            }
+        } else {
+            Text(verbatim: text)
+                .styledFont(.body)
+                .foregroundStyle(theme.labelColor)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-}
 
-private struct StreamingMessageScaffold: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
-
-    let chunkCount: Int
-
-    var body: some View {
-        HStack(spacing: style.gridSize) {
-            ProgressView()
-                .controlSize(.small)
-                .tint(theme.secondaryLabelColor)
-
-            Text("Streaming \(chunkCount.formatted()) chunks")
-                .styledFont(.caption)
-                .foregroundStyle(theme.secondaryLabelColor)
-        }
-        .padding(style.gridSize)
-        .background(theme.secondaryBackgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: style.gridSize, style: .continuous))
+    private var userMessageShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: style.gridSize * 1.5, style: .continuous)
     }
 }

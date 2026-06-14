@@ -6,6 +6,11 @@ import * as providers from "../src/providers";
 import * as session from "../src/session";
 import * as sessionsApi from "../src/sessions";
 import * as clientState from "../src/client-state";
+import * as uiMessageCommon from "../src/ui-message-common";
+import * as uiMessageParts from "../src/ui-message-parts";
+import * as uiMessageChunks from "../src/ui-message-chunks";
+import * as uiMessage from "../src/ui-message";
+import * as uiMessageAISDK from "../src/ui-message-ai-sdk";
 import * as websocketApi from "../src/websocket-api";
 import * as userSessionsWebsocketApi from "../src/user-sessions-websocket-api";
 import * as authApi from "../src/auth";
@@ -36,6 +41,11 @@ const SOURCES: { module: Record<string, unknown>; group: string; file: string }[
   { module: session, group: "Session", file: "session.ts" },
   { module: sessionsApi, group: "SessionsAPI", file: "sessions.ts" },
   { module: clientState, group: "ClientState", file: "client-state.ts" },
+  { module: uiMessageCommon, group: "UIMessage", file: "ui-message-common.ts" },
+  { module: uiMessageParts, group: "UIMessage", file: "ui-message-parts.ts" },
+  { module: uiMessageChunks, group: "UIMessage", file: "ui-message-chunks.ts" },
+  { module: uiMessage, group: "UIMessage", file: "ui-message.ts" },
+  { module: uiMessageAISDK, group: "UIMessage", file: "ui-message-ai-sdk.ts" },
   { module: websocketApi, group: "WebSocket", file: "websocket-api.ts" },
   {
     module: userSessionsWebsocketApi,
@@ -70,9 +80,35 @@ function assertContractPackageCovered(): void {
 
 /** Per-type exceptions, keyed by export name. */
 const OVERRIDES: Record<string, Partial<Omit<ManifestEntry, "schema" | "group">>> = {
+  JSONPayloadSchema: {
+    swiftName: "JSONPayload",
+    doc: "Arbitrary JSON payload carried by AI SDK-compatible UI wire data.",
+  },
+  ProviderMetadataSchema: {
+    swiftName: "ProviderMetadata",
+    doc: "Provider-scoped metadata map used by AI SDK-compatible UI wire data.",
+  },
+  ToolApprovalSchema: {
+    swiftName: "ToolApproval",
+    doc: "Approval metadata for AI SDK-compatible tool UI parts.",
+  },
+  ToolInvocationStateSchema: {
+    swiftName: "ToolInvocationState",
+    doc: "Broad state discriminator for AI SDK-compatible tool UI parts.",
+  },
+  UIMessagePartSchema: {
+    swiftName: "UIMessagePart",
+    doc: "Wire shape of an AI SDK-compatible UI message part.",
+    openUnion: uiMessageParts.UI_MESSAGE_PART_OPEN_UNION,
+  },
+  UIMessageChunkSchema: {
+    swiftName: "UIMessageChunk",
+    doc: "Wire shape of an AI SDK-compatible UI message stream chunk.",
+    openUnion: uiMessageChunks.UI_MESSAGE_CHUNK_OPEN_UNION,
+  },
   UIMessageSchema: {
     swiftName: "UIMessage",
-    doc: "Wire shape of an AI SDK UIMessage; parts stay opaque JSON.",
+    doc: "Wire shape of an AI SDK-compatible UIMessage.",
   },
   ClientStateSchema: {
     swiftName: "ClientState",

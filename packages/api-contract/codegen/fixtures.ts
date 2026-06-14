@@ -2,7 +2,8 @@ import type { z } from "zod";
 import { SessionSetupRun } from "../src/session";
 import { ClientStateSchema } from "../src/client-state";
 import { ListSessionsResponse } from "../src/sessions";
-import { ClientMessage, ServerMessage, UIMessageSchema } from "../src/websocket-api";
+import { UIMessageSchema } from "../src/ui-message";
+import { ClientMessage, ServerMessage } from "../src/websocket-api";
 import { ModelsResponse } from "../src/models";
 import { AgentSettings } from "../src/providers";
 
@@ -70,7 +71,13 @@ const uiMessage = {
   role: "assistant",
   parts: [
     { type: "text", text: "Here is the plan." },
-    { type: "tool-call", toolName: "bash", input: { command: "ls" }, nested: [1, 2.5, true, null] },
+    {
+      type: "tool-bash",
+      toolCallId: "call_1",
+      state: "output-available",
+      input: { command: "ls" },
+      output: { stdout: "README.md\npackage.json" },
+    },
   ],
   metadata: { custom: { deeply: ["nested", 42] } },
 };
@@ -145,7 +152,11 @@ export const FIXTURES: Fixture[] = [
     value: {
       type: "sync.response",
       messages: [uiMessage],
-      pendingChunks: [{ type: "text-delta", delta: "Hel" }],
+      pendingChunks: [
+        { type: "start", messageId: "msg_2" },
+        { type: "text-start", id: "text_1" },
+        { type: "text-delta", id: "text_1", delta: "Hel" },
+      ],
       activeTurn: { userMessageId: "msg_1" },
     },
   },
@@ -153,7 +164,13 @@ export const FIXTURES: Fixture[] = [
     schema: ServerMessage,
     typeName: "ServerMessage",
     caseName: "agentChunks",
-    value: { type: "agent.chunks", chunks: [{ type: "text-delta", delta: "lo" }, { type: "finish" }] },
+    value: {
+      type: "agent.chunks",
+      chunks: [
+        { type: "text-delta", id: "text_1", delta: "lo" },
+        { type: "finish", finishReason: "stop" },
+      ],
+    },
   },
   {
     schema: ServerMessage,

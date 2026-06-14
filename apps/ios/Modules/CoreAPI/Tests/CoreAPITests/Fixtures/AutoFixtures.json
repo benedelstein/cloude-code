@@ -627,7 +627,7 @@
         "role": "user",
         "parts": [
           {
-            "opaque": true
+            "type": "sample"
           }
         ],
         "metadata": {
@@ -680,7 +680,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ],
       "metadata": {
@@ -697,7 +697,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ]
     },
@@ -705,11 +705,430 @@
       "sample"
     ]
   },
+  "ToolApproval.autoFull": {
+    "id": "sample",
+    "approved": true,
+    "reason": "sample"
+  },
+  "ToolApproval.autoMinimal": {
+    "id": "sample"
+  },
+  "UIMessagePart.autoText": {
+    "type": "text",
+    "text": "sample",
+    "state": "streaming",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessagePart.autoReasoning": {
+    "type": "reasoning",
+    "text": "sample",
+    "state": "streaming",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessagePart.autoSourceUrl": {
+    "type": "source-url",
+    "sourceId": "sample",
+    "url": "sample",
+    "title": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessagePart.autoSourceDocument": {
+    "type": "source-document",
+    "sourceId": "sample",
+    "mediaType": "sample",
+    "title": "sample",
+    "filename": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessagePart.autoFile": {
+    "type": "file",
+    "mediaType": "sample",
+    "filename": "sample",
+    "url": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessagePart.autoStepStart": {
+    "type": "step-start"
+  },
+  "UIMessagePart.autoDynamicTool": {
+    "type": "dynamic-tool",
+    "toolName": "sample",
+    "toolCallId": "sample",
+    "title": "sample",
+    "providerExecuted": true,
+    "state": "input-streaming",
+    "input": {
+      "opaque": true
+    },
+    "output": {
+      "opaque": true
+    },
+    "errorText": "sample",
+    "callProviderMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "resultProviderMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "preliminary": true,
+    "approval": {
+      "id": "sample",
+      "approved": true,
+      "reason": "sample"
+    }
+  },
+  "UIMessagePart.autoData": {
+    "type": "data-sample",
+    "id": "sample",
+    "data": {
+      "opaque": true
+    }
+  },
+  "UIMessagePart.autoTool": {
+    "type": "tool-sample",
+    "toolCallId": "sample",
+    "title": "sample",
+    "state": "input-streaming",
+    "input": {
+      "opaque": true
+    },
+    "output": {
+      "opaque": true
+    },
+    "rawInput": {
+      "opaque": true
+    },
+    "errorText": "sample",
+    "providerExecuted": true,
+    "callProviderMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "resultProviderMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "preliminary": true,
+    "approval": {
+      "id": "sample",
+      "approved": true,
+      "reason": "sample"
+    }
+  },
+  "UIMessagePart.autoUnknown": {
+    "type": "future-variant",
+    "payload": {
+      "opaque": true
+    }
+  },
+  "UIMessageChunk.autoTextStart": {
+    "type": "text-start",
+    "id": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoTextDelta": {
+    "type": "text-delta",
+    "id": "sample",
+    "delta": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoTextEnd": {
+    "type": "text-end",
+    "id": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoReasoningStart": {
+    "type": "reasoning-start",
+    "id": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoReasoningDelta": {
+    "type": "reasoning-delta",
+    "id": "sample",
+    "delta": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoReasoningEnd": {
+    "type": "reasoning-end",
+    "id": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoError": {
+    "type": "error",
+    "errorText": "sample"
+  },
+  "UIMessageChunk.autoToolInputStart": {
+    "type": "tool-input-start",
+    "toolCallId": "sample",
+    "toolName": "sample",
+    "providerExecuted": true,
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "dynamic": true,
+    "title": "sample"
+  },
+  "UIMessageChunk.autoToolInputDelta": {
+    "type": "tool-input-delta",
+    "toolCallId": "sample",
+    "inputTextDelta": "sample"
+  },
+  "UIMessageChunk.autoToolInputAvailable": {
+    "type": "tool-input-available",
+    "toolCallId": "sample",
+    "toolName": "sample",
+    "input": {
+      "opaque": true
+    },
+    "providerExecuted": true,
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "dynamic": true,
+    "title": "sample"
+  },
+  "UIMessageChunk.autoToolInputError": {
+    "type": "tool-input-error",
+    "toolCallId": "sample",
+    "toolName": "sample",
+    "input": {
+      "opaque": true
+    },
+    "providerExecuted": true,
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    },
+    "dynamic": true,
+    "errorText": "sample",
+    "title": "sample"
+  },
+  "UIMessageChunk.autoToolApprovalRequest": {
+    "type": "tool-approval-request",
+    "approvalId": "sample",
+    "toolCallId": "sample"
+  },
+  "UIMessageChunk.autoToolOutputAvailable": {
+    "type": "tool-output-available",
+    "toolCallId": "sample",
+    "output": {
+      "opaque": true
+    },
+    "providerExecuted": true,
+    "dynamic": true,
+    "preliminary": true
+  },
+  "UIMessageChunk.autoToolOutputError": {
+    "type": "tool-output-error",
+    "toolCallId": "sample",
+    "errorText": "sample",
+    "providerExecuted": true,
+    "dynamic": true
+  },
+  "UIMessageChunk.autoToolOutputDenied": {
+    "type": "tool-output-denied",
+    "toolCallId": "sample"
+  },
+  "UIMessageChunk.autoSourceUrl": {
+    "type": "source-url",
+    "sourceId": "sample",
+    "url": "sample",
+    "title": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoSourceDocument": {
+    "type": "source-document",
+    "sourceId": "sample",
+    "mediaType": "sample",
+    "title": "sample",
+    "filename": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoFile": {
+    "type": "file",
+    "url": "sample",
+    "mediaType": "sample",
+    "providerMetadata": {
+      "key": {
+        "key": {
+          "opaque": true
+        }
+      }
+    }
+  },
+  "UIMessageChunk.autoStartStep": {
+    "type": "start-step"
+  },
+  "UIMessageChunk.autoFinishStep": {
+    "type": "finish-step"
+  },
+  "UIMessageChunk.autoStart": {
+    "type": "start",
+    "messageId": "sample",
+    "messageMetadata": {
+      "opaque": true
+    }
+  },
+  "UIMessageChunk.autoFinish": {
+    "type": "finish",
+    "finishReason": "length",
+    "messageMetadata": {
+      "opaque": true
+    }
+  },
+  "UIMessageChunk.autoAbort": {
+    "type": "abort",
+    "reason": "sample"
+  },
+  "UIMessageChunk.autoMessageMetadata": {
+    "type": "message-metadata",
+    "messageMetadata": {
+      "opaque": true
+    }
+  },
+  "UIMessageChunk.autoData": {
+    "type": "data-sample",
+    "id": "sample",
+    "data": {
+      "opaque": true
+    },
+    "transient": true
+  },
+  "UIMessageChunk.autoUnknown": {
+    "type": "future-variant",
+    "payload": {
+      "opaque": true
+    }
+  },
+  "UIMessage.autoFull": {
+    "id": "sample",
+    "role": "user",
+    "parts": [
+      {
+        "type": "sample"
+      }
+    ],
+    "metadata": {
+      "opaque": true
+    }
+  },
+  "UIMessage.autoMinimal": {
+    "id": "sample",
+    "role": "user",
+    "parts": [
+      {
+        "type": "sample"
+      }
+    ]
+  },
   "AgentChunksEvent.autoFull": {
     "type": "agent.chunks",
     "chunks": [
       {
-        "opaque": true
+        "type": "sample"
       }
     ]
   },
@@ -717,7 +1136,7 @@
     "type": "agent.chunks",
     "chunks": [
       {
-        "opaque": true
+        "type": "sample"
       }
     ]
   },
@@ -728,7 +1147,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ],
       "metadata": {
@@ -743,7 +1162,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ]
     }
@@ -843,7 +1262,7 @@
         "role": "user",
         "parts": [
           {
-            "opaque": true
+            "type": "sample"
           }
         ],
         "metadata": {
@@ -853,7 +1272,7 @@
     ],
     "pendingChunks": [
       {
-        "opaque": true
+        "type": "sample"
       }
     ],
     "activeTurn": {
@@ -869,7 +1288,7 @@
     "type": "agent.chunks",
     "chunks": [
       {
-        "opaque": true
+        "type": "sample"
       }
     ]
   },
@@ -880,7 +1299,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ],
       "metadata": {
@@ -898,7 +1317,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ],
       "metadata": {
@@ -981,7 +1400,7 @@
         "role": "user",
         "parts": [
           {
-            "opaque": true
+            "type": "sample"
           }
         ],
         "metadata": {
@@ -991,7 +1410,7 @@
     ],
     "pendingChunks": [
       {
-        "opaque": true
+        "type": "sample"
       }
     ],
     "activeTurn": {
@@ -1006,33 +1425,12 @@
         "role": "user",
         "parts": [
           {
-            "opaque": true
+            "type": "sample"
           }
         ]
       }
     ],
     "activeTurn": null
-  },
-  "UIMessage.autoFull": {
-    "id": "sample",
-    "role": "user",
-    "parts": [
-      {
-        "opaque": true
-      }
-    ],
-    "metadata": {
-      "opaque": true
-    }
-  },
-  "UIMessage.autoMinimal": {
-    "id": "sample",
-    "role": "user",
-    "parts": [
-      {
-        "opaque": true
-      }
-    ]
   },
   "UserMessageEvent.autoFull": {
     "type": "user.message",
@@ -1041,7 +1439,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ],
       "metadata": {
@@ -1056,7 +1454,7 @@
       "role": "user",
       "parts": [
         {
-          "opaque": true
+          "type": "sample"
         }
       ]
     }
@@ -1851,7 +2249,7 @@
   "NetworkAccessConfig.autoCustom": {
     "mode": "custom",
     "extraAllowlist": [
-      "sample"
+      "data-sample"
     ],
     "includeDefaultAllowlist": true
   },

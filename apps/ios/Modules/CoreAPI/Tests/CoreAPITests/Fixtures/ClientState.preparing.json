@@ -86,17 +86,15 @@
           "text": "Here is the plan."
         },
         {
-          "type": "tool-call",
-          "toolName": "bash",
+          "type": "tool-bash",
+          "toolCallId": "call_1",
+          "state": "output-available",
           "input": {
             "command": "ls"
           },
-          "nested": [
-            1,
-            2.5,
-            true,
-            null
-          ]
+          "output": {
+            "stdout": "README.md\npackage.json"
+          }
         }
       ],
       "metadata": {

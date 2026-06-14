@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { ManifestEntry } from "./ir";
 import type { JSONSchema } from "./introspect";
 import { pascalCase, refId } from "./introspect";
@@ -40,6 +40,8 @@ const UUID_SAMPLE = "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d";
 const DATETIME_SAMPLE = "2026-06-10T12:00:00Z";
 /** Candidates tried in order against `pattern` constraints. */
 const PATTERN_CANDIDATES = [
+  "data-sample",
+  "tool-sample",
   "sample",
   "SAMPLE_VAR",
   "a.example.com",
@@ -56,6 +58,46 @@ export function synthesizeFixtures(
 
   for (const entry of entries) {
     const node = requireSchema(schemas, entry.swiftName);
+    if (entry.openUnion) {
+      for (const variant of entry.openUnion.exactCases) {
+        fixtures.push({
+          schema: entry.schema,
+          typeName: entry.swiftName,
+          caseName: `auto${pascalCase(variant.discriminatorValue)}`,
+          value: sampleOpenUnionVariant(
+            variant.schema,
+            entry.swiftName,
+            schemas,
+            entry.openUnion.discriminatorKey,
+            variant.discriminatorValue,
+          ),
+          mustParse: true,
+        });
+      }
+      for (const variant of entry.openUnion.prefixCases) {
+        fixtures.push({
+          schema: entry.schema,
+          typeName: entry.swiftName,
+          caseName: `auto${pascalCase(variant.caseName)}`,
+          value: sampleOpenUnionVariant(
+            variant.schema,
+            entry.swiftName,
+            schemas,
+            entry.openUnion.discriminatorKey,
+            `${variant.prefix}sample`,
+          ),
+          mustParse: true,
+        });
+      }
+      fixtures.push({
+        schema: entry.schema,
+        typeName: entry.swiftName,
+        caseName: "autoUnknown",
+        value: { [entry.openUnion.discriminatorKey]: "future-variant", payload: { opaque: true } },
+        mustParse: true,
+      });
+      continue;
+    }
     if (node.oneOf) {
       for (const branch of node.oneOf as JSONSchema[]) {
         const variantName = refId(branch);
@@ -91,6 +133,21 @@ export function synthesizeFixtures(
   }
 
   return fixtures;
+}
+
+function sampleOpenUnionVariant(
+  schema: z.ZodType,
+  typeName: string,
+  schemas: Record<string, JSONSchema>,
+  discriminatorKey: string,
+  discriminatorValue: string,
+): unknown {
+  const node = z.toJSONSchema(schema, { io: "output" }) as JSONSchema;
+  const value = sample(node, schemas, "full", typeName, []);
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return { ...value, [discriminatorKey]: discriminatorValue };
+  }
+  return value;
 }
 
 /** First string const found among the variant's properties (its discriminator). */

@@ -5,10 +5,10 @@ import Foundation
 
 public struct AgentChunksEvent: Codable, Equatable, Sendable {
     public let type = "agent.chunks"
-    public var chunks: [JSONValue]
+    public var chunks: [UIMessageChunk]
 
     public init(
-        chunks: [JSONValue]
+        chunks: [UIMessageChunk]
     ) {
         self.chunks = chunks
     }
@@ -403,12 +403,12 @@ public struct SyncRequestEvent: Codable, Equatable, Sendable {
 public struct SyncResponseEvent: Codable, Equatable, Sendable {
     public let type = "sync.response"
     public var messages: [UIMessage]
-    public var pendingChunks: [JSONValue]?
+    public var pendingChunks: [UIMessageChunk]?
     public var activeTurn: ActiveTurnState?
 
     public init(
         messages: [UIMessage],
-        pendingChunks: [JSONValue]? = nil,
+        pendingChunks: [UIMessageChunk]? = nil,
         activeTurn: ActiveTurnState? = nil
     ) {
         self.messages = messages
@@ -421,52 +421,6 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
         case messages
         case pendingChunks
         case activeTurn
-    }
-}
-
-/// Wire shape of an AI SDK UIMessage; parts stay opaque JSON.
-public struct UIMessage: Codable, Equatable, Sendable {
-    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
-        case user
-        case assistant
-        case system
-        /// A value this client version doesn't recognize yet.
-        case unknown(String)
-
-        public init(rawValue: String) {
-            switch rawValue {
-            case "user": self = .user
-            case "assistant": self = .assistant
-            case "system": self = .system
-            default: self = .unknown(rawValue)
-            }
-        }
-
-        public var rawValue: String {
-            switch self {
-            case .user: "user"
-            case .assistant: "assistant"
-            case .system: "system"
-            case .unknown(let value): value
-            }
-        }
-    }
-
-    public var id: String
-    public var role: Role
-    public var parts: [JSONValue]
-    public var metadata: JSONValue?
-
-    public init(
-        id: String,
-        role: Role,
-        parts: [JSONValue],
-        metadata: JSONValue? = nil
-    ) {
-        self.id = id
-        self.role = role
-        self.parts = parts
-        self.metadata = metadata
     }
 }
 

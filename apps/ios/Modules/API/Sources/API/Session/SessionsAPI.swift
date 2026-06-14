@@ -1,4 +1,5 @@
 import CoreAPI
+import Domain
 import Foundation
 
 // MARK: - Requests
@@ -173,7 +174,7 @@ public protocol SessionsAPIProviding: Sendable {
     ) async throws -> SessionSummaryPage
     func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse
     func session(id: UUID) async throws -> SessionInfoResponse
-    func messages(sessionId: UUID) async throws -> [UIMessage]
+    func messages(sessionId: UUID) async throws -> [SessionMessage]
     func plan(sessionId: UUID) async throws -> SessionPlanResponse
     func updateTitle(sessionId: UUID, title: String) async throws -> UpdateSessionTitleResponse
     func createPullRequest(sessionId: UUID) async throws -> PullRequestResponse
@@ -230,8 +231,11 @@ public struct SessionsAPI: SessionsAPIProviding {
         try await client.fetch(GetSession(sessionId: id, headers: tokenProvider.bearerHeaders()))
     }
 
-    public func messages(sessionId: UUID) async throws -> [UIMessage] {
-        try await client.fetch(GetSessionMessages(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
+    public func messages(sessionId: UUID) async throws -> [SessionMessage] {
+        try await client.fetch(GetSessionMessages(
+            sessionId: sessionId,
+            headers: tokenProvider.bearerHeaders()
+        )).map(SessionMessage.init)
     }
 
     public func plan(sessionId: UUID) async throws -> SessionPlanResponse {
