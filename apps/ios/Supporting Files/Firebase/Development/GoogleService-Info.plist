@@ -5,7 +5,7 @@
 	<key>API_KEY</key>
 	<string>REPLACE_WITH_FIREBASE_API_KEY</string>
 	<key>BUNDLE_ID</key>
-	<string>llc.bze.CloudeCode</string>
+	<string>llc.bze.CloudeCode-Dev</string>
 	<key>GCM_SENDER_ID</key>
 	<string>REPLACE_WITH_GCM_SENDER_ID</string>
 	<key>GOOGLE_APP_ID</key>
@@ -24,5 +24,7 @@
 	<string>1</string>
 	<key>PROJECT_ID</key>
 	<string>REPLACE_WITH_FIREBASE_PROJECT_ID</string>
+	<key>STORAGE_BUCKET</key>
+	<string>REPLACE_WITH_FIREBASE_STORAGE_BUCKET</string>
 </dict>
 </plist>
