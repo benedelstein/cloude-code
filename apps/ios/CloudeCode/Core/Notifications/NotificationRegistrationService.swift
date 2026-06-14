@@ -16,7 +16,7 @@ final class NotificationRegistrationService: NSObject {
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
     private let authUserPublisher: AnyPublisher<String?, Never>
-    private let fcmTokenSubject = CurrentValueSubject<String?, Never>(nil)
+    @Published private var fcmToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var uploadTask: Task<Void, Never>?
     private var lastUploadRequest: UploadRequest?
@@ -40,7 +40,7 @@ final class NotificationRegistrationService: NSObject {
         UNUserNotificationCenter.current().delegate = self
 
         authUserPublisher
-            .combineLatest(fcmTokenSubject)
+            .combineLatest($fcmToken)
             .sink { [weak self] userId, token in
                 guard let self else { return }
                 guard let userId, let token else {
@@ -105,7 +105,7 @@ final class NotificationRegistrationService: NSObject {
     }
 
     private func handleToken(_ token: String) {
-        fcmTokenSubject.send(token)
+        fcmToken = token
     }
 }
 
