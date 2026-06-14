@@ -166,12 +166,11 @@ describe("SessionSummaryService", () => {
       logger: noopLogger,
     });
 
-    service.persistAssistantTurnFinished({
+    await service.persistAssistantTurnFinished({
       messageId: "assistant-message-1",
       messageCreatedAt: "2026-06-03T00:00:00.000Z",
       aborted: false,
     });
-    await waitFor(() => operations.length === 2);
 
     expect(repository.recordAssistantTurnFinished).toHaveBeenCalledWith(
       SESSION_ID,
@@ -205,7 +204,7 @@ describe("SessionSummaryService", () => {
       logger: noopLogger,
     });
 
-    service.persistAssistantTurnFinished({
+    void service.persistAssistantTurnFinished({
       messageId: "assistant-message-1",
       messageCreatedAt: "2026-06-03T00:00:00.000Z",
       aborted: true,

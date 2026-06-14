@@ -71,6 +71,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var notificationsAPI: any NotificationsAPIProviding {
+        shared {
+            NotificationsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
     var sessionsAPI: any SessionsAPIProviding {
         shared {
             SessionsAPI(client: apiClient, tokenProvider: tokenCoordinator)
@@ -83,8 +89,15 @@ final class ApplicationComponent: Component<ApplicationDependency> {
                 coordinator: tokenCoordinator,
                 userStore: userStore,
                 signInAPI: unauthenticatedAuthAPI,
+                notificationRegistrationService: notificationRegistrationService,
                 oauthRedirectURI: oauthRedirectURI
             )
+        }
+    }
+
+    @MainActor var notificationRegistrationService: NotificationRegistrationService {
+        shared {
+            NotificationRegistrationService(notificationsAPI: notificationsAPI)
         }
     }
 

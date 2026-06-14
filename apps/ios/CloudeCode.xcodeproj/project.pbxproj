@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B5F751322FD9448C00DFA071 /* CoreAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000C /* CoreAPI */; };
+		B6A000000000000000000013 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000015 /* FirebaseMessaging */; };
 		B6A000000000000000000001 /* API in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000008 /* API */; };
 		B6A000000000000000000003 /* NeedleFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000A /* NeedleFoundation */; };
 		B6A00000000000000000000D /* Entities in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000E /* Entities */; };
@@ -80,6 +81,7 @@
 			files = (
 				B5F751322FD9448C00DFA071 /* CoreAPI in Frameworks */,
 				B6A000000000000000000001 /* API in Frameworks */,
+				B6A000000000000000000013 /* FirebaseMessaging in Frameworks */,
 				B6A000000000000000000003 /* NeedleFoundation in Frameworks */,
 				B6A00000000000000000000D /* Entities in Frameworks */,
 				B6A000000000000000000012 /* Valet in Frameworks */,
@@ -150,6 +152,7 @@
 				B6A00000000000000000000C /* CoreAPI */,
 				B6A00000000000000000000E /* Entities */,
 				B6A000000000000000000011 /* Valet */,
+				B6A000000000000000000015 /* FirebaseMessaging */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -239,6 +242,7 @@
 				B6A00000000000000000000F /* XCLocalSwiftPackageReference "Modules/Entities" */,
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
 				B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */,
+				B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B50E874E2FCD709D00240B2E /* Products */;
@@ -1065,6 +1069,14 @@
 				minimumVersion = 5.1.0;
 			};
 		};
+		B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1089,6 +1101,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */;
 			productName = Valet;
+		};
+		B6A000000000000000000015 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
