@@ -324,7 +324,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "GOOGLESERVICE_INFO_PLIST=GoogleService-Info.plist\nGOOGLESERVICE_INFO_DEV=\"${PROJECT_DIR}/Supporting Files/Firebase/Development/${GOOGLESERVICE_INFO_PLIST}\"\nGOOGLESERVICE_INFO_PROD=\"${PROJECT_DIR}/Supporting Files/Firebase/Production/${GOOGLESERVICE_INFO_PLIST}\"\n\nif [ ! -f \"$GOOGLESERVICE_INFO_DEV\" ]; then\n    echo \"No Development GoogleService-Info.plist found at ${GOOGLESERVICE_INFO_DEV}.\"\n    exit 1\nfi\n\nif [ ! -f \"$GOOGLESERVICE_INFO_PROD\" ]; then\n    echo \"No Production GoogleService-Info.plist found at ${GOOGLESERVICE_INFO_PROD}.\"\n    exit 1\nfi\n\nPLIST_DESTINATION=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\"\n\nif [ \"${BUILD_ENVIRONMENT}\" = \"PRODUCTION\" ]; then\n    SOURCE_FILE=\"${GOOGLESERVICE_INFO_PROD}\"\nelse\n    SOURCE_FILE=\"${GOOGLESERVICE_INFO_DEV}\"\nfi\n\necho \"Copying ${SOURCE_FILE} to ${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\ncp \"$SOURCE_FILE\" \"${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\n";
+			shellScript = "GOOGLESERVICE_INFO_PLIST=GoogleService-Info.plist\nSOURCE_FILE=\"${PROJECT_DIR}/Supporting Files/Firebase/${GOOGLESERVICE_INFO_PLIST}\"\nPLIST_DESTINATION=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\"\n\nif [ ! -f \"$SOURCE_FILE\" ]; then\n    echo \"No GoogleService-Info.plist found at ${SOURCE_FILE}.\"\n    exit 1\nfi\n\necho \"Copying ${SOURCE_FILE} to ${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\ncp \"$SOURCE_FILE\" \"${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
