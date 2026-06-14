@@ -9,21 +9,22 @@ import UserNotifications
 
 final class NotificationRegistrationService: NSObject {
     private struct UploadRequest: Equatable {
-        let authUser: AuthUserSession
+        let userId: String
         let token: String
     }
 
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
-    private let authUserPublisher: AnyPublisher<AuthUserSession?, Never>
+    private let authUserPublisher: AnyPublisher<String?, Never>
     private let fcmTokenSubject = CurrentValueSubject<String?, Never>(nil)
     private var cancellables = Set<AnyCancellable>()
     private var uploadTask: Task<Void, Never>?
+    private var lastUploadRequest: UploadRequest?
     private var hasStarted = false
 
     init(
         notificationsAPI: any NotificationsAPIProviding,
-        authUserPublisher: AnyPublisher<AuthUserSession?, Never>,
+        authUserPublisher: AnyPublisher<String?, Never>,
         deviceIdentifierStore: DeviceIdentifierStore = DeviceIdentifierStore()
     ) {
         self.notificationsAPI = notificationsAPI
@@ -40,15 +41,20 @@ final class NotificationRegistrationService: NSObject {
 
         authUserPublisher
             .combineLatest(fcmTokenSubject)
-            .compactMap { authUser, token -> UploadRequest? in
-                guard let authUser, let token else { return nil }
-                return UploadRequest(authUser: authUser, token: token)
-            }
-            .removeDuplicates()
-            .sink { [weak self] request in
-                self?.uploadTask?.cancel()
-                self?.uploadTask = Task { [weak self] in
-                    await self?.uploadToken(request.token)
+            .sink { [weak self] userId, token in
+                guard let self else { return }
+                guard let userId, let token else {
+                    self.lastUploadRequest = nil
+                    return
+                }
+
+                let request = UploadRequest(userId: userId, token: token)
+                guard request != self.lastUploadRequest else { return }
+
+                self.lastUploadRequest = request
+                self.uploadTask?.cancel()
+                self.uploadTask = Task { [weak self] in
+                    await self?.uploadToken(token)
                 }
             }
             .store(in: &cancellables)

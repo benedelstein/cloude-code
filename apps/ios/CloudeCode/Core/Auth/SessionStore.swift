@@ -7,22 +7,30 @@ import Foundation
 import Observation
 import SwiftUI
 
-struct AuthUserSession: Equatable {
-    let userId: String
-    fileprivate let generation: Int
-}
-
 /// Auth state for the UI: drives the root view's loading/signedIn/signedOut
 /// switch and exposes the signed-in user.
 @MainActor @Observable
 final class SessionStore {
     enum State: Equatable {
         case loading
-        case signedIn
+        case signedIn(userId: String)
         case signedOut
+
+        fileprivate var authUserId: String? {
+            switch self {
+            case .loading, .signedOut:
+                nil
+            case .signedIn(let userId):
+                userId
+            }
+        }
     }
 
-    private(set) var state: State = .loading
+    private(set) var state: State = .loading {
+        didSet {
+            authUserSubject.send(state.authUserId)
+        }
+    }
     private(set) var user: UserModel?
     private(set) var isSigningIn = false
     private(set) var signInError: String?
@@ -30,10 +38,9 @@ final class SessionStore {
     private let userStore: UserStore
     private let signInAPI: any SignInProviding
     private let oauthRedirectURI: String
-    private let authUserSubject = CurrentValueSubject<AuthUserSession?, Never>(nil)
-    private var authUserGeneration = 0
+    private let authUserSubject = CurrentValueSubject<String?, Never>(nil)
 
-    var authUserPublisher: AnyPublisher<AuthUserSession?, Never> {
+    var authUserPublisher: AnyPublisher<String?, Never> {
         authUserSubject.eraseToAnyPublisher()
     }
 
@@ -52,28 +59,24 @@ final class SessionStore {
     func start() async {
         if let session = await coordinator.restore() {
             Logger.debug("Session restored for user", session.userId)
-            state = .signedIn
-            publishSignedIn(session)
+            state = .signedIn(userId: session.userId)
             // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
         } else {
             Logger.debug("No stored session; signed out")
             state = .signedOut
-            publishSignedOut()
         }
 
         for await event in coordinator.events {
             switch event {
             case .signedIn(let session):
                 Logger.debug("Auth event: signedIn", session.userId)
-                state = .signedIn
-                publishSignedIn(session)
+                state = .signedIn(userId: session.userId)
                 user = try? await userStore.get([session.userId], scopes: .all).first
             case .signedOut:
                 Logger.debug("Auth event: signedOut")
                 user = nil
                 state = .signedOut
-                publishSignedOut()
             case .refreshed:
                 Logger.debug("Auth event: refreshed")
             }
@@ -118,17 +121,5 @@ final class SessionStore {
         } catch {
             signInError = "Sign-in failed. Please try again."
         }
-    }
-
-    private func publishSignedIn(_ session: Session) {
-        authUserGeneration += 1
-        authUserSubject.send(AuthUserSession(
-            userId: session.userId,
-            generation: authUserGeneration
-        ))
-    }
-
-    private func publishSignedOut() {
-        authUserSubject.send(nil)
     }
 }
