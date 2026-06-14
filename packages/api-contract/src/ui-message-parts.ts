@@ -98,9 +98,9 @@ type StepStartUIPart = z.infer<typeof StepStartUIPartSchema>;
 type DataUIPart = z.infer<typeof DataUIPartSchema>;
 type ToolUIPart = z.infer<typeof ToolUIPartSchema>;
 type DynamicToolUIPart = z.infer<typeof DynamicToolUIPartSchema>;
-type UnknownUIPart = { type: string; [key: string]: unknown };
+type UnknownWireUIMessagePart = { type: string; [key: string]: unknown };
 
-export type UIMessagePart =
+export type WireUIMessagePart =
   | TextUIPart
   | ReasoningUIPart
   | SourceUrlUIPart
@@ -110,7 +110,7 @@ export type UIMessagePart =
   | DataUIPart
   | ToolUIPart
   | DynamicToolUIPart
-  | UnknownUIPart;
+  | UnknownWireUIMessagePart;
 
 export const UI_MESSAGE_PART_OPEN_UNION = {
   discriminatorKey: "type",
@@ -136,4 +136,4 @@ export const UI_MESSAGE_PART_OPEN_UNION = {
 
 export const UIMessagePartSchema = openDiscriminatorSchema(
   UI_MESSAGE_PART_OPEN_UNION,
-) as z.ZodType<UIMessagePart>;
+) as z.ZodType<WireUIMessagePart>;

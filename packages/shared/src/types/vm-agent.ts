@@ -1,10 +1,6 @@
 import { z } from "zod";
-import type { UIMessage, UIMessageChunk } from "ai";
 import { AgentMode } from "@repo/api-contract";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@repo/api-contract";
-
-// Re-export AI SDK types without colliding with API contract wire DTO names.
-export type { UIMessage as AIUIMessage, UIMessageChunk as AIUIMessageChunk };
 
 // ============================================
 // VM Agent Input (api-server → vm-agent stdin)

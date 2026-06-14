@@ -211,9 +211,9 @@ type StartChunk = z.infer<typeof StartChunkSchema>;
 type FinishChunk = z.infer<typeof FinishChunkSchema>;
 type AbortChunk = z.infer<typeof AbortChunkSchema>;
 type MessageMetadataChunk = z.infer<typeof MessageMetadataChunkSchema>;
-type UnknownUIMessageChunk = { type: string; [key: string]: unknown };
+type UnknownWireUIMessageChunk = { type: string; [key: string]: unknown };
 
-export type UIMessageChunk =
+export type WireUIMessageChunk =
   | TextStartChunk
   | TextDeltaChunk
   | TextEndChunk
@@ -239,7 +239,7 @@ export type UIMessageChunk =
   | FinishChunk
   | AbortChunk
   | MessageMetadataChunk
-  | UnknownUIMessageChunk;
+  | UnknownWireUIMessageChunk;
 
 export const UI_MESSAGE_CHUNK_OPEN_UNION = {
   discriminatorKey: "type",
@@ -329,4 +329,4 @@ export const UI_MESSAGE_CHUNK_OPEN_UNION = {
 
 export const UIMessageChunkSchema = openDiscriminatorSchema(
   UI_MESSAGE_CHUNK_OPEN_UNION,
-) as z.ZodType<UIMessageChunk>;
+) as z.ZodType<WireUIMessageChunk>;

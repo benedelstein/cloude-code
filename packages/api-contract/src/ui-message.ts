@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { UIMessagePartSchema, type UIMessagePart } from "./ui-message-parts";
+import { UIMessagePartSchema, type WireUIMessagePart } from "./ui-message-parts";
 
 export const UIMessageSchema = z.object({
   id: z.string(),
@@ -8,9 +8,9 @@ export const UIMessageSchema = z.object({
   metadata: z.unknown().optional(),
 });
 
-export type UIMessage = {
+export type WireUIMessage = {
   id: string;
   role: "user" | "assistant" | "system";
-  parts: UIMessagePart[];
+  parts: WireUIMessagePart[];
   metadata?: unknown;
 };

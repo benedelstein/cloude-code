@@ -12,7 +12,7 @@ import {
   getProviderEffortDefinition,
   getProviderModelDefinition,
   success,
-  toAIUIMessage,
+  aiMessageFromWire,
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { UIMessage } from "ai";
@@ -217,7 +217,7 @@ export class SessionChatDispatchService {
       fields: { messageId: pendingMessage.message.id },
     });
     const { attachmentIds } = pendingMessage;
-    const userMessage = toAIUIMessage(pendingMessage.message);
+    const userMessage = aiMessageFromWire(pendingMessage.message);
     const content = getUserMessageTextContent(userMessage);
 
     this.updatePartialState({ pendingUserMessage: null });

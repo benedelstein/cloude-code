@@ -1,42 +1,39 @@
-import type {
-  UIMessage as AIUIMessage,
-  UIMessageChunk as AIUIMessageChunk,
-} from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import {
   UI_MESSAGE_CHUNK_OPEN_UNION,
   UIMessageChunkSchema,
-  type UIMessageChunk,
+  type WireUIMessageChunk,
 } from "./ui-message-chunks";
-import { UIMessageSchema, type UIMessage } from "./ui-message";
+import { UIMessageSchema, type WireUIMessage } from "./ui-message";
 import {
   UI_MESSAGE_PART_OPEN_UNION,
-  type UIMessagePart,
+  type WireUIMessagePart,
 } from "./ui-message-parts";
 
-export function fromAIUIMessage(message: AIUIMessage): UIMessage {
+export function wireMessageFromAI(message: UIMessage): WireUIMessage {
   return UIMessageSchema.parse(message);
 }
 
-export function fromAIUIMessageChunk(chunk: AIUIMessageChunk): UIMessageChunk {
+export function wireChunkFromAI(chunk: UIMessageChunk): WireUIMessageChunk {
   return UIMessageChunkSchema.parse(chunk);
 }
 
-export function toAIUIMessage(message: UIMessage): AIUIMessage {
+export function aiMessageFromWire(message: WireUIMessage): UIMessage {
   return {
     ...message,
     parts: message.parts.filter(isKnownUIMessagePart),
-  } as AIUIMessage;
+  } as UIMessage;
 }
 
-export function toAIUIMessageChunk(chunk: UIMessageChunk): AIUIMessageChunk | undefined {
-  return isKnownUIMessageChunk(chunk) ? (chunk as AIUIMessageChunk) : undefined;
+export function aiChunkFromWire(chunk: WireUIMessageChunk): UIMessageChunk | undefined {
+  return isKnownUIMessageChunk(chunk) ? (chunk as UIMessageChunk) : undefined;
 }
 
-function isKnownUIMessagePart(part: UIMessagePart): boolean {
+function isKnownUIMessagePart(part: WireUIMessagePart): boolean {
   return isKnownDiscriminator(part.type, UI_MESSAGE_PART_OPEN_UNION);
 }
 
-function isKnownUIMessageChunk(chunk: UIMessageChunk): boolean {
+function isKnownUIMessageChunk(chunk: WireUIMessageChunk): boolean {
   return isKnownDiscriminator(chunk.type, UI_MESSAGE_CHUNK_OPEN_UNION);
 }
 

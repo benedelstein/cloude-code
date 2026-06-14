@@ -31,7 +31,7 @@ import type {
   ProviderId,
   ActiveTurnState,
 } from "@repo/shared";
-import { toAIUIMessage } from "@repo/shared";
+import { aiMessageFromWire } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
   const configuredApiUrl = normalizeHost(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -406,7 +406,7 @@ export function useCloudflareAgent({
       setTodos((prev) => keepPreviousIfDeepEqual(prev, state.todos));
       setPlan((prev) => keepPreviousIfDeepEqual(prev, state.plan));
       const pendingUserMessage = state.pendingUserMessage?.message
-        ? toAIUIMessage(state.pendingUserMessage.message)
+        ? aiMessageFromWire(state.pendingUserMessage.message)
         : null;
       setPendingUserMessage((prev) => keepPreviousIfDeepEqual(prev, pendingUserMessage));
       setSessionSetupRun((prev) => keepPreviousIfDeepEqual(prev, state.sessionSetupRun));
