@@ -36,6 +36,7 @@ const ErrorWithUrlResponse = z.object({
   error: z.string(),
   url: z.string(),
 });
+const SessionMessagesResponseSchema: z.ZodType<unknown> = z.array(UIMessageSchema);
 
 export const listSessionsRoute = createRoute({
   method: "get",
@@ -222,7 +223,7 @@ export const getSessionMessagesRoute = createRoute({
   },
   responses: {
     200: {
-      content: { "application/json": { schema: z.array(UIMessageSchema) } },
+      content: { "application/json": { schema: SessionMessagesResponseSchema } },
       description: "Session messages",
     },
     404: {
