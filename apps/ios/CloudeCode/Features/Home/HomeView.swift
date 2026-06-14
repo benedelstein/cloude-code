@@ -7,6 +7,7 @@ struct HomeView: View {
     @Environment(\.style) private var style
     @Environment(\.openSettings) private var openSettings
     @Environment(\.showToast) private var showToast
+    @Environment(\.notificationRegistrationService) private var notificationRegistrationService
 
     @State private var viewModel: HomeViewModel
     @State private var collapsedRepoIDs = Set<Int>()
@@ -55,6 +56,7 @@ struct HomeView: View {
         // Outside the NavigationStack: pushes/pops re-evaluate the stack's
         // content, and we only want to bind once per appearance of Home.
         .task {
+            await notificationRegistrationService?.uploadTokenIfAvailable()
             await viewModel.start()
         }
         .onDisappear {

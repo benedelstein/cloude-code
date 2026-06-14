@@ -29,14 +29,11 @@ struct RootView: View {
         .environment(\.openSettings, OpenSettingsAction {
             isSettingsPresented = true
         })
+        .environment(\.notificationRegistrationService, notificationRegistrationService)
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(logStore: logStore)
         }
-        .task { await notificationRegistrationService.start() }
-        .task(id: sessionStore.state) {
-            guard sessionStore.state == .signedIn else { return }
-            notificationRegistrationService.retryPendingTokenUpload()
-        }
+        .task { notificationRegistrationService.start() }
         .task { await sessionStore.start() }
         .themedRoot()
     }
