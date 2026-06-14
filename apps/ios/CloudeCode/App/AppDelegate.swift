@@ -7,6 +7,7 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate {
     override init() {
         super.init()
+        registerProviderFactories()
     }
 
     func application(
@@ -14,8 +15,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         FirebaseApp.configure()
-        registerProviderFactories()
-        application.registerForRemoteNotifications()
         Logger.info("App launched")
         return true
     }

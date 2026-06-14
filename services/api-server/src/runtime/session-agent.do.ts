@@ -42,6 +42,7 @@ import type {
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
 import { timingSafeCompare } from "@/shared/utils/crypto";
 import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
+import { extractUiMessageText } from "@/shared/utils/uimessage-utils";
 import type {
   AgentEvent,
   SessionStatus,
@@ -433,7 +434,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       sessionId,
       messageId,
       repoFullName,
-      messagePreview: extractMessageText(message),
+      messagePreview: extractUiMessageText(message),
     });
   }
 
@@ -936,20 +937,4 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private sendMessage(message: ServerMessage, to: Connection): void {
     to.send(JSON.stringify(message));
   }
-}
-
-function extractMessageText(message: UIMessage): string {
-  const messageParts = Array.isArray(message.parts) ? message.parts : [];
-  const textParts: string[] = [];
-
-  for (const part of messageParts) {
-    if (part.type === "text" && typeof part.text === "string") {
-      const normalizedText = part.text.replace(/\s+/g, " ").trim();
-      if (normalizedText) {
-        textParts.push(normalizedText);
-      }
-    }
-  }
-
-  return textParts.join(" ").trim();
 }

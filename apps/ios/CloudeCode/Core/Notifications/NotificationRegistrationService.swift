@@ -5,7 +5,7 @@ import FirebaseMessaging
 import Foundation
 import UserNotifications
 
-final class NotificationRegistrationService: NSObject, @unchecked Sendable {
+final class NotificationRegistrationService: NSObject {
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
     private var pendingToken: String?
@@ -25,6 +25,21 @@ final class NotificationRegistrationService: NSObject, @unchecked Sendable {
 
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+    }
+
+    func requestNotificationAuthorization() async {
+        do {
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .badge, .sound]
+            )
+            if granted {
+                Logger.debug("Notification authorization granted")
+            } else {
+                Logger.debug("Notification authorization not granted")
+            }
+        } catch {
+            Logger.warning("Notification authorization request failed", error)
+        }
     }
 
     func uploadTokenIfAvailable() async {
