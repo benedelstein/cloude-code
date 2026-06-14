@@ -96,7 +96,10 @@ final class ApplicationComponent: Component<ApplicationDependency> {
 
     @MainActor var notificationRegistrationService: NotificationRegistrationService {
         shared {
-            NotificationRegistrationService(notificationsAPI: notificationsAPI)
+            NotificationRegistrationService(
+                notificationsAPI: notificationsAPI,
+                authUserPublisher: sessionStore.authUserPublisher
+            )
         }
     }
 

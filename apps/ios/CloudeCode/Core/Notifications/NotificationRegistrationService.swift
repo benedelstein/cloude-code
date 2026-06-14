@@ -15,6 +15,7 @@ final class NotificationRegistrationService: NSObject {
 
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
+    private let authUserPublisher: AnyPublisher<AuthUserSession?, Never>
     private let fcmTokenSubject = CurrentValueSubject<String?, Never>(nil)
     private var cancellables = Set<AnyCancellable>()
     private var uploadTask: Task<Void, Never>?
@@ -22,13 +23,15 @@ final class NotificationRegistrationService: NSObject {
 
     init(
         notificationsAPI: any NotificationsAPIProviding,
+        authUserPublisher: AnyPublisher<AuthUserSession?, Never>,
         deviceIdentifierStore: DeviceIdentifierStore = DeviceIdentifierStore()
     ) {
         self.notificationsAPI = notificationsAPI
+        self.authUserPublisher = authUserPublisher
         self.deviceIdentifierStore = deviceIdentifierStore
     }
 
-    func start(authUserPublisher: AnyPublisher<AuthUserSession?, Never>) {
+    func start() {
         guard !hasStarted else { return }
         hasStarted = true
 

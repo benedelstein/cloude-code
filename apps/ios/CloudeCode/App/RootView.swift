@@ -33,7 +33,7 @@ struct RootView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(logStore: logStore)
         }
-        .task { notificationRegistrationService.start(authUserPublisher: sessionStore.authUserPublisher) }
+        .task { notificationRegistrationService.start() }
         .task { await sessionStore.start() }
         .themedRoot()
     }
