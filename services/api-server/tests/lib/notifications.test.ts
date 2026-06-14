@@ -110,12 +110,13 @@ describe("NotificationPublisher", () => {
       sessionId: "123e4567-e89b-12d3-a456-426614174000",
       messageId: "message-1",
       repoFullName: "owner/repo",
+      messagePreview: "Here is the final answer.",
     });
 
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       toUserId: "user-1",
       title: "Agent turn finished",
-      body: "owner/repo is ready to review.",
+      body: "Here is the final answer.",
       payload: {
         type: "TURN_FINISHED",
         version: 1,

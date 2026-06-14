@@ -121,8 +121,8 @@ export default {
       fcmProvider: new FcmProvider(env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64),
     });
 
-    for (const message of batch.messages) {
-      await consumer.handleMessage(message.body);
-    }
+    await Promise.all(
+      batch.messages.map((message) => consumer.handleMessage(message.body)),
+    );
   },
 };

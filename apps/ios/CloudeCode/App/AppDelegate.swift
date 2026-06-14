@@ -6,18 +6,18 @@ import UIKit
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
     override init() {
-        FirebaseApp.configure()
-        // always register this right away.
-        registerProviderFactories()
         super.init()
-        Logger.info("App launched")
     }
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        true
+        FirebaseApp.configure()
+        registerProviderFactories()
+        application.registerForRemoteNotifications()
+        Logger.info("App launched")
+        return true
     }
 
     func application(

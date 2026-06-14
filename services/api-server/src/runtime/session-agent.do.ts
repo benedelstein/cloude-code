@@ -25,7 +25,7 @@ import { SessionEnvironmentSnapshotRepository } from "@/modules/session-agent/re
 import { SetupOutputRepository } from "@/modules/session-agent/repositories/setup-output.repository";
 import { migrateAll } from "@/modules/session-agent/repositories/schema-manager.repository";
 import { createLogger, initializeLogger } from "@/shared/logging";
-import type { UIMessageChunk } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import type {
   HandleDeleteSessionResult,
   HandleCreatePullRequestResult,
@@ -259,7 +259,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
           return;
         }
         void summaryPersistence
-          .then(() => this.publishTurnFinishedNotification(turn.message.id))
+          .then(() => this.publishTurnFinishedNotification(turn.message))
           .catch((error: unknown) => {
             this.logger.error("Failed to enqueue turn finished notification", {
               fields: {
@@ -411,10 +411,11 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     return effectiveSetupRun?.status === "completed" ? "ready" : "preparing";
   }
 
-  private async publishTurnFinishedNotification(messageId: string): Promise<void> {
+  private async publishTurnFinishedNotification(message: UIMessage): Promise<void> {
     const sessionId = this.serverState.sessionId;
     const userId = this.serverState.userId;
     const repoFullName = this.state.repoFullName;
+    const messageId = message.id;
     if (!sessionId || !userId || !repoFullName) {
       this.logger.warn("Skipping turn finished notification with missing session state", {
         fields: {
@@ -432,6 +433,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       sessionId,
       messageId,
       repoFullName,
+      messagePreview: extractMessageText(message),
     });
   }
 
@@ -934,4 +936,20 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private sendMessage(message: ServerMessage, to: Connection): void {
     to.send(JSON.stringify(message));
   }
+}
+
+function extractMessageText(message: UIMessage): string {
+  const messageParts = Array.isArray(message.parts) ? message.parts : [];
+  const textParts: string[] = [];
+
+  for (const part of messageParts) {
+    if (part.type === "text" && typeof part.text === "string") {
+      const normalizedText = part.text.replace(/\s+/g, " ").trim();
+      if (normalizedText) {
+        textParts.push(normalizedText);
+      }
+    }
+  }
+
+  return textParts.join(" ").trim();
 }

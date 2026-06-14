@@ -1,8 +1,8 @@
 import CoreAPI
 import Foundation
 
-enum NotificationPayloadDecoder {
-    static func decodePayload(from userInfo: [AnyHashable: Any]) -> NotificationPayload? {
+extension NotificationPayload {
+    init?(from userInfo: [AnyHashable: Any]) {
         guard
             let payload = userInfo["payload"] as? String,
             let data = payload.data(using: .utf8)
@@ -10,6 +10,10 @@ enum NotificationPayloadDecoder {
             return nil
         }
 
-        return try? JSONDecoder().decode(NotificationPayload.self, from: data)
+        guard let decoded = try? JSONDecoder().decode(NotificationPayload.self, from: data) else {
+            return nil
+        }
+
+        self = decoded
     }
 }

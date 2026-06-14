@@ -1,14 +1,14 @@
 import API
+import CoreAPI
 import Domain
 import FirebaseMessaging
 import Foundation
-import UIKit
 import UserNotifications
 
-@MainActor
-final class NotificationRegistrationService: NSObject {
+final class NotificationRegistrationService: NSObject, @unchecked Sendable {
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
+    private let stateLock = NSLock()
     private var pendingToken: String?
     private var hasStarted = false
     private var uploadTask: Task<Void, Never>?
@@ -22,23 +22,16 @@ final class NotificationRegistrationService: NSObject {
     }
 
     func start() async {
-        guard !hasStarted else { return }
+        stateLock.lock()
+        guard !hasStarted else {
+            stateLock.unlock()
+            return
+        }
         hasStarted = true
+        stateLock.unlock()
 
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
-        UIApplication.shared.registerForRemoteNotifications()
-
-        do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .badge, .sound]
-            )
-            if !granted {
-                Logger.debug("Notification authorization not granted")
-            }
-        } catch {
-            Logger.warning("Notification authorization request failed", error)
-        }
 
         do {
             let token = try await Messaging.messaging().token()
@@ -53,22 +46,27 @@ final class NotificationRegistrationService: NSObject {
     }
 
     private func handleToken(_ token: String) {
+        stateLock.lock()
         pendingToken = token
+        stateLock.unlock()
         uploadPendingToken()
     }
 
     private func uploadPendingToken() {
-        guard let token = pendingToken else { return }
+        stateLock.lock()
+        guard let token = pendingToken else {
+            stateLock.unlock()
+            return
+        }
         uploadTask?.cancel()
-        let deviceId = deviceIdentifierStore.deviceId()
-        uploadTask = Task { [notificationsAPI] in
+        uploadTask = Task { [notificationsAPI, deviceIdentifierStore] in
+            guard let deviceId = await deviceIdentifierStore.deviceId() else {
+                Logger.warning("Skipping FCM token upload because identifierForVendor is unavailable")
+                return
+            }
             do {
                 try await notificationsAPI.registerFcmToken(deviceId: deviceId, token: token)
-                await MainActor.run {
-                    if self.pendingToken == token {
-                        self.pendingToken = nil
-                    }
-                }
+                self.clearPendingToken(token)
                 Logger.debug("Uploaded FCM token")
             } catch APIError.unauthenticated {
                 Logger.debug("Deferring FCM token upload until authentication is available")
@@ -76,6 +74,15 @@ final class NotificationRegistrationService: NSObject {
                 Logger.warning("FCM token upload failed", error)
             }
         }
+        stateLock.unlock()
+    }
+
+    private func clearPendingToken(_ token: String) {
+        stateLock.lock()
+        if pendingToken == token {
+            pendingToken = nil
+        }
+        stateLock.unlock()
     }
 }
 
@@ -91,8 +98,6 @@ extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        _ = NotificationPayloadDecoder.decodePayload(
-            from: response.notification.request.content.userInfo
-        )
+        _ = NotificationPayload(from: response.notification.request.content.userInfo)
     }
 }
