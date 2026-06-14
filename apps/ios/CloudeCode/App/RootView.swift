@@ -32,7 +32,11 @@ struct RootView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(logStore: logStore)
         }
-        .task { notificationRegistrationService.start() }
+        .task { await notificationRegistrationService.start() }
+        .task(id: sessionStore.state) {
+            guard sessionStore.state == .signedIn else { return }
+            notificationRegistrationService.retryPendingTokenUpload()
+        }
         .task { await sessionStore.start() }
         .themedRoot()
     }

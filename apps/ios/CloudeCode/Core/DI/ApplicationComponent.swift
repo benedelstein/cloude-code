@@ -89,7 +89,6 @@ final class ApplicationComponent: Component<ApplicationDependency> {
                 coordinator: tokenCoordinator,
                 userStore: userStore,
                 signInAPI: unauthenticatedAuthAPI,
-                notificationRegistrationService: notificationRegistrationService,
                 oauthRedirectURI: oauthRedirectURI
             )
         }

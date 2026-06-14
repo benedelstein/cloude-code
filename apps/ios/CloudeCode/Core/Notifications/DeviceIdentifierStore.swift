@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct DeviceIdentifierStore {
     private let userDefaults: UserDefaults
@@ -13,6 +14,10 @@ struct DeviceIdentifierStore {
     }
 
     func deviceId() -> String {
+        if let identifier = UIDevice.current.identifierForVendor?.uuidString.lowercased() {
+            return identifier
+        }
+
         if let existing = userDefaults.string(forKey: key), !existing.isEmpty {
             return existing
         }

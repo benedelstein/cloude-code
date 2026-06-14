@@ -21,35 +21,30 @@ final class NotificationRegistrationService: NSObject {
         self.deviceIdentifierStore = deviceIdentifierStore
     }
 
-    func start() {
+    func start() async {
         guard !hasStarted else { return }
         hasStarted = true
 
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error {
-                Logger.warning("Notification authorization request failed", error)
-                return
-            }
-            guard granted else {
+        UIApplication.shared.registerForRemoteNotifications()
+
+        do {
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .badge, .sound]
+            )
+            if !granted {
                 Logger.debug("Notification authorization not granted")
-                return
             }
-            Task { @MainActor in
-                UIApplication.shared.registerForRemoteNotifications()
-            }
+        } catch {
+            Logger.warning("Notification authorization request failed", error)
         }
 
-        Messaging.messaging().token { [weak self] token, error in
-            if let error {
-                Logger.warning("FCM token fetch failed", error)
-                return
-            }
-            guard let token else { return }
-            Task { @MainActor in
-                self?.handleToken(token)
-            }
+        do {
+            let token = try await Messaging.messaging().token()
+            handleToken(token)
+        } catch {
+            Logger.warning("FCM token fetch failed", error)
         }
     }
 
@@ -85,11 +80,9 @@ final class NotificationRegistrationService: NSObject {
 }
 
 extension NotificationRegistrationService: MessagingDelegate {
-    nonisolated func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let fcmToken else { return }
-        Task { @MainActor in
-            self.handleToken(fcmToken)
-        }
+        handleToken(fcmToken)
     }
 }
 

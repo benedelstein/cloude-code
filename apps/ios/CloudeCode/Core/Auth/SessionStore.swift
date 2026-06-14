@@ -23,20 +23,17 @@ final class SessionStore {
     private let coordinator: TokenCoordinator
     private let userStore: UserStore
     private let signInAPI: any SignInProviding
-    private let notificationRegistrationService: NotificationRegistrationService
     private let oauthRedirectURI: String
 
     init(
         coordinator: TokenCoordinator,
         userStore: UserStore,
         signInAPI: any SignInProviding,
-        notificationRegistrationService: NotificationRegistrationService,
         oauthRedirectURI: String
     ) {
         self.coordinator = coordinator
         self.userStore = userStore
         self.signInAPI = signInAPI
-        self.notificationRegistrationService = notificationRegistrationService
         self.oauthRedirectURI = oauthRedirectURI
     }
 
@@ -46,7 +43,6 @@ final class SessionStore {
             state = .signedIn
             // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
-            notificationRegistrationService.retryPendingTokenUpload()
         } else {
             Logger.debug("No stored session; signed out")
             state = .signedOut
@@ -58,14 +54,12 @@ final class SessionStore {
                 Logger.debug("Auth event: signedIn", session.userId)
                 state = .signedIn
                 user = try? await userStore.get([session.userId], scopes: .all).first
-                notificationRegistrationService.retryPendingTokenUpload()
             case .signedOut:
                 Logger.debug("Auth event: signedOut")
                 user = nil
                 state = .signedOut
             case .refreshed:
                 Logger.debug("Auth event: refreshed")
-                notificationRegistrationService.retryPendingTokenUpload()
             }
         }
     }
