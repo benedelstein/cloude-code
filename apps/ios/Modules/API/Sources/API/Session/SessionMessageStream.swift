@@ -221,17 +221,9 @@ private extension SessionMessage {
         self.init(
             id: message.id,
             role: Role(rawValue: message.role.rawValue),
-            text: message.parts.compactMap { $0.textValue }.joined(separator: "\n\n")
+            parts: message.parts.map(SessionMessage.Part.init),
+            metadata: message.metadata.map(Domain.JSONValue.init)
         )
-    }
-}
-
-private extension SwiftAISDK.UIMessagePart {
-    var textValue: String? {
-        guard case .text(let textPart) = self else {
-            return nil
-        }
-        return textPart.text
     }
 }
 

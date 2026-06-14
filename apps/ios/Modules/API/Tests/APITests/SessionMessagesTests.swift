@@ -5,13 +5,19 @@ import Testing
 
 @Suite("Session messages")
 struct SessionMessagesTests {
-    @Test func uiMessageMapsToDomainMessageWithTextPartsOnly() {
+    @Test func uiMessageMapsToDomainMessageWithAllParts() {
         let message = WireUIMessage(
             id: "msg_1",
             role: .assistant,
             parts: [
                 .text(.init(text: "First paragraph.")),
-                .tool(.init(type: "tool-bash", toolCallId: "call_1", state: .outputAvailable)),
+                .tool(.init(
+                    type: "tool-bash",
+                    toolCallId: "call_1",
+                    state: .outputAvailable,
+                    input: .object(["cmd": .string("ls")]),
+                    output: .string("README.md")
+                )),
                 .text(.init(text: "Second paragraph."))
             ]
         )
@@ -21,6 +27,15 @@ struct SessionMessagesTests {
         #expect(sessionMessage.id == "msg_1")
         #expect(sessionMessage.role == .assistant)
         #expect(sessionMessage.text == "First paragraph.\n\nSecond paragraph.")
+        #expect(sessionMessage.parts.count == 3)
+        guard case .tool(let toolPart) = sessionMessage.parts[1] else {
+            Issue.record("Expected tool part to be preserved")
+            return
+        }
+        #expect(toolPart.type == "tool-bash")
+        #expect(toolPart.toolCallId == "call_1")
+        #expect(toolPart.input == .object(["cmd": .string("ls")]))
+        #expect(toolPart.output == .string("README.md"))
     }
 
     @Test func streamChunkExposesTextDelta() {

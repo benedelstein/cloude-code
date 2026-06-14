@@ -6,18 +6,9 @@ extension SessionMessage {
         self.init(
             id: message.id,
             role: Role(rawValue: message.role.rawValue),
-            text: Self.text(from: message.parts)
+            parts: message.parts.map(SessionMessage.Part.init),
+            metadata: message.metadata.map(Domain.JSONValue.init)
         )
-    }
-
-    private static func text(from parts: [CoreAPI.WireUIMessagePart]) -> String {
-        parts.compactMap { part -> String? in
-            guard case .text(let payload) = part else {
-                return nil
-            }
-            return payload.text
-        }
-        .joined(separator: "\n\n")
     }
 }
 
