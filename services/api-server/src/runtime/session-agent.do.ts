@@ -274,7 +274,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       updatePartialState: (partial) => this.updatePartialState(partial),
       synthesizeStatus: () => this.synthesizeStatus(),
       ensureGitProxySecret: () => this.gitProxyService.ensureGitProxySecret(),
-      ensureConnectorSecret: () => this.connectorProxyService.ensureConnectorSecret(),
+      ensureConnectorToken: () => this.connectorProxyService.ensureConnectorToken(),
       githubTokenProvider: this.githubAppService,
       setupReporter: {
         startTask: (taskId) => this.setupRunService.startTask(taskId),
@@ -736,6 +736,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     } catch (error) {
       this.logger.warn("Failed to kill vm-agent on session delete", { error });
     }
+
+    // Revoke the connector grant so any leaked token is immediately inert.
+    this.connectorProxyService.revokeConnectorGrant();
 
     // Clean up sprite
     if (this.serverState.spriteName) {

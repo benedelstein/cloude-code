@@ -2,7 +2,7 @@ import type { Migration, SqlFn, Repository } from "./repository.types";
 
 export type SecretKey =
   | "git_proxy_secret"
-  | "connector_proxy_secret"
+  | "connector_grant"
   | "editor_token"
   | "webhook_token";
 

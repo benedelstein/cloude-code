@@ -1,5 +1,4 @@
 import type { Logger } from "@repo/shared";
-import { timingSafeCompare } from "@/shared/utils/crypto";
 
 /** A connector resolved for a single request, with its secret already decrypted. */
 export interface ResolvedConnector {
@@ -14,9 +13,17 @@ export interface ResolvedConnector {
   key: string;
 }
 
+/** Result of authorizing a sprite request against the session's connector grant. */
+export type ConnectorAuthResult =
+  | { ok: true }
+  | { ok: false; status: number; reason: string };
+
 export interface ConnectorProxyServiceDeps {
-  /** Per-session bearer secret the sprite presents. */
-  getConnectorSecret(): string | null;
+  /**
+   * Authorize the presented token against the live session grant, binding the
+   * request to a source identity. Owns expiry, revocation, and source pinning.
+   */
+  authorize(token: string | null, sourceIp: string | null): ConnectorAuthResult;
   /** Resolve a connector id to its config + decrypted key, or null if unknown. */
   resolveConnector(connectorId: string): Promise<ResolvedConnector | null>;
   logger: Logger;
@@ -45,13 +52,14 @@ export class ConnectorProxyService {
   }
 
   async handleRequest(request: Request, path: string): Promise<Response> {
-    const secret = this.deps.getConnectorSecret();
-    const authHeader = parseBearer(request.headers.get("Authorization"));
-    if (!secret || !authHeader || !timingSafeCompare(authHeader, secret)) {
+    const token = parseBearer(request.headers.get("Authorization"));
+    const sourceIp = request.headers.get("cf-connecting-ip");
+    const auth = this.deps.authorize(token, sourceIp);
+    if (!auth.ok) {
       this.logger.warn("[connector-proxy] auth failed", {
-        fields: { hasSecret: secret !== null, hasAuth: authHeader !== null },
+        fields: { reason: auth.reason, hasToken: token !== null },
       });
-      return new Response("unauthorized", { status: 401 });
+      return new Response("unauthorized", { status: auth.status });
     }
 
     const parsed = parseConnectorPath(path);

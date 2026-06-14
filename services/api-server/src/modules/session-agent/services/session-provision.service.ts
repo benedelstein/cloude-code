@@ -74,7 +74,7 @@ export interface SessionProvisionServiceDeps {
   updatePartialState: (partial: ProvisionClientStateUpdate) => void;
   synthesizeStatus: () => SessionStatus;
   ensureGitProxySecret: () => string;
-  ensureConnectorSecret: () => string;
+  ensureConnectorToken: () => string;
   githubTokenProvider: {
     getReadOnlyTokenForRepo(
       repoFullName: string,
@@ -103,7 +103,7 @@ export class SessionProvisionService {
   private readonly updatePartialState: SessionProvisionServiceDeps["updatePartialState"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly ensureGitProxySecret: () => string;
-  private readonly ensureConnectorSecret: () => string;
+  private readonly ensureConnectorToken: () => string;
   private readonly githubTokenProvider: SessionProvisionServiceDeps["githubTokenProvider"];
   private readonly setupReporter: SessionProvisionServiceDeps["setupReporter"];
   private readonly startupScriptService: SessionStartupScriptService;
@@ -123,7 +123,7 @@ export class SessionProvisionService {
     this.updatePartialState = deps.updatePartialState;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.ensureGitProxySecret = deps.ensureGitProxySecret;
-    this.ensureConnectorSecret = deps.ensureConnectorSecret;
+    this.ensureConnectorToken = deps.ensureConnectorToken;
     this.githubTokenProvider = deps.githubTokenProvider;
     this.setupReporter = deps.setupReporter;
     this.startupScriptService = new SessionStartupScriptService(this.logger);
@@ -375,7 +375,7 @@ export class SessionProvisionService {
     const config = {
       port: EGRESS_PROXY_PORT,
       connectorBaseUrl: `${this.env.WORKER_URL}/connector/${sessionId}`,
-      connectorSecret: this.ensureConnectorSecret(),
+      connectorSecret: this.ensureConnectorToken(),
       caCertPath: EGRESS_PROXY_CA_CERT_PATH,
       caKeyPath: EGRESS_PROXY_CA_KEY_PATH,
       hostMap: buildConnectorHostMap(snapshot),
