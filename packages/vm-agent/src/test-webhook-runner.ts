@@ -24,8 +24,8 @@ import {
   MessageAccumulator,
   OPENAI_CODEX_PROVIDER_ID,
   type AgentOutput,
-  type UIMessageChunk,
 } from "@repo/shared";
+import type { UIMessageChunk } from "ai";
 
 const { values, positionals } = parseArgs({
   options: {

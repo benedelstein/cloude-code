@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UIMessageChunk } from "@repo/shared";
+import type { UIMessageChunk } from "ai";
 import { ChunkBatcher, type ChunkBatchItem } from "../src/lib/chunk-batcher";
 
 function makeFlushSpy() {

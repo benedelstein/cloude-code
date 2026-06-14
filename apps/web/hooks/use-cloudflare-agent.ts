@@ -31,6 +31,7 @@ import type {
   ProviderId,
   ActiveTurnState,
 } from "@repo/shared";
+import { toAIUIMessage } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
   const configuredApiUrl = normalizeHost(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -404,10 +405,10 @@ export function useCloudflareAgent({
       setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, state.pullRequest ?? null));
       setTodos((prev) => keepPreviousIfDeepEqual(prev, state.todos));
       setPlan((prev) => keepPreviousIfDeepEqual(prev, state.plan));
-      setPendingUserMessage((prev) => keepPreviousIfDeepEqual(
-        prev,
-        state.pendingUserMessage?.message ?? null,
-      ));
+      const pendingUserMessage = state.pendingUserMessage?.message
+        ? toAIUIMessage(state.pendingUserMessage.message)
+        : null;
+      setPendingUserMessage((prev) => keepPreviousIfDeepEqual(prev, pendingUserMessage));
       setSessionSetupRun((prev) => keepPreviousIfDeepEqual(prev, state.sessionSetupRun));
       applyServerActiveTurn(state.activeTurn ?? null);
       setEditorUrl(state.editorUrl);

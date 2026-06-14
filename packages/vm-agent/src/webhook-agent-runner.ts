@@ -9,9 +9,9 @@ import {
   type AgentMode,
   type AgentOutput,
   type AgentSettings,
-  type UIMessageChunk,
   encodeAgentOutput,
 } from "@repo/shared";
+import type { UIMessageChunk } from "ai";
 import {
   type AgentHarnessHandle,
   type AgentProviderConfig,
