@@ -1,14 +1,23 @@
 import API
+import Combine
 import CoreAPI
 import Domain
 import FirebaseMessaging
 import Foundation
+import UIKit
 import UserNotifications
 
 final class NotificationRegistrationService: NSObject {
+    private struct UploadRequest: Equatable {
+        let authUser: AuthUserSession
+        let token: String
+    }
+
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
-    private var pendingToken: String?
+    private let fcmTokenSubject = CurrentValueSubject<String?, Never>(nil)
+    private var cancellables = Set<AnyCancellable>()
+    private var uploadTask: Task<Void, Never>?
     private var hasStarted = false
 
     init(
@@ -19,14 +28,34 @@ final class NotificationRegistrationService: NSObject {
         self.deviceIdentifierStore = deviceIdentifierStore
     }
 
-    func start() {
+    func start(authUserPublisher: AnyPublisher<AuthUserSession?, Never>) {
         guard !hasStarted else { return }
         hasStarted = true
 
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+
+        authUserPublisher
+            .combineLatest(fcmTokenSubject)
+            .compactMap { authUser, token -> UploadRequest? in
+                guard let authUser, let token else { return nil }
+                return UploadRequest(authUser: authUser, token: token)
+            }
+            .removeDuplicates()
+            .sink { [weak self] request in
+                self?.uploadTask?.cancel()
+                self?.uploadTask = Task { [weak self] in
+                    await self?.uploadToken(request.token)
+                }
+            }
+            .store(in: &cancellables)
+
+        Task { [weak self] in
+            await self?.fetchCurrentToken()
+        }
     }
 
+    @MainActor
     func requestNotificationAuthorization() async {
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(
@@ -40,22 +69,19 @@ final class NotificationRegistrationService: NSObject {
         } catch {
             Logger.warning("Notification authorization request failed", error)
         }
+
+        UIApplication.shared.registerForRemoteNotifications()
     }
 
-    func uploadTokenIfAvailable() async {
-        let token: String
-        if let pendingToken {
-            token = pendingToken
-        } else {
-            do {
-                token = try await Messaging.messaging().token()
-                pendingToken = token
-            } catch {
-                Logger.warning("FCM token fetch failed", error)
-                return
-            }
+    private func fetchCurrentToken() async {
+        do {
+            handleToken(try await Messaging.messaging().token())
+        } catch {
+            Logger.warning("FCM token fetch failed", error)
         }
+    }
 
+    private func uploadToken(_ token: String) async {
         guard let deviceId = await deviceIdentifierStore.deviceId() else {
             Logger.warning("Skipping FCM token upload because identifierForVendor is unavailable")
             return
@@ -63,9 +89,6 @@ final class NotificationRegistrationService: NSObject {
 
         do {
             try await notificationsAPI.registerFcmToken(deviceId: deviceId, token: token)
-            if pendingToken == token {
-                pendingToken = nil
-            }
             Logger.debug("Uploaded FCM token")
         } catch {
             Logger.warning("FCM token upload failed", error)
@@ -73,7 +96,7 @@ final class NotificationRegistrationService: NSObject {
     }
 
     private func handleToken(_ token: String) {
-        pendingToken = token
+        fcmTokenSubject.send(token)
     }
 }
 

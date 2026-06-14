@@ -68,7 +68,6 @@ struct HomeView: View {
     private func prepareNotifications() async {
         guard let notificationRegistrationService else { return }
         await notificationRegistrationService.requestNotificationAuthorization()
-        await notificationRegistrationService.uploadTokenIfAvailable()
     }
 
     @ViewBuilder

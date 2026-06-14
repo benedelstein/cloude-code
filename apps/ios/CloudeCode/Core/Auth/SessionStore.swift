@@ -1,10 +1,16 @@
 import API
 import AuthenticationServices
+import Combine
 import Domain
 import Entities
 import Foundation
 import Observation
 import SwiftUI
+
+struct AuthUserSession: Equatable {
+    let userId: String
+    fileprivate let generation: Int
+}
 
 /// Auth state for the UI: drives the root view's loading/signedIn/signedOut
 /// switch and exposes the signed-in user.
@@ -24,6 +30,12 @@ final class SessionStore {
     private let userStore: UserStore
     private let signInAPI: any SignInProviding
     private let oauthRedirectURI: String
+    private let authUserSubject = CurrentValueSubject<AuthUserSession?, Never>(nil)
+    private var authUserGeneration = 0
+
+    var authUserPublisher: AnyPublisher<AuthUserSession?, Never> {
+        authUserSubject.eraseToAnyPublisher()
+    }
 
     init(
         coordinator: TokenCoordinator,
@@ -41,11 +53,13 @@ final class SessionStore {
         if let session = await coordinator.restore() {
             Logger.debug("Session restored for user", session.userId)
             state = .signedIn
+            publishSignedIn(session)
             // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
         } else {
             Logger.debug("No stored session; signed out")
             state = .signedOut
+            publishSignedOut()
         }
 
         for await event in coordinator.events {
@@ -53,11 +67,13 @@ final class SessionStore {
             case .signedIn(let session):
                 Logger.debug("Auth event: signedIn", session.userId)
                 state = .signedIn
+                publishSignedIn(session)
                 user = try? await userStore.get([session.userId], scopes: .all).first
             case .signedOut:
                 Logger.debug("Auth event: signedOut")
                 user = nil
                 state = .signedOut
+                publishSignedOut()
             case .refreshed:
                 Logger.debug("Auth event: refreshed")
             }
@@ -102,5 +118,17 @@ final class SessionStore {
         } catch {
             signInError = "Sign-in failed. Please try again."
         }
+    }
+
+    private func publishSignedIn(_ session: Session) {
+        authUserGeneration += 1
+        authUserSubject.send(AuthUserSession(
+            userId: session.userId,
+            generation: authUserGeneration
+        ))
+    }
+
+    private func publishSignedOut() {
+        authUserSubject.send(nil)
     }
 }
