@@ -215,7 +215,6 @@ private struct SessionRow: View {
 
             SessionAttentionSlot(session: session)
         }
-        .border(.red)
     }
 }
 

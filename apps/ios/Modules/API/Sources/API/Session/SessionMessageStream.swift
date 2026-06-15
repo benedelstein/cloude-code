@@ -52,7 +52,7 @@ public struct SessionMessageStreamState: Sendable, Equatable {
 public enum SessionMessageStreamReader {
     public static func message(from chunks: [SessionStreamChunk]) async throws -> Domain.SessionMessage? {
         guard !chunks.isEmpty else { return nil }
-        let sdkChunks = chunks.compactMap { $0.sdkChunk() }
+        let sdkChunks = chunks.compactMap { $0.value.sdkChunk() }
         guard !sdkChunks.isEmpty else {
             Logger.debug("empty sdk chunks, cant create message")
             return nil
@@ -89,10 +89,13 @@ public struct SessionStreamChunk: Sendable, Equatable {
         return payload.delta
     }
 
+}
+
+private extension CoreAPI.WireUIMessageChunk {
     // Map our api chunk type to the swift ai sdk type.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     func sdkChunk() -> SwiftAISDK.AnyUIMessageChunk? {
-        switch value {
+        switch self {
         case .textStart(let payload):
             return .textStart(id: payload.id, providerMetadata: payload.providerMetadata?.aiSDKProviderMetadata)
         case .textDelta(let payload):
@@ -191,7 +194,7 @@ public struct SessionStreamChunk: Sendable, Equatable {
             )
         case .data(let payload):
             return .data(
-                DataUIMessageChunk(
+                SwiftAISDK.DataUIMessageChunk(
                     name: String(payload.type.dropFirst("data-".count)),
                     id: payload.id,
                     data: payload.data.aiSDKValue,
@@ -206,7 +209,7 @@ public struct SessionStreamChunk: Sendable, Equatable {
             return .start(messageId: payload.messageId, messageMetadata: payload.messageMetadata?.aiSDKValue)
         case .finish(let payload):
             return .finish(
-                finishReason: payload.finishReason.flatMap { FinishReason(rawValue: $0.rawValue) },
+                finishReason: payload.finishReason.flatMap { SwiftAISDK.FinishReason(rawValue: $0.rawValue) },
                 messageMetadata: payload.messageMetadata?.aiSDKValue
             )
         case .abort(let payload):

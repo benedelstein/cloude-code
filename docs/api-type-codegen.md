@@ -2,6 +2,11 @@
 
 The iOS app's API types are not written by hand. They are transpiled from the Zod schemas in `packages/api-contract/src/` — the same schemas the API server validates with and the web client imports (via `@repo/shared`, which re-exports the whole contract) — into a checked-in Swift package at `apps/ios/Modules/CoreAPI`. One source of truth; drift is a CI failure, not a runtime decode bug.
 
+For the AI SDK UI transcript contract specifically, see
+`docs/ai-sdk-ui-wire-contract.md`. It explains why this repo owns `WireUIMessage`
+schemas instead of exposing AI SDK TypeScript types directly, and where those
+schemas may and may not be used.
+
 ```
 packages/api-contract/src/*.ts        (Zod schemas — source of truth)
         │
@@ -81,5 +86,8 @@ Three layers, all enforced in CI (`ci-ios.yml` on macOS, plus a cheap `codegen:c
 
 - Discriminator values must be string literals (the boolean-discriminated `IntegrationSessionResponse` is bot-facing and lives in @repo/shared, outside the contract).
 - No support for `z.lazy` (recursion), transforms, intersections, or non-discriminated unions — the introspector throws if one appears in manifest scope.
-- Library-owned types (AI SDK `UIMessagePart`) cross the wire as opaque JSON: schema-side they are `wireOpaque<T>()` (validates as unknown, infers as `T`), Swift-side `JSONValue`. `ClientState` is fully schema-derived (`z.infer<typeof ClientStateSchema>` in `src/client-state.ts`) — there is no hand-written duplicate to keep in sync.
+- AI SDK UI transcript data uses app-owned `WireUIMessage*` schemas under
+  `packages/api-contract/src/ui-message/`. They mirror AI SDK JSON while giving
+  Swift codegen, unknown-variant preservation, and API-boundary validation a
+  stable source of truth. See `docs/ai-sdk-ui-wire-contract.md`.
 - Swift clients intentionally treat `z.uuid()` fields as `String` instead of `UUID`: the server still validates UUID shape today, but clients keep identifiers opaque so future non-UUID ID formats do not require app-side type changes.
