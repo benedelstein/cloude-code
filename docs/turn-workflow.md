@@ -8,6 +8,8 @@ How one user turn moves from the browser to the Sprite VM and back. The current 
 - `SessionChatDispatchService` (`services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts`) - validates chat payloads, persists the user message, registers the active turn, and asks the process manager to dispatch it.
 - `SpriteAgentProcessManager` (`services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts`) - owns vm-agent process reuse, fresh process spawn, credential sync, cancel, and kill.
 - `AgentTurnCoordinator` (`services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts`) - owns turn state, WAL replay, chunk accumulation, derived state updates, terminal-chunk finalization, and client broadcasts.
+- `SessionSetupOutputService` (`services/api-server/src/modules/session-agent/services/session-setup-output.service.ts`) - persists startup-script stdout/stderr, broadcasts live `setup.output.chunks`, and keeps large output out of synced client state.
+- `NotificationPublisher` (`services/api-server/src/modules/notifications/services/notification-publisher.service.ts`) - enqueues non-aborted turn-finished push notifications after summary persistence.
 - `WebhookAgentRunner` (`packages/vm-agent/src/webhook-agent-runner.ts`) - runs inside the Sprite VM, drives the shared agent harness, batches stream chunks, and posts webhook payloads.
 
 ## Turn Path
@@ -65,6 +67,8 @@ Only one user turn may be active per session. A second `chat.message` while `act
 
 Fresh spawn writes the webhook bundle to `~/.cloude/agent-webhook.js`, stages the initial message under `~/.cloude/turns/`, passes `DO_WEBHOOK_URL` and `DO_WEBHOOK_TOKEN`, and captures the Sprite process id from the setup session.
 
+If provisioning runs a startup script, `SessionProvisionService` sends stdout/stderr through `SessionSetupOutputService`. The service persists full output in `SetupOutputRepository`, broadcasts batched `setup.output.chunks` messages to connected clients, and leaves only output metadata on the public setup task. `GET /sessions/{sessionId}/setup-output` reads the full accumulated output on demand through `SessionQueryService`.
+
 ## Webhooks
 
 Internal routes in `services/api-server/src/modules/session-agent/routes/internal.routes.ts` authenticate with a per-session bearer token stored as `webhook_token` in `SecretRepository`.
@@ -86,8 +90,8 @@ The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` response
 4. Feed fresh chunks into `MessageAccumulator`.
 5. Apply derived todos/plan metadata with `applyDerivedStateFromParts`.
 6. Broadcast batched `agent.chunks`.
-7. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, and broadcast `agent.finish`.
-8. If the message was not aborted and a pushed branch exists without a stored PR, queue server-side pull request creation through the GitHub App service.
+7. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, invoke the DO `onTurnFinished` callback, and broadcast `agent.finish`.
+8. `SessionAgentDO.onTurnFinished` persists summary metadata. For non-aborted turns, it then enqueues a turn-finished notification through `NotificationPublisher` and queues server-side pull request creation if a pushed branch exists without a stored PR.
 
 The DO broadcasts chunk batches rather than individual chunks. The client protocol still receives WebSocket messages from the DO, not direct sprite traffic.
 
@@ -117,6 +121,10 @@ Duplicate webhook batches are deduped by the WAL sequence constraint. Missing ch
 - DO entrypoint: [session-agent.do.ts](../services/api-server/src/runtime/session-agent.do.ts)
 - Dispatch service: [session-chat-dispatch.service.ts](../services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts)
 - Turn coordinator: [agent-turn-coordinator.service.ts](../services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts)
+- Setup output service: [session-setup-output.service.ts](../services/api-server/src/modules/session-agent/services/session-setup-output.service.ts)
+- Setup output repository: [setup-output.repository.ts](../services/api-server/src/modules/session-agent/repositories/setup-output.repository.ts)
+- Notification publisher: [notification-publisher.service.ts](../services/api-server/src/modules/notifications/services/notification-publisher.service.ts)
+- Notification queue consumer: [notification-queue-consumer.service.ts](../services/api-server/src/modules/notifications/services/notification-queue-consumer.service.ts)
 - Automatic PR queue: [session-auto-pull-request.service.ts](../services/api-server/src/runtime/session-auto-pull-request.service.ts)
 - Process manager: [sprite-agent-process-manager.service.ts](../services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts)
 - VM webhook runner: [webhook-agent-runner.ts](../packages/vm-agent/src/webhook-agent-runner.ts)
