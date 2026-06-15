@@ -9,6 +9,7 @@ export function validateWireCompatibleMessage(value: unknown): asserts value is 
 }
 
 export function validateWireCompatibleChunk(value: unknown): asserts value is WireUIMessageChunk {
+  // This parsing is tolerant of future fields, but requires that existing fields are covered.
   const result = WireUIMessageChunkSchema.safeParse(value);
   if (!result.success) {
     throw new Error(`Chunk is not wire-compatible: ${result.error.message}`);

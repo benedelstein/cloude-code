@@ -36,6 +36,8 @@ const ErrorWithUrlResponse = z.object({
   error: z.string(),
   url: z.string(),
 });
+// Keep the response schema local, but cap its TypeScript type. Inferring the
+// full WireUIMessage open union through Hono/OpenAPI hits TS2589.
 const SessionMessagesResponseSchema: z.ZodType<unknown> = z.array(WireUIMessageSchema);
 
 export const listSessionsRoute = createRoute({
