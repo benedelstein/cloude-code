@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState, Logger } from "@repo/shared";
 import { GitProxyService } from "../../src/shared/integrations/git/git-proxy.service";
 import type { GitProxyTokenProvider } from "../../src/shared/integrations/git/git.providers";
-import { SessionGitProxyService } from "../../src/modules/session-agent/services/session-git-proxy.service";
+import {
+  SessionGitProxyService,
+  type SessionGitProxyServiceDeps,
+} from "../../src/modules/session-agent/services/session-git-proxy.service";
 import type { SecretRepository } from "../../src/modules/session-agent/repositories/secret.repository";
 import type { ServerState } from "../../src/modules/session-agent/repositories/server-state.repository";
 import type { Env } from "../../src/shared/types";
@@ -276,6 +279,10 @@ describe("SessionGitProxyService", () => {
           ok: true,
           value: "github-module-token",
         })),
+        getReadOnlyTokenForRepo: vi.fn(async () => ({
+          ok: true,
+          value: "readonly-token",
+        })),
       },
     });
 
@@ -295,5 +302,86 @@ describe("SessionGitProxyService", () => {
       "github_token",
       expect.any(String),
     );
+  });
+});
+
+describe("SessionGitProxyService.mintReadCredential", () => {
+  function createService(overrides: {
+    assertSessionRepoAccess?: SessionGitProxyServiceDeps["assertSessionRepoAccess"];
+    getReadOnlyTokenForRepo?: SessionGitProxyServiceDeps["githubTokenProvider"]["getReadOnlyTokenForRepo"];
+    enforceSessionAccessBlocked?: SessionGitProxyServiceDeps["enforceSessionAccessBlocked"];
+    repoFullName?: string | null;
+  } = {}): SessionGitProxyService {
+    const clientState = {
+      repoFullName: overrides.repoFullName ?? "ben/repo",
+      pushedBranch: null,
+    } as ClientState;
+    const serverState = { sessionId: "abcd-session", userId: "user-1" } as ServerState;
+    const secretRepository = {
+      get: vi.fn(() => "secret"),
+      set: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as SecretRepository;
+    return new SessionGitProxyService({
+      logger: createLogger(),
+      env: {} as Env,
+      secretRepository,
+      getServerState: () => serverState,
+      getClientState: () => clientState,
+      updatePartialState: vi.fn(),
+      updatePushedBranch: vi.fn(),
+      assertSessionRepoAccess:
+        overrides.assertSessionRepoAccess ??
+        vi.fn(async () => ({
+          ok: true,
+          value: { userId: "user-1", repoId: 1, installationId: 2, repoFullName: "ben/repo" },
+        })),
+      enforceSessionAccessBlocked: overrides.enforceSessionAccessBlocked ?? vi.fn(),
+      githubTokenProvider: {
+        getInstallationTokenForRepo: vi.fn(async () => ({ ok: true, value: "install-token" })),
+        getReadOnlyTokenForRepo:
+          overrides.getReadOnlyTokenForRepo ??
+          vi.fn(async () => ({ ok: true, value: "readonly-token" })),
+      },
+    });
+  }
+
+  it("returns a read-only token credential on success", async () => {
+    const result = await createService().mintReadCredential();
+    expect(result).toEqual({
+      ok: true,
+      username: "x-access-token",
+      password: "readonly-token",
+    });
+  });
+
+  it("denies and enforces the block when session repo access is blocked", async () => {
+    const enforce = vi.fn();
+    const result = await createService({
+      assertSessionRepoAccess: vi.fn(async () => ({
+        ok: false,
+        error: {
+          code: "REPO_ACCESS_BLOCKED",
+          status: 403,
+          message: "blocked",
+          justBlocked: true,
+        },
+      })),
+      enforceSessionAccessBlocked: enforce,
+    }).mintReadCredential();
+
+    expect(result).toEqual({ ok: false, status: 403, message: "blocked" });
+    expect(enforce).toHaveBeenCalledOnce();
+  });
+
+  it("propagates github token errors with a mapped status", async () => {
+    const result = await createService({
+      getReadOnlyTokenForRepo: vi.fn(async () => ({
+        ok: false,
+        error: { code: "REPO_NOT_ACCESSIBLE", message: "no access" },
+      })),
+    }).mintReadCredential();
+
+    expect(result).toEqual({ ok: false, status: 403, message: "no access" });
   });
 });

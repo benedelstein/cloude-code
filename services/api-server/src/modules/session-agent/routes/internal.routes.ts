@@ -121,6 +121,30 @@ export function createInternalRoutes(): Hono<{ Bindings: Env }> {
     return new Response(null, { status: 204 });
   });
 
+  internalRoutes.get("/session/:sessionId/git-credential", async (c) => {
+    const sessionId = c.req.param("sessionId");
+    const target = await getWebhookTarget(
+      c.env,
+      sessionId,
+      c.req.header("authorization"),
+    );
+    if (!target.ok) {
+      logger.warn("[/git-credential] auth failed", {
+        fields: { sessionId, status: target.status, reason: target.message },
+      });
+      return c.json({ error: target.message }, target.status);
+    }
+
+    const result = await target.stub.handleGitCredential(target.token);
+    if (!result.ok) {
+      logger.warn("[/git-credential] denied", {
+        fields: { sessionId, status: result.status },
+      });
+      return c.json({ error: result.message }, result.status);
+    }
+    return c.json({ username: result.username, password: result.password });
+  });
+
   internalRoutes.post("/session/:sessionId/events", async (c) => {
     const sessionId = c.req.param("sessionId");
     const target = await getWebhookTarget(

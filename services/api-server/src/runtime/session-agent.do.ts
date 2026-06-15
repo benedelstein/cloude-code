@@ -28,6 +28,7 @@ import type { UIMessageChunk } from "ai";
 import type {
   HandleDeleteSessionResult,
   HandleCreatePullRequestResult,
+  GitCredentialResult,
   HandleGetMessagesResult,
   HandleGetPlanResult,
   HandleGetSessionResult,
@@ -452,6 +453,18 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    */
   async handleGitProxy(request: Request): Promise<Response> {
     return this.gitProxyService.handleRequest(request);
+  }
+
+  /**
+   * RPC entry point for `GET /internal/session/:sessionId/git-credential`.
+   * Authenticates the sprite's webhook token, then mints a fresh read-only
+   * installation token for the session's repo.
+   */
+  async handleGitCredential(token: string): Promise<GitCredentialResult> {
+    if (!this.isWebhookTokenValid(token)) {
+      return { ok: false, status: 401, message: "Invalid webhook token" };
+    }
+    return this.gitProxyService.mintReadCredential();
   }
 
   // WebSocket lifecycle (Agents SDK)

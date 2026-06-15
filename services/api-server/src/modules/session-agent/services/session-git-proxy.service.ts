@@ -7,6 +7,7 @@ import type {
   SessionRepoAccessResult,
 } from "@/shared/types/repo-access";
 import type { GitHubAppResult } from "@/shared/types/github";
+import type { GitCredentialResult } from "@/shared/types/session-agent";
 import { GitProxyService } from "@/shared/integrations/git/git-proxy.service";
 import type {
   GitProxyProviderError,
@@ -28,6 +29,7 @@ export interface SessionGitProxyServiceDeps {
   enforceSessionAccessBlocked: () => Promise<void>;
   githubTokenProvider: {
     getInstallationTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>>;
+    getReadOnlyTokenForRepo(repoFullName: string): Promise<GitHubAppResult<string>>;
   };
 }
 
@@ -109,6 +111,36 @@ export class SessionGitProxyService implements
     return result.response;
   }
 
+  /**
+   * Mints a fresh read-only installation token for the session's repo, used by
+   * the sprite's git credential helper for clone/fetch directly against GitHub.
+   * Auto-renewing per request, so reads keep working past the ~1h token TTL
+   * without a long-lived credential living on the sprite.
+   */
+  async mintReadCredential(): Promise<GitCredentialResult> {
+    const accessResult = await this.assertSessionRepoAccess();
+    if (!accessResult.ok) {
+      if (accessResult.error.code === "REPO_ACCESS_BLOCKED") {
+        await this.enforceSessionAccessBlocked();
+      }
+      const mapped = this.mapSessionRepoAccessError(accessResult.error);
+      return { ok: false, status: mapped.status, message: mapped.message };
+    }
+
+    const repoFullName = this.getAllowedRepoFullName();
+    if (!repoFullName) {
+      return { ok: false, status: 409, message: "repo not configured" };
+    }
+
+    const tokenResult = await this.githubTokenProvider.getReadOnlyTokenForRepo(repoFullName);
+    if (!tokenResult.ok) {
+      const mapped = this.mapGitHubTokenError(tokenResult.error);
+      return { ok: false, status: mapped.status, message: mapped.message };
+    }
+
+    return { ok: true, username: "x-access-token", password: tokenResult.value };
+  }
+
   getGitProxySecret(): string | null {
     return this.gitProxySecret;
   }
@@ -162,49 +194,36 @@ export class SessionGitProxyService implements
   private async respondToAccessFailure(
     error: SessionRepoAccessError,
   ): Promise<Response> {
+    if (error.code === "REPO_ACCESS_BLOCKED") {
+      await this.enforceSessionAccessBlocked();
+    }
+    const mapped = this.mapSessionRepoAccessError(error);
+    return new Response(
+      JSON.stringify({ error: mapped.message, code: mapped.code }),
+      {
+        status: mapped.status,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  private mapSessionRepoAccessError(error: SessionRepoAccessError): {
+    status: 400 | 401 | 403 | 404 | 503;
+    code: SessionRepoAccessError["code"];
+    message: string;
+  } {
     switch (error.code) {
       case "REPO_ACCESS_BLOCKED":
-        await this.enforceSessionAccessBlocked();
-        return new Response(
-          JSON.stringify({ error: error.message, code: error.code }),
-          {
-            status: error.status,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return { status: error.status, code: error.code, message: error.message };
       case "GITHUB_AUTH_REQUIRED":
-        return new Response(
-          JSON.stringify({ error: error.message, code: error.code }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return { status: 401, code: error.code, message: error.message };
       case "GITHUB_API_ERROR":
       case "GITHUB_UNAVAILABLE":
-        return new Response(
-          JSON.stringify({ error: error.message, code: error.code }),
-          {
-            status: 503,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return { status: 503, code: error.code, message: error.message };
       case "SESSION_NOT_FOUND":
-        return new Response(
-          JSON.stringify({ error: error.message, code: error.code }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return { status: 404, code: error.code, message: error.message };
       case "INVALID_REPO":
-        return new Response(
-          JSON.stringify({ error: error.message, code: error.code }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return { status: 400, code: error.code, message: error.message };
       default: {
         const exhaustiveCheck: never = error;
         this.logger.error("Unhandled session repo access error", {

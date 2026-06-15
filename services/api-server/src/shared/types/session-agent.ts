@@ -68,9 +68,19 @@ export type HandleCreatePullRequestResult = Result<
 >;
 export type HandleUpdatePullRequestResult = Result<void, Extract<SessionAgentRpcError, { code: "PULL_REQUEST_NOT_FOUND" }>>;
 
+/**
+ * Result of minting a short-lived read-only git credential for the sprite.
+ * On success the helper uses `username`/`password` as HTTP basic auth against
+ * GitHub directly; failures carry an HTTP status for the internal route.
+ */
+export type GitCredentialResult =
+  | { ok: true; username: string; password: string }
+  | { ok: false; status: 400 | 401 | 403 | 404 | 409 | 503; message: string };
+
 export interface SessionAgentRpc {
   refreshProviderConnection(): Promise<void>;
   handleGitProxy(request: Request): Promise<Response>;
+  handleGitCredential(token: string): Promise<GitCredentialResult>;
   handleWebhookChunks(
     token: string,
     userMessageId: string,
