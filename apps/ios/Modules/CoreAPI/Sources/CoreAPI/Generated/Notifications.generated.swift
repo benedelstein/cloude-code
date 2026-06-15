@@ -102,12 +102,12 @@ public struct RegisterFcmTokenResponse: Codable, Equatable, Sendable {
 public struct TurnFinishedNotificationPayload: Codable, Equatable, Sendable {
     public let type = "TURN_FINISHED"
     public let version = 1
-    public var sessionId: UUID
+    public var sessionId: String
     public var messageId: String
     public var repoFullName: String
 
     public init(
-        sessionId: UUID,
+        sessionId: String,
         messageId: String,
         repoFullName: String
     ) {
