@@ -1,4 +1,4 @@
-import type { NotificationPayload } from "@repo/api-contract";
+import type { NotificationPayload } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { NotificationQueueMessage } from "../types/notification.types";
 

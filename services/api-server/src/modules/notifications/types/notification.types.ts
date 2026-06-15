@@ -1,4 +1,4 @@
-import type { NotificationPayload } from "@repo/api-contract";
+import type { NotificationPayload } from "@repo/shared";
 
 export interface FcmToken {
   userId: string;

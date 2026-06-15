@@ -2,7 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   RegisterFcmTokenRequest,
   RegisterFcmTokenResponse,
-} from "@repo/api-contract";
+} from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
 
