@@ -1,3 +1,7 @@
+import {
+  validateWireCompatibleChunk,
+  validateWireCompatibleMessage,
+} from "@repo/shared";
 import type { ClientState, ServerMessage } from "@repo/shared";
 import type { UIMessageChunk } from "ai";
 import type { MessageRepository } from "../repositories/message.repository";
@@ -41,11 +45,20 @@ export class SessionSyncService {
       return { type: "sync.response", messages: [], activeTurn: null };
     }
 
-    const storedMessages = this.messageRepository.getAllBySession(sessionId);
+    const messages = this.messageRepository
+      .getAllBySession(sessionId)
+      .map((message) => message.message);
+    const pendingChunks = this.getPendingChunks();
+    for (const message of messages) {
+      validateWireCompatibleMessage(message);
+    }
+    for (const chunk of pendingChunks ?? []) {
+      validateWireCompatibleChunk(chunk);
+    }
     return {
       type: "sync.response",
-      messages: storedMessages.map((message) => message.message),
-      pendingChunks: this.getPendingChunks(),
+      messages,
+      pendingChunks,
       activeTurn: serverState.activeUserMessageId
         ? { userMessageId: serverState.activeUserMessageId }
         : null,

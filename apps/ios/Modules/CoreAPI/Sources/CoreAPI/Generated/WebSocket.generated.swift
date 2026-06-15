@@ -5,10 +5,10 @@ import Foundation
 
 public struct AgentChunksEvent: Codable, Equatable, Sendable {
     public let type = "agent.chunks"
-    public var chunks: [JSONValue]
+    public var chunks: [WireUIMessageChunk]
 
     public init(
-        chunks: [JSONValue]
+        chunks: [WireUIMessageChunk]
     ) {
         self.chunks = chunks
     }
@@ -21,10 +21,10 @@ public struct AgentChunksEvent: Codable, Equatable, Sendable {
 
 public struct AgentFinishEvent: Codable, Equatable, Sendable {
     public let type = "agent.finish"
-    public var message: UIMessage
+    public var message: WireUIMessage
 
     public init(
-        message: UIMessage
+        message: WireUIMessage
     ) {
         self.message = message
     }
@@ -49,7 +49,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public let type = "chat.message"
     public var content: String?
     public var attachments: [MessageAttachmentRef]?
-    public var messageId: UUID?
+    public var messageId: String?
     public var model: String?
     public var effort: String?
     public var agentMode: AgentMode?
@@ -57,7 +57,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public init(
         content: String? = nil,
         attachments: [MessageAttachmentRef]? = nil,
-        messageId: UUID? = nil,
+        messageId: String? = nil,
         model: String? = nil,
         effort: String? = nil,
         agentMode: AgentMode? = nil
@@ -128,14 +128,14 @@ public enum ClientMessage: Codable, Equatable, Sendable {
 
 public struct ConnectedEvent: Codable, Equatable, Sendable {
     public let type = "connected"
-    public var sessionId: UUID
+    public var sessionId: String
     public var status: SessionStatus
-    public var lastMessageId: UUID?
+    public var lastMessageId: String?
 
     public init(
-        sessionId: UUID,
+        sessionId: String,
         status: SessionStatus,
-        lastMessageId: UUID? = nil
+        lastMessageId: String? = nil
     ) {
         self.sessionId = sessionId
         self.status = status
@@ -382,11 +382,11 @@ public struct SetupOutputChunksEvent: Codable, Equatable, Sendable {
 
 public struct SyncRequestEvent: Codable, Equatable, Sendable {
     public let type = "sync.request"
-    public var lastMessageId: UUID?
+    public var lastMessageId: String?
     public var lastChunkIndex: Int?
 
     public init(
-        lastMessageId: UUID? = nil,
+        lastMessageId: String? = nil,
         lastChunkIndex: Int? = nil
     ) {
         self.lastMessageId = lastMessageId
@@ -402,13 +402,13 @@ public struct SyncRequestEvent: Codable, Equatable, Sendable {
 
 public struct SyncResponseEvent: Codable, Equatable, Sendable {
     public let type = "sync.response"
-    public var messages: [UIMessage]
-    public var pendingChunks: [JSONValue]?
+    public var messages: [WireUIMessage]
+    public var pendingChunks: [WireUIMessageChunk]?
     public var activeTurn: ActiveTurnState?
 
     public init(
-        messages: [UIMessage],
-        pendingChunks: [JSONValue]? = nil,
+        messages: [WireUIMessage],
+        pendingChunks: [WireUIMessageChunk]? = nil,
         activeTurn: ActiveTurnState? = nil
     ) {
         self.messages = messages
@@ -424,58 +424,12 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
     }
 }
 
-/// Wire shape of an AI SDK UIMessage; parts stay opaque JSON.
-public struct UIMessage: Codable, Equatable, Sendable {
-    public enum Role: RawRepresentable, Codable, Equatable, Sendable {
-        case user
-        case assistant
-        case system
-        /// A value this client version doesn't recognize yet.
-        case unknown(String)
-
-        public init(rawValue: String) {
-            switch rawValue {
-            case "user": self = .user
-            case "assistant": self = .assistant
-            case "system": self = .system
-            default: self = .unknown(rawValue)
-            }
-        }
-
-        public var rawValue: String {
-            switch self {
-            case .user: "user"
-            case .assistant: "assistant"
-            case .system: "system"
-            case .unknown(let value): value
-            }
-        }
-    }
-
-    public var id: String
-    public var role: Role
-    public var parts: [JSONValue]
-    public var metadata: JSONValue?
-
-    public init(
-        id: String,
-        role: Role,
-        parts: [JSONValue],
-        metadata: JSONValue? = nil
-    ) {
-        self.id = id
-        self.role = role
-        self.parts = parts
-        self.metadata = metadata
-    }
-}
-
 public struct UserMessageEvent: Codable, Equatable, Sendable {
     public let type = "user.message"
-    public var message: UIMessage
+    public var message: WireUIMessage
 
     public init(
-        message: UIMessage
+        message: WireUIMessage
     ) {
         self.message = message
     }

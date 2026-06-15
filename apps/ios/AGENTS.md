@@ -15,7 +15,7 @@ SwiftLint runs in the app target build phase for Debug builds.
 
 See `docs/` for specific documentation about certain parts of the codebase.
 
-`docs/Styling.md` - the iOS styling conventions.
+`docs/Styling.md` - iOS styling conventions.
 `docs/caching.md` - how to handle caching
 `docs/dependency-injection.md` - how to handle dependency injection
 `docs/feature-development.md` - how to develop a new feature

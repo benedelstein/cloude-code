@@ -3,10 +3,12 @@
   "chunks": [
     {
       "type": "text-delta",
+      "id": "text_1",
       "delta": "lo"
     },
     {
-      "type": "finish"
+      "type": "finish",
+      "finishReason": "stop"
     }
   ]
 }

@@ -43,6 +43,7 @@ export class PendingChunkRepository implements Repository {
    * the chunk when this returns false.
    */
   appendIfNew(chunk: UIMessageChunk, sequence: number): boolean {
+    // Stored JSON is AI SDK UI state, not Wire DTO output. Do not normalize through Wire schemas here.
     const chunkJson = JSON.stringify(chunk);
     const inserted = this.sql<{ sequence: number }>`
       INSERT INTO pending_message_chunks (sequence, chunk)

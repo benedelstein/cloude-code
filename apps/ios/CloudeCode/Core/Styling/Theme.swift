@@ -16,6 +16,7 @@ struct Theme {
     // MARK: Labels
     var labelColor: Color = .black
     var secondaryLabelColor = Color(hex: 0x7E7E7E)
+    var tertiaryLabelColor: Color = Color(hex: 0xA8A8A8)
 
     // MARK: Outlines
     var outlineColor = Color(hex: 0xB2B2B2)
@@ -23,7 +24,7 @@ struct Theme {
     // MARK: Accents
     var accentBlue = Color(hex: 0x12B8FF)
     var accentOrange = Color(hex: 0xFF5101)
-    var moneyGreen = Color(hex: 0x1FE053)
+    var green = Color(hex: 0x1FE053)
     var errorRed = Color(hex: 0xF51A12)
 }
 
@@ -41,10 +42,11 @@ extension Theme {
         sliderBackgroundColor: Color(hex: 0x48484A),
         labelColor: .white,
         secondaryLabelColor: Color(hex: 0x9A9A9F),
+        tertiaryLabelColor: Color(hex: 0x7F7F88),
         outlineColor: Color(hex: 0x3A3A3C),
         accentBlue: Color(hex: 0x39C6FF),
         accentOrange: Color(hex: 0xFF6A2C),
-        moneyGreen: Color(hex: 0x33E866),
+        green: Color(hex: 0x33E866),
         errorRed: Color(hex: 0xFF453A)
     )
 

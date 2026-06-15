@@ -10,10 +10,10 @@ import {
   SessionTodo,
 } from "./session";
 import { AgentSettings } from "./providers";
-import { UIMessageSchema } from "./websocket-api";
+import { WireUIMessageSchema } from "./ui-message";
 
 export const PendingUserMessage = z.object({
-  message: UIMessageSchema.describe("A formatted UIMessage for display to the client."),
+  message: WireUIMessageSchema.describe("A formatted UIMessage for display to the client."),
   attachmentIds: z.array(z.string())
     .describe("Also found within UIMessage parts, but more easily accessible here."),
 });

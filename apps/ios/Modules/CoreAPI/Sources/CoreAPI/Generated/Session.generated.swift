@@ -111,8 +111,8 @@ public struct Message: Codable, Equatable, Sendable {
         }
     }
 
-    public var id: UUID
-    public var sessionId: UUID
+    public var id: String
+    public var sessionId: String
     public var role: Role
     public var content: String
     public var toolCalls: [JSONValue]?
@@ -120,8 +120,8 @@ public struct Message: Codable, Equatable, Sendable {
     public var createdAt: ISODateTimeString
 
     public init(
-        id: UUID,
-        sessionId: UUID,
+        id: String,
+        sessionId: String,
         role: Role,
         content: String,
         toolCalls: [JSONValue]? = nil,
@@ -567,7 +567,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         }
     }
 
-    public var id: UUID
+    public var id: String
     public var repoId: Int
     public var repoFullName: String
     public var title: String?
@@ -582,7 +582,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var hasUnread: Bool
 
     public init(
-        id: UUID,
+        id: String,
         repoId: Int,
         repoFullName: String,
         title: String? = nil,

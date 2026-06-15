@@ -26,7 +26,7 @@ public enum UserSessionsServerEvent: Sendable {
         case .sessionSummaryUpdated(let event):
             self = .summaryUpdated(event.session.domainSummary)
         case .sessionSummaryRemoved(let event):
-            self = .summaryRemoved(id: event.sessionId.uuidString)
+            self = .summaryRemoved(id: event.sessionId)
         case .sessionListResyncRequired:
             self = .resyncRequired
         case .unknown(let type):

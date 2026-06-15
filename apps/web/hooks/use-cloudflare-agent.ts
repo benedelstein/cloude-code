@@ -17,7 +17,6 @@ import type {
   MessageAttachmentRef,
   AttachmentDescriptor,
   OperationErrorEvent,
-  ServerMessage,
   SessionTodo,
   SessionPlanMetadata,
   AgentSettings,
@@ -30,7 +29,9 @@ import type {
   ProviderAuthRequired,
   ProviderId,
   ActiveTurnState,
+  WireUIMessageChunk,
 } from "@repo/shared";
+import { aiChunkFromWire, aiMessageFromWire, ServerMessage } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
   const configuredApiUrl = normalizeHost(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -71,6 +72,12 @@ function getLatestAssistantMessageId(messages: UIMessage[]): string | null {
     }
   }
   return null;
+}
+
+export function aiChunksFromWire(chunks: WireUIMessageChunk[]): UIMessageChunk[] {
+  return chunks
+    .map(aiChunkFromWire)
+    .filter((chunk): chunk is UIMessageChunk => chunk !== undefined);
 }
 
 function isVisibleDocument(): boolean {
@@ -269,9 +276,11 @@ export function useCloudflareAgent({
         break;
 
       case "sync.response": {
-        const synced = msg.messages as UIMessage[];
+        const synced = msg.messages.map(aiMessageFromWire);
         setMessages(synced);
-        const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        const pendingChunks = msg.pendingChunks
+          ? aiChunksFromWire(msg.pendingChunks)
+          : undefined;
         applyServerActiveTurn(msg.activeTurn);
         const latestAssistantMessageId = getLatestAssistantMessageId(synced);
         latestAssistantMessageIdRef.current = latestAssistantMessageId;
@@ -308,7 +317,10 @@ export function useCloudflareAgent({
       }
 
       case "agent.chunks": {
-        const incoming = msg.chunks as UIMessageChunk[];
+        const incoming = aiChunksFromWire(msg.chunks);
+        if (incoming.length === 0) {
+          break;
+        }
         if (!streamControllerRef.current) {
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {
@@ -328,7 +340,7 @@ export function useCloudflareAgent({
       }
 
       case "agent.finish": {
-        const finishedMessage = msg.message as UIMessage;
+        const finishedMessage = aiMessageFromWire(msg.message);
         if (streamControllerRef.current) {
           streamControllerRef.current.close();
           streamControllerRef.current = null;
@@ -356,7 +368,7 @@ export function useCloudflareAgent({
       case "user.message":
         setOperationError(null);
         setPendingUserMessage(null);
-        setMessages((prev) => [...prev, msg.message as UIMessage]);
+        setMessages((prev) => [...prev, aiMessageFromWire(msg.message)]);
         break;
 
       case "operation.error":
@@ -376,12 +388,21 @@ export function useCloudflareAgent({
     host: DEFAULT_API_HOST,
     query: { token: webSocketToken.token },
     onMessage: (event) => {
+      let payload: unknown;
       try {
-        const msg = JSON.parse(event.data) as ServerMessage;
-        handleServerMessage(msg);
+        payload = JSON.parse(event.data);
       } catch (err) {
         console.error("Error parsing message:", err);
+        return;
       }
+
+      const result = ServerMessage.safeParse(payload);
+      if (!result.success) {
+        console.warn("Dropping invalid server message", result.error);
+        return;
+      }
+
+      handleServerMessage(result.data);
     },
     onOpen: () => {
       console.log("[agent] ws onOpen");
@@ -404,10 +425,10 @@ export function useCloudflareAgent({
       setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, state.pullRequest ?? null));
       setTodos((prev) => keepPreviousIfDeepEqual(prev, state.todos));
       setPlan((prev) => keepPreviousIfDeepEqual(prev, state.plan));
-      setPendingUserMessage((prev) => keepPreviousIfDeepEqual(
-        prev,
-        state.pendingUserMessage?.message ?? null,
-      ));
+      const pendingUserMessage = state.pendingUserMessage?.message
+        ? aiMessageFromWire(state.pendingUserMessage.message)
+        : null;
+      setPendingUserMessage((prev) => keepPreviousIfDeepEqual(prev, pendingUserMessage));
       setSessionSetupRun((prev) => keepPreviousIfDeepEqual(prev, state.sessionSetupRun));
       applyServerActiveTurn(state.activeTurn ?? null);
       setEditorUrl(state.editorUrl);

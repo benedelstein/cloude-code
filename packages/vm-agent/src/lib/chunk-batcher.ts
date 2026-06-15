@@ -3,7 +3,8 @@
  * flush. Flushes are serialized on an in-flight promise chain so network
  * reordering cannot swap batches at the DO.
  */
-import type { SequencedAgentStreamChunk, UIMessageChunk } from "@repo/shared";
+import type { UIMessageChunk } from "ai";
+import type { SequencedAgentStreamChunk } from "@repo/shared";
 
 export type ChunkBatchItem = SequencedAgentStreamChunk;
 

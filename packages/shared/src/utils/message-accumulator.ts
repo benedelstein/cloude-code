@@ -4,6 +4,15 @@ import { ConsoleLogger, type Logger } from "../logging";
 type MessageParts = UIMessage["parts"];
 type MessagePart = MessageParts[number];
 
+// The data chunk's discriminant is a template literal (`data-${string}`), which
+// can't appear as a switch case label. Narrow it out with a type guard before
+// the switch so the `never` exhaustiveness check still holds.
+type DataUIMessageChunk = Extract<UIMessageChunk, { type: `data-${string}` }>;
+
+function isDataChunk(chunk: UIMessageChunk): chunk is DataUIMessageChunk {
+  return chunk.type.startsWith("data-");
+}
+
 // Writable view over DynamicToolUIPart's discriminated union. The SDK type
 // requires state and fields (input/output/errorText) to be set together per
 // variant, which blocks in-place mutation as the tool transitions states.
@@ -13,6 +22,7 @@ type MutableDynamicToolUIPart = Omit<DynamicToolUIPart, "state" | "input" | "out
   input?: unknown;
   output?: unknown;
   errorText?: string;
+  approval?: { id: string; approved?: boolean; reason?: string };
   startedAt?: number;
   endedAt?: number;
 };
@@ -84,6 +94,11 @@ export class MessageAccumulator {
     this.stampMessageStartedIfNeeded();
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
+
+    if (isDataChunk(chunk)) {
+      // TODO: handle custom data parts (chunk.data, chunk.id, chunk.transient)
+      return { completedParts };
+    }
 
     switch (chunk.type) {
       case "start":
@@ -211,6 +226,37 @@ export class MessageAccumulator {
         break;
       }
 
+      case "tool-input-error": {
+        // Tool input failed to parse/validate. Terminal: the SDK maps this to
+        // an `output-error` part carrying the raw input and the error text.
+        const existing = this.toolCalls.get(chunk.toolCallId);
+        if (existing) {
+          existing.part.input = chunk.input;
+          existing.part.errorText = chunk.errorText;
+          existing.part.state = "output-error";
+          existing.part.endedAt = Date.now();
+          this.toolCalls.delete(chunk.toolCallId);
+          completedParts.push(existing.part as DynamicToolUIPart);
+        } else {
+          // No prior tool-input-start — insert a completed error part now.
+          const toolPart: MutableDynamicToolUIPart = {
+            type: "dynamic-tool",
+            toolName: chunk.toolName,
+            toolCallId: chunk.toolCallId,
+            state: "output-error",
+            input: chunk.input,
+            errorText: chunk.errorText,
+            title: chunk.title,
+            providerExecuted: chunk.providerExecuted,
+            startedAt: Date.now(),
+            endedAt: Date.now(),
+          };
+          this.parts.push(toolPart as DynamicToolUIPart);
+          completedParts.push(toolPart as DynamicToolUIPart);
+        }
+        break;
+      }
+
       case "tool-output-available": {
         const toolCall = this.toolCalls.get(chunk.toolCallId);
         if (toolCall) {
@@ -231,6 +277,37 @@ export class MessageAccumulator {
           toolCall.part.endedAt = Date.now();
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
+        }
+        break;
+      }
+
+      case "tool-approval-request": {
+        // Non-terminal: the tool is waiting on a human approval decision.
+        const toolCall = this.toolCalls.get(chunk.toolCallId);
+        if (toolCall) {
+          toolCall.part.state = "approval-requested";
+          toolCall.part.approval = { id: chunk.approvalId };
+        } else {
+          this.logger.warn("[chunk-trace] tool-approval-request for unknown toolCallId", {
+            fields: { toolCallId: chunk.toolCallId, knownToolCallIds: [...this.toolCalls.keys()] },
+          });
+        }
+        break;
+      }
+
+      case "tool-output-denied": {
+        // Terminal: the approval was denied, so the tool never produced output.
+        const toolCall = this.toolCalls.get(chunk.toolCallId);
+        if (toolCall) {
+          toolCall.part.state = "output-denied";
+          toolCall.part.approval = { ...(toolCall.part.approval ?? { id: "" }), approved: false };
+          toolCall.part.endedAt = Date.now();
+          this.toolCalls.delete(chunk.toolCallId);
+          completedParts.push(toolCall.part as DynamicToolUIPart);
+        } else {
+          this.logger.warn("[chunk-trace] tool-output-denied for unknown toolCallId", {
+            fields: { toolCallId: chunk.toolCallId, knownToolCallIds: [...this.toolCalls.keys()] },
+          });
         }
         break;
       }
@@ -290,6 +367,13 @@ export class MessageAccumulator {
       case "finish-step":
         break;
 
+      case "message-metadata":
+        this.metadata = {
+          ...(this.metadata ?? {}),
+          ...((chunk.messageMetadata as Record<string, unknown> | undefined) ?? {}),
+        };
+        break;
+
       case "abort":
         completedParts.push(...this.finalizePendingParts());
         this.mergeMetadataOnTerminate({ aborted: true });
@@ -301,12 +385,18 @@ export class MessageAccumulator {
         this.mergeMetadataOnTerminate(undefined);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
-      
+
       default: {
-        const _exhaustiveCheck = null as never;
+        // Runtime log: a chunk type the union doesn't know about can still
+        // arrive (SDK version skew, malformed chunk over the wire).
+        const chunkType = (chunk as { type?: unknown }).type;
         this.logger.warn("Unhandled chunk type", {
-          fields: { chunkType: String(_exhaustiveCheck) },
+          fields: { chunkType: typeof chunkType === "string" ? chunkType : "unknown" },
         });
+        // Compile-time tripwire: build breaks if a new chunk type is added to
+        // the union and left unhandled above.
+        const _exhaustiveCheck: never = chunk;
+        void _exhaustiveCheck;
       }
     }
 

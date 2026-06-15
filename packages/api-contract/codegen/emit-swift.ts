@@ -219,7 +219,9 @@ function renderUnion(decl: IRUnion): string {
   }
   if (decl.nonFrozen) {
     lines.push("    /// A variant this client version doesn't recognize yet.");
-    lines.push("    case unknown(type: String)");
+    lines.push(decl.unknownRawValue
+      ? "    case unknown(type: String, rawValue: JSONValue)"
+      : "    case unknown(type: String)");
   }
 
   lines.push("");
@@ -228,18 +230,45 @@ function renderUnion(decl: IRUnion): string {
   lines.push("    }");
   lines.push("");
   lines.push("    public init(from decoder: any Decoder) throws {");
+  if (decl.nonFrozen && decl.unknownRawValue) {
+    lines.push("        let rawValue = try JSONValue(from: decoder)");
+  }
   lines.push("        let container = try decoder.container(keyedBy: DiscriminatorKeys.self)");
   lines.push("        switch try container.decode(String.self, forKey: .discriminator) {");
-  for (const variant of decl.variants) {
+  for (const variant of decl.variants.filter((variant) => variant.match.kind === "literal")) {
     lines.push(`        case ${swiftLiteral(variant.discriminatorValue)}:`);
     lines.push(
       `            self = .${escapeIdentifier(variant.caseName)}(try ${variant.typeName}(from: decoder))`,
     );
   }
   lines.push("        case let unrecognized:");
+  const prefixVariants = decl.variants.filter((variant) => variant.match.kind === "prefix");
+  for (const [index, variant] of prefixVariants.entries()) {
+    const prefix = index === 0 ? "            if" : "            } else if";
+    lines.push(`${prefix} unrecognized.hasPrefix(${swiftLiteral(variant.match.value)}) {`);
+    lines.push(
+      `                self = .${escapeIdentifier(variant.caseName)}(try ${variant.typeName}(from: decoder))`,
+    );
+    if (index === prefixVariants.length - 1) {
+      lines.push("            }");
+    }
+  }
   if (decl.nonFrozen) {
-    lines.push("            self = .unknown(type: unrecognized)");
+    if (prefixVariants.length > 0) {
+      lines[lines.length - 1] = "            } else {";
+      lines.push(decl.unknownRawValue
+        ? "                self = .unknown(type: unrecognized, rawValue: rawValue)"
+        : "                self = .unknown(type: unrecognized)");
+      lines.push("            }");
+    } else {
+      lines.push(decl.unknownRawValue
+        ? "            self = .unknown(type: unrecognized, rawValue: rawValue)"
+        : "            self = .unknown(type: unrecognized)");
+    }
   } else {
+    if (prefixVariants.length > 0) {
+      lines[lines.length - 1] = "            } else {";
+    }
     lines.push("            throw DecodingError.dataCorruptedError(");
     lines.push("                forKey: .discriminator,");
     lines.push("                in: container,");
@@ -247,6 +276,9 @@ function renderUnion(decl: IRUnion): string {
       `                debugDescription: "Unknown ${decl.name} discriminator: \\(unrecognized)"`,
     );
     lines.push("            )");
+    if (prefixVariants.length > 0) {
+      lines.push("            }");
+    }
   }
   lines.push("        }");
   lines.push("    }");
@@ -258,9 +290,14 @@ function renderUnion(decl: IRUnion): string {
     lines.push("            try payload.encode(to: encoder)");
   }
   if (decl.nonFrozen) {
-    lines.push("        case .unknown(let type):");
-    lines.push("            var container = encoder.container(keyedBy: DiscriminatorKeys.self)");
-    lines.push("            try container.encode(type, forKey: .discriminator)");
+    if (decl.unknownRawValue) {
+      lines.push("        case .unknown(_, let rawValue):");
+      lines.push("            try rawValue.encode(to: encoder)");
+    } else {
+      lines.push("        case .unknown(let type):");
+      lines.push("            var container = encoder.container(keyedBy: DiscriminatorKeys.self)");
+      lines.push("            try container.encode(type, forKey: .discriminator)");
+    }
   }
   lines.push("        }");
   lines.push("    }");
@@ -289,7 +326,7 @@ export function renderType(type: SwiftTypeRef): string {
     case "bool":
       return "Bool";
     case "uuid":
-      return "UUID";
+      return "String";
     case "datetime":
       return "ISODateTimeString";
     case "json":

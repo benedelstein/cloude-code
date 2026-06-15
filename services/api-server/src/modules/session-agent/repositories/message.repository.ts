@@ -41,6 +41,7 @@ export class MessageRepository implements Repository {
   create(sessionId: string, message: UIMessage): StoredMessage {
     const createdAt = new Date().toISOString();
     const messageWithCreatedAt = withCreatedAtMetadata(message, createdAt);
+    // Stored JSON is AI SDK UI state, not Wire DTO output. Do not normalize through Wire schemas here.
     const messageJson = JSON.stringify(messageWithCreatedAt);
 
     this.sql`

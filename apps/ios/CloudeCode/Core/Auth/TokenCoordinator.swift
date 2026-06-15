@@ -103,7 +103,7 @@ actor TokenCoordinator: AuthTokenProviding {
             clearSession()
             continuation.yield(.signedOut)
             throw APIError.unauthenticated
-        } catch { // other errors: transient, session kept
+        } catch { // other errors: transient, session kept. maybe retry??
             Logger.error("Token refresh: transient failure, keeping session —", error)
             throw error
         }
