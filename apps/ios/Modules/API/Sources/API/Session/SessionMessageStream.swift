@@ -88,7 +88,6 @@ public struct SessionStreamChunk: Sendable, Equatable {
         }
         return payload.delta
     }
-
 }
 
 private extension CoreAPI.WireUIMessageChunk {
