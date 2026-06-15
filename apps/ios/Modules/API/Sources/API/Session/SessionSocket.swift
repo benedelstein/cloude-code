@@ -35,11 +35,11 @@ public actor SessionSocket {
 
     public init(
         baseURL: URL,
-        sessionId: UUID,
+        sessionId: String,
         urlSession: URLSession = .shared,
         tokenCache: WebSocketTokenCache
     ) {
-        let path = "agents/session/\(sessionId.uuidString.lowercased())"
+        let path = "agents/session/\(sessionId)"
         connection = WebSocketConnection(urlSession: urlSession) {
             let token = try await tokenCache.token()
             return try WebSocketURLBuilder.url(baseURL: baseURL, path: path, token: token.token)
@@ -66,7 +66,7 @@ public actor SessionSocket {
         pumpTask = nil
     }
 
-    public func requestSync(lastMessageId: UUID? = nil, lastChunkIndex: Int? = nil) async throws {
+    public func requestSync(lastMessageId: String? = nil, lastChunkIndex: Int? = nil) async throws {
         try await send(.syncRequest(SyncRequestEvent(
             lastMessageId: lastMessageId,
             lastChunkIndex: lastChunkIndex
@@ -124,21 +124,13 @@ public actor SessionSocket {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private static func event(from message: ServerMessage) -> SessionSocketEvent? {
         switch message {
         case .agentReady:
             return .agentReady
         case .setupOutputChunks, .unknown:
             return nil
-        case .connected, .operationError, .editorReady:
-            return lifecycleEvent(from: message)
-        case .syncResponse, .agentChunks, .agentFinish, .userMessage:
-            return transcriptEvent(from: message)
-        }
-    }
-
-    private static func lifecycleEvent(from message: ServerMessage) -> SessionSocketEvent? {
-        switch message {
         case .connected(let event):
             return .connected(status: event.status.rawValue)
         case .operationError(let event):
@@ -148,13 +140,6 @@ public actor SessionSocket {
             ))
         case .editorReady(let event):
             return .editorReady(url: event.url)
-        case .syncResponse, .agentChunks, .agentFinish, .agentReady, .userMessage, .setupOutputChunks, .unknown:
-            return nil
-        }
-    }
-
-    private static func transcriptEvent(from message: ServerMessage) -> SessionSocketEvent? {
-        switch message {
         case .syncResponse(let event):
             return .syncResponse(SessionSyncSnapshot(
                 messages: event.messages.map(SessionMessage.init),
@@ -167,8 +152,6 @@ public actor SessionSocket {
             return .agentFinish(SessionMessage(event.message))
         case .userMessage(let event):
             return .userMessage(SessionMessage(event.message))
-        case .connected, .operationError, .agentReady, .editorReady, .setupOutputChunks, .unknown:
-            return nil
         }
     }
 }

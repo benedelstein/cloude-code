@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { uiMessageChunkSchema, validateUIMessages } from "ai";
-import { UIMessageChunkSchema } from "../src/ui-message-chunks";
-import { UIMessagePartSchema } from "../src/ui-message-parts";
-import { UIMessageSchema } from "../src/ui-message";
+import {
+  validateWireCompatibleChunk,
+  validateWireCompatibleMessage,
+  WireUIMessageChunkSchema,
+  WireUIMessagePartSchema,
+  WireUIMessageSchema,
+} from "../src/ui-message";
 
 describe("AI SDK-compatible UI message wire schemas", () => {
   it("parses exact chunk variants", () => {
-    expect(UIMessageChunkSchema.parse({
+    expect(WireUIMessageChunkSchema.parse({
       type: "text-start",
       id: "text_1",
     })).toEqual({
@@ -14,7 +18,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       id: "text_1",
     });
 
-    expect(UIMessageChunkSchema.parse({
+    expect(WireUIMessageChunkSchema.parse({
       type: "text-delta",
       id: "text_1",
       delta: "Hello",
@@ -24,7 +28,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       delta: "Hello",
     });
 
-    expect(UIMessageChunkSchema.parse({
+    expect(WireUIMessageChunkSchema.parse({
       type: "finish",
       finishReason: "stop",
     })).toEqual({
@@ -34,7 +38,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
   });
 
   it("parses data prefix chunks", () => {
-    expect(UIMessageChunkSchema.parse({
+    expect(WireUIMessageChunkSchema.parse({
       type: "data-progress",
       id: "progress_1",
       data: { percent: 50 },
@@ -48,7 +52,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
   });
 
   it("parses exact and prefix message parts", () => {
-    expect(UIMessagePartSchema.parse({
+    expect(WireUIMessagePartSchema.parse({
       type: "text",
       text: "Hello",
     })).toEqual({
@@ -56,7 +60,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       text: "Hello",
     });
 
-    expect(UIMessagePartSchema.parse({
+    expect(WireUIMessagePartSchema.parse({
       type: "reasoning",
       text: "Thinking",
     })).toEqual({
@@ -64,7 +68,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       text: "Thinking",
     });
 
-    expect(UIMessagePartSchema.parse({
+    expect(WireUIMessagePartSchema.parse({
       type: "dynamic-tool",
       toolName: "bash",
       toolCallId: "call_1",
@@ -80,7 +84,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       output: "README.md",
     });
 
-    expect(UIMessagePartSchema.parse({
+    expect(WireUIMessagePartSchema.parse({
       type: "data-progress",
       data: { percent: 50 },
     })).toEqual({
@@ -88,7 +92,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       data: { percent: 50 },
     });
 
-    expect(UIMessagePartSchema.parse({
+    expect(WireUIMessagePartSchema.parse({
       type: "tool-bash",
       toolCallId: "call_1",
       state: "output-available",
@@ -113,23 +117,69 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       payload: { nested: [1, true, null] },
     };
 
-    expect(UIMessageChunkSchema.parse(unknownChunk)).toEqual(unknownChunk);
-    expect(UIMessagePartSchema.parse(unknownPart)).toEqual(unknownPart);
+    expect(WireUIMessageChunkSchema.parse(unknownChunk)).toEqual(unknownChunk);
+    expect(WireUIMessagePartSchema.parse(unknownPart)).toEqual(unknownPart);
+  });
+
+  it("preserves additive fields on known variants", () => {
+    const chunk = {
+      type: "text-delta",
+      id: "text_1",
+      delta: "Hello",
+      future: true,
+    };
+    const part = {
+      type: "text",
+      text: "Hello",
+      future: { nested: true },
+    };
+    const message = {
+      id: "msg_1",
+      role: "assistant",
+      parts: [part],
+      future: ["value"],
+    };
+
+    expect(WireUIMessageChunkSchema.parse(chunk)).toEqual(chunk);
+    expect(WireUIMessagePartSchema.parse(part)).toEqual(part);
+    expect(WireUIMessageSchema.parse(message)).toEqual(message);
   });
 
   it("rejects malformed known variants instead of treating them as unknown", () => {
-    expect(() => UIMessageChunkSchema.parse({
+    expect(() => WireUIMessageChunkSchema.parse({
       type: "text-delta",
       id: "text_1",
     })).toThrow();
 
-    expect(() => UIMessagePartSchema.parse({
+    expect(() => WireUIMessagePartSchema.parse({
       type: "text",
     })).toThrow();
   });
 
+  it("validates wire compatibility without returning parsed output", () => {
+    const chunk = {
+      type: "text-delta",
+      id: "text_1",
+      delta: "Hello",
+      future: true,
+    };
+    const message = {
+      id: "msg_1",
+      role: "assistant",
+      parts: [{ type: "text", text: "Hello", future: true }],
+      future: true,
+    };
+
+    expect(validateWireCompatibleChunk(chunk)).toBeUndefined();
+    expect(validateWireCompatibleMessage(message)).toBeUndefined();
+    expect(() => validateWireCompatibleChunk({
+      type: "text-delta",
+      id: "text_1",
+    })).toThrow("Chunk is not wire-compatible");
+  });
+
   it("keeps known fixtures compatible with AI SDK validation", async () => {
-    const chunk = UIMessageChunkSchema.parse({
+    const chunk = WireUIMessageChunkSchema.parse({
       type: "text-delta",
       id: "text_1",
       delta: "Hello",
@@ -139,7 +189,7 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       value: chunk,
     });
 
-    const message = UIMessageSchema.parse({
+    const message = WireUIMessageSchema.parse({
       id: "msg_1",
       role: "assistant",
       parts: [

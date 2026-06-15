@@ -4,8 +4,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MessageAttachmentRef,
 } from "./attachments";
-import { UIMessageSchema } from "./ui-message";
-import { UIMessageChunkSchema } from "./ui-message-chunks";
+import { WireUIMessageChunkSchema, WireUIMessageSchema } from "./ui-message";
 
 // ------------------------------------------------------------
 // Client → Server messages
@@ -66,8 +65,8 @@ export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
 export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
-  messages: z.array(UIMessageSchema),
-  pendingChunks: z.array(UIMessageChunkSchema).optional(),
+  messages: z.array(WireUIMessageSchema),
+  pendingChunks: z.array(WireUIMessageChunkSchema).optional(),
   activeTurn: ActiveTurnState.nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
@@ -94,14 +93,14 @@ export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 // AI SDK UIMessageStream chunks (for real-time streaming, batched per webhook delivery)
 export const AgentChunksEvent = z.object({
   type: z.literal("agent.chunks"),
-  chunks: z.array(UIMessageChunkSchema),
+  chunks: z.array(WireUIMessageChunkSchema),
 });
 export type AgentChunksEvent = z.infer<typeof AgentChunksEvent>;
 
 // Agent message finished (accumulated UIMessage saved)
 export const AgentFinishEvent = z.object({
   type: z.literal("agent.finish"),
-  message: UIMessageSchema,
+  message: WireUIMessageSchema,
 });
 export type AgentFinishEvent = z.infer<typeof AgentFinishEvent>;
 
@@ -112,7 +111,7 @@ export type AgentReadyEvent = z.infer<typeof AgentReadyEvent>;
 
 export const UserMessageEvent = z.object({
   type: z.literal("user.message"),
-  message: UIMessageSchema,
+  message: WireUIMessageSchema,
 });
 export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
 

@@ -160,7 +160,7 @@ public enum NetworkAccessConfig: Codable, Equatable, Sendable {
 public typealias PlainEnvVars = [String: String]
 
 public struct RepoEnvironment: Codable, Equatable, Sendable {
-    public var id: UUID
+    public var id: String
     public var repoId: Int
     public var name: String
     public var network: NetworkAccessConfig
@@ -170,7 +170,7 @@ public struct RepoEnvironment: Codable, Equatable, Sendable {
     public var updatedAt: ISODateTimeString
 
     public init(
-        id: UUID,
+        id: String,
         repoId: Int,
         name: String,
         network: NetworkAccessConfig,
@@ -230,7 +230,7 @@ public struct RepoEnvironmentResponse: Codable, Equatable, Sendable {
 }
 
 public struct RepoEnvironmentSummary: Codable, Equatable, Sendable {
-    public var id: UUID
+    public var id: String
     public var repoId: Int
     public var name: String
     public var network: NetworkAccessConfig
@@ -241,7 +241,7 @@ public struct RepoEnvironmentSummary: Codable, Equatable, Sendable {
     public var repoFullName: String
 
     public init(
-        id: UUID,
+        id: String,
         repoId: Int,
         name: String,
         network: NetworkAccessConfig,

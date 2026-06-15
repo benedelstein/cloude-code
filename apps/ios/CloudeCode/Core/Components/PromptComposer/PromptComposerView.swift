@@ -66,9 +66,6 @@ struct PromptComposerView: View {
             in: RoundedRectangle(cornerRadius: style.gridSize * 2.5, style: .continuous),
             fallbackColor: theme.secondaryBackgroundColor
         )
-        .padding(.horizontal, style.horizontalPadding)
-        .padding(.vertical, style.gridSize)
-        .background(theme.backgroundColor)
     }
 
     @ViewBuilder

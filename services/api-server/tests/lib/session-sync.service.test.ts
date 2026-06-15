@@ -64,7 +64,7 @@ describe("SessionSyncService", () => {
 
   it("builds sync response from stored messages, pending chunks, and active turn", () => {
     const message: UIMessage = { id: "message-1", role: "user", parts: [] };
-    const pendingChunk = { type: "text-delta" } as unknown as UIMessageChunk;
+    const pendingChunk = { type: "text-delta", id: "text-1", delta: "hello" } as UIMessageChunk;
     const messageRepository = {
       getAllBySession: vi.fn(() => [{
         sessionId,

@@ -4,7 +4,7 @@ import {
   openDiscriminatorSchema,
   ProviderMetadataSchema,
   type OpenUnionConfig,
-} from "./ui-message-common";
+} from "./common";
 
 const FinishReasonSchema = z.enum([
   "length",
@@ -15,50 +15,50 @@ const FinishReasonSchema = z.enum([
   "other",
 ]);
 
-const TextStartChunkSchema = z.strictObject({
+const TextStartChunkSchema = z.looseObject({
   type: z.literal("text-start"),
   id: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const TextDeltaChunkSchema = z.strictObject({
+const TextDeltaChunkSchema = z.looseObject({
   type: z.literal("text-delta"),
   id: z.string(),
   delta: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const TextEndChunkSchema = z.strictObject({
+const TextEndChunkSchema = z.looseObject({
   type: z.literal("text-end"),
   id: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const ReasoningStartChunkSchema = z.strictObject({
+const ReasoningStartChunkSchema = z.looseObject({
   type: z.literal("reasoning-start"),
   id: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const ReasoningDeltaChunkSchema = z.strictObject({
+const ReasoningDeltaChunkSchema = z.looseObject({
   type: z.literal("reasoning-delta"),
   id: z.string(),
   delta: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const ReasoningEndChunkSchema = z.strictObject({
+const ReasoningEndChunkSchema = z.looseObject({
   type: z.literal("reasoning-end"),
   id: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const ErrorChunkSchema = z.strictObject({
+const ErrorChunkSchema = z.looseObject({
   type: z.literal("error"),
   errorText: z.string(),
 });
 
-const ToolInputStartChunkSchema = z.strictObject({
+const ToolInputStartChunkSchema = z.looseObject({
   type: z.literal("tool-input-start"),
   toolCallId: z.string(),
   toolName: z.string(),
@@ -68,13 +68,13 @@ const ToolInputStartChunkSchema = z.strictObject({
   title: z.string().optional(),
 });
 
-const ToolInputDeltaChunkSchema = z.strictObject({
+const ToolInputDeltaChunkSchema = z.looseObject({
   type: z.literal("tool-input-delta"),
   toolCallId: z.string(),
   inputTextDelta: z.string(),
 });
 
-const ToolInputAvailableChunkSchema = z.strictObject({
+const ToolInputAvailableChunkSchema = z.looseObject({
   type: z.literal("tool-input-available"),
   toolCallId: z.string(),
   toolName: z.string(),
@@ -85,7 +85,7 @@ const ToolInputAvailableChunkSchema = z.strictObject({
   title: z.string().optional(),
 });
 
-const ToolInputErrorChunkSchema = z.strictObject({
+const ToolInputErrorChunkSchema = z.looseObject({
   type: z.literal("tool-input-error"),
   toolCallId: z.string(),
   toolName: z.string(),
@@ -97,13 +97,13 @@ const ToolInputErrorChunkSchema = z.strictObject({
   title: z.string().optional(),
 });
 
-const ToolApprovalRequestChunkSchema = z.strictObject({
+const ToolApprovalRequestChunkSchema = z.looseObject({
   type: z.literal("tool-approval-request"),
   approvalId: z.string(),
   toolCallId: z.string(),
 });
 
-const ToolOutputAvailableChunkSchema = z.strictObject({
+const ToolOutputAvailableChunkSchema = z.looseObject({
   type: z.literal("tool-output-available"),
   toolCallId: z.string(),
   output: JSONPayloadSchema,
@@ -112,7 +112,7 @@ const ToolOutputAvailableChunkSchema = z.strictObject({
   preliminary: z.boolean().optional(),
 });
 
-const ToolOutputErrorChunkSchema = z.strictObject({
+const ToolOutputErrorChunkSchema = z.looseObject({
   type: z.literal("tool-output-error"),
   toolCallId: z.string(),
   errorText: z.string(),
@@ -120,12 +120,12 @@ const ToolOutputErrorChunkSchema = z.strictObject({
   dynamic: z.boolean().optional(),
 });
 
-const ToolOutputDeniedChunkSchema = z.strictObject({
+const ToolOutputDeniedChunkSchema = z.looseObject({
   type: z.literal("tool-output-denied"),
   toolCallId: z.string(),
 });
 
-const SourceUrlChunkSchema = z.strictObject({
+const SourceUrlChunkSchema = z.looseObject({
   type: z.literal("source-url"),
   sourceId: z.string(),
   url: z.string(),
@@ -133,7 +133,7 @@ const SourceUrlChunkSchema = z.strictObject({
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const SourceDocumentChunkSchema = z.strictObject({
+const SourceDocumentChunkSchema = z.looseObject({
   type: z.literal("source-document"),
   sourceId: z.string(),
   mediaType: z.string(),
@@ -142,46 +142,46 @@ const SourceDocumentChunkSchema = z.strictObject({
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const FileChunkSchema = z.strictObject({
+const FileChunkSchema = z.looseObject({
   type: z.literal("file"),
   url: z.string(),
   mediaType: z.string(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const DataChunkSchema = z.strictObject({
+const DataChunkSchema = z.looseObject({
   type: z.string().startsWith("data-"),
   id: z.string().optional(),
   data: JSONPayloadSchema,
   transient: z.boolean().optional(),
 });
 
-const StartStepChunkSchema = z.strictObject({
+const StartStepChunkSchema = z.looseObject({
   type: z.literal("start-step"),
 });
 
-const FinishStepChunkSchema = z.strictObject({
+const FinishStepChunkSchema = z.looseObject({
   type: z.literal("finish-step"),
 });
 
-const StartChunkSchema = z.strictObject({
+const StartChunkSchema = z.looseObject({
   type: z.literal("start"),
   messageId: z.string().optional(),
   messageMetadata: JSONPayloadSchema.optional(),
 });
 
-const FinishChunkSchema = z.strictObject({
+const FinishChunkSchema = z.looseObject({
   type: z.literal("finish"),
   finishReason: FinishReasonSchema.optional(),
   messageMetadata: JSONPayloadSchema.optional(),
 });
 
-const AbortChunkSchema = z.strictObject({
+const AbortChunkSchema = z.looseObject({
   type: z.literal("abort"),
   reason: z.string().optional(),
 });
 
-const MessageMetadataChunkSchema = z.strictObject({
+const MessageMetadataChunkSchema = z.looseObject({
   type: z.literal("message-metadata"),
   messageMetadata: JSONPayloadSchema,
 });
@@ -327,6 +327,6 @@ export const UI_MESSAGE_CHUNK_OPEN_UNION = {
   ],
 } satisfies OpenUnionConfig;
 
-export const UIMessageChunkSchema = openDiscriminatorSchema(
+export const WireUIMessageChunkSchema = openDiscriminatorSchema(
   UI_MESSAGE_CHUNK_OPEN_UNION,
 ) as z.ZodType<WireUIMessageChunk>;

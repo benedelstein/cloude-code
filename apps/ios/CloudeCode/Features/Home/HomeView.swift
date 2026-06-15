@@ -21,36 +21,36 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             content
-            .navigationTitle("Cloude Code")
-            .toolbar { settingsToolbar }
-            .navigationDestination(for: SessionSummaryModel.self) { session in
-                sessionBuilder.build(session: session)
-            }
-            .onChange(of: viewModel.errorMessage) { _, errorMessage in
-                guard let errorMessage else {
-                    return
+                .navigationTitle("Sessions")
+                .toolbar { settingsToolbar }
+                .navigationDestination(for: SessionSummaryModel.self) { session in
+                    sessionBuilder.build(session: session)
                 }
-                showToast?(
-                    verbatimTitle: errorMessage,
-                    icon: Image(systemName: "exclamationmark.circle.fill")
-                )
-            }
-            .alert(
-                "Delete session?",
-                isPresented: deleteConfirmationPresented,
-                presenting: sessionPendingDelete
-            ) { session in
-                Button("Delete", role: .destructive) {
-                    Task {
-                        await viewModel.delete(session)
+                .onChange(of: viewModel.errorMessage) { _, errorMessage in
+                    guard let errorMessage else {
+                        return
                     }
+                    showToast?(
+                        verbatimTitle: errorMessage,
+                        icon: Image(systemName: "exclamationmark.circle.fill")
+                    )
                 }
-                Button("Cancel", role: .cancel) {
-                    sessionPendingDelete = nil
+                .alert(
+                    "Delete session?",
+                    isPresented: deleteConfirmationPresented,
+                    presenting: sessionPendingDelete
+                ) { session in
+                    Button("Delete", role: .destructive) {
+                        Task {
+                            await viewModel.delete(session)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {
+                        sessionPendingDelete = nil
+                    }
+                } message: { session in
+                    Text("This permanently deletes \(session.title ?? "this session").")
                 }
-            } message: { session in
-                Text("This permanently deletes \(session.title ?? "this session").")
-            }
         }
         // Outside the NavigationStack: pushes/pops re-evaluate the stack's
         // content, and we only want to bind once per appearance of Home.
@@ -88,7 +88,8 @@ struct HomeView: View {
                 RepoSectionHeader(group: group)
             }
         }
-        .listStyle(.sidebar)
+        .animation(.default, value: viewModel.groups)
+        .listStyle(.automatic)
         .refreshable {
             await viewModel.refresh()
         }
@@ -163,20 +164,23 @@ private struct RepoSectionHeader: View {
 
     var body: some View {
         HStack(spacing: style.gridSize) {
-            Image(systemName: "folder.badge.gearshape")
-                .foregroundStyle(theme.secondaryLabelColor)
+            Image(.folderGit2)
+                .resizable()
+                .renderingMode(.template)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 16, height: 16)
 
             Text(group.repoFullName)
                 .styledFont(.subheadline)
-                .foregroundStyle(theme.secondaryLabelColor)
                 .lineLimit(1)
 
             Spacer()
 
             Text(group.sessions.count.formatted())
                 .styledFont(.caption)
-                .foregroundStyle(theme.secondaryLabelColor)
+                .foregroundStyle(theme.tertiaryLabelColor)
         }
+        .foregroundStyle(theme.secondaryLabelColor)
         .textCase(nil)
     }
 }
@@ -192,7 +196,7 @@ private struct SessionRow: View {
             SessionArtifactIcon(session: session)
                 .frame(width: style.gridSize * 2.5, height: style.gridSize * 2.5)
 
-            VStack(alignment: .leading, spacing: style.gridSize / 2) {
+            VStack(alignment: .leading) {
                 Text(session.title ?? "Untitled session")
                     .styledFont(.headline)
                     .foregroundStyle(theme.labelColor)
@@ -210,9 +214,8 @@ private struct SessionRow: View {
             Spacer(minLength: style.gridSize)
 
             SessionAttentionSlot(session: session)
-                .frame(minWidth: style.gridSize * 4.5, alignment: .trailing)
         }
-        .padding(.vertical, style.gridSize * 1.5)
+        .border(.red)
     }
 }
 
@@ -224,51 +227,35 @@ private struct SessionArtifactIcon: View {
 
     var body: some View {
         if let icon = artifactIcon {
-            Image(systemName: icon.systemName)
-                .font(.system(size: style.gridSize * 1.75, weight: .medium))
-                .foregroundStyle(icon.color)
-                .accessibilityLabel(icon.accessibilityLabel)
+            Image(icon.0)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(icon.1)
         } else {
             Color.clear
         }
     }
 
-    private var artifactIcon: ArtifactIcon? {
+    private var artifactIcon: (ImageResource, Color)? {
         if let pullRequest = session.pullRequest {
             return icon(for: pullRequest)
         }
 
         if session.pushedBranch != nil {
-            return ArtifactIcon(
-                systemName: "arrow.triangle.branch",
-                color: theme.secondaryLabelColor,
-                accessibilityLabel: "Pushed branch"
-            )
+            return (.gitBranch, theme.secondaryLabelColor)
         }
 
         return nil
     }
 
-    private func icon(for pullRequest: Domain.SessionSummary.PullRequest) -> ArtifactIcon {
+    private func icon(for pullRequest: Domain.SessionSummary.PullRequest) -> (ImageResource, Color) {
         switch pullRequest.state {
         case "merged":
-            return ArtifactIcon(
-                systemName: "arrow.triangle.merge",
-                color: .purple,
-                accessibilityLabel: "Merged pull request"
-            )
+            return (.gitMerge, .purple)
         case "closed":
-            return ArtifactIcon(
-                systemName: "arrow.triangle.pull",
-                color: theme.errorRed,
-                accessibilityLabel: "Closed pull request"
-            )
+            return (.gitPullRequestClosed, theme.errorRed)
         default:
-            return ArtifactIcon(
-                systemName: "arrow.triangle.pull",
-                color: theme.moneyGreen,
-                accessibilityLabel: "Open pull request"
-            )
+            return (.gitPullRequest, .green)
         }
     }
 }
@@ -306,12 +293,6 @@ private struct SessionAttentionSlot: View {
 }
 
 private enum SessionTimestampFormatter {
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter
-    }()
-
     private static let fractionalISOFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -320,11 +301,36 @@ private enum SessionTimestampFormatter {
 
     private static let isoFormatter = ISO8601DateFormatter()
 
-    static func relativeString(for timestamp: String) -> String {
+    static func relativeString(for timestamp: String, relativeTo now: Date = Date()) -> String {
         guard let date = fractionalISOFormatter.date(from: timestamp) ?? isoFormatter.date(from: timestamp) else {
             return ""
         }
-        return relativeFormatter.localizedString(for: date, relativeTo: Date())
+
+        let second: TimeInterval = 1
+        let minute = 60 * second
+        let hour = 60 * minute
+        let day = 24 * hour
+        let week = 7 * day
+        let month = 30 * day
+        let elapsed = max(0, now.timeIntervalSince(date))
+
+        if elapsed < minute {
+            let seconds = Int(elapsed / second)
+            return seconds == 0 ? "NOW" : "\(seconds)s"
+        }
+        if elapsed < hour {
+            return "\(Int(elapsed / minute))m"
+        }
+        if elapsed < day {
+            return "\(Int(elapsed / hour))h"
+        }
+        if elapsed < week {
+            return "\(Int(elapsed / day))d"
+        }
+        if elapsed < month {
+            return "\(Int(elapsed / week))w"
+        }
+        return "\(Int(elapsed / month))mo"
     }
 }
 

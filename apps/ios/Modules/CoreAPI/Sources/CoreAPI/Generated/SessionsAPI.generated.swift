@@ -17,11 +17,11 @@ public struct CreateSessionInitialMessage: Codable, Equatable, Sendable {
     /// Initial text content for the session
     public var content: String?
     /// Uploaded attachment IDs to bind to the initial message
-    public var attachmentIds: [UUID]?
+    public var attachmentIds: [String]?
 
     public init(
         content: String? = nil,
-        attachmentIds: [UUID]? = nil
+        attachmentIds: [String]? = nil
     ) {
         self.content = content
         self.attachmentIds = attachmentIds
@@ -32,7 +32,7 @@ public struct CreateSessionRequest: Codable, Equatable, Sendable {
     /// Numeric GitHub repo ID
     public var repoId: Int
     /// Optional repo environment to snapshot for session setup
-    public var environmentId: UUID?
+    public var environmentId: String?
     /// Agent settings
     public var settings: AgentSettingsInput?
     /// Agent operational mode
@@ -44,7 +44,7 @@ public struct CreateSessionRequest: Codable, Equatable, Sendable {
 
     public init(
         repoId: Int,
-        environmentId: UUID? = nil,
+        environmentId: String? = nil,
         settings: AgentSettingsInput? = nil,
         agentMode: AgentMode? = nil,
         branch: String? = nil,
@@ -60,14 +60,14 @@ public struct CreateSessionRequest: Codable, Equatable, Sendable {
 }
 
 public struct CreateSessionResponse: Codable, Equatable, Sendable {
-    public var sessionId: UUID
+    public var sessionId: String
     public var title: String?
     /// Short-lived token for the session WebSocket stream
     public var websocketToken: String
     public var websocketTokenExpiresAt: ISODateTimeString
 
     public init(
-        sessionId: UUID,
+        sessionId: String,
         title: String? = nil,
         websocketToken: String,
         websocketTokenExpiresAt: ISODateTimeString
@@ -139,7 +139,7 @@ public struct PullRequestStatusResponse: Codable, Equatable, Sendable {
 }
 
 public struct SessionInfoResponse: Codable, Equatable, Sendable {
-    public var sessionId: UUID
+    public var sessionId: String
     public var title: String?
     /// preparing: setup in progress or blocked; ready: accepting messages
     public var status: SessionStatus
@@ -156,7 +156,7 @@ public struct SessionInfoResponse: Codable, Equatable, Sendable {
     public var editorUrl: String?
 
     public init(
-        sessionId: UUID,
+        sessionId: String,
         title: String? = nil,
         status: SessionStatus,
         repoFullName: String,

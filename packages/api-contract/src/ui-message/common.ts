@@ -49,7 +49,7 @@ export function openDiscriminatorSchema(config: OpenUnionConfig): z.ZodType {
     config.exactCases.map((entry) => [entry.discriminatorValue, entry.schema]),
   );
 
-  return z.strictObject({ [config.discriminatorKey]: z.string() }).passthrough().superRefine((value, ctx) => {
+  return z.looseObject({ [config.discriminatorKey]: z.string() }).superRefine((value, ctx) => {
     const discriminator = value[config.discriminatorKey];
     if (typeof discriminator !== "string") {
       return;

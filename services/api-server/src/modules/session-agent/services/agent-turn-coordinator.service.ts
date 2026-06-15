@@ -8,7 +8,7 @@ import type {
 } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import type { UIMessage, UIMessageChunk } from "ai";
-import { MessageAccumulator } from "@repo/shared";
+import { MessageAccumulator, validateWireCompatibleChunk } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state.service";
 import type { MessageRepository } from "../repositories/message.repository";
@@ -247,6 +247,7 @@ export class AgentTurnCoordinator {
           });
         }
       }
+      validateWireCompatibleChunk(chunk);
       // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
       // means this chunk was already applied by a prior batch (retry).
       const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence);

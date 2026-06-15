@@ -49,7 +49,7 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         self.applicationComponent = applicationComponent
     }
 
-    func makeSessionSocket(sessionId: UUID) -> SessionSocket {
+    func makeSessionSocket(sessionId: String) -> SessionSocket {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
     }
 }

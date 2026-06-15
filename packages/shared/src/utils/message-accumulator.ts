@@ -301,11 +301,11 @@ export class MessageAccumulator {
         this.mergeMetadataOnTerminate(undefined);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
-      
+
       default: {
-        const _exhaustiveCheck = null as never;
+        const chunkType = (chunk as { type?: unknown }).type;
         this.logger.warn("Unhandled chunk type", {
-          fields: { chunkType: String(_exhaustiveCheck) },
+          fields: { chunkType: typeof chunkType === "string" ? chunkType : "unknown" },
         });
       }
     }

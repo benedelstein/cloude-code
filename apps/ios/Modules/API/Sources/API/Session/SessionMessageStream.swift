@@ -50,9 +50,11 @@ public struct SessionMessageStreamState: Sendable, Equatable {
 }
 
 public enum SessionMessageStreamReader {
-    public static func message(from chunks: [SessionStreamChunk]) async throws -> SessionMessage? {
+    public static func message(from chunks: [SessionStreamChunk]) async throws -> Domain.SessionMessage? {
+        guard !chunks.isEmpty else { return nil }
         let sdkChunks = chunks.compactMap { $0.sdkChunk() }
         guard !sdkChunks.isEmpty else {
+            Logger.debug("empty sdk chunks, cant create message")
             return nil
         }
 
@@ -87,8 +89,9 @@ public struct SessionStreamChunk: Sendable, Equatable {
         return payload.delta
     }
 
+    // Map our api chunk type to the swift ai sdk type.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    func sdkChunk() -> AnyUIMessageChunk? {
+    func sdkChunk() -> SwiftAISDK.AnyUIMessageChunk? {
         switch value {
         case .textStart(let payload):
             return .textStart(id: payload.id, providerMetadata: payload.providerMetadata?.aiSDKProviderMetadata)
@@ -210,7 +213,8 @@ public struct SessionStreamChunk: Sendable, Equatable {
             return .abort(reason: payload.reason)
         case .messageMetadata(let payload):
             return .messageMetadata(payload.messageMetadata.aiSDKValue)
-        case .unknown:
+        case .unknown(let type, _):
+            Logger.debug("unknown chunk: \(type)")
             return nil
         }
     }

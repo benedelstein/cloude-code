@@ -2,7 +2,7 @@ import type { z } from "zod";
 import { SessionSetupRun } from "../src/session";
 import { ClientStateSchema } from "../src/client-state";
 import { ListSessionsResponse } from "../src/sessions";
-import { UIMessageSchema } from "../src/ui-message";
+import { WireUIMessageSchema } from "../src/ui-message";
 import { ClientMessage, ServerMessage } from "../src/websocket-api";
 import { ModelsResponse } from "../src/models";
 import { AgentSettings } from "../src/providers";
@@ -130,7 +130,7 @@ const sessionSetupRun = {
 };
 
 export const FIXTURES: Fixture[] = [
-  { schema: UIMessageSchema, typeName: "WireUIMessage", caseName: "withParts", value: uiMessage },
+  { schema: WireUIMessageSchema, typeName: "WireUIMessage", caseName: "withParts", value: uiMessage },
   {
     schema: ClientMessage,
     typeName: "ClientMessage",

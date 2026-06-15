@@ -5,13 +5,14 @@ import Foundation
 
 @MainActor
 @Observable
-final class AgentSessionStore {
-    /// Canonical cached model — updates from the cache/socket propagate here.
+final class AgentSessionViewModel {
+    /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
     let session: SessionSummaryModel
 
     private let socket: SessionSocket
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
+    private var lastMarkReadSentMessageId: String?
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
@@ -19,6 +20,7 @@ final class AgentSessionStore {
     private(set) var clientState = SessionClientState.empty
     private(set) var isSending = false
     private(set) var isWaitingForResponse = false
+    private(set) var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
 
@@ -59,6 +61,7 @@ final class AgentSessionStore {
         guard subscriptionTask == nil else {
             return
         }
+        // Future caching work should load cached messages before replacing them with socket values.
 
         subscriptionTask = Task { [weak self, socket] in
             await socket.connect()
@@ -139,13 +142,20 @@ final class AgentSessionStore {
     private func applyTranscriptEvent(_ event: SessionSocketEvent) async {
         switch event {
         case .syncResponse(let snapshot):
+            if !hasLoadedMessages {
+                hasLoadedMessages = true
+            }
             messages = snapshot.messages
             stream = await SessionMessageStreamState.reducing(snapshot.pendingChunks)
             applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
+            markLatestAssistantMessageRead(in: snapshot.messages)
         case .agentChunks(let chunks):
             stream = await stream.appending(chunks)
         case .agentFinish(let message):
             upsert(message)
+            if message.role == .assistant {
+                markReadIfNeeded(messageId: message.id)
+            }
             resetPendingResponse()
         case .userMessage(let message):
             upsert(message)
@@ -162,6 +172,36 @@ final class AgentSessionStore {
         } else {
             messages.append(message)
         }
+    }
+
+    private func markLatestAssistantMessageRead(in messages: [SessionMessage]) {
+        guard let messageId = messages.reversed().first(where: { $0.role == .assistant })?.id else {
+            return
+        }
+        markReadIfNeeded(messageId: messageId)
+    }
+
+    private func markReadIfNeeded(messageId: String) {
+        guard lastMarkReadSentMessageId != messageId else {
+            return
+        }
+        lastMarkReadSentMessageId = messageId
+        clearUnreadIfCurrentAssistantMessage(messageId)
+
+        Task { [socket, messageId] in
+            do {
+                try await socket.markRead(messageId: messageId)
+            } catch {
+                Logger.warning("Failed to mark session read:", error)
+            }
+        }
+    }
+
+    private func clearUnreadIfCurrentAssistantMessage(_ messageId: String) {
+        guard session.lastAssistantMessageId == messageId else {
+            return
+        }
+        session.hasUnread = false
     }
 
     private func finishSending() {

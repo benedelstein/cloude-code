@@ -7,57 +7,65 @@ struct AgentSessionView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    @State private var store: AgentSessionStore
+    @State private var store: AgentSessionViewModel
     @State private var scrollTarget: SessionScrollTarget? = .bottom
     @FocusState private var composerFocused: Bool
 
-    init(store: AgentSessionStore) {
+    init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            sessionHeader
-                .padding(.horizontal, style.horizontalPadding)
-                .padding(.vertical, style.gridSize)
+//            sessionHeader
+//                .padding(.horizontal, style.horizontalPadding)
+//                .padding(.vertical, style.gridSize)
 
-            Divider()
-
-            SessionTranscriptScaffold(
-                messages: store.messages,
-                stream: store.stream,
-                isResponding: store.isResponding,
+            SessionScrollView(
+                store: store,
                 scrollTarget: $scrollTarget
             )
-            .onChange(of: store.messages) { _, _ in
-                scrollTarget = .bottom
-            }
-            .onChange(of: store.stream) { _, _ in
-                scrollTarget = .bottom
-            }
             .onChange(of: store.isResponding) { _, _ in
                 scrollTarget = .bottom
             }
-
-            Divider()
-
-            PromptComposerView(
-                text: $store.draftText,
-                focused: $composerFocused,
-                placeholder: store.composerPlaceholder,
-                isSubmitDisabled: !store.canSubmitDraft,
-                isSubmitting: store.isResponding,
-                onSubmit: store.submitDraft
-            )
+            .safeSafeAreaBar(edge: .bottom) {
+                PromptComposerView(
+                    text: $store.draftText,
+                    focused: $composerFocused,
+                    placeholder: store.composerPlaceholder,
+                    isSubmitDisabled: !store.canSubmitDraft,
+                    isSubmitting: store.isResponding,
+                    onSubmit: store.submitDraft
+                )
+                .padding(.horizontal, style.horizontalPadding)
+                .padding(.bottom, style.gridSize)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("Session")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(store.session.title ?? "Untitled session")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                header
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+            }
+        }
+        .toolbarTitleDisplayMode(.inline)
         .onAppear {
             store.bind()
         }
         .onDisappear {
             store.unbind()
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            sessionHeader
         }
     }
 
@@ -93,22 +101,24 @@ private enum SessionScrollTarget: Hashable {
     case bottom
 }
 
-private struct SessionTranscriptScaffold: View {
+private struct SessionScrollView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let messages: [SessionMessage]
-    let stream: SessionMessageStreamState
-    let isResponding: Bool
+    let store: AgentSessionViewModel
     @Binding var scrollTarget: SessionScrollTarget?
+
+    var messages: [SessionMessage] {
+        store.messages
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: style.spacing) {
-                let visibleMessages = messages.filter { !$0.text.isEmpty }
-                let streamingText = stream.text
+                let visibleMessages = messages
+                let streamingText = store.stream.text
 
-                if visibleMessages.isEmpty, streamingText.isEmpty, !isResponding {
+                if visibleMessages.isEmpty, streamingText.isEmpty, !store.isResponding, store.hasLoadedMessages {
                     ContentUnavailableView(
                         "No messages yet",
                         systemImage: "text.bubble"
@@ -116,15 +126,16 @@ private struct SessionTranscriptScaffold: View {
                     .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
                 } else {
                     ForEach(visibleMessages) { message in
-                        MessageTextRow(
-                            text: message.text,
-                            isUser: message.isUser
-                        )
-                        .id(SessionScrollTarget.message(message.id))
+                        if message.isUser {
+                            UserMessageView(message: message)
+                        } else {
+                            AssistantMessageView(message: message)
+                        }
+//                            .id(SessionScrollTarget.message(message.id))
                     }
 
-                    if !streamingText.isEmpty {
-                        MessageTextRow(text: streamingText, isUser: false)
+                    if let streamingMessage = store.stream.message {
+                        AssistantMessageView(message: streamingMessage)
                             .id(SessionScrollTarget.stream)
                     }
                 }
@@ -133,45 +144,50 @@ private struct SessionTranscriptScaffold: View {
                     .frame(height: 1)
                     .id(SessionScrollTarget.bottom)
             }
-            .scrollTargetLayout()
+//            .scrollTargetLayout()
             .padding(style.horizontalPadding)
         }
         .defaultScrollAnchor(.bottom)
-        .scrollPosition(id: $scrollTarget, anchor: .bottom)
-        .scrollDismissesKeyboard(.interactively)
-        .background(theme.backgroundColor)
+//        .scrollPosition(id: $scrollTarget, anchor: .bottom)
+        .scrollDismissesKeyboard(.immediately)
     }
 }
 
-private struct MessageTextRow: View {
+private struct AssistantMessageView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let text: String
-    let isUser: Bool
+    let message: SessionMessage
 
     var body: some View {
-        if isUser {
-            HStack(alignment: .top) {
-                Spacer(minLength: style.gridSize * 5)
-                Text(verbatim: text)
-                    .styledFont(.body)
-                    .foregroundStyle(theme.labelColor)
-                    .textSelection(.enabled)
-                    .padding(style.gridSize)
-                    .background(theme.secondaryBackgroundColor)
-                    .clipShape(userMessageShape)
+        ForEach(Array(message.parts.enumerated()), id: \.offset) { _, part in
+            switch part {
+            case .text(let text):
+                Text(verbatim: text.text)
+            case .data:
+                Text("data part")
+            case .dynamicTool(let toolUse):
+                Text("tool use: \(toolUse.title ?? toolUse.toolName)")
+            case .file(let file):
+                Text("file part \(file.url) - \(file.mediaType)")
+            case .reasoning(let reasoning):
+                Text("reasoning - \(reasoning.text)")
+            case .sourceURL(let source):
+                Text("source - \(source.title ?? source.url)")
+            case .sourceDocument(let source):
+                Text("source - \(source.title)")
+            case .stepStart:
+                Text("step")
+            case .tool(let tool):
+                Text("tool - \(tool.title ?? tool.type)")
+            case .unknown:
+                Text("unknown part")
             }
-        } else {
-            Text(verbatim: text)
-                .styledFont(.body)
-                .foregroundStyle(theme.labelColor)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var userMessageShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: style.gridSize * 1.5, style: .continuous)
+//        Text(verbatim: message.text)
+//            .styledFont(.subheadline)
+//            .foregroundStyle(theme.labelColor)
+//            .textSelection(.enabled)
+//            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

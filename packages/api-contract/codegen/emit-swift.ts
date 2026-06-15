@@ -326,7 +326,7 @@ export function renderType(type: SwiftTypeRef): string {
     case "bool":
       return "Bool";
     case "uuid":
-      return "UUID";
+      return "String";
     case "datetime":
       return "ISODateTimeString";
     case "json":

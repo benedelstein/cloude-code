@@ -49,7 +49,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public let type = "chat.message"
     public var content: String?
     public var attachments: [MessageAttachmentRef]?
-    public var messageId: UUID?
+    public var messageId: String?
     public var model: String?
     public var effort: String?
     public var agentMode: AgentMode?
@@ -57,7 +57,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public init(
         content: String? = nil,
         attachments: [MessageAttachmentRef]? = nil,
-        messageId: UUID? = nil,
+        messageId: String? = nil,
         model: String? = nil,
         effort: String? = nil,
         agentMode: AgentMode? = nil
@@ -128,14 +128,14 @@ public enum ClientMessage: Codable, Equatable, Sendable {
 
 public struct ConnectedEvent: Codable, Equatable, Sendable {
     public let type = "connected"
-    public var sessionId: UUID
+    public var sessionId: String
     public var status: SessionStatus
-    public var lastMessageId: UUID?
+    public var lastMessageId: String?
 
     public init(
-        sessionId: UUID,
+        sessionId: String,
         status: SessionStatus,
-        lastMessageId: UUID? = nil
+        lastMessageId: String? = nil
     ) {
         self.sessionId = sessionId
         self.status = status
@@ -382,11 +382,11 @@ public struct SetupOutputChunksEvent: Codable, Equatable, Sendable {
 
 public struct SyncRequestEvent: Codable, Equatable, Sendable {
     public let type = "sync.request"
-    public var lastMessageId: UUID?
+    public var lastMessageId: String?
     public var lastChunkIndex: Int?
 
     public init(
-        lastMessageId: UUID? = nil,
+        lastMessageId: String? = nil,
         lastChunkIndex: Int? = nil
     ) {
         self.lastMessageId = lastMessageId

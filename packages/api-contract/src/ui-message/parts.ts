@@ -6,23 +6,23 @@ import {
   ToolApprovalSchema,
   ToolInvocationStateSchema,
   type OpenUnionConfig,
-} from "./ui-message-common";
+} from "./common";
 
-const TextUIPartSchema = z.strictObject({
+const TextUIPartSchema = z.looseObject({
   type: z.literal("text"),
   text: z.string(),
   state: z.enum(["streaming", "done"]).optional(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const ReasoningUIPartSchema = z.strictObject({
+const ReasoningUIPartSchema = z.looseObject({
   type: z.literal("reasoning"),
   text: z.string(),
   state: z.enum(["streaming", "done"]).optional(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const SourceUrlUIPartSchema = z.strictObject({
+const SourceUrlUIPartSchema = z.looseObject({
   type: z.literal("source-url"),
   sourceId: z.string(),
   url: z.string(),
@@ -30,7 +30,7 @@ const SourceUrlUIPartSchema = z.strictObject({
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const SourceDocumentUIPartSchema = z.strictObject({
+const SourceDocumentUIPartSchema = z.looseObject({
   type: z.literal("source-document"),
   sourceId: z.string(),
   mediaType: z.string(),
@@ -39,7 +39,7 @@ const SourceDocumentUIPartSchema = z.strictObject({
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const FileUIPartSchema = z.strictObject({
+const FileUIPartSchema = z.looseObject({
   type: z.literal("file"),
   mediaType: z.string(),
   filename: z.string().optional(),
@@ -47,17 +47,17 @@ const FileUIPartSchema = z.strictObject({
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 
-const StepStartUIPartSchema = z.strictObject({
+const StepStartUIPartSchema = z.looseObject({
   type: z.literal("step-start"),
 });
 
-const DataUIPartSchema = z.strictObject({
+const DataUIPartSchema = z.looseObject({
   type: z.string().startsWith("data-"),
   id: z.string().optional(),
   data: JSONPayloadSchema,
 });
 
-const ToolUIPartSchema = z.strictObject({
+const ToolUIPartSchema = z.looseObject({
   type: z.string().startsWith("tool-"),
   toolCallId: z.string(),
   title: z.string().optional(),
@@ -73,7 +73,7 @@ const ToolUIPartSchema = z.strictObject({
   approval: ToolApprovalSchema.optional(),
 });
 
-const DynamicToolUIPartSchema = z.strictObject({
+const DynamicToolUIPartSchema = z.looseObject({
   type: z.literal("dynamic-tool"),
   toolName: z.string(),
   toolCallId: z.string(),
@@ -134,6 +134,6 @@ export const UI_MESSAGE_PART_OPEN_UNION = {
   ],
 } satisfies OpenUnionConfig;
 
-export const UIMessagePartSchema = openDiscriminatorSchema(
+export const WireUIMessagePartSchema = openDiscriminatorSchema(
   UI_MESSAGE_PART_OPEN_UNION,
 ) as z.ZodType<WireUIMessagePart>;

@@ -14,7 +14,7 @@ import {
   PullRequestStatusResponse,
   DeleteSessionResponse,
   ArchiveSessionResponse,
-  UIMessageSchema,
+  WireUIMessageSchema,
 } from "@repo/shared";
 
 const ErrorResponse = z.object({ error: z.string() });
@@ -36,7 +36,7 @@ const ErrorWithUrlResponse = z.object({
   error: z.string(),
   url: z.string(),
 });
-const SessionMessagesResponseSchema: z.ZodType<unknown> = z.array(UIMessageSchema);
+const SessionMessagesResponseSchema: z.ZodType<unknown> = z.array(WireUIMessageSchema);
 
 export const listSessionsRoute = createRoute({
   method: "get",

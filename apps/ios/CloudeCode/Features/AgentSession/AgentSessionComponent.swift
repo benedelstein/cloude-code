@@ -1,11 +1,10 @@
 import API
 import Entities
-import Foundation
 import NeedleFoundation
 import SwiftUI
 
 protocol AgentSessionDependency: Dependency {
-    func makeSessionSocket(sessionId: UUID) -> SessionSocket
+    func makeSessionSocket(sessionId: String) -> SessionSocket
 }
 
 /// Child of `HomeComponent`: agent sessions can only be opened from the
@@ -19,14 +18,11 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     }
 
     @MainActor
-    var store: AgentSessionStore {
+    var store: AgentSessionViewModel {
         shared {
-            guard let sessionId = UUID(uuidString: session.id) else {
-                preconditionFailure("Invalid session id: \(session.id)")
-            }
-            return AgentSessionStore(
+            AgentSessionViewModel(
                 session: session,
-                socket: dependency.makeSessionSocket(sessionId: sessionId)
+                socket: dependency.makeSessionSocket(sessionId: session.id)
             )
         }
     }

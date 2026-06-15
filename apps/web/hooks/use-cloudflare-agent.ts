@@ -30,8 +30,9 @@ import type {
   ProviderAuthRequired,
   ProviderId,
   ActiveTurnState,
+  WireUIMessageChunk,
 } from "@repo/shared";
-import { aiMessageFromWire } from "@repo/shared";
+import { aiChunkFromWire, aiMessageFromWire } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
   const configuredApiUrl = normalizeHost(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -72,6 +73,12 @@ function getLatestAssistantMessageId(messages: UIMessage[]): string | null {
     }
   }
   return null;
+}
+
+export function aiChunksFromWire(chunks: WireUIMessageChunk[]): UIMessageChunk[] {
+  return chunks
+    .map(aiChunkFromWire)
+    .filter((chunk): chunk is UIMessageChunk => chunk !== undefined);
 }
 
 function isVisibleDocument(): boolean {
@@ -272,7 +279,9 @@ export function useCloudflareAgent({
       case "sync.response": {
         const synced = msg.messages as UIMessage[];
         setMessages(synced);
-        const pendingChunks = (msg as { pendingChunks?: unknown[] }).pendingChunks as UIMessageChunk[] | undefined;
+        const pendingChunks = msg.pendingChunks
+          ? aiChunksFromWire(msg.pendingChunks)
+          : undefined;
         applyServerActiveTurn(msg.activeTurn);
         const latestAssistantMessageId = getLatestAssistantMessageId(synced);
         latestAssistantMessageIdRef.current = latestAssistantMessageId;
@@ -309,7 +318,10 @@ export function useCloudflareAgent({
       }
 
       case "agent.chunks": {
-        const incoming = msg.chunks as UIMessageChunk[];
+        const incoming = aiChunksFromWire(msg.chunks);
+        if (incoming.length === 0) {
+          break;
+        }
         if (!streamControllerRef.current) {
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {

@@ -59,7 +59,7 @@ Never edit `*.generated.swift` or fixture JSON by hand — the generator owns th
 | `z.discriminatedUnion` | enum with one case per variant + custom Codable that switches on the discriminator; `nonFrozen` adds `.unknown(type: String)` |
 | `.optional()` / `.nullable()` | `T?` (encoded as omit-when-nil) |
 | `z.array(T)` / `z.record(z.string(), T)` | `[T]` / `[String: T]` |
-| `z.uuid()` | `UUID` |
+| `z.uuid()` | `String` (opaque client id; UUID validation stays server-side) |
 | `z.iso.datetime()` | `ISODateTimeString` (= `String`; parse with `ISO8601.date(from:)` at the display edge) |
 | `z.number()` / `.int()` / `z.boolean()` | `Double` / `Int` / `Bool` |
 | `z.literal("x")` | `let field = "x"` — encoded on the wire, skipped during decode (with explicit CodingKeys to keep the build warning-free) |
@@ -75,11 +75,11 @@ Three layers, all enforced in CI (`ci-ios.yml` on macOS, plus a cheap `codegen:c
 
 1. **Staleness**: `pnpm --filter @repo/api-contract codegen:check` fails if committed output doesn't match the schemas.
 2. **Validity**: every fixture passes `schema.parse()` at generation time, so fixtures can't drift from the contract.
-3. **Round-trip**: generated Swift tests decode each TS-produced fixture, re-encode, re-decode, and compare — and also compare the re-encoded JSON against the original fixture as canonicalized `JSONValue` (object-member nulls stripped, UUID strings case-normalized), so a field the generator silently dropped cannot pass. Green means both languages agree on the wire format.
+3. **Round-trip**: generated Swift tests decode each TS-produced fixture, re-encode, re-decode, and compare — and also compare the re-encoded JSON against the original fixture as canonicalized `JSONValue` (object-member nulls stripped), so a field the generator silently dropped cannot pass. Green means both languages agree on the wire format.
 
 ## Known limitations
 
 - Discriminator values must be string literals (the boolean-discriminated `IntegrationSessionResponse` is bot-facing and lives in @repo/shared, outside the contract).
 - No support for `z.lazy` (recursion), transforms, intersections, or non-discriminated unions — the introspector throws if one appears in manifest scope.
 - Library-owned types (AI SDK `UIMessagePart`) cross the wire as opaque JSON: schema-side they are `wireOpaque<T>()` (validates as unknown, infers as `T`), Swift-side `JSONValue`. `ClientState` is fully schema-derived (`z.infer<typeof ClientStateSchema>` in `src/client-state.ts`) — there is no hand-written duplicate to keep in sync.
-- Swift's `UUID` re-encodes as uppercase; if a generated type carrying a `UUID` is ever string-compared server-side, confirm the comparison is case-insensitive.
+- Swift clients intentionally treat `z.uuid()` fields as `String` instead of `UUID`: the server still validates UUID shape today, but clients keep identifiers opaque so future non-UUID ID formats do not require app-side type changes.

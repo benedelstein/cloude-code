@@ -149,4 +149,24 @@ struct SessionMessagesTests {
         #expect(clientState.agentMode == "edit")
         #expect(clientState.createdAt == "2026-06-13T00:00:00.000Z")
     }
+
+    @Test func sessionSummaryIDsAreOpaqueStrings() {
+        let summary = CoreAPI.SessionSummary(
+            id: "session_custom_ID",
+            repoId: 1,
+            repoFullName: "ben/cloude-code",
+            title: nil,
+            archived: false,
+            workingState: .idle,
+            pushedBranch: nil,
+            pullRequest: nil,
+            createdAt: "2026-06-13T00:00:00.000Z",
+            updatedAt: "2026-06-13T00:00:00.000Z",
+            lastMessageAt: nil,
+            lastAssistantMessageId: nil,
+            hasUnread: false
+        )
+
+        #expect(summary.domainSummary.id == "session_custom_ID")
+    }
 }

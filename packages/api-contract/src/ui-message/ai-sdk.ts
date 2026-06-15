@@ -1,21 +1,26 @@
 import type { UIMessage, UIMessageChunk } from "ai";
 import {
   UI_MESSAGE_CHUNK_OPEN_UNION,
-  UIMessageChunkSchema,
   type WireUIMessageChunk,
-} from "./ui-message-chunks";
-import { UIMessageSchema, type WireUIMessage } from "./ui-message";
+} from "./chunks";
+import type { WireUIMessage } from "./message";
 import {
   UI_MESSAGE_PART_OPEN_UNION,
   type WireUIMessagePart,
-} from "./ui-message-parts";
+} from "./parts";
+import {
+  validateWireCompatibleChunk,
+  validateWireCompatibleMessage,
+} from "./wire-validation";
 
 export function wireMessageFromAI(message: UIMessage): WireUIMessage {
-  return UIMessageSchema.parse(message);
+  validateWireCompatibleMessage(message);
+  return message;
 }
 
 export function wireChunkFromAI(chunk: UIMessageChunk): WireUIMessageChunk {
-  return UIMessageChunkSchema.parse(chunk);
+  validateWireCompatibleChunk(chunk);
+  return chunk;
 }
 
 export function aiMessageFromWire(message: WireUIMessage): UIMessage {

@@ -1224,8 +1224,7 @@ private func assertAutoRoundTrip<T: Codable & Equatable>(
 private extension JSONValue {
     /// Canonical form for cross-language comparison:
     /// - drops object members that are null (TS emits `"field": null` where
-    ///   Swift omits nil optionals; both mean "absent" on this API), and
-    /// - lowercases UUID-shaped strings (Foundation re-encodes UUIDs uppercase).
+    ///   Swift omits nil optionals; both mean "absent" on this API).
     /// Nulls inside arrays are preserved — only object members are dropped.
     var canonicalized: JSONValue {
         switch self {
@@ -1237,14 +1236,8 @@ private extension JSONValue {
             return .object(result)
         case .array(let elements):
             return .array(elements.map { $0 == .null ? .null : $0.canonicalized })
-        case .string(let value):
-            return .string(Self.isUUIDShaped(value) ? value.lowercased() : value)
         default:
             return self
         }
-    }
-
-    private static func isUUIDShaped(_ value: String) -> Bool {
-        value.count == 36 && UUID(uuidString: value) != nil
     }
 }
