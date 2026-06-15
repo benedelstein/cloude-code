@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_ROOT = path.resolve(here, "../../../apps/ios/Modules/CoreAPI");
 const GENERATED_DIR = "Sources/CoreAPI/Generated";
 const FIXTURES_DIR = "Tests/CoreAPITests/Fixtures";
-const AUTO_FIXTURES_FILE = `${FIXTURES_DIR}/AutoFixtures.json`;
+const AUTO_FIXTURES_FILE = `${FIXTURES_DIR}/AutoFixtures.generated.json`;
 const TESTS_FILE = "Tests/CoreAPITests/FixtureDecodingTests.generated.swift";
 
 function buildOutputs(): GeneratedFile[] {
@@ -164,18 +164,18 @@ private func assertRoundTrip<T: Codable & Equatable>(
     #expect(original.canonicalized == roundTripped.canonicalized)
 }
 
-/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.json).
+/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.generated.json).
 private let autoFixtures: [String: JSONValue] = {
     guard
         let url = Bundle.module.url(
-            forResource: "AutoFixtures",
+            forResource: "AutoFixtures.generated",
             withExtension: "json",
             subdirectory: "Fixtures"
         ),
         let data = try? Data(contentsOf: url),
         let fixtures = try? JSONDecoder().decode([String: JSONValue].self, from: data)
     else {
-        fatalError("AutoFixtures.json missing or undecodable")
+        fatalError("AutoFixtures.generated.json missing or undecodable")
     }
     return fixtures
 }()

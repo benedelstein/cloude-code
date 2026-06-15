@@ -1217,18 +1217,18 @@ private func assertRoundTrip<T: Codable & Equatable>(
     #expect(original.canonicalized == roundTripped.canonicalized)
 }
 
-/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.json).
+/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.generated.json).
 private let autoFixtures: [String: JSONValue] = {
     guard
         let url = Bundle.module.url(
-            forResource: "AutoFixtures",
+            forResource: "AutoFixtures.generated",
             withExtension: "json",
             subdirectory: "Fixtures"
         ),
         let data = try? Data(contentsOf: url),
         let fixtures = try? JSONDecoder().decode([String: JSONValue].self, from: data)
     else {
-        fatalError("AutoFixtures.json missing or undecodable")
+        fatalError("AutoFixtures.generated.json missing or undecodable")
     }
     return fixtures
 }()

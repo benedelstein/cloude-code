@@ -34,7 +34,7 @@ Selection works like protobuf: pointing the generator at a source module include
    - Swift name overrides, reserved-word `renames` (`private` → `isPrivate`), doc strings → `OVERRIDES`.
    - Enums/unions are **decode-tolerant by default** (unrecognized server values decode to `.unknown` instead of throwing). Mark `frozen: true` in `OVERRIDES` only for client→server-only unions where an unknown case is dead code (`ClientMessage`).
    - Re-export aliases dedup by object identity and generate once, under the name in the earliest-listed module.
-3. **Fixtures are synthesized automatically** (`codegen/synthesize-fixtures.ts`): every struct gets `autoFull`/`autoMinimal` samples and every union gets one sample per variant, written to `Fixtures/AutoFixtures.json` and parse-gated against the real Zod schema (so the synthesizer cannot inherit a generator misreading). Hand-written fixtures in `codegen/fixtures.ts` are optional — add one only for realism the synthesizer can't invent (actual AI SDK message parts, populated state).
+3. **Fixtures are synthesized automatically** (`codegen/synthesize-fixtures.ts`): every struct gets `autoFull`/`autoMinimal` samples and every union gets one sample per variant, written to `Fixtures/AutoFixtures.generated.json` and parse-gated against the real Zod schema (so the synthesizer cannot inherit a generator misreading). Hand-written fixtures in `codegen/fixtures.ts` are optional — add one only for realism the synthesizer can't invent (actual AI SDK message parts, populated state).
 4. **Regenerate**: `pnpm --filter @repo/api-contract codegen`, then commit the schema change *and* the regenerated Swift together.
 5. **Verify**: `cd apps/ios/Modules/CoreAPI && swift test`.
 

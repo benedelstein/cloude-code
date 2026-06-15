@@ -112,6 +112,10 @@ export type WireUIMessagePart =
   | DynamicToolUIPart
   | UnknownWireUIMessagePart;
 
+// Describes the open `WireUIMessagePart` discriminator union for runtime
+// validation and Swift codegen. Exact cases are fixed AI SDK part types;
+// prefix cases cover families like `data-*` and `tool-*`; unknown values keep
+// their raw JSON so newer server parts do not break older clients.
 export const UI_MESSAGE_PART_OPEN_UNION = {
   discriminatorKey: "type",
   unknownRawValue: true,

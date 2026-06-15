@@ -241,6 +241,12 @@ export type WireUIMessageChunk =
   | MessageMetadataChunk
   | UnknownWireUIMessageChunk;
 
+/**
+ * Describes the open `WireUIMessageChunk` discriminator union for runtime
+ * validation and Swift codegen. Exact cases are fixed AI SDK stream chunk
+ * types; prefix cases cover families like `data-*`; unknown values keep their
+ * raw JSON so newer server chunks can pass through older clients safely.
+ */
 export const UI_MESSAGE_CHUNK_OPEN_UNION = {
   discriminatorKey: "type",
   unknownRawValue: true,
