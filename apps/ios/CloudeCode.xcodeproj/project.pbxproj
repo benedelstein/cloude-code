@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B5F751322FD9448C00DFA071 /* CoreAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000C /* CoreAPI */; };
+		B6A000000000000000000013 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000015 /* FirebaseMessaging */; };
 		B6A000000000000000000001 /* API in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000008 /* API */; };
 		B6A000000000000000000003 /* NeedleFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000A /* NeedleFoundation */; };
 		B6A00000000000000000000D /* Entities in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000E /* Entities */; };
@@ -71,6 +72,11 @@
 			path = Config;
 			sourceTree = "<group>";
 		};
+		B6A000000000000000000017 /* Supporting Files */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +86,7 @@
 			files = (
 				B5F751322FD9448C00DFA071 /* CoreAPI in Frameworks */,
 				B6A000000000000000000001 /* API in Frameworks */,
+				B6A000000000000000000013 /* FirebaseMessaging in Frameworks */,
 				B6A000000000000000000003 /* NeedleFoundation in Frameworks */,
 				B6A00000000000000000000D /* Entities in Frameworks */,
 				B6A000000000000000000012 /* Valet in Frameworks */,
@@ -107,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				B5F75E342FDB302400DFA071 /* Config */,
+				B6A000000000000000000017 /* Supporting Files */,
 				B50E874F2FCD709D00240B2E /* CloudeCode */,
 				B50E875D2FCD709E00240B2E /* CloudeCodeTests */,
 				B50E87672FCD709E00240B2E /* CloudeCodeUITests */,
@@ -135,6 +143,7 @@
 				B50E87492FCD709D00240B2E /* Sources */,
 				B50E874A2FCD709D00240B2E /* Frameworks */,
 				B50E874B2FCD709D00240B2E /* Resources */,
+				B6A000000000000000000016 /* Copy Google Plist */,
 			);
 			buildRules = (
 			);
@@ -150,6 +159,7 @@
 				B6A00000000000000000000C /* CoreAPI */,
 				B6A00000000000000000000E /* Entities */,
 				B6A000000000000000000011 /* Valet */,
+				B6A000000000000000000015 /* FirebaseMessaging */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -239,6 +249,7 @@
 				B6A00000000000000000000F /* XCLocalSwiftPackageReference "Modules/Entities" */,
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
 				B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */,
+				B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B50E874E2FCD709D00240B2E /* Products */;
@@ -295,6 +306,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if [ \"${CI:-}\" = \"true\" ]\nthen\n    echo \"CI=true; skipping SwiftLint build phase.\"\n    exit 0\nfi\n\ncase \"${CONFIGURATION}\" in\n    *Debug*) ;;\n    *)\n        echo \"Non-Debug configuration ${CONFIGURATION}; skipping SwiftLint.\"\n        exit 0\n        ;;\nesac\n\nif which swiftlint > /dev/null 2>&1\nthen\n    swiftlint --no-cache\nelse\n    echo \"warning: `swiftlint` command not found - See https://github.com/realm/SwiftLint#installation for installation instructions.\"\nfi\n";
+		};
+		B6A000000000000000000016 /* Copy Google Plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy Google Plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "GOOGLESERVICE_INFO_PLIST=GoogleService-Info.plist\nSOURCE_FILE=\"${PROJECT_DIR}/Supporting Files/Firebase/${GOOGLESERVICE_INFO_PLIST}\"\nPLIST_DESTINATION=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\"\n\nif [ ! -f \"$SOURCE_FILE\" ]; then\n    echo \"No GoogleService-Info.plist found at ${SOURCE_FILE}.\"\n    exit 1\nfi\n\necho \"Copying ${SOURCE_FILE} to ${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\ncp \"$SOURCE_FILE\" \"${PLIST_DESTINATION}/${GOOGLESERVICE_INFO_PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1065,6 +1095,14 @@
 				minimumVersion = 5.1.0;
 			};
 		};
+		B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1089,6 +1127,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */;
 			productName = Valet;
+		};
+		B6A000000000000000000015 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

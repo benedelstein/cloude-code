@@ -21,6 +21,7 @@
     "@fly/sprites": "^0.0.1",
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "catalog:",
+    "@repo/api-contract": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/vm-agent": "workspace:*",
     "agents": "catalog:",
