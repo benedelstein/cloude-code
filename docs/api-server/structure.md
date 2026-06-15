@@ -73,16 +73,21 @@ Routes live under `services/api-server/src/modules/*/routes/`. Each route group 
 
 Auth-related routes are mounted together under `/auth` from the auth module. Provider-specific auth route files can live in their owning module when needed, but route mounting should stay centralized through composition rather than scattered in `src/index.ts`.
 
+`services/api-server/src/composition/build-routes.ts` is the route composition point. It currently wires auth, provider auth, repos, repo environments, sessions, notifications, voice, attachments, integrations, GitHub webhooks, the session-agent WebSocket/internal routes, and the git proxy into `src/index.ts`.
+
 For auth flow details, see `docs/auth.md`. For GitHub App repo-access and git-proxy details, see `docs/github-app-auth.md`.
 
 ## Repositories
 
 D1 repositories live inside the module that owns the data:
 
+- `services/api-server/src/modules/attachments/repositories/` - uploaded attachment metadata and binding state.
 - `services/api-server/src/modules/sessions/repositories/` - session list and metadata.
 - `services/api-server/src/modules/auth/repositories/` - user account and session persistence.
 - `services/api-server/src/modules/ai-auth/repositories/` - provider OAuth credential state.
 - `services/api-server/src/modules/github/repositories/` - GitHub App installation, access, and token cache state.
+- `services/api-server/src/modules/integrations/repositories/` - external integration account links and session request state.
+- `services/api-server/src/modules/notifications/repositories/` - user device FCM token registration and invalidation state.
 - `services/api-server/src/modules/repo-environments/repositories/` - per-user, per-repo environment presets for network policy, plain env vars, and startup scripts.
 
-Durable Object SQLite repositories for session-agent state live in `services/api-server/src/modules/session-agent/repositories/`.
+Durable Object SQLite repositories for session-agent state live in `services/api-server/src/modules/session-agent/repositories/`. They include message history, pending chunk WAL state, secrets, server state, repo environment snapshots, latest plan state, and setup-script output chunks.
