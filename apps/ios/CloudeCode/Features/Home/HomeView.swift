@@ -291,10 +291,12 @@ private struct SessionAttentionSlot: View {
                 .frame(width: style.gridSize, height: style.gridSize)
                 .accessibilityLabel("Unread message")
         } else {
-            Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
-                .styledFont(.caption)
-                .foregroundStyle(theme.secondaryLabelColor)
-                .lineLimit(1)
+            TimelineView(.everyMinute) { _ in
+                Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
+                    .styledFont(.caption)
+                    .foregroundStyle(theme.secondaryLabelColor)
+                    .lineLimit(1)
+            }
         }
     }
 }
@@ -323,7 +325,7 @@ private enum SessionTimestampFormatter {
 
         if elapsed < minute {
             let seconds = Int(elapsed / second)
-            return seconds == 0 ? "NOW" : "\(seconds)s"
+            return seconds == 0 ? "Now" : "\(seconds)s"
         }
         if elapsed < hour {
             return "\(Int(elapsed / minute))m"

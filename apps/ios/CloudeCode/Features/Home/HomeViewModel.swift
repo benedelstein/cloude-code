@@ -133,6 +133,7 @@ final class HomeViewModel {
         switch event {
         case .connectionChanged(.connected):
             if hasConnected {
+                // TODO: FIX LOOP WHEN THIS KEEPS DISCONNECTING AND CONNECTING.
                 await refresh()
             }
             hasConnected = true
