@@ -1,20 +1,28 @@
 import Domain
+import FirebaseCore
+import FirebaseMessaging
 import UIKit
 
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
     override init() {
-        // always register this right away.
-        registerProviderFactories()
         super.init()
-        Logger.info("App launched")
+        registerProviderFactories()
     }
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // application setup code
-        true
+        FirebaseApp.configure()
+        Logger.info("App launched")
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Messaging.messaging().apnsToken = deviceToken
     }
 }

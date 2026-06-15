@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     private let component: ApplicationComponent
     private let sessionStore: SessionStore
+    private let notificationRegistrationService: NotificationRegistrationService
     private let logStore: AppLogStore
     @State private var isSettingsPresented = false
 
@@ -10,6 +11,7 @@ struct RootView: View {
         self.component = component
         self.logStore = logStore
         sessionStore = component.sessionStore
+        notificationRegistrationService = component.notificationRegistrationService
     }
 
     var body: some View {
@@ -27,9 +29,11 @@ struct RootView: View {
         .environment(\.openSettings, OpenSettingsAction {
             isSettingsPresented = true
         })
+        .environment(\.notificationRegistrationService, notificationRegistrationService)
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(logStore: logStore)
         }
+        .task { notificationRegistrationService.start() }
         .task { await sessionStore.start() }
         .themedRoot()
     }

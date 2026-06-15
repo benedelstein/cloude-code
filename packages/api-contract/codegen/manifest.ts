@@ -17,6 +17,7 @@ import * as userSessionsWebsocketApi from "../src/user-sessions-websocket-api";
 import * as authApi from "../src/auth";
 import * as reposApi from "../src/repos";
 import * as modelsApi from "../src/models";
+import * as notificationsApi from "../src/notifications";
 import * as attachments from "../src/attachments";
 import * as repoEnvironmentsApi from "../src/repo-environments";
 import * as voiceApi from "../src/voice";
@@ -57,6 +58,7 @@ const SOURCES: { module: Record<string, unknown>; group: string; file: string }[
   { module: authApi, group: "Auth", file: "auth.ts" },
   { module: reposApi, group: "Repos", file: "repos.ts" },
   { module: modelsApi, group: "Models", file: "models.ts" },
+  { module: notificationsApi, group: "Notifications", file: "notifications.ts" },
   { module: attachments, group: "Attachments", file: "attachments.ts" },
   { module: repoEnvironmentsApi, group: "RepoEnvironments", file: "repo-environments.ts" },
   { module: voiceApi, group: "Voice", file: "voice.ts" },

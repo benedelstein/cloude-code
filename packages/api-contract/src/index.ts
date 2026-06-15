@@ -9,6 +9,7 @@ export * from "./auth";
 export * from "./client-state";
 export * from "./integrations";
 export * from "./models";
+export * from "./notifications";
 export * from "./providers";
 export * from "./repo-environments";
 export * from "./repos";

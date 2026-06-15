@@ -55,13 +55,13 @@ export class SessionSummaryService {
     messageId: string;
     messageCreatedAt: string;
     aborted: boolean;
-  }): void {
+  }): Promise<void> {
     if (params.aborted) {
       this.persistWorkingState("idle");
-      return;
+      return Promise.resolve();
     }
 
-    void this.enqueueMutation(
+    return this.enqueueMutation(
       "assistant_turn_finished",
       (sessionId) =>
         this.params.repository.recordAssistantTurnFinished(
