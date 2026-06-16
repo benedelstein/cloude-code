@@ -56,20 +56,33 @@ private extension SessionClientState.AgentSettings {
         switch settings {
         case .openaiCodex(let payload):
             self.init(
-                provider: payload.provider,
+                provider: .openaiCodex,
                 model: payload.model.rawValue,
                 effort: payload.effort.rawValue,
                 maxTokens: payload.maxTokens
             )
         case .claudeCode(let payload):
             self.init(
-                provider: payload.provider,
+                provider: .claudeCode,
                 model: payload.model.rawValue,
                 effort: payload.effort.rawValue,
                 maxTokens: payload.maxTokens
             )
         case .unknown(let type):
-            self.init(provider: type, model: "", effort: "", maxTokens: 0)
+            self.init(provider: .unknown(type), model: "", effort: "", maxTokens: 0)
+        }
+    }
+}
+
+private extension AgentProviderID {
+    init(_ provider: CoreAPI.ProviderId) {
+        switch provider {
+        case .claudeCode:
+            self = .claudeCode
+        case .openaiCodex:
+            self = .openaiCodex
+        case .unknown(let value):
+            self = .unknown(value)
         }
     }
 }

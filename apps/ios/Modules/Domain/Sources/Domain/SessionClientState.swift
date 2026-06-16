@@ -3,7 +3,7 @@ public struct SessionClientState: Sendable, Equatable, Codable {
         repoFullName: nil,
         status: "preparing",
         sessionSetupRun: nil,
-        agentSettings: AgentSettings(provider: "", model: "", effort: "", maxTokens: 0),
+        agentSettings: AgentSettings(provider: .unknown(""), model: "", effort: "", maxTokens: 0),
         pullRequest: nil,
         pushedBranch: nil,
         baseBranch: nil,
@@ -74,12 +74,12 @@ public struct SessionClientState: Sendable, Equatable, Codable {
 
 public extension SessionClientState {
     struct AgentSettings: Sendable, Equatable, Codable {
-        public let provider: String
+        public let provider: AgentProviderID
         public let model: String
         public let effort: String
         public let maxTokens: Int
 
-        public init(provider: String, model: String, effort: String, maxTokens: Int) {
+        public init(provider: AgentProviderID, model: String, effort: String, maxTokens: Int) {
             self.provider = provider
             self.model = model
             self.effort = effort

@@ -135,7 +135,7 @@ struct SessionMessagesTests {
         #expect(clientState.repoFullName == "benedelstein/cloude-code")
         #expect(clientState.status == "ready")
         #expect(clientState.sessionSetupRun?.tasks.first?.id == "repository")
-        #expect(clientState.agentSettings.provider == "openai-codex")
+        #expect(clientState.agentSettings.provider == .openaiCodex)
         #expect(clientState.agentSettings.model == "gpt-5.5")
         #expect(clientState.pullRequest == .creating)
         #expect(clientState.pushedBranch == "codex/session-client-state")

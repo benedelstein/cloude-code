@@ -129,13 +129,13 @@ private struct SessionScrollView: View {
                         if message.isUser {
                             UserMessageView(message: message)
                         } else {
-                            AssistantMessageView(message: message)
+                            AssistantMessageView(message: message, clientState: store.clientState)
                         }
 //                            .id(SessionScrollTarget.message(message.id))
                     }
 
                     if let streamingMessage = store.stream.message {
-                        AssistantMessageView(message: streamingMessage)
+                        AssistantMessageView(message: streamingMessage, clientState: store.clientState)
                             .id(SessionScrollTarget.stream)
                     }
                 }
@@ -154,40 +154,25 @@ private struct SessionScrollView: View {
 }
 
 private struct AssistantMessageView: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
-
     let message: SessionMessage
+    let clientState: SessionClientState
+    @State private var destination: AgentSessionToolDetailDestination?
+
+    private var renderItems: [AgentSessionRenderItem] {
+        AgentSessionTranscriptBuilder.build(message: message, clientState: clientState)
+    }
 
     var body: some View {
-        ForEach(Array(message.parts.enumerated()), id: \.offset) { _, part in
-            switch part {
-            case .text(let text):
-                Text(verbatim: text.text)
-            case .data:
-                Text("data part")
-            case .dynamicTool(let toolUse):
-                Text("tool use: \(toolUse.title ?? toolUse.toolName)")
-            case .file(let file):
-                Text("file part \(file.url) - \(file.mediaType)")
-            case .reasoning(let reasoning):
-                Text("reasoning - \(reasoning.text)")
-            case .sourceURL(let source):
-                Text("source - \(source.title ?? source.url)")
-            case .sourceDocument(let source):
-                Text("source - \(source.title)")
-            case .stepStart:
-                Text("step")
-            case .tool(let tool):
-                Text("tool - \(tool.title ?? tool.type)")
-            case .unknown:
-                Text("unknown part")
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(renderItems, id: \.key) { item in
+                AgentSessionRenderItemView(item: item) {
+                    destination = .renderItem(item)
+                }
             }
         }
-//        Text(verbatim: message.text)
-//            .styledFont(.subheadline)
-//            .foregroundStyle(theme.labelColor)
-//            .textSelection(.enabled)
-//            .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(item: $destination) { destination in
+            AgentSessionToolDetailSheet(destination: destination)
+                .presentationDetents([.medium, .large])
+        }
     }
 }

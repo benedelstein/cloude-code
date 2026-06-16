@@ -1,0 +1,143 @@
+@testable import CloudeCode
+import Domain
+import Testing
+
+@Suite("Agent session transcript builder")
+struct AgentSessionTranscriptBuilderTests {
+    @Test func groupsAdjacentCompatibleActions() {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [
+                tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
+                tool("Read", callId: "read-2", input: ["file_path": .string("/b.swift")])
+            ]),
+            providerId: .claudeCode
+        )
+
+        #expect(items.count == 1)
+        if case .actionItem(.group(let group)) = items.first {
+            #expect(group.kind == .read)
+            #expect(group.actions.map(\.toolCallId) == ["read-1", "read-2"])
+            #expect(group.key == "m1-actions-0-0-group-read-1-read")
+        } else {
+            Issue.record("Expected grouped read actions")
+        }
+    }
+
+    @Test func doesNotGroupAcrossTextOrReasoning() {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [
+                tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
+                .text(.init(text: "done")),
+                tool("Read", callId: "read-2", input: ["file_path": .string("/b.swift")]),
+                .reasoning(.init(text: "thinking")),
+                tool("Read", callId: "read-3", input: ["file_path": .string("/c.swift")])
+            ]),
+            providerId: .claudeCode
+        )
+
+        #expect(items.count == 5)
+        #expect(items.map(\.key) == [
+            "m1-actions-0-0-single-read-1",
+            "m1-text-1",
+            "m1-actions-2-0-single-read-2",
+            "m1-reasoning-3",
+            "m1-actions-4-0-single-read-3"
+        ])
+    }
+
+    @Test func keepsNonGroupableActionsStandalone() {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [
+                tool("Edit", callId: "edit-1", input: editInput(path: "/a.swift", from: "a", to: "b")),
+                tool("Edit", callId: "edit-2", input: editInput(path: "/b.swift", from: "c", to: "d")),
+                tool("TodoWrite", callId: "todo-1", input: ["todos": .array([])]),
+                tool("ExitPlanMode", callId: "plan-1", input: ["plan": .string("Plan")])
+            ]),
+            providerId: .claudeCode
+        )
+
+        let actionItems = items.compactMap { item -> AgentSessionRenderItem.ActionItem? in
+            if case .actionItem(let actionItem) = item { return actionItem }
+            return nil
+        }
+
+        #expect(actionItems.count == 4)
+        #expect(actionItems.allSatisfy(\.isSingle))
+    }
+
+    @Test func usesClientStateProviderForAssistantMessages() {
+        var clientState = SessionClientState.empty
+        clientState.agentSettings = .init(provider: .openaiCodex, model: "codex", effort: "", maxTokens: 0)
+
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [
+                tool("exec", callId: "exec-1", input: [
+                    "type": .string("commandExecution"),
+                    "command": .string("pwd")
+                ])
+            ]),
+            clientState: clientState
+        )
+
+        if case .actionItem(.single(let single)) = items.first {
+            #expect(single.action.kind == .bash)
+        } else {
+            Issue.record("Expected Codex exec to normalize through client-state provider")
+        }
+    }
+
+    @Test func treatsUnsupportedPartsAsGroupingBoundaries() {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [
+                tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
+                .data(.init(type: "data-status", data: .object(["value": .string("boundary")]))),
+                tool("Read", callId: "read-2", input: ["file_path": .string("/b.swift")])
+            ]),
+            providerId: .claudeCode
+        )
+
+        #expect(items.count == 2)
+        #expect(items.map(\.key) == [
+            "m1-actions-0-0-single-read-1",
+            "m1-actions-2-0-single-read-2"
+        ])
+    }
+
+    private func editInput(path: String, from oldString: String, to newString: String) -> [String: JSONValue] {
+        [
+            "file_path": .string(path),
+            "old_string": .string(oldString),
+            "new_string": .string(newString)
+        ]
+    }
+
+    private func message(
+        id: String = "m1",
+        role: SessionMessage.Role = .assistant,
+        parts: [SessionMessage.Part]
+    ) -> SessionMessage {
+        SessionMessage(id: id, role: role, parts: parts)
+    }
+
+    private func tool(
+        _ toolName: String,
+        callId: String,
+        input: [String: JSONValue] = [:],
+        output: JSONValue? = nil
+    ) -> SessionMessage.Part {
+        .dynamicTool(.init(
+            toolName: toolName,
+            toolCallId: callId,
+            state: "output-available",
+            input: .object(input),
+            output: output
+        ))
+    }
+}
+
+private extension AgentSessionRenderItem.ActionItem {
+    var isSingle: Bool {
+        if case .single = self { return true }
+        return false
+    }
+}
