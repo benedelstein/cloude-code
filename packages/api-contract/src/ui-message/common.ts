@@ -1,6 +1,38 @@
 import { z } from "zod/v4";
 
-export const JSONPayloadSchema = z.unknown();
+export type JSONPayload =
+  | null
+  | string
+  | number
+  | boolean
+  | JSONPayload[]
+  | { [key: string]: JSONPayload };
+
+function isJSONPayload(value: unknown): value is JSONPayload {
+  if (value === null) {
+    return true;
+  }
+
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return true;
+    case "number":
+      return Number.isFinite(value);
+    case "object":
+      if (Array.isArray(value)) {
+        return value.every(isJSONPayload);
+      }
+      return Object.values(value as Record<string, unknown>).every(isJSONPayload);
+    default:
+      return false;
+  }
+}
+
+export const JSONPayloadSchema = z.unknown().refine(
+  isJSONPayload,
+  { message: "Expected JSON value" },
+) as z.ZodType<JSONPayload>;
 
 export const ProviderMetadataSchema = z.record(
   z.string(),
