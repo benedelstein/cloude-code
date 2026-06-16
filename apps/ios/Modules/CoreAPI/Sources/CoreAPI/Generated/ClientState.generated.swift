@@ -67,12 +67,12 @@ public struct ClientState: Codable, Equatable, Sendable {
 
 public struct PendingUserMessage: Codable, Equatable, Sendable {
     /// A formatted UIMessage for display to the client.
-    public var message: UIMessage
+    public var message: WireUIMessage
     /// Also found within UIMessage parts, but more easily accessible here.
     public var attachmentIds: [String]
 
     public init(
-        message: UIMessage,
+        message: WireUIMessage,
         attachmentIds: [String]
     ) {
         self.message = message

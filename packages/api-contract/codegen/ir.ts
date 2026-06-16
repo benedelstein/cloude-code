@@ -66,6 +66,7 @@ export type IRUnionVariant = {
   /** Swift type of the associated payload. */
   typeName: string;
   discriminatorValue: string;
+  match: { kind: "literal"; value: string } | { kind: "prefix"; value: string };
 };
 
 export type IRUnion = {
@@ -78,6 +79,8 @@ export type IRUnion = {
   nested: IRDecl[];
   /** Adds `.unknown(type: String)` so new server variants decode instead of failing. */
   nonFrozen: boolean;
+  /** Preserves the full JSON object for non-frozen unknown variants. */
+  unknownRawValue: boolean;
 };
 
 export type IRTypeAlias = {
@@ -109,6 +112,23 @@ export type ManifestEntry = {
   renames?: Record<string, string>;
   /** Documentation override; falls back to the schema's `.describe()`. */
   doc?: string;
+  /** Opt-in support for discriminators with prefix cases and raw unknown preservation. */
+  openUnion?: {
+    discriminatorKey: string;
+    unknownRawValue: boolean;
+    exactCases: Array<{
+      discriminatorValue: string;
+      caseName?: string;
+      typeName: string;
+      schema: z.ZodType;
+    }>;
+    prefixCases: Array<{
+      prefix: string;
+      caseName: string;
+      typeName: string;
+      schema: z.ZodType;
+    }>;
+  };
 };
 
 export type GeneratedFile = {

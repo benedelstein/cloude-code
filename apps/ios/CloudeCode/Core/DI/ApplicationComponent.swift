@@ -116,7 +116,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     }
 
     /// Per-session chat stream. Not shared: each open session owns a socket.
-    func makeSessionSocket(sessionId: UUID) -> SessionSocket {
+    func makeSessionSocket(sessionId: String) -> SessionSocket {
         SessionSocket(
             baseURL: apiBaseURL,
             sessionId: sessionId,

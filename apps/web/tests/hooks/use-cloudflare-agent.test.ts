@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientState } from "@repo/shared";
-import { useCloudflareAgent } from "@/hooks/use-cloudflare-agent";
+import { aiChunksFromWire, useCloudflareAgent } from "@/hooks/use-cloudflare-agent";
 
 const mockAgentState = vi.hoisted(() => ({
   send: vi.fn(),
@@ -212,6 +212,15 @@ describe("useCloudflareAgent", () => {
 
     const metadata = result.current.streamingMessage?.metadata as { startedAt?: unknown } | undefined;
     expect(typeof metadata?.startedAt).toBe("number");
+  });
+
+  it("filters unknown wire chunks before AI SDK stream consumption", () => {
+    expect(aiChunksFromWire([
+      { type: "future-chunk", payload: true },
+      { type: "text-delta", id: "text-1", delta: "hello" },
+    ])).toEqual([
+      { type: "text-delta", id: "text-1", delta: "hello" },
+    ]);
   });
 
   it("refreshes the websocket token when the socket closes near expiry", () => {

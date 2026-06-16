@@ -2,9 +2,9 @@ import Foundation
 
 /// A JSON value of unknown shape.
 ///
-/// Used wherever the schema declares `z.unknown()` — most notably AI SDK
-/// `UIMessage.parts` and streamed chunks, whose shapes are owned by the AI SDK
-/// rather than our API contract. Values round-trip losslessly through Codable.
+/// Used wherever the schema declares `z.unknown()` — including AI SDK-compatible
+/// metadata, dynamic payloads, and unknown future UI wire variants. Values
+/// round-trip losslessly through Codable.
 public enum JSONValue: Codable, Equatable, Hashable, Sendable {
     case string(String)
     case number(Double)

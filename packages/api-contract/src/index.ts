@@ -15,6 +15,7 @@ export * from "./repo-environments";
 export * from "./repos";
 export * from "./session";
 export * from "./sessions";
+export * from "./ui-message";
 export * from "./user-sessions-websocket-api";
 export * from "./voice";
 export * from "./websocket-api";

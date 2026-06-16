@@ -17,7 +17,7 @@ public struct SessionSummaryPage: Sendable, Equatable {
 extension CoreAPI.SessionSummary {
     var domainSummary: Domain.SessionSummary {
         Domain.SessionSummary(
-            id: id.uuidString,
+            id: id,
             repoId: repoId,
             repoFullName: repoFullName,
             title: title,

@@ -31,10 +31,10 @@ public struct SessionSummaryCreatedEvent: Codable, Equatable, Sendable {
 
 public struct SessionSummaryRemovedEvent: Codable, Equatable, Sendable {
     public let type = "session.summary.removed"
-    public var sessionId: UUID
+    public var sessionId: String
 
     public init(
-        sessionId: UUID
+        sessionId: String
     ) {
         self.sessionId = sessionId
     }

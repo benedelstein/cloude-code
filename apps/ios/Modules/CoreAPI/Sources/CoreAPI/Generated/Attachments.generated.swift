@@ -4,23 +4,23 @@
 import Foundation
 
 public struct AttachmentDescriptor: Codable, Equatable, Sendable {
-    public var attachmentId: UUID
+    public var attachmentId: String
     public var filename: String
     public var mediaType: String
     public var sizeBytes: Int
     public var createdAt: String
     /// The session ID the attachment belongs to, if any. Once attached to a session, it cannot be attached to another.
-    public var sessionId: UUID?
+    public var sessionId: String?
     /// The URL to the attachment content. This is the URL that the client should use to display the attachment.
     public var contentUrl: String
 
     public init(
-        attachmentId: UUID,
+        attachmentId: String,
         filename: String,
         mediaType: String,
         sizeBytes: Int,
         createdAt: String,
-        sessionId: UUID? = nil,
+        sessionId: String? = nil,
         contentUrl: String
     ) {
         self.attachmentId = attachmentId
@@ -34,10 +34,10 @@ public struct AttachmentDescriptor: Codable, Equatable, Sendable {
 }
 
 public struct MessageAttachmentRef: Codable, Equatable, Sendable {
-    public var attachmentId: UUID
+    public var attachmentId: String
 
     public init(
-        attachmentId: UUID
+        attachmentId: String
     ) {
         self.attachmentId = attachmentId
     }

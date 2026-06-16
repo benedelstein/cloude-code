@@ -15,8 +15,8 @@ import Testing
 /// green run means both languages agree on the wire format.
 @Suite("CoreAPI wire fixtures")
 struct FixtureDecodingTests {
-    @Test func uiMessageWithParts() throws {
-        try assertRoundTrip(UIMessage.self, fixture: "UIMessage.withParts")
+    @Test func wireUIMessageWithParts() throws {
+        try assertRoundTrip(WireUIMessage.self, fixture: "WireUIMessage.withParts")
     }
 
     @Test func clientMessageChatMessage() throws {
@@ -355,6 +355,166 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(PendingUserMessage.self, key: "PendingUserMessage.autoMinimal")
     }
 
+    @Test func toolApprovalAutoFull() throws {
+        try assertAutoRoundTrip(ToolApproval.self, key: "ToolApproval.autoFull")
+    }
+
+    @Test func toolApprovalAutoMinimal() throws {
+        try assertAutoRoundTrip(ToolApproval.self, key: "ToolApproval.autoMinimal")
+    }
+
+    @Test func wireUIMessagePartAutoText() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoText")
+    }
+
+    @Test func wireUIMessagePartAutoReasoning() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoReasoning")
+    }
+
+    @Test func wireUIMessagePartAutoSourceUrl() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoSourceUrl")
+    }
+
+    @Test func wireUIMessagePartAutoSourceDocument() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoSourceDocument")
+    }
+
+    @Test func wireUIMessagePartAutoFile() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoFile")
+    }
+
+    @Test func wireUIMessagePartAutoStepStart() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoStepStart")
+    }
+
+    @Test func wireUIMessagePartAutoDynamicTool() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoDynamicTool")
+    }
+
+    @Test func wireUIMessagePartAutoData() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoData")
+    }
+
+    @Test func wireUIMessagePartAutoTool() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoTool")
+    }
+
+    @Test func wireUIMessagePartAutoUnknown() throws {
+        try assertAutoRoundTrip(WireUIMessagePart.self, key: "WireUIMessagePart.autoUnknown")
+    }
+
+    @Test func wireUIMessageChunkAutoTextStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextStart")
+    }
+
+    @Test func wireUIMessageChunkAutoTextDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextDelta")
+    }
+
+    @Test func wireUIMessageChunkAutoTextEnd() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoTextEnd")
+    }
+
+    @Test func wireUIMessageChunkAutoReasoningStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningStart")
+    }
+
+    @Test func wireUIMessageChunkAutoReasoningDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningDelta")
+    }
+
+    @Test func wireUIMessageChunkAutoReasoningEnd() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoReasoningEnd")
+    }
+
+    @Test func wireUIMessageChunkAutoError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoError")
+    }
+
+    @Test func wireUIMessageChunkAutoToolInputStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputStart")
+    }
+
+    @Test func wireUIMessageChunkAutoToolInputDelta() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputDelta")
+    }
+
+    @Test func wireUIMessageChunkAutoToolInputAvailable() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputAvailable")
+    }
+
+    @Test func wireUIMessageChunkAutoToolInputError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolInputError")
+    }
+
+    @Test func wireUIMessageChunkAutoToolApprovalRequest() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolApprovalRequest")
+    }
+
+    @Test func wireUIMessageChunkAutoToolOutputAvailable() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputAvailable")
+    }
+
+    @Test func wireUIMessageChunkAutoToolOutputError() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputError")
+    }
+
+    @Test func wireUIMessageChunkAutoToolOutputDenied() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoToolOutputDenied")
+    }
+
+    @Test func wireUIMessageChunkAutoSourceUrl() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoSourceUrl")
+    }
+
+    @Test func wireUIMessageChunkAutoSourceDocument() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoSourceDocument")
+    }
+
+    @Test func wireUIMessageChunkAutoFile() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFile")
+    }
+
+    @Test func wireUIMessageChunkAutoStartStep() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoStartStep")
+    }
+
+    @Test func wireUIMessageChunkAutoFinishStep() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFinishStep")
+    }
+
+    @Test func wireUIMessageChunkAutoStart() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoStart")
+    }
+
+    @Test func wireUIMessageChunkAutoFinish() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoFinish")
+    }
+
+    @Test func wireUIMessageChunkAutoAbort() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoAbort")
+    }
+
+    @Test func wireUIMessageChunkAutoMessageMetadata() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoMessageMetadata")
+    }
+
+    @Test func wireUIMessageChunkAutoData() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoData")
+    }
+
+    @Test func wireUIMessageChunkAutoUnknown() throws {
+        try assertAutoRoundTrip(WireUIMessageChunk.self, key: "WireUIMessageChunk.autoUnknown")
+    }
+
+    @Test func wireUIMessageAutoFull() throws {
+        try assertAutoRoundTrip(WireUIMessage.self, key: "WireUIMessage.autoFull")
+    }
+
+    @Test func wireUIMessageAutoMinimal() throws {
+        try assertAutoRoundTrip(WireUIMessage.self, key: "WireUIMessage.autoMinimal")
+    }
+
     @Test func agentChunksEventAutoFull() throws {
         try assertAutoRoundTrip(AgentChunksEvent.self, key: "AgentChunksEvent.autoFull")
     }
@@ -505,14 +665,6 @@ struct FixtureDecodingTests {
 
     @Test func syncResponseEventAutoMinimal() throws {
         try assertAutoRoundTrip(SyncResponseEvent.self, key: "SyncResponseEvent.autoMinimal")
-    }
-
-    @Test func uiMessageAutoFull() throws {
-        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoFull")
-    }
-
-    @Test func uiMessageAutoMinimal() throws {
-        try assertAutoRoundTrip(UIMessage.self, key: "UIMessage.autoMinimal")
     }
 
     @Test func userMessageEventAutoFull() throws {
@@ -1065,18 +1217,18 @@ private func assertRoundTrip<T: Codable & Equatable>(
     #expect(original.canonicalized == roundTripped.canonicalized)
 }
 
-/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.json).
+/// Auto-synthesized fixtures live in one keyed document (AutoFixtures.generated.json).
 private let autoFixtures: [String: JSONValue] = {
     guard
         let url = Bundle.module.url(
-            forResource: "AutoFixtures",
+            forResource: "AutoFixtures.generated",
             withExtension: "json",
             subdirectory: "Fixtures"
         ),
         let data = try? Data(contentsOf: url),
         let fixtures = try? JSONDecoder().decode([String: JSONValue].self, from: data)
     else {
-        fatalError("AutoFixtures.json missing or undecodable")
+        fatalError("AutoFixtures.generated.json missing or undecodable")
     }
     return fixtures
 }()
@@ -1100,8 +1252,7 @@ private func assertAutoRoundTrip<T: Codable & Equatable>(
 private extension JSONValue {
     /// Canonical form for cross-language comparison:
     /// - drops object members that are null (TS emits `"field": null` where
-    ///   Swift omits nil optionals; both mean "absent" on this API), and
-    /// - lowercases UUID-shaped strings (Foundation re-encodes UUIDs uppercase).
+    ///   Swift omits nil optionals; both mean "absent" on this API).
     /// Nulls inside arrays are preserved — only object members are dropped.
     var canonicalized: JSONValue {
         switch self {
@@ -1113,14 +1264,8 @@ private extension JSONValue {
             return .object(result)
         case .array(let elements):
             return .array(elements.map { $0 == .null ? .null : $0.canonicalized })
-        case .string(let value):
-            return .string(Self.isUUIDShaped(value) ? value.lowercased() : value)
         default:
             return self
         }
-    }
-
-    private static func isUUIDShaped(_ value: String) -> Bool {
-        value.count == 36 && UUID(uuidString: value) != nil
     }
 }

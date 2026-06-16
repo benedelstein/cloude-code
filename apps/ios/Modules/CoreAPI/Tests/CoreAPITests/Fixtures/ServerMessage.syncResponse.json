@@ -10,17 +10,15 @@
           "text": "Here is the plan."
         },
         {
-          "type": "tool-call",
-          "toolName": "bash",
+          "type": "tool-bash",
+          "toolCallId": "call_1",
+          "state": "output-available",
           "input": {
             "command": "ls"
           },
-          "nested": [
-            1,
-            2.5,
-            true,
-            null
-          ]
+          "output": {
+            "stdout": "README.md\npackage.json"
+          }
         }
       ],
       "metadata": {
@@ -35,7 +33,16 @@
   ],
   "pendingChunks": [
     {
+      "type": "start",
+      "messageId": "msg_2"
+    },
+    {
+      "type": "text-start",
+      "id": "text_1"
+    },
+    {
       "type": "text-delta",
+      "id": "text_1",
       "delta": "Hel"
     }
   ],
