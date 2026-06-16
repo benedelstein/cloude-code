@@ -74,6 +74,7 @@ function createClientState(activeTurn: ClientState["activeTurn"]): ClientState {
     plan: null,
     pendingUserMessage: null,
     activeTurn,
+    pendingQuestion: null,
     editorUrl: null,
     providerConnection: null,
     lastError: null,

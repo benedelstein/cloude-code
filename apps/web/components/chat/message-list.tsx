@@ -5,7 +5,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { UIMessage } from "ai";
 import type {
   ListReposResponse,
+  PendingQuestion,
   ProviderId,
+  QuestionResponse,
   SessionSetupOutputResponse,
   SessionSetupRun,
   SessionSetupTask,
@@ -25,6 +27,7 @@ import type { SetupScriptOutputState } from "@/hooks/use-setup-script-output";
 import { CACHE_KEY_REPOS, readCache } from "@/lib/swr-cache";
 import { useGitHubReauth } from "@/hooks/use-github-reauth";
 import { MessageItem } from "./message-item";
+import { PendingQuestionCard } from "./pending-question-card";
 import { WorkingCloudRow } from "./working-cloud-indicator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GithubIcon } from "@/components/github-icon";
@@ -48,6 +51,8 @@ interface MessageListProps {
   onHydrateSetupOutput?: (snapshot: SessionSetupOutputResponse) => void;
   isResponding?: boolean;
   pendingUserMessage?: UIMessage | null;
+  pendingQuestion?: PendingQuestion | null;
+  onAnswerQuestion?: (questionId: string, responses: QuestionResponse[]) => void;
   userAvatarUrl?: string | null;
   providerId?: ProviderId | null;
   rightInset?: string;
@@ -68,6 +73,8 @@ export function MessageList({
   onHydrateSetupOutput,
   isResponding,
   pendingUserMessage,
+  pendingQuestion = null,
+  onAnswerQuestion,
   userAvatarUrl,
   providerId,
   rightInset = "0rem",
@@ -274,6 +281,12 @@ export function MessageList({
             />
           )}
           <PersistentWorkingCloud active={isPersistentWorkingCloudActive} />
+          {pendingQuestion && onAnswerQuestion && (
+            <PendingQuestionCard
+              pendingQuestion={pendingQuestion}
+              onAnswer={onAnswerQuestion}
+            />
+          )}
           <div ref={bottomRef} />
         </div>
       )}

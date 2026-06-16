@@ -48,6 +48,7 @@ import type {
   SessionStatus,
   LogLevel,
   ChatMessageEvent,
+  QuestionAnswerEvent,
 } from "@repo/shared";
 import { AgentTurnCoordinator } from "@/modules/session-agent/services/agent-turn-coordinator.service";
 import { SessionProvisionService } from "@/modules/session-agent/services/session-provision.service";
@@ -120,6 +121,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     plan: null,
     pendingUserMessage: null,
     activeTurn: null,
+    pendingQuestion: null,
     editorUrl: null,
     providerConnection: null,
     lastError: null,
@@ -371,6 +373,9 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       activeTurn: this.serverState.activeUserMessageId
         ? { userMessageId: this.serverState.activeUserMessageId }
         : null,
+      // A pending question is tied to a live vm-agent process holding the
+      // blocked tool call; it cannot survive a restart, so clear it.
+      pendingQuestion: null,
     });
     this.logger.debug("onStart");
   }
@@ -815,6 +820,30 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       case "operation.cancel":
         await this.cancelActiveTurnAndClearState();
         break;
+      case "question.answer":
+        await this.handleQuestionAnswer(message);
+        break;
+    }
+  }
+
+  private async handleQuestionAnswer(message: QuestionAnswerEvent): Promise<void> {
+    const pending = this.state.pendingQuestion;
+    if (!pending || pending.questionId !== message.questionId) {
+      this.logger.warn("Ignoring answer for non-pending question", {
+        fields: { questionId: message.questionId },
+      });
+      return;
+    }
+    const delivered = await this.processManager.deliverAnswer(
+      message.questionId,
+      message.responses,
+    );
+    if (delivered) {
+      this.updatePartialState({ pendingQuestion: null });
+      this.broadcastMessage({
+        type: "agent.question.resolved",
+        questionId: message.questionId,
+      });
     }
   }
 

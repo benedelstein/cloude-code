@@ -2,6 +2,7 @@ import {
   type AgentInputAttachment,
   type AgentInputMessage,
   type AgentMode,
+  type AgentQuestionResponse,
   type AgentSettings,
   type ClientState,
   type Logger,
@@ -193,6 +194,54 @@ export class SpriteAgentProcessManager {
         session.close();
       } catch (error) {
         this.logger.debug("Failed to close cancel attach websocket", { error });
+      }
+    }
+  }
+
+  /**
+   * Delivers a user's answer to a pending ask_user question by writing it to
+   * the running agent process's stdin and awaiting the typed ack. Returns
+   * whether the agent acknowledged delivery.
+   */
+  async deliverAnswer(
+    questionId: string,
+    responses: AgentQuestionResponse[],
+  ): Promise<boolean> {
+    const serverState = this.getServerState();
+    const processId = serverState.agentProcessId;
+    const spriteName = serverState.spriteName;
+    if (!processId || !spriteName) {
+      this.logger.warn("No active agent process to deliver answer to", {
+        fields: { questionId },
+      });
+      return false;
+    }
+
+    const sprite = this.getSpriteClient();
+    const session = sprite.attachSession(String(processId), {
+      idleTimeoutMs: 10_000,
+    });
+
+    try {
+      await session.start();
+      const answerAck = this.waitForAnswerAck(session, questionId, 5_000);
+      session.write(
+        `${encodeAgentInput({ type: "answer", questionId, responses })}\n`,
+      );
+      await answerAck;
+      this.logger.debug("Agent process acknowledged answer delivery");
+      return true;
+    } catch (error) {
+      this.logger.warn("Failed to deliver answer to agent process", {
+        error,
+        fields: { processId, questionId },
+      });
+      return false;
+    } finally {
+      try {
+        session.close();
+      } catch (error) {
+        this.logger.debug("Failed to close answer attach websocket", { error });
       }
     }
   }
@@ -692,6 +741,31 @@ export class SpriteAgentProcessManager {
         rejectWaiting(new Error(`vm-agent exited before ${ackName}: ${code}`)),
       onTimeout: () =>
         rejectWaiting(new Error(`Timed out waiting for ${ackName} for ${userMessageId}`)),
+    });
+  }
+
+  private waitForAnswerAck(
+    session: SpriteWebsocketSession,
+    questionId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    return waitForSessionSignals(session, {
+      timeoutMs,
+      onStdoutLine: (line) =>
+        lineMatchesAgentOutput(
+          line,
+          (output) =>
+            output.type === "answer_ack" && output.questionId === questionId,
+        )
+          ? resolveWaiting(undefined)
+          : continueWaiting(),
+      onError: (error) => rejectWaiting(error),
+      onExit: (code) =>
+        rejectWaiting(new Error(`vm-agent exited before answer ack: ${code}`)),
+      onTimeout: () =>
+        rejectWaiting(
+          new Error(`Timed out waiting for answer ack for ${questionId}`),
+        ),
     });
   }
 

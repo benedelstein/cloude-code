@@ -30,6 +30,8 @@ import type {
   ProviderAuthRequired,
   ProviderId,
   ActiveTurnState,
+  PendingQuestion,
+  QuestionResponse,
 } from "@repo/shared";
 
 function resolveDefaultApiHost(): string {
@@ -114,6 +116,7 @@ export interface UseCloudflareAgentReturn {
   pullRequestState: ClientState["pullRequest"] | null;
   todos: SessionTodo[] | null;
   plan: SessionPlanMetadata | null;
+  pendingQuestion: PendingQuestion | null;
   agentSettings: AgentSettings | null;
   providerConnection: ProviderConnectionState | null;
   agentMode: AgentMode;
@@ -131,6 +134,7 @@ export interface UseCloudflareAgentReturn {
     optimisticAttachments?: AttachmentDescriptor[];
   }) => void;
   stop: () => void;
+  answerQuestion: (questionId: string, responses: QuestionResponse[]) => void;
 }
 
 export function useCloudflareAgent({
@@ -165,6 +169,7 @@ export function useCloudflareAgent({
   const [pullRequestState, setPullRequestState] = useState<ClientState["pullRequest"] | null>(null);
   const [todos, setTodos] = useState<SessionTodo[] | null>(null);
   const [plan, setPlan] = useState<SessionPlanMetadata | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null);
   const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [providerAuthRequired, setProviderAuthRequired] = useState<ProviderAuthRequired>(null);
   const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null);
@@ -349,6 +354,16 @@ export function useCloudflareAgent({
       case "agent.ready":
         break;
 
+      case "agent.question":
+        setPendingQuestion({ questionId: msg.questionId, questions: msg.questions });
+        break;
+
+      case "agent.question.resolved":
+        setPendingQuestion((prev) =>
+          prev && prev.questionId === msg.questionId ? null : prev,
+        );
+        break;
+
       case "setup.output.chunks":
         applySetupOutputEvent(msg);
         break;
@@ -404,6 +419,7 @@ export function useCloudflareAgent({
       setPullRequestState((prev) => keepPreviousIfDeepEqual(prev, state.pullRequest ?? null));
       setTodos((prev) => keepPreviousIfDeepEqual(prev, state.todos));
       setPlan((prev) => keepPreviousIfDeepEqual(prev, state.plan));
+      setPendingQuestion((prev) => keepPreviousIfDeepEqual(prev, state.pendingQuestion ?? null));
       setPendingUserMessage((prev) => keepPreviousIfDeepEqual(
         prev,
         state.pendingUserMessage?.message ?? null,
@@ -520,6 +536,17 @@ export function useCloudflareAgent({
     sendToAgent({ type: "operation.cancel" });
   }, [sendToAgent]);
 
+  const answerQuestion = useCallback(
+    (questionId: string, responses: QuestionResponse[]) => {
+      // Optimistically dismiss the card; the server confirms via resolved.
+      setPendingQuestion((prev) =>
+        prev && prev.questionId === questionId ? null : prev,
+      );
+      sendToAgent({ type: "question.answer", questionId, responses });
+    },
+    [sendToAgent],
+  );
+
   const selectedProvider = agentSettings?.provider ?? null;
 
   return {
@@ -545,6 +572,7 @@ export function useCloudflareAgent({
     pullRequestState,
     todos,
     plan,
+    pendingQuestion,
     agentSettings,
     providerConnection,
     agentMode: resolvedAgentMode,
@@ -558,5 +586,6 @@ export function useCloudflareAgent({
     providerAuthRequired,
     sendMessage,
     stop,
+    answerQuestion,
   };
 }

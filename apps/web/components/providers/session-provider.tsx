@@ -86,6 +86,7 @@ function createPendingSession(
     pullRequestState: null,
     todos: null,
     plan: null,
+    pendingQuestion: null,
     agentSettings: null,
     providerConnection: null,
     agentMode: "edit",
@@ -99,6 +100,7 @@ function createPendingSession(
     providerAuthRequired: null,
     sendMessage: () => {},
     stop: () => {},
+    answerQuestion: () => {},
   };
 }
 

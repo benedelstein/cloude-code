@@ -10,7 +10,7 @@ import {
   SessionTodo,
 } from "./session";
 import { AgentSettings } from "./providers";
-import { UIMessageSchema } from "./websocket-api";
+import { PendingQuestion, UIMessageSchema } from "./websocket-api";
 
 export const PendingUserMessage = z.object({
   message: UIMessageSchema.describe("A formatted UIMessage for display to the client."),
@@ -44,6 +44,8 @@ export const ClientStateSchema = z.object({
   pendingUserMessage: PendingUserMessage.nullable(),
   activeTurn: ActiveTurnState.nullable()
     .describe("Active agent turn known by the server, even before any assistant chunks exist."),
+  pendingQuestion: PendingQuestion.nullable()
+    .describe("Set when the agent is blocked awaiting an answer to a question — reset on restart."),
   editorUrl: z.string().nullable()
     .describe("Public URL for the VS Code editor (set when the editor is open)."),
   providerConnection: ProviderConnectionState.nullable(),

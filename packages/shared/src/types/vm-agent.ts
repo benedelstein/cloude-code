@@ -47,9 +47,46 @@ export const AgentCancelInput = z.object({
   userMessageId: z.string().min(1),
 });
 
+// ============================================
+// Interactive question/answer (ask_user tool)
+// ============================================
+
+export const AgentQuestionOption = z.object({
+  label: z.string().min(1),
+  description: z.string().optional(),
+});
+export type AgentQuestionOption = z.infer<typeof AgentQuestionOption>;
+
+export const AgentQuestionItem = z.object({
+  question: z.string().min(1),
+  /** Short label shown as a chip/tag (max 12 chars). */
+  header: z.string().min(1),
+  options: z.array(AgentQuestionOption).min(2),
+  multiSelect: z.boolean().optional(),
+});
+export type AgentQuestionItem = z.infer<typeof AgentQuestionItem>;
+
+export const AgentQuestions = z.array(AgentQuestionItem).min(1);
+export type AgentQuestions = z.infer<typeof AgentQuestions>;
+
+/** A user's response to one question: the selected option label(s). */
+export const AgentQuestionResponse = z.object({
+  header: z.string(),
+  selected: z.array(z.string()),
+});
+export type AgentQuestionResponse = z.infer<typeof AgentQuestionResponse>;
+
+/** Delivered to the running vm-agent to resolve a pending ask_user call. */
+export const AgentAnswerInput = z.object({
+  type: z.literal("answer"),
+  questionId: z.string().min(1),
+  responses: z.array(AgentQuestionResponse),
+});
+
 export const AgentInput = z.discriminatedUnion("type", [
   AgentChatInput,
   AgentCancelInput,
+  AgentAnswerInput,
 ]);
 export type AgentInput = z.infer<typeof AgentInput>;
 
@@ -117,6 +154,20 @@ export const AgentCancelAckOutput = z.object({
   userMessageId: z.string().min(1),
 });
 
+/** Emitted when the agent asks the user a question and blocks for an answer. */
+export const AgentQuestionOutput = z.object({
+  type: z.literal("question"),
+  questionId: z.string().min(1),
+  questions: AgentQuestions,
+});
+export type AgentQuestionOutput = z.infer<typeof AgentQuestionOutput>;
+
+/** Local stdout ack confirming an answer was delivered to a pending question. */
+export const AgentAnswerAckOutput = z.object({
+  type: z.literal("answer_ack"),
+  questionId: z.string().min(1),
+});
+
 /**
  * Non-stream agent events accepted by the API webhook route. The vm-agent
  * posts ready, error, sessionId, and process_exit to /events; heartbeat and
@@ -129,6 +180,7 @@ export const AgentEvent = z.discriminatedUnion("type", [
   AgentSessionIdOutput,
   AgentHeartbeatOutput,
   AgentProcessExitOutput,
+  AgentQuestionOutput,
 ]);
 export type AgentEvent = z.infer<typeof AgentEvent>;
 
@@ -140,6 +192,7 @@ export const AgentOutput = z.discriminatedUnion("type", [
   AgentStreamOutput,
   AgentStdinAckOutput,
   AgentCancelAckOutput,
+  AgentAnswerAckOutput,
 ]);
 export type AgentOutput = z.infer<typeof AgentOutput>;
 

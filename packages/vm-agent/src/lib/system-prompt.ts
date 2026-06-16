@@ -25,12 +25,26 @@ function formatTodoToolInstruction(todoToolName: TodoToolName): string {
  * @param sessionSuffix - First 4 characters of the session ID, used for branch naming.
  * @param spriteContext - Sprite's llm.txt file injected into the system prompt.
  * @param todoToolName - Provider-specific todo tracking tool name.
+ * @param askUserToolName - If set, the tool to use for blocking user questions.
  */
 export function buildSystemPromptAppend(
   sessionSuffix: string,
   spriteContext: string,
   todoToolName: TodoToolName,
+  askUserToolName?: string,
 ): string {
+  const askUserSection = askUserToolName
+    ? dedent`
+
+<asking-questions>
+When you need the user to make a decision or clarify requirements before you can
+continue, use the \`${askUserToolName}\` tool. It presents multiple-choice options
+and BLOCKS until the user answers, then returns their selection. Do NOT use the
+native AskUserQuestion tool — it is disabled. Prefer ${askUserToolName} over ending
+your turn with a question in plain text whenever the choices are well-defined.
+</asking-questions>`
+    : "";
+
   return dedent`
 <environment>
 
@@ -66,5 +80,6 @@ After you push the branch and finish your turn, the service automatically create
 For multi-step tasks, you should use ${formatTodoToolInstruction(todoToolName)} to track your progress and surface information to the user.
 For complex tasks, you can enter plan mode to get a better understanding of the task and plan your approach. \`EnterPlanMode\`
 </other-information>
+${askUserSection}
 `;
 }

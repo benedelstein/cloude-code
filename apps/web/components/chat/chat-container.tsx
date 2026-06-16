@@ -63,8 +63,10 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
     agentMode,
     setAgentMode,
     providerAuthRequired,
+    pendingQuestion,
     sendMessage,
     stop,
+    answerQuestion,
   } = useSession();
   const { rightSidebarInset, isRightSidebarResizing } = useRightSidebarInset();
 
@@ -221,6 +223,8 @@ export function ChatContainer({ sessionId }: ChatContainerProps) {
           onHydrateSetupOutput={hydrateSetupOutput}
           isResponding={isResponding}
           pendingUserMessage={pendingUserMessage}
+          pendingQuestion={pendingQuestion}
+          onAnswerQuestion={answerQuestion}
           userAvatarUrl={user?.avatarUrl}
           providerId={selectedProvider}
           rightInset={rightSidebarInset}

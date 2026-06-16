@@ -49,6 +49,7 @@ export class SessionSyncService {
       activeTurn: serverState.activeUserMessageId
         ? { userMessageId: serverState.activeUserMessageId }
         : null,
+      pendingQuestion: this.getClientState().pendingQuestion,
     };
   }
 }

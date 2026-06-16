@@ -8,6 +8,7 @@ import {
   type AgentInputMessage,
   type AgentMode,
   type AgentOutput,
+  type AgentQuestionResponse,
   type AgentSettings,
   type UIMessageChunk,
   encodeAgentOutput,
@@ -18,6 +19,7 @@ import {
   type AgentTurnEndResult,
   startAgentHarness,
 } from "./lib/agent-harness";
+import { QuestionRegistry } from "./lib/question-registry";
 import { ChunkBatcher, type ChunkBatchItem } from "./lib/chunk-batcher";
 import { WebhookClient } from "./lib/webhook-client";
 
@@ -92,6 +94,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   private readonly batcher: ChunkBatcher;
   private readonly httpClient: WebhookClient;
   private readonly webhookEventHandler: WebhookEventHandler;
+  private readonly questionRegistry: QuestionRegistry;
   private readonly processRunId: string;
   private readonly idleTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
@@ -121,11 +124,14 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       flush: (batch) => this.flushChunkBatch(batch),
     });
 
+    this.questionRegistry = new QuestionRegistry();
+
     this.harness = startAgentHarness({
       config: opts.config,
       settings: opts.settings,
       args: opts.args,
       initialAgentMode: opts.initialAgentMode,
+      questionRegistry: this.questionRegistry,
       emit: (output) => this.handleEmit(output),
       onTurnStart: (_message, userMessageId) => this.onTurnStart(userMessageId),
       onTurnEnd: (result) => this.onTurnEnd(result),
@@ -168,6 +174,18 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
   }
 
   /**
+   * Resolves a pending ask_user question with the user's selection. Emits a
+   * typed ack so the attaching DO can confirm delivery.
+   */
+  deliverAnswer(questionId: string, responses: AgentQuestionResponse[]): void {
+    const delivered = this.questionRegistry.answer(questionId, responses);
+    if (!delivered) {
+      this.log("warn", "answer for unknown/stale questionId", { questionId });
+    }
+    this.handleEmit({ type: "answer_ack", questionId });
+  }
+
+  /**
    * Cancels the in-flight turn (if any), waits for the harness to drain its
    * abort terminal chunk through the batcher, then exits. Bounded by
    * `SHUTDOWN_DRAIN_TIMEOUT_MS` so a stuck webhook retry can't block exit.
@@ -199,6 +217,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         return;
       case "stdin_ack":
       case "cancel_ack":
+      case "answer_ack":
         // Write directly to stdout so the attaching DO can await the ack.
         process.stdout.write(encodeAgentOutput(output) + "\n");
         return;
@@ -211,6 +230,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
       case "error":
       case "sessionId":
       case "process_exit":
+      case "question":
         this.log("debug", "emit event -> /events", { ...output });
         this.webhookEventHandler.post(output);
         return;

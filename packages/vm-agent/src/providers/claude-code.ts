@@ -7,6 +7,12 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
+import {
+  ASK_USER_FULL_TOOL_NAME,
+  ASK_USER_SERVER_NAME,
+  NATIVE_ASK_TOOL_NAME,
+  createAskUserMcpServer,
+} from "./ask-user-tool";
 import { ClaudeEffort } from "@repo/shared";
 import type { AgentMode, AgentSettings } from "@repo/shared";
 import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
@@ -64,7 +70,15 @@ function setupClaudeCredentials(emit: ProviderSetupContext["emit"]): void {
 
 export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
   async setup(context: ProviderSetupContext<ClaudeSettings>): Promise<SetupResult<ClaudeSettings["model"]>> {
-    const { emit, settings, sessionSuffix, args, spriteContext, agentMode: initialAgentMode } = context;
+    const {
+      emit,
+      settings,
+      sessionSuffix,
+      args,
+      spriteContext,
+      agentMode: initialAgentMode,
+      questionRegistry,
+    } = context;
 
     setupClaudeCredentials(emit);
 
@@ -77,6 +91,11 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
 
     // Track session ID from Claude - updated after first message
     let agentSessionId: string | undefined = args.sessionId;
+    const askUserServer = createAskUserMcpServer(
+      questionRegistry,
+      emit,
+      () => crypto.randomUUID(),
+    );
     const claudeCode = createClaudeCode({
       defaultSettings: {
         pathToClaudeCodeExecutable: claudeExecutablePath,
@@ -86,6 +105,10 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         includePartialMessages: false, // reduces chunk amount
         streamingInput: "always",
         persistSession: true,
+        // Replace the built-in AskUserQuestion (which cannot return a real
+        // answer in headless mode) with our blocking ask_user MCP tool.
+        mcpServers: { [ASK_USER_SERVER_NAME]: askUserServer },
+        disallowedTools: [NATIVE_ASK_TOOL_NAME],
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -93,6 +116,7 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
             sessionSuffix,
             spriteContext,
             getTodoToolNameForProvider(settings.provider),
+            ASK_USER_FULL_TOOL_NAME,
           ),
         },
         stderr: (data) => {

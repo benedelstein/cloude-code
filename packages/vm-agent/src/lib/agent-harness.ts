@@ -21,6 +21,7 @@ import type {
   AgentOutput,
   AgentSettings,
 } from "@repo/shared";
+import { QuestionRegistry } from "./question-registry";
 
 export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   emit: (_output: AgentOutput) => void;
@@ -29,6 +30,8 @@ export interface ProviderSetupContext<S extends AgentSettings = AgentSettings> {
   sessionSuffix: string;
   args: { sessionId?: string };
   spriteContext: string;
+  /** Tracks blocking ask_user questions awaiting a user response. */
+  questionRegistry: QuestionRegistry;
 }
 
 export type StreamTextExtras = {
@@ -75,6 +78,8 @@ export interface AgentHarnessOptions<S extends AgentSettings = AgentSettings> {
   onSetupError?: (_error: unknown) => void | Promise<void>;
   args?: { sessionId?: string };
   initialAgentMode?: AgentMode;
+  /** Shared registry for blocking ask_user questions. Defaults to a new one. */
+  questionRegistry?: QuestionRegistry;
 }
 
 export interface AgentHarnessHandle {
@@ -122,6 +127,7 @@ export function startAgentHarness<S extends AgentSettings>(
   const sessionId = process.env.SESSION_ID ?? "";
   const sessionSuffix = sessionId.slice(0, 4);
   const args = opts.args ?? {};
+  const questionRegistry = opts.questionRegistry ?? new QuestionRegistry();
 
   const pendingMessages: QueueEntry[] = [];
   let messageResolver: ((_entry: QueueEntry) => void) | null = null;
@@ -171,7 +177,11 @@ export function startAgentHarness<S extends AgentSettings>(
 
   function cancelTurn(turnId?: string): boolean {
     if (!turnId) {
-      currentEntry?.abortController.abort();
+      if (currentEntry) {
+        currentEntry.abortController.abort();
+        // Unblock any ask_user call waiting on this turn.
+        questionRegistry.rejectAll(new Error("turn cancelled"));
+      }
       return currentEntry !== null;
     }
 
@@ -186,6 +196,7 @@ export function startAgentHarness<S extends AgentSettings>(
 
     if (currentEntry?.turnId !== turnId) { return false; }
     currentEntry.abortController.abort();
+    questionRegistry.rejectAll(new Error("turn cancelled"));
     return true;
   }
 
@@ -287,6 +298,7 @@ export function startAgentHarness<S extends AgentSettings>(
       sessionSuffix,
       args,
       spriteContext,
+      questionRegistry,
     });
 
     emit({ type: "ready" });

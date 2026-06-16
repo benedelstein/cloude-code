@@ -1,6 +1,7 @@
 import {
   type AgentMode,
   type AgentInputMessage,
+  type AgentQuestionResponse,
   decodeAgentInput,
 } from "@repo/shared";
 
@@ -11,6 +12,7 @@ export interface WebhookStdinRunner {
     overrides?: { model?: string; effort?: string; agentMode?: AgentMode },
   ): void;
   cancelTurn(_userMessageId: string): void;
+  deliverAnswer(_questionId: string, _responses: AgentQuestionResponse[]): void;
 }
 
 export type WebhookStdinLogger = (
@@ -42,6 +44,10 @@ export function handleWebhookStdinLine(
       case "cancel":
         log("debug", "cancel received on stdin; aborting current operation");
         runner.cancelTurn(input.userMessageId);
+        break;
+      case "answer":
+        log("debug", "answer received on stdin; resolving pending question");
+        runner.deliverAnswer(input.questionId, input.responses);
         break;
     }
   } catch (error) {

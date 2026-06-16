@@ -324,6 +324,19 @@ export class AgentTurnCoordinator {
       case "process_exit":
         this.handleProcessExit(event);
         break;
+      case "question":
+        this.logger.info("Agent asked a question", {
+          fields: { questionId: event.questionId, count: event.questions.length },
+        });
+        this.updatePartialState({
+          pendingQuestion: { questionId: event.questionId, questions: event.questions },
+        });
+        this.broadcastMessage({
+          type: "agent.question",
+          questionId: event.questionId,
+          questions: event.questions,
+        });
+        break;
       case "heartbeat":
       case "debug":
         break;
@@ -597,7 +610,15 @@ export class AgentTurnCoordinator {
         ? serverState.agentProcessRunId
         : null,
     });
-    this.updatePartialState({ activeTurn: null });
+    const pendingQuestion = this.getClientState().pendingQuestion;
+    this.updatePartialState({ activeTurn: null, pendingQuestion: null });
+    if (pendingQuestion) {
+      // The turn is ending; dismiss any unanswered question card.
+      this.broadcastMessage({
+        type: "agent.question.resolved",
+        questionId: pendingQuestion.questionId,
+      });
+    }
     if (options.persistWorkingState !== false) {
       this.updateWorkingState("idle");
     }

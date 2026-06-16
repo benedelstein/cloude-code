@@ -56,11 +56,50 @@ export const OperationCancelEvent = z.object({
 });
 export type OperationCancelEvent = z.infer<typeof OperationCancelEvent>;
 
+// ------------------------------------------------------------
+// Interactive questions (ask_user tool)
+// ------------------------------------------------------------
+export const QuestionOption = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+});
+export type QuestionOption = z.infer<typeof QuestionOption>;
+
+export const QuestionItem = z.object({
+  question: z.string(),
+  header: z.string(),
+  options: z.array(QuestionOption),
+  multiSelect: z.boolean().optional(),
+});
+export type QuestionItem = z.infer<typeof QuestionItem>;
+
+/** A user's response to a single question: the selected option label(s). */
+export const QuestionResponse = z.object({
+  header: z.string(),
+  selected: z.array(z.string()),
+});
+export type QuestionResponse = z.infer<typeof QuestionResponse>;
+
+/** The currently-pending question, if the agent is blocked awaiting an answer. */
+export const PendingQuestion = z.object({
+  questionId: z.string(),
+  questions: z.array(QuestionItem),
+});
+export type PendingQuestion = z.infer<typeof PendingQuestion>;
+
+export const QuestionAnswerEvent = z.object({
+  type: z.literal("question.answer"),
+  questionId: z.string(),
+  responses: z.array(QuestionResponse),
+});
+export type QuestionAnswerEvent = z.infer<typeof QuestionAnswerEvent>;
+
 export const ClientMessage = z.discriminatedUnion("type", [
   ChatMessageEvent,
   SyncRequestEvent,
   SessionMarkReadEvent,
   OperationCancelEvent,
+  QuestionAnswerEvent,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -89,6 +128,8 @@ export const SyncResponseEvent = z.object({
   messages: z.array(UIMessageSchema),
   pendingChunks: z.array(z.unknown()).optional(),
   activeTurn: ActiveTurnState.nullable(),
+  /** Set when the agent is blocked awaiting an answer to a question. */
+  pendingQuestion: PendingQuestion.nullable().optional(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
 
@@ -130,6 +171,21 @@ export const AgentReadyEvent = z.object({
 });
 export type AgentReadyEvent = z.infer<typeof AgentReadyEvent>;
 
+/** The agent is asking the user a question and is blocked awaiting an answer. */
+export const AgentQuestionEvent = z.object({
+  type: z.literal("agent.question"),
+  questionId: z.string(),
+  questions: z.array(QuestionItem),
+});
+export type AgentQuestionEvent = z.infer<typeof AgentQuestionEvent>;
+
+/** A previously-asked question has been answered (or cancelled); dismiss it. */
+export const AgentQuestionResolvedEvent = z.object({
+  type: z.literal("agent.question.resolved"),
+  questionId: z.string(),
+});
+export type AgentQuestionResolvedEvent = z.infer<typeof AgentQuestionResolvedEvent>;
+
 export const UserMessageEvent = z.object({
   type: z.literal("user.message"),
   message: UIMessageSchema,
@@ -168,6 +224,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentChunksEvent,
   AgentFinishEvent,
   AgentReadyEvent,
+  AgentQuestionEvent,
+  AgentQuestionResolvedEvent,
   UserMessageEvent,
   EditorReadyEvent,
   SetupOutputChunksEvent,

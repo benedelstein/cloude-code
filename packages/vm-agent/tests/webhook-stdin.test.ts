@@ -11,6 +11,7 @@ describe("handleWebhookStdinLine", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
       cancelTurn: vi.fn(),
+      deliverAnswer: vi.fn(),
     };
     const logger = createLogger();
 
@@ -38,6 +39,7 @@ describe("handleWebhookStdinLine", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
       cancelTurn: vi.fn(),
+      deliverAnswer: vi.fn(),
     };
     const logger = createLogger();
 
@@ -55,6 +57,7 @@ describe("handleWebhookStdinLine", () => {
     const runner = {
       queueStdinMessage: vi.fn(),
       cancelTurn: vi.fn(),
+      deliverAnswer: vi.fn(),
     };
     const logger = createLogger();
 
@@ -66,5 +69,30 @@ describe("handleWebhookStdinLine", () => {
 
     expect(runner.cancelTurn).toHaveBeenCalledWith("user-message-2");
     expect(runner.queueStdinMessage).not.toHaveBeenCalled();
+  });
+
+  it("forwards answer inputs to the runner", () => {
+    const runner = {
+      queueStdinMessage: vi.fn(),
+      cancelTurn: vi.fn(),
+      deliverAnswer: vi.fn(),
+    };
+    const logger = createLogger();
+
+    handleWebhookStdinLine(
+      encodeAgentInput({
+        type: "answer",
+        questionId: "question-1",
+        responses: [{ header: "Choice", selected: ["Option A"] }],
+      }),
+      runner,
+      logger,
+    );
+
+    expect(runner.deliverAnswer).toHaveBeenCalledWith("question-1", [
+      { header: "Choice", selected: ["Option A"] },
+    ]);
+    expect(runner.queueStdinMessage).not.toHaveBeenCalled();
+    expect(runner.cancelTurn).not.toHaveBeenCalled();
   });
 });
