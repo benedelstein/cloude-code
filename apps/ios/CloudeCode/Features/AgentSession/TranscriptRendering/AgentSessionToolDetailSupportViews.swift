@@ -1,6 +1,7 @@
 import Domain
 import Foundation
 import SwiftUI
+import UIKit
 
 struct DetailSection<Content: View>: View {
     @Environment(\.theme) private var theme
@@ -26,22 +27,43 @@ struct DetailSection<Content: View>: View {
 struct CodePreview: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
+    @Environment(\.showToast) private var showToast
+    @Environment(\.lightFeedback) private var lightFeedback
 
     let text: String
 
     var body: some View {
-        ScrollView(.horizontal) {
+        ZStack(alignment: .topTrailing) {
             Text(verbatim: text)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(theme.labelColor)
-                .textSelection(.enabled)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(style.gridSize)
+                .padding(.trailing, style.gridSize * 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: copyText) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.secondaryLabelColor)
+                    .frame(width: style.gridSize * 4, height: style.gridSize * 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Copy")
+            .padding(style.gridSize / 2)
         }
         .background(
             RoundedRectangle(cornerRadius: style.gridSize)
-                .fill(theme.secondaryBackgroundColor)
+                .fill(theme.backgroundColor)
         )
+    }
+
+    private func copyText() {
+        UIPasteboard.general.string = text
+        lightFeedback.impactOccurred()
+        showToast?(verbatimTitle: "Copied", icon: Image(systemName: "doc.on.doc"))
     }
 }
 
@@ -57,7 +79,7 @@ struct ValueList: View {
                 Text(value)
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(theme.labelColor)
-                    .textSelection(.enabled)
+//                    .textSelection(.enabled)
             }
         }
     }

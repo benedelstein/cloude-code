@@ -14,7 +14,7 @@ struct UserMessageView: View {
     let message: SessionMessage
 
     var images: [URL] {
-        // Image parts are not decoded yet.
+        // todo Image parts are not decoded yet.
         []
     }
 

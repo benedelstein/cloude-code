@@ -5,6 +5,7 @@ protocol ToolPartNormalizer: Sendable {
 }
 
 enum ToolActionNormalizer {
+    /// Normalizes a message part into an array of provider-agnosti (normalized)  tool actions
     static func normalize(
         part: SessionMessage.Part,
         providerId: AgentProviderID?

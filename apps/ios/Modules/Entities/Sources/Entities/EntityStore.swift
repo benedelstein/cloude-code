@@ -1,3 +1,4 @@
+import Domain
 import Foundation
 import Observation
 import os
@@ -60,7 +61,7 @@ public final class EntityStore<M: EntityModel> {
         guard let cache else { return [] }
 
         let snapshots = try await cache.fetch(M.EntityType.self, ids: ids)
-        logger.debug("got \(snapshots.count) of \(ids.count) from disk")
+        Logger.debug("got \(snapshots.count) of \(ids.count) from disk")
         return putMemory(snapshots)
     }
 
@@ -72,6 +73,7 @@ public final class EntityStore<M: EntityModel> {
         limit: Int? = nil
     ) async throws -> [M] {
         guard let cache else { return [] }
+        let d0 = Date()
 
         let snapshots = try await cache.fetch(
             M.EntityType.self,
@@ -79,7 +81,7 @@ public final class EntityStore<M: EntityModel> {
             sortBy: sortBy,
             limit: limit
         )
-        logger.debug("got \(snapshots.count) from disk by predicate")
+        Logger.debug("got \(snapshots.count) from disk by predicate in \(Date.now.timeIntervalSince(d0) * 1000)ms")
         return putMemory(snapshots)
     }
 

@@ -24,10 +24,8 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                ToolbarCloseButton {
+                    dismiss()
                 }
             }
         }
@@ -94,7 +92,7 @@ private struct LogRow: View {
             Text(entry.message)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(theme.labelColor)
-                .textSelection(.enabled)
+//                .textSelection(.enabled)
 
             Text(entry.location)
                 .styledFont(.caption)

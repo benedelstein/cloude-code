@@ -156,6 +156,33 @@ struct AgentSessionToolNormalizationTests {
         }
     }
 
+    @Test func codexWebSearchNormalizes() {
+        let actions = OpenAICodexToolPartNormalizer().normalize(part(
+            "web_search",
+            input: [
+                "type": .string("webSearch"),
+                "query": .string("")
+            ],
+            output: .object([
+                "action": .object([
+                    "type": .string("search"),
+                    "query": .string("Microsoft Teams bot outgoing webhook"),
+                    "queries": .array([
+                        .string("Microsoft Teams bot outgoing webhook")
+                    ])
+                ])
+            ])
+        ))
+
+        #expect(actions.first?.kind == .web)
+        if case .web(let payload) = actions.first?.payload {
+            #expect(payload.kind == .search)
+            #expect(payload.query == "Microsoft Teams bot outgoing webhook")
+        } else {
+            Issue.record("Expected web payload")
+        }
+    }
+
     @Test func codexPatchPlanAndFallbackNormalize() {
         let patch = OpenAICodexToolPartNormalizer().normalize(part(
             "patch",

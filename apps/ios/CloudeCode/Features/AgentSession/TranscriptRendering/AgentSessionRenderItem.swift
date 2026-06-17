@@ -18,6 +18,15 @@ enum AgentSessionRenderItem: Sendable, Equatable {
 }
 
 extension AgentSessionRenderItem {
+    var isText: Bool {
+        if case .text = self {
+            return true
+        }
+        return false
+    }
+}
+
+extension AgentSessionRenderItem {
     struct TextItem: Sendable, Equatable {
         let key: String
         let text: String

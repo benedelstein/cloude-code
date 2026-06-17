@@ -69,7 +69,7 @@ struct AgentSessionView: View {
     }
 
     private var sessionHeader: some View {
-        VStack(alignment: .center) {
+        VStack(alignment: .center, spacing: 0) {
             Text(store.session.title ?? "Untitled session")
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
@@ -78,19 +78,23 @@ struct AgentSessionView: View {
             HStack(spacing: style.gridSize) {
                 Text(store.clientState.repoFullName ?? store.session.repoFullName)
                     .lineLimit(1)
-
-                Text(store.clientState.status)
-
-                if store.isResponding {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(theme.secondaryLabelColor)
-                }
             }
             .styledFont(.caption)
             .foregroundStyle(theme.secondaryLabelColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension AgentSessionView {
+    struct MessageDisplayData: Identifiable, Equatable {
+        let message: SessionMessage
+        let renderItems: [AgentSessionRenderItem]
+        let finalResponseStartIndex: Int?
+
+        var id: String {
+            message.id
+        }
     }
 }
 
@@ -100,110 +104,90 @@ private enum SessionScrollTarget: Hashable {
     case bottom
 }
 
-private struct SessionScrollView: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
+private extension AgentSessionView {
+    struct SessionScrollView: View {
+        @Environment(\.theme) private var theme
+        @Environment(\.style) private var style
 
-    let store: AgentSessionViewModel
-    @Binding var destination: Modal<AgentSessionView.Destination>?
-    @Binding var scrollTarget: SessionScrollTarget?
+        @State private var latestStreamingMessageId: String?
+        @State private var autoCollapseMessageId: String?
 
-    var messages: [SessionMessage] {
-        store.messages
-    }
+        let store: AgentSessionViewModel
+        @Binding var destination: Modal<AgentSessionView.Destination>?
+        @Binding var scrollTarget: SessionScrollTarget?
 
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: style.spacing) {
-                let visibleMessages = messages
-                let streamingText = store.stream.text
+        var messages: [SessionMessage] {
+            store.messages
+        }
 
-                if visibleMessages.isEmpty, streamingText.isEmpty, !store.isResponding, store.hasLoadedMessages {
-                    ContentUnavailableView(
-                        "No messages yet",
-                        systemImage: "text.bubble"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
-                } else {
-                    ForEach(visibleMessages) { message in
-                        if message.isUser {
-                            UserMessageView(message: message)
-                        } else {
+        var body: some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: style.spacing) {
+                    let visibleMessages = messages
+
+                    if visibleMessages.isEmpty,
+                       store.streamingDisplayData == nil,
+                       !store.isResponding,
+                       store.hasLoadedMessages {
+                        ContentUnavailableView(
+                            "No messages yet",
+                            systemImage: "text.bubble"
+                        )
+                        .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
+                    } else {
+                        ForEach(visibleMessages) { message in
+                            if message.isUser {
+                                UserMessageView(message: message)
+                            } else if let displayData = store.assistantDisplayDataByMessageId[message.id] {
+                                AssistantMessageView(
+                                    displayData: displayData,
+                                    isStreaming: false,
+                                    autoCollapseOnAppear: autoCollapseMessageId == message.id,
+                                    destination: $destination
+                                ) {
+                                    if autoCollapseMessageId == message.id {
+                                        autoCollapseMessageId = nil
+                                    }
+                                }
+                            }
+                        }
+
+                        if let streamingDisplayData = store.streamingDisplayData {
                             AssistantMessageView(
-                                message: message,
-                                clientState: store.clientState,
-                                isStreaming: false,
+                                displayData: streamingDisplayData,
+                                isStreaming: true,
+                                autoCollapseOnAppear: false,
                                 destination: $destination
                             )
+                            .id(SessionScrollTarget.stream)
                         }
-//                            .id(SessionScrollTarget.message(message.id))
                     }
 
-                    if let streamingMessage = store.stream.message {
-                        AssistantMessageView(
-                            message: streamingMessage,
-                            clientState: store.clientState,
-                            isStreaming: true,
-                            destination: $destination
-                        )
-                        .id(SessionScrollTarget.stream)
-                    }
+                    Color.clear
+                        .frame(height: 1)
+                        .id(SessionScrollTarget.bottom)
                 }
-
-                Color.clear
-                    .frame(height: 1)
-                    .id(SessionScrollTarget.bottom)
+                //            .scrollTargetLayout()
+                .padding(style.horizontalPadding)
             }
-//            .scrollTargetLayout()
-            .padding(style.horizontalPadding)
-        }
-        .defaultScrollAnchor(.bottom)
-//        .scrollPosition(id: $scrollTarget, anchor: .bottom)
-        .scrollDismissesKeyboard(.immediately)
-    }
-}
-
-private struct AssistantMessageView: View {
-    let message: SessionMessage
-    let clientState: SessionClientState
-    let isStreaming: Bool
-    @Binding var destination: Modal<AgentSessionView.Destination>?
-
-    private var renderItems: [AgentSessionRenderItem] {
-        AgentSessionTranscriptBuilder.build(message: message, clientState: clientState)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let items = renderItems
-            ForEach(Array(items.enumerated()), id: \.element.key) { index, item in
-                let isActive = isActiveFinalGroup(
-                    item: item,
-                    index: index,
-                    items: items
-                )
-
-                AgentSessionRenderItemView(
-                    item: item,
-                    isActive: isActive
-                ) {
-                    destination = .sheet(.renderItem(item))
-                }
+            .defaultScrollAnchor(.bottom)
+            //        .scrollPosition(id: $scrollTarget, anchor: .bottom)
+            .scrollDismissesKeyboard(.immediately)
+            .onChange(of: store.streamingDisplayData?.id) { oldValue, newValue in
+                handleStreamingMessageIdChange(oldValue: oldValue, newValue: newValue)
             }
         }
-    }
 
-    private func isActiveFinalGroup(
-        item: AgentSessionRenderItem,
-        index: Int,
-        items: [AgentSessionRenderItem]
-    ) -> Bool {
-        guard isStreaming, index == items.endIndex - 1 else {
-            return false
+        private func handleStreamingMessageIdChange(oldValue: String?, newValue: String?) {
+            if let newValue {
+                latestStreamingMessageId = newValue
+                return
+            }
+
+            if let finishedMessageId = oldValue ?? latestStreamingMessageId {
+                autoCollapseMessageId = finishedMessageId
+            }
+            latestStreamingMessageId = nil
         }
-        if case .actionItem(.group) = item {
-            return true
-        }
-        return false
     }
 }

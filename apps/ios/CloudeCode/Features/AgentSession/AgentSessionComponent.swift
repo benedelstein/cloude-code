@@ -18,11 +18,19 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     }
 
     @MainActor
+    private var transcriptBuilder: any AgentSessionTranscriptBuilding {
+        shared {
+            AgentSessionTranscriptBuilder()
+        }
+    }
+
+    @MainActor
     var store: AgentSessionViewModel {
         shared {
             AgentSessionViewModel(
                 session: session,
-                socket: dependency.makeSessionSocket(sessionId: session.id)
+                socket: dependency.makeSessionSocket(sessionId: session.id),
+                transcriptBuilder: transcriptBuilder
             )
         }
     }

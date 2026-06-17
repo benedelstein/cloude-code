@@ -75,7 +75,7 @@ struct HomeView: View {
         if viewModel.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.isEmpty {
+        } else if viewModel.isEmpty && viewModel.hasLoaded {
             ContentUnavailableView(
                 "No sessions",
                 systemImage: "sidebar.left",

@@ -6,16 +6,20 @@ import Foundation
 @MainActor
 @Observable
 final class AgentSessionViewModel {
+    typealias MessageDisplayData = AgentSessionView.MessageDisplayData
     /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
     let session: SessionSummaryModel
 
     private let socket: SessionSocket
+    private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
+    private(set) var assistantDisplayDataByMessageId: [String: MessageDisplayData] = [:]
+    private(set) var streamingDisplayData: MessageDisplayData?
     private(set) var stream = SessionMessageStreamState()
     private(set) var clientState = SessionClientState.empty
     private(set) var isSending = false
@@ -52,9 +56,14 @@ final class AgentSessionViewModel {
         }
     }
 
-    init(session: SessionSummaryModel, socket: SessionSocket) {
+    init(
+        session: SessionSummaryModel,
+        socket: SessionSocket,
+        transcriptBuilder: any AgentSessionTranscriptBuilding
+    ) {
         self.session = session
         self.socket = socket
+        self.transcriptBuilder = transcriptBuilder
     }
 
     func bind() {
@@ -94,13 +103,14 @@ final class AgentSessionViewModel {
         isSending = true
         isWaitingForResponse = true
         errorMessage = nil
+        // todo put draft to messages array.
 
         Task { [weak self, socket] in
             do {
                 try await socket.sendChat(content: content)
                 self?.finishSending()
             } catch {
-                self?.record(error)
+                self?.recordSendError(error)
             }
         }
     }
@@ -132,8 +142,12 @@ final class AgentSessionViewModel {
         case .editorReady(let url):
             clientState.editorURL = url
         case .liveState(let state):
+            let previousProvider = clientState.agentSettings.provider
             clientState = state
             applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
+            if previousProvider != state.agentSettings.provider {
+                rebuildTranscriptDisplayData()
+            }
         case .connectionChanged, .syncResponse, .operationError, .agentChunks, .agentFinish, .agentReady, .userMessage:
             break
         }
@@ -145,12 +159,15 @@ final class AgentSessionViewModel {
             if !hasLoadedMessages {
                 hasLoadedMessages = true
             }
+            assistantDisplayDataByMessageId = assistantDisplayData(for: snapshot.messages)
             messages = snapshot.messages
             stream = await SessionMessageStreamState.reducing(snapshot.pendingChunks)
+            rebuildStreamingDisplayData()
             applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
             markLatestAssistantMessageRead(in: snapshot.messages)
         case .agentChunks(let chunks):
             stream = await stream.appending(chunks)
+            rebuildStreamingDisplayData()
         case .agentFinish(let message):
             upsert(message)
             if message.role == .assistant {
@@ -167,6 +184,7 @@ final class AgentSessionViewModel {
     }
 
     private func upsert(_ message: SessionMessage) {
+        upsertDisplayData(for: message)
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index] = message
         } else {
@@ -202,19 +220,22 @@ final class AgentSessionViewModel {
             return
         }
         session.hasUnread = false
+        // Persisting unread state belongs with the session summary store once that dependency is available.
+        // sessionSummaryStore.putDisk(session)
     }
 
     private func finishSending() {
         isSending = false
     }
 
-    private func record(_ error: any Error) {
+    private func recordSendError(_ error: any Error) {
         errorMessage = error.localizedDescription
         resetPendingResponse()
     }
 
     private func resetPendingResponse() {
         stream = SessionMessageStreamState()
+        streamingDisplayData = nil
         clientState.activeTurnUserMessageId = nil
         isSending = false
         isWaitingForResponse = false
@@ -231,5 +252,62 @@ final class AgentSessionViewModel {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
         }
+    }
+}
+
+private extension AgentSessionViewModel {
+    func rebuildTranscriptDisplayData() {
+        rebuildAssistantDisplayData()
+        rebuildStreamingDisplayData()
+    }
+
+    func rebuildAssistantDisplayData() {
+        assistantDisplayDataByMessageId = assistantDisplayData(for: messages)
+    }
+
+    func assistantDisplayData(
+        for messages: [SessionMessage]
+    ) -> [String: AgentSessionView.MessageDisplayData] {
+        messages.reduce(into: [:]) { result, message in
+            guard message.role != .user else {
+                return
+            }
+            result[message.id] = makeDisplayData(for: message, isStreaming: false)
+        }
+    }
+
+    private func rebuildStreamingDisplayData() {
+        guard let message = stream.message else {
+            streamingDisplayData = nil
+            return
+        }
+        streamingDisplayData = makeDisplayData(for: message, isStreaming: true)
+    }
+
+    private func upsertDisplayData(for message: SessionMessage) {
+        guard message.role == .assistant else {
+            assistantDisplayDataByMessageId[message.id] = nil
+            return
+        }
+        assistantDisplayDataByMessageId[message.id] = makeDisplayData(for: message, isStreaming: false)
+    }
+
+    private func makeDisplayData(
+        for message: SessionMessage,
+        isStreaming: Bool
+    ) -> AgentSessionView.MessageDisplayData {
+        let renderItems = transcriptBuilder.build(
+            message: message,
+            providerId: clientState.agentSettings.provider
+        )
+        let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
+            renderItems: renderItems
+        )
+
+        return AgentSessionView.MessageDisplayData(
+            message: message,
+            renderItems: renderItems,
+            finalResponseStartIndex: finalResponseStartIndex
+        )
     }
 }

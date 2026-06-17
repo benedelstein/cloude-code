@@ -25,7 +25,6 @@ struct AgentSessionRenderItemView: View {
             MarkdownText(text: item.text)
                 .styledFont(.subheadline)
                 .foregroundStyle(theme.labelColor)
-                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .reasoning(let item):
             VStack(alignment: .leading, spacing: style.gridSize / 2) {
@@ -35,7 +34,6 @@ struct AgentSessionRenderItemView: View {
                 MarkdownText(text: item.part.text)
                     .styledFont(.footnote)
                     .foregroundStyle(theme.secondaryLabelColor)
-                    .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .actionItem(let item):
@@ -59,20 +57,22 @@ private struct ToolActionInlineRow: View {
             Image(systemName: item.iconName)
                 .font(style.caption2Font)
                 .foregroundStyle(theme.accentBlue)
-                .frame(width: 14)
+                .frame(width: 15)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title(isActive: isActive))
-                    .styledFont(.subheadline)
-                    .foregroundStyle(theme.labelColor)
+                    .styledFont(.footnote)
+                    .foregroundStyle(theme.secondaryLabelColor)
                     .lineLimit(1)
             }
 
             Image(systemName: "chevron.right")
-                .font(style.caption2Font)
+                .font(.system(size: 9))
                 .foregroundStyle(theme.tertiaryLabelColor)
         }
-        .contentShape(RoundedRectangle(cornerRadius: style.gridSize))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().foregroundStyle(theme.tertiaryBackgroundColor))
     }
 }
 
@@ -182,6 +182,7 @@ extension NormalizedToolAction {
         fileSystemTitle ?? commandTitle(isActive: isActive)
     }
 
+    // ??
     private var fileSystemTitle: String? {
         switch payload {
         case .read(let payload):
@@ -197,6 +198,7 @@ extension NormalizedToolAction {
         }
     }
 
+    // what the hell is this?
     private func commandTitle(isActive: Bool) -> String {
         switch payload {
         case .search(let payload):
@@ -214,6 +216,7 @@ extension NormalizedToolAction {
         }
     }
 
+    // ??
     private func todoTitle(isActive: Bool) -> String {
         switch phase(isActive: isActive) {
         case .pending:
@@ -226,7 +229,7 @@ extension NormalizedToolAction {
     }
 
     private func phase(isActive: Bool) -> ToolActionPhase {
-        if isActive {
+        if isActive { // why isactive and isrunning?
             return .active
         }
         if isComplete {

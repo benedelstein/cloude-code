@@ -114,9 +114,8 @@ private struct ToolActionNavigationRow: View {
                 .font(style.captionFont)
                 .foregroundStyle(theme.tertiaryLabelColor)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(theme.secondaryBackgroundColor))
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(theme.backgroundColor))
         .padding(.horizontal, style.horizontalPadding)
     }
 }
@@ -129,7 +128,7 @@ private struct ToolActionDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: style.spacing) {
-                ToolActionHeader(action: action)
+//                ToolActionHeader(action: action)
                 payloadView
                 if let errorText = action.errorText {
                     DetailSection(title: "Error") {
@@ -266,7 +265,7 @@ private struct WebDetailView: View {
     var body: some View {
         DetailSection(title: payload.kind == .fetch ? "URL" : "Query") {
             Text(payload.url ?? payload.query ?? "No details available")
-                .textSelection(.enabled)
+//                .textSelection(.enabled)
         }
     }
 }
@@ -303,7 +302,7 @@ private struct TextDetailView: View {
             MarkdownText(text: text)
                 .styledFont(.body)
                 .foregroundStyle(theme.labelColor)
-                .textSelection(.enabled)
+//                .textSelection(.enabled)
                 .padding(style.horizontalPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -4,8 +4,10 @@ import Testing
 
 @Suite("Agent session transcript builder")
 struct AgentSessionTranscriptBuilderTests {
+    private let builder = AgentSessionTranscriptBuilder()
+
     @Test func groupsAdjacentCompatibleActions() {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: [
                 tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
                 tool("Read", callId: "read-2", input: ["file_path": .string("/b.swift")])
@@ -24,7 +26,7 @@ struct AgentSessionTranscriptBuilderTests {
     }
 
     @Test func doesNotGroupAcrossTextOrReasoning() {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: [
                 tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
                 .text(.init(text: "done")),
@@ -46,7 +48,7 @@ struct AgentSessionTranscriptBuilderTests {
     }
 
     @Test func keepsNonGroupableActionsStandalone() {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: [
                 tool("Edit", callId: "edit-1", input: editInput(path: "/a.swift", from: "a", to: "b")),
                 tool("Edit", callId: "edit-2", input: editInput(path: "/b.swift", from: "c", to: "d")),
@@ -112,29 +114,26 @@ struct AgentSessionTranscriptBuilderTests {
         #expect(pendingTodo?.title(isActive: true) == "Updating todos")
     }
 
-    @Test func usesClientStateProviderForAssistantMessages() {
-        var clientState = SessionClientState.empty
-        clientState.agentSettings = .init(provider: .openaiCodex, model: "codex", effort: "", maxTokens: 0)
-
-        let items = AgentSessionTranscriptBuilder.build(
+    @Test func usesProviderForToolNormalization() {
+        let items = builder.build(
             message: message(parts: [
                 tool("exec", callId: "exec-1", input: [
                     "type": .string("commandExecution"),
                     "command": .string("pwd")
                 ])
             ]),
-            clientState: clientState
+            providerId: .openaiCodex
         )
 
         if case .actionItem(.single(let single)) = items.first {
             #expect(single.action.kind == .bash)
         } else {
-            Issue.record("Expected Codex exec to normalize through client-state provider")
+            Issue.record("Expected Codex exec to normalize through provider")
         }
     }
 
     @Test func treatsUnsupportedPartsAsGroupingBoundaries() {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: [
                 tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
                 .data(.init(type: "data-status", data: .object(["value": .string("boundary")]))),
@@ -148,6 +147,39 @@ struct AgentSessionTranscriptBuilderTests {
             "m1-actions-0-0-single-read-1",
             "m1-actions-2-0-single-read-2"
         ])
+    }
+
+    @Test func findsFinalResponseStartAfterWorkTrace() {
+        let message = message(parts: [
+            .reasoning(.init(text: "thinking")),
+            tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
+            .text(.init(text: "Final answer"))
+        ])
+        let items = builder.build(message: message, providerId: .claudeCode)
+
+        #expect(builder.finalResponseStartIndex(renderItems: items) == 2)
+    }
+
+    @Test func doesNotFindFinalResponseStartForAllTextTranscript() {
+        let message = message(parts: [
+            .text(.init(text: "First")),
+            .text(.init(text: "Second"))
+        ])
+        let items = builder.build(message: message, providerId: .claudeCode)
+
+        #expect(builder.finalResponseStartIndex(renderItems: items) == nil)
+    }
+
+    @Test func findsLastTextAfterWorkTrace() {
+        let message = message(parts: [
+            tool("Read", callId: "read-1", input: ["file_path": .string("/a.swift")]),
+            .text(.init(text: "First answer")),
+            tool("Read", callId: "read-2", input: ["file_path": .string("/b.swift")]),
+            .text(.init(text: "Final answer"))
+        ])
+        let items = builder.build(message: message, providerId: .claudeCode)
+
+        #expect(builder.finalResponseStartIndex(renderItems: items) == 3)
     }
 
     private func editInput(path: String, from oldString: String, to newString: String) -> [String: JSONValue] {
@@ -167,7 +199,7 @@ struct AgentSessionTranscriptBuilderTests {
     }
 
     private func groupedActionItem(parts: [SessionMessage.Part]) -> AgentSessionRenderItem.ActionItem? {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: parts),
             providerId: .claudeCode
         )
@@ -179,7 +211,7 @@ struct AgentSessionTranscriptBuilderTests {
     }
 
     private func singleActionItem(part: SessionMessage.Part) -> AgentSessionRenderItem.ActionItem? {
-        let items = AgentSessionTranscriptBuilder.build(
+        let items = builder.build(
             message: message(parts: [part]),
             providerId: .claudeCode
         )

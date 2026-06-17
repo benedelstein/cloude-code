@@ -10,6 +10,8 @@ struct OpenAICodexToolPartNormalizer: ToolPartNormalizer {
             return [commandExecution(part)]
         case ("patch", _), (_, "fileChange"):
             return fileChanges(part)
+        case ("web_search", _), (_, "webSearch"):
+            return [webSearch(part)]
         case ("update_plan", _):
             return [NormalizedToolAction(
                 toolPart: part,
@@ -31,6 +33,19 @@ struct OpenAICodexToolPartNormalizer: ToolPartNormalizer {
                 exitCode: output["exitCode"]?.intValue,
                 status: nil
             ))
+        )
+    }
+
+    private func webSearch(_ part: NormalizableToolPart) -> NormalizedToolAction {
+        let input = inputObject(part)
+        let outputAction = part.output?.objectValue?["action"]?.objectValue
+        let query = input.string("query").nilIfEmpty
+            ?? outputAction?.string("query").nilIfEmpty
+            ?? outputAction?.array("queries")?.first?.stringValue?.nilIfEmpty
+
+        return NormalizedToolAction(
+            toolPart: part,
+            payload: .web(.init(kind: .search, url: nil, query: query))
         )
     }
 
@@ -79,5 +94,11 @@ struct OpenAICodexToolPartNormalizer: ToolPartNormalizer {
 
     private func inputObject(_ part: NormalizableToolPart) -> [String: JSONValue] {
         part.input?.objectValue ?? [:]
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

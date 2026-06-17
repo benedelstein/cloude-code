@@ -58,7 +58,7 @@ final class ToastWindowController {
             guard !Task.isCancelled else {
                 return
             }
-            await self?.dismiss(id: id)
+            self?.dismiss(id: id)
         }
     }
 

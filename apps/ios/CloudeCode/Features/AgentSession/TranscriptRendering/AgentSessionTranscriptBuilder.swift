@@ -1,22 +1,91 @@
 import Domain
 
-enum AgentSessionTranscriptBuilder {
-    static func build(
+protocol AgentSessionTranscriptBuilding {
+    func build(
         message: SessionMessage,
-        clientState: SessionClientState
-    ) -> [AgentSessionRenderItem] {
-        build(message: message, providerId: providerId(for: message, clientState: clientState))
+        providerId: AgentProviderID?
+    ) -> [AgentSessionRenderItem]
+
+    func finalResponseStartIndex(
+        renderItems: [AgentSessionRenderItem]
+    ) -> Int?
+}
+
+struct AgentSessionTranscriptBuilder: AgentSessionTranscriptBuilding {
+    private struct PendingActions {
+        let keyBase: String
+        var actions: [NormalizedToolAction] = []
     }
 
-    static func build(
+    func build(
         message: SessionMessage,
         providerId: AgentProviderID?
     ) -> [AgentSessionRenderItem] {
-        var builder = TranscriptRenderItemBuilder(message: message, providerId: providerId)
-        return builder.build()
+        var items: [AgentSessionRenderItem] = []
+        var pendingActions: PendingActions?
+
+        func flushActions() {
+            guard let pending = pendingActions, !pending.actions.isEmpty else {
+                pendingActions = nil
+                return
+            }
+
+            let grouped = groupActions(pending.actions)
+            for (index, item) in grouped.enumerated() {
+                items.append(.actionItem(.init(item, keyBase: pending.keyBase, index: index)))
+            }
+            pendingActions = nil
+        }
+
+        for (index, part) in message.parts.enumerated() {
+            switch part {
+            case .text(let text):
+                flushActions()
+                items.append(.text(.init(key: "\(message.id)-text-\(index)", text: text.text)))
+            case .reasoning(let reasoning):
+                flushActions()
+                items.append(.reasoning(.init(key: "\(message.id)-reasoning-\(index)", part: reasoning)))
+            case .dynamicTool, .tool:
+                let actions = ToolActionNormalizer.normalize(part: part, providerId: providerId)
+                guard !actions.isEmpty else {
+                    continue
+                }
+
+                if pendingActions == nil {
+                    pendingActions = .init(keyBase: "\(message.id)-actions-\(index)")
+                }
+                pendingActions?.actions.append(contentsOf: actions)
+            case .stepStart:
+                continue
+            case .sourceURL, .sourceDocument, .file, .data, .unknown:
+                flushActions()
+            }
+        }
+
+        flushActions()
+        return items
     }
 
-    static func groupActions(_ actions: [NormalizedToolAction]) -> [AgentSessionRenderItem.ActionItem] {
+    func finalResponseStartIndex(
+        renderItems: [AgentSessionRenderItem]
+    ) -> Int? {
+        var hasWorkBeforeCurrentText = false
+        var finalResponseStartIndex: Int?
+
+        for (index, item) in renderItems.enumerated() {
+            if item.isText {
+                if hasWorkBeforeCurrentText {
+                    finalResponseStartIndex = index
+                }
+            } else {
+                hasWorkBeforeCurrentText = true
+            }
+        }
+
+        return finalResponseStartIndex
+    }
+
+    private func groupActions(_ actions: [NormalizedToolAction]) -> [AgentSessionRenderItem.ActionItem] {
         var result: [AgentSessionRenderItem.ActionItem] = []
         var currentGroup: AgentSessionRenderItem.ActionGroup?
 
@@ -45,6 +114,7 @@ enum AgentSessionTranscriptBuilder {
             }
         }
 
+        // convert single-item groups into .single
         return result.map { item in
             guard case .group(let group) = item, group.actions.count == 1, let action = group.actions.first else {
                 return item
@@ -52,78 +122,6 @@ enum AgentSessionTranscriptBuilder {
 
             return .single(.init(action: action, key: "single-\(action.toolCallId)"))
         }
-    }
-
-    private static func providerId(
-        for message: SessionMessage,
-        clientState: SessionClientState
-    ) -> AgentProviderID? {
-        guard message.role == .assistant else {
-            return nil
-        }
-        return clientState.agentSettings.provider
-    }
-}
-
-private struct PendingActions {
-    let keyBase: String
-    var actions: [NormalizedToolAction] = []
-}
-
-private struct TranscriptRenderItemBuilder {
-    let message: SessionMessage
-    let providerId: AgentProviderID?
-    var items: [AgentSessionRenderItem] = []
-    var pendingActions: PendingActions?
-
-    mutating func build() -> [AgentSessionRenderItem] {
-        for (index, part) in message.parts.enumerated() {
-            process(part: part, index: index)
-        }
-        flushActions()
-        return items
-    }
-
-    mutating func process(part: SessionMessage.Part, index: Int) {
-        switch part {
-        case .text(let text):
-            flushActions()
-            items.append(.text(.init(key: "\(message.id)-text-\(index)", text: text.text)))
-        case .reasoning(let reasoning):
-            flushActions()
-            items.append(.reasoning(.init(key: "\(message.id)-reasoning-\(index)", part: reasoning)))
-        case .dynamicTool, .tool:
-            appendToolActions(part: part, index: index)
-        case .stepStart:
-            return
-        case .sourceURL, .sourceDocument, .file, .data, .unknown:
-            flushActions()
-        }
-    }
-
-    mutating func flushActions() {
-        guard let pending = pendingActions, !pending.actions.isEmpty else {
-            pendingActions = nil
-            return
-        }
-
-        let grouped = AgentSessionTranscriptBuilder.groupActions(pending.actions)
-        for (index, item) in grouped.enumerated() {
-            items.append(.actionItem(.init(item, keyBase: pending.keyBase, index: index)))
-        }
-        pendingActions = nil
-    }
-
-    mutating func appendToolActions(part: SessionMessage.Part, index: Int) {
-        let actions = ToolActionNormalizer.normalize(part: part, providerId: providerId)
-        guard !actions.isEmpty else {
-            return
-        }
-
-        if pendingActions == nil {
-            pendingActions = .init(keyBase: "\(message.id)-actions-\(index)")
-        }
-        pendingActions?.actions.append(contentsOf: actions)
     }
 }
 
