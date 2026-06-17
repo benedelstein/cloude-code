@@ -17,6 +17,7 @@ The VM owns the execution runtime for its workflows, and the Durable Object disp
 - **@repo/web** (`apps/web/`) - Next.js web client.
 - **@repo/discord-bot** (`apps/discord-bot/`) - Cloudflare Worker that adapts the Discord `/cloude` slash command into integration session requests against the API server. See `docs/api-server/discord-bot.md`.
 - **@repo/slack-bot** (`apps/slack-bot/`) - Cloudflare Worker that adapts the Slack `/cloude` slash command into integration session requests against the API server. See `docs/api-server/slack-bot.md`.
+- **@repo/teams-bot** (`apps/teams-bot/`) - Cloudflare Worker that adapts Microsoft Teams Bot Framework message activities into async integration session requests against the API server. See `docs/api-server/teams-bot.md`.
 
 ## Key Files
 
