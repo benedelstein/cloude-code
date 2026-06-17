@@ -320,7 +320,7 @@ private struct TextDetailView: View {
 
     var body: some View {
         ScrollView {
-            Text(verbatim: text)
+            MarkdownText(text: text)
                 .styledFont(.body)
                 .foregroundStyle(theme.labelColor)
                 .textSelection(.enabled)

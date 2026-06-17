@@ -11,7 +11,7 @@ struct AgentSessionRenderItemView: View {
     var body: some View {
         switch item {
         case .text(let item):
-            Text(verbatim: item.text)
+            MarkdownText(text: item.text)
                 .styledFont(.subheadline)
                 .foregroundStyle(theme.labelColor)
                 .textSelection(.enabled)
@@ -21,7 +21,7 @@ struct AgentSessionRenderItemView: View {
                 Label("Reasoning", systemImage: "brain")
                     .styledFont(.caption)
                     .foregroundStyle(theme.secondaryLabelColor)
-                Text(verbatim: item.part.text)
+                MarkdownText(text: item.part.text)
                     .styledFont(.footnote)
                     .foregroundStyle(theme.secondaryLabelColor)
                     .textSelection(.enabled)
