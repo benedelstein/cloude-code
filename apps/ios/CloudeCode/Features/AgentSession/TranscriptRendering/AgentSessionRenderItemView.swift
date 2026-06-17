@@ -6,7 +6,18 @@ struct AgentSessionRenderItemView: View {
     @Environment(\.style) private var style
 
     let item: AgentSessionRenderItem
+    let isActive: Bool
     let openDetails: () -> Void
+
+    init(
+        item: AgentSessionRenderItem,
+        isActive: Bool = false,
+        openDetails: @escaping () -> Void
+    ) {
+        self.item = item
+        self.isActive = isActive
+        self.openDetails = openDetails
+    }
 
     var body: some View {
         switch item {
@@ -18,7 +29,7 @@ struct AgentSessionRenderItemView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .reasoning(let item):
             VStack(alignment: .leading, spacing: style.gridSize / 2) {
-                Label("Reasoning", systemImage: "brain")
+                Label("Thinking", systemImage: "brain")
                     .styledFont(.caption)
                     .foregroundStyle(theme.secondaryLabelColor)
                 MarkdownText(text: item.part.text)
@@ -29,7 +40,7 @@ struct AgentSessionRenderItemView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         case .actionItem(let item):
             Button(action: openDetails) {
-                ToolActionInlineRow(item: item)
+                ToolActionInlineRow(item: item, isActive: isActive)
             }
             .buttonStyle(.plain)
         }
@@ -41,52 +52,41 @@ private struct ToolActionInlineRow: View {
     @Environment(\.style) private var style
 
     let item: AgentSessionRenderItem.ActionItem
+    let isActive: Bool
 
     var body: some View {
         HStack(spacing: style.gridSize) {
             Image(systemName: item.iconName)
-                .font(style.calloutFont)
+                .font(style.caption2Font)
                 .foregroundStyle(theme.accentBlue)
-                .frame(width: style.gridSize * 3, height: style.gridSize * 3)
+                .frame(width: 14)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
+                Text(item.title(isActive: isActive))
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
                     .lineLimit(1)
-                Text(item.subtitle)
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .lineLimit(1)
             }
 
-            Spacer(minLength: style.gridSize)
-
             Image(systemName: "chevron.right")
-                .font(style.captionFont)
+                .font(style.caption2Font)
                 .foregroundStyle(theme.tertiaryLabelColor)
         }
-        .padding(.horizontal, style.gridSize * 1.5)
-        .padding(.vertical, style.gridSize)
-        .background(
-            RoundedRectangle(cornerRadius: style.gridSize)
-                .fill(theme.secondaryBackgroundColor)
-        )
         .contentShape(RoundedRectangle(cornerRadius: style.gridSize))
     }
 }
 
-private extension AgentSessionRenderItem.ActionItem {
-    var title: String {
+extension AgentSessionRenderItem.ActionItem {
+    func title(isActive: Bool = false) -> String {
         switch self {
         case .single(let single):
             single.action.title
         case .group(let group):
-            "\(group.kind.groupTitle) \(group.actions.count) \(group.kind.groupNoun(count: group.actions.count))"
+            group.title(isActive: isActive)
         }
     }
 
-    var subtitle: String {
+    var subtitle: String? {
         switch self {
         case .single(let single):
             single.action.subtitle
@@ -105,7 +105,79 @@ private extension AgentSessionRenderItem.ActionItem {
     }
 }
 
+extension AgentSessionRenderItem.ActionGroup {
+    func title(isActive: Bool = false) -> String {
+        kind.groupTitle(count: displayCount, phase: phase(isActive: isActive))
+    }
+
+    private var displayCount: Int {
+        switch kind {
+        case .read:
+            let pathCount = actions.reduce(0) { result, action in
+                guard case .read(let payload) = action.payload else {
+                    return result
+                }
+                return result + payload.paths.count
+            }
+            return max(pathCount, actions.count)
+        case .search:
+            let patternCount = actions.reduce(0) { result, action in
+                guard case .search(let payload) = action.payload else {
+                    return result
+                }
+                return result + payload.patterns.count
+            }
+            return max(patternCount, actions.count)
+        case .web, .bash, .other, .edit, .write, .todo, .plan:
+            return actions.count
+        }
+    }
+
+    private func phase(isActive: Bool) -> ToolActionPhase {
+        if isActive {
+            return .active
+        }
+        if actions.allSatisfy(\.isComplete) {
+            return .complete
+        }
+        if actions.contains(where: \.isRunning) {
+            return .active
+        }
+        return .pending
+    }
+}
+
+enum ToolActionPhase: Sendable, Equatable {
+    case pending
+    case active
+    case complete
+}
+
+private struct ToolKindGroupVerbs {
+    let pending: String
+    let active: String
+    let complete: String
+}
+
 extension NormalizedToolAction {
+    var isComplete: Bool {
+        switch state {
+        case "output-available", "output-error":
+            true
+        default:
+            false
+        }
+    }
+
+    var isRunning: Bool {
+        switch state {
+        case "input-available":
+            true
+        default:
+            false
+        }
+    }
+
     var title: String {
         switch payload {
         case .read(let payload):
@@ -129,7 +201,7 @@ extension NormalizedToolAction {
         }
     }
 
-    var subtitle: String {
+    var subtitle: String? {
         switch payload {
         case .read(let payload):
             payload.content == nil ? state : "File preview available"
@@ -138,7 +210,7 @@ extension NormalizedToolAction {
         case .write(let payload):
             payload.deleted ? "Deleted file" : "File contents available"
         case .bash(let payload):
-            payload.exitCode.map { "Exit \($0)" } ?? state
+            payload.exitCode.map { "Exit \($0)" }
         case .search(let payload):
             payload.patterns.joined(separator: ", ")
         case .web(let payload):
@@ -183,20 +255,40 @@ extension ToolKind {
         }
     }
 
-    var groupTitle: String {
+    func groupTitle(count: Int, phase: ToolActionPhase) -> String {
+        "\(groupVerb(for: phase)) \(count) \(groupNoun(count: count))"
+    }
+
+    private func groupVerb(for phase: ToolActionPhase) -> String {
+        let verbs = groupVerbs
+        switch phase {
+        case .pending:
+            return verbs.pending
+        case .active:
+            return verbs.active
+        case .complete:
+            return verbs.complete
+        }
+    }
+
+    private var groupVerbs: ToolKindGroupVerbs {
         switch self {
         case .read:
-            "Read"
+            ToolKindGroupVerbs(pending: "Read", active: "Reading", complete: "Read")
         case .search:
-            "Search"
+            ToolKindGroupVerbs(pending: "Search", active: "Searching", complete: "Searched")
         case .web:
-            "Web"
+            ToolKindGroupVerbs(pending: "Make", active: "Making", complete: "Made")
         case .bash:
-            "Run"
+            ToolKindGroupVerbs(pending: "Run", active: "Running", complete: "Ran")
         case .other:
-            "Use"
+            ToolKindGroupVerbs(pending: "Use", active: "Using", complete: "Used")
         case .edit, .write, .todo, .plan:
-            rawValue.capitalized
+            ToolKindGroupVerbs(
+                pending: rawValue.capitalized,
+                active: rawValue.capitalized,
+                complete: rawValue.capitalized
+            )
         }
     }
 
@@ -205,9 +297,9 @@ extension ToolKind {
         case .read:
             count == 1 ? "file" : "files"
         case .search:
-            count == 1 ? "search" : "searches"
+            count == 1 ? "pattern" : "patterns"
         case .web:
-            count == 1 ? "request" : "requests"
+            count == 1 ? "web request" : "web requests"
         case .bash:
             count == 1 ? "command" : "commands"
         case .other:

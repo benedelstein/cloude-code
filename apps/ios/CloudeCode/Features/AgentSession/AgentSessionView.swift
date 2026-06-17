@@ -10,6 +10,7 @@ struct AgentSessionView: View {
     @State private var store: AgentSessionViewModel
     @State private var scrollTarget: SessionScrollTarget? = .bottom
     @FocusState private var composerFocused: Bool
+    @State private var destination: Modal<Destination>?
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
@@ -17,12 +18,9 @@ struct AgentSessionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-//            sessionHeader
-//                .padding(.horizontal, style.horizontalPadding)
-//                .padding(.vertical, style.gridSize)
-
             SessionScrollView(
                 store: store,
+                destination: $destination,
                 scrollTarget: $scrollTarget
             )
             .onChange(of: store.isResponding) { _, _ in
@@ -55,6 +53,7 @@ struct AgentSessionView: View {
             }
         }
         .toolbarTitleDisplayMode(.inline)
+        .modifier(Destinations(destination: $destination))
         .onAppear {
             store.bind()
         }
@@ -70,7 +69,7 @@ struct AgentSessionView: View {
     }
 
     private var sessionHeader: some View {
-        VStack(alignment: .leading, spacing: style.gridSize / 2) {
+        VStack(alignment: .center) {
             Text(store.session.title ?? "Untitled session")
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
@@ -106,6 +105,7 @@ private struct SessionScrollView: View {
     @Environment(\.style) private var style
 
     let store: AgentSessionViewModel
+    @Binding var destination: Modal<AgentSessionView.Destination>?
     @Binding var scrollTarget: SessionScrollTarget?
 
     var messages: [SessionMessage] {
@@ -129,14 +129,24 @@ private struct SessionScrollView: View {
                         if message.isUser {
                             UserMessageView(message: message)
                         } else {
-                            AssistantMessageView(message: message, clientState: store.clientState)
+                            AssistantMessageView(
+                                message: message,
+                                clientState: store.clientState,
+                                isStreaming: false,
+                                destination: $destination
+                            )
                         }
 //                            .id(SessionScrollTarget.message(message.id))
                     }
 
                     if let streamingMessage = store.stream.message {
-                        AssistantMessageView(message: streamingMessage, clientState: store.clientState)
-                            .id(SessionScrollTarget.stream)
+                        AssistantMessageView(
+                            message: streamingMessage,
+                            clientState: store.clientState,
+                            isStreaming: true,
+                            destination: $destination
+                        )
+                        .id(SessionScrollTarget.stream)
                     }
                 }
 
@@ -156,7 +166,8 @@ private struct SessionScrollView: View {
 private struct AssistantMessageView: View {
     let message: SessionMessage
     let clientState: SessionClientState
-    @State private var destination: AgentSessionToolDetailDestination?
+    let isStreaming: Bool
+    @Binding var destination: Modal<AgentSessionView.Destination>?
 
     private var renderItems: [AgentSessionRenderItem] {
         AgentSessionTranscriptBuilder.build(message: message, clientState: clientState)
@@ -164,16 +175,35 @@ private struct AssistantMessageView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(renderItems, id: \.key) { item in
-                AgentSessionRenderItemView(item: item) {
-                    destination = .renderItem(item)
+            let items = renderItems
+            ForEach(Array(items.enumerated()), id: \.element.key) { index, item in
+                let isActive = isActiveFinalGroup(
+                    item: item,
+                    index: index,
+                    items: items
+                )
+
+                AgentSessionRenderItemView(
+                    item: item,
+                    isActive: isActive
+                ) {
+                    destination = .sheet(.renderItem(item))
                 }
             }
         }
-        .sheet(item: $destination) { destination in
-            AgentSessionToolDetailSheet(destination: destination)
-                .presentationDetents([.medium, .large])
-                .presentationBackground(.clear)
+    }
+
+    private func isActiveFinalGroup(
+        item: AgentSessionRenderItem,
+        index: Int,
+        items: [AgentSessionRenderItem]
+    ) -> Bool {
+        guard isStreaming, index == items.endIndex - 1 else {
+            return false
         }
+        if case .actionItem(.group) = item {
+            return true
+        }
+        return false
     }
 }

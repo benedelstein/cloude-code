@@ -3,10 +3,9 @@ import SwiftUI
 
 struct AgentSessionToolDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.theme) private var theme
     @State private var path: [ToolDetailRoute] = []
 
-    let destination: AgentSessionToolDetailDestination
+    let item: AgentSessionRenderItem
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -15,8 +14,8 @@ struct AgentSessionToolDetailSheet: View {
                     routeView(route)
                 }
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        closeButton
+                    ToolbarCloseButton {
+                        dismiss()
                     }
                 }
                 .toolbarBackground(.hidden, for: .navigationBar)
@@ -25,10 +24,7 @@ struct AgentSessionToolDetailSheet: View {
 
     @ViewBuilder
     private var rootView: some View {
-        switch destination {
-        case .renderItem(let item):
-            renderItemRoot(item)
-        }
+        renderItemRoot(item)
     }
 
     @ViewBuilder
@@ -47,31 +43,14 @@ struct AgentSessionToolDetailSheet: View {
 
     @ViewBuilder
     private func routeView(_ route: ToolDetailRoute) -> some View {
-        switch destination {
-        case .renderItem(let item):
-            switch route {
-            case .action(let index):
-                if let action = item.groupActions[safe: index] {
-                    ToolActionDetailView(action: action)
-                } else {
-                    ContentUnavailableView("Tool not found", systemImage: "wrench.and.screwdriver")
-                }
+        switch route {
+        case .action(let index):
+            if let action = item.groupActions[safe: index] {
+                ToolActionDetailView(action: action)
+            } else {
+                ContentUnavailableView("Tool not found", systemImage: "wrench.and.screwdriver")
             }
         }
-    }
-
-    private var closeButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.secondaryLabelColor)
-                .frame(width: 40, height: 40)
-                .glassBackground(in: Circle())
-                .contentShape(Circle())
-        }
-        .accessibilityLabel("Close")
     }
 }
 
@@ -86,25 +65,21 @@ private struct ToolActionGroupDetailView: View {
     @Binding var path: [ToolDetailRoute]
 
     var body: some View {
-        List {
-            ForEach(Array(group.actions.enumerated()), id: \.offset) { index, action in
-                Button {
-                    path.append(.action(index))
-                } label: {
-                    ToolActionNavigationRow(action: action)
+        ScrollView {
+            LazyVStack {
+                ForEach(Array(group.actions.enumerated()), id: \.offset) { index, action in
+                    Button {
+                        path.append(.action(index))
+                    } label: {
+                        ToolActionNavigationRow(action: action)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(Color.clear)
             }
         }
-        .listStyle(.plain)
-        .navigationTitle("\(group.kind.groupTitle) \(group.actions.count)")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(group.title())
+        .toolbarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)
-        .background(.clear)
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: style.gridSize)
-        }
     }
 }
 
@@ -125,10 +100,12 @@ private struct ToolActionNavigationRow: View {
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
                     .lineLimit(1)
-                Text(action.subtitle)
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .lineLimit(1)
+                if let subtitle = action.subtitle {
+                    Text(subtitle)
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -137,7 +114,10 @@ private struct ToolActionNavigationRow: View {
                 .font(style.captionFont)
                 .foregroundStyle(theme.tertiaryLabelColor)
         }
-        .padding(.vertical, style.gridSize / 2)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .background(RoundedRectangle(cornerRadius: 12).fill(theme.secondaryBackgroundColor))
+        .padding(.horizontal, style.horizontalPadding)
     }
 }
 

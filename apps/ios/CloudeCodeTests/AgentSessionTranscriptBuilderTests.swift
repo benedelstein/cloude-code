@@ -65,6 +65,35 @@ struct AgentSessionTranscriptBuilderTests {
         #expect(actionItems.allSatisfy(\.isSingle))
     }
 
+    @Test func groupedBashTitleReflectsCompletedActiveAndPendingPhases() {
+        let completedGroup = groupedActionItem(parts: [
+            tool("Bash", callId: "bash-1", state: "output-available", input: ["command": .string("pwd")]),
+            tool("Bash", callId: "bash-2", state: "output-available", input: ["command": .string("ls")])
+        ])
+        #expect(completedGroup?.title() == "Ran 2 commands")
+
+        let activeGroup = groupedActionItem(parts: [
+            tool("Bash", callId: "bash-1", state: "output-available", input: ["command": .string("pwd")]),
+            tool("Bash", callId: "bash-2", state: "input-available", input: ["command": .string("ls")])
+        ])
+        #expect(activeGroup?.title() == "Running 2 commands")
+
+        let pendingGroup = groupedActionItem(parts: [
+            tool("Bash", callId: "bash-1", state: "input-streaming", input: ["command": .string("pwd")]),
+            tool("Bash", callId: "bash-2", state: "input-streaming", input: ["command": .string("ls")])
+        ])
+        #expect(pendingGroup?.title() == "Run 2 commands")
+    }
+
+    @Test func activeFinalGroupOverridesStateForStreamingLabel() {
+        let group = groupedActionItem(parts: [
+            tool("Bash", callId: "bash-1", state: "input-streaming", input: ["command": .string("pwd")]),
+            tool("Bash", callId: "bash-2", state: "input-streaming", input: ["command": .string("ls")])
+        ])
+
+        #expect(group?.title(isActive: true) == "Running 2 commands")
+    }
+
     @Test func usesClientStateProviderForAssistantMessages() {
         var clientState = SessionClientState.empty
         clientState.agentSettings = .init(provider: .openaiCodex, model: "codex", effort: "", maxTokens: 0)
@@ -119,16 +148,29 @@ struct AgentSessionTranscriptBuilderTests {
         SessionMessage(id: id, role: role, parts: parts)
     }
 
+    private func groupedActionItem(parts: [SessionMessage.Part]) -> AgentSessionRenderItem.ActionItem? {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: parts),
+            providerId: .claudeCode
+        )
+        guard case .actionItem(let item) = items.first else {
+            Issue.record("Expected action item")
+            return nil
+        }
+        return item
+    }
+
     private func tool(
         _ toolName: String,
         callId: String,
+        state: String = "output-available",
         input: [String: JSONValue] = [:],
         output: JSONValue? = nil
     ) -> SessionMessage.Part {
         .dynamicTool(.init(
             toolName: toolName,
             toolCallId: callId,
-            state: "output-available",
+            state: state,
             input: .object(input),
             output: output
         ))
