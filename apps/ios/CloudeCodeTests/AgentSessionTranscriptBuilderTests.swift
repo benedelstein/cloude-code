@@ -94,6 +94,24 @@ struct AgentSessionTranscriptBuilderTests {
         #expect(group?.title(isActive: true) == "Running 2 commands")
     }
 
+    @Test func todoTitleReflectsCompletedActiveAndPendingPhases() {
+        let completedTodo = singleActionItem(
+            part: tool("TodoWrite", callId: "todo-1", state: "output-available", input: ["todos": .array([])])
+        )
+        #expect(completedTodo?.title() == "Updated todos")
+
+        let activeTodo = singleActionItem(
+            part: tool("TodoWrite", callId: "todo-1", state: "input-available", input: ["todos": .array([])])
+        )
+        #expect(activeTodo?.title() == "Updating todos")
+
+        let pendingTodo = singleActionItem(
+            part: tool("TodoWrite", callId: "todo-1", state: "input-streaming", input: ["todos": .array([])])
+        )
+        #expect(pendingTodo?.title() == "Update todos")
+        #expect(pendingTodo?.title(isActive: true) == "Updating todos")
+    }
+
     @Test func usesClientStateProviderForAssistantMessages() {
         var clientState = SessionClientState.empty
         clientState.agentSettings = .init(provider: .openaiCodex, model: "codex", effort: "", maxTokens: 0)
@@ -151,6 +169,18 @@ struct AgentSessionTranscriptBuilderTests {
     private func groupedActionItem(parts: [SessionMessage.Part]) -> AgentSessionRenderItem.ActionItem? {
         let items = AgentSessionTranscriptBuilder.build(
             message: message(parts: parts),
+            providerId: .claudeCode
+        )
+        guard case .actionItem(let item) = items.first else {
+            Issue.record("Expected action item")
+            return nil
+        }
+        return item
+    }
+
+    private func singleActionItem(part: SessionMessage.Part) -> AgentSessionRenderItem.ActionItem? {
+        let items = AgentSessionTranscriptBuilder.build(
+            message: message(parts: [part]),
             providerId: .claudeCode
         )
         guard case .actionItem(let item) = items.first else {

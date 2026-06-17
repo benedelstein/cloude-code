@@ -96,7 +96,7 @@ private struct ToolActionNavigationRow: View {
                 .frame(width: style.gridSize * 3)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
+                Text(action.title())
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
                     .lineLimit(1)
@@ -141,7 +141,7 @@ private struct ToolActionDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(.clear)
-        .navigationTitle(action.title)
+        .navigationTitle(action.title())
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -182,7 +182,7 @@ private struct ToolActionHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: style.gridSize / 2) {
-            Label(action.title, systemImage: action.kind.iconName)
+            Label(action.title(), systemImage: action.kind.iconName)
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
             Text(action.state)

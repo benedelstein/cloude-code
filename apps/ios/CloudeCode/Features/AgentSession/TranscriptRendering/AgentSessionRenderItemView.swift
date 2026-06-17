@@ -80,7 +80,7 @@ extension AgentSessionRenderItem.ActionItem {
     func title(isActive: Bool = false) -> String {
         switch self {
         case .single(let single):
-            single.action.title
+            single.action.title(isActive: isActive)
         case .group(let group):
             group.title(isActive: isActive)
         }
@@ -178,7 +178,11 @@ extension NormalizedToolAction {
         }
     }
 
-    var title: String {
+    func title(isActive: Bool = false) -> String {
+        fileSystemTitle ?? commandTitle(isActive: isActive)
+    }
+
+    private var fileSystemTitle: String? {
         switch payload {
         case .read(let payload):
             "Read \(payload.primaryPath)"
@@ -188,17 +192,50 @@ extension NormalizedToolAction {
             payload.deleted ? "Delete \(payload.path)" : "Write \(payload.path)"
         case .bash(let payload):
             payload.command.isEmpty ? "Run command" : payload.command
+        case .search, .web, .todo, .plan, .other:
+            nil
+        }
+    }
+
+    private func commandTitle(isActive: Bool) -> String {
+        switch payload {
         case .search(let payload):
             "Search \(payload.patterns.first ?? "")"
         case .web(let payload):
             payload.kind == .fetch ? "Fetch \(payload.url ?? "")" : "Search web"
         case .todo:
-            "Update todos"
+            todoTitle(isActive: isActive)
         case .plan:
             "Plan"
         case .other(let payload):
             payload.toolName
+        case .read, .edit, .write, .bash:
+            ""
         }
+    }
+
+    private func todoTitle(isActive: Bool) -> String {
+        switch phase(isActive: isActive) {
+        case .pending:
+            "Update todos"
+        case .active:
+            "Updating todos"
+        case .complete:
+            "Updated todos"
+        }
+    }
+
+    private func phase(isActive: Bool) -> ToolActionPhase {
+        if isActive {
+            return .active
+        }
+        if isComplete {
+            return .complete
+        }
+        if isRunning {
+            return .active
+        }
+        return .pending
     }
 
     var subtitle: String? {
