@@ -86,6 +86,7 @@ public struct IntegrationLinksResponse: Codable, Equatable, Sendable {
 public enum IntegrationProvider: RawRepresentable, Codable, Equatable, Sendable {
     case discord
     case slack
+    case teams
     case generic
     /// A value this client version doesn't recognize yet.
     case unknown(String)
@@ -94,6 +95,7 @@ public enum IntegrationProvider: RawRepresentable, Codable, Equatable, Sendable 
         switch rawValue {
         case "discord": self = .discord
         case "slack": self = .slack
+        case "teams": self = .teams
         case "generic": self = .generic
         default: self = .unknown(rawValue)
         }
@@ -103,6 +105,7 @@ public enum IntegrationProvider: RawRepresentable, Codable, Equatable, Sendable 
         switch self {
         case .discord: "discord"
         case .slack: "slack"
+        case .teams: "teams"
         case .generic: "generic"
         case .unknown(let value): value
         }
