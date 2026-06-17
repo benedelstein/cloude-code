@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const IntegrationProvider = z.enum(["discord", "slack", "teams", "generic"]);
+export const IntegrationProvider = z.enum(["discord", "slack", "generic"]);
 export type IntegrationProvider = z.infer<typeof IntegrationProvider>;
 
 export const IntegrationLinkClaimRequest = z.object({
