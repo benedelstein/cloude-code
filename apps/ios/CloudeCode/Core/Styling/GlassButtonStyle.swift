@@ -1,18 +1,30 @@
 import SwiftUI
 
 extension View {
-    /// Liquid Glass background on iOS 26+, falling back to a solid tint with
-    /// a soft shadow on older systems.
+    /// Liquid Glass background on iOS 26+, falling back to material or a solid
+    /// tint with a soft shadow on older systems.
     @ViewBuilder
-    func glassBackground<S: Shape>(in shape: S, tint: Color) -> some View {
+    func glassBackground<S: Shape>(in shape: S, tint: Color? = nil) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.tint(tint).interactive(), in: shape)
+            if let tint {
+                glassEffect(.regular.tint(tint).interactive(), in: shape)
+            } else {
+                glassEffect(.regular.interactive(), in: shape)
+            }
         } else {
-            background(
-                shape
-                    .fill(tint)
-                    .shadow(color: tint.opacity(0.35), radius: 8, x: 0, y: 4)
-            )
+            if let tint {
+                background(
+                    shape
+                        .fill(tint)
+                        .shadow(color: tint.opacity(0.35), radius: 8, x: 0, y: 4)
+                )
+            } else {
+                background(
+                    shape
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                )
+            }
         }
     }
 }

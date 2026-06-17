@@ -173,6 +173,7 @@ private struct AssistantMessageView: View {
         .sheet(item: $destination) { destination in
             AgentSessionToolDetailSheet(destination: destination)
                 .presentationDetents([.medium, .large])
+                .presentationBackground(.clear)
         }
     }
 }

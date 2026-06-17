@@ -19,6 +19,7 @@ struct AgentSessionToolDetailSheet: View {
                         closeButton
                     }
                 }
+                .toolbarBackground(.hidden, for: .navigationBar)
         }
     }
 
@@ -64,12 +65,12 @@ struct AgentSessionToolDetailSheet: View {
             dismiss()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(theme.labelColor)
-                .frame(width: 32, height: 32)
-                .glassBackground(in: Circle(), tint: theme.secondaryBackgroundColor)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(theme.secondaryLabelColor)
+                .frame(width: 40, height: 40)
+                .glassBackground(in: Circle())
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Close")
     }
 }
@@ -79,7 +80,6 @@ private enum ToolDetailRoute: Hashable {
 }
 
 private struct ToolActionGroupDetailView: View {
-    @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
     let group: AgentSessionRenderItem.ActionGroup
@@ -94,13 +94,14 @@ private struct ToolActionGroupDetailView: View {
                     ToolActionNavigationRow(action: action)
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(Color.clear)
             }
         }
         .listStyle(.plain)
         .navigationTitle("\(group.kind.groupTitle) \(group.actions.count)")
         .navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)
-        .background(theme.backgroundColor)
+        .background(.clear)
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: style.gridSize)
         }
@@ -141,7 +142,6 @@ private struct ToolActionNavigationRow: View {
 }
 
 private struct ToolActionDetailView: View {
-    @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
     let action: NormalizedToolAction
@@ -160,7 +160,7 @@ private struct ToolActionDetailView: View {
             .padding(style.horizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(theme.backgroundColor)
+        .background(.clear)
         .navigationTitle(action.title)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -329,6 +329,6 @@ private struct TextDetailView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .background(theme.backgroundColor)
+        .background(.clear)
     }
 }
