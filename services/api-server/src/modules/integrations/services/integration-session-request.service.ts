@@ -468,6 +468,7 @@ function getExternalUsername(externalUser: IntegrationExternalUser): string | nu
     case "discord":
       return externalUser.displayName ?? externalUser.username ?? null;
     case "slack":
+    case "teams":
     case "generic":
       return externalUser.displayName ?? null;
     default: {
@@ -483,6 +484,8 @@ function formatProviderName(provider: IntegrationProvider): string {
       return "Discord";
     case "slack":
       return "Slack";
+    case "teams":
+      return "Microsoft Teams";
     case "generic":
       return "External integration";
     default: {
