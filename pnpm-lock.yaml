@@ -106,6 +106,28 @@ importers:
         specifier: ^4.84.1
         version: 4.84.1(@cloudflare/workers-types@4.20260421.1)
 
+  apps/slack-bot:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 4.20260421.1
+        version: 4.20260421.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@25.6.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
+      wrangler:
+        specifier: ^4.84.1
+        version: 4.84.1(@cloudflare/workers-types@4.20260421.1)
+
   apps/web:
     dependencies:
       '@radix-ui/react-alert-dialog':
@@ -339,7 +361,7 @@ importers:
         version: link:../../packages/vm-agent
       agents:
         specifier: 'catalog:'
-        version: 0.10.1(@babel/core@7.29.0)(@babel/runtime@7.29.7)(@cloudflare/workers-types@4.20260421.1)(ai@6.0.59(zod@4.3.6))(react@19.2.3)(rolldown@1.0.0-rc.15)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))(zod@4.3.6)
+        version: 0.10.1(@babel/core@7.29.0)(@babel/runtime@7.29.7)(@cloudflare/workers-types@4.20260421.1)(ai@6.0.59(zod@4.3.6))(react@19.2.3)(rolldown@1.0.0-rc.15)(zod@4.3.6)
       ai:
         specifier: 'catalog:'
         version: 6.0.59(zod@4.3.6)
@@ -5862,14 +5884,13 @@ snapshots:
   '@rolldown/binding-win32-x64-msvc@1.0.0-rc.15':
     optional: true
 
-  '@rolldown/plugin-babel@0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))':
+  '@rolldown/plugin-babel@0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)':
     dependencies:
       '@babel/core': 7.29.0
       picomatch: 4.0.4
       rolldown: 1.0.0-rc.15
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      vite: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
 
   '@rolldown/pluginutils@1.0.0-rc.15': {}
 
@@ -6350,7 +6371,7 @@ snapshots:
       '@babel/plugin-proposal-decorators': 7.29.0(@babel/core@7.29.0)
       '@cfworker/json-schema': 4.1.1
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
-      '@rolldown/plugin-babel': 0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
+      '@rolldown/plugin-babel': 0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)
       ai: 6.0.59(zod@4.3.6)
       cron-schedule: 6.0.0
       json-schema: 0.4.0
@@ -6371,12 +6392,12 @@ snapshots:
       - rolldown
       - supports-color
 
-  agents@0.10.1(@babel/core@7.29.0)(@babel/runtime@7.29.7)(@cloudflare/workers-types@4.20260421.1)(ai@6.0.59(zod@4.3.6))(react@19.2.3)(rolldown@1.0.0-rc.15)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))(zod@4.3.6):
+  agents@0.10.1(@babel/core@7.29.0)(@babel/runtime@7.29.7)(@cloudflare/workers-types@4.20260421.1)(ai@6.0.59(zod@4.3.6))(react@19.2.3)(rolldown@1.0.0-rc.15)(zod@4.3.6):
     dependencies:
       '@babel/plugin-proposal-decorators': 7.29.0(@babel/core@7.29.0)
       '@cfworker/json-schema': 4.1.1
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
-      '@rolldown/plugin-babel': 0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
+      '@rolldown/plugin-babel': 0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.7)(rolldown@1.0.0-rc.15)
       ai: 6.0.59(zod@4.3.6)
       cron-schedule: 6.0.0
       json-schema: 0.4.0
@@ -6389,8 +6410,6 @@ snapshots:
       react: 19.2.3
       yargs: 18.0.0
       zod: 4.3.6
-    optionalDependencies:
-      vite: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@babel/core'
       - '@babel/plugin-transform-runtime'
