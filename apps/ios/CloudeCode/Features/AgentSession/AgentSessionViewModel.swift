@@ -161,12 +161,15 @@ final class AgentSessionViewModel {
             }
             assistantDisplayDataByMessageId = assistantDisplayData(for: snapshot.messages)
             messages = snapshot.messages
-            stream = await SessionMessageStreamState.reducing(snapshot.pendingChunks)
+            stream = await SessionMessageStreamState.reducing(
+                snapshot.pendingChunks,
+                messageMetadata: snapshot.pendingMessageMetadata
+            )
             rebuildStreamingDisplayData()
             applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
             markLatestAssistantMessageRead(in: snapshot.messages)
-        case .agentChunks(let chunks):
-            stream = await stream.appending(chunks)
+        case .agentChunks(let chunks, let messageMetadata):
+            stream = await stream.appending(chunks, messageMetadata: messageMetadata)
             rebuildStreamingDisplayData()
         case .agentFinish(let message):
             upsert(message)

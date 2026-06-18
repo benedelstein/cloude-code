@@ -6,16 +6,20 @@ import Foundation
 public struct AgentChunksEvent: Codable, Equatable, Sendable {
     public let type = "agent.chunks"
     public var chunks: [WireUIMessageChunk]
+    public var messageMetadata: MessageStreamMetadata?
 
     public init(
-        chunks: [WireUIMessageChunk]
+        chunks: [WireUIMessageChunk],
+        messageMetadata: MessageStreamMetadata? = nil
     ) {
         self.chunks = chunks
+        self.messageMetadata = messageMetadata
     }
 
     private enum CodingKeys: String, CodingKey {
         case type
         case chunks
+        case messageMetadata
     }
 }
 
@@ -167,6 +171,16 @@ public struct EditorReadyEvent: Codable, Equatable, Sendable {
         case type
         case url
         case token
+    }
+}
+
+public struct MessageStreamMetadata: Codable, Equatable, Sendable {
+    public var startedAt: Double
+
+    public init(
+        startedAt: Double
+    ) {
+        self.startedAt = startedAt
     }
 }
 
@@ -404,15 +418,18 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
     public let type = "sync.response"
     public var messages: [WireUIMessage]
     public var pendingChunks: [WireUIMessageChunk]?
+    public var pendingMessageMetadata: MessageStreamMetadata?
     public var activeTurn: ActiveTurnState?
 
     public init(
         messages: [WireUIMessage],
         pendingChunks: [WireUIMessageChunk]? = nil,
+        pendingMessageMetadata: MessageStreamMetadata? = nil,
         activeTurn: ActiveTurnState? = nil
     ) {
         self.messages = messages
         self.pendingChunks = pendingChunks
+        self.pendingMessageMetadata = pendingMessageMetadata
         self.activeTurn = activeTurn
     }
 
@@ -420,6 +437,7 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
         case type
         case messages
         case pendingChunks
+        case pendingMessageMetadata
         case activeTurn
     }
 }

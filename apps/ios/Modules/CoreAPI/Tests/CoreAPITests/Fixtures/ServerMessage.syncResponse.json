@@ -46,6 +46,9 @@
       "delta": "Hel"
     }
   ],
+  "pendingMessageMetadata": {
+    "startedAt": 1782561600000
+  },
   "activeTurn": {
     "userMessageId": "msg_1"
   }

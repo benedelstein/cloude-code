@@ -63,10 +63,16 @@ export const ConnectedEvent = z.object({
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
+export const MessageStreamMetadata = z.object({
+  startedAt: z.number(),
+});
+export type MessageStreamMetadata = z.infer<typeof MessageStreamMetadata>;
+
 export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
   messages: z.array(WireUIMessageSchema),
   pendingChunks: z.array(WireUIMessageChunkSchema).optional(),
+  pendingMessageMetadata: MessageStreamMetadata.optional(),
   activeTurn: ActiveTurnState.nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
@@ -94,6 +100,7 @@ export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 export const AgentChunksEvent = z.object({
   type: z.literal("agent.chunks"),
   chunks: z.array(WireUIMessageChunkSchema),
+  messageMetadata: MessageStreamMetadata.optional(),
 });
 export type AgentChunksEvent = z.infer<typeof AgentChunksEvent>;
 

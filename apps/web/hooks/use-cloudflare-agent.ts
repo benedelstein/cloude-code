@@ -257,8 +257,11 @@ export function useCloudflareAgent({
       });
 
       for await (const message of messageStream) {
-        streamingStartedAtRef.current = streamingStartedAtRef.current ?? Date.now();
-        setStreamingMessage(withLiveStartedAt(message, streamingStartedAtRef.current));
+        setStreamingMessage(
+          streamingStartedAtRef.current === null
+            ? message
+            : withLiveStartedAt(message, streamingStartedAtRef.current),
+        );
       }
       console.log("[agent] consumeStream ended normally");
     } catch (err) {
@@ -298,6 +301,7 @@ export function useCloudflareAgent({
         // mid-stream (e.g. WS reconnect) and would otherwise orphan the
         // existing controller and buffer chunks into an unconsumed stream.
         if (pendingChunks && pendingChunks.length > 0) {
+          streamingStartedAtRef.current = msg.pendingMessageMetadata?.startedAt ?? null;
           if (streamControllerRef.current) {
             console.log("[agent] sync.response skipping pendingChunks replay — stream already active", { pendingChunkCount: pendingChunks.length });
           } else {
@@ -321,6 +325,7 @@ export function useCloudflareAgent({
         if (incoming.length === 0) {
           break;
         }
+        streamingStartedAtRef.current = msg.messageMetadata?.startedAt ?? streamingStartedAtRef.current;
         if (!streamControllerRef.current) {
           const stream = new ReadableStream<UIMessageChunk>({
             start: (controller) => {

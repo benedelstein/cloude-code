@@ -53,6 +53,7 @@ describe("SessionSyncService", () => {
       getServerState: () => createServerState(),
       getClientState: () => createClientState(),
       getPendingChunks: () => undefined,
+      getPendingMessageMetadata: () => undefined,
     });
 
     expect(service.buildConnectedMessage()).toEqual({
@@ -76,13 +77,15 @@ describe("SessionSyncService", () => {
       messageRepository,
       getServerState: () => createServerState({ activeUserMessageId: "user-message-1" }),
       getClientState: () => createClientState(),
-      getPendingChunks: () => [pendingChunk],
+      getPendingChunks: () => [{ sequence: 0, chunk: pendingChunk, receivedAt: 1_782_561_600_000 }],
+      getPendingMessageMetadata: () => ({ startedAt: 1_782_561_600_000 }),
     });
 
     expect(service.buildSyncResponse()).toEqual({
       type: "sync.response",
       messages: [message],
       pendingChunks: [pendingChunk],
+      pendingMessageMetadata: { startedAt: 1_782_561_600_000 },
       activeTurn: { userMessageId: "user-message-1" },
     });
     expect(messageRepository.getAllBySession).toHaveBeenCalledWith(sessionId);
@@ -97,6 +100,7 @@ describe("SessionSyncService", () => {
       getServerState: () => createServerState({ sessionId: null }),
       getClientState: () => createClientState(),
       getPendingChunks: () => undefined,
+      getPendingMessageMetadata: () => undefined,
     });
 
     expect(service.buildSyncResponse()).toEqual({

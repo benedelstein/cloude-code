@@ -279,6 +279,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getServerState: () => this.serverState,
       getClientState: () => this.state,
       getPendingChunks: () => this.turnCoordinator.getPendingChunks(),
+      getPendingMessageMetadata: () => this.turnCoordinator.getPendingMessageMetadata(),
     });
 
     this.processManager = new SpriteAgentProcessManager({

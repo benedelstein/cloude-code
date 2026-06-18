@@ -25,6 +25,22 @@ describe("MessageAccumulator timing", () => {
     expect(metadata.endedAt).toBe(before + 500);
   });
 
+  it("uses receivedAt when replaying persisted chunks", () => {
+    const accumulator = new MessageAccumulator();
+    accumulator.process(
+      { type: "start", messageId: "m1" },
+      { receivedAt: 1_782_561_600_000 },
+    );
+    const result = accumulator.process(
+      { type: "finish" },
+      { receivedAt: 1_782_561_602_000 },
+    );
+
+    const metadata = result.finishedMessage!.metadata as { startedAt: number; endedAt: number };
+    expect(metadata.startedAt).toBe(1_782_561_600_000);
+    expect(metadata.endedAt).toBe(1_782_561_602_000);
+  });
+
   it("preserves startedAt across finish and stamps endedAt", () => {
     const accumulator = new MessageAccumulator();
     accumulator.process({ type: "start", messageId: "m1" });

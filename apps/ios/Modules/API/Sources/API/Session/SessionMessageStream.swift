@@ -6,15 +6,18 @@ import SwiftAISDK
 
 public struct SessionMessageStreamState: Sendable, Equatable {
     public private(set) var chunks: [SessionStreamChunk]
+    public private(set) var messageMetadata: SessionStreamMessageMetadata?
     public private(set) var message: SessionMessage?
     public private(set) var errorDescription: String?
 
     public init(
         chunks: [SessionStreamChunk] = [],
+        messageMetadata: SessionStreamMessageMetadata? = nil,
         message: SessionMessage? = nil,
         errorDescription: String? = nil
     ) {
         self.chunks = chunks
+        self.messageMetadata = messageMetadata
         self.message = message
         self.errorDescription = errorDescription
     }
@@ -30,22 +33,52 @@ public struct SessionMessageStreamState: Sendable, Equatable {
         return chunks.compactMap(\.textDelta).joined()
     }
 
-    public static func reducing(_ chunks: [SessionStreamChunk]) async -> Self {
-        await Self().appending(chunks)
+    public static func reducing(
+        _ chunks: [SessionStreamChunk],
+        messageMetadata: SessionStreamMessageMetadata? = nil
+    ) async -> Self {
+        await Self().appending(chunks, messageMetadata: messageMetadata)
     }
 
-    public func appending(_ newChunks: [SessionStreamChunk]) async -> Self {
+    public func appending(
+        _ newChunks: [SessionStreamChunk],
+        messageMetadata newMessageMetadata: SessionStreamMessageMetadata? = nil
+    ) async -> Self {
         var next = self
         next.chunks.append(contentsOf: newChunks)
+        next.messageMetadata = newMessageMetadata ?? next.messageMetadata
 
         do {
             next.message = try await SessionMessageStreamReader.message(from: next.chunks)
+            next.applyMessageMetadata()
             next.errorDescription = nil
         } catch {
             next.errorDescription = error.localizedDescription
         }
 
         return next
+    }
+
+    private mutating func applyMessageMetadata() {
+        guard let message, let messageMetadata else { return }
+        self.message = SessionMessage(
+            id: message.id,
+            role: message.role,
+            parts: message.parts,
+            metadata: message.metadata.addingStartedAtIfNeeded(messageMetadata.startedAt)
+        )
+    }
+}
+
+private extension Optional where Wrapped == Domain.JSONValue {
+    func addingStartedAtIfNeeded(_ startedAt: Double) -> Domain.JSONValue {
+        guard case .object(var object) = self else {
+            return .object(["startedAt": .number(startedAt)])
+        }
+        if object["startedAt"] == nil {
+            object["startedAt"] = .number(startedAt)
+        }
+        return .object(object)
     }
 }
 

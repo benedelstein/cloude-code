@@ -15,16 +15,37 @@ extension SessionMessage {
 public struct SessionSyncSnapshot: Sendable, Equatable {
     public let messages: [SessionMessage]
     public let pendingChunks: [SessionStreamChunk]
+    public let pendingMessageMetadata: SessionStreamMessageMetadata?
     public let activeTurnUserMessageId: String?
 
     public init(
         messages: [SessionMessage],
         pendingChunks: [SessionStreamChunk],
+        pendingMessageMetadata: SessionStreamMessageMetadata?,
         activeTurnUserMessageId: String?
     ) {
         self.messages = messages
         self.pendingChunks = pendingChunks
+        self.pendingMessageMetadata = pendingMessageMetadata
         self.activeTurnUserMessageId = activeTurnUserMessageId
+    }
+}
+
+public struct SessionStreamMessageMetadata: Sendable, Equatable {
+    public let startedAt: Double
+
+    public init(startedAt: Double) {
+        self.startedAt = startedAt
+    }
+}
+
+extension SessionStreamMessageMetadata {
+    init(_ metadata: CoreAPI.MessageStreamMetadata) {
+        self.init(startedAt: metadata.startedAt)
+    }
+
+    var jsonValue: Domain.JSONValue {
+        .object(["startedAt": .number(startedAt)])
     }
 }
 

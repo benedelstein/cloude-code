@@ -65,6 +65,21 @@ struct SessionMessagesTests {
         #expect(state.errorDescription == nil)
     }
 
+    @Test func streamStateAttachesServerMessageMetadata() async throws {
+        let state = await SessionMessageStreamState.reducing(
+            [
+                SessionStreamChunk(.start(.init(messageId: "message-1"))),
+                SessionStreamChunk(.textStart(.init(id: "text-1"))),
+                SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
+            ],
+            messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000)
+        )
+
+        #expect(state.message?.metadata == .object([
+            "startedAt": .number(1_782_561_600_000)
+        ]))
+    }
+
     @Test func streamStateFallsBackToTextDeltasWhenSDKProducesNoMessage() async throws {
         let state = await SessionMessageStreamState.reducing([
             SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))

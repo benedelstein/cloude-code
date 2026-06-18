@@ -1130,7 +1130,10 @@
       {
         "type": "sample"
       }
-    ]
+    ],
+    "messageMetadata": {
+      "startedAt": 1
+    }
   },
   "AgentChunksEvent.autoMinimal": {
     "type": "agent.chunks",
@@ -1232,6 +1235,12 @@
     "url": "sample",
     "token": "sample"
   },
+  "MessageStreamMetadata.autoFull": {
+    "startedAt": 1
+  },
+  "MessageStreamMetadata.autoMinimal": {
+    "startedAt": 1
+  },
   "OperationCancelEvent.autoFull": {
     "type": "operation.cancel"
   },
@@ -1275,6 +1284,9 @@
         "type": "sample"
       }
     ],
+    "pendingMessageMetadata": {
+      "startedAt": 1
+    },
     "activeTurn": {
       "userMessageId": "sample"
     }
@@ -1290,7 +1302,10 @@
       {
         "type": "sample"
       }
-    ]
+    ],
+    "messageMetadata": {
+      "startedAt": 1
+    }
   },
   "ServerMessage.autoAgentFinish": {
     "type": "agent.finish",
@@ -1413,6 +1428,9 @@
         "type": "sample"
       }
     ],
+    "pendingMessageMetadata": {
+      "startedAt": 1
+    },
     "activeTurn": {
       "userMessageId": "sample"
     }

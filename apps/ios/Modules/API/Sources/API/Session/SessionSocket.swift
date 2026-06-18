@@ -8,7 +8,7 @@ public enum SessionSocketEvent: Sendable {
     case connected(status: String)
     case syncResponse(SessionSyncSnapshot)
     case operationError(SessionSocketOperationError)
-    case agentChunks([SessionStreamChunk])
+    case agentChunks(chunks: [SessionStreamChunk], messageMetadata: SessionStreamMessageMetadata?)
     case agentFinish(SessionMessage)
     case agentReady
     case userMessage(SessionMessage)
@@ -144,10 +144,14 @@ public actor SessionSocket {
             return .syncResponse(SessionSyncSnapshot(
                 messages: event.messages.map(SessionMessage.init),
                 pendingChunks: (event.pendingChunks ?? []).map(SessionStreamChunk.init),
+                pendingMessageMetadata: event.pendingMessageMetadata.map(SessionStreamMessageMetadata.init),
                 activeTurnUserMessageId: event.activeTurn?.userMessageId
             ))
         case .agentChunks(let event):
-            return .agentChunks(event.chunks.map(SessionStreamChunk.init))
+            return .agentChunks(
+                chunks: event.chunks.map(SessionStreamChunk.init),
+                messageMetadata: event.messageMetadata.map(SessionStreamMessageMetadata.init)
+            )
         case .agentFinish(let event):
             return .agentFinish(SessionMessage(event.message))
         case .userMessage(let event):

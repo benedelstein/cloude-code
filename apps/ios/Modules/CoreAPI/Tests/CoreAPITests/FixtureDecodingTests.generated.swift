@@ -575,6 +575,14 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(EditorReadyEvent.self, key: "EditorReadyEvent.autoMinimal")
     }
 
+    @Test func messageStreamMetadataAutoFull() throws {
+        try assertAutoRoundTrip(MessageStreamMetadata.self, key: "MessageStreamMetadata.autoFull")
+    }
+
+    @Test func messageStreamMetadataAutoMinimal() throws {
+        try assertAutoRoundTrip(MessageStreamMetadata.self, key: "MessageStreamMetadata.autoMinimal")
+    }
+
     @Test func operationCancelEventAutoFull() throws {
         try assertAutoRoundTrip(OperationCancelEvent.self, key: "OperationCancelEvent.autoFull")
     }
