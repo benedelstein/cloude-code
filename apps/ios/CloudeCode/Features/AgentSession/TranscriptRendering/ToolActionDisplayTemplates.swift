@@ -2,14 +2,10 @@ import Domain
 import Foundation
 
 struct CountTitleTemplate {
-    let singular: (Int) -> String
-    let plural: (Int) -> String
+    let title: (Int) -> String
 
     func title(count: Int) -> String {
-        if count == 1 {
-            return singular(count)
-        }
-        return plural(count)
+        title(count)
     }
 }
 
@@ -84,120 +80,63 @@ extension ToolActionDisplayFormatter {
 private extension ToolActionDisplayFormatter {
     var readTemplates: GroupTitleTemplates {
         GroupTitleTemplates(
-            pending: .init(
-                singular: { String(localized: "Read \($0) file") },
-                plural: { String(localized: "Read \($0) files") }
-            ),
-            active: .init(
-                singular: { String(localized: "Reading \($0) file") },
-                plural: { String(localized: "Reading \($0) files") }
-            ),
-            complete: .init(
-                singular: { String(localized: "Read \($0) file") },
-                plural: { String(localized: "Read \($0) files") }
-            )
+            pending: .init { String(localized: "Read \($0) files") },
+            active: .init { String(localized: "Reading \($0) files") },
+            complete: .init { String(localized: "Read \($0) files") }
         )
     }
 
     var searchTemplates: GroupTitleTemplates {
         GroupTitleTemplates(
-            pending: .init(
-                singular: { String(localized: "Search \($0) pattern") },
-                plural: { String(localized: "Search \($0) patterns") }
-            ),
-            active: .init(
-                singular: { String(localized: "Searching \($0) pattern") },
-                plural: { String(localized: "Searching \($0) patterns") }
-            ),
-            complete: .init(
-                singular: { String(localized: "Searched \($0) pattern") },
-                plural: { String(localized: "Searched \($0) patterns") }
-            )
+            pending: .init { String(localized: "Search \($0) patterns") },
+            active: .init { String(localized: "Searching \($0) patterns") },
+            complete: .init { String(localized: "Searched \($0) patterns") }
         )
     }
 
     var webTemplates: GroupTitleTemplates {
         GroupTitleTemplates(
-            pending: .init(
-                singular: { String(localized: "Make \($0) web request") },
-                plural: { String(localized: "Make \($0) web requests") }
-            ),
-            active: .init(
-                singular: { String(localized: "Making \($0) web request") },
-                plural: { String(localized: "Making \($0) web requests") }
-            ),
-            complete: .init(
-                singular: { String(localized: "Made \($0) web request") },
-                plural: { String(localized: "Made \($0) web requests") }
-            )
+            pending: .init { String(localized: "Make \($0) web requests") },
+            active: .init { String(localized: "Making \($0) web requests") },
+            complete: .init { String(localized: "Made \($0) web requests") }
         )
     }
 
     var bashTemplates: GroupTitleTemplates {
         GroupTitleTemplates(
-            pending: .init(
-                singular: { String(localized: "Run \($0) command") },
-                plural: { String(localized: "Run \($0) commands") }
-            ),
-            active: .init(
-                singular: { String(localized: "Running \($0) command") },
-                plural: { String(localized: "Running \($0) commands") }
-            ),
-            complete: .init(
-                singular: { String(localized: "Ran \($0) command") },
-                plural: { String(localized: "Ran \($0) commands") }
-            )
+            pending: .init { String(localized: "Run \($0) commands") },
+            active: .init { String(localized: "Running \($0) commands") },
+            complete: .init { String(localized: "Ran \($0) commands") }
         )
     }
 }
 
 private extension ToolActionDisplayFormatter {
     var editTemplates: GroupTitleTemplates {
-        let template = CountTitleTemplate(
-            singular: { String(localized: "Edit \($0) action") },
-            plural: { String(localized: "Edit \($0) actions") }
-        )
+        let template = CountTitleTemplate { String(localized: "Edit \($0) actions") }
         return GroupTitleTemplates(pending: template, active: template, complete: template)
     }
 
     var writeTemplates: GroupTitleTemplates {
-        let template = CountTitleTemplate(
-            singular: { String(localized: "Write \($0) action") },
-            plural: { String(localized: "Write \($0) actions") }
-        )
+        let template = CountTitleTemplate { String(localized: "Write \($0) actions") }
         return GroupTitleTemplates(pending: template, active: template, complete: template)
     }
 
     var todoTemplates: GroupTitleTemplates {
-        let template = CountTitleTemplate(
-            singular: { String(localized: "Update \($0) todo list") },
-            plural: { String(localized: "Update \($0) todo lists") }
-        )
+        let template = CountTitleTemplate { String(localized: "Update \($0) todo lists") }
         return GroupTitleTemplates(pending: template, active: template, complete: template)
     }
 
     var planTemplates: GroupTitleTemplates {
-        let template = CountTitleTemplate(
-            singular: { String(localized: "Plan \($0) update") },
-            plural: { String(localized: "Plan \($0) updates") }
-        )
+        let template = CountTitleTemplate { String(localized: "Plan \($0) updates") }
         return GroupTitleTemplates(pending: template, active: template, complete: template)
     }
 
     var otherTemplates: GroupTitleTemplates {
         GroupTitleTemplates(
-            pending: .init(
-                singular: { String(localized: "Use \($0) tool") },
-                plural: { String(localized: "Use \($0) tools") }
-            ),
-            active: .init(
-                singular: { String(localized: "Using \($0) tool") },
-                plural: { String(localized: "Using \($0) tools") }
-            ),
-            complete: .init(
-                singular: { String(localized: "Used \($0) tool") },
-                plural: { String(localized: "Used \($0) tools") }
-            )
+            pending: .init { String(localized: "Use \($0) tools") },
+            active: .init { String(localized: "Using \($0) tools") },
+            complete: .init { String(localized: "Used \($0) tools") }
         )
     }
 }

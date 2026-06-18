@@ -1,0 +1,420 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Edit %lld actions" : {
+      "comment" : "Grouped tool title. %lld is the number of edit actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Edit %lld action"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Edit %lld actions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Made %lld web requests" : {
+      "comment" : "Grouped tool title. %lld is the number of completed web requests.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Made %lld web request"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Made %lld web requests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Make %lld web requests" : {
+      "comment" : "Grouped tool title. %lld is the number of pending web requests.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Make %lld web request"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Make %lld web requests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Making %lld web requests" : {
+      "comment" : "Grouped tool title. %lld is the number of active web requests.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Making %lld web request"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Making %lld web requests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Plan %lld updates" : {
+      "comment" : "Grouped tool title. %lld is the number of plan updates.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Plan %lld update"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Plan %lld updates"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Ran %lld commands" : {
+      "comment" : "Grouped tool title. %lld is the number of completed shell commands.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Ran %lld command"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Ran %lld commands"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Read %lld files" : {
+      "comment" : "Grouped tool title. %lld is the number of files read or pending read.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Read %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Read %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Reading %lld files" : {
+      "comment" : "Grouped tool title. %lld is the number of active file reads.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Reading %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Reading %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Run %lld commands" : {
+      "comment" : "Grouped tool title. %lld is the number of pending shell commands.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Run %lld command"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Run %lld commands"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Running %lld commands" : {
+      "comment" : "Grouped tool title. %lld is the number of active shell commands.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Running %lld command"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Running %lld commands"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Search %lld patterns" : {
+      "comment" : "Grouped tool title. %lld is the number of pending search patterns.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Search %lld pattern"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Search %lld patterns"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Searched %lld patterns" : {
+      "comment" : "Grouped tool title. %lld is the number of completed search patterns.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searched %lld pattern"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searched %lld patterns"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Searching %lld patterns" : {
+      "comment" : "Grouped tool title. %lld is the number of active search patterns.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searching %lld pattern"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searching %lld patterns"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Update %lld todo lists" : {
+      "comment" : "Grouped tool title. %lld is the number of todo-list update actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Update %lld todo list"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Update %lld todo lists"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Use %lld tools" : {
+      "comment" : "Grouped tool title. %lld is the number of pending generic tool actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Use %lld tool"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Use %lld tools"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Used %lld tools" : {
+      "comment" : "Grouped tool title. %lld is the number of completed generic tool actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Used %lld tool"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Used %lld tools"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Using %lld tools" : {
+      "comment" : "Grouped tool title. %lld is the number of active generic tool actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Using %lld tool"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Using %lld tools"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Write %lld actions" : {
+      "comment" : "Grouped tool title. %lld is the number of write actions.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Write %lld action"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Write %lld actions"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
