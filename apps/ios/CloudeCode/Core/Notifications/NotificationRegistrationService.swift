@@ -58,10 +58,6 @@ final class NotificationRegistrationService: NSObject {
                 }
             }
             .store(in: &cancellables)
-
-        Task { [weak self] in
-            await self?.fetchCurrentToken()
-        }
     }
 
     @MainActor
@@ -82,14 +78,6 @@ final class NotificationRegistrationService: NSObject {
         UIApplication.shared.registerForRemoteNotifications()
     }
 
-    private func fetchCurrentToken() async {
-        do {
-            handleToken(try await Messaging.messaging().token())
-        } catch {
-            Logger.warning("FCM token fetch failed", error)
-        }
-    }
-
     private func uploadToken(_ token: String) async {
         guard let deviceId = await deviceIdentifierStore.deviceId() else {
             Logger.warning("Skipping FCM token upload because identifierForVendor is unavailable")
@@ -98,7 +86,7 @@ final class NotificationRegistrationService: NSObject {
 
         do {
             try await notificationsAPI.registerFcmToken(deviceId: deviceId, token: token)
-            Logger.debug("Uploaded FCM token")
+            Logger.debug("Uploaded FCM token \(token)")
         } catch {
             Logger.warning("FCM token upload failed", error)
         }
