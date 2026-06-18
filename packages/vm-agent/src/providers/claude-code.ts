@@ -106,9 +106,17 @@ export const claudeCodeProvider: AgentProviderConfig<ClaudeSettings> = {
         streamingInput: "always",
         persistSession: true,
         // Replace the built-in AskUserQuestion (which cannot return a real
-        // answer in headless mode) with our blocking ask_user MCP tool.
+        // answer in headless mode) with our blocking ask_user MCP tool. A
+        // canUseTool callback (rather than disallowedTools) both blocks the
+        // native tool and explicitly approves ask_user — the latter matters in
+        // plan mode, where the SDK otherwise gates non-read-only tool calls.
         mcpServers: { [ASK_USER_SERVER_NAME]: askUserServer },
-        disallowedTools: [NATIVE_ASK_TOOL_NAME],
+        canUseTool: async (toolName, input) => {
+          if (toolName === NATIVE_ASK_TOOL_NAME) {
+            return { behavior: "deny", message: `Use ${ASK_USER_FULL_TOOL_NAME} instead.` };
+          }
+          return { behavior: "allow", updatedInput: input };
+        },
         systemPrompt: {
           type: "preset",
           preset: "claude_code",

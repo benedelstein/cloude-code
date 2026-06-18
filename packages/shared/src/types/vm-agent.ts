@@ -166,6 +166,8 @@ export type AgentQuestionOutput = z.infer<typeof AgentQuestionOutput>;
 export const AgentAnswerAckOutput = z.object({
   type: z.literal("answer_ack"),
   questionId: z.string().min(1),
+  /** False when no matching question was pending (stale/unknown id). */
+  delivered: z.boolean(),
 });
 
 /**

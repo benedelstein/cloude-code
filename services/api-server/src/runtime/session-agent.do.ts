@@ -844,7 +844,25 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         type: "agent.question.resolved",
         questionId: message.questionId,
       });
+      return;
     }
+    // Delivery failed (ack timeout, stale id, or dead process). The answering
+    // client optimistically dismissed the card — restore it so the user can
+    // retry, and surface the failure. A dead process will clear the pending
+    // question shortly via process_exit.
+    this.logger.warn("Failed to deliver answer to agent", {
+      fields: { questionId: message.questionId },
+    });
+    this.broadcastMessage({
+      type: "agent.question",
+      questionId: pending.questionId,
+      questions: pending.questions,
+    });
+    this.broadcastMessage({
+      type: "operation.error",
+      code: "CHAT_MESSAGE_FAILED",
+      message: "Failed to deliver your answer to the agent. Please try again.",
+    });
   }
 
   private async handleUserChatMessage(

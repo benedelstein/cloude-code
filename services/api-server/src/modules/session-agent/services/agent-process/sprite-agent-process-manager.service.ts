@@ -228,9 +228,11 @@ export class SpriteAgentProcessManager {
       session.write(
         `${encodeAgentInput({ type: "answer", questionId, responses })}\n`,
       );
-      await answerAck;
-      this.logger.debug("Agent process acknowledged answer delivery");
-      return true;
+      const delivered = await answerAck;
+      this.logger.debug("Agent process acknowledged answer delivery", {
+        fields: { questionId, delivered },
+      });
+      return delivered;
     } catch (error) {
       this.logger.warn("Failed to deliver answer to agent process", {
         error,
@@ -748,17 +750,20 @@ export class SpriteAgentProcessManager {
     session: SpriteWebsocketSession,
     questionId: string,
     timeoutMs: number,
-  ): Promise<void> {
-    return waitForSessionSignals(session, {
+  ): Promise<boolean> {
+    return waitForSessionSignals<boolean>(session, {
       timeoutMs,
-      onStdoutLine: (line) =>
-        lineMatchesAgentOutput(
-          line,
-          (output) =>
-            output.type === "answer_ack" && output.questionId === questionId,
-        )
-          ? resolveWaiting(undefined)
-          : continueWaiting(),
+      onStdoutLine: (line) => {
+        let delivered: boolean | null = null;
+        lineMatchesAgentOutput(line, (output) => {
+          if (output.type === "answer_ack" && output.questionId === questionId) {
+            delivered = output.delivered;
+            return true;
+          }
+          return false;
+        });
+        return delivered === null ? continueWaiting() : resolveWaiting(delivered);
+      },
       onError: (error) => rejectWaiting(error),
       onExit: (code) =>
         rejectWaiting(new Error(`vm-agent exited before answer ack: ${code}`)),

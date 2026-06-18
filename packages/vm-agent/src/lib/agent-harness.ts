@@ -202,6 +202,8 @@ export function startAgentHarness<S extends AgentSettings>(
 
   async function shutdown(): Promise<void> {
     stopped = true;
+    // Unblock the loop if it is parked inside a blocking ask_user tool call.
+    questionRegistry.rejectAll(new Error("shutdown"));
     // Unblock the loop if it is waiting on an empty queue.
     if (messageResolver) {
       const resolve = messageResolver;

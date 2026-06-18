@@ -325,6 +325,12 @@ export class AgentTurnCoordinator {
         this.handleProcessExit(event);
         break;
       case "question":
+        if (!this.getServerState().activeUserMessageId) {
+          this.logger.warn("Dropping question event with no active turn", {
+            fields: { questionId: event.questionId },
+          });
+          break;
+        }
         this.logger.info("Agent asked a question", {
           fields: { questionId: event.questionId, count: event.questions.length },
         });

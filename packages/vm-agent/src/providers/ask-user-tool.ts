@@ -42,14 +42,15 @@ export function createAskUserMcpServer(
       questions: z
         .array(
           z.object({
-            question: z.string().describe("The question to ask the user."),
+            question: z.string().min(1).describe("The question to ask the user."),
             header: z
               .string()
+              .min(1)
               .describe("Short label shown as a chip/tag (max 12 chars)."),
             options: z
               .array(
                 z.object({
-                  label: z.string().describe("The option text shown to the user."),
+                  label: z.string().min(1).describe("The option text shown to the user."),
                   description: z
                     .string()
                     .optional()
@@ -57,6 +58,7 @@ export function createAskUserMcpServer(
                 }),
               )
               .min(2)
+              .max(4)
               .describe("2-4 mutually exclusive options."),
             multiSelect: z
               .boolean()

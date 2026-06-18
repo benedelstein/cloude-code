@@ -182,7 +182,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
     if (!delivered) {
       this.log("warn", "answer for unknown/stale questionId", { questionId });
     }
-    this.handleEmit({ type: "answer_ack", questionId });
+    this.handleEmit({ type: "answer_ack", questionId, delivered });
   }
 
   /**
