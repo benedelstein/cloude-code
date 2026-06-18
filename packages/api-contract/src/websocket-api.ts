@@ -13,11 +13,9 @@ export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().trim().min(1).optional(),
   attachments: z.array(MessageAttachmentRef).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
-  /**
-   * Caller-generated correlation id for optimistic UI/idempotent local reconciliation;
-   * not stored as the durable message id.
-   */
-  clientMessageId: z.uuid().optional(),
+  clientMessageId: z.uuid()
+    .optional()
+    .describe("Caller-generated correlation id for optimistic UI reconciliation; not the durable message id."),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch provider effort before processing the message. */
