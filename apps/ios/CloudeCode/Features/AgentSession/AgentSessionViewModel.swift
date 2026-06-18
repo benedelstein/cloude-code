@@ -320,7 +320,7 @@ extension AgentSessionViewModel {
             id: messageId,
             role: optimisticMessage.role,
             parts: optimisticMessage.parts,
-            metadata: optimisticMessage.metadata
+            metadata: optimisticMessage.removingOptimisticMarker.metadata
         )
         messages[index] = acceptedMessage
     }
