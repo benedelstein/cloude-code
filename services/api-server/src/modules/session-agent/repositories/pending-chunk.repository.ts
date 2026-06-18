@@ -4,6 +4,13 @@ import type { Migration, SqlFn, Repository } from "./repository.types";
 interface PendingChunkRow {
   sequence: number;
   chunk: string;
+  received_at: number | null;
+}
+
+export interface PendingChunkRecord {
+  sequence: number;
+  chunk: UIMessageChunk;
+  receivedAt: number;
 }
 
 /**
@@ -32,6 +39,17 @@ export class PendingChunkRepository implements Repository {
         )
       `;
     },
+    (sql) => {
+      sql`
+        ALTER TABLE pending_message_chunks
+        ADD COLUMN received_at INTEGER
+      `;
+      sql`
+        UPDATE pending_message_chunks
+        SET received_at = ${Date.now()}
+        WHERE received_at IS NULL
+      `;
+    },
   ];
 
   constructor(private sql: SqlFn) {}
@@ -42,12 +60,16 @@ export class PendingChunkRepository implements Repository {
    * already existed (duplicate retry). Callers must skip applying / broadcasting
    * the chunk when this returns false.
    */
-  appendIfNew(chunk: UIMessageChunk, sequence: number): boolean {
+  appendIfNew(
+    chunk: UIMessageChunk,
+    sequence: number,
+    receivedAt: number,
+  ): boolean {
     // Stored JSON is AI SDK UI state, not Wire DTO output. Do not normalize through Wire schemas here.
     const chunkJson = JSON.stringify(chunk);
     const inserted = this.sql<{ sequence: number }>`
-      INSERT INTO pending_message_chunks (sequence, chunk)
-      VALUES (${sequence}, ${chunkJson})
+      INSERT INTO pending_message_chunks (sequence, chunk, received_at)
+      VALUES (${sequence}, ${chunkJson}, ${receivedAt})
       ON CONFLICT(sequence) DO NOTHING
       RETURNING sequence
     `;
@@ -55,13 +77,14 @@ export class PendingChunkRepository implements Repository {
   }
 
   /** Returns all buffered chunks paired with their sequence, ordered ascending. */
-  getAll(): Array<{ sequence: number; chunk: UIMessageChunk }> {
+  getAll(): PendingChunkRecord[] {
     const rows = this.sql<PendingChunkRow>`
-      SELECT sequence, chunk FROM pending_message_chunks ORDER BY sequence ASC
+      SELECT sequence, chunk, received_at FROM pending_message_chunks ORDER BY sequence ASC
     `;
     return rows.map((row) => ({
       sequence: row.sequence,
       chunk: JSON.parse(row.chunk) as UIMessageChunk,
+      receivedAt: row.received_at ?? Date.now(),
     }));
   }
 

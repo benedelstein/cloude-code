@@ -27,15 +27,26 @@ struct SignedOutView: View {
             Button {
                 Task { await sessionStore.signIn(using: webAuthenticationSession) }
             } label: {
-                HStack(spacing: style.spacing) {
-                    Image("GitHubMark")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                    Text("Sign in")
+                ZStack {
+                    if sessionStore.isSigningIn {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        HStack(spacing: style.spacing) {
+                            Image("GitHubMark")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
+                            Text("Sign in")
+                        }
+                    }
                 }
+                .font(style.headlineFont)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: style.mainButtonHeight)
             }
-            .buttonStyle(GlassButtonStyle(tint: theme.accentBlue, isLoading: sessionStore.isSigningIn))
+            .glassButtonStyle(.glassProminent, tint: theme.accentBlue)
             .disabled(sessionStore.isSigningIn)
             .padding(.horizontal, style.horizontalPadding)
         }

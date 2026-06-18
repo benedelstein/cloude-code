@@ -8,7 +8,8 @@ public enum SessionSocketEvent: Sendable {
     case connected(status: String)
     case syncResponse(SessionSyncSnapshot)
     case operationError(SessionSocketOperationError)
-    case agentChunks([SessionStreamChunk])
+    case chatAccepted(clientMessageId: String, messageId: String)
+    case agentChunks(chunks: [SessionStreamChunk], messageMetadata: SessionStreamMessageMetadata?)
     case agentFinish(SessionMessage)
     case agentReady
     case userMessage(SessionMessage)
@@ -73,8 +74,11 @@ public actor SessionSocket {
         )))
     }
 
-    public func sendChat(content: String) async throws {
-        try await send(.chatMessage(ChatMessageEvent(content: content)))
+    public func sendChat(content: String, clientMessageId: String) async throws {
+        try await send(.chatMessage(ChatMessageEvent(
+            content: content,
+            clientMessageId: clientMessageId
+        )))
     }
 
     public func markRead(messageId: String) async throws {
@@ -138,16 +142,25 @@ public actor SessionSocket {
                 code: event.code.rawValue,
                 message: event.message
             ))
+        case .chatAccepted(let event):
+            return .chatAccepted(
+                clientMessageId: event.clientMessageId,
+                messageId: event.messageId
+            )
         case .editorReady(let event):
             return .editorReady(url: event.url)
         case .syncResponse(let event):
             return .syncResponse(SessionSyncSnapshot(
                 messages: event.messages.map(SessionMessage.init),
                 pendingChunks: (event.pendingChunks ?? []).map(SessionStreamChunk.init),
+                pendingMessageMetadata: event.pendingMessageMetadata.map(SessionStreamMessageMetadata.init),
                 activeTurnUserMessageId: event.activeTurn?.userMessageId
             ))
         case .agentChunks(let event):
-            return .agentChunks(event.chunks.map(SessionStreamChunk.init))
+            return .agentChunks(
+                chunks: event.chunks.map(SessionStreamChunk.init),
+                messageMetadata: event.messageMetadata.map(SessionStreamMessageMetadata.init)
+            )
         case .agentFinish(let event):
             return .agentFinish(SessionMessage(event.message))
         case .userMessage(let event):

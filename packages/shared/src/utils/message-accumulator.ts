@@ -43,6 +43,10 @@ export interface ProcessChunkResult {
   completedParts: MessagePart[];
 }
 
+export interface ProcessChunkOptions {
+  receivedAt?: number;
+}
+
 /**
  * Accumulates UIMessageStream chunks into a complete UIMessage.
  * Used by the DO to build the final message for storage while streaming parts to clients.
@@ -90,8 +94,12 @@ export class MessageAccumulator {
    * Process a stream chunk and accumulate it into the message.
    * @returns message completion state plus any parts fully materialized by this chunk
    */
-  process(chunk: UIMessageChunk): ProcessChunkResult {
-    this.stampMessageStartedIfNeeded();
+  process(
+    chunk: UIMessageChunk,
+    options: ProcessChunkOptions = {},
+  ): ProcessChunkResult {
+    const now = options.receivedAt ?? Date.now();
+    this.stampMessageStartedIfNeeded(now);
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
 
@@ -144,7 +152,7 @@ export class MessageAccumulator {
           type: "reasoning",
           text: "",
           state: "streaming",
-          startedAt: Date.now(),
+          startedAt: now,
         };
         this.activeReasoningParts.set(chunk.id, reasoningPart);
         this.parts.push(reasoningPart);
@@ -167,7 +175,7 @@ export class MessageAccumulator {
         const reasoningPart = this.activeReasoningParts.get(chunk.id);
         if (reasoningPart) {
           reasoningPart.state = "done";
-          reasoningPart.endedAt = Date.now();
+          reasoningPart.endedAt = now;
           this.activeReasoningParts.delete(chunk.id);
           completedParts.push(reasoningPart);
         }
@@ -183,7 +191,7 @@ export class MessageAccumulator {
           input: undefined,
           title: chunk.title,
           providerExecuted: chunk.providerExecuted,
-          startedAt: Date.now(),
+          startedAt: now,
         };
         this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
         this.parts.push(toolPart as DynamicToolUIPart);
@@ -218,7 +226,7 @@ export class MessageAccumulator {
             input: chunk.input,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
-            startedAt: Date.now(),
+            startedAt: now,
           };
           this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
           this.parts.push(toolPart as DynamicToolUIPart);
@@ -234,7 +242,7 @@ export class MessageAccumulator {
           existing.part.input = chunk.input;
           existing.part.errorText = chunk.errorText;
           existing.part.state = "output-error";
-          existing.part.endedAt = Date.now();
+          existing.part.endedAt = now;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(existing.part as DynamicToolUIPart);
         } else {
@@ -248,8 +256,8 @@ export class MessageAccumulator {
             errorText: chunk.errorText,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
-            startedAt: Date.now(),
-            endedAt: Date.now(),
+            startedAt: now,
+            endedAt: now,
           };
           this.parts.push(toolPart as DynamicToolUIPart);
           completedParts.push(toolPart as DynamicToolUIPart);
@@ -262,7 +270,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.output = chunk.output;
           toolCall.part.state = "output-available";
-          toolCall.part.endedAt = Date.now();
+          toolCall.part.endedAt = now;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -274,7 +282,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.errorText = chunk.errorText;
           toolCall.part.state = "output-error";
-          toolCall.part.endedAt = Date.now();
+          toolCall.part.endedAt = now;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -301,7 +309,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.state = "output-denied";
           toolCall.part.approval = { ...(toolCall.part.approval ?? { id: "" }), approved: false };
-          toolCall.part.endedAt = Date.now();
+          toolCall.part.endedAt = now;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         } else {
@@ -359,8 +367,11 @@ export class MessageAccumulator {
       }
 
       case "finish":
-        completedParts.push(...this.finalizePendingParts());
-        this.mergeMetadataOnTerminate(chunk.messageMetadata as Record<string, unknown> | undefined);
+        completedParts.push(...this.finalizePendingParts(now));
+        this.mergeMetadataOnTerminate(
+          chunk.messageMetadata as Record<string, unknown> | undefined,
+          now,
+        );
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
@@ -375,14 +386,14 @@ export class MessageAccumulator {
         break;
 
       case "abort":
-        completedParts.push(...this.finalizePendingParts());
-        this.mergeMetadataOnTerminate({ aborted: true });
+        completedParts.push(...this.finalizePendingParts(now));
+        this.mergeMetadataOnTerminate({ aborted: true }, now);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
       case "error":
-        completedParts.push(...this.finalizePendingParts());
-        this.mergeMetadataOnTerminate(undefined);
+        completedParts.push(...this.finalizePendingParts(now));
+        this.mergeMetadataOnTerminate(undefined, now);
         this.finished = true;
         return { finishedMessage: this.getMessage() ?? undefined, completedParts };
 
@@ -408,23 +419,26 @@ export class MessageAccumulator {
    * that begin with `text-start` (no explicit `start` chunk) still get a
    * message-level start timestamp.
    */
-  private stampMessageStartedIfNeeded(): void {
+  private stampMessageStartedIfNeeded(now: number): void {
     if (this.metadata?.startedAt === undefined) {
-      this.metadata = { ...(this.metadata ?? {}), startedAt: Date.now() };
+      this.metadata = { ...(this.metadata ?? {}), startedAt: now };
     }
   }
 
   /**
    * Shallow-merge provider `messageMetadata` into existing metadata, preserving
-   * any existing `startedAt` and stamping `endedAt = Date.now()`.
+   * any existing `startedAt` and stamping `endedAt`.
    */
-  private mergeMetadataOnTerminate(incoming: Record<string, unknown> | undefined): void {
+  private mergeMetadataOnTerminate(
+    incoming: Record<string, unknown> | undefined,
+    now: number,
+  ): void {
     const existing = this.metadata ?? {};
     const merged: Record<string, unknown> = { ...existing, ...(incoming ?? {}) };
     if (existing.startedAt !== undefined) {
       merged.startedAt = existing.startedAt;
     }
-    merged.endedAt = Date.now();
+    merged.endedAt = now;
     this.metadata = merged;
   }
 
@@ -433,9 +447,8 @@ export class MessageAccumulator {
    * Parts are already in `this.parts`; we just mutate their state and
    * report them via completedParts so consumers see the close-out.
    */
-  private finalizePendingParts(): MessagePart[] {
+  private finalizePendingParts(now = Date.now()): MessagePart[] {
     const completedParts: MessagePart[] = [];
-    const now = Date.now();
 
     for (const [, textPart] of this.activeTextParts) {
       textPart.state = "done";
@@ -514,8 +527,9 @@ export class MessageAccumulator {
     if (!this.messageId) {
       this.messageId = crypto.randomUUID();
     }
-    this.finalizePendingParts();
-    this.mergeMetadataOnTerminate({ aborted: true });
+    const now = Date.now();
+    this.finalizePendingParts(now);
+    this.mergeMetadataOnTerminate({ aborted: true }, now);
     this.finished = true;
     return this.getMessage();
   }

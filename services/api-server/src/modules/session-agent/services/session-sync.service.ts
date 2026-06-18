@@ -3,9 +3,9 @@ import {
   validateWireCompatibleMessage,
 } from "@repo/shared";
 import type { ClientState, ServerMessage } from "@repo/shared";
-import type { UIMessageChunk } from "ai";
 import type { MessageRepository } from "../repositories/message.repository";
 import type { ServerState } from "../repositories/server-state.repository";
+import type { PendingChunkRecord } from "../repositories/pending-chunk.repository";
 
 type ConnectedMessage = Extract<ServerMessage, { type: "connected" }>;
 type SyncResponseMessage = Extract<ServerMessage, { type: "sync.response" }>;
@@ -14,20 +14,23 @@ export interface SessionSyncServiceDeps {
   messageRepository: MessageRepository;
   getServerState: () => ServerState;
   getClientState: () => ClientState;
-  getPendingChunks: () => UIMessageChunk[] | undefined;
+  getPendingChunks: () => PendingChunkRecord[] | undefined;
+  getPendingMessageMetadata: () => { startedAt: number } | undefined;
 }
 
 export class SessionSyncService {
   private readonly messageRepository: MessageRepository;
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
-  private readonly getPendingChunks: () => UIMessageChunk[] | undefined;
+  private readonly getPendingChunks: () => PendingChunkRecord[] | undefined;
+  private readonly getPendingMessageMetadata: () => { startedAt: number } | undefined;
 
   constructor(deps: SessionSyncServiceDeps) {
     this.messageRepository = deps.messageRepository;
     this.getServerState = deps.getServerState;
     this.getClientState = deps.getClientState;
     this.getPendingChunks = deps.getPendingChunks;
+    this.getPendingMessageMetadata = deps.getPendingMessageMetadata;
   }
 
   buildConnectedMessage(): ConnectedMessage {
@@ -48,7 +51,8 @@ export class SessionSyncService {
     const messages = this.messageRepository
       .getAllBySession(sessionId)
       .map((message) => message.message);
-    const pendingChunks = this.getPendingChunks();
+    const pendingChunkRecords = this.getPendingChunks();
+    const pendingChunks = pendingChunkRecords?.map((record) => record.chunk);
     for (const message of messages) {
       validateWireCompatibleMessage(message);
     }
@@ -59,6 +63,7 @@ export class SessionSyncService {
       type: "sync.response",
       messages,
       pendingChunks,
+      pendingMessageMetadata: this.getPendingMessageMetadata(),
       activeTurn: serverState.activeUserMessageId
         ? { userMessageId: serverState.activeUserMessageId }
         : null,

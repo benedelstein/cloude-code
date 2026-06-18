@@ -122,6 +122,37 @@ describe("useCloudflareAgent", () => {
     expect(result.current.isResponding).toBe(true);
   });
 
+  it("sends a client message id and reconciles the optimistic message id on ack", () => {
+    const randomUUIDSpy = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValue("123e4567-e89b-12d3-a456-426614174099");
+    const { result } = renderAgent();
+
+    act(() => {
+      result.current.sendMessage({ content: "hello" });
+    });
+
+    expect(result.current.messages[0]?.id).toBe("123e4567-e89b-12d3-a456-426614174099");
+    expect(latestSentMessage()).toEqual({
+      type: "chat.message",
+      clientMessageId: "123e4567-e89b-12d3-a456-426614174099",
+      content: "hello",
+    });
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "chat.accepted",
+          clientMessageId: "123e4567-e89b-12d3-a456-426614174099",
+          messageId: "server-message-1",
+        }),
+      });
+    });
+
+    expect(result.current.messages[0]?.id).toBe("server-message-1");
+    randomUUIDSpy.mockRestore();
+  });
+
   it("clears local waiting when a seen server active turn ends", () => {
     const { result } = renderAgent();
 
@@ -193,13 +224,14 @@ describe("useCloudflareAgent", () => {
     expect(result.current.baseBranch).toBe("develop");
   });
 
-  it("stamps live startedAt metadata on streaming messages", async () => {
+  it("uses server streaming metadata on streaming messages", async () => {
     const { result } = renderAgent();
 
     await act(async () => {
       mockAgentState.options?.onMessage({
         data: JSON.stringify({
           type: "agent.chunks",
+          messageMetadata: { startedAt: 1_782_561_600_000 },
           chunks: [
             { type: "start", messageId: "assistant-1" },
             { type: "text-start", id: "text-1" },
@@ -211,7 +243,7 @@ describe("useCloudflareAgent", () => {
     });
 
     const metadata = result.current.streamingMessage?.metadata as { startedAt?: unknown } | undefined;
-    expect(typeof metadata?.startedAt).toBe("number");
+    expect(metadata?.startedAt).toBe(1_782_561_600_000);
   });
 
   it("filters unknown wire chunks before AI SDK stream consumption", () => {

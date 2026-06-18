@@ -47,8 +47,9 @@ describe("UI message storage", () => {
       futureChunkField: true,
     } as UIMessageChunk;
 
-    expect(repository.appendIfNew(chunk, 1)).toBe(true);
+    expect(repository.appendIfNew(chunk, 1, 1_782_561_600_000)).toBe(true);
 
     expect(JSON.parse(calls[0]?.values[1] as string)).toEqual(chunk);
+    expect(calls[0]?.values[2]).toBe(1_782_561_600_000);
   });
 });

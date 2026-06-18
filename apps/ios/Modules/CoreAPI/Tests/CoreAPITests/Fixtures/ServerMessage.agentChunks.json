@@ -10,5 +10,8 @@
       "type": "finish",
       "finishReason": "stop"
     }
-  ]
+  ],
+  "messageMetadata": {
+    "startedAt": 1782561600000
+  }
 }

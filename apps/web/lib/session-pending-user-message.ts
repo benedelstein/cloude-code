@@ -19,9 +19,11 @@ function isValidPendingUserMessage(
 }
 
 export function buildOptimisticUserMessage({
+  id = crypto.randomUUID(),
   content,
   attachments = [],
 }: {
+  id?: string;
   content?: string;
   attachments?: AttachmentDescriptor[];
 }): UIMessage | null {
@@ -45,7 +47,7 @@ export function buildOptimisticUserMessage({
   }
 
   return {
-    id: crypto.randomUUID(),
+    id,
     role: "user",
     parts,
     metadata: { createdAt: new Date().toISOString() },

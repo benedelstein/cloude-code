@@ -118,6 +118,29 @@ describe("codexToolNormalizer", () => {
     expect(result[0]!.kind).toBe("todo");
   });
 
+  it("web_search maps to web search from output action query", () => {
+    const result = normalizeToolPart(
+      part({
+        toolName: "web_search",
+        input: { type: "webSearch", query: "" },
+        output: {
+          action: {
+            type: "search",
+            query: "Microsoft Teams bot outgoing webhook",
+            queries: ["Microsoft Teams bot outgoing webhook"],
+          },
+        },
+      }),
+      "openai-codex",
+    );
+
+    expect(result[0]!.kind).toBe("web");
+    if (result[0]!.kind === "web") {
+      expect(result[0]!.payload.kind).toBe("search");
+      expect(result[0]!.payload.query).toBe("Microsoft Teams bot outgoing webhook");
+    }
+  });
+
   it("unknown falls back to other", () => {
     const result = normalizeToolPart(
       part({ toolName: "weird_tool", input: {} }),

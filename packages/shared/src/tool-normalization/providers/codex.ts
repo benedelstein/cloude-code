@@ -14,15 +14,36 @@ function ctx(part: NormalizableToolUIPart) {
 
 function getInput(part: NormalizableToolUIPart): Record<string, unknown> {
   const value = "input" in part ? (part as { input?: unknown }).input : undefined;
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return asRecord(value);
 }
 
 function getOutput(part: NormalizableToolUIPart): unknown {
   return "output" in part ? (part as { output?: unknown }).output : undefined;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function codexWebSearchQuery(part: NormalizableToolUIPart, input: Record<string, unknown>): string | undefined {
+  const inputQuery = asString(input.query);
+  if (inputQuery) {
+    return inputQuery;
+  }
+
+  const output = asRecord(getOutput(part));
+  const action = asRecord(output.action);
+  const actionQuery = asString(action.query);
+  if (actionQuery) {
+    return actionQuery;
+  }
+
+  const queries = Array.isArray(action.queries) ? action.queries : [];
+  return asString(queries.find((query) => typeof query === "string")) || undefined;
 }
 
 interface CodexChange {
@@ -102,6 +123,14 @@ export const codexToolNormalizer: ToolPartNormalizer = {
         return [fallbackOtherAction(part)];
       }
       return changes.flatMap((change) => changeToActions(change, context));
+    }
+
+    if (name === "web_search" || inputType === "webSearch") {
+      return [{
+        kind: "web",
+        ...context,
+        payload: { kind: "search", query: codexWebSearchQuery(part, input) },
+      }];
     }
 
     if (name === "update_plan") {

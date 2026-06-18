@@ -99,7 +99,7 @@ actor TokenCoordinator: AuthTokenProviding {
             Logger.debug("Token refresh: discarded stale result")
             throw APIError.unauthenticated
         } catch APIError.unauthenticated { // refresh token rejected: terminal
-            Logger.warning("Token refresh: refresh token rejected, signing out")
+            Logger.warning("refresh token rejected, signing out")
             clearSession()
             continuation.yield(.signedOut)
             throw APIError.unauthenticated

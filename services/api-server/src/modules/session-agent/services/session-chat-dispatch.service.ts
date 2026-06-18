@@ -69,6 +69,7 @@ export interface SessionChatDispatchServiceDeps {
   getClientState: () => ClientState;
   updatePartialState: (partial: Partial<ClientState>) => void;
   broadcastMessage: (message: ServerMessage, without?: string[]) => void;
+  sendMessageToConnection: (message: ServerMessage, connectionId: string) => void;
   synthesizeStatus: () => SessionStatus;
   publishSessionSummaryInvalidated: (
     userId: string,
@@ -100,6 +101,7 @@ export class SessionChatDispatchService {
   private readonly getClientState: () => ClientState;
   private readonly updatePartialState: SessionChatDispatchServiceDeps["updatePartialState"];
   private readonly broadcastMessage: SessionChatDispatchServiceDeps["broadcastMessage"];
+  private readonly sendMessageToConnection: SessionChatDispatchServiceDeps["sendMessageToConnection"];
   private readonly synthesizeStatus: () => SessionStatus;
   private readonly publishSessionSummaryInvalidated:
     SessionChatDispatchServiceDeps["publishSessionSummaryInvalidated"];
@@ -115,6 +117,7 @@ export class SessionChatDispatchService {
     this.getClientState = deps.getClientState;
     this.updatePartialState = deps.updatePartialState;
     this.broadcastMessage = deps.broadcastMessage;
+    this.sendMessageToConnection = deps.sendMessageToConnection;
     this.synthesizeStatus = deps.synthesizeStatus;
     this.publishSessionSummaryInvalidated = deps.publishSessionSummaryInvalidated;
   }
@@ -169,7 +172,6 @@ export class SessionChatDispatchService {
     const userUiMessage = createUserUiMessage(
       content,
       attachmentRecords,
-      payload.messageId,
     );
     if (!userUiMessage) {
       return failure(
@@ -180,7 +182,12 @@ export class SessionChatDispatchService {
       );
     }
 
-    this.onUserMessageSent(userUiMessage, attachmentIds, connectionId);
+    this.onUserMessageSent(
+      userUiMessage,
+      attachmentIds,
+      connectionId,
+      payload.clientMessageId,
+    );
 
     const dispatchResult = await this.spawnTurn({
       userMessageId: userUiMessage.id,
@@ -349,12 +356,23 @@ export class SessionChatDispatchService {
     message: UIMessage,
     attachmentIds: string[],
     connectionId?: string,
+    clientMessageId?: string,
   ): void {
     const sessionId = this.getServerState().sessionId;
     if (!sessionId) { return; }
     const existing = this.messageRepository.getById(message.id);
     if (existing) { return; }
     const stored = this.messageRepository.create(sessionId, message);
+    if (connectionId && clientMessageId) {
+      this.sendMessageToConnection(
+        {
+          type: "chat.accepted",
+          clientMessageId,
+          messageId: stored.message.id,
+        },
+        connectionId,
+      );
+    }
     this.broadcastMessage(
       { type: "user.message", message: stored.message },
       connectionId ? [connectionId] : undefined,

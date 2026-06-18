@@ -139,7 +139,7 @@ export const FIXTURES: Fixture[] = [
       type: "chat.message",
       content: "Run the tests",
       attachments: [{ attachmentId: ATTACHMENT_ID }],
-      messageId: MESSAGE_ID,
+      clientMessageId: MESSAGE_ID,
       model: "claude-fable-5",
       effort: "high",
       agentMode: "edit",
@@ -157,7 +157,18 @@ export const FIXTURES: Fixture[] = [
         { type: "text-start", id: "text_1" },
         { type: "text-delta", id: "text_1", delta: "Hel" },
       ],
+      pendingMessageMetadata: { startedAt: 1_782_561_600_000 },
       activeTurn: { userMessageId: "msg_1" },
+    },
+  },
+  {
+    schema: ServerMessage,
+    typeName: "ServerMessage",
+    caseName: "chatAccepted",
+    value: {
+      type: "chat.accepted",
+      clientMessageId: MESSAGE_ID,
+      messageId: "server-message-1",
     },
   },
   {
@@ -170,6 +181,7 @@ export const FIXTURES: Fixture[] = [
         { type: "text-delta", id: "text_1", delta: "lo" },
         { type: "finish", finishReason: "stop" },
       ],
+      messageMetadata: { startedAt: 1_782_561_600_000 },
     },
   },
   {

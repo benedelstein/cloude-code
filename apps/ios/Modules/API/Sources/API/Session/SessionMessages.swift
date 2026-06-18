@@ -15,16 +15,37 @@ extension SessionMessage {
 public struct SessionSyncSnapshot: Sendable, Equatable {
     public let messages: [SessionMessage]
     public let pendingChunks: [SessionStreamChunk]
+    public let pendingMessageMetadata: SessionStreamMessageMetadata?
     public let activeTurnUserMessageId: String?
 
     public init(
         messages: [SessionMessage],
         pendingChunks: [SessionStreamChunk],
+        pendingMessageMetadata: SessionStreamMessageMetadata?,
         activeTurnUserMessageId: String?
     ) {
         self.messages = messages
         self.pendingChunks = pendingChunks
+        self.pendingMessageMetadata = pendingMessageMetadata
         self.activeTurnUserMessageId = activeTurnUserMessageId
+    }
+}
+
+public struct SessionStreamMessageMetadata: Sendable, Equatable {
+    public let startedAt: Double
+
+    public init(startedAt: Double) {
+        self.startedAt = startedAt
+    }
+}
+
+extension SessionStreamMessageMetadata {
+    init(_ metadata: CoreAPI.MessageStreamMetadata) {
+        self.init(startedAt: metadata.startedAt)
+    }
+
+    var jsonValue: Domain.JSONValue {
+        .object(["startedAt": .number(startedAt)])
     }
 }
 
@@ -56,20 +77,33 @@ private extension SessionClientState.AgentSettings {
         switch settings {
         case .openaiCodex(let payload):
             self.init(
-                provider: payload.provider,
+                provider: .openaiCodex,
                 model: payload.model.rawValue,
                 effort: payload.effort.rawValue,
                 maxTokens: payload.maxTokens
             )
         case .claudeCode(let payload):
             self.init(
-                provider: payload.provider,
+                provider: .claudeCode,
                 model: payload.model.rawValue,
                 effort: payload.effort.rawValue,
                 maxTokens: payload.maxTokens
             )
         case .unknown(let type):
-            self.init(provider: type, model: "", effort: "", maxTokens: 0)
+            self.init(provider: .unknown(type), model: "", effort: "", maxTokens: 0)
+        }
+    }
+}
+
+private extension AgentProviderID {
+    init(_ provider: CoreAPI.ProviderId) {
+        switch provider {
+        case .claudeCode:
+            self = .claudeCode
+        case .openaiCodex:
+            self = .openaiCodex
+        case .unknown(let value):
+            self = .unknown(value)
         }
     }
 }

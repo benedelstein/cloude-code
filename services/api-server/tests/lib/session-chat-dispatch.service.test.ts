@@ -32,7 +32,9 @@ vi.mock("../../src/modules/session-agent/services/session-agent-history.service"
 
 const SESSION_ID = "123e4567-e89b-12d3-a456-426614174010";
 const USER_ID = "123e4567-e89b-12d3-a456-426614174001";
-const MESSAGE_ID = "123e4567-e89b-12d3-a456-426614174099";
+const CLIENT_MESSAGE_ID = "123e4567-e89b-12d3-a456-426614174099";
+const SERVER_MESSAGE_ID = "123e4567-e89b-12d3-a456-426614174098" as
+  `${string}-${string}-${string}-${string}-${string}`;
 
 const noopLogger: Logger = {
   log: vi.fn(),
@@ -93,9 +95,9 @@ function makeMessageRepository(): MessageRepository {
   return repository as unknown as MessageRepository;
 }
 
-function makeChatDispatchService(params: {
+function makeChatDispatchHarness(params: {
   publishSessionSummaryInvalidated: (userId: string, sessionId: string) => Promise<void>;
-}): SessionChatDispatchService {
+}) {
   const turnCoordinator = {
     beginTurn: vi.fn(),
     attachProcessId: vi.fn(),
@@ -107,37 +109,106 @@ function makeChatDispatchService(params: {
   const attachmentService: SessionChatAttachmentProvider = {
     getByIdsBoundToSession: vi.fn(async () => []),
   };
+  const messageRepository = makeMessageRepository();
+  const broadcastMessage = vi.fn((_message: ServerMessage, _without?: string[]) => {});
+  const sendMessageToConnection = vi.fn((_message: ServerMessage, _connectionId: string) => {});
 
-  return new SessionChatDispatchService({
+  const service = new SessionChatDispatchService({
     logger: noopLogger,
     env: {
       DB: {} as D1Database,
       ANTHROPIC_API_KEY: "test-api-key",
     } as unknown as Env,
-    messageRepository: makeMessageRepository(),
+    messageRepository,
     attachmentService,
     turnCoordinator,
     processManager,
     getServerState: makeServerState,
     getClientState: makeClientState,
     updatePartialState: vi.fn(),
-    broadcastMessage: vi.fn((_message: ServerMessage, _without?: string[]) => {}),
+    broadcastMessage,
+    sendMessageToConnection,
     synthesizeStatus: vi.fn((): SessionStatus => "ready"),
     publishSessionSummaryInvalidated: params.publishSessionSummaryInvalidated,
   });
+
+  return {
+    service,
+    messageRepository,
+    broadcastMessage,
+    sendMessageToConnection,
+    turnCoordinator,
+    processManager,
+  };
+}
+
+function makeChatDispatchService(params: {
+  publishSessionSummaryInvalidated: (userId: string, sessionId: string) => Promise<void>;
+}): SessionChatDispatchService {
+  return makeChatDispatchHarness(params).service;
 }
 
 function makeChatMessage(): ChatMessageEvent {
   return {
     type: "chat.message",
     content: "Update sidebar title",
-    messageId: MESSAGE_ID,
+    clientMessageId: CLIENT_MESSAGE_ID,
   };
 }
 
 describe("SessionChatDispatchService", () => {
   beforeEach(() => {
     historyMockState.updateSessionHistoryData.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it("stores, broadcasts, and dispatches the server-generated user message id", async () => {
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(SERVER_MESSAGE_ID);
+    const harness = makeChatDispatchHarness({
+      publishSessionSummaryInvalidated: vi.fn(async () => {}),
+    });
+
+    const result = await harness.service.dispatchChatMessage(makeChatMessage(), "connection-1");
+
+    expect(result).toEqual(success(undefined));
+    expect(harness.messageRepository.create).toHaveBeenCalledWith(
+      SESSION_ID,
+      expect.objectContaining({ id: SERVER_MESSAGE_ID }),
+    );
+    expect(harness.messageRepository.create).not.toHaveBeenCalledWith(
+      SESSION_ID,
+      expect.objectContaining({ id: CLIENT_MESSAGE_ID }),
+    );
+    expect(harness.sendMessageToConnection).toHaveBeenCalledWith(
+      {
+        type: "chat.accepted",
+        clientMessageId: CLIENT_MESSAGE_ID,
+        messageId: SERVER_MESSAGE_ID,
+      },
+      "connection-1",
+    );
+    expect(harness.broadcastMessage).toHaveBeenCalledWith(
+      {
+        type: "user.message",
+        message: expect.objectContaining({ id: SERVER_MESSAGE_ID }),
+      },
+      ["connection-1"],
+    );
+    expect(harness.turnCoordinator.beginTurn).toHaveBeenCalledWith(SERVER_MESSAGE_ID);
+    expect(harness.processManager.dispatchMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.objectContaining({ id: SERVER_MESSAGE_ID }),
+      }),
+    );
+    expect(harness.messageRepository.create.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.sendMessageToConnection.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.sendMessageToConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.broadcastMessage.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.broadcastMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.turnCoordinator.beginTurn.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("publishes a summary invalidation only after history persistence resolves", async () => {

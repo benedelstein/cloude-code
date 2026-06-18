@@ -7,9 +7,10 @@ describe("websocket api schemas", () => {
     const client = ClientMessage.parse({
       type: "chat.message",
       content: "hello",
-      messageId: "123e4567-e89b-12d3-a456-426614174000",
+      clientMessageId: "123e4567-e89b-12d3-a456-426614174000",
     });
     expect(client.type).toBe("chat.message");
+    expect(client.clientMessageId).toBe("123e4567-e89b-12d3-a456-426614174000");
 
     const server = ServerMessage.parse({
       type: "connected",
@@ -17,6 +18,31 @@ describe("websocket api schemas", () => {
       status: "ready",
     });
     expect(server.type).toBe("connected");
+  });
+
+  it("does not include a client-supplied durable message id on chat.message", () => {
+    const client = ClientMessage.parse({
+      type: "chat.message",
+      content: "hello",
+      messageId: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(client.type).toBe("chat.message");
+    expect("messageId" in client).toBe(false);
+  });
+
+  it("parses chat accepted server messages", () => {
+    const server = ServerMessage.parse({
+      type: "chat.accepted",
+      clientMessageId: "123e4567-e89b-12d3-a456-426614174000",
+      messageId: "server-message-1",
+    });
+
+    expect(server).toEqual({
+      type: "chat.accepted",
+      clientMessageId: "123e4567-e89b-12d3-a456-426614174000",
+      messageId: "server-message-1",
+    });
   });
 
   it("parses session mark-read client messages", () => {

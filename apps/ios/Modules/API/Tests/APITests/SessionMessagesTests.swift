@@ -65,6 +65,21 @@ struct SessionMessagesTests {
         #expect(state.errorDescription == nil)
     }
 
+    @Test func streamStateAttachesServerMessageMetadata() async throws {
+        let state = await SessionMessageStreamState.reducing(
+            [
+                SessionStreamChunk(.start(.init(messageId: "message-1"))),
+                SessionStreamChunk(.textStart(.init(id: "text-1"))),
+                SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
+            ],
+            messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000)
+        )
+
+        #expect(state.message?.metadata == .object([
+            "startedAt": .number(1_782_561_600_000)
+        ]))
+    }
+
     @Test func streamStateFallsBackToTextDeltasWhenSDKProducesNoMessage() async throws {
         let state = await SessionMessageStreamState.reducing([
             SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
@@ -135,7 +150,7 @@ struct SessionMessagesTests {
         #expect(clientState.repoFullName == "benedelstein/cloude-code")
         #expect(clientState.status == "ready")
         #expect(clientState.sessionSetupRun?.tasks.first?.id == "repository")
-        #expect(clientState.agentSettings.provider == "openai-codex")
+        #expect(clientState.agentSettings.provider == .openaiCodex)
         #expect(clientState.agentSettings.model == "gpt-5.5")
         #expect(clientState.pullRequest == .creating)
         #expect(clientState.pushedBranch == "codex/session-client-state")

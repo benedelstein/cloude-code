@@ -24,6 +24,7 @@ final class HomeViewModel {
     private var socketTask: Task<Void, Never>?
 
     private(set) var isLoading = false
+    private(set) var hasLoaded = false
     private(set) var errorMessage: String?
     private(set) var nextRepoCursor: String?
 
@@ -59,10 +60,11 @@ final class HomeViewModel {
             return
         }
         didStart = true
-        listenForSocketEvents()
         await loadCache()
+        listenForSocketEvents()
         await refresh(showLoading: isEmpty)
         await userSessionsSocket.connect()
+        hasLoaded = true
     }
 
     /// Tear down socket bindings; `start()` rebinds on the next appearance.

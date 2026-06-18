@@ -14,7 +14,7 @@ struct UserMessageView: View {
     let message: SessionMessage
 
     var images: [URL] {
-        // Image parts are not decoded yet.
+        // todo Image parts are not decoded yet.
         []
     }
 
@@ -26,7 +26,8 @@ struct UserMessageView: View {
                 Text(verbatim: message.text)
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
-                    .padding(style.gridSize)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(userMessageShape.fill(theme.secondaryBackgroundColor))
             }
         }

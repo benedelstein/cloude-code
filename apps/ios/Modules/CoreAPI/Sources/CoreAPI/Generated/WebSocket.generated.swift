@@ -6,16 +6,20 @@ import Foundation
 public struct AgentChunksEvent: Codable, Equatable, Sendable {
     public let type = "agent.chunks"
     public var chunks: [WireUIMessageChunk]
+    public var messageMetadata: MessageStreamMetadata?
 
     public init(
-        chunks: [WireUIMessageChunk]
+        chunks: [WireUIMessageChunk],
+        messageMetadata: MessageStreamMetadata? = nil
     ) {
         self.chunks = chunks
+        self.messageMetadata = messageMetadata
     }
 
     private enum CodingKeys: String, CodingKey {
         case type
         case chunks
+        case messageMetadata
     }
 }
 
@@ -45,11 +49,31 @@ public struct AgentReadyEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct ChatAcceptedEvent: Codable, Equatable, Sendable {
+    public let type = "chat.accepted"
+    public var clientMessageId: String
+    public var messageId: String
+
+    public init(
+        clientMessageId: String,
+        messageId: String
+    ) {
+        self.clientMessageId = clientMessageId
+        self.messageId = messageId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case clientMessageId
+        case messageId
+    }
+}
+
 public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public let type = "chat.message"
     public var content: String?
     public var attachments: [MessageAttachmentRef]?
-    public var messageId: String?
+    public var clientMessageId: String?
     public var model: String?
     public var effort: String?
     public var agentMode: AgentMode?
@@ -57,14 +81,14 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public init(
         content: String? = nil,
         attachments: [MessageAttachmentRef]? = nil,
-        messageId: String? = nil,
+        clientMessageId: String? = nil,
         model: String? = nil,
         effort: String? = nil,
         agentMode: AgentMode? = nil
     ) {
         self.content = content
         self.attachments = attachments
-        self.messageId = messageId
+        self.clientMessageId = clientMessageId
         self.model = model
         self.effort = effort
         self.agentMode = agentMode
@@ -74,7 +98,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
         case type
         case content
         case attachments
-        case messageId
+        case clientMessageId
         case model
         case effort
         case agentMode
@@ -170,6 +194,16 @@ public struct EditorReadyEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct MessageStreamMetadata: Codable, Equatable, Sendable {
+    public var startedAt: Double
+
+    public init(
+        startedAt: Double
+    ) {
+        self.startedAt = startedAt
+    }
+}
+
 public struct OperationCancelEvent: Codable, Equatable, Sendable {
     public let type = "operation.cancel"
 
@@ -241,6 +275,7 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case agentFinish(AgentFinishEvent)
     case agentReady(AgentReadyEvent)
     case userMessage(UserMessageEvent)
+    case chatAccepted(ChatAcceptedEvent)
     case editorReady(EditorReadyEvent)
     case setupOutputChunks(SetupOutputChunksEvent)
     /// A variant this client version doesn't recognize yet.
@@ -267,6 +302,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
             self = .agentReady(try AgentReadyEvent(from: decoder))
         case "user.message":
             self = .userMessage(try UserMessageEvent(from: decoder))
+        case "chat.accepted":
+            self = .chatAccepted(try ChatAcceptedEvent(from: decoder))
         case "editor.ready":
             self = .editorReady(try EditorReadyEvent(from: decoder))
         case "setup.output.chunks":
@@ -291,6 +328,8 @@ public enum ServerMessage: Codable, Equatable, Sendable {
         case .agentReady(let payload):
             try payload.encode(to: encoder)
         case .userMessage(let payload):
+            try payload.encode(to: encoder)
+        case .chatAccepted(let payload):
             try payload.encode(to: encoder)
         case .editorReady(let payload):
             try payload.encode(to: encoder)
@@ -404,15 +443,18 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
     public let type = "sync.response"
     public var messages: [WireUIMessage]
     public var pendingChunks: [WireUIMessageChunk]?
+    public var pendingMessageMetadata: MessageStreamMetadata?
     public var activeTurn: ActiveTurnState?
 
     public init(
         messages: [WireUIMessage],
         pendingChunks: [WireUIMessageChunk]? = nil,
+        pendingMessageMetadata: MessageStreamMetadata? = nil,
         activeTurn: ActiveTurnState? = nil
     ) {
         self.messages = messages
         self.pendingChunks = pendingChunks
+        self.pendingMessageMetadata = pendingMessageMetadata
         self.activeTurn = activeTurn
     }
 
@@ -420,6 +462,7 @@ public struct SyncResponseEvent: Codable, Equatable, Sendable {
         case type
         case messages
         case pendingChunks
+        case pendingMessageMetadata
         case activeTurn
     }
 }

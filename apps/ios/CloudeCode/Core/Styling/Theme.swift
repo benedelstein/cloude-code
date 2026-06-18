@@ -7,6 +7,7 @@ struct Theme {
     // MARK: Backgrounds
     var backgroundColor: Color = .white
     var secondaryBackgroundColor = Color(hex: 0xF4F4F4)
+    var tertiaryBackgroundColor: Color = Color(hex: 0xF0F0F0)
     var highlightColor = Color(hex: 0xF0F0F0)
     /// Disabled button background
     var disabledBackgroundColor = Color(hex: 0xC8C8C8)
@@ -34,8 +35,9 @@ extension Theme {
 
     /// Dark appearance — dark backgrounds, light labels, accents nudged for contrast.
     static let dark = Theme(
-        backgroundColor: Color(hex: 0x000000),
+        backgroundColor: Color(hex: 0x090909),
         secondaryBackgroundColor: Color(hex: 0x1C1C1E),
+        tertiaryBackgroundColor: Color(hex: 0x28282A).opacity(0.5),
         highlightColor: Color(hex: 0x2A2A2C),
         disabledBackgroundColor: Color(hex: 0x3A3A3C),
         loadingBackgroundColor: Color(hex: 0x2C2C2E),

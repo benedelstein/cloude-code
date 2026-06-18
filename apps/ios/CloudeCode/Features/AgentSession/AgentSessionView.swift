@@ -10,6 +10,7 @@ struct AgentSessionView: View {
     @State private var store: AgentSessionViewModel
     @State private var scrollTarget: SessionScrollTarget? = .bottom
     @FocusState private var composerFocused: Bool
+    @State private var destination: Modal<Destination>?
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
@@ -17,28 +18,22 @@ struct AgentSessionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-//            sessionHeader
-//                .padding(.horizontal, style.horizontalPadding)
-//                .padding(.vertical, style.gridSize)
-
             SessionScrollView(
                 store: store,
+                destination: $destination,
                 scrollTarget: $scrollTarget
             )
             .onChange(of: store.isResponding) { _, _ in
                 scrollTarget = .bottom
             }
+            .onChange(of: store.messages) {
+                if $0.isEmpty && !$1.isEmpty {
+                    // scroll to bottom when messages first appear.
+                    scrollTarget = .bottom
+                }
+            }
             .safeSafeAreaBar(edge: .bottom) {
-                PromptComposerView(
-                    text: $store.draftText,
-                    focused: $composerFocused,
-                    placeholder: store.composerPlaceholder,
-                    isSubmitDisabled: !store.canSubmitDraft,
-                    isSubmitting: store.isResponding,
-                    onSubmit: store.submitDraft
-                )
-                .padding(.horizontal, style.horizontalPadding)
-                .padding(.bottom, style.gridSize)
+                composer
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -55,6 +50,7 @@ struct AgentSessionView: View {
             }
         }
         .toolbarTitleDisplayMode(.inline)
+        .modifier(Destinations(destination: $destination))
         .onAppear {
             store.bind()
         }
@@ -70,7 +66,7 @@ struct AgentSessionView: View {
     }
 
     private var sessionHeader: some View {
-        VStack(alignment: .leading, spacing: style.gridSize / 2) {
+        VStack(alignment: .center, spacing: 0) {
             Text(store.session.title ?? "Untitled session")
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
@@ -79,19 +75,52 @@ struct AgentSessionView: View {
             HStack(spacing: style.gridSize) {
                 Text(store.clientState.repoFullName ?? store.session.repoFullName)
                     .lineLimit(1)
-
-                Text(store.clientState.status)
-
-                if store.isResponding {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(theme.secondaryLabelColor)
-                }
             }
             .styledFont(.caption)
             .foregroundStyle(theme.secondaryLabelColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AgentSessionWorkingIndicatorView: View {
+    @Environment(\.style) private var style
+
+    var body: some View {
+        HStack {
+            ProgressView()
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, style.gridSize / 2)
+        .accessibilityLabel("Agent is responding")
+    }
+}
+
+private extension AgentSessionView {
+    var composer: some View {
+        PromptComposerView(
+            text: $store.draftText,
+            focused: $composerFocused,
+            placeholder: store.composerPlaceholder,
+            isSubmitDisabled: !store.canSubmitDraft,
+            isSubmitting: store.isResponding,
+            onSubmit: store.submitDraft
+        )
+        .padding(.horizontal, style.horizontalPadding)
+        .padding(.bottom, style.gridSize)
+    }
+}
+
+extension AgentSessionView {
+    struct MessageDisplayData: Identifiable, Equatable {
+        let message: SessionMessage
+        let renderItems: [AgentSessionRenderItem]
+        let finalResponseStartIndex: Int?
+
+        var id: String {
+            message.id
+        }
     }
 }
 
@@ -101,93 +130,96 @@ private enum SessionScrollTarget: Hashable {
     case bottom
 }
 
-private struct SessionScrollView: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
+private extension AgentSessionView {
+    struct SessionScrollView: View {
+        @Environment(\.theme) private var theme
+        @Environment(\.style) private var style
 
-    let store: AgentSessionViewModel
-    @Binding var scrollTarget: SessionScrollTarget?
+        @State private var latestStreamingMessageId: String?
+        @State private var autoCollapseMessageId: String?
 
-    var messages: [SessionMessage] {
-        store.messages
-    }
+        let store: AgentSessionViewModel
+        @Binding var destination: Modal<AgentSessionView.Destination>?
+        @Binding var scrollTarget: SessionScrollTarget?
 
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: style.spacing) {
-                let visibleMessages = messages
-                let streamingText = store.stream.text
+        var messages: [SessionMessage] {
+            store.messages
+        }
 
-                if visibleMessages.isEmpty, streamingText.isEmpty, !store.isResponding, store.hasLoadedMessages {
-                    ContentUnavailableView(
-                        "No messages yet",
-                        systemImage: "text.bubble"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
-                } else {
-                    ForEach(visibleMessages) { message in
-                        if message.isUser {
-                            UserMessageView(message: message)
-                        } else {
-                            AssistantMessageView(message: message)
+        var body: some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: style.spacing) {
+                    let visibleMessages = messages
+
+                    if visibleMessages.isEmpty,
+                       store.streamingDisplayData == nil,
+                       store.hasLoadedMessages {
+                        ContentUnavailableView(
+                            "No messages yet",
+                            systemImage: "text.bubble"
+                        )
+                        .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
+                    } else {
+                        ForEach(visibleMessages) { message in
+                            if message.isUser {
+                                UserMessageView(message: message)
+                            } else if let displayData = store.assistantDisplayDataByMessageId[message.id] {
+                                AssistantMessageView(
+                                    displayData: displayData,
+                                    isStreaming: false,
+                                    autoCollapseOnAppear: autoCollapseMessageId == message.id,
+                                    destination: $destination
+                                ) {
+                                    if autoCollapseMessageId == message.id {
+                                        autoCollapseMessageId = nil
+                                    }
+                                }
+                            }
                         }
-//                            .id(SessionScrollTarget.message(message.id))
-                    }
 
-                    if let streamingMessage = store.stream.message {
-                        AssistantMessageView(message: streamingMessage)
+                        if let streamingDisplayData = store.streamingDisplayData {
+                            AssistantMessageView(
+                                displayData: streamingDisplayData,
+                                isStreaming: true,
+                                autoCollapseOnAppear: false,
+                                destination: $destination
+                            )
                             .id(SessionScrollTarget.stream)
+                        }
+
+                        if store.isResponding {
+                            AgentSessionWorkingIndicatorView()
+                                .transition(.opacity)
+                        }
                     }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(SessionScrollTarget.bottom)
                 }
-
-                Color.clear
-                    .frame(height: 1)
-                    .id(SessionScrollTarget.bottom)
+                .scrollTargetLayout()
+                .padding(style.horizontalPadding)
             }
-//            .scrollTargetLayout()
-            .padding(style.horizontalPadding)
-        }
-        .defaultScrollAnchor(.bottom)
-//        .scrollPosition(id: $scrollTarget, anchor: .bottom)
-        .scrollDismissesKeyboard(.immediately)
-    }
-}
-
-private struct AssistantMessageView: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
-
-    let message: SessionMessage
-
-    var body: some View {
-        ForEach(Array(message.parts.enumerated()), id: \.offset) { _, part in
-            switch part {
-            case .text(let text):
-                Text(verbatim: text.text)
-            case .data:
-                Text("data part")
-            case .dynamicTool(let toolUse):
-                Text("tool use: \(toolUse.title ?? toolUse.toolName)")
-            case .file(let file):
-                Text("file part \(file.url) - \(file.mediaType)")
-            case .reasoning(let reasoning):
-                Text("reasoning - \(reasoning.text)")
-            case .sourceURL(let source):
-                Text("source - \(source.title ?? source.url)")
-            case .sourceDocument(let source):
-                Text("source - \(source.title)")
-            case .stepStart:
-                Text("step")
-            case .tool(let tool):
-                Text("tool - \(tool.title ?? tool.type)")
-            case .unknown:
-                Text("unknown part")
+            .defaultScrollAnchor(.bottom)
+            .scrollPosition(id: $scrollTarget, anchor: .bottom)
+            .scrollDismissesKeyboard(.immediately)
+            .onChange(of: store.streamingDisplayData?.id) { oldValue, newValue in
+                handleStreamingMessageIdChange(oldValue: oldValue, newValue: newValue)
             }
+            .animation(.default, value: store.streamingDisplayData)
+            .animation(.default, value: store.messages)
         }
-//        Text(verbatim: message.text)
-//            .styledFont(.subheadline)
-//            .foregroundStyle(theme.labelColor)
-//            .textSelection(.enabled)
-//            .frame(maxWidth: .infinity, alignment: .leading)
+
+        private func handleStreamingMessageIdChange(oldValue: String?, newValue: String?) {
+            if let newValue {
+                latestStreamingMessageId = newValue
+                return
+            }
+
+            if let finishedMessageId = oldValue ?? latestStreamingMessageId {
+                autoCollapseMessageId = finishedMessageId
+            }
+            latestStreamingMessageId = nil
+        }
     }
 }

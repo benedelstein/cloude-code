@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// App-wide layout, animation, and typography tokens. Views read the active
 /// style from the environment (`@Environment(\.style)`).
@@ -57,7 +58,20 @@ struct Style {
     }
 }
 
+extension Font {
+    static func body(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .regular)
+    }
+
+    static func bold(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .bold)
+    }
+}
+
 extension EnvironmentValues {
     @Entry
     var style: Style = .init()
+
+    @Entry
+    var lightFeedback: UIImpactFeedbackGenerator = .init(style: .light)
 }

@@ -13,7 +13,9 @@ export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().trim().min(1).optional(),
   attachments: z.array(MessageAttachmentRef).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
-  messageId: z.uuid().optional(),
+  clientMessageId: z.uuid()
+    .optional()
+    .describe("Caller-generated correlation id for optimistic UI reconciliation; not the durable message id."),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch provider effort before processing the message. */
@@ -63,10 +65,16 @@ export const ConnectedEvent = z.object({
 });
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
+export const MessageStreamMetadata = z.object({
+  startedAt: z.number(),
+});
+export type MessageStreamMetadata = z.infer<typeof MessageStreamMetadata>;
+
 export const SyncResponseEvent = z.object({
   type: z.literal("sync.response"),
   messages: z.array(WireUIMessageSchema),
   pendingChunks: z.array(WireUIMessageChunkSchema).optional(),
+  pendingMessageMetadata: MessageStreamMetadata.optional(),
   activeTurn: ActiveTurnState.nullable(),
 });
 export type SyncResponseEvent = z.infer<typeof SyncResponseEvent>;
@@ -94,6 +102,7 @@ export type OperationErrorEvent = z.infer<typeof OperationErrorEvent>;
 export const AgentChunksEvent = z.object({
   type: z.literal("agent.chunks"),
   chunks: z.array(WireUIMessageChunkSchema),
+  messageMetadata: MessageStreamMetadata.optional(),
 });
 export type AgentChunksEvent = z.infer<typeof AgentChunksEvent>;
 
@@ -114,6 +123,19 @@ export const UserMessageEvent = z.object({
   message: WireUIMessageSchema,
 });
 export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
+
+export const ChatAcceptedEvent = z.object({
+  type: z.literal("chat.accepted"),
+  /**
+   * Caller-generated correlation id from chat.message; used only to reconcile local optimistic UI.
+   */
+  clientMessageId: z.string(),
+  /**
+   * Server-generated durable UIMessage.id; also used by activeTurn.userMessageId.
+   */
+  messageId: z.string(),
+});
+export type ChatAcceptedEvent = z.infer<typeof ChatAcceptedEvent>;
 
 export const EditorReadyEvent = z.object({
   type: z.literal("editor.ready"),
@@ -148,6 +170,7 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentFinishEvent,
   AgentReadyEvent,
   UserMessageEvent,
+  ChatAcceptedEvent,
   EditorReadyEvent,
   SetupOutputChunksEvent,
 ]);

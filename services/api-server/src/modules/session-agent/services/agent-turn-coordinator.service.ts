@@ -12,7 +12,10 @@ import { MessageAccumulator, validateWireCompatibleChunk } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import { applyDerivedStateFromParts } from "./session-agent-derived-state.service";
 import type { MessageRepository } from "../repositories/message.repository";
-import type { PendingChunkRepository } from "../repositories/pending-chunk.repository";
+import type {
+  PendingChunkRecord,
+  PendingChunkRepository,
+} from "../repositories/pending-chunk.repository";
 import type { LatestPlanRepository } from "../repositories/latest-plan.repository";
 import type { ServerState } from "../repositories/server-state.repository";
 import { SpritesError } from "@/shared/integrations/sprites/types";
@@ -86,6 +89,7 @@ export class AgentTurnCoordinator {
 
   private hasEnsuredRehydratedState = false;
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
+  private pendingMessageStartedAt: number | null = null;
 
   constructor(deps: AgentTurnCoordinatorDeps) {
     this.logger = deps.logger.scope("agent-turn-coordinator");
@@ -126,8 +130,9 @@ export class AgentTurnCoordinator {
       // backfill any plans or todos that were missed
       let lastTodos: ClientState["todos"] | null | undefined;
       let lastPlan: ClientState["plan"] | null | undefined;
-      for (const { chunk } of orphanedChunks) {
-        const { completedParts } = this.messageAccumulator.process(chunk);
+      this.pendingMessageStartedAt = orphanedChunks[0]?.receivedAt ?? null;
+      for (const { chunk, receivedAt } of orphanedChunks) {
+        const { completedParts } = this.messageAccumulator.process(chunk, { receivedAt });
         applyDerivedStateFromParts(
           {
             sessionId,
@@ -165,9 +170,18 @@ export class AgentTurnCoordinator {
   }
 
   /** Returns any pending (uncommitted) chunks for client sync. */
-  getPendingChunks(): UIMessageChunk[] | undefined {
+  getPendingChunks(): PendingChunkRecord[] | undefined {
     this.ensureRehydratedState();
-    return this.messageAccumulator.getPendingChunks();
+    const pendingChunks = this.pendingChunkRepository.getAll();
+    return pendingChunks.length > 0 ? pendingChunks : undefined;
+  }
+
+  /** Returns metadata for the current in-flight assistant message, if any. */
+  getPendingMessageMetadata(): { startedAt: number } | undefined {
+    this.ensureRehydratedState();
+    return this.pendingMessageStartedAt === null
+      ? undefined
+      : { startedAt: this.pendingMessageStartedAt };
   }
 
   /**
@@ -248,21 +262,24 @@ export class AgentTurnCoordinator {
         }
       }
       validateWireCompatibleChunk(chunk);
+      const receivedAt = Date.now();
       // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
       // means this chunk was already applied by a prior batch (retry).
-      const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence);
+      const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence, receivedAt);
       if (!inserted) {
         this.logger.warn("Dropping duplicate chunk from WAL conflict", {
           fields: { sequence },
         });
         continue;
       }
+      this.pendingMessageStartedAt = this.pendingMessageStartedAt ?? receivedAt;
       buffered.push(chunk);
-      const result = this.handleStreamChunk(chunk);
+      const messageMetadata = this.getPendingMessageMetadata();
+      const result = this.handleStreamChunk(chunk, receivedAt);
       if (result.ended) {
         // Flush the batched chunks (including this terminal one) before the
         // agent.finish so the wire order stays chunks → finish.
-        this.flushBufferedChunks(buffered);
+        this.flushBufferedChunks(buffered, messageMetadata);
         this.onTurnFinished({
           message: result.finishedMessage,
           messageCreatedAt: result.messageCreatedAt,
@@ -292,6 +309,7 @@ export class AgentTurnCoordinator {
         });
         this.messageAccumulator.reset();
         this.pendingChunkRepository.clear();
+        this.pendingMessageStartedAt = null;
         this.clearActiveTurnState();
         this.updatePartialState({
           lastError: event.error,
@@ -415,6 +433,7 @@ export class AgentTurnCoordinator {
    */
   private handleStreamChunk(
     chunk: UIMessageChunk,
+    receivedAt: number,
   ): { ended: false } | {
     ended: true;
     finishedMessage: UIMessage;
@@ -423,7 +442,7 @@ export class AgentTurnCoordinator {
   } {
     const serverState = this.getServerState();
 
-    const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk);
+    const { finishedMessage, completedParts } = this.messageAccumulator.process(chunk, { receivedAt });
     applyDerivedStateFromParts(
       {
         sessionId: serverState.sessionId!,
@@ -447,6 +466,7 @@ export class AgentTurnCoordinator {
     const aborted = isAbortedMessage(stored.message);
     this.pendingChunkRepository.clear();
     this.messageAccumulator.reset();
+    this.pendingMessageStartedAt = null;
     this.logger.info("Terminal chunk received", {
       fields: {
         userMessageId: serverState.activeUserMessageId,
@@ -470,9 +490,16 @@ export class AgentTurnCoordinator {
   }
 
   /** Emits buffered chunks as a single agent.chunks */
-  private flushBufferedChunks(buffered: UIMessageChunk[]): void {
+  private flushBufferedChunks(
+    buffered: UIMessageChunk[],
+    messageMetadata = this.getPendingMessageMetadata(),
+  ): void {
     if (buffered.length === 0) { return; }
-    this.broadcastMessage({ type: "agent.chunks", chunks: buffered });
+    this.broadcastMessage({
+      type: "agent.chunks",
+      chunks: buffered,
+      messageMetadata,
+    });
   }
 
   /**
@@ -487,6 +514,7 @@ export class AgentTurnCoordinator {
   ): boolean {
     const abortedMessage = this.messageAccumulator.forceAbort();
     this.pendingChunkRepository.clear();
+    this.pendingMessageStartedAt = null;
     if (abortedMessage) {
       const sessionId = this.getServerState().sessionId!;
       const stored = this.messageRepository.create(sessionId, abortedMessage);
