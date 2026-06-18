@@ -15,7 +15,6 @@ final class AgentSessionViewModel {
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
-    var pendingOptimisticUserMessage: SessionMessage?
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
@@ -106,19 +105,20 @@ final class AgentSessionViewModel {
         isWaitingForResponse = true
         errorMessage = nil
 
-        Task { [weak self, socket] in
+        Task { [socket] in
             do {
                 try await socket.sendChat(
                     content: content,
                     clientMessageId: clientMessageId
                 )
-                self?.finishSending()
+                self.isSending = false
             } catch {
-                self?.recordSendError(error, submittedContent: content)
+                self.recordSendError(error, submittedContent: content)
             }
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func handle(_ event: SessionSocketEvent) async {
         switch event {
         case .connectionChanged(let state):
@@ -136,69 +136,73 @@ final class AgentSessionViewModel {
                 clientMessageId: clientMessageId,
                 messageId: messageId
             )
-        case .agentReady:
-            break
-        case .connected, .editorReady, .liveState:
-            applyLiveState(event)
-        case .syncResponse, .agentChunks, .agentFinish, .userMessage:
-            await applyTranscriptEvent(event)
-        }
-    }
-
-    private func applyLiveState(_ event: SessionSocketEvent) {
-        switch event {
         case .connected(let status):
             clientState.status = status
         case .editorReady(let url):
             clientState.editorURL = url
         case .liveState(let state):
-            let previousProvider = clientState.agentSettings.provider
-            clientState = state
-            applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
-            if previousProvider != state.agentSettings.provider {
-                rebuildTranscriptDisplayData()
-            }
-        case .connectionChanged, .syncResponse, .operationError, .chatAccepted,
-             .agentChunks, .agentFinish, .agentReady, .userMessage:
+            applyLiveState(state)
+        case .syncResponse(let snapshot):
+            await applySyncResponse(snapshot)
+        case .agentChunks(let chunks, let messageMetadata):
+            await applyAgentChunks(chunks, messageMetadata: messageMetadata)
+        case .agentFinish(let message):
+            applyAgentFinish(message)
+        case .userMessage(let message):
+            applyUserMessage(message)
+        case .agentReady:
             break
         }
     }
 
-    private func applyTranscriptEvent(_ event: SessionSocketEvent) async {
-        switch event {
-        case .syncResponse(let snapshot):
-            if !hasLoadedMessages {
-                hasLoadedMessages = true
-            }
-            let snapshotMessages = messagesIncludingPendingOptimisticUserMessage(
-                in: snapshot.messages
-            )
-            assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
-            messages = snapshotMessages
-            stream = await SessionMessageStreamState.reducing(
-                snapshot.pendingChunks,
-                messageMetadata: snapshot.pendingMessageMetadata
-            )
-            rebuildStreamingDisplayData()
-            applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
-            markLatestAssistantMessageRead(in: snapshotMessages)
-        case .agentChunks(let chunks, let messageMetadata):
-            stream = await stream.appending(chunks, messageMetadata: messageMetadata)
-            rebuildStreamingDisplayData()
-        case .agentFinish(let message):
-            upsert(message)
-            if message.role == .assistant {
-                markReadIfNeeded(messageId: message.id)
-            }
-            clearPendingOptimisticUserMessageTracking()
-            resetPendingResponse()
-        case .userMessage(let message):
-            upsertConfirmedUserMessage(message)
-            isSending = false
-            errorMessage = nil
-        case .connectionChanged, .connected, .operationError, .chatAccepted, .agentReady, .editorReady, .liveState:
-            break
+    private func applyLiveState(_ state: SessionClientState) {
+        let previousProvider = clientState.agentSettings.provider
+        clientState = state
+        applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
+        if previousProvider != state.agentSettings.provider {
+            rebuildTranscriptDisplayData()
         }
+    }
+
+    private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {
+        if !hasLoadedMessages {
+            hasLoadedMessages = true
+        }
+        let snapshotMessages = messagesIncludingOptimisticUserMessages(
+            in: snapshot.messages
+        )
+        assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
+        messages = snapshotMessages
+        stream = await SessionMessageStreamState.reducing(
+            snapshot.pendingChunks,
+            messageMetadata: snapshot.pendingMessageMetadata
+        )
+        rebuildStreamingDisplayData()
+        applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
+        markLatestAssistantMessageRead(in: snapshotMessages)
+    }
+
+    private func applyAgentChunks(
+        _ chunks: [SessionStreamChunk],
+        messageMetadata: SessionStreamMessageMetadata?
+    ) async {
+        stream = await stream.appending(chunks, messageMetadata: messageMetadata)
+        rebuildStreamingDisplayData()
+    }
+
+    private func applyAgentFinish(_ message: SessionMessage) {
+        upsert(message)
+        if message.role == .assistant {
+            markReadIfNeeded(messageId: message.id)
+        }
+        clearOptimisticUserMessageTracking()
+        resetPendingResponse()
+    }
+
+    private func applyUserMessage(_ message: SessionMessage) {
+        upsertConfirmedUserMessage(message)
+        isSending = false
+        errorMessage = nil
     }
 
     func upsert(_ message: SessionMessage) {
@@ -242,10 +246,6 @@ final class AgentSessionViewModel {
         // sessionSummaryStore.putDisk(session)
     }
 
-    private func finishSending() {
-        isSending = false
-    }
-
     private func recordSendError(
         _ error: any Error,
         submittedContent: String
@@ -276,22 +276,113 @@ final class AgentSessionViewModel {
         if hasSeenServerActiveTurn {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
-            clearPendingOptimisticUserMessageTracking()
+            clearOptimisticUserMessageTracking()
         }
     }
 }
 
 extension AgentSessionViewModel {
-    func replaceMessage(id: String, with message: SessionMessage) -> Bool {
+    /// Returns true if replaced, false if the message id was not found
+    private func replaceMessage(id: String, with message: SessionMessage) -> Bool {
         guard let index = messages.firstIndex(where: { $0.id == id }) else {
             return false
         }
         messages[index] = message
+        upsertDisplayData(for: message)
         return true
     }
 
-    func removeMessage(id: String) {
+    private func removeMessage(id: String) {
         messages.removeAll { $0.id == id }
+    }
+
+    private func appendPendingOptimisticUserMessage(content: String) -> String {
+        let clientMessageId = UUID().uuidString.lowercased()
+        let message = SessionMessage(
+            id: clientMessageId,
+            role: .user,
+            text: content,
+            metadata: .object(["optimistic": .bool(true)])
+        )
+        upsert(message)
+        return clientMessageId
+    }
+
+    /// Replaces an optimistically client-set message with the server-side id
+    private func acceptOptimisticUserMessage(clientMessageId: String, messageId: String) {
+        guard let index = messages.firstIndex(where: { message in
+            message.id == clientMessageId && message.isOptimisticUserMessage
+        }) else {
+            return
+        }
+        let optimisticMessage = messages[index]
+        let acceptedMessage = SessionMessage(
+            id: messageId,
+            role: optimisticMessage.role,
+            parts: optimisticMessage.parts,
+            metadata: optimisticMessage.metadata
+        )
+        messages[index] = acceptedMessage
+    }
+
+    private func upsertConfirmedUserMessage(_ message: SessionMessage) {
+        // if we already have an optimistic message for this message, mutate and replace it
+        // if not, just upsert
+        guard let optimisticMessage = messages.first(where: {
+            $0.isOptimisticUserMessage && isServerConfirmation(message, of: $0)
+        }) else {
+            upsert(message)
+            return
+        }
+
+        if !replaceMessage(id: optimisticMessage.id, with: message) {
+            upsert(message)
+        }
+    }
+
+    private func messagesIncludingOptimisticUserMessages(
+        in serverMessages: [SessionMessage]
+    ) -> [SessionMessage] {
+        var mergedMessages = serverMessages
+
+        for optimisticMessage in messages where optimisticMessage.isOptimisticUserMessage {
+            let hasServerMessage = serverMessages.contains {
+                $0.id == optimisticMessage.id || isServerConfirmation($0, of: optimisticMessage)
+            }
+            if !hasServerMessage {
+                mergedMessages.append(optimisticMessage)
+            }
+        }
+
+        return mergedMessages
+    }
+
+    private func clearOptimisticUserMessageTracking() {
+        for message in messages where message.isOptimisticUserMessage {
+            _ = replaceMessage(id: message.id, with: message.removingOptimisticMarker)
+        }
+    }
+
+    private func removePendingOptimisticUserMessage(
+        restoreDraft: Bool,
+        submittedContent: String? = nil
+    ) {
+        guard let optimisticMessage = messages.first(where: \.isOptimisticUserMessage) else {
+            return
+        }
+        removeMessage(id: optimisticMessage.id)
+        if restoreDraft {
+            draftText = submittedContent ?? optimisticMessage.text
+        }
+    }
+
+    private func isServerConfirmation(
+        _ message: SessionMessage,
+        of optimisticMessage: SessionMessage
+    ) -> Bool {
+        message.role == .user
+            && message.id != optimisticMessage.id
+            && message.text == optimisticMessage.text
     }
 }
 

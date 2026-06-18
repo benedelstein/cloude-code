@@ -1,6 +1,63 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
+    "☁️" : {
+
+    },
+    "Add attachment" : {
+
+    },
+    "Agent is responding" : {
+
+    },
+    "Archive" : {
+
+    },
+    "Back" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Close" : {
+
+    },
+    "Cloude Code" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Create a session to see it here." : {
+
+    },
+    "Dark" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete %@" : {
+      "comment" : "Title for a file delete tool action"
+    },
+    "Delete session?" : {
+
+    },
+    "Deleted file" : {
+
+    },
+    "Diagnostics" : {
+
+    },
+    "Diff available" : {
+
+    },
+    "Edit %@" : {
+      "comment" : "Title for a file edit tool action"
+    },
     "Edit %lld actions" : {
       "comment" : "Grouped tool title. %lld is the number of edit actions.",
       "localizations" : {
@@ -23,6 +80,30 @@
           }
         }
       }
+    },
+    "Exit %lld" : {
+
+    },
+    "Fetch %@" : {
+      "comment" : "Title for a web fetch tool action"
+    },
+    "File" : {
+
+    },
+    "File contents available" : {
+
+    },
+    "File preview available" : {
+
+    },
+    "Generic tool details" : {
+
+    },
+    "Light" : {
+
+    },
+    "Logs" : {
+
     },
     "Made %lld web requests" : {
       "comment" : "Grouped tool title. %lld is the number of completed web requests.",
@@ -93,6 +174,18 @@
         }
       }
     },
+    "No logs yet" : {
+
+    },
+    "No messages yet" : {
+
+    },
+    "No sessions" : {
+
+    },
+    "Plan" : {
+      "comment" : "Title for a plan tool action"
+    },
     "Plan %lld updates" : {
       "comment" : "Grouped tool title. %lld is the number of plan updates.",
       "localizations" : {
@@ -116,6 +209,9 @@
         }
       }
     },
+    "Plan details" : {
+
+    },
     "Ran %lld commands" : {
       "comment" : "Grouped tool title. %lld is the number of completed shell commands.",
       "localizations" : {
@@ -138,6 +234,9 @@
           }
         }
       }
+    },
+    "Read %@" : {
+      "comment" : "Title for a file read tool action"
     },
     "Read %lld files" : {
       "comment" : "Grouped tool title. %lld is the number of files read or pending read.",
@@ -185,6 +284,12 @@
         }
       }
     },
+    "Recent app logs are kept in memory for TestFlight debugging." : {
+
+    },
+    "Responding" : {
+
+    },
     "Run %lld commands" : {
       "comment" : "Grouped tool title. %lld is the number of pending shell commands.",
       "localizations" : {
@@ -207,6 +312,9 @@
           }
         }
       }
+    },
+    "Run command" : {
+      "comment" : "Title for an empty shell command tool action"
     },
     "Running %lld commands" : {
       "comment" : "Grouped tool title. %lld is the number of active shell commands.",
@@ -231,6 +339,9 @@
         }
       }
     },
+    "Search %@" : {
+      "comment" : "Title for a code search tool action"
+    },
     "Search %lld patterns" : {
       "comment" : "Grouped tool title. %lld is the number of pending search patterns.",
       "localizations" : {
@@ -253,6 +364,9 @@
           }
         }
       }
+    },
+    "Search web" : {
+      "comment" : "Title for a web search tool action"
     },
     "Searched %lld patterns" : {
       "comment" : "Grouped tool title. %lld is the number of completed search patterns.",
@@ -300,6 +414,54 @@
         }
       }
     },
+    "Send" : {
+
+    },
+    "Sessions" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Sign in" : {
+
+    },
+    "System" : {
+
+    },
+    "Tap to view each action" : {
+
+    },
+    "Tap to view each command" : {
+
+    },
+    "Tap to view each file" : {
+
+    },
+    "Tap to view each pattern" : {
+
+    },
+    "Tap to view each tool" : {
+
+    },
+    "Tap to view each web request" : {
+
+    },
+    "Thinking" : {
+
+    },
+    "This permanently deletes %@." : {
+
+    },
+    "Todo details" : {
+
+    },
+    "Tool not found" : {
+
+    },
+    "Unread message" : {
+
+    },
     "Update %lld todo lists" : {
       "comment" : "Grouped tool title. %lld is the number of todo-list update actions.",
       "localizations" : {
@@ -322,6 +484,15 @@
           }
         }
       }
+    },
+    "Update todos" : {
+      "comment" : "Pending title for a todo update tool action"
+    },
+    "Updated todos" : {
+      "comment" : "Complete title for a todo update tool action"
+    },
+    "Updating todos" : {
+      "comment" : "Active title for a todo update tool action"
     },
     "Use %lld tools" : {
       "comment" : "Grouped tool title. %lld is the number of pending generic tool actions.",
@@ -391,6 +562,21 @@
           }
         }
       }
+    },
+    "Worked" : {
+
+    },
+    "Worked for %@" : {
+
+    },
+    "Working" : {
+
+    },
+    "Working for %@" : {
+
+    },
+    "Write %@" : {
+      "comment" : "Title for a file write tool action"
     },
     "Write %lld actions" : {
       "comment" : "Grouped tool title. %lld is the number of write actions.",
