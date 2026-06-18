@@ -63,6 +63,12 @@ final class NotificationRegistrationService: NSObject {
             .store(in: &cancellables)
     }
 
+    /// Handles the remote notification payload supplied in app launch options.
+    @MainActor
+    func handleLaunchRemoteNotification(_ userInfo: [AnyHashable: Any]) {
+        handleTappedNotification(userInfo: userInfo, failureMessage: "Unable to decode launch notification payload")
+    }
+
     @MainActor
     func requestNotificationAuthorization() async {
         do {
@@ -100,7 +106,43 @@ final class NotificationRegistrationService: NSObject {
     }
 
     @MainActor
+    private func handleTappedNotification(userInfo: [AnyHashable: Any], failureMessage: String) {
+        appDidReceiveMessage(userInfo)
+
+        guard let payload = NotificationPayload(from: userInfo) else {
+            Logger.warning(
+                failureMessage,
+                "keys:",
+                Array(userInfo.keys)
+            )
+            return
+        }
+
+        notificationHandler.handleNotificationTap(payload)
+    }
+
+    @MainActor
+    private func presentationOptions(
+        userInfo: [AnyHashable: Any],
+        failureMessage: String
+    ) -> UNNotificationPresentationOptions {
+        appDidReceiveMessage(userInfo)
+
+        guard let payload = NotificationPayload(from: userInfo) else {
+            Logger.warning(
+                failureMessage,
+                "keys:",
+                Array(userInfo.keys)
+            )
+            return NotificationHandler.defaultPresentationOptions
+        }
+
+        return notificationHandler.presentationOptions(forForeground: payload)
+    }
+
+    @MainActor
     private func appDidReceiveMessage(_ userInfo: [AnyHashable: Any]) {
+        // NOTE: MUST BE CALLED ON MAIN THREAD
         // Firebase's analytics hook reads `UIApplication.applicationState`.
         Messaging.messaging().appDidReceiveMessage(userInfo)
     }
@@ -114,41 +156,29 @@ extension NotificationRegistrationService: MessagingDelegate {
 }
 
 extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
-    nonisolated func userNotificationCenter(
+    // These async notification delegate methods must stay on MainActor. UIKit
+    // can otherwise finish notification background-event cleanup off-main and crash.
+    @MainActor
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let userInfo = notification.request.content.userInfo
-        await appDidReceiveMessage(userInfo)
-
-        guard let payload = NotificationPayload(from: userInfo) else {
-            Logger.warning(
-                "Unable to decode foreground notification payload",
-                "keys:",
-                Array(userInfo.keys)
-            )
-            return NotificationHandler.defaultPresentationOptions
-        }
-
-        return await notificationHandler.presentationOptions(forForeground: payload)
+        return presentationOptions(
+            userInfo: userInfo,
+            failureMessage: "Unable to decode foreground notification payload"
+        )
     }
 
-    nonisolated func userNotificationCenter(
+    @MainActor
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        await appDidReceiveMessage(userInfo)
-
-        guard let payload = NotificationPayload(from: userInfo) else {
-            Logger.warning(
-                "Unable to decode tapped notification payload",
-                "keys:",
-                Array(userInfo.keys)
-            )
-            return
-        }
-
-        await notificationHandler.handleNotificationTap(payload)
+        handleTappedNotification(
+            userInfo: userInfo,
+            failureMessage: "Unable to decode tapped notification payload"
+        )
     }
 }

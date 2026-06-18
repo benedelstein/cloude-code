@@ -5,9 +5,14 @@ import UIKit
 
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    private let notificationRegistrationService: NotificationRegistrationService
+
     override init() {
-        super.init()
+        // must call this first. otherwise dependencies will crash.
         registerProviderFactories()
+        notificationRegistrationService = RootComponent.shared.applicationComponent.notificationRegistrationService
+
+        super.init()
     }
 
     func application(
@@ -16,6 +21,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         FirebaseApp.configure()
         Logger.info("App launched")
+        // set up notification delegates.
+        notificationRegistrationService.start()
+
+        if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            notificationRegistrationService.handleLaunchRemoteNotification(userInfo)
+        }
+
         return true
     }
 
