@@ -16,6 +16,7 @@ final class NotificationRegistrationService: NSObject {
     private let notificationsAPI: any NotificationsAPIProviding
     private let deviceIdentifierStore: DeviceIdentifierStore
     private let authUserPublisher: AnyPublisher<String?, Never>
+    private let notificationHandler: any NotificationHandling
     @Published private var fcmToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var uploadTask: Task<Void, Never>?
@@ -25,10 +26,12 @@ final class NotificationRegistrationService: NSObject {
     init(
         notificationsAPI: any NotificationsAPIProviding,
         authUserPublisher: AnyPublisher<String?, Never>,
+        notificationHandler: any NotificationHandling,
         deviceIdentifierStore: DeviceIdentifierStore = DeviceIdentifierStore()
     ) {
         self.notificationsAPI = notificationsAPI
         self.authUserPublisher = authUserPublisher
+        self.notificationHandler = notificationHandler
         self.deviceIdentifierStore = deviceIdentifierStore
     }
 
@@ -109,13 +112,37 @@ extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        let userInfo = notification.request.content.userInfo
+        Messaging.messaging().appDidReceiveMessage(userInfo)
+
+        guard let payload = NotificationPayload(from: userInfo) else {
+            Logger.warning(
+                "Unable to decode foreground notification payload",
+                "keys:",
+                Array(userInfo.keys)
+            )
+            return NotificationHandler.defaultPresentationOptions
+        }
+
+        return await notificationHandler.presentationOptions(forForeground: payload)
     }
 
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        _ = NotificationPayload(from: response.notification.request.content.userInfo)
+        let userInfo = response.notification.request.content.userInfo
+        Messaging.messaging().appDidReceiveMessage(userInfo)
+
+        guard let payload = NotificationPayload(from: userInfo) else {
+            Logger.warning(
+                "Unable to decode tapped notification payload",
+                "keys:",
+                Array(userInfo.keys)
+            )
+            return
+        }
+
+        await notificationHandler.handleNotificationTap(payload)
     }
 }

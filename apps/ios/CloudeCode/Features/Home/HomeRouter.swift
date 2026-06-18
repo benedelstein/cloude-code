@@ -1,0 +1,89 @@
+import Domain
+import Entities
+import Foundation
+import Observation
+import UserNotifications
+
+@MainActor
+@Observable
+final class HomeRouter: NotificationHandlerDelegate {
+    var path: [SessionSummaryModel] = []
+
+    @ObservationIgnored private let notificationHandler: NotificationHandler
+    @ObservationIgnored private let sessionSummaryStore: SessionSummaryStore
+
+    var notificationTap: NotificationRoute? {
+        notificationHandler.notificationTap
+    }
+
+    init(
+        notificationHandler: NotificationHandler,
+        sessionSummaryStore: SessionSummaryStore
+    ) {
+        self.notificationHandler = notificationHandler
+        self.sessionSummaryStore = sessionSummaryStore
+    }
+
+    /// Installs this router as the foreground notification presenter while Home is active.
+    func start() {
+        notificationHandler.delegate = self
+    }
+
+    /// Clears the foreground notification delegate if this router is still installed.
+    func stop() {
+        if notificationHandler.delegate === self {
+            notificationHandler.delegate = nil
+        }
+    }
+
+    /// Suppresses foreground notifications for the currently visible session.
+    func notificationHandler(
+        _ handler: NotificationHandler,
+        presentationOptionsFor route: NotificationRoute
+    ) -> UNNotificationPresentationOptions {
+        switch route {
+        case .session(let sessionId, _):
+            path.last?.id == sessionId
+                ? []
+                : NotificationHandler.defaultPresentationOptions
+        }
+    }
+
+    /// Routes a notification tap by replacing Home's navigation path with the target session.
+    func handleNotificationTap(_ route: NotificationRoute) async {
+        switch route {
+        case .session(let sessionId, _):
+            guard path.last?.id != sessionId else {
+                notificationHandler.consumeTap(route)
+                return
+            }
+
+            guard let target = await sessionSummary(for: sessionId) else {
+                Logger.warning("Notification target session missing:", sessionId)
+                notificationHandler.consumeTap(route)
+                return
+            }
+
+            path = [target]
+            notificationHandler.consumeTap(route)
+        }
+    }
+
+    /// Routes the currently pending notification tap, if one exists.
+    func handlePendingNotificationTap() async {
+        guard let route = notificationHandler.notificationTap else {
+            return
+        }
+
+        await handleNotificationTap(route)
+    }
+
+    private func sessionSummary(for sessionId: String) async -> SessionSummaryModel? {
+        do {
+            return try await sessionSummaryStore.get([sessionId]).first
+        } catch {
+            Logger.warning("Notification target session lookup failed:", sessionId, error)
+            return nil
+        }
+    }
+}

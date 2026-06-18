@@ -29,6 +29,11 @@ private final class HomeDependencyProvider: HomeDependency {
     }
 
     @MainActor
+    var notificationHandler: NotificationHandler {
+        applicationComponent.notificationHandler
+    }
+
+    @MainActor
     var sessionSummaryStore: SessionSummaryStore {
         applicationComponent.sessionSummaryStore
     }
