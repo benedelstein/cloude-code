@@ -98,6 +98,12 @@ final class NotificationRegistrationService: NSObject {
     private func handleToken(_ token: String) {
         fcmToken = token
     }
+
+    @MainActor
+    private func appDidReceiveMessage(_ userInfo: [AnyHashable: Any]) {
+        // Firebase's analytics hook reads `UIApplication.applicationState`.
+        Messaging.messaging().appDidReceiveMessage(userInfo)
+    }
 }
 
 extension NotificationRegistrationService: MessagingDelegate {
@@ -113,7 +119,7 @@ extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let userInfo = notification.request.content.userInfo
-        Messaging.messaging().appDidReceiveMessage(userInfo)
+        await appDidReceiveMessage(userInfo)
 
         guard let payload = NotificationPayload(from: userInfo) else {
             Logger.warning(
@@ -132,7 +138,7 @@ extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        Messaging.messaging().appDidReceiveMessage(userInfo)
+        await appDidReceiveMessage(userInfo)
 
         guard let payload = NotificationPayload(from: userInfo) else {
             Logger.warning(
