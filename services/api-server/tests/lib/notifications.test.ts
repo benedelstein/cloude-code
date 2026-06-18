@@ -68,7 +68,7 @@ function createNotificationEvent(): NotificationQueueMessage {
 }
 
 describe("FcmTokenRepository", () => {
-  it("upserts active device tokens and clears invalidation state", async () => {
+  it("upserts device tokens", async () => {
     const { database, calls } = createMockDatabase();
     const repository = new FcmTokenRepository(database);
 
@@ -82,17 +82,16 @@ describe("FcmTokenRepository", () => {
     expect(calls[0]?.query).toContain("DELETE FROM fcm_tokens");
     expect(calls[0]?.bindings).toEqual(["fcm-token", "user-1", "device-1"]);
     expect(calls[1]?.query).toContain("ON CONFLICT(user_id, device_id) DO UPDATE");
-    expect(calls[1]?.query).toContain("invalidated_at = NULL");
     expect(calls[1]?.bindings).toEqual(["user-1", "device-1", "fcm-token", "ios"]);
   });
 
-  it("invalidates terminal tokens", async () => {
+  it("deletes tokens", async () => {
     const { database, calls } = createMockDatabase();
     const repository = new FcmTokenRepository(database);
 
-    await repository.invalidateToken("fcm-token");
+    await repository.deleteToken("fcm-token");
 
-    expect(calls[0]?.query).toContain("invalidated_at = datetime('now')");
+    expect(calls[0]?.query).toContain("DELETE FROM fcm_tokens");
     expect(calls[0]?.bindings).toEqual(["fcm-token"]);
   });
 });
@@ -140,7 +139,6 @@ describe("NotificationQueueConsumer", () => {
           created_at: "2026-06-13 00:00:00",
           updated_at: "2026-06-13 00:00:00",
           last_seen_at: "2026-06-13 00:00:00",
-          invalidated_at: null,
         },
       ]],
     });
@@ -158,7 +156,7 @@ describe("NotificationQueueConsumer", () => {
     expect(send).toHaveBeenCalledWith({ token: "fcm-token", event });
   });
 
-  it("invalidates tokens on terminal FCM failures", async () => {
+  it("deletes tokens on terminal FCM failures", async () => {
     const { database, calls } = createMockDatabase({
       allRows: [[
         {
@@ -169,7 +167,6 @@ describe("NotificationQueueConsumer", () => {
           created_at: "2026-06-13 00:00:00",
           updated_at: "2026-06-13 00:00:00",
           last_seen_at: "2026-06-13 00:00:00",
-          invalidated_at: null,
         },
       ]],
     });
@@ -186,7 +183,49 @@ describe("NotificationQueueConsumer", () => {
 
     await consumer.handleMessage(createNotificationEvent());
 
-    expect(calls.at(-1)?.query).toContain("UPDATE fcm_tokens");
+    expect(calls.at(-1)?.query).toContain("DELETE FROM fcm_tokens");
     expect(calls.at(-1)?.bindings).toEqual(["dead-token"]);
+  });
+
+  it("does not retry the queue message when one token transiently fails", async () => {
+    const { database } = createMockDatabase({
+      allRows: [[
+        {
+          user_id: "user-1",
+          device_id: "device-1",
+          token: "delivered-token",
+          platform: "ios",
+          created_at: "2026-06-13 00:00:00",
+          updated_at: "2026-06-13 00:00:00",
+          last_seen_at: "2026-06-13 00:00:00",
+        },
+        {
+          user_id: "user-1",
+          device_id: "device-2",
+          token: "failing-token",
+          platform: "ios",
+          created_at: "2026-06-13 00:00:00",
+          updated_at: "2026-06-13 00:00:00",
+          last_seen_at: "2026-06-13 00:00:00",
+        },
+      ]],
+    });
+    const send = vi.fn<(params: {
+      token: string;
+      event: NotificationQueueMessage;
+    }) => Promise<FcmSendResult>>()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: "TRANSIENT", message: "Temporary failure", status: 503 },
+      });
+    const consumer = new NotificationQueueConsumer({
+      logger: createLogger("notifications.test.ts"),
+      tokenRepository: new FcmTokenRepository(database),
+      fcmProvider: { send },
+    });
+
+    await expect(consumer.handleMessage(createNotificationEvent())).resolves.toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

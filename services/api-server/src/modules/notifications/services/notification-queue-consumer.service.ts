@@ -48,7 +48,6 @@ export class NotificationQueueConsumer {
       return;
     }
 
-    const transientFailures: Array<{ deviceId: string; status?: number }> = [];
     for (const token of tokens) {
       const result = await this.fcmProvider.send({
         token: token.token,
@@ -60,8 +59,8 @@ export class NotificationQueueConsumer {
 
       switch (result.error.code) {
         case "TERMINAL_TOKEN":
-          await this.tokenRepository.invalidateToken(token.token);
-          this.logger.info("Invalidated terminal FCM token", {
+          await this.tokenRepository.deleteToken(token.token);
+          this.logger.info("Deleted terminal FCM token", {
             fields: {
               notificationId: event.id,
               toUserId: event.toUserId,
@@ -71,15 +70,12 @@ export class NotificationQueueConsumer {
           });
           break;
         case "TRANSIENT":
-          transientFailures.push({
-            deviceId: token.deviceId,
-            status: result.error.status,
-          });
           this.logger.warn("FCM send failed transiently", {
             fields: {
               notificationId: event.id,
               toUserId: event.toUserId,
               deviceId: token.deviceId,
+              message: result.error.message,
               status: result.error.status ?? null,
             },
           });
@@ -89,10 +85,6 @@ export class NotificationQueueConsumer {
           throw new Error(`Unhandled FCM send error: ${JSON.stringify(exhaustiveCheck)}`);
         }
       }
-    }
-
-    if (transientFailures.length > 0) {
-      throw new Error("FCM transient notification delivery failure");
     }
   }
 }

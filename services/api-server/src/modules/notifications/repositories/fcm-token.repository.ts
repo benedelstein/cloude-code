@@ -9,7 +9,6 @@ interface FcmTokenRow {
   created_at: string;
   updated_at: string;
   last_seen_at: string;
-  invalidated_at: string | null;
 }
 
 function rowToToken(row: FcmTokenRow): FcmToken {
@@ -21,7 +20,6 @@ function rowToToken(row: FcmTokenRow): FcmToken {
     createdAt: fromSqliteDatetime(row.created_at),
     updatedAt: fromSqliteDatetime(row.updated_at),
     lastSeenAt: fromSqliteDatetime(row.last_seen_at),
-    invalidatedAt: fromSqliteDatetime(row.invalidated_at),
   };
 }
 
@@ -53,8 +51,7 @@ export class FcmTokenRepository {
              token = excluded.token,
              platform = excluded.platform,
              updated_at = datetime('now'),
-             last_seen_at = datetime('now'),
-             invalidated_at = NULL`,
+             last_seen_at = datetime('now')`,
         )
         .bind(params.userId, params.deviceId, params.token, params.platform),
     ]);
@@ -65,7 +62,7 @@ export class FcmTokenRepository {
       .prepare(
         `SELECT *
          FROM fcm_tokens
-         WHERE user_id = ? AND invalidated_at IS NULL
+         WHERE user_id = ?
          ORDER BY updated_at DESC, device_id ASC`,
       )
       .bind(userId)
@@ -74,13 +71,11 @@ export class FcmTokenRepository {
     return (result.results ?? []).map(rowToToken);
   }
 
-  async invalidateToken(token: string): Promise<void> {
+  async deleteToken(token: string): Promise<void> {
     await this.database
       .prepare(
-        `UPDATE fcm_tokens
-         SET invalidated_at = datetime('now'),
-             updated_at = datetime('now')
-         WHERE token = ? AND invalidated_at IS NULL`,
+        `DELETE FROM fcm_tokens
+         WHERE token = ?`,
       )
       .bind(token)
       .run();

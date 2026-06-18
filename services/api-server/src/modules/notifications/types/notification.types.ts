@@ -8,7 +8,6 @@ export interface FcmToken {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string;
-  invalidatedAt: string | null;
 }
 
 export interface NotificationQueueMessage {

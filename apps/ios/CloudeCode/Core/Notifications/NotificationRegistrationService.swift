@@ -119,6 +119,13 @@ extension NotificationRegistrationService: MessagingDelegate {
 extension NotificationRegistrationService: UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         _ = NotificationPayload(from: response.notification.request.content.userInfo)
