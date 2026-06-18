@@ -27,7 +27,7 @@ struct AgentSessionView: View {
                 scrollTarget = .bottom
             }
             .safeSafeAreaBar(edge: .bottom) {
-                bottomBar
+                composer
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,18 +51,6 @@ struct AgentSessionView: View {
         .onDisappear {
             store.unbind()
         }
-    }
-
-    private var bottomBar: some View {
-        VStack(spacing: style.gridSize) {
-            if store.isResponding {
-                AgentSessionWorkingIndicatorView()
-                    .transition(.opacity)
-            }
-
-            composer
-        }
-        .animation(style.springAnimation, value: store.isResponding)
     }
 
     private var header: some View {
@@ -98,7 +86,7 @@ private struct AgentSessionWorkingIndicatorView: View {
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, style.horizontalPadding)
+        .padding(.vertical, style.gridSize / 2)
         .accessibilityLabel("Agent is responding")
     }
 }
@@ -192,6 +180,11 @@ private extension AgentSessionView {
                                 destination: $destination
                             )
                             .id(SessionScrollTarget.stream)
+                        }
+
+                        if store.isResponding {
+                            AgentSessionWorkingIndicatorView()
+                                .transition(.opacity)
                         }
                     }
 
