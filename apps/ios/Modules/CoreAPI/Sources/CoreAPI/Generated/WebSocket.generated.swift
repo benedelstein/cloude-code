@@ -73,6 +73,7 @@ public struct ChatMessageEvent: Codable, Equatable, Sendable {
     public let type = "chat.message"
     public var content: String?
     public var attachments: [MessageAttachmentRef]?
+    /// Caller-generated correlation id for optimistic UI reconciliation; not the durable message id.
     public var clientMessageId: String?
     public var model: String?
     public var effort: String?
