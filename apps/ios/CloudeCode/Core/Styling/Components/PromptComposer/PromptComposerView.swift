@@ -97,14 +97,17 @@ struct PromptComposerView: View {
             .focused(focused)
     }
 
+    @ViewBuilder
     private var editorBody: some View {
+        let horizontalInset: CGFloat = 12
+        let verticalInset: CGFloat = 20
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
                     .styledFont(.body)
                     .foregroundStyle(theme.tertiaryLabelColor)
-                    .padding(.top, 20)
-                    .padding(.leading, 8)
+                    .padding(.top, verticalInset)
+                    .padding(.leading, horizontalInset)
             }
 
             TextEditor(text: $text)
@@ -113,10 +116,10 @@ struct PromptComposerView: View {
                 .scrollContentBackground(.hidden)
                 .introspect(.textEditor, on: .iOS(.v17, .v18, .v26, .v27)) { textView in
                     textView.textContainerInset = UIEdgeInsets(
-                        top: 20,
-                        left: 8,
-                        bottom: 12,
-                        right: 8
+                        top: verticalInset,
+                        left: horizontalInset,
+                        bottom: verticalInset,
+                        right: horizontalInset
                     )
                     textView.textContainer.lineFragmentPadding = 0
                 }

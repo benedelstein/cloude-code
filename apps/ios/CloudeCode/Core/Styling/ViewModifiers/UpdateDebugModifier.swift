@@ -8,7 +8,8 @@ private class UpdateCounter {
 
 @ViewBuilder func randomColorView() -> some View {
     #if DEBUG
-        [Color.red, .blue, .green, .orange, .pink, .white, .gray, .cyan, .black, .yellow, .purple].randomElement()!
+        let colors: [Color] = [.red, .blue, .green, .orange, .pink, .white, .gray, .cyan, .black, .yellow, .purple]
+        colors.randomElement() ?? .red
     #else
         EmptyView()
     #endif
