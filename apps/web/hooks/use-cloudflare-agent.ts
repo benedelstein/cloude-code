@@ -376,6 +376,14 @@ export function useCloudflareAgent({
         setMessages((prev) => [...prev, aiMessageFromWire(msg.message)]);
         break;
 
+      case "chat.accepted":
+        setMessages((prev) => prev.map((message) =>
+          message.id === msg.clientMessageId
+            ? { ...message, id: msg.messageId }
+            : message,
+        ));
+        break;
+
       case "operation.error":
         resetPendingResponse("operation.error");
         applyServerActiveTurn(null);
@@ -500,7 +508,9 @@ export function useCloudflareAgent({
     }
     setOperationError(null);
     const optimisticAttachments = message.optimisticAttachments ?? [];
+    const clientMessageId = crypto.randomUUID();
     const userMessage = buildOptimisticUserMessage({
+      id: clientMessageId,
       content,
       attachments: optimisticAttachments,
     });
@@ -526,6 +536,7 @@ export function useCloudflareAgent({
     const agentModeToSend = resolvedAgentMode !== serverAgentModeRef.current ? resolvedAgentMode : undefined;
     sendToAgent({
       type: "chat.message",
+      clientMessageId,
       content,
       attachments: attachmentReferences.length > 0 ? attachmentReferences : undefined,
       model: modelToSend,

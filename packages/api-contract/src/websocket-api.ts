@@ -13,7 +13,11 @@ export const ChatMessageEvent = z.object({
   type: z.literal("chat.message"),
   content: z.string().trim().min(1).optional(),
   attachments: z.array(MessageAttachmentRef).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
-  messageId: z.uuid().optional(),
+  /**
+   * Caller-generated correlation id for optimistic UI/idempotent local reconciliation;
+   * not stored as the durable message id.
+   */
+  clientMessageId: z.uuid().optional(),
   /** If provided, switch to this model before processing the message. */
   model: z.string().optional(),
   /** If provided, switch provider effort before processing the message. */
@@ -122,6 +126,19 @@ export const UserMessageEvent = z.object({
 });
 export type UserMessageEvent = z.infer<typeof UserMessageEvent>;
 
+export const ChatAcceptedEvent = z.object({
+  type: z.literal("chat.accepted"),
+  /**
+   * Caller-generated correlation id from chat.message; used only to reconcile local optimistic UI.
+   */
+  clientMessageId: z.string(),
+  /**
+   * Server-generated durable UIMessage.id; also used by activeTurn.userMessageId.
+   */
+  messageId: z.string(),
+});
+export type ChatAcceptedEvent = z.infer<typeof ChatAcceptedEvent>;
+
 export const EditorReadyEvent = z.object({
   type: z.literal("editor.ready"),
   url: z.string(),
@@ -155,6 +172,7 @@ export const ServerMessage = z.discriminatedUnion("type", [
   AgentFinishEvent,
   AgentReadyEvent,
   UserMessageEvent,
+  ChatAcceptedEvent,
   EditorReadyEvent,
   SetupOutputChunksEvent,
 ]);

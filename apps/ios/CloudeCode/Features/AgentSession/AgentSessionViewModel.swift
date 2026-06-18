@@ -15,6 +15,7 @@ final class AgentSessionViewModel {
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
+    var pendingOptimisticUserMessage: SessionMessage?
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
@@ -100,17 +101,20 @@ final class AgentSessionViewModel {
         }
 
         draftText = ""
+        let clientMessageId = appendPendingOptimisticUserMessage(content: content)
         isSending = true
         isWaitingForResponse = true
         errorMessage = nil
-        // todo put draft to messages array.
 
         Task { [weak self, socket] in
             do {
-                try await socket.sendChat(content: content)
+                try await socket.sendChat(
+                    content: content,
+                    clientMessageId: clientMessageId
+                )
                 self?.finishSending()
             } catch {
-                self?.recordSendError(error)
+                self?.recordSendError(error, submittedContent: content)
             }
         }
     }
@@ -125,7 +129,13 @@ final class AgentSessionViewModel {
             }
         case .operationError(let operationError):
             errorMessage = operationError.message
+            removePendingOptimisticUserMessage(restoreDraft: draftText.isEmpty)
             resetPendingResponse()
+        case .chatAccepted(let clientMessageId, let messageId):
+            acceptOptimisticUserMessage(
+                clientMessageId: clientMessageId,
+                messageId: messageId
+            )
         case .agentReady:
             break
         case .connected, .editorReady, .liveState:
@@ -148,7 +158,8 @@ final class AgentSessionViewModel {
             if previousProvider != state.agentSettings.provider {
                 rebuildTranscriptDisplayData()
             }
-        case .connectionChanged, .syncResponse, .operationError, .agentChunks, .agentFinish, .agentReady, .userMessage:
+        case .connectionChanged, .syncResponse, .operationError, .chatAccepted,
+             .agentChunks, .agentFinish, .agentReady, .userMessage:
             break
         }
     }
@@ -159,15 +170,18 @@ final class AgentSessionViewModel {
             if !hasLoadedMessages {
                 hasLoadedMessages = true
             }
-            assistantDisplayDataByMessageId = assistantDisplayData(for: snapshot.messages)
-            messages = snapshot.messages
+            let snapshotMessages = messagesIncludingPendingOptimisticUserMessage(
+                in: snapshot.messages
+            )
+            assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
+            messages = snapshotMessages
             stream = await SessionMessageStreamState.reducing(
                 snapshot.pendingChunks,
                 messageMetadata: snapshot.pendingMessageMetadata
             )
             rebuildStreamingDisplayData()
             applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
-            markLatestAssistantMessageRead(in: snapshot.messages)
+            markLatestAssistantMessageRead(in: snapshotMessages)
         case .agentChunks(let chunks, let messageMetadata):
             stream = await stream.appending(chunks, messageMetadata: messageMetadata)
             rebuildStreamingDisplayData()
@@ -176,17 +190,18 @@ final class AgentSessionViewModel {
             if message.role == .assistant {
                 markReadIfNeeded(messageId: message.id)
             }
+            clearPendingOptimisticUserMessageTracking()
             resetPendingResponse()
         case .userMessage(let message):
-            upsert(message)
+            upsertConfirmedUserMessage(message)
             isSending = false
             errorMessage = nil
-        case .connectionChanged, .connected, .operationError, .agentReady, .editorReady, .liveState:
+        case .connectionChanged, .connected, .operationError, .chatAccepted, .agentReady, .editorReady, .liveState:
             break
         }
     }
 
-    private func upsert(_ message: SessionMessage) {
+    func upsert(_ message: SessionMessage) {
         upsertDisplayData(for: message)
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index] = message
@@ -231,8 +246,15 @@ final class AgentSessionViewModel {
         isSending = false
     }
 
-    private func recordSendError(_ error: any Error) {
+    private func recordSendError(
+        _ error: any Error,
+        submittedContent: String
+    ) {
         errorMessage = error.localizedDescription
+        removePendingOptimisticUserMessage(
+            restoreDraft: draftText.isEmpty,
+            submittedContent: submittedContent
+        )
         resetPendingResponse()
     }
 
@@ -254,7 +276,22 @@ final class AgentSessionViewModel {
         if hasSeenServerActiveTurn {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
+            clearPendingOptimisticUserMessageTracking()
         }
+    }
+}
+
+extension AgentSessionViewModel {
+    func replaceMessage(id: String, with message: SessionMessage) -> Bool {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        messages[index] = message
+        return true
+    }
+
+    func removeMessage(id: String) {
+        messages.removeAll { $0.id == id }
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Domain
 
 struct AssistantMessageView: View {
     private let partSpacing: CGFloat = 12
@@ -12,43 +13,35 @@ struct AssistantMessageView: View {
     @State private var workExpanded = false
     @State private var hasConsumedAutoCollapse = false
 
+    @ViewBuilder
     var body: some View {
         VStack(alignment: .leading, spacing: partSpacing) {
             let items = displayData.renderItems
             let finalResponseStartIndex = displayData.finalResponseStartIndex
             let showsCollapsibleWorkTrace = !isStreaming && finalResponseStartIndex != nil
 
-            if isStreaming {
+            if isStreaming || showsCollapsibleWorkTrace {
                 TurnWorkHeaderView(
-                    expanded: false,
+                    expanded: workExpanded || isStreaming,
                     startedAt: displayData.message.workStartedAt,
                     endedAt: displayData.message.workEndedAt,
-                    isStreaming: true,
-                    collapsible: false
-                ) {}
-            }
-
-            if showsCollapsibleWorkTrace, let finalResponseStartIndex {
-                TurnWorkHeaderView(
-                    expanded: workExpanded,
-                    startedAt: displayData.message.workStartedAt,
-                    endedAt: displayData.message.workEndedAt,
-                    isStreaming: false,
-                    collapsible: true
+                    isStreaming: isStreaming,
+                    collapsible: showsCollapsibleWorkTrace
                 ) {
+                    guard !isStreaming else { return }
                     withAnimation(.easeOut(duration: 0.2)) {
                         workExpanded.toggle()
                     }
                 }
+            }
 
-                if workExpanded {
-                    renderRows(
-                        Array(items.prefix(finalResponseStartIndex)),
-                        fullItems: items,
-                        indexOffset: 0
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+            if showsCollapsibleWorkTrace, let finalResponseStartIndex, workExpanded {
+                renderRows(
+                    Array(items.prefix(finalResponseStartIndex)),
+                    fullItems: items,
+                    indexOffset: 0
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             renderRows(

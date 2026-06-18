@@ -26,6 +26,12 @@ struct AgentSessionView: View {
             .onChange(of: store.isResponding) { _, _ in
                 scrollTarget = .bottom
             }
+            .onChange(of: store.messages) {
+                if $0.isEmpty && !$1.isEmpty {
+                    // scroll to bottom when messages first appear.
+                    scrollTarget = .bottom
+                }
+            }
             .safeSafeAreaBar(edge: .bottom) {
                 composer
             }
@@ -147,7 +153,6 @@ private extension AgentSessionView {
 
                     if visibleMessages.isEmpty,
                        store.streamingDisplayData == nil,
-                       !store.isResponding,
                        store.hasLoadedMessages {
                         ContentUnavailableView(
                             "No messages yet",
@@ -192,15 +197,17 @@ private extension AgentSessionView {
                         .frame(height: 1)
                         .id(SessionScrollTarget.bottom)
                 }
-                //            .scrollTargetLayout()
+                .scrollTargetLayout()
                 .padding(style.horizontalPadding)
             }
             .defaultScrollAnchor(.bottom)
-            //        .scrollPosition(id: $scrollTarget, anchor: .bottom)
+            .scrollPosition(id: $scrollTarget, anchor: .bottom)
             .scrollDismissesKeyboard(.immediately)
             .onChange(of: store.streamingDisplayData?.id) { oldValue, newValue in
                 handleStreamingMessageIdChange(oldValue: oldValue, newValue: newValue)
             }
+            .animation(.default, value: store.streamingDisplayData)
+            .animation(.default, value: store.messages)
         }
 
         private func handleStreamingMessageIdChange(oldValue: String?, newValue: String?) {

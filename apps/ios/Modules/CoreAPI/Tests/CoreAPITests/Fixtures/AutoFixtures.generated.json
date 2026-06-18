@@ -1176,6 +1176,16 @@
   "AgentReadyEvent.autoMinimal": {
     "type": "agent.ready"
   },
+  "ChatAcceptedEvent.autoFull": {
+    "type": "chat.accepted",
+    "clientMessageId": "sample",
+    "messageId": "sample"
+  },
+  "ChatAcceptedEvent.autoMinimal": {
+    "type": "chat.accepted",
+    "clientMessageId": "sample",
+    "messageId": "sample"
+  },
   "ChatMessageEvent.autoFull": {
     "type": "chat.message",
     "content": "sample",
@@ -1184,7 +1194,7 @@
         "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
       }
     ],
-    "messageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "clientMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
     "model": "sample",
     "effort": "sample",
     "agentMode": "edit"
@@ -1197,7 +1207,7 @@
         "attachmentId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d"
       }
     ],
-    "messageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
+    "clientMessageId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
     "model": "sample",
     "effort": "sample",
     "agentMode": "edit"
@@ -1339,6 +1349,11 @@
         "opaque": true
       }
     }
+  },
+  "ServerMessage.autoChatAccepted": {
+    "type": "chat.accepted",
+    "clientMessageId": "sample",
+    "messageId": "sample"
   },
   "ServerMessage.autoEditorReady": {
     "type": "editor.ready",

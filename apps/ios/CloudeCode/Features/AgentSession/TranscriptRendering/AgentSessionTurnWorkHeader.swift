@@ -33,7 +33,7 @@ struct TurnWorkHeaderView: View {
 
             if collapsible {
                 Image(systemName: "chevron.right")
-                    .font(style.caption2Font)
+                    .font(.body(9))
                     .foregroundStyle(theme.tertiaryLabelColor)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
@@ -46,7 +46,9 @@ struct TurnWorkHeaderView: View {
         if let startedAt, let endedAt {
             Text("Worked for \(Self.durationString(from: startedAt, to: endedAt))")
         } else if let startedAt, isStreaming {
-            Text("Working for \(startedAt, style: .timer)")
+            TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                Text("Working for \(Self.durationString(from: startedAt, to: context.date))")
+            }
         } else {
             Text(isStreaming ? "Working" : "Worked")
         }
@@ -54,17 +56,17 @@ struct TurnWorkHeaderView: View {
 
     private static func durationString(from startDate: Date, to endDate: Date) -> String {
         let totalSeconds = max(0, Int(endDate.timeIntervalSince(startDate)))
-        if totalSeconds < 60 {
-            return "\(totalSeconds)s"
-        }
-
-        let totalMinutes = totalSeconds / 60
-        if totalMinutes < 60 {
-            return "\(totalMinutes)m \(totalSeconds % 60)s"
-        }
-
-        return "\(totalMinutes / 60)h \(totalMinutes % 60)m"
+        return durationFormatter.string(from: TimeInterval(totalSeconds)) ?? "\(totalSeconds)s"
     }
+
+    nonisolated(unsafe) private static let durationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 2
+        formatter.zeroFormattingBehavior = .dropAll
+        return formatter
+    }()
 }
 
 extension SessionMessage {

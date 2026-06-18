@@ -122,6 +122,37 @@ describe("useCloudflareAgent", () => {
     expect(result.current.isResponding).toBe(true);
   });
 
+  it("sends a client message id and reconciles the optimistic message id on ack", () => {
+    const randomUUIDSpy = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValue("123e4567-e89b-12d3-a456-426614174099");
+    const { result } = renderAgent();
+
+    act(() => {
+      result.current.sendMessage({ content: "hello" });
+    });
+
+    expect(result.current.messages[0]?.id).toBe("123e4567-e89b-12d3-a456-426614174099");
+    expect(latestSentMessage()).toEqual({
+      type: "chat.message",
+      clientMessageId: "123e4567-e89b-12d3-a456-426614174099",
+      content: "hello",
+    });
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "chat.accepted",
+          clientMessageId: "123e4567-e89b-12d3-a456-426614174099",
+          messageId: "server-message-1",
+        }),
+      });
+    });
+
+    expect(result.current.messages[0]?.id).toBe("server-message-1");
+    randomUUIDSpy.mockRestore();
+  });
+
   it("clears local waiting when a seen server active turn ends", () => {
     const { result } = renderAgent();
 

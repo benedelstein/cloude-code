@@ -27,6 +27,10 @@ struct FixtureDecodingTests {
         try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.syncResponse")
     }
 
+    @Test func serverMessageChatAccepted() throws {
+        try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.chatAccepted")
+    }
+
     @Test func serverMessageAgentChunks() throws {
         try assertRoundTrip(ServerMessage.self, fixture: "ServerMessage.agentChunks")
     }
@@ -539,6 +543,14 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(AgentReadyEvent.self, key: "AgentReadyEvent.autoMinimal")
     }
 
+    @Test func chatAcceptedEventAutoFull() throws {
+        try assertAutoRoundTrip(ChatAcceptedEvent.self, key: "ChatAcceptedEvent.autoFull")
+    }
+
+    @Test func chatAcceptedEventAutoMinimal() throws {
+        try assertAutoRoundTrip(ChatAcceptedEvent.self, key: "ChatAcceptedEvent.autoMinimal")
+    }
+
     @Test func chatMessageEventAutoFull() throws {
         try assertAutoRoundTrip(ChatMessageEvent.self, key: "ChatMessageEvent.autoFull")
     }
@@ -625,6 +637,10 @@ struct FixtureDecodingTests {
 
     @Test func serverMessageAutoUserMessage() throws {
         try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoUserMessage")
+    }
+
+    @Test func serverMessageAutoChatAccepted() throws {
+        try assertAutoRoundTrip(ServerMessage.self, key: "ServerMessage.autoChatAccepted")
     }
 
     @Test func serverMessageAutoEditorReady() throws {

@@ -36,10 +36,6 @@ async function waitFor(
   throw new Error("Timed out waiting for expected condition");
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 describe("WebhookAgentRunner", () => {
   const settings: AgentSettings = {
     provider: "openai-codex",
@@ -58,10 +54,12 @@ describe("WebhookAgentRunner", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it("flushes default chunk batches after 200ms", async () => {
+    vi.useFakeTimers();
     const chunkConsumed = createDeferred();
     const releaseStream = createDeferred();
     const chunkPosts: unknown[] = [];
@@ -98,10 +96,10 @@ describe("WebhookAgentRunner", () => {
     runner.queueMessage("user-message-1", { content: "first" });
     await chunkConsumed.promise;
 
-    await sleep(190);
+    await vi.advanceTimersByTimeAsync(199);
     expect(chunkPosts).toHaveLength(0);
 
-    await sleep(30);
+    await vi.advanceTimersByTimeAsync(1);
     await waitFor(() => chunkPosts.length === 1);
 
     releaseStream.resolve();

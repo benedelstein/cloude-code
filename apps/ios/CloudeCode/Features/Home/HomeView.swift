@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 
 struct HomeView: View {
+    @Environment(\.theme) var theme: Theme
     @Environment(\.style) private var style
     @Environment(\.openSettings) private var openSettings
     @Environment(\.showToast) private var showToast
@@ -22,6 +23,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             content
+                .background(theme.backgroundColor)
                 .navigationTitle("Sessions")
                 .toolbar { settingsToolbar }
                 .navigationDestination(for: SessionSummaryModel.self) { session in

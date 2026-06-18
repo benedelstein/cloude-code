@@ -325,6 +325,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       getClientState: () => this.state,
       updatePartialState: (partial) => this.updatePartialState(partial),
       broadcastMessage: (msg, without) => this.broadcastMessage(msg, without),
+      sendMessageToConnection: (msg, connectionId) => {
+        const connection = Array.from(this.getConnections())
+          .find((candidate) => candidate.id === connectionId);
+        if (!connection) {
+          this.logger.warn("Cannot send message to missing connection", {
+            fields: { connectionId, type: msg.type },
+          });
+          return;
+        }
+        this.sendMessage(msg, connection);
+      },
       synthesizeStatus: () => this.synthesizeStatus(),
       publishSessionSummaryInvalidated: (userId, sessionId) =>
         userSessionsPublisher.invalidateSessionSummary({ userId, sessionId }),
@@ -875,6 +886,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
             },
             connection,
           );
+          return;
         }
       });
     } catch (error) {

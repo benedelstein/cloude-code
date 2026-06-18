@@ -58,6 +58,16 @@ struct Style {
     }
 }
 
+extension Font {
+    static func body(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .regular)
+    }
+
+    static func bold(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .bold)
+    }
+}
+
 extension EnvironmentValues {
     @Entry
     var style: Style = .init()

@@ -44,13 +44,15 @@ struct CodePreview: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: copyText) {
-                Image(systemName: "doc.on.doc")
+                Image(systemName: "square.on.square")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(theme.secondaryLabelColor)
-                    .frame(width: style.gridSize * 4, height: style.gridSize * 4)
+                    .padding(6)
                     .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 6).fill(theme.secondaryBackgroundColor)
+                    )
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("Copy")
             .padding(style.gridSize / 2)
         }

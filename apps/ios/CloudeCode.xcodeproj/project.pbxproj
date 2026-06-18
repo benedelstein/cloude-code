@@ -13,6 +13,7 @@
 		B6A00000000000000000000D /* Entities in Frameworks */ = {isa = PBXBuildFile; productRef = B6A00000000000000000000E /* Entities */; };
 		B6A000000000000000000012 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000011 /* Valet */; };
 		B6A000000000000000000013 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000015 /* FirebaseMessaging */; };
+		B6A00000000000000000001A /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000019 /* SwiftUIIntrospect */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +88,7 @@
 				B5F751322FD9448C00DFA071 /* CoreAPI in Frameworks */,
 				B6A000000000000000000001 /* API in Frameworks */,
 				B6A000000000000000000013 /* FirebaseMessaging in Frameworks */,
+				B6A00000000000000000001A /* SwiftUIIntrospect in Frameworks */,
 				B6A000000000000000000003 /* NeedleFoundation in Frameworks */,
 				B6A00000000000000000000D /* Entities in Frameworks */,
 				B6A000000000000000000012 /* Valet in Frameworks */,
@@ -160,6 +162,7 @@
 				B6A00000000000000000000E /* Entities */,
 				B6A000000000000000000011 /* Valet */,
 				B6A000000000000000000015 /* FirebaseMessaging */,
+				B6A000000000000000000019 /* SwiftUIIntrospect */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -250,6 +253,7 @@
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
 				B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */,
 				B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				B6A000000000000000000018 /* XCRemoteSwiftPackageReference "swiftui-introspect" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B50E874E2FCD709D00240B2E /* Products */;
@@ -1103,6 +1107,14 @@
 				minimumVersion = 12.6.0;
 			};
 		};
+		B6A000000000000000000018 /* XCRemoteSwiftPackageReference "swiftui-introspect" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/siteline/swiftui-introspect";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = "27.0.0-beta";
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1132,6 +1144,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		B6A000000000000000000019 /* SwiftUIIntrospect */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6A000000000000000000018 /* XCRemoteSwiftPackageReference "swiftui-introspect" */;
+			productName = SwiftUIIntrospect;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -128,7 +128,6 @@ private struct ToolActionDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: style.spacing) {
-//                ToolActionHeader(action: action)
                 payloadView
                 if let errorText = action.errorText {
                     DetailSection(title: "Error") {
