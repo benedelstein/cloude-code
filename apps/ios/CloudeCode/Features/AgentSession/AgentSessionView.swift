@@ -27,16 +27,7 @@ struct AgentSessionView: View {
                 scrollTarget = .bottom
             }
             .safeSafeAreaBar(edge: .bottom) {
-                PromptComposerView(
-                    text: $store.draftText,
-                    focused: $composerFocused,
-                    placeholder: store.composerPlaceholder,
-                    isSubmitDisabled: !store.canSubmitDraft,
-                    isSubmitting: store.isResponding,
-                    onSubmit: store.submitDraft
-                )
-                .padding(.horizontal, style.horizontalPadding)
-                .padding(.bottom, style.gridSize)
+                bottomBar
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -62,6 +53,18 @@ struct AgentSessionView: View {
         }
     }
 
+    private var bottomBar: some View {
+        VStack(spacing: style.gridSize) {
+            if store.isResponding {
+                AgentSessionWorkingIndicatorView()
+                    .transition(.opacity)
+            }
+
+            composer
+        }
+        .animation(style.springAnimation, value: store.isResponding)
+    }
+
     private var header: some View {
         HStack {
             sessionHeader
@@ -83,6 +86,35 @@ struct AgentSessionView: View {
             .foregroundStyle(theme.secondaryLabelColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AgentSessionWorkingIndicatorView: View {
+    @Environment(\.style) private var style
+
+    var body: some View {
+        HStack {
+            ProgressView()
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, style.horizontalPadding)
+        .accessibilityLabel("Agent is responding")
+    }
+}
+
+private extension AgentSessionView {
+    var composer: some View {
+        PromptComposerView(
+            text: $store.draftText,
+            focused: $composerFocused,
+            placeholder: store.composerPlaceholder,
+            isSubmitDisabled: !store.canSubmitDraft,
+            isSubmitting: store.isResponding,
+            onSubmit: store.submitDraft
+        )
+        .padding(.horizontal, style.horizontalPadding)
+        .padding(.bottom, style.gridSize)
     }
 }
 
