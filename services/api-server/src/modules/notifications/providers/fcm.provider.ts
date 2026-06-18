@@ -1,9 +1,15 @@
 import { SignJWT, importPKCS8 } from "jose";
 import { z } from "zod";
-import type {
-  FcmSendResult,
-  NotificationQueueMessage,
-} from "../types/notification.types";
+import type { NotificationQueueMessage } from "../types/notification.types";
+
+export type FcmSendResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error:
+        | { code: "INVALID_TOKEN"; message: string; status: number }
+        | { code: "TRANSIENT"; message: string; status?: number };
+    };
 
 const FirebaseServiceAccount = z.object({
   project_id: z.string().min(1),
@@ -88,11 +94,11 @@ export class FcmProvider {
 
     const errorBody = await parseFcmErrorBody(response);
     const message = errorBody.error?.message ?? "FCM send failed";
-    if (isTerminalTokenError(errorBody)) {
+    if (isInvalidTokenError(errorBody)) {
       return {
         ok: false,
         error: {
-          code: "TERMINAL_TOKEN",
+          code: "INVALID_TOKEN",
           message,
           status: response.status,
         },
@@ -163,7 +169,7 @@ async function parseFcmErrorBody(response: Response): Promise<FcmErrorBody> {
   }
 }
 
-function isTerminalTokenError(body: FcmErrorBody): boolean {
+function isInvalidTokenError(body: FcmErrorBody): boolean {
   const fcmErrorCodes = new Set(
     body.error?.details
       ?.filter((detail) => detail["@type"] === "type.googleapis.com/google.firebase.fcm.v1.FcmError")

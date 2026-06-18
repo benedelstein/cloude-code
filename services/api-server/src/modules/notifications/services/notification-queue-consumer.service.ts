@@ -1,9 +1,7 @@
 import type { Logger } from "@repo/shared";
+import type { FcmSendResult } from "../providers/fcm.provider";
 import type { FcmTokenRepository } from "../repositories/fcm-token.repository";
-import type {
-  FcmSendResult,
-  NotificationQueueMessage,
-} from "../types/notification.types";
+import type { NotificationQueueMessage } from "../types/notification.types";
 
 export interface NotificationQueueConsumerDeps {
   logger: Logger;
@@ -58,9 +56,9 @@ export class NotificationQueueConsumer {
       }
 
       switch (result.error.code) {
-        case "TERMINAL_TOKEN":
+        case "INVALID_TOKEN":
           await this.tokenRepository.deleteToken(token.token);
-          this.logger.info("Deleted terminal FCM token", {
+          this.logger.info("Deleted invalid FCM token", {
             fields: {
               notificationId: event.id,
               toUserId: event.toUserId,

@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import type { FcmSendResult } from "../../src/modules/notifications/providers/fcm.provider";
 import { FcmTokenRepository } from "../../src/modules/notifications/repositories/fcm-token.repository";
 import { NotificationPublisher } from "../../src/modules/notifications/services/notification-publisher.service";
 import { NotificationQueueConsumer } from "../../src/modules/notifications/services/notification-queue-consumer.service";
 import { createLogger } from "../../src/shared/logging";
-import type {
-  FcmSendResult,
-  NotificationQueueMessage,
-} from "../../src/modules/notifications/types/notification.types";
+import type { NotificationQueueMessage } from "../../src/modules/notifications/types/notification.types";
 import type { Env } from "../../src/shared/types";
 
 type PreparedStatement = {
@@ -156,7 +154,7 @@ describe("NotificationQueueConsumer", () => {
     expect(send).toHaveBeenCalledWith({ token: "fcm-token", event });
   });
 
-  it("deletes tokens on terminal FCM failures", async () => {
+  it("deletes tokens on invalid FCM token failures", async () => {
     const { database, calls } = createMockDatabase({
       allRows: [[
         {
@@ -173,7 +171,7 @@ describe("NotificationQueueConsumer", () => {
     const send = vi.fn<() => Promise<FcmSendResult>>()
       .mockResolvedValue({
         ok: false,
-        error: { code: "TERMINAL_TOKEN", message: "Unregistered", status: 404 },
+        error: { code: "INVALID_TOKEN", message: "Unregistered", status: 404 },
       });
     const consumer = new NotificationQueueConsumer({
       logger: createLogger("notifications.test.ts"),

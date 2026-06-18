@@ -18,12 +18,3 @@ export interface NotificationQueueMessage {
   payload: NotificationPayload;
   createdAt: string;
 }
-
-export type FcmSendResult =
-  | { ok: true }
-  | {
-      ok: false;
-      error:
-        | { code: "TERMINAL_TOKEN"; message: string; status: number }
-        | { code: "TRANSIENT"; message: string; status?: number };
-    };
