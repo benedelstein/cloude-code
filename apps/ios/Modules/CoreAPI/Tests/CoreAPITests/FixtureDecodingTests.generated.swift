@@ -1015,6 +1015,14 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(ProviderCatalogModel.self, key: "ProviderCatalogModel.autoMinimal")
     }
 
+    @Test func notificationMessageDataAutoFull() throws {
+        try assertAutoRoundTrip(NotificationMessageData.self, key: "NotificationMessageData.autoFull")
+    }
+
+    @Test func notificationMessageDataAutoMinimal() throws {
+        try assertAutoRoundTrip(NotificationMessageData.self, key: "NotificationMessageData.autoMinimal")
+    }
+
     @Test func notificationPayloadAutoTurnFinished() throws {
         try assertAutoRoundTrip(NotificationPayload.self, key: "NotificationPayload.autoTurnFinished")
     }

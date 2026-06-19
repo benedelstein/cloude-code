@@ -2,6 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { NotificationMessageData } from "@repo/api-contract";
 import { config } from "dotenv";
 import { FcmProvider } from "../src/modules/notifications/providers/fcm.provider";
 import type { NotificationQueueMessage } from "../src/modules/notifications/types/notification.types";
@@ -166,6 +167,12 @@ async function printRawFcmFailure(params: {
   }
 
   const accessToken = await (params.provider as unknown as { getAccessToken: () => Promise<string> }).getAccessToken();
+  const data = {
+    notification_id: params.event.id,
+    notification_type: params.event.payload.type,
+    payload: JSON.stringify(params.event.payload),
+  } satisfies NotificationMessageData;
+
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
     method: "POST",
     headers: {
@@ -179,11 +186,7 @@ async function printRawFcmFailure(params: {
           title: params.event.title,
           body: params.event.body,
         },
-        data: {
-          notification_id: params.event.id,
-          notification_type: params.event.payload.type,
-          payload: JSON.stringify(params.event.payload),
-        },
+        data,
         apns: {
           payload: {
             aps: {

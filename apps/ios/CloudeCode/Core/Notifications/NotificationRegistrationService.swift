@@ -22,6 +22,7 @@ final class NotificationRegistrationService: NSObject {
     private var uploadTask: Task<Void, Never>?
     private var lastUploadRequest: UploadRequest?
     private var hasStarted = false
+    private var receivedNotificationIds = Set<String>()
 
     init(
         notificationsAPI: any NotificationsAPIProviding,
@@ -126,9 +127,10 @@ final class NotificationRegistrationService: NSObject {
         userInfo: [AnyHashable: Any],
         failureMessage: String
     ) -> UNNotificationPresentationOptions {
-        appDidReceiveMessage(userInfo)
-
-        guard let payload = NotificationPayload(from: userInfo) else {
+        guard
+            let notificationData = NotificationMessageData(from: userInfo),
+            let payload = NotificationPayload(jsonString: notificationData.payload)
+        else {
             Logger.warning(
                 failureMessage,
                 "keys:",
@@ -137,6 +139,12 @@ final class NotificationRegistrationService: NSObject {
             return NotificationHandler.defaultPresentationOptions
         }
 
+        guard shouldProcessNotificationDelivery(notificationData) else {
+            Logger.debug("Skipping duplicate notification delivery", notificationData.notificationId)
+            return []
+        }
+
+        appDidReceiveMessage(userInfo)
         return notificationHandler.presentationOptions(forForeground: payload)
     }
 
@@ -145,6 +153,10 @@ final class NotificationRegistrationService: NSObject {
         // NOTE: MUST BE CALLED ON MAIN THREAD
         // Firebase's analytics hook reads `UIApplication.applicationState`.
         Messaging.messaging().appDidReceiveMessage(userInfo)
+    }
+
+    private func shouldProcessNotificationDelivery(_ notificationData: NotificationMessageData) -> Bool {
+        receivedNotificationIds.insert(notificationData.notificationId).inserted
     }
 }
 

@@ -144,6 +144,13 @@ const OVERRIDES: Record<string, Partial<Omit<ManifestEntry, "schema" | "group">>
     doc: "Server → client messages on the user-level sessions WebSocket.",
   },
   AgentSettings: { doc: "Active agent settings, discriminated by provider." },
+  NotificationMessageData: {
+    doc: "String-only FCM data payload for app notifications.",
+    renames: {
+      notification_id: "notificationId",
+      notification_type: "notificationType",
+    },
+  },
   // Swift reserved words.
   Repo: { renames: { private: "isPrivate" } },
   Branch: { renames: { default: "isDefault" } },
