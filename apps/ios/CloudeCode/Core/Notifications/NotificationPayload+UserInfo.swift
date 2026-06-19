@@ -24,11 +24,11 @@ extension NotificationMessageData {
 
 extension CoreAPI.NotificationPayload {
     init?(from userInfo: [AnyHashable: Any]) {
-        guard let notificationData = NotificationMessageData(from: userInfo) else {
+        guard let payload = userInfo["payload"] as? String else {
             return nil
         }
 
-        self.init(jsonString: notificationData.payload)
+        self.init(jsonString: payload)
     }
 
     init?(jsonString: String) {
