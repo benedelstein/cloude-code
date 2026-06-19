@@ -35,6 +35,17 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B50E87592FCD709E00240B2E"
+               BuildableName = "CloudeCodeTests.xctest"
+               BlueprintName = "CloudeCodeTests"
+               ReferencedContainer = "container:CloudeCode.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "B50E87632FCD709E00240B2E"
                BuildableName = "CloudeCodeUITests.xctest"
                BlueprintName = "CloudeCodeUITests"

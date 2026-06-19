@@ -1,4 +1,5 @@
 import { SignJWT, importPKCS8 } from "jose";
+import type { NotificationMessageData } from "@repo/api-contract";
 import { z } from "zod";
 import type { NotificationQueueMessage } from "../types/notification.types";
 
@@ -56,6 +57,12 @@ export class FcmProvider {
     event: NotificationQueueMessage;
   }): Promise<FcmSendResult> {
     const accessToken = await this.getAccessToken();
+    const data = {
+      notification_id: params.event.id,
+      notification_type: params.event.payload.type,
+      payload: JSON.stringify(params.event.payload),
+    } satisfies NotificationMessageData;
+
     const response = await fetch(
       `https://fcm.googleapis.com/v1/projects/${this.serviceAccount.project_id}/messages:send`,
       {
@@ -71,11 +78,7 @@ export class FcmProvider {
               title: params.event.title,
               body: params.event.body,
             },
-            data: {
-              notification_id: params.event.id,
-              notification_type: params.event.payload.type,
-              payload: JSON.stringify(params.event.payload),
-            },
+            data,
             apns: {
               payload: {
                 aps: {

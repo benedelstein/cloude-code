@@ -2113,6 +2113,16 @@
     "isDefault": true,
     "selectable": true
   },
+  "NotificationMessageData.autoFull": {
+    "notification_id": "sample",
+    "notification_type": "TURN_FINISHED",
+    "payload": "sample"
+  },
+  "NotificationMessageData.autoMinimal": {
+    "notification_id": "sample",
+    "notification_type": "TURN_FINISHED",
+    "payload": "sample"
+  },
   "NotificationPayload.autoTurnFinished": {
     "type": "TURN_FINISHED",
     "version": 1,

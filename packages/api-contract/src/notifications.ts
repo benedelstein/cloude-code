@@ -31,3 +31,10 @@ export const NotificationPayload = z.discriminatedUnion("type", [
   TurnFinishedNotificationPayload,
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
+
+export const NotificationMessageData = z.object({
+  notification_id: z.string().min(1),
+  notification_type: NotificationType,
+  payload: z.string().min(1),
+});
+export type NotificationMessageData = z.infer<typeof NotificationMessageData>;

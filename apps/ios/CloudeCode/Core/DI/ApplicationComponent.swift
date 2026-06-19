@@ -77,6 +77,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    @MainActor var notificationHandler: NotificationHandler {
+        shared {
+            NotificationHandler()
+        }
+    }
+
     var sessionsAPI: any SessionsAPIProviding {
         shared {
             SessionsAPI(client: apiClient, tokenProvider: tokenCoordinator)
@@ -98,7 +104,8 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         shared {
             NotificationRegistrationService(
                 notificationsAPI: notificationsAPI,
-                authUserPublisher: sessionStore.authUserPublisher
+                authUserPublisher: sessionStore.authUserPublisher,
+                notificationHandler: notificationHandler
             )
         }
     }
@@ -147,6 +154,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
 
     @MainActor var sessionSummaryStore: SessionSummaryStore {
         shared {
+            // todo add a summary get endpoint rn we just have a get that returns data from the do.
             SessionSummaryStore(cache: cache)
         }
     }

@@ -8,20 +8,29 @@ struct HomeView: View {
     @Environment(\.style) private var style
     @Environment(\.openSettings) private var openSettings
     @Environment(\.showToast) private var showToast
-    @Environment(\.notificationRegistrationService) private var notificationRegistrationService
+    @Environment(\.notificationRegistrationService)
+    private var notificationRegistrationService: NotificationRegistrationService?
 
     @State private var viewModel: HomeViewModel
+    @State private var router: HomeRouter
     @State private var collapsedRepoIDs = Set<Int>()
     @State private var sessionPendingDelete: SessionSummaryModel?
     let sessionBuilder: AgentSessionBuilder
 
-    init(viewModel: HomeViewModel, sessionBuilder: AgentSessionBuilder) {
+    init(
+        viewModel: HomeViewModel,
+        router: HomeRouter,
+        sessionBuilder: AgentSessionBuilder
+    ) {
         _viewModel = State(initialValue: viewModel)
+        _router = State(initialValue: router)
         self.sessionBuilder = sessionBuilder
     }
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+
+        NavigationStack(path: $router.path) {
             content
                 .background(theme.backgroundColor)
                 .navigationTitle("Sessions")
@@ -55,14 +64,22 @@ struct HomeView: View {
                     Text("This permanently deletes \(session.title ?? "this session").")
                 }
         }
+        .onChange(of: router.notificationTap) { _, _ in
+            Task {
+                await router.handlePendingNotificationTap()
+            }
+        }
         // Outside the NavigationStack: pushes/pops re-evaluate the stack's
         // content, and we only want to bind once per appearance of Home.
         .task {
+            router.start()
             async let notifications: Void = prepareNotifications()
-            async let start: Void = viewModel.start()
-            _ = await (notifications, start)
+            await viewModel.start()
+            await router.handlePendingNotificationTap()
+            await notifications
         }
         .onDisappear {
+            router.stop()
             viewModel.unload()
         }
     }

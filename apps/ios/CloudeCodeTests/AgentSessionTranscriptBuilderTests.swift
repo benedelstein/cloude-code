@@ -64,7 +64,7 @@ struct AgentSessionTranscriptBuilderTests {
         }
 
         #expect(actionItems.count == 4)
-        #expect(actionItems.allSatisfy(\.isSingle))
+        #expect(actionItems.allSatisfy { $0.isSingle })
     }
 
     @Test func groupedBashTitleReflectsCompletedActiveAndPendingPhases() {

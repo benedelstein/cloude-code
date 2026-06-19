@@ -23,6 +23,29 @@ public enum FcmTokenPlatform: RawRepresentable, Codable, Equatable, Sendable {
     }
 }
 
+/// String-only FCM data payload for app notifications.
+public struct NotificationMessageData: Codable, Equatable, Sendable {
+    public var notificationId: String
+    public var notificationType: NotificationType
+    public var payload: String
+
+    public init(
+        notificationId: String,
+        notificationType: NotificationType,
+        payload: String
+    ) {
+        self.notificationId = notificationId
+        self.notificationType = notificationType
+        self.payload = payload
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case notificationId = "notification_id"
+        case notificationType = "notification_type"
+        case payload
+    }
+}
+
 public enum NotificationPayload: Codable, Equatable, Sendable {
     case turnFinished(TurnFinishedNotificationPayload)
     /// A variant this client version doesn't recognize yet.
