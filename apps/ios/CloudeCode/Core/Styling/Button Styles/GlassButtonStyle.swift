@@ -11,14 +11,14 @@ extension View {
     ) -> some View {
         if #available(iOS 26.0, *) {
             let effect: Glass = {
-                var e: Glass = .regular
+                var glass: Glass = .regular
                 if let tint {
-                    e = e.tint(tint)
+                    glass = glass.tint(tint)
                 }
                 if interactive {
-                    e = e.interactive()
+                    glass = glass.interactive()
                 }
-                return e
+                return glass
             }()
             glassEffect(effect, in: shape)
         } else {
