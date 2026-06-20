@@ -44,7 +44,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             }
             collectionView.layer.removeAllAnimations()
         }
-
     }
 
     func bottomContentOffset(in collectionView: UICollectionView) -> CGPoint {
