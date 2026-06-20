@@ -2,12 +2,12 @@ import SwiftUI
 import SwiftUIIntrospect
 
 struct PromptComposerView: View {
-    @Environment(\.theme) private var theme
-    @Environment(\.style) private var style
+    @Environment(\.theme) private var theme: Theme
+    @Environment(\.style) private var style: Style
     @Environment(\.lightFeedback) private var lightFeedback: UIImpactFeedbackGenerator
 
     @Binding private var text: String
-    private let focused: FocusState<Bool>.Binding
+    private var focused: FocusState<Bool>.Binding
     private let placeholder: String
     private let isSubmitDisabled: Bool
     private let isSubmitting: Bool
@@ -32,6 +32,10 @@ struct PromptComposerView: View {
         self.onLeadingAction = onLeadingAction
     }
 
+    var composerShape: some Shape {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+    }
+
     var body: some View {
         VStack(spacing: style.gridSize) {
             composerEditor
@@ -39,9 +43,13 @@ struct PromptComposerView: View {
                 .padding(8)
         }
         .promptComposerGlassBackground(
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+            in: composerShape,
             fallbackColor: theme.secondaryBackgroundColor
         )
+        .contentShape(composerShape)
+        .onTapGesture {
+            focused.wrappedValue = true
+        }
     }
 
     var bottomBar: some View {
@@ -125,6 +133,7 @@ struct PromptComposerView: View {
                     textView.keyboardDismissMode = .interactive
                     textView.alwaysBounceVertical = true
                 }
+                // todo better height sizing. rn it is too short til you focus the keyboard
                 .frame(minHeight: style.gridSize * 5, maxHeight: style.gridSize * 15)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(Color.clear)

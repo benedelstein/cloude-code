@@ -35,12 +35,10 @@ struct AgentSessionView: View {
                     onSubmit: store.submitDraft
                 )
                 .padding(.horizontal, style.horizontalPadding)
-                .padding(.bottom, style.gridSize)
+                .padding(.bottom, style.spacing) // todo zero padding when not keyboard presented. animate smoothly
                 .readSize { size in
                     guard abs(composerHeight - size.height) > 0.5 else { return }
-                    if composerHeight != size.height {
-                        composerHeight = size.height
-                    }
+                    composerHeight = size.height
                 }
             }
         }
