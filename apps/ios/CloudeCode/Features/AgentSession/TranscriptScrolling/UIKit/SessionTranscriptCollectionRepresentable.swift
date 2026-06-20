@@ -6,10 +6,15 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
     let keyboardDismissPadding: CGFloat
     let rowSpacing: CGFloat
     let contentPadding: CGFloat
+    let scrollCoordinator: SessionTranscriptScrollCoordinator
+    let scrollToBottomRequestID: Int
     let rowContent: (SessionTranscriptItem) -> Row
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(rowContent: rowContent)
+        Coordinator(
+            scrollCoordinator: scrollCoordinator,
+            rowContent: rowContent
+        )
     }
 
     func makeUIView(context: Context) -> LayoutReportingCollectionView {
@@ -33,6 +38,7 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
         }
 
         context.coordinator.installDataSource(on: collectionView)
+        context.coordinator.installScrollDelegate(on: collectionView)
         return collectionView
     }
 
@@ -44,11 +50,15 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
             contentPadding: contentPadding,
             rowContent: rowContent
         )
+        context.coordinator.handleScrollToBottomRequestIfNeeded(
+            scrollToBottomRequestID,
+            in: collectionView
+        )
     }
 }
 
 extension SessionTranscriptCollectionRepresentable {
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, UICollectionViewDelegate {
         private enum Section {
             case main
         }
@@ -58,15 +68,21 @@ extension SessionTranscriptCollectionRepresentable {
 
         private var dataSource: DataSource?
         private var itemsByID: [String: SessionTranscriptItem] = [:]
-        private var initialAnchorState: SessionTranscriptInitialAnchorState = .waitingForItems
+        private(set) var initialAnchorState: SessionTranscriptInitialAnchorState = .waitingForItems
         private var lastItems: [SessionTranscriptItem] = []
         private var lastItemIDs: [String] = []
         private var lastLayoutBoundsSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
+        var handledScrollToBottomRequestID = 0
+        let scrollCoordinator: SessionTranscriptScrollCoordinator
         private var rowContent: (SessionTranscriptItem) -> Row
 
-        init(rowContent: @escaping (SessionTranscriptItem) -> Row) {
+        init(
+            scrollCoordinator: SessionTranscriptScrollCoordinator,
+            rowContent: @escaping (SessionTranscriptItem) -> Row
+        ) {
+            self.scrollCoordinator = scrollCoordinator
             self.rowContent = rowContent
         }
 
@@ -92,6 +108,10 @@ extension SessionTranscriptCollectionRepresentable {
                     item: id
                 )
             }
+        }
+
+        func installScrollDelegate(on collectionView: UICollectionView) {
+            collectionView.delegate = self
         }
 
         func update(
@@ -162,16 +182,16 @@ extension SessionTranscriptCollectionRepresentable {
             if keyboardTransition != nil {
                 logKeyboardLayout(collectionView, wasAtBottomBeforeLayout, boundsChanged, didUpdateContentInsets)
             }
-//
-//            if isInitialAnchorComplete
-//                && wasAtBottomBeforeLayout
-//                && didChangeLayout {
-//                scrollToBottom(
-//                    collectionView,
-//                    animated: false,
-//                    keyboardTransition: keyboardTransition
-//                )
-//            }
+
+            if isInitialAnchorComplete
+                && wasAtBottomBeforeLayout
+                && didChangeLayout {
+                scrollToBottom(
+                    collectionView,
+                    animated: false,
+                    keyboardTransition: keyboardTransition
+                )
+            }
 
             clearKeyboardTransitionIfNeeded(layoutCollectionView, keyboardTransition, didChangeLayout)
 
@@ -192,6 +212,30 @@ extension SessionTranscriptCollectionRepresentable {
                 lastGeometry: lastGeometry,
                 attempts: attempts
             )
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            updateScrollToBottomVisibility(scrollView)
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            scrollCoordinator.finishScrollToBottom()
+            updateScrollToBottomVisibility(scrollView)
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            guard !decelerate else { return }
+
+            updateScrollToBottomVisibility(scrollView)
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            updateScrollToBottomVisibility(scrollView)
+        }
+
+        func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+            scrollCoordinator.finishScrollToBottom()
+            updateScrollToBottomVisibility(scrollView)
         }
     }
 }
@@ -223,6 +267,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         lastLayoutBoundsSize = collectionView.bounds.size
         lastDistanceFromBottom = distanceFromBottom(collectionView)
+        updateScrollToBottomVisibility(collectionView)
     }
 
     func updateContentInsets(_ collectionView: UICollectionView, reason: String) -> Bool {
@@ -412,62 +457,6 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(reconfiguredIDs)
         dataSource.apply(snapshot, animatingDifferences: false)
-    }
-
-    func scrollToBottom(
-        _ collectionView: UICollectionView,
-        animated: Bool,
-        keyboardTransition: LayoutReportingCollectionView.KeyboardTransition? = nil
-    ) {
-        // UIKit's maximum vertical offset is content height minus visible height,
-        // plus the adjusted bottom inset. Clamp to the top inset for short content.
-        let yOffset = max(
-            -collectionView.adjustedContentInset.top,
-            collectionView.contentSize.height
-                - collectionView.bounds.height
-                + collectionView.adjustedContentInset.bottom
-        )
-
-        print(
-            "xx scrollToBottom yOffset=\(yOffset) " +
-                "bounds=\(collectionView.bounds.size) " +
-                "contentSize=\(collectionView.contentSize) " +
-                "insets=\(collectionView.adjustedContentInset) " +
-                "remainingKeyboardDuration=\(String(describing: keyboardTransition?.remainingDuration))"
-        )
-
-        let targetOffset = CGPoint(x: collectionView.contentOffset.x, y: yOffset)
-        let applyOffset = {
-            if keyboardTransition != nil {
-                collectionView.contentOffset = targetOffset
-            } else {
-                collectionView.setContentOffset(targetOffset, animated: animated)
-            }
-            collectionView.layoutIfNeeded()
-        }
-
-        if let keyboardTransition {
-            animateWithKeyboardTransition(keyboardTransition, applyOffset)
-        } else {
-            UIView.performWithoutAnimation {
-                applyOffset()
-            }
-            collectionView.layer.removeAllAnimations()
-        }
-
-        print("xx scrollToBottom applied offset=\(collectionView.contentOffset)")
-    }
-
-    func isAtBottom(_ collectionView: UICollectionView) -> Bool {
-        abs(distanceFromBottom(collectionView)) <= 0.5
-    }
-
-    func distanceFromBottom(_ collectionView: UICollectionView) -> CGFloat {
-        let visibleBottomY = collectionView.contentOffset.y
-            + collectionView.bounds.height
-            - collectionView.adjustedContentInset.bottom
-
-        return collectionView.contentSize.height - visibleBottomY
     }
 
     func completeInitialBottomAnchor(_ collectionView: UICollectionView) {

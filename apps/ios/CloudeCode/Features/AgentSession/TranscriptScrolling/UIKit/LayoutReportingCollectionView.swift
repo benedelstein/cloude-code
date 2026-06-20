@@ -1,18 +1,32 @@
 import UIKit
 
 final class LayoutReportingCollectionView: UICollectionView {
-    struct KeyboardTransition {
-        let startTime: TimeInterval
-        let duration: TimeInterval
-        let options: UIView.AnimationOptions
+    /// Called after UIKit completes this collection view's layout pass.
+    var onLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
+    /// Most recent keyboard transition waiting to be consumed by the transcript coordinator.
+    private(set) var pendingKeyboardTransition: KeyboardTransition?
+    private let keyboardTransitionObserver: KeyboardTransitionObserving
 
-        var remainingDuration: TimeInterval {
-            max(0, duration - (ProcessInfo.processInfo.systemUptime - startTime))
-        }
+    /// Creates a collection view that reports layout passes and keyboard transitions.
+    init(
+        frame: CGRect,
+        collectionViewLayout layout: UICollectionViewLayout,
+        keyboardTransitionObserver: KeyboardTransitionObserving = NotificationKeyboardTransitionObserver()
+    ) {
+        self.keyboardTransitionObserver = keyboardTransitionObserver
+        super.init(frame: frame, collectionViewLayout: layout)
+        configureKeyboardTransitionObserver()
     }
 
-    var onLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
-    private(set) var pendingKeyboardTransition: KeyboardTransition?
+    required init?(coder: NSCoder) {
+        keyboardTransitionObserver = NotificationKeyboardTransitionObserver()
+        super.init(coder: coder)
+        configureKeyboardTransitionObserver()
+    }
+
+    deinit {
+        keyboardTransitionObserver.stop()
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -24,10 +38,7 @@ final class LayoutReportingCollectionView: UICollectionView {
         updateKeyboardObservers()
     }
 
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-
+    /// Returns the insets needed when this view overlaps safe areas or visible navigation bars.
     func contentInsets() -> UIEdgeInsets {
         guard let window, let viewportFrame = viewportFrame(in: window) else {
             return safeAreaInsets
@@ -44,101 +55,44 @@ final class LayoutReportingCollectionView: UICollectionView {
         )
     }
 
+    /// Marks the pending keyboard transition as consumed.
     func clearPendingKeyboardTransition() {
         pendingKeyboardTransition = nil
     }
 
-    @objc
-    private func keyboardFrameWillChange(_ notification: Notification) {
-        guard let window,
-              let screenFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let keyboardFrameInWindow = window.convert(screenFrame, from: nil)
-        let keyboardTransition = keyboardTransition(from: notification)
-        pendingKeyboardTransition = keyboardTransition
-        print(
-            "xx keyboard frame screen=\(screenFrame) " +
-                "window=\(keyboardFrameInWindow) " +
-                "windowBounds=\(window.bounds) " +
-                "duration=\(keyboardTransition.duration) " +
-                "remainingDuration=\(keyboardTransition.remainingDuration)"
-        )
-        setNeedsLayout()
-    }
-
-    @objc
-    private func keyboardWillHide(_ notification: Notification) {
-        pendingKeyboardTransition = keyboardTransition(from: notification)
-        setNeedsLayout()
-    }
-
     private func updateKeyboardObservers() {
-        NotificationCenter.default.removeObserver(
-            self,
-            name: UIResponder.keyboardWillChangeFrameNotification,
-            object: nil
-        )
-        NotificationCenter.default.removeObserver(
-            self,
-            name: UIResponder.keyboardWillHideNotification,
-            object: nil
-        )
+        keyboardTransitionObserver.stop()
         pendingKeyboardTransition = nil
 
         guard window != nil else { return }
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardFrameWillChange(_:)),
-            name: UIResponder.keyboardWillChangeFrameNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillHide(_:)),
-            name: UIResponder.keyboardWillHideNotification,
-            object: nil
-        )
+        keyboardTransitionObserver.start(in: self)
     }
 
-    private func keyboardTransition(from notification: Notification) -> KeyboardTransition {
-        KeyboardTransition(
-            startTime: ProcessInfo.processInfo.systemUptime,
-            duration: keyboardAnimationDuration(from: notification),
-            options: keyboardAnimationOptions(from: notification)
-        )
-    }
-
-    private func keyboardAnimationDuration(from notification: Notification) -> TimeInterval {
-        guard let duration = notification
-            .userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber else {
-            return 0.25
+    private func configureKeyboardTransitionObserver() {
+        keyboardTransitionObserver.onTransition = { [weak self] transition in
+            self?.handleKeyboardTransition(transition)
         }
-
-        return duration.doubleValue
     }
 
-    private func keyboardAnimationOptions(from notification: Notification) -> UIView.AnimationOptions {
-        let curveRawValue = (
-            notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber
-        )?.uintValue ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
-        let curveOptions = UIView.AnimationOptions(rawValue: curveRawValue << 16)
-
-        return [.beginFromCurrentState, .allowUserInteraction, .layoutSubviews, curveOptions]
+    private func handleKeyboardTransition(_ transition: KeyboardTransition) {
+        pendingKeyboardTransition = transition
+        setNeedsLayout()
     }
 
     private func safeAreaTopHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
+        // Add only the top safe-area portion that overlaps this view's frame.
         max(0, window.safeAreaInsets.top - viewportFrame.minY)
     }
 
     private func safeAreaBottomHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
+        // Add only the bottom safe-area portion that overlaps this view's frame.
         let safeAreaBottomY = window.bounds.maxY - window.safeAreaInsets.bottom
         return max(0, viewportFrame.maxY - safeAreaBottomY)
     }
 
     private func navigationBarHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
+        // Add visible navigation-bar overlap because this view opts out of automatic inset adjustment.
         visibleNavigationBars(from: window.rootViewController).reduce(0) { currentHeight, navigationBar in
             guard !navigationBar.isHidden else {
                 return currentHeight
@@ -186,10 +140,12 @@ final class LayoutReportingCollectionView: UICollectionView {
             visit(viewController.presentedViewController)
         }
 
+        // recursively look for a navigation bar in view, starting from root
         visit(rootViewController)
         return navigationBars
     }
 
+    // return the frame of the view in global coordinates
     private func viewportFrame(in window: UIWindow) -> CGRect? {
         guard self.window === window else { return nil }
 

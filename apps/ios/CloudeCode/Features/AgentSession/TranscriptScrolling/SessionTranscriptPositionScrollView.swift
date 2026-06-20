@@ -4,7 +4,6 @@ import Domain
 import Combine
 
 struct SessionTranscriptPositionScrollView<Row: View>: View {
-    @Environment(\.theme) var theme: Theme
     @State private var scrollPosition = ScrollPosition(idType: String.self, edge: .bottom)
     @State private var scrollController = ScrollController()
     @State private var showScrollToBottom: Bool = false
@@ -18,46 +17,40 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
     @ViewBuilder let rowContent: (SessionTranscriptItem) -> Row
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack {
-                    // regular vstack uses more memory but has more deterministic scrolling.
-                    // lazy vstack causes the scroll cursor to go wonky.
-                    LazyVStack(alignment: .leading, spacing: rowSpacing) {
-                        ForEach(items) { item in
-                            rowContent(item)
-                                .id(item.id)
-                        }
+        ScrollView {
+            VStack {
+                // regular vstack uses more memory but has more deterministic scrolling.
+                // lazy vstack causes the scroll cursor to go wonky.
+                LazyVStack(alignment: .leading, spacing: rowSpacing) {
+                    ForEach(items) { item in
+                        rowContent(item)
+                            .id(item.id)
                     }
-                    Color.clear.frame(height: 0).id("bottom")
                 }
-                // .scrollTargetLayout() // not needed?
-                .padding(.vertical, contentPadding)
-                .task {
-//                    proxy.scrollTo("bottom")
-//                    do {
-//                        // wait for any layout shift.
-//                        for _ in 1..<2 {
-//                            try await Task.sleep(nanoseconds: 500_000)
-//                            withAnimation {
-//                                proxy.scrollTo("bottom", anchor: .bottom)
-//                            }
-//                        }
-////                        show = true
-//                    } catch {
-//                    }
-                }
+                Color.clear.frame(height: 0).id("bottom")
             }
+            // .scrollTargetLayout() // not needed?
+            .padding(.vertical, contentPadding)
         }
-        .overlay(alignment: .bottom) {
-            if showScrollToBottom {
-                scrollBottomIndicator
-                    .padding(.bottom, 16)
+        .overlay {
+            SessionTranscriptScrollToBottomOverlay(
+                isVisible: showScrollToBottom,
+                bottomObstructionHeight: keyboardDismissPadding
+            ) {
+                isScrollingToBottom = true
+                showScrollToBottom = false
+                withAnimation(.easeInOut) {
+                    scrollToBottom()
+                } completion: {
+                    isScrollingToBottom = false
+                }
             }
         }
 //        .opacity(show ? 1 : 0)
-        .defaultScrollAnchor(.bottom)
-//        .scrollPosition($scrollPosition, anchor: .center)
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
+        .defaultScrollAnchor(.top, for: .alignment)
+        .defaultScrollAnchor(.top, for: .sizeChanges)
+        .scrollPosition($scrollPosition, anchor: .bottom)
         .scrollDismissesKeyboard(.interactively)
         .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
             scrollController.update(with: scrollView)
@@ -89,32 +82,10 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
             } catch {
             }
         }
-//        .onChange(of: items) {
-//            scrollToBottom()
-//        }
         .onChange(of: keyboardDismissPadding) {
             scrollController.updateKeyboardDismissPadding($1)
             scrollToBottom()
         }
-    }
-
-    private var scrollBottomIndicator: some View {
-        Button {
-            isScrollingToBottom = true
-            showScrollToBottom = false
-            withAnimation(.easeInOut) {
-                scrollToBottom()
-            } completion: {
-                isScrollingToBottom = false
-            }
-        } label: {
-            Image(systemName: "arrow.down")
-                .font(.body(16))
-                .foregroundStyle(theme.labelColor)
-                .frame(width: 40, height: 40)
-                .glassBackground(in: Circle(), interactive: true)
-        }
-        .transition(.scale(scale: 0.5).combined(with: .opacity).animation(.spring))
     }
 
     private func scrollToBottom() {

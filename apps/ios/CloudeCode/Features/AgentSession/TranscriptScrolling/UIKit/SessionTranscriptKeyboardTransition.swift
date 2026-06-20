@@ -1,11 +1,12 @@
 import UIKit
 
 extension SessionTranscriptCollectionRepresentable.Coordinator {
+    /// Returns a keyboard transition only while it can still affect a layout update.
     func unexpiredKeyboardTransition(
-        _ transition: LayoutReportingCollectionView.KeyboardTransition?,
+        _ transition: KeyboardTransition?,
         in collectionView: LayoutReportingCollectionView?,
         didChangeLayout: Bool
-    ) -> LayoutReportingCollectionView.KeyboardTransition? {
+    ) -> KeyboardTransition? {
         guard let transition else { return nil }
         guard !didChangeLayout && transition.remainingDuration <= 0 else {
             return transition
@@ -16,9 +17,10 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         return nil
     }
 
+    /// Clears a keyboard transition after a layout update has consumed it.
     func clearKeyboardTransitionIfNeeded(
         _ collectionView: LayoutReportingCollectionView?,
-        _ transition: LayoutReportingCollectionView.KeyboardTransition?,
+        _ transition: KeyboardTransition?,
         _ didChangeLayout: Bool
     ) {
         guard transition != nil && didChangeLayout else { return }
@@ -27,8 +29,9 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         collectionView?.clearPendingKeyboardTransition()
     }
 
+    /// Runs offset updates using the remaining keyboard transition timing.
     func animateWithKeyboardTransition(
-        _ keyboardTransition: LayoutReportingCollectionView.KeyboardTransition,
+        _ keyboardTransition: KeyboardTransition,
         _ animations: @escaping () -> Void
     ) {
         let remainingDuration = keyboardTransition.remainingDuration

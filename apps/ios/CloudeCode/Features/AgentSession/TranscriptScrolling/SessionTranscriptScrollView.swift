@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SessionTranscriptScrollView<Row: View>: View {
+    @State private var scrollCoordinator = SessionTranscriptScrollCoordinator()
+
     let items: [SessionTranscriptItem]
     let keyboardDismissPadding: CGFloat
     let rowSpacing: CGFloat
@@ -13,7 +15,17 @@ struct SessionTranscriptScrollView<Row: View>: View {
             keyboardDismissPadding: keyboardDismissPadding,
             rowSpacing: rowSpacing,
             contentPadding: contentPadding,
+            scrollCoordinator: scrollCoordinator,
+            scrollToBottomRequestID: scrollCoordinator.scrollToBottomRequestID,
             rowContent: rowContent
         )
+        .overlay {
+            SessionTranscriptScrollToBottomOverlay(
+                isVisible: scrollCoordinator.showsScrollToBottom,
+                bottomObstructionHeight: keyboardDismissPadding
+            ) {
+                scrollCoordinator.requestScrollToBottom()
+            }
+        }
     }
 }

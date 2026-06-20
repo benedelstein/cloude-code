@@ -18,11 +18,6 @@ struct AgentSessionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-//            ScrollView {
-//                ForEach(store.messages) { message in
-//                    Text("Message" + message.text)
-//                }
-//            }
             SessionScrollView(
                 store: store,
                 destination: $destination,
@@ -41,7 +36,9 @@ struct AgentSessionView: View {
                 .padding(.bottom, style.gridSize)
                 .readSize { size in
                     guard abs(composerHeight - size.height) > 0.5 else { return }
-                    composerHeight = size.height
+                    if composerHeight != size.height {
+                        composerHeight = size.height
+                    }
                 }
             }
         }
@@ -132,15 +129,6 @@ private extension AgentSessionView {
 
         var body: some View {
             if hasTranscriptItems {
-//                SessionTranscriptFlippedScrollView(
-//                    items: transcriptItems,
-//                    keyboardDismissPadding: keyboardDismissPadding,
-//                    rowSpacing: style.spacing,
-//                    contentPadding: style.spacing
-//                ) { item in
-//                    transcriptRow(item)
-//                        .padding(.horizontal, style.horizontalPadding)
-//                }
 //                SessionTranscriptPositionScrollView(
 //                    items: transcriptItems,
 //                    keyboardDismissPadding: keyboardDismissPadding,
@@ -212,8 +200,6 @@ private extension AgentSessionView {
                     // necessary for scroll edge effects.
                     // we inset the content internally in the uiscrollview
                     .ignoresSafeArea(.container, edges: [.top, .bottom])
-//                    .scrollClipDisabled()
-//                    .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
             } else {
                 scrollView
                     .scrollClipDisabled()

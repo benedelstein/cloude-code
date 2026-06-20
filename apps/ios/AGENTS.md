@@ -19,3 +19,8 @@ See `docs/` for specific documentation about certain parts of the codebase.
 `docs/caching.md` - how to handle caching
 `docs/dependency-injection.md` - how to handle dependency injection
 `docs/feature-development.md` - how to develop a new feature
+
+## Important Agent Guidelines
+
+- Add doc comments to all public methods and class definitions. Add concise inline comments where needed, to explain complex logic
+or important considerations.
