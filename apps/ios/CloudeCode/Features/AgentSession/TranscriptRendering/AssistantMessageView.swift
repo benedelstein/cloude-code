@@ -11,8 +11,11 @@ struct AssistantMessageView: View, Equatable {
         lhs.workExpanded == rhs.workExpanded &&
         lhs.destination?.id == rhs.destination?.id
     }
-    
+
     private let partSpacing: CGFloat = 12
+    private let renderItemInsertionTransition = AnyTransition
+        .opacity
+        .combined(with: .move(edge: .top))
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
@@ -60,6 +63,7 @@ struct AssistantMessageView: View, Equatable {
                 indexOffset: finalResponseStartIndex ?? 0
             )
         }
+        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
             configureInitialCollapse()
@@ -86,7 +90,12 @@ struct AssistantMessageView: View, Equatable {
             ) {
                 destination = .sheet(.renderItem(item))
             }
+            .transition(renderItemInsertionTransition)
         }
+    }
+
+    private var renderItemKeys: [String] {
+        displayData.renderItems.map(\.key)
     }
 
     private func configureInitialCollapse() {

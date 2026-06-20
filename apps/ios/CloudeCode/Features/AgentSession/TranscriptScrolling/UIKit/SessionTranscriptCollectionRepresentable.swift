@@ -74,6 +74,7 @@ extension SessionTranscriptCollectionRepresentable {
         private var lastItems: [SessionTranscriptItem] = []
         private var lastItemIDs: [String] = []
         private var lastLayoutBoundsSize: CGSize?
+        private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
         var handledScrollToBottomRequestID = 0
@@ -166,11 +167,13 @@ extension SessionTranscriptCollectionRepresentable {
         func handleLayoutSubviews(_ collectionView: UICollectionView) {
             let layoutCollectionView = collectionView as? LayoutReportingCollectionView
             var keyboardTransition = layoutCollectionView?.pendingKeyboardTransition
-            let wasAtBottomBeforeLayout = lastDistanceFromBottom.map { abs($0) <= 0.5 }
-                ?? isAtBottom(collectionView)
+            let wasNearBottomBeforeLayout = lastDistanceFromBottom.map {
+                $0 <= SessionTranscriptScrollMetrics.bottomProximityThreshold
+            } ?? isNearBottom(collectionView)
             let boundsChanged = lastLayoutBoundsSize != collectionView.bounds.size
+            let contentSizeChanged = lastLayoutContentSize != collectionView.contentSize
             let didUpdateContentInsets = updateContentInsets(collectionView, reason: "layout")
-            let didChangeLayout = boundsChanged || didUpdateContentInsets
+            let didChangeLayout = boundsChanged || contentSizeChanged || didUpdateContentInsets
             defer {
                 recordLayoutState(collectionView)
             }
@@ -182,7 +185,7 @@ extension SessionTranscriptCollectionRepresentable {
             )
 
             if isInitialAnchorComplete
-                && wasAtBottomBeforeLayout
+                && wasNearBottomBeforeLayout
                 && didChangeLayout {
                 scrollToBottom(
                     collectionView,
@@ -262,6 +265,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         guard collectionView.contentSize.height > 0 else { return }
 
         lastLayoutBoundsSize = collectionView.bounds.size
+        lastLayoutContentSize = collectionView.contentSize
         lastDistanceFromBottom = distanceFromBottom(collectionView)
         updateScrollToBottomVisibility(collectionView)
     }
@@ -370,9 +374,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
             return
         }
 
-        dataSource?.apply(snapshot, animatingDifferences: false) { [weak collectionView] in
-            guard let collectionView else { return }
-        }
+        dataSource?.apply(snapshot, animatingDifferences: false)
     }
 
     private func applyInitialSnapshot(

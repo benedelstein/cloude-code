@@ -10,7 +10,8 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         handledScrollToBottomRequestID = scrollToBottomRequestID
         let targetOffset = bottomContentOffset(in: collectionView)
 
-        guard abs(collectionView.contentOffset.y - targetOffset.y) > 0.5 else {
+        guard abs(collectionView.contentOffset.y - targetOffset.y)
+            > SessionTranscriptScrollMetrics.bottomDistanceEpsilon else {
             scrollCoordinator.finishScrollToBottom()
             updateScrollToBottomVisibility(collectionView)
             return
@@ -25,6 +26,12 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         keyboardTransition: KeyboardTransition? = nil
     ) {
         let targetOffset = bottomContentOffset(in: collectionView)
+        guard abs(collectionView.contentOffset.y - targetOffset.y)
+            > SessionTranscriptScrollMetrics.bottomDistanceEpsilon else {
+            updateScrollToBottomVisibility(collectionView)
+            return
+        }
+
         let applyOffset = {
             if keyboardTransition != nil {
                 collectionView.contentOffset = targetOffset
@@ -60,7 +67,11 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
     }
 
     func isAtBottom(_ collectionView: UICollectionView) -> Bool {
-        abs(distanceFromBottom(collectionView)) <= 0.5
+        abs(distanceFromBottom(collectionView)) <= SessionTranscriptScrollMetrics.bottomDistanceEpsilon
+    }
+
+    func isNearBottom(_ collectionView: UICollectionView) -> Bool {
+        distanceFromBottom(collectionView) <= SessionTranscriptScrollMetrics.bottomProximityThreshold
     }
 
     func distanceFromBottom(_ scrollView: UIScrollView) -> CGFloat {

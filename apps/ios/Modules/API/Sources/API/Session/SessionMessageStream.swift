@@ -99,6 +99,8 @@ public enum SessionMessageStreamReader {
         }
 
         var latest: SwiftAISDK.UIMessage?
+        // todo dont replay every chunk
+        // optimize this.
         let messages = readUIMessageStream(message: nil as SwiftAISDK.UIMessage?, stream: stream)
         for try await message in messages {
             latest = message

@@ -1,5 +1,10 @@
 import UIKit
 
+enum SessionTranscriptScrollMetrics {
+    static let bottomDistanceEpsilon: CGFloat = 0.5
+    static let bottomProximityThreshold: CGFloat = 50
+}
+
 struct SessionTranscriptContentInsetConfiguration: Equatable {
     var contentPadding: CGFloat = 0
     var bottomOverlayHeight: CGFloat = 0

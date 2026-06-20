@@ -5,7 +5,7 @@ import SwiftUI
 /// Pick a concrete variant with `Theme.light` / `Theme.dark`.
 struct Theme {
     // MARK: Backgrounds
-    var backgroundColor: Color = .white
+    var backgroundColor: Color = .red
     var secondaryBackgroundColor = Color(hex: 0xF4F4F4)
     var tertiaryBackgroundColor: Color = Color(hex: 0xF0F0F0)
     var highlightColor = Color(hex: 0xF0F0F0)
@@ -54,7 +54,14 @@ extension Theme {
 
     /// Resolves the matching variant for a SwiftUI color scheme.
     static func resolve(for colorScheme: ColorScheme) -> Theme {
-        colorScheme == .dark ? .dark : .light
+        switch colorScheme {
+        case .dark:
+                .dark
+        case .light:
+                .light
+        @unknown default:
+                .light
+        }
     }
 }
 

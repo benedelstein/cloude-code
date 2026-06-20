@@ -70,7 +70,8 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
                 + scrollView.bounds.height
                 - scrollView.adjustedContentInset.bottom
             let distanceFromBottom = max(0, contentHeight - visibleBottomY)
-            let shouldShowScrollToBottom = distanceFromBottom > 50 && !isScrollingToBottom
+            let shouldShowScrollToBottom = distanceFromBottom > SessionTranscriptScrollMetrics.bottomProximityThreshold
+                && !isScrollingToBottom
 
             if showScrollToBottom != shouldShowScrollToBottom {
                 showScrollToBottom = shouldShowScrollToBottom

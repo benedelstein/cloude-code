@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct RootView: View {
-    @Environment(\.theme) var theme: Theme
     private let component: ApplicationComponent
     private let sessionStore: SessionStore
     private let notificationRegistrationService: NotificationRegistrationService
@@ -20,7 +19,7 @@ struct RootView: View {
             Group {
                 switch sessionStore.state {
                 case .loading:
-                    theme.backgroundColor.ignoresSafeArea()
+                    Color.clear
                 case .signedIn:
                     HomeBuilder(component: component.homeComponent).build()
                 case .signedOut:
@@ -30,7 +29,8 @@ struct RootView: View {
             .transition(.opacity.animation(.easeIn(duration: 0.3)))
             .zIndex(1)
         }
-        .background(theme.backgroundColor)
+        // need to grab the theme from the injected themedRoot via subview
+        .background(ThemedView { $0.backgroundColor.ignoresSafeArea() })
         .environment(\.openSettings, OpenSettingsAction {
             isSettingsPresented = true
         })

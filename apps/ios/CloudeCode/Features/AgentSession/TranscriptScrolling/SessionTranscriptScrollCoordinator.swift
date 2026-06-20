@@ -6,8 +6,6 @@ final class SessionTranscriptScrollCoordinator {
     private(set) var scrollToBottomRequestID = 0
     private(set) var isScrollingToBottom = false
 
-    private let showScrollToBottomDistance: CGFloat = 50
-
     func requestScrollToBottom() {
         scrollToBottomRequestID += 1
         isScrollingToBottom = true
@@ -15,7 +13,8 @@ final class SessionTranscriptScrollCoordinator {
     }
 
     func updateDistanceFromBottom(_ distance: CGFloat) {
-        let shouldShowScrollToBottom = distance > showScrollToBottomDistance && !isScrollingToBottom
+        let shouldShowScrollToBottom = distance > SessionTranscriptScrollMetrics.bottomProximityThreshold
+            && !isScrollingToBottom
         guard showsScrollToBottom != shouldShowScrollToBottom else { return }
 
         showsScrollToBottom = shouldShowScrollToBottom

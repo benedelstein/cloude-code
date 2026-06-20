@@ -22,7 +22,7 @@ struct AgentSessionRenderItemView: View {
     var body: some View {
         switch item {
         case .text(let item):
-            MarkdownText(text: item.text)
+            Text(verbatim: item.text)
                 .styledFont(.subheadline)
                 .foregroundStyle(theme.labelColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -31,7 +31,7 @@ struct AgentSessionRenderItemView: View {
                 Label("Thinking", systemImage: "brain")
                     .styledFont(.caption)
                     .foregroundStyle(theme.secondaryLabelColor)
-                MarkdownText(text: item.part.text)
+                Text(verbatim: item.part.text)
                     .styledFont(.footnote)
                     .foregroundStyle(theme.secondaryLabelColor)
             }
