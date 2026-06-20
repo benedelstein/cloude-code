@@ -162,16 +162,16 @@ extension SessionTranscriptCollectionRepresentable {
             if keyboardTransition != nil {
                 logKeyboardLayout(collectionView, wasAtBottomBeforeLayout, boundsChanged, didUpdateContentInsets)
             }
-
-            if isInitialAnchorComplete
-                && wasAtBottomBeforeLayout
-                && didChangeLayout {
-                scrollToBottom(
-                    collectionView,
-                    animated: false,
-                    keyboardTransition: keyboardTransition
-                )
-            }
+//
+//            if isInitialAnchorComplete
+//                && wasAtBottomBeforeLayout
+//                && didChangeLayout {
+//                scrollToBottom(
+//                    collectionView,
+//                    animated: false,
+//                    keyboardTransition: keyboardTransition
+//                )
+//            }
 
             clearKeyboardTransitionIfNeeded(layoutCollectionView, keyboardTransition, didChangeLayout)
 

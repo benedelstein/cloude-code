@@ -18,15 +18,36 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
     @ViewBuilder let rowContent: (SessionTranscriptItem) -> Row
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: rowSpacing) {
-                ForEach(items) { item in
-                    rowContent(item)
-                        .id(item.id)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack {
+                    // regular vstack uses more memory but has more deterministic scrolling.
+                    // lazy vstack causes the scroll cursor to go wonky.
+                    LazyVStack(alignment: .leading, spacing: rowSpacing) {
+                        ForEach(items) { item in
+                            rowContent(item)
+                                .id(item.id)
+                        }
+                    }
+                    Color.clear.frame(height: 0).id("bottom")
+                }
+                // .scrollTargetLayout() // not needed?
+                .padding(.vertical, contentPadding)
+                .task {
+//                    proxy.scrollTo("bottom")
+//                    do {
+//                        // wait for any layout shift.
+//                        for _ in 1..<2 {
+//                            try await Task.sleep(nanoseconds: 500_000)
+//                            withAnimation {
+//                                proxy.scrollTo("bottom", anchor: .bottom)
+//                            }
+//                        }
+////                        show = true
+//                    } catch {
+//                    }
                 }
             }
-//            .scrollTargetLayout()
-            .padding(.vertical, contentPadding)
         }
         .overlay(alignment: .bottom) {
             if showScrollToBottom {
@@ -34,15 +55,14 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
                     .padding(.bottom, 16)
             }
         }
-        .opacity(show ? 1 : 0)
-//        .animation(.easeIn, value: show)
+//        .opacity(show ? 1 : 0)
         .defaultScrollAnchor(.bottom)
-        .scrollPosition($scrollPosition, anchor: .bottom)
+//        .scrollPosition($scrollPosition, anchor: .center)
         .scrollDismissesKeyboard(.interactively)
         .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
             scrollController.update(with: scrollView)
             scrollController.updateKeyboardDismissPadding(keyboardDismissPadding)
-//            scrollView.contentAlignmentPoint = .init(x: 0.5, y: 0)
+            scrollView.contentAlignmentPoint = .init(x: 0.5, y: 0)
         }
         .onReceive(scrollController.$contentOffset) {
             guard let offset = $0 else { return }
@@ -72,9 +92,6 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
 //        .onChange(of: items) {
 //            scrollToBottom()
 //        }
-        .onChange(of: scrollPosition) {
-            print($1)
-        }
         .onChange(of: keyboardDismissPadding) {
             scrollController.updateKeyboardDismissPadding($1)
             scrollToBottom()

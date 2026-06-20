@@ -141,16 +141,16 @@ private extension AgentSessionView {
 //                    transcriptRow(item)
 //                        .padding(.horizontal, style.horizontalPadding)
 //                }
-                SessionTranscriptPositionScrollView(
-                    items: transcriptItems,
-                    keyboardDismissPadding: keyboardDismissPadding,
-                    rowSpacing: style.spacing,
-                    contentPadding: style.spacing
-                ) { item in
-                    transcriptRow(item)
-                        .padding(.horizontal, style.horizontalPadding)
-                }
-//                transcriptScrollView
+//                SessionTranscriptPositionScrollView(
+//                    items: transcriptItems,
+//                    keyboardDismissPadding: keyboardDismissPadding,
+//                    rowSpacing: style.spacing,
+//                    contentPadding: style.spacing
+//                ) { item in
+//                    transcriptRow(item)
+//                        .padding(.horizontal, style.horizontalPadding)
+//                }
+                transcriptScrollView
             } else {
                 emptyScrollView
             }
