@@ -1,4 +1,5 @@
 import UIKit
+import Domain
 
 /// Keyboard animation metadata captured from UIKit keyboard notifications.
 struct KeyboardTransition {
@@ -109,12 +110,12 @@ final class NotificationKeyboardTransitionObserver: KeyboardTransitionObserving 
         }
 
         let keyboardFrameInWindow = window.convert(screenFrame, from: nil)
-        print(
-            "xx keyboard frame screen=\(screenFrame) " +
-                "window=\(keyboardFrameInWindow) " +
-                "windowBounds=\(window.bounds) " +
-                "duration=\(transition.duration) " +
-                "remainingDuration=\(transition.remainingDuration)"
-        )
+//        Logger.debug(
+//            "xx keyboard frame screen=\(screenFrame) " +
+//                "window=\(keyboardFrameInWindow) " +
+//                "windowBounds=\(window.bounds) " +
+//                "duration=\(transition.duration) " +
+//                "remainingDuration=\(transition.remainingDuration)"
+//        )
     }
 }

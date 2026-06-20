@@ -1,4 +1,5 @@
 import UIKit
+import Domain
 import SwiftUI
 
 struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable {
@@ -39,6 +40,7 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
 
         context.coordinator.installDataSource(on: collectionView)
         context.coordinator.installScrollDelegate(on: collectionView)
+        Logger.debug("created session collection view")
         return collectionView
     }
 
@@ -133,6 +135,7 @@ extension SessionTranscriptCollectionRepresentable {
             itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
 
             if collectionView.keyboardLayoutGuide.keyboardDismissPadding != keyboardDismissPadding {
+                // sets the point at which drag down gesture starts dismissing the keyboard, to the top of the composer.
                 collectionView.keyboardLayoutGuide.keyboardDismissPadding = keyboardDismissPadding
             }
 
@@ -147,7 +150,6 @@ extension SessionTranscriptCollectionRepresentable {
             if itemIDs == lastItemIDs {
                 guard items != lastItems else { return }
 
-                print("xx reconfiguring \(itemIDs.count) transcript items")
                 lastItems = items
                 reconfigureItems(itemIDs)
                 return
@@ -179,10 +181,6 @@ extension SessionTranscriptCollectionRepresentable {
                 didChangeLayout: didChangeLayout
             )
 
-            if keyboardTransition != nil {
-                logKeyboardLayout(collectionView, wasAtBottomBeforeLayout, boundsChanged, didUpdateContentInsets)
-            }
-
             if isInitialAnchorComplete
                 && wasAtBottomBeforeLayout
                 && didChangeLayout {
@@ -201,8 +199,6 @@ extension SessionTranscriptCollectionRepresentable {
             guard case let .anchoring(lastGeometry, attempts) = initialAnchorState else {
                 return
             }
-
-            logInitialAnchorLayout(collectionView, attempts: attempts)
 
             guard collectionView.bounds.height > 0 else { return }
             guard collectionView.contentSize.height > 0 else { return }
@@ -261,7 +257,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         8
     }
 
-    func recordLayoutState(_ collectionView: UICollectionView) {
+    private func recordLayoutState(_ collectionView: UICollectionView) {
         guard collectionView.bounds.height > 0 else { return }
         guard collectionView.contentSize.height > 0 else { return }
 
@@ -292,48 +288,12 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         collectionView.contentInset = contentInset
         collectionView.verticalScrollIndicatorInsets = contentInset
-        print(
-                "xx transcript contentInset updated reason=\(reason) " +
-                "inset=\(contentInset) " +
-                "topObstructionHeight=\(obstructionInsets.top) " +
-                "bottomObstructionHeight=\(obstructionInsets.bottom) " +
-                "bottomOverlayHeight=\(contentInsetConfiguration.bottomOverlayHeight)"
-        )
         return true
     }
 
     func roundedForScreen(_ value: CGFloat, in view: UIView) -> CGFloat {
         let scale = view.window?.screen.scale ?? UIScreen.main.scale
         return (value * scale).rounded() / scale
-    }
-
-    func logInitialAnchorLayout(_ collectionView: UICollectionView, attempts: Int) {
-        print(
-            "xx layoutSubviews for pending initial anchor; " +
-                "attempt=\(attempts) " +
-                "bounds=\(collectionView.bounds.size) " +
-                "contentSize=\(collectionView.contentSize) " +
-                "offset=\(collectionView.contentOffset) " +
-                "bottomDistance=\(distanceFromBottom(collectionView))"
-        )
-    }
-
-    func logKeyboardLayout(
-        _ collectionView: UICollectionView,
-        _ wasAtBottomBeforeLayout: Bool,
-        _ boundsChanged: Bool,
-        _ didUpdateContentInsets: Bool
-    ) {
-        print(
-            "xx keyboard layout transition; " +
-                "wasAtBottomBeforeLayout=\(wasAtBottomBeforeLayout) " +
-                "lastDistanceFromBottom=\(String(describing: lastDistanceFromBottom)) " +
-                "boundsChanged=\(boundsChanged) " +
-                "didUpdateContentInsets=\(didUpdateContentInsets) " +
-                "bounds=\(collectionView.bounds.size) " +
-                "contentSize=\(collectionView.contentSize) " +
-                "offset=\(collectionView.contentOffset)"
-        )
     }
 
     private func continueInitialBottomAnchor(
@@ -344,7 +304,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         let nextAttempts = attempts + 1
 
         if nextAttempts > maximumInitialAnchorLayoutAttempts {
-            print("xx initial anchor reached attempt limit; revealing current state")
+            Logger.debug("xx initial anchor reached attempt limit; revealing current state")
             scrollToBottom(collectionView, animated: false)
             completeInitialBottomAnchor(collectionView)
             return
@@ -388,7 +348,6 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
             lastGeometry: geometry,
             attempts: attempts
         )
-        print("xx initial layout \(reason); correcting bottom offset while hidden")
         scrollToBottom(collectionView, animated: false)
         collectionView.setNeedsLayout()
     }
@@ -411,15 +370,8 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
             return
         }
 
-        print("xx applying snapshot for \(itemIDs.count) transcript items, initial=false")
         dataSource?.apply(snapshot, animatingDifferences: false) { [weak collectionView] in
             guard let collectionView else { return }
-
-            print(
-                "xx snapshot applied; bounds=\(collectionView.bounds.size) " +
-                    "contentSize=\(collectionView.contentSize) " +
-                    "offset=\(collectionView.contentOffset)"
-            )
         }
     }
 
@@ -433,16 +385,10 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         // Initial load is a full replacement from empty data, so reloadData avoids a
         // diff pass. The collection view stays hidden until layout has settled below.
-        print("xx applying initial snapshot using reloadData for \(itemCount) transcript items")
         dataSource?.applySnapshotUsingReloadData(snapshot) { [weak self, weak collectionView] in
             guard let self, let collectionView else { return }
 
             initialAnchorState = .anchoring(lastGeometry: nil, attempts: 0)
-            print(
-                "xx initial snapshot applied; bounds=\(collectionView.bounds.size) " +
-                    "contentSize=\(collectionView.contentSize) " +
-                    "offset=\(collectionView.contentOffset)"
-            )
             collectionView.setNeedsLayout()
         }
     }
@@ -460,12 +406,6 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
     }
 
     func completeInitialBottomAnchor(_ collectionView: UICollectionView) {
-        print(
-            "xx completing initial bottom anchor; bounds=\(collectionView.bounds.size) " +
-                "contentSize=\(collectionView.contentSize) " +
-                "offset=\(collectionView.contentOffset) " +
-                "bottomDistance=\(distanceFromBottom(collectionView))"
-        )
         initialAnchorState = .complete
         UIView.performWithoutAnimation {
             collectionView.alpha = 1

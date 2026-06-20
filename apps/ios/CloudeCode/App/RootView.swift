@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.theme) var theme: Theme
     private let component: ApplicationComponent
     private let sessionStore: SessionStore
     private let notificationRegistrationService: NotificationRegistrationService
@@ -15,17 +16,21 @@ struct RootView: View {
     }
 
     var body: some View {
-        Group {
-            switch sessionStore.state {
-            case .loading:
-                ProgressView()
-            case .signedIn:
-                HomeBuilder(component: component.homeComponent).build()
-            case .signedOut:
-                SignedOutView(sessionStore: sessionStore)
+        ZStack {
+            Group {
+                switch sessionStore.state {
+                case .loading:
+                    theme.backgroundColor.ignoresSafeArea()
+                case .signedIn:
+                    HomeBuilder(component: component.homeComponent).build()
+                case .signedOut:
+                    SignedOutView(sessionStore: sessionStore)
+                }
             }
+            .transition(.opacity.animation(.easeIn(duration: 0.3)))
+            .zIndex(1)
         }
-        .transition(.opacity.animation(.easeIn(duration: 0.3)))
+        .background(theme.backgroundColor)
         .environment(\.openSettings, OpenSettingsAction {
             isSettingsPresented = true
         })
@@ -34,6 +39,7 @@ struct RootView: View {
             SettingsView(logStore: logStore)
         }
         .task { await sessionStore.start() }
+        .onDisappear { sessionStore.stop() }
         .themedRoot()
     }
 }

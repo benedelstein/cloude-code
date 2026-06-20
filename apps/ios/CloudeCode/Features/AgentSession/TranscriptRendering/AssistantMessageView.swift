@@ -1,7 +1,17 @@
 import SwiftUI
 import Domain
 
-struct AssistantMessageView: View {
+struct AssistantMessageView: View, Equatable {
+    // for better scroll performance.
+    static func == (lhs: AssistantMessageView, rhs: AssistantMessageView) -> Bool {
+        lhs.displayData == rhs.displayData &&
+        lhs.isStreaming == rhs.isStreaming &&
+        lhs.autoCollapseOnAppear == rhs.autoCollapseOnAppear &&
+        lhs.hasConsumedAutoCollapse == rhs.hasConsumedAutoCollapse &&
+        lhs.workExpanded == rhs.workExpanded &&
+        lhs.destination?.id == rhs.destination?.id
+    }
+    
     private let partSpacing: CGFloat = 12
 
     let displayData: AgentSessionView.MessageDisplayData

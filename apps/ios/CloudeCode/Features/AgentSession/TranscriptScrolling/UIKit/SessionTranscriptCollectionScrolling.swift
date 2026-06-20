@@ -24,14 +24,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         animated: Bool,
         keyboardTransition: KeyboardTransition? = nil
     ) {
-        print(
-            "xx scrollToBottom yOffset=\(bottomContentOffset(in: collectionView).y) " +
-                "bounds=\(collectionView.bounds.size) " +
-                "contentSize=\(collectionView.contentSize) " +
-                "insets=\(collectionView.adjustedContentInset) " +
-                "remainingKeyboardDuration=\(String(describing: keyboardTransition?.remainingDuration))"
-        )
-
         let targetOffset = bottomContentOffset(in: collectionView)
         let applyOffset = {
             if keyboardTransition != nil {
@@ -53,7 +45,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             collectionView.layer.removeAllAnimations()
         }
 
-        print("xx scrollToBottom applied offset=\(collectionView.contentOffset)")
     }
 
     func bottomContentOffset(in collectionView: UICollectionView) -> CGPoint {

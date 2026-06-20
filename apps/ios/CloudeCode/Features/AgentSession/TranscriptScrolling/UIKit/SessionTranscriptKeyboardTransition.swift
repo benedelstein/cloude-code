@@ -12,7 +12,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             return transition
         }
 
-        print("xx clearing expired keyboard transition remainingDuration=\(transition.remainingDuration)")
         collectionView?.clearPendingKeyboardTransition()
         return nil
     }
@@ -25,7 +24,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
     ) {
         guard transition != nil && didChangeLayout else { return }
 
-        print("xx clearing consumed keyboard transition")
         collectionView?.clearPendingKeyboardTransition()
     }
 
