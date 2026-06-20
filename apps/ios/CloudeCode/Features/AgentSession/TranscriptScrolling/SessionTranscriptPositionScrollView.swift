@@ -32,18 +32,22 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
             // .scrollTargetLayout() // not needed?
             .padding(.vertical, contentPadding)
         }
-        .overlay {
-            SessionTranscriptScrollToBottomOverlay(
-                isVisible: showScrollToBottom,
-                bottomObstructionHeight: keyboardDismissPadding
-            ) {
-                isScrollingToBottom = true
-                showScrollToBottom = false
-                withAnimation(.easeInOut) {
-                    scrollToBottom()
-                } completion: {
-                    isScrollingToBottom = false
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 0) {
+                if showScrollToBottom {
+                    SessionTranscriptScrollToBottomButton {
+                        isScrollingToBottom = true
+                        showScrollToBottom = false
+                        withAnimation(.easeInOut) {
+                            scrollToBottom()
+                        } completion: {
+                            isScrollingToBottom = false
+                        }
+                    }
                 }
+                Color.clear
+                    .frame(height: keyboardDismissPadding + 16)
+                    .allowsHitTesting(false)
             }
         }
 //        .opacity(show ? 1 : 0)

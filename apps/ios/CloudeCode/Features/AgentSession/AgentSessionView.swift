@@ -11,6 +11,7 @@ struct AgentSessionView: View {
     @FocusState private var composerFocused: Bool
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
+    @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
@@ -21,7 +22,8 @@ struct AgentSessionView: View {
             SessionScrollView(
                 store: store,
                 destination: $destination,
-                keyboardDismissPadding: composerHeight
+                keyboardDismissPadding: composerHeight,
+                scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
                 PromptComposerView(
@@ -41,6 +43,12 @@ struct AgentSessionView: View {
                     }
                 }
             }
+        }
+        .overlay {
+            ScrollBottomButton(
+                scrollCoordinator: transcriptScrollCoordinator,
+                composerHeight: composerHeight
+            )
         }
         .background(theme.backgroundColor)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,6 +93,36 @@ struct AgentSessionView: View {
 }
 
 private extension AgentSessionView {
+    // Isolate coordinator observation so scroll-button visibility changes do not
+    // invalidate the rest of AgentSessionView's body.
+    struct ScrollBottomButton: View {
+        let scrollCoordinator: SessionTranscriptScrollCoordinator
+        let composerHeight: CGFloat
+
+        var body: some View {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                if scrollCoordinator.showsScrollToBottom {
+                    SessionTranscriptScrollToBottomButton {
+                        scrollCoordinator.requestScrollToBottom()
+                    }
+                }
+
+                Color.clear
+                    .frame(height: bottomSpacerHeight)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(scrollCoordinator.showsScrollToBottom)
+            .animation(.easeInOut(duration: 0.25), value: bottomSpacerHeight)
+        }
+
+        private var bottomSpacerHeight: CGFloat {
+            composerHeight + 16
+        }
+    }
+
     struct WorkingIndicatorView: View {
         @Environment(\.style) private var style
 
@@ -122,6 +160,7 @@ private extension AgentSessionView {
         let store: AgentSessionViewModel
         @Binding var destination: Modal<AgentSessionView.Destination>?
         let keyboardDismissPadding: CGFloat
+        let scrollCoordinator: SessionTranscriptScrollCoordinator
 
         var messages: [SessionMessage] {
             store.messages
@@ -186,7 +225,8 @@ private extension AgentSessionView {
                 items: transcriptItems,
                 keyboardDismissPadding: keyboardDismissPadding,
                 rowSpacing: style.spacing,
-                contentPadding: style.spacing
+                contentPadding: style.spacing,
+                scrollCoordinator: scrollCoordinator
             ) { item in
                 transcriptRow(item)
                     .padding(.horizontal, style.horizontalPadding)
