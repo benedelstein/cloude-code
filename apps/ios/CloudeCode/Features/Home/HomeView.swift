@@ -28,8 +28,6 @@ struct HomeView: View {
     }
 
     var body: some View {
-        @Bindable var router = router
-
         NavigationStack(path: $router.path) {
             content
                 .background(theme.backgroundColor)
@@ -115,8 +113,9 @@ struct HomeView: View {
                 RepoSectionHeader(group: group)
             }
         }
+        .scrollContentBackground(.hidden)
         .animation(.default, value: viewModel.groups)
-        .listStyle(.automatic)
+        .listStyle(.sidebar)
         .refreshable {
             await viewModel.refresh()
         }

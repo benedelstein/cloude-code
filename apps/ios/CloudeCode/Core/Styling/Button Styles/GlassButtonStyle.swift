@@ -4,13 +4,23 @@ extension View {
     /// Liquid Glass background on iOS 26+, falling back to material or a solid
     /// tint with a soft shadow on older systems.
     @ViewBuilder
-    func glassBackground<S: Shape>(in shape: S, tint: Color? = nil) -> some View {
+    func glassBackground<S: Shape>(
+        in shape: S,
+        tint: Color? = nil,
+        interactive: Bool = true
+    ) -> some View {
         if #available(iOS 26.0, *) {
-            if let tint {
-                glassEffect(.regular.tint(tint).interactive(), in: shape)
-            } else {
-                glassEffect(.regular.interactive(), in: shape)
-            }
+            let effect: Glass = {
+                var e: Glass = .regular
+                if let tint {
+                    e = e.tint(tint)
+                }
+                if interactive {
+                    e = e.interactive()
+                }
+                return e
+            }()
+            glassEffect(effect, in: shape)
         } else {
             if let tint {
                 background(

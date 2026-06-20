@@ -35,7 +35,7 @@ extension Theme {
 
     /// Dark appearance — dark backgrounds, light labels, accents nudged for contrast.
     static let dark = Theme(
-        backgroundColor: Color(hex: 0x090909),
+        backgroundColor: Color(hex: 0x090A0B),
         secondaryBackgroundColor: Color(hex: 0x1C1C1E),
         tertiaryBackgroundColor: Color(hex: 0x28282A).opacity(0.5),
         highlightColor: Color(hex: 0x2A2A2C),

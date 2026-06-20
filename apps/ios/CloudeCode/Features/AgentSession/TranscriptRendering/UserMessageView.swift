@@ -30,6 +30,12 @@ struct UserMessageView: View {
                     .padding(.vertical, 8)
                     .background(userMessageShape.fill(theme.secondaryBackgroundColor))
             }
+            .contextMenu {
+                Button {
+                } label: {
+                    Text("test")
+                }
+            }
         }
     }
 

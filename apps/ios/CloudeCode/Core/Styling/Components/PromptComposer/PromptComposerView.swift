@@ -122,6 +122,8 @@ struct PromptComposerView: View {
                         right: horizontalInset
                     )
                     textView.textContainer.lineFragmentPadding = 0
+                    textView.keyboardDismissMode = .interactive
+                    textView.alwaysBounceVertical = true
                 }
                 .frame(minHeight: style.gridSize * 5, maxHeight: style.gridSize * 15)
                 .fixedSize(horizontal: false, vertical: true)

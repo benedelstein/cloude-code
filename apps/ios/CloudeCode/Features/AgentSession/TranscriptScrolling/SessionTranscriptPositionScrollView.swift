@@ -1,0 +1,106 @@
+import SwiftUI
+import Domain
+@_spi(Advanced) import SwiftUIIntrospect
+import Combine
+
+struct SessionTranscriptPositionScrollView<Row: View>: View {
+    @Environment(\.theme) var theme: Theme
+    @State private var scrollPosition = ScrollPosition(idType: String.self, edge: .bottom)
+    @State private var scrollController = ScrollController()
+    @State private var showScrollToBottom: Bool = false
+    @State private var isScrollingToBottom: Bool = false
+
+    let items: [SessionTranscriptItem]
+    let keyboardDismissPadding: CGFloat
+    let rowSpacing: CGFloat
+    let contentPadding: CGFloat
+    @State private var show: Bool = false
+    @ViewBuilder let rowContent: (SessionTranscriptItem) -> Row
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: rowSpacing) {
+                ForEach(items) { item in
+                    rowContent(item)
+                        .id(item.id)
+                }
+            }
+//            .scrollTargetLayout()
+            .padding(.vertical, contentPadding)
+        }
+        .overlay(alignment: .bottom) {
+            if showScrollToBottom {
+                scrollBottomIndicator
+                    .padding(.bottom, 16)
+            }
+        }
+        .opacity(show ? 1 : 0)
+//        .animation(.easeIn, value: show)
+        .defaultScrollAnchor(.bottom)
+        .scrollPosition($scrollPosition, anchor: .bottom)
+        .scrollDismissesKeyboard(.interactively)
+        .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
+            scrollController.update(with: scrollView)
+            scrollController.updateKeyboardDismissPadding(keyboardDismissPadding)
+//            scrollView.contentAlignmentPoint = .init(x: 0.5, y: 0)
+        }
+        .onReceive(scrollController.$contentOffset) {
+            guard let offset = $0 else { return }
+            guard let scrollView = scrollController.scrollView else { return }
+            guard let contentHeight = scrollController.contentSize?.height else { return }
+
+            let visibleBottomY = offset.y
+                + scrollView.bounds.height
+                - scrollView.adjustedContentInset.bottom
+            let distanceFromBottom = max(0, contentHeight - visibleBottomY)
+            let shouldShowScrollToBottom = distanceFromBottom > 50 && !isScrollingToBottom
+
+            if showScrollToBottom != shouldShowScrollToBottom {
+                showScrollToBottom = shouldShowScrollToBottom
+            }
+        }
+        .task {
+            scrollToBottom()
+            do {
+                // wait for any layout shift.
+                try await Task.sleep(nanoseconds: 100_000)
+                scrollToBottom()
+                show = true
+            } catch {
+            }
+        }
+//        .onChange(of: items) {
+//            scrollToBottom()
+//        }
+        .onChange(of: scrollPosition) {
+            print($1)
+        }
+        .onChange(of: keyboardDismissPadding) {
+            scrollController.updateKeyboardDismissPadding($1)
+            scrollToBottom()
+        }
+    }
+
+    private var scrollBottomIndicator: some View {
+        Button {
+            isScrollingToBottom = true
+            showScrollToBottom = false
+            withAnimation(.easeInOut) {
+                scrollToBottom()
+            } completion: {
+                isScrollingToBottom = false
+            }
+        } label: {
+            Image(systemName: "arrow.down")
+                .font(.body(16))
+                .foregroundStyle(theme.labelColor)
+                .frame(width: 40, height: 40)
+                .glassBackground(in: Circle(), interactive: true)
+        }
+        .transition(.scale(scale: 0.5).combined(with: .opacity).animation(.spring))
+    }
+
+    private func scrollToBottom() {
+        scrollPosition.scrollTo(edge: .bottom)
+    }
+}
