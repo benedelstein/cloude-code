@@ -63,7 +63,8 @@ struct AssistantMessageView: View, Equatable {
                 indexOffset: finalResponseStartIndex ?? 0
             )
         }
-        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
+        .debugUpdates(alignment: .bottom)
+//        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
             configureInitialCollapse()
@@ -86,7 +87,8 @@ struct AssistantMessageView: View, Equatable {
 
             AgentSessionRenderItemView(
                 item: item,
-                isActive: isActive
+                isActive: isActive,
+                isStreaming: isStreaming
             ) {
                 destination = .sheet(.renderItem(item))
             }

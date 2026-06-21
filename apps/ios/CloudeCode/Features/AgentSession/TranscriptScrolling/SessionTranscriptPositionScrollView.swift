@@ -45,9 +45,9 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
                         }
                     }
                 }
-                Color.clear
-                    .frame(height: keyboardDismissPadding + 16)
-                    .allowsHitTesting(false)
+//                Color.clear
+//                    .frame(height: keyboardDismissPadding + 16)
+//                    .allowsHitTesting(false)
             }
         }
 //        .opacity(show ? 1 : 0)

@@ -50,8 +50,39 @@ struct SessionMessagesTests {
         #expect(chunk.textDelta == nil)
     }
 
-    @Test func streamStateReducesSDKChunksIntoSessionMessage() async throws {
-        let state = await SessionMessageStreamState.reducing([
+    @Test
+    func streamAccumulatorAppendsChunksIncrementally() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append([
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hel")))
+        ])
+
+        let initialMessage = try await recorder.waitForMessage { $0.text == "Hel" }
+        #expect(initialMessage.id == "message-1")
+
+        await accumulator.append([
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "lo"))),
+            SessionStreamChunk(.textEnd(.init(id: "text-1"))),
+            SessionStreamChunk(.finish(.init(finishReason: .stop)))
+        ])
+
+        let finalMessage = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(finalMessage.id == "message-1")
+        #expect(await accumulator.errorDescription == nil)
+        #expect(await recorder.errors.isEmpty)
+        await accumulator.finish()
+    }
+
+    @Test
+    func streamAccumulatorReducesPendingChunksAllAtOnce() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append([
             SessionStreamChunk(.start(.init(messageId: "message-1"))),
             SessionStreamChunk(.textStart(.init(id: "text-1"))),
             SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hel"))),
@@ -60,13 +91,18 @@ struct SessionMessagesTests {
             SessionStreamChunk(.finish(.init(finishReason: .stop)))
         ])
 
-        #expect(state.message?.id == "message-1")
-        #expect(state.text == "Hello")
-        #expect(state.errorDescription == nil)
+        let message = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(message.id == "message-1")
+        #expect(await accumulator.errorDescription == nil)
+        await accumulator.finish()
     }
 
-    @Test func streamStateAttachesServerMessageMetadata() async throws {
-        let state = await SessionMessageStreamState.reducing(
+    @Test
+    func streamAccumulatorAppliesMetadata() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append(
             [
                 SessionStreamChunk(.start(.init(messageId: "message-1"))),
                 SessionStreamChunk(.textStart(.init(id: "text-1"))),
@@ -75,32 +111,80 @@ struct SessionMessagesTests {
             messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000)
         )
 
-        #expect(state.message?.metadata == .object([
+        let message = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(message.metadata == .object([
             "startedAt": .number(1_782_561_600_000)
         ]))
+        await accumulator.finish()
     }
 
-    @Test func streamStateFallsBackToTextDeltasWhenSDKProducesNoMessage() async throws {
-        let state = await SessionMessageStreamState.reducing([
+    @Test
+    func streamAccumulatorReemitsWhenMetadataArrivesAfterMessage() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append([
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
             SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
         ])
 
-        #expect(state.message == nil)
-        #expect(state.text == "Hello")
-        #expect(state.errorDescription == nil)
+        _ = try await recorder.waitForMessage { $0.text == "Hello" }
+
+        await accumulator.append([], messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000))
+
+        let message = try await recorder.waitForMessage {
+            $0.metadata == .object(["startedAt": .number(1_782_561_600_000)])
+        }
+        #expect(message.text == "Hello")
+        await accumulator.finish()
     }
 
-    @Test func streamStateSkipsUnknownChunksWithoutError() async throws {
-        let state = await SessionMessageStreamState.reducing([
+    @Test
+    func streamAccumulatorSkipsUnknownChunksWithoutError() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append([
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
             SessionStreamChunk(.unknown(type: "future-chunk", rawValue: .object([
                 "type": .string("future-chunk"),
                 "payload": .object(["opaque": .bool(true)])
-            ])))
+            ]))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
         ])
 
-        #expect(state.message == nil)
-        #expect(state.text == "")
-        #expect(state.errorDescription == nil)
+        let message = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(message.id == "message-1")
+        #expect(await accumulator.errorDescription == nil)
+        #expect(await recorder.errors.isEmpty)
+        await accumulator.finish()
+    }
+
+    @Test
+    func streamAccumulatorFinishCancelsCleanly() async throws {
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator()
+
+        await accumulator.append([
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hel")))
+        ])
+
+        _ = try await recorder.waitForMessage { $0.text == "Hel" }
+        let messageCount = await recorder.messageCount
+
+        await accumulator.finish()
+        await accumulator.append([
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "lo"))),
+            SessionStreamChunk(.textEnd(.init(id: "text-1")))
+        ])
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(await recorder.messageCount == messageCount)
+        #expect(await recorder.lastMessage?.text == "Hel")
     }
 
     @Test func clientStateMapsWebUsedFieldsToDomainState() {
@@ -185,3 +269,59 @@ struct SessionMessagesTests {
         #expect(summary.domainSummary.id == "session_custom_ID")
     }
 }
+
+private actor StreamEmissionRecorder {
+    private(set) var statuses: [SessionMessageStreamStatus] = []
+    private(set) var messages: [SessionMessage] = []
+    private(set) var errors: [String] = []
+
+    nonisolated func makeAccumulator() -> SessionMessageStreamAccumulator {
+        SessionMessageStreamAccumulator(
+            onStatus: { [weak self] status in
+                Task {
+                    await self?.record(status)
+                }
+            },
+            onMessage: { [weak self] message in
+                Task {
+                    await self?.record(message)
+                }
+            }
+        )
+    }
+
+    var messageCount: Int {
+        messages.count
+    }
+
+    var lastMessage: SessionMessage? {
+        messages.last
+    }
+
+    private func record(_ status: SessionMessageStreamStatus) {
+        statuses.append(status)
+        if let errorDescription = status.errorDescription {
+            errors.append(errorDescription)
+        }
+    }
+
+    private func record(_ message: SessionMessage) {
+        messages.append(message)
+    }
+
+    func waitForMessage(
+        where predicate: (SessionMessage) -> Bool
+    ) async throws -> SessionMessage {
+        for _ in 0..<100 {
+            if let message = messages.last(where: predicate) {
+                return message
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        Issue.record("Timed out waiting for streamed message")
+        throw StreamEmissionTimeout()
+    }
+}
+
+private struct StreamEmissionTimeout: Error {}

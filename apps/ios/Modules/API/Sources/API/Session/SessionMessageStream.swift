@@ -4,109 +4,28 @@ import Domain
 import Foundation
 import SwiftAISDK
 
-public struct SessionMessageStreamState: Sendable, Equatable {
-    public private(set) var chunks: [SessionStreamChunk]
-    public private(set) var messageMetadata: SessionStreamMessageMetadata?
-    public private(set) var message: SessionMessage?
-    public private(set) var errorDescription: String?
-
-    public init(
-        chunks: [SessionStreamChunk] = [],
-        messageMetadata: SessionStreamMessageMetadata? = nil,
-        message: SessionMessage? = nil,
-        errorDescription: String? = nil
-    ) {
-        self.chunks = chunks
-        self.messageMetadata = messageMetadata
-        self.message = message
-        self.errorDescription = errorDescription
-    }
-
-    public var isActive: Bool {
-        !chunks.isEmpty
-    }
-
-    public var text: String {
-        if let message {
-            return message.text
-        }
-        return chunks.compactMap(\.textDelta).joined()
-    }
-
-    public static func reducing(
-        _ chunks: [SessionStreamChunk],
-        messageMetadata: SessionStreamMessageMetadata? = nil
-    ) async -> Self {
-        await Self().appending(chunks, messageMetadata: messageMetadata)
-    }
-
-    public func appending(
-        _ newChunks: [SessionStreamChunk],
-        messageMetadata newMessageMetadata: SessionStreamMessageMetadata? = nil
-    ) async -> Self {
-        var next = self
-        next.chunks.append(contentsOf: newChunks)
-        next.messageMetadata = newMessageMetadata ?? next.messageMetadata
-
-        do {
-            next.message = try await SessionMessageStreamReader.message(from: next.chunks)
-            next.applyMessageMetadata()
-            next.errorDescription = nil
-        } catch {
-            next.errorDescription = error.localizedDescription
-        }
-
-        return next
-    }
-
-    private mutating func applyMessageMetadata() {
-        guard let message, let messageMetadata else { return }
-        self.message = SessionMessage(
-            id: message.id,
-            role: message.role,
-            parts: message.parts,
-            metadata: message.metadata.addingStartedAtIfNeeded(messageMetadata.startedAt)
-        )
-    }
-}
-
-private extension Optional where Wrapped == Domain.JSONValue {
-    func addingStartedAtIfNeeded(_ startedAt: Double) -> Domain.JSONValue {
-        guard case .object(var object) = self else {
-            return .object(["startedAt": .number(startedAt)])
-        }
-        if object["startedAt"] == nil {
-            object["startedAt"] = .number(startedAt)
-        }
-        return .object(object)
-    }
-}
-
 public enum SessionMessageStreamReader {
+    /// Reduces a finite set of stream chunks into the latest domain message.
+    ///
+    /// - Parameter chunks: Full chunk history to reduce.
+    /// - Returns: The latest message emitted by the SDK reducer, or `nil` when no message is emitted.
     public static func message(from chunks: [SessionStreamChunk]) async throws -> Domain.SessionMessage? {
-        guard !chunks.isEmpty else { return nil }
-        let sdkChunks = chunks.compactMap { $0.value.sdkChunk() }
-        guard !sdkChunks.isEmpty else {
-            Logger.debug("empty sdk chunks, cant create message")
-            return nil
-        }
-
-        let stream = AsyncThrowingStream<AnyUIMessageChunk, Error> { continuation in
-            for chunk in sdkChunks {
-                continuation.yield(chunk)
+        let stream = AsyncThrowingStream<SwiftAISDK.AnyUIMessageChunk, Error> { continuation in
+            for chunk in chunks {
+                guard let sdkChunk = chunk.value.sdkChunk() else {
+                    continue
+                }
+                continuation.yield(sdkChunk)
             }
             continuation.finish()
         }
 
-        var latest: SwiftAISDK.UIMessage?
-        // todo dont replay every chunk
-        // optimize this.
-        let messages = readUIMessageStream(message: nil as SwiftAISDK.UIMessage?, stream: stream)
-        for try await message in messages {
-            latest = message
+        let sequence: SwiftAISDK.AsyncIterableStream<SwiftAISDK.UIMessage> = readUIMessageStream(stream: stream)
+        var latestMessage: SessionMessage?
+        for try await sdkMessage in sequence {
+            latestMessage = SessionMessage(aiSDKMessage: sdkMessage)
         }
-
-        return latest.map(SessionMessage.init(aiSDKMessage:))
+        return latestMessage
     }
 }
 
@@ -125,7 +44,7 @@ public struct SessionStreamChunk: Sendable, Equatable {
     }
 }
 
-private extension CoreAPI.WireUIMessageChunk {
+extension CoreAPI.WireUIMessageChunk {
     // Map our api chunk type to the swift ai sdk type.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     func sdkChunk() -> SwiftAISDK.AnyUIMessageChunk? {
@@ -257,7 +176,7 @@ private extension CoreAPI.WireUIMessageChunk {
     }
 }
 
-private extension SessionMessage {
+extension SessionMessage {
     init(aiSDKMessage message: SwiftAISDK.UIMessage) {
         self.init(
             id: message.id,
@@ -268,7 +187,7 @@ private extension SessionMessage {
     }
 }
 
-private extension Dictionary where Key == String, Value == [String: CoreAPI.JSONValue] {
+extension Dictionary where Key == String, Value == [String: CoreAPI.JSONValue] {
     var aiSDKProviderMetadata: SwiftAISDK.ProviderMetadata {
         reduce(into: SwiftAISDK.ProviderMetadata()) { result, entry in
             result[entry.key] = entry.value.mapValues(\.aiSDKValue)
@@ -276,7 +195,7 @@ private extension Dictionary where Key == String, Value == [String: CoreAPI.JSON
     }
 }
 
-private extension CoreAPI.JSONValue {
+extension CoreAPI.JSONValue {
     var aiSDKValue: AISDKProvider.JSONValue {
         switch self {
         case .string(let value):

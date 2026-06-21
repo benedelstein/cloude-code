@@ -149,10 +149,17 @@ extension SessionTranscriptCollectionRepresentable {
             let isInitialLoad = isWaitingForInitialItems && !itemIDs.isEmpty
 
             if itemIDs == lastItemIDs {
-                guard items != lastItems else { return }
+                let changedItemIDs = changedItemIDs(
+                    oldItems: lastItems,
+                    newItems: items
+                )
+                guard !changedItemIDs.isEmpty else {
+                    lastItems = items
+                    return
+                }
 
                 lastItems = items
-                reconfigureItems(itemIDs)
+                reconfigureItems(changedItemIDs, in: collectionView)
                 return
             }
 
@@ -395,7 +402,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         }
     }
 
-    func reconfigureItems(_ itemIDs: [String]) {
+    func reconfigureItems(_ itemIDs: [String], in collectionView: UICollectionView) {
         guard let dataSource else { return }
 
         let existingIDs = Set(dataSource.snapshot().itemIdentifiers)
@@ -404,14 +411,27 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(reconfiguredIDs)
-        dataSource.apply(snapshot, animatingDifferences: false)
+        // might fix
+//        UIView.performWithoutAnimation {
+            dataSource.apply(snapshot, animatingDifferences: false)
+            collectionView.layoutIfNeeded()
+//        }
+    }
+
+    func changedItemIDs(
+        oldItems: [SessionTranscriptItem],
+        newItems: [SessionTranscriptItem]
+    ) -> [String] {
+        zip(oldItems, newItems).compactMap { oldItem, newItem in
+            oldItem == newItem ? nil : newItem.id
+        }
     }
 
     func completeInitialBottomAnchor(_ collectionView: UICollectionView) {
         initialAnchorState = .complete
-        UIView.performWithoutAnimation {
+//        UIView.performWithoutAnimation {
             collectionView.alpha = 1
-        }
+//        }
         collectionView.layer.removeAllAnimations()
     }
 }

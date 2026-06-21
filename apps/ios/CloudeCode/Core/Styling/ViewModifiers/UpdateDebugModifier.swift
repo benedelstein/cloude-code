@@ -62,7 +62,7 @@ struct UpdateDebugModifier: ViewModifier {
 }
 
 public extension View {
-    func debugUpdates(name: String? = nil, offset: CGSize = .zero) -> some View {
-        modifier(UpdateDebugModifier(name: name, offset: offset))
+    func debugUpdates(name: String? = nil, alignment: Alignment = .center, offset: CGSize = .zero) -> some View {
+        modifier(UpdateDebugModifier(name: name, offset: offset, alignment: alignment))
     }
 }
