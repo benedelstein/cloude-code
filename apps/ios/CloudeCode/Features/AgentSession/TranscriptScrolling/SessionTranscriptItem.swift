@@ -12,15 +12,27 @@ enum SessionTranscriptItem: Identifiable, Equatable {
     var id: String {
         switch self {
         case .userMessage(let message):
-            "message:\(message.id)"
+            Self.messageItemID(for: message.id)
         case .assistantMessage(let displayData, let isStreaming, _):
             if isStreaming {
-                "streaming:\(displayData.id)"
+                Self.streamingItemID(for: displayData.id)
             } else {
-                "message:\(displayData.id)"
+                Self.messageItemID(for: displayData.id)
             }
         case .workingIndicator:
-            "working"
+            Self.workingItemID
         }
+    }
+
+    static func messageItemID(for messageID: String) -> String {
+        "message:\(messageID)"
+    }
+
+    static func streamingItemID(for messageID: String) -> String {
+        "streaming:\(messageID)"
+    }
+
+    static var workingItemID: String {
+        "working"
     }
 }

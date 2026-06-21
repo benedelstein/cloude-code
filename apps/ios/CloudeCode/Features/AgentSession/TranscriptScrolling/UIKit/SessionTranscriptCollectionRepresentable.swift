@@ -8,7 +8,7 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
     let rowSpacing: CGFloat
     let contentPadding: CGFloat
     let scrollCoordinator: SessionTranscriptScrollCoordinator
-    let scrollToBottomRequestID: Int
+    let scrollRequest: SessionTranscriptScrollRequest?
     let rowContent: (SessionTranscriptItem) -> Row
 
     func makeCoordinator() -> Coordinator {
@@ -52,8 +52,8 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
             contentPadding: contentPadding,
             rowContent: rowContent
         )
-        context.coordinator.handleScrollToBottomRequestIfNeeded(
-            scrollToBottomRequestID,
+        context.coordinator.handleScrollRequestIfNeeded(
+            scrollRequest,
             in: collectionView
         )
     }
@@ -77,7 +77,7 @@ extension SessionTranscriptCollectionRepresentable {
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
-        var handledScrollToBottomRequestID = 0
+        var handledScrollRequestID = 0
         let scrollCoordinator: SessionTranscriptScrollCoordinator
         private var rowContent: (SessionTranscriptItem) -> Row
 
@@ -115,6 +115,10 @@ extension SessionTranscriptCollectionRepresentable {
 
         func installScrollDelegate(on collectionView: UICollectionView) {
             collectionView.delegate = self
+        }
+
+        func indexPath(forItemID id: String) -> IndexPath? {
+            dataSource?.indexPath(for: id)
         }
 
         func update(

@@ -34,6 +34,9 @@ final class ChunkedTextRenderCache {
     }
 }
 
+// FUTURE OPTIMIZATION - CHUNK INTO ATTRIBUTED STRINGS INSTEAD OF RAW STRINGS
+// SUPPORT MARKDOWN RENDERING
+// POSSIBLY PRECOMPUTE TEXT BOUNDS FROM THE ATTRIBUTED STRING FOR FASTER LAYOUT.
 private final class ChunkedTextChunkCache {
     private static let maxChunkUTF16Length = 2_400
     private static let softBoundaryLookbackUTF16Length = 600

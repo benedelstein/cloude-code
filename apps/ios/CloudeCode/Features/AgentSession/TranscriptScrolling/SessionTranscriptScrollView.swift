@@ -15,7 +15,7 @@ struct SessionTranscriptScrollView<Row: View>: View {
             rowSpacing: rowSpacing,
             contentPadding: contentPadding,
             scrollCoordinator: scrollCoordinator,
-            scrollToBottomRequestID: scrollCoordinator.scrollToBottomRequestID,
+            scrollRequest: scrollCoordinator.scrollRequest,
             rowContent: rowContent
         )
     }

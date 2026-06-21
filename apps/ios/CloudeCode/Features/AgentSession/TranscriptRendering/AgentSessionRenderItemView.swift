@@ -62,7 +62,6 @@ private struct ChunkedTextView: View {
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .border(.red)
                     .transition(.identity.animation(nil))
             }
         }

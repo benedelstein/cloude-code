@@ -1,13 +1,41 @@
 import UIKit
 
 extension SessionTranscriptCollectionRepresentable.Coordinator {
-    func handleScrollToBottomRequestIfNeeded(
-        _ scrollToBottomRequestID: Int,
+    func handleScrollRequestIfNeeded(
+        _ scrollRequest: SessionTranscriptScrollRequest?,
         in collectionView: UICollectionView
     ) {
-        guard scrollToBottomRequestID != handledScrollToBottomRequestID else { return }
+        guard let scrollRequest else { return }
+        guard scrollRequest.id != handledScrollRequestID else { return }
 
-        handledScrollToBottomRequestID = scrollToBottomRequestID
+        handledScrollRequestID = scrollRequest.id
+
+        switch scrollRequest.destination {
+        case .top:
+            scrollToTop(collectionView, animated: scrollRequest.animated)
+        case .bottom:
+            handleScrollToBottomRequest(scrollRequest, in: collectionView)
+        case .message(let id):
+            scrollToItem(
+                id: SessionTranscriptItem.messageItemID(for: id),
+                alignment: scrollRequest.alignment,
+                animated: scrollRequest.animated,
+                in: collectionView
+            )
+        case .item(let id):
+            scrollToItem(
+                id: id,
+                alignment: scrollRequest.alignment,
+                animated: scrollRequest.animated,
+                in: collectionView
+            )
+        }
+    }
+
+    func handleScrollToBottomRequest(
+        _ scrollRequest: SessionTranscriptScrollRequest,
+        in collectionView: UICollectionView
+    ) {
         let targetOffset = bottomContentOffset(in: collectionView)
 
         guard abs(collectionView.contentOffset.y - targetOffset.y)
@@ -17,7 +45,52 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             return
         }
 
-        scrollToBottom(collectionView, animated: true)
+        scrollToBottom(collectionView, animated: scrollRequest.animated)
+        if !scrollRequest.animated {
+            scrollCoordinator.finishScrollToBottom()
+        }
+    }
+
+    func scrollToTop(_ collectionView: UICollectionView, animated: Bool) {
+        let targetOffset = CGPoint(
+            x: collectionView.contentOffset.x,
+            y: -collectionView.adjustedContentInset.top
+        )
+
+        applyContentOffset(targetOffset, in: collectionView, animated: animated)
+    }
+
+    func scrollToItem(
+        id: String,
+        alignment: SessionTranscriptScrollAlignment,
+        animated: Bool,
+        in collectionView: UICollectionView
+    ) {
+        guard let indexPath = indexPath(forItemID: id) else {
+            updateScrollToBottomVisibility(collectionView)
+            return
+        }
+
+        let scrollPosition: UICollectionView.ScrollPosition
+        switch alignment {
+        case .top:
+            scrollPosition = .top
+        case .center:
+            scrollPosition = .centeredVertically
+        case .bottom:
+            scrollPosition = .bottom
+        }
+
+        collectionView.scrollToItem(
+            at: indexPath,
+            at: scrollPosition,
+            animated: animated
+        )
+
+        if !animated {
+            collectionView.layoutIfNeeded()
+            updateScrollToBottomVisibility(collectionView)
+        }
     }
 
     func scrollToBottom(
@@ -36,7 +109,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             if keyboardTransition != nil {
                 collectionView.contentOffset = targetOffset
             } else {
-                collectionView.setContentOffset(targetOffset, animated: animated)
+                self.applyContentOffset(targetOffset, in: collectionView, animated: animated)
             }
             collectionView.layoutIfNeeded()
         }
@@ -50,6 +123,29 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
                 applyOffset()
             }
             collectionView.layer.removeAllAnimations()
+        }
+    }
+
+    func applyContentOffset(
+        _ targetOffset: CGPoint,
+        in collectionView: UICollectionView,
+        animated: Bool
+    ) {
+        guard abs(collectionView.contentOffset.y - targetOffset.y)
+            > SessionTranscriptScrollMetrics.bottomDistanceEpsilon else {
+            updateScrollToBottomVisibility(collectionView)
+            return
+        }
+
+        if animated {
+            collectionView.setContentOffset(targetOffset, animated: true)
+        } else {
+            UIView.performWithoutAnimation {
+                collectionView.setContentOffset(targetOffset, animated: false)
+                collectionView.layoutIfNeeded()
+            }
+            collectionView.layer.removeAllAnimations()
+            updateScrollToBottomVisibility(collectionView)
         }
     }
 

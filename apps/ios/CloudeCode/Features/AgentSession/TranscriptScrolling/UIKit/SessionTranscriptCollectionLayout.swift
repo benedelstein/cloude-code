@@ -8,6 +8,7 @@ extension SessionTranscriptCollectionRepresentable {
             // FUTURE OPTIMIZATION: calculate cell heights using the text layout and possibly cache them
             // and give each swiftui cell a fixed .frame(height: ..) modifier so each dequeued cell can
             // size fixed and not waste time recalculating the dynamic height.
+            // Can use NSAttributedString.boundingRect for this.
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
                 heightDimension: .estimated(44)
