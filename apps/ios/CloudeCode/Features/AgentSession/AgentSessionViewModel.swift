@@ -25,7 +25,7 @@ final class AgentSessionViewModel {
     private(set) var streamingDisplayData: MessageDisplayData?
     @ObservationIgnored private var latestStreamingMessage: SessionMessage?
     @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
-    @ObservationIgnored private var streamingRenderCache = StreamingMessageRenderCache()
+    @ObservationIgnored private var textRenderCache = ChunkedTextRenderCache()
     private var streamAccumulator: SessionMessageStreamAccumulator?
     private var streamGeneration = 0
     private(set) var streamStatus = SessionMessageStreamStatus()
@@ -180,6 +180,7 @@ final class AgentSessionViewModel {
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
             in: snapshot.messages
         )
+        textRenderCache.reset()
         assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
         messages = snapshotMessages
         replaceStreamAccumulator()
@@ -268,7 +269,6 @@ final class AgentSessionViewModel {
         messageThrottler?.cancel()
         messageThrottler = nil
         streamGeneration += 1
-        streamingRenderCache.reset()
         clearStreamingState()
         clientState.activeTurnUserMessageId = nil
         isSending = false
@@ -418,7 +418,6 @@ private extension AgentSessionViewModel {
             await previousAccumulator?.finish()
         }
         messageThrottler?.cancel()
-        streamingRenderCache.reset()
         streamGeneration += 1
         let generation = streamGeneration
 
@@ -479,7 +478,6 @@ private extension AgentSessionViewModel {
         streamStatus = .init()
         latestStreamingMessage = nil
         streamingDisplayData = nil
-        streamingRenderCache.reset()
     }
 
     func rebuildTranscriptDisplayData() {
@@ -526,9 +524,7 @@ private extension AgentSessionViewModel {
             message: message,
             providerId: clientState.agentSettings.provider
         )
-        if isStreaming {
-            renderItems = streamingRenderCache.renderItems(from: renderItems)
-        }
+        renderItems = textRenderCache.renderItems(from: renderItems)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
             renderItems: renderItems
         )

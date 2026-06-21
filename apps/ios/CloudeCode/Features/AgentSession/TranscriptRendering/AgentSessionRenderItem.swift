@@ -2,7 +2,7 @@ import Domain
 
 enum AgentSessionRenderItem: Sendable, Equatable {
     case text(TextItem)
-    case streamingText(StreamingTextItem)
+    case chunkedText(ChunkedTextItem)
     case reasoning(ReasoningItem)
     case actionItem(ActionItem)
 
@@ -10,7 +10,7 @@ enum AgentSessionRenderItem: Sendable, Equatable {
         switch self {
         case .text(let item):
             item.key
-        case .streamingText(let item):
+        case .chunkedText(let item):
             item.key
         case .reasoning(let item):
             item.key
@@ -25,7 +25,7 @@ extension AgentSessionRenderItem {
         if case .text = self {
             return true
         }
-        if case .streamingText = self {
+        if case .chunkedText = self {
             return true
         }
         return false
@@ -38,10 +38,10 @@ extension AgentSessionRenderItem {
         let text: String
     }
 
-    struct StreamingTextItem: Sendable, Equatable {
+    struct ChunkedTextItem: Sendable, Equatable {
         let key: String
         let text: String
-        let chunks: [StreamingTextChunk]
+        let chunks: [ChunkedTextChunk]
     }
 
     struct ReasoningItem: Sendable, Equatable {
@@ -75,7 +75,7 @@ extension AgentSessionRenderItem {
     }
 }
 
-struct StreamingTextChunk: Identifiable, Sendable, Equatable {
+struct ChunkedTextChunk: Identifiable, Sendable, Equatable {
     let id: Int
     let text: String
 }

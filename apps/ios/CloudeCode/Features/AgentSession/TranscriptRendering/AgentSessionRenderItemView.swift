@@ -29,8 +29,8 @@ struct AgentSessionRenderItemView: View {
                 .styledFont(.subheadline)
                 .foregroundStyle(theme.labelColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        case .streamingText(let item):
-            StreamingChunkedTextView(chunks: item.chunks)
+        case .chunkedText(let item):
+            ChunkedTextView(chunks: item.chunks)
         case .reasoning(let item):
             VStack(alignment: .leading, spacing: style.gridSize / 2) {
                 Label("Thinking", systemImage: "brain")
@@ -50,10 +50,10 @@ struct AgentSessionRenderItemView: View {
     }
 }
 
-private struct StreamingChunkedTextView: View {
+private struct ChunkedTextView: View {
     @Environment(\.theme) private var theme
 
-    let chunks: [StreamingTextChunk]
+    let chunks: [ChunkedTextChunk]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
