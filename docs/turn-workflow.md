@@ -86,12 +86,13 @@ The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` response
 
 1. Drop stale chunks if `userMessageId` does not match `activeUserMessageId`.
 2. Detect sequence gaps using `lastSeenChunkSequence`.
-3. Insert each chunk into `PendingChunkRepository` with a unique sequence for retry dedupe.
-4. Feed fresh chunks into `MessageAccumulator`.
-5. Apply derived todos/plan metadata with `applyDerivedStateFromParts`.
-6. Broadcast batched `agent.chunks`.
-7. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, invoke the DO `onTurnFinished` callback, and broadcast `agent.finish`.
-8. `SessionAgentDO.onTurnFinished` persists summary metadata. For non-aborted turns, it then enqueues a turn-finished notification through `NotificationPublisher` and queues server-side pull request creation if a pushed branch exists without a stored PR.
+3. Guard each fresh chunk with `validateWireCompatibleChunk(...)` before it enters storage or transport.
+4. Insert each chunk into `PendingChunkRepository` with a unique sequence for retry dedupe.
+5. Feed fresh chunks into `MessageAccumulator`.
+6. Apply derived todos/plan metadata with `applyDerivedStateFromParts`.
+7. Broadcast batched `agent.chunks`.
+8. On a terminal chunk, persist the finished assistant message, clear the WAL, clear active turn state, invoke the DO `onTurnFinished` callback, and broadcast `agent.finish`.
+9. `SessionAgentDO.onTurnFinished` persists summary metadata. For non-aborted turns, it then enqueues a turn-finished notification through `NotificationPublisher` and queues server-side pull request creation if a pushed branch exists without a stored PR.
 
 The DO broadcasts chunk batches rather than individual chunks. The client protocol still receives WebSocket messages from the DO, not direct sprite traffic.
 

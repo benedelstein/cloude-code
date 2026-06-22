@@ -65,6 +65,12 @@ store(rawChunk);
 broadcast(rawChunk);
 ```
 
+Current server guard points are `AgentTurnCoordinator.handleChunks(...)` before
+writing fresh chunks to the pending-chunk WAL, and
+`SessionSyncService.buildSyncResponse()` before returning stored messages or
+pending chunks to clients. Those paths validate compatibility but keep the
+original AI SDK JSON as the stored and transported value.
+
 Do not make parsed wire output canonical:
 
 ```ts
