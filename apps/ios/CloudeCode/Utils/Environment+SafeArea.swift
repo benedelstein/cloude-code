@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 extension UIApplication {
-    var keyWindow: UIWindow? {
+    var activeKeyWindow: UIWindow? {
         connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
@@ -12,7 +12,7 @@ extension UIApplication {
 
 private struct SafeAreaInsetsKey: EnvironmentKey {
     static var defaultValue: EdgeInsets {
-        UIApplication.shared.keyWindow?.safeAreaInsets.swiftUIInsets ?? EdgeInsets()
+        UIApplication.shared.activeKeyWindow?.safeAreaInsets.swiftUIInsets ?? EdgeInsets()
     }
 }
 

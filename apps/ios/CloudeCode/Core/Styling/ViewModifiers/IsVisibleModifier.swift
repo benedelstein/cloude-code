@@ -17,7 +17,8 @@ struct IsVisibleModifier: ViewModifier {
                 Color.clear
                     .preference(
                         key: VisibleKey.self,
-                        value: (UIApplication.shared.keyWindow?.frame ?? .zero).intersects(proxy.frame(in: .global))
+                        value: (UIApplication.shared.activeKeyWindow?.frame ?? .zero)
+                            .intersects(proxy.frame(in: .global))
                     )
                     .onPreferenceChange(VisibleKey.self) { isVisible in
                         guard isVisible, let action else { return }
