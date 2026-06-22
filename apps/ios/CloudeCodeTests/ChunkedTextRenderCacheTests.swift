@@ -21,6 +21,36 @@ struct ChunkedTextRenderCacheTests {
         ])
     }
 
+    @Test func lineBreakBatchingUsesEarlierLineBreakWhenFullBatchExceedsHardCap() {
+        let chunks = renderChunks(
+            for: "aa\nbb\ncc\ndd\nee\nff",
+            maxLineBreaksPerChunk: 5,
+            maxChunkUTF16Length: 12
+        )
+
+        #expect(chunks.map(\.text) == [
+            "aa\nbb\ncc\ndd",
+            "ee\nff"
+        ])
+    }
+
+    @Test func lineBreakBatchingFallsBackWhenNoLineBreakFitsHardCap() {
+        let chunks = renderChunks(
+            for: "abcdefghijklm\nnext\nlast",
+            maxLineBreaksPerChunk: 1,
+            maxChunkUTF16Length: 8,
+            softBoundaryLookbackUTF16Length: 0,
+            minimumSoftBoundaryUTF16Length: 0
+        )
+
+        #expect(chunks.map(\.text) == [
+            "abcdefgh",
+            "ijklm",
+            "next",
+            "last"
+        ])
+    }
+
     @Test func prefersSentenceBoundaryBeforeHardCap() {
         let text = String(repeating: "a", count: 2_250)
             + ". "
@@ -68,8 +98,19 @@ struct ChunkedTextRenderCacheTests {
     }
 }
 
-private func renderChunks(for text: String) -> [ChunkedTextChunk] {
-    let cache = ChunkedTextRenderCache(maxLineBreaksPerChunk: 5)
+private func renderChunks(
+    for text: String,
+    maxLineBreaksPerChunk: Int = 5,
+    maxChunkUTF16Length: Int = 2_400,
+    softBoundaryLookbackUTF16Length: Int = 600,
+    minimumSoftBoundaryUTF16Length: Int = 800
+) -> [ChunkedTextChunk] {
+    let cache = ChunkedTextRenderCache(
+        maxLineBreaksPerChunk: maxLineBreaksPerChunk,
+        maxChunkUTF16Length: maxChunkUTF16Length,
+        softBoundaryLookbackUTF16Length: softBoundaryLookbackUTF16Length,
+        minimumSoftBoundaryUTF16Length: minimumSoftBoundaryUTF16Length
+    )
     let items = cache.renderItems(from: [
         .text(.init(key: "message-text-0", text: text))
     ])

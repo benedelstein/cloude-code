@@ -415,11 +415,8 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(reconfiguredIDs)
-        // might fix
-//        UIView.performWithoutAnimation {
-            dataSource.apply(snapshot, animatingDifferences: false)
-            collectionView.layoutIfNeeded()
-//        }
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
     }
 
     func changedItemIDs(
@@ -433,9 +430,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
     func completeInitialBottomAnchor(_ collectionView: UICollectionView) {
         initialAnchorState = .complete
-//        UIView.performWithoutAnimation {
-            collectionView.alpha = 1
-//        }
+        collectionView.alpha = 1
         collectionView.layer.removeAllAnimations()
     }
 }

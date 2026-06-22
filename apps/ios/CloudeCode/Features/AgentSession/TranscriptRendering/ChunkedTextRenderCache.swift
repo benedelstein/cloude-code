@@ -3,9 +3,20 @@ import Foundation
 final class ChunkedTextRenderCache {
     private var textCachesByPartKey: [String: ChunkedTextChunkCache] = [:]
     private let maxLineBreaksPerChunk: Int
+    private let maxChunkUTF16Length: Int
+    private let softBoundaryLookbackUTF16Length: Int
+    private let minimumSoftBoundaryUTF16Length: Int
 
-    init(maxLineBreaksPerChunk: Int = 5) {
+    init(
+        maxLineBreaksPerChunk: Int = 5,
+        maxChunkUTF16Length: Int = 2_400,
+        softBoundaryLookbackUTF16Length: Int = 600,
+        minimumSoftBoundaryUTF16Length: Int = 800
+    ) {
         self.maxLineBreaksPerChunk = max(1, maxLineBreaksPerChunk)
+        self.maxChunkUTF16Length = max(1, maxChunkUTF16Length)
+        self.softBoundaryLookbackUTF16Length = max(0, softBoundaryLookbackUTF16Length)
+        self.minimumSoftBoundaryUTF16Length = max(0, minimumSoftBoundaryUTF16Length)
     }
 
     func renderItems(
@@ -17,7 +28,10 @@ final class ChunkedTextRenderCache {
             }
 
             let cache = textCachesByPartKey[textItem.key] ?? ChunkedTextChunkCache(
-                maxLineBreaksPerChunk: maxLineBreaksPerChunk
+                maxLineBreaksPerChunk: maxLineBreaksPerChunk,
+                maxChunkUTF16Length: maxChunkUTF16Length,
+                softBoundaryLookbackUTF16Length: softBoundaryLookbackUTF16Length,
+                minimumSoftBoundaryUTF16Length: minimumSoftBoundaryUTF16Length
             )
             textCachesByPartKey[textItem.key] = cache
 
@@ -38,20 +52,11 @@ final class ChunkedTextRenderCache {
 // SUPPORT MARKDOWN RENDERING
 // POSSIBLY PRECOMPUTE TEXT BOUNDS FROM THE ATTRIBUTED STRING FOR FASTER LAYOUT.
 private final class ChunkedTextChunkCache {
-    private static let maxChunkUTF16Length = 2_400
-    private static let softBoundaryLookbackUTF16Length = 600
-    private static let minimumSoftBoundaryUTF16Length = 800
-
-    private struct ChunkBoundary {
-        let offset: Int
-        let skipsTrailingDelimiter: Bool
-        let trimsFollowingHorizontalWhitespace: Bool
-    }
-
     // UTF-16 offsets let us scan newly appended text without repeatedly walking
     // Swift Character indices across the full response.
     private var scannedUTF16Offset = 0
     private var lineBreakUTF16Offsets: [Int] = []
+    // Index into lineBreakUTF16Offsets, not a UTF-16 text offset.
     private var nextLineBreakIndex = 0
 
     // Finalized chunks are stable SwiftUI Text inputs. Only the last tail chunk
@@ -59,9 +64,20 @@ private final class ChunkedTextChunkCache {
     private var finalizedChunks: [ChunkedTextChunk] = []
     private var nextChunkStartUTF16Offset = 0
     private let maxLineBreaksPerChunk: Int
+    private let maxChunkUTF16Length: Int
+    private let softBoundaryLookbackUTF16Length: Int
+    private let minimumSoftBoundaryUTF16Length: Int
 
-    init(maxLineBreaksPerChunk: Int) {
+    init(
+        maxLineBreaksPerChunk: Int,
+        maxChunkUTF16Length: Int,
+        softBoundaryLookbackUTF16Length: Int,
+        minimumSoftBoundaryUTF16Length: Int
+    ) {
         self.maxLineBreaksPerChunk = maxLineBreaksPerChunk
+        self.maxChunkUTF16Length = maxChunkUTF16Length
+        self.softBoundaryLookbackUTF16Length = softBoundaryLookbackUTF16Length
+        self.minimumSoftBoundaryUTF16Length = minimumSoftBoundaryUTF16Length
     }
 
     func chunks(for text: String) -> [ChunkedTextChunk] {
@@ -91,7 +107,7 @@ private final class ChunkedTextChunkCache {
         var offset = startOffset
         var index = utf16.index(utf16.startIndex, offsetBy: startOffset)
         while index < utf16.endIndex {
-            if utf16[index] == 10 {
+            if utf16[index] == UTF16Character.lineFeed {
                 lineBreakUTF16Offsets.append(offset)
             }
             offset += 1
@@ -102,18 +118,26 @@ private final class ChunkedTextChunkCache {
     private func finalizeStableChunks(in text: String) {
         let totalUTF16Count = text.utf16.count
 
-        while let boundary = nextStableBoundary(in: text, totalUTF16Count: totalUTF16Count) {
+        while let stableBoundary = nextStableBoundary(
+            in: text,
+            startOffset: nextChunkStartUTF16Offset,
+            totalUTF16Count: totalUTF16Count
+        ) {
+            let boundary = stableBoundary.boundary
             let startOffset = nextChunkStartUTF16Offset
             guard boundary.offset >= startOffset, boundary.offset <= totalUTF16Count else {
                 return
             }
 
-            let chunkText = if boundary.offset > startOffset {
-                text.substring(utf16Offsets: startOffset..<boundary.offset)
+            let chunkText: String
+            if boundary.offset > startOffset {
+                chunkText = text.substring(utf16Offsets: startOffset..<boundary.offset)
             } else if boundary.skipsTrailingDelimiter {
-                " "
+                // Preserve an otherwise empty newline-delimited chunk after stripping
+                // the delimiter so blank lines still produce stable rendered space.
+                chunkText = " "
             } else {
-                ""
+                chunkText = ""
             }
 
             guard !chunkText.isEmpty else {
@@ -130,78 +154,103 @@ private final class ChunkedTextChunkCache {
                 in: text,
                 totalUTF16Count: totalUTF16Count
             )
-
-            while nextLineBreakIndex < lineBreakUTF16Offsets.count,
-                  lineBreakUTF16Offsets[nextLineBreakIndex] < nextChunkStartUTF16Offset {
-                nextLineBreakIndex += 1
-            }
+            nextLineBreakIndex = stableBoundary.nextLineBreakIndex
+                ?? lineBreakIndex(afterConsumingTextBefore: nextChunkStartUTF16Offset)
         }
     }
 
     private func nextStableBoundary(
         in text: String,
+        startOffset: Int,
         totalUTF16Count: Int
-    ) -> ChunkBoundary? {
-        let startOffset = nextChunkStartUTF16Offset
-        let hardBoundary = min(startOffset + Self.maxChunkUTF16Length, totalUTF16Count)
+    ) -> StableBoundary? {
+        let hardBoundary = min(startOffset + maxChunkUTF16Length, totalUTF16Count)
 
-        // Batch complete lines so line-heavy output does not create one SwiftUI
-        // Text per line. The trailing newline is a delimiter; internal newlines
-        // stay inside the chunk.
-        if let lineBreakBoundary = batchedLineBreakBoundary(), lineBreakBoundary <= hardBoundary {
-            return .init(
-                offset: lineBreakBoundary,
-                skipsTrailingDelimiter: true,
-                trimsFollowingHorizontalWhitespace: false
-            )
+        // This pass can finalize chunks before they hit the max length, so it
+        // only accepts a full newline batch. Accepting partial batches here
+        // would make streaming line-heavy output finalize one chunk per line.
+        if let lineBreakBoundary = batchedLineBreakBoundary(
+            from: nextLineBreakIndex,
+            hardBoundary: hardBoundary
+        ) {
+            return lineBreakBoundary
         }
 
-        guard totalUTF16Count - startOffset > Self.maxChunkUTF16Length else {
+        // If the chunk is under the max length and no line-break boundary is
+        // ready, keep it active rather than finalizing it.
+        guard totalUTF16Count - startOffset > maxChunkUTF16Length else {
             return nil
         }
 
+        // Once the active chunk is too long, partial newline batches are fine:
+        // at that point a natural boundary is better than a hard-cap split.
         return preferredBoundary(in: text, startOffset: startOffset, hardBoundary: hardBoundary)
     }
 
-    private func batchedLineBreakBoundary() -> Int? {
-        let boundaryLineBreakIndex = nextLineBreakIndex + maxLineBreaksPerChunk - 1
+    private func batchedLineBreakBoundary(
+        from lastLineBreakIndex: Int,
+        hardBoundary: Int
+    ) -> StableBoundary? {
+        var boundaryLineBreakIndex = lastLineBreakIndex + maxLineBreaksPerChunk - 1
         guard boundaryLineBreakIndex < lineBreakUTF16Offsets.count else {
             return nil
         }
 
-        return lineBreakUTF16Offsets[boundaryLineBreakIndex]
+        // A full batch exists, but it may run past the hard cap. Walk back to
+        // the largest newline batch that keeps the finalized chunk under cap.
+        while boundaryLineBreakIndex >= lastLineBreakIndex,
+              lineBreakUTF16Offsets[boundaryLineBreakIndex] > hardBoundary {
+            boundaryLineBreakIndex -= 1
+        }
+
+        guard boundaryLineBreakIndex >= lastLineBreakIndex else {
+            return nil
+        }
+
+        let boundaryOffset = lineBreakUTF16Offsets[boundaryLineBreakIndex]
+
+        return (
+            boundary: .init(
+                offset: boundaryOffset,
+                // Strip the trailing \n from the chunk text.
+                skipsTrailingDelimiter: true,
+                // Newline splits do not need leading horizontal whitespace trim.
+                trimsFollowingHorizontalWhitespace: false
+            ),
+            nextLineBreakIndex: boundaryLineBreakIndex + 1
+        )
     }
 
     private func preferredBoundary(
         in text: String,
         startOffset: Int,
         hardBoundary: Int
-    ) -> ChunkBoundary {
+    ) -> StableBoundary? {
         guard hardBoundary > startOffset else {
-            return hardBoundaryFallback(at: hardBoundary)
+            return nil
         }
 
         let lowerBound = max(
-            startOffset + Self.minimumSoftBoundaryUTF16Length,
-            hardBoundary - Self.softBoundaryLookbackUTF16Length
+            startOffset + minimumSoftBoundaryUTF16Length,
+            hardBoundary - softBoundaryLookbackUTF16Length
         )
 
         guard lowerBound < hardBoundary else {
-            return hardBoundaryFallback(at: hardBoundary)
+            return (hardBoundaryFallback(at: hardBoundary), nil)
         }
 
         return nearestSoftBoundary(
             in: text,
             lowerBound: lowerBound,
             hardBoundary: hardBoundary
-        ) ?? hardBoundaryFallback(at: hardBoundary)
+        ) ?? (hardBoundaryFallback(at: hardBoundary), nil)
     }
 
     private func nearestSoftBoundary(
         in text: String,
         lowerBound: Int,
         hardBoundary: Int
-    ) -> ChunkBoundary? {
+    ) -> StableBoundary? {
         let utf16 = text.utf16
         var sentenceBoundary: ChunkBoundary?
         var whitespaceBoundary: ChunkBoundary?
@@ -212,14 +261,22 @@ private final class ChunkedTextChunkCache {
             utf16.formIndex(before: &index)
             offset -= 1
 
-            switch utf16[index] {
-            case 10:
-                return .init(
-                    offset: offset,
-                    skipsTrailingDelimiter: true,
-                    trimsFollowingHorizontalWhitespace: false
+            let value = utf16[index]
+            switch value {
+            case UTF16Character.lineFeed:
+                // Reaching this scan means the chunk already exceeded the max
+                // length and the eager full-batch newline path did not apply.
+                // Use the best partial newline boundary instead of splitting
+                // mid-line at the hard cap.
+                return (
+                    boundary: .init(
+                        offset: offset,
+                        skipsTrailingDelimiter: true,
+                        trimsFollowingHorizontalWhitespace: false
+                    ),
+                    nextLineBreakIndex: lineBreakIndex(afterConsumingTextBefore: offset + 1)
                 )
-            case 46, 33, 63:
+            case _ where UTF16Character.isSentencePunctuation(value):
                 if sentenceBoundary == nil {
                     sentenceBoundary = expandedSentenceBoundaryOffset(
                         in: text,
@@ -227,7 +284,7 @@ private final class ChunkedTextChunkCache {
                         hardBoundary: hardBoundary
                     )
                 }
-            case 32, 9:
+            case _ where UTF16Character.isHorizontalWhitespace(value):
                 if whitespaceBoundary == nil {
                     whitespaceBoundary = .init(
                         offset: offset + 1,
@@ -240,7 +297,7 @@ private final class ChunkedTextChunkCache {
             }
         }
 
-        return sentenceBoundary ?? whitespaceBoundary
+        return (sentenceBoundary ?? whitespaceBoundary).map { ($0, nil) }
     }
 
     private func hardBoundaryFallback(at offset: Int) -> ChunkBoundary {
@@ -249,6 +306,17 @@ private final class ChunkedTextChunkCache {
             skipsTrailingDelimiter: false,
             trimsFollowingHorizontalWhitespace: false
         )
+    }
+}
+
+private extension ChunkedTextChunkCache {
+    private func lineBreakIndex(afterConsumingTextBefore utf16Offset: Int) -> Int {
+        var lineBreakIndex = nextLineBreakIndex
+        while lineBreakIndex < lineBreakUTF16Offsets.count,
+              lineBreakUTF16Offsets[lineBreakIndex] < utf16Offset {
+            lineBreakIndex += 1
+        }
+        return lineBreakIndex
     }
 
     private func nextStartOffset(
@@ -263,8 +331,10 @@ private final class ChunkedTextChunkCache {
 
         let utf16 = text.utf16
         while offset < totalUTF16Count {
+            // Trim whitespace from the start of the next chunk so it doesn't render like:
+            // "   Foo..."
             let index = utf16.index(utf16.startIndex, offsetBy: offset)
-            guard utf16[index].isHorizontalWhitespace else {
+            guard UTF16Character.isHorizontalWhitespace(utf16[index]) else {
                 break
             }
             offset += 1
@@ -283,7 +353,7 @@ private final class ChunkedTextChunkCache {
 
         while offset < hardBoundary {
             let index = utf16.index(utf16.startIndex, offsetBy: offset)
-            guard utf16[index].isClosingSentenceDelimiter else {
+            guard UTF16Character.isClosingSentenceDelimiter(utf16[index]) else {
                 break
             }
             offset += 1
@@ -314,25 +384,59 @@ private final class ChunkedTextChunkCache {
     }
 }
 
-private extension String {
-    func substring(utf16Offsets offsets: Range<Int>) -> String {
-        let start = String.Index(utf16Offset: offsets.lowerBound, in: self)
-        let end = String.Index(utf16Offset: offsets.upperBound, in: self)
-        return String(self[start..<end])
-    }
+private struct ChunkBoundary {
+    // End offset for the next finalized chunk. The start offset is the cache's
+    // current nextChunkStartUTF16Offset.
+    let offset: Int
+    let skipsTrailingDelimiter: Bool
+    let trimsFollowingHorizontalWhitespace: Bool
 }
 
-private extension UInt16 {
-    var isClosingSentenceDelimiter: Bool {
-        switch self {
-        case 34, 39, 41, 93, 125, 8217, 8221:
+private typealias StableBoundary = (boundary: ChunkBoundary, nextLineBreakIndex: Int?)
+
+private enum UTF16Character {
+    static let horizontalTab: UInt16 = 9
+    static let lineFeed: UInt16 = 10
+    static let space: UInt16 = 32
+    static let doubleQuote: UInt16 = 34
+    static let apostrophe: UInt16 = 39
+    static let closingParenthesis: UInt16 = 41
+    static let exclamationMark: UInt16 = 33
+    static let period: UInt16 = 46
+    static let questionMark: UInt16 = 63
+    static let closingSquareBracket: UInt16 = 93
+    static let closingCurlyBrace: UInt16 = 125
+    static let rightSingleQuotationMark: UInt16 = 8217
+    static let rightDoubleQuotationMark: UInt16 = 8221
+
+    static func isSentencePunctuation(_ value: UInt16) -> Bool {
+        value == period || value == exclamationMark || value == questionMark
+    }
+
+    static func isClosingSentenceDelimiter(_ value: UInt16) -> Bool {
+        switch value {
+        case doubleQuote,
+             apostrophe,
+             closingParenthesis,
+             closingSquareBracket,
+             closingCurlyBrace,
+             rightSingleQuotationMark,
+             rightDoubleQuotationMark:
             true
         default:
             false
         }
     }
 
-    var isHorizontalWhitespace: Bool {
-        self == 32 || self == 9
+    static func isHorizontalWhitespace(_ value: UInt16) -> Bool {
+        value == space || value == horizontalTab
+    }
+}
+
+private extension String {
+    func substring(utf16Offsets offsets: Range<Int>) -> String {
+        let start = String.Index(utf16Offset: offsets.lowerBound, in: self)
+        let end = String.Index(utf16Offset: offsets.upperBound, in: self)
+        return String(self[start..<end])
     }
 }
