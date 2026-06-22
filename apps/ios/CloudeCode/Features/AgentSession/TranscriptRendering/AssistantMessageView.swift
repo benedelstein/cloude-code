@@ -63,6 +63,7 @@ struct AssistantMessageView: View, Equatable {
                 indexOffset: finalResponseStartIndex ?? 0
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
 //        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
