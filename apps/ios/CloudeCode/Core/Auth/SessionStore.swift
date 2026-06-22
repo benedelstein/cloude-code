@@ -83,6 +83,10 @@ final class SessionStore {
         }
     }
 
+    func stop() {
+        // noop
+    }
+
     func signOut() async {
         await coordinator.signOut()
     }

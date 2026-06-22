@@ -1,7 +1,10 @@
 import API
+import Combine
 import Domain
 import Entities
 import Foundation
+
+// swiftlint:disable file_length
 
 @MainActor
 @Observable
@@ -20,7 +23,12 @@ final class AgentSessionViewModel {
     private(set) var messages: [SessionMessage] = []
     private(set) var assistantDisplayDataByMessageId: [String: MessageDisplayData] = [:]
     private(set) var streamingDisplayData: MessageDisplayData?
-    private(set) var stream = SessionMessageStreamState()
+    @ObservationIgnored private var latestStreamingMessage: SessionMessage?
+    @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
+    @ObservationIgnored private var textRenderCache = ChunkedTextRenderCache()
+    private var streamAccumulator: SessionMessageStreamAccumulator?
+    private var streamGeneration = 0
+    private(set) var streamStatus = SessionMessageStreamStatus()
     private(set) var clientState = SessionClientState.empty
     private(set) var isSending = false
     private(set) var isWaitingForResponse = false
@@ -37,7 +45,7 @@ final class AgentSessionViewModel {
 
     var isResponding: Bool {
         isWaitingForResponse
-            || stream.isActive
+            || streamStatus.isActive
             || clientState.activeTurnUserMessageId != nil
     }
 
@@ -87,6 +95,7 @@ final class AgentSessionViewModel {
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected
+        resetPendingResponse()
 
         Task { [socket] in
             await socket.disconnect()
@@ -171,13 +180,18 @@ final class AgentSessionViewModel {
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
             in: snapshot.messages
         )
+        textRenderCache.reset()
         assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
         messages = snapshotMessages
-        stream = await SessionMessageStreamState.reducing(
-            snapshot.pendingChunks,
-            messageMetadata: snapshot.pendingMessageMetadata
-        )
-        rebuildStreamingDisplayData()
+        replaceStreamAccumulator()
+        if snapshot.pendingChunks.isEmpty {
+            clearStreamingState()
+        } else {
+            await streamAccumulator?.append(
+                snapshot.pendingChunks,
+                messageMetadata: snapshot.pendingMessageMetadata
+            )
+        }
         applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         markLatestAssistantMessageRead(in: snapshotMessages)
     }
@@ -186,23 +200,11 @@ final class AgentSessionViewModel {
         _ chunks: [SessionStreamChunk],
         messageMetadata: SessionStreamMessageMetadata?
     ) async {
-        stream = await stream.appending(chunks, messageMetadata: messageMetadata)
-        rebuildStreamingDisplayData()
-    }
-
-    private func applyAgentFinish(_ message: SessionMessage) {
-        upsert(message)
-        if message.role == .assistant {
-            markReadIfNeeded(messageId: message.id)
+        if streamAccumulator == nil {
+            replaceStreamAccumulator()
         }
-        clearOptimisticUserMessageTracking()
-        resetPendingResponse()
-    }
 
-    private func applyUserMessage(_ message: SessionMessage) {
-        upsertConfirmedUserMessage(message)
-        isSending = false
-        errorMessage = nil
+        await streamAccumulator?.append(chunks, messageMetadata: messageMetadata)
     }
 
     func upsert(_ message: SessionMessage) {
@@ -259,8 +261,15 @@ final class AgentSessionViewModel {
     }
 
     private func resetPendingResponse() {
-        stream = SessionMessageStreamState()
-        streamingDisplayData = nil
+        let streamAccumulator = self.streamAccumulator
+        Task {
+            await streamAccumulator?.finish()
+        }
+        self.streamAccumulator = nil
+        messageThrottler?.cancel()
+        messageThrottler = nil
+        streamGeneration += 1
+        clearStreamingState()
         clientState.activeTurnUserMessageId = nil
         isSending = false
         isWaitingForResponse = false
@@ -282,6 +291,22 @@ final class AgentSessionViewModel {
 }
 
 extension AgentSessionViewModel {
+    private func applyAgentFinish(_ message: SessionMessage) {
+        messageThrottler?.flush()
+        upsert(message)
+        if message.role == .assistant {
+            markReadIfNeeded(messageId: message.id)
+        }
+        clearOptimisticUserMessageTracking()
+        resetPendingResponse()
+    }
+
+    private func applyUserMessage(_ message: SessionMessage) {
+        upsertConfirmedUserMessage(message)
+        isSending = false
+        errorMessage = nil
+    }
+
     /// Returns true if replaced, false if the message id was not found
     private func replaceMessage(id: String, with message: SessionMessage) -> Bool {
         guard let index = messages.firstIndex(where: { $0.id == id }) else {
@@ -387,6 +412,74 @@ extension AgentSessionViewModel {
 }
 
 private extension AgentSessionViewModel {
+    func replaceStreamAccumulator() {
+        let previousAccumulator = streamAccumulator
+        Task {
+            await previousAccumulator?.finish()
+        }
+        messageThrottler?.cancel()
+        streamGeneration += 1
+        let generation = streamGeneration
+
+        messageThrottler = SchedulerLatestValueThrottler(
+            interval: .milliseconds(100),
+            scheduler: .main
+        ) { [weak self] message in
+            guard let self, streamGeneration == generation else {
+                return
+            }
+            applyStreamingMessage(message)
+        }
+
+        streamAccumulator = SessionMessageStreamAccumulator(
+            onStatus: { [weak self] status in
+                Task { @MainActor [weak self] in
+                    guard let self, streamGeneration == generation else {
+                        return
+                    }
+                    applyStreamStatus(status)
+                }
+            },
+            onMessage: { [weak self] message in
+                Task { @MainActor [weak self] in
+                    guard let self, streamGeneration == generation else {
+                        return
+                    }
+                    messageThrottler?.submit(message)
+                }
+            }
+        )
+    }
+
+    func applyStreamStatus(_ status: SessionMessageStreamStatus) {
+        guard streamStatus != status else {
+            return
+        }
+
+        let previousErrorDescription = streamStatus.errorDescription
+        streamStatus = status
+
+        guard
+            let errorDescription = status.errorDescription,
+            errorDescription != previousErrorDescription
+        else {
+            return
+        }
+
+        errorMessage = errorDescription
+    }
+
+    func applyStreamingMessage(_ message: SessionMessage) {
+        latestStreamingMessage = message
+        rebuildStreamingDisplayData()
+    }
+
+    func clearStreamingState() {
+        streamStatus = .init()
+        latestStreamingMessage = nil
+        streamingDisplayData = nil
+    }
+
     func rebuildTranscriptDisplayData() {
         rebuildAssistantDisplayData()
         rebuildStreamingDisplayData()
@@ -408,7 +501,7 @@ private extension AgentSessionViewModel {
     }
 
     private func rebuildStreamingDisplayData() {
-        guard let message = stream.message else {
+        guard let message = latestStreamingMessage else {
             streamingDisplayData = nil
             return
         }
@@ -427,10 +520,11 @@ private extension AgentSessionViewModel {
         for message: SessionMessage,
         isStreaming: Bool
     ) -> AgentSessionView.MessageDisplayData {
-        let renderItems = transcriptBuilder.build(
+        var renderItems = transcriptBuilder.build(
             message: message,
             providerId: clientState.agentSettings.provider
         )
+        renderItems = textRenderCache.renderItems(from: renderItems)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
             renderItems: renderItems
         )

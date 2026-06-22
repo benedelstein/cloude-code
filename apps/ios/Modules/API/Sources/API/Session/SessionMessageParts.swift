@@ -215,7 +215,7 @@ private extension SessionMessage.ToolApproval {
     }
 }
 
-private extension Dictionary where Key == String, Value == [String: CoreAPI.JSONValue] {
+extension Dictionary where Key == String, Value == [String: CoreAPI.JSONValue] {
     var domainProviderMetadata: SessionMessage.ProviderMetadata {
         mapValues { providerValues in
             providerValues.mapValues(Domain.JSONValue.init)

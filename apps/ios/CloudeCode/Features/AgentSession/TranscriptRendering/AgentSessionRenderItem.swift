@@ -2,12 +2,15 @@ import Domain
 
 enum AgentSessionRenderItem: Sendable, Equatable {
     case text(TextItem)
+    case chunkedText(ChunkedTextItem)
     case reasoning(ReasoningItem)
     case actionItem(ActionItem)
 
     var key: String {
         switch self {
         case .text(let item):
+            item.key
+        case .chunkedText(let item):
             item.key
         case .reasoning(let item):
             item.key
@@ -22,6 +25,9 @@ extension AgentSessionRenderItem {
         if case .text = self {
             return true
         }
+        if case .chunkedText = self {
+            return true
+        }
         return false
     }
 }
@@ -30,6 +36,12 @@ extension AgentSessionRenderItem {
     struct TextItem: Sendable, Equatable {
         let key: String
         let text: String
+    }
+
+    struct ChunkedTextItem: Sendable, Equatable {
+        let key: String
+        let text: String
+        let chunks: [ChunkedTextChunk]
     }
 
     struct ReasoningItem: Sendable, Equatable {
@@ -61,4 +73,9 @@ extension AgentSessionRenderItem {
         let action: NormalizedToolAction
         let key: String
     }
+}
+
+struct ChunkedTextChunk: Identifiable, Sendable, Equatable {
+    let id: Int
+    let text: String
 }

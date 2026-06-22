@@ -1,8 +1,21 @@
 import SwiftUI
 import Domain
 
-struct AssistantMessageView: View {
+struct AssistantMessageView: View, Equatable {
+    // for better scroll performance.
+    static func == (lhs: AssistantMessageView, rhs: AssistantMessageView) -> Bool {
+        lhs.displayData == rhs.displayData &&
+        lhs.isStreaming == rhs.isStreaming &&
+        lhs.autoCollapseOnAppear == rhs.autoCollapseOnAppear &&
+        lhs.hasConsumedAutoCollapse == rhs.hasConsumedAutoCollapse &&
+        lhs.workExpanded == rhs.workExpanded &&
+        lhs.destination?.id == rhs.destination?.id
+    }
+
     private let partSpacing: CGFloat = 12
+    private let renderItemInsertionTransition = AnyTransition
+        .opacity
+        .combined(with: .move(edge: .top))
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
@@ -50,6 +63,8 @@ struct AssistantMessageView: View {
                 indexOffset: finalResponseStartIndex ?? 0
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+//        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
             configureInitialCollapse()
@@ -72,11 +87,17 @@ struct AssistantMessageView: View {
 
             AgentSessionRenderItemView(
                 item: item,
-                isActive: isActive
+                isActive: isActive,
+                isStreaming: isStreaming
             ) {
                 destination = .sheet(.renderItem(item))
             }
+            .transition(renderItemInsertionTransition)
         }
+    }
+
+    private var renderItemKeys: [String] {
+        displayData.renderItems.map(\.key)
     }
 
     private func configureInitialCollapse() {

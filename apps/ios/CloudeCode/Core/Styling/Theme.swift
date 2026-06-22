@@ -35,8 +35,8 @@ extension Theme {
 
     /// Dark appearance — dark backgrounds, light labels, accents nudged for contrast.
     static let dark = Theme(
-        backgroundColor: Color(hex: 0x090909),
-        secondaryBackgroundColor: Color(hex: 0x1C1C1E),
+        backgroundColor: Color(hex: 0x090A0B),
+        secondaryBackgroundColor: Color(hex: 0x19191B),
         tertiaryBackgroundColor: Color(hex: 0x28282A).opacity(0.5),
         highlightColor: Color(hex: 0x2A2A2C),
         disabledBackgroundColor: Color(hex: 0x3A3A3C),
@@ -54,7 +54,14 @@ extension Theme {
 
     /// Resolves the matching variant for a SwiftUI color scheme.
     static func resolve(for colorScheme: ColorScheme) -> Theme {
-        colorScheme == .dark ? .dark : .light
+        switch colorScheme {
+        case .dark:
+                .dark
+        case .light:
+                .light
+        @unknown default:
+                .light
+        }
     }
 }
 
