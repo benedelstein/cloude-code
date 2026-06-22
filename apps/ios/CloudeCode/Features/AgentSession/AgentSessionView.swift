@@ -277,7 +277,6 @@ private extension AgentSessionView {
                         autoCollapseMessageId = nil
                     }
                 }
-                .equatable()
             case .workingIndicator:
                 WorkingIndicatorView()
             }

@@ -53,7 +53,7 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
 //        .opacity(show ? 1 : 0)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .defaultScrollAnchor(.top, for: .alignment)
-        .defaultScrollAnchor(.top, for: .sizeChanges)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollPosition($scrollPosition, anchor: .bottom)
         .scrollDismissesKeyboard(.interactively)
         .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
