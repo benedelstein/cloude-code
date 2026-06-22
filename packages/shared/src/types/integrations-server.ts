@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Bot → server session creation (Discord/Slack), authenticated with bot
+ * Bot → server session creation (Discord/Slack/Teams), authenticated with bot
  * tokens. Server-side only — not part of the client API contract, hence not
  * in @repo/api-contract and never transpiled to Swift.
  */
@@ -22,6 +22,13 @@ export const SlackExternalUser = BaseExternalUser.extend({
 });
 export type SlackExternalUser = z.infer<typeof SlackExternalUser>;
 
+export const TeamsExternalUser = BaseExternalUser.extend({
+  provider: z.literal("teams"),
+  tenantId: z.string().min(1).optional(),
+  teamId: z.string().min(1).optional(),
+});
+export type TeamsExternalUser = z.infer<typeof TeamsExternalUser>;
+
 export const GenericExternalUser = BaseExternalUser.extend({
   provider: z.literal("generic"),
   namespace: z.string().min(1).optional(),
@@ -31,6 +38,7 @@ export type GenericExternalUser = z.infer<typeof GenericExternalUser>;
 export const IntegrationExternalUser = z.discriminatedUnion("provider", [
   DiscordExternalUser,
   SlackExternalUser,
+  TeamsExternalUser,
   GenericExternalUser,
 ]);
 export type IntegrationExternalUser = z.infer<typeof IntegrationExternalUser>;
