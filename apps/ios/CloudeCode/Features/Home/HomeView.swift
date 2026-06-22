@@ -108,12 +108,14 @@ struct HomeView: View {
             Section(isExpanded: expandedBinding(for: group)) {
                 ForEach(group.sessions) { session in
                     sessionLink(for: session)
+                        .listRowBackground(theme.backgroundColor)
                 }
             } header: {
                 RepoSectionHeader(group: group)
             }
         }
         .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
         .animation(.default, value: viewModel.groups)
         .listStyle(.sidebar)
         .refreshable {
