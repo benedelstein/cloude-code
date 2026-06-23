@@ -87,7 +87,4 @@ extension Font {
 extension EnvironmentValues {
     @Entry
     var style: Style = .init()
-
-    @Entry
-    var lightFeedback: UIImpactFeedbackGenerator = .init(style: .light)
 }

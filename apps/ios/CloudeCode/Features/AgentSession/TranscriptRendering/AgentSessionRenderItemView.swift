@@ -43,7 +43,7 @@ struct AgentSessionRenderItemView: View {
             Button(action: openDetails) {
                 ToolActionInlineRow(item: item, isActive: isActive)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bounce(0.97))
         }
     }
 }

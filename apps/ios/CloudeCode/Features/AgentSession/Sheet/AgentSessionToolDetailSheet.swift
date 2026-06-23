@@ -207,7 +207,7 @@ private struct ReadDetailView: View {
         }
 
         DetailSection(title: "Preview") {
-            CodePreview(text: payload.content ?? "No preview available")
+            FilePreview(text: payload.content ?? "No preview available")
         }
     }
 }
@@ -223,7 +223,7 @@ private struct FileChangeDetailView: View {
                 .font(.system(.body, design: .monospaced))
         }
         DetailSection(title: title) {
-            CodePreview(text: text.isEmpty ? "No details available" : text)
+            FilePreview(text: text.isEmpty ? "No details available" : text)
         }
     }
 }
