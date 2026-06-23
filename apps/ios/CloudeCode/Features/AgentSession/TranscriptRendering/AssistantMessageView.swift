@@ -1,17 +1,8 @@
 import SwiftUI
 import Domain
+import UIKit
 
-struct AssistantMessageView: View, Equatable {
-    // for better scroll performance.
-    static func == (lhs: AssistantMessageView, rhs: AssistantMessageView) -> Bool {
-        lhs.displayData == rhs.displayData &&
-        lhs.isStreaming == rhs.isStreaming &&
-        lhs.autoCollapseOnAppear == rhs.autoCollapseOnAppear &&
-        lhs.hasConsumedAutoCollapse == rhs.hasConsumedAutoCollapse &&
-        lhs.workExpanded == rhs.workExpanded &&
-        lhs.destination?.id == rhs.destination?.id
-    }
-
+struct AssistantMessageView: View {
     private let partSpacing: CGFloat = 12
     private let renderItemInsertionTransition = AnyTransition
         .opacity
@@ -42,9 +33,10 @@ struct AssistantMessageView: View, Equatable {
                     collapsible: showsCollapsibleWorkTrace
                 ) {
                     guard !isStreaming else { return }
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        workExpanded.toggle()
-                    }
+                    setWorkExpanded(!workExpanded)
+                    // NOTE - Not using animations here because it looks wonky and doesnt sync with uikit resizing.
+//                    withAnimation(.easeOut(duration: 0.2)) {
+//                    }
                 }
             }
 
@@ -54,7 +46,7 @@ struct AssistantMessageView: View, Equatable {
                     fullItems: items,
                     indexOffset: 0
                 )
-                .transition(.opacity.combined(with: .move(edge: .top)))
+//                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             renderRows(
@@ -64,7 +56,6 @@ struct AssistantMessageView: View, Equatable {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-//        .animation(.easeOut(duration: 0.2), value: displayData.renderItems)
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
             configureInitialCollapse()
@@ -96,10 +87,6 @@ struct AssistantMessageView: View, Equatable {
         }
     }
 
-    private var renderItemKeys: [String] {
-        displayData.renderItems.map(\.key)
-    }
-
     private func configureInitialCollapse() {
         guard displayData.finalResponseStartIndex != nil else {
             onAutoCollapseConsumed()
@@ -114,9 +101,22 @@ struct AssistantMessageView: View, Equatable {
         onAutoCollapseConsumed()
 
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) {
-                workExpanded = false
-            }
+            setWorkExpanded(false)
+        }
+    }
+
+    private func setWorkExpanded(_ expanded: Bool) {
+        let animationsWereEnabled = UIView.areAnimationsEnabled
+        UIView.setAnimationsEnabled(false)
+
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            workExpanded = expanded
+        }
+
+        DispatchQueue.main.async {
+            UIView.setAnimationsEnabled(animationsWereEnabled)
         }
     }
 

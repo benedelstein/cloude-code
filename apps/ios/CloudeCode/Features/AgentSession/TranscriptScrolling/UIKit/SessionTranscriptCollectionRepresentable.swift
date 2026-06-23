@@ -97,7 +97,6 @@ extension SessionTranscriptCollectionRepresentable {
                 }
 
                 let rowContent = self.rowContent
-                cell.backgroundColor = .blue.withAlphaComponent(0.8)
                 cell.contentConfiguration = UIHostingConfiguration {
                     rowContent(item)
                 }
