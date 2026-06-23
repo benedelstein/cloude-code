@@ -26,23 +26,4 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         collectionView?.clearPendingKeyboardTransition()
     }
-
-    /// Runs offset updates using the remaining keyboard transition timing.
-    func animateWithKeyboardTransition(
-        _ keyboardTransition: KeyboardTransition,
-        _ animations: @escaping () -> Void
-    ) {
-        let remainingDuration = keyboardTransition.remainingDuration
-        guard remainingDuration > 0 else {
-            UIView.performWithoutAnimation(animations)
-            return
-        }
-
-        UIView.animate(
-            withDuration: remainingDuration,
-            delay: 0,
-            options: keyboardTransition.options,
-            animations: animations
-        )
-    }
 }

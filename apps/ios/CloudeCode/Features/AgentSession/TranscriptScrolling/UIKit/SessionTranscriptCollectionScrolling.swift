@@ -106,16 +106,17 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         }
 
         let applyOffset = {
-            if keyboardTransition != nil {
-                collectionView.contentOffset = targetOffset
-            } else {
-                self.applyContentOffset(targetOffset, in: collectionView, animated: animated)
-            }
+            self.applyContentOffset(
+                targetOffset,
+                in: collectionView,
+                animated: keyboardTransition == nil && animated
+            )
             collectionView.layoutIfNeeded()
         }
 
-        if let keyboardTransition {
-            animateWithKeyboardTransition(keyboardTransition, applyOffset)
+        if keyboardTransition != nil {
+            UIView.performWithoutAnimation(applyOffset)
+            collectionView.layer.removeAllAnimations()
         } else if animated {
             applyOffset()
         } else {
