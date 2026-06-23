@@ -38,7 +38,7 @@ struct TurnWorkHeaderView: View {
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(.rect)
     }
 
     @ViewBuilder
@@ -68,6 +68,8 @@ struct TurnWorkHeaderView: View {
 }
 
 private struct WorkingDurationLabel: View {
+    private let durationTickAnimation = Animation.easeInOut(duration: 0.2)
+
     let startedAt: Date
 
     var body: some View {
@@ -75,6 +77,7 @@ private struct WorkingDurationLabel: View {
             let totalSeconds = max(0, Int(context.date.timeIntervalSince(startedAt)))
             Text("Working for \(Self.durationString(seconds: totalSeconds))")
                 .contentTransition(.numericText(value: Double(totalSeconds)))
+                .animation(durationTickAnimation, value: totalSeconds)
         }
     }
 

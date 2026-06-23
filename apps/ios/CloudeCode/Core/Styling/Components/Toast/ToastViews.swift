@@ -9,21 +9,20 @@ struct ToastContainerView<Content: View>: View {
     let content: () -> Content
 
     private let cornerRadius: CGFloat = 22
-    private let verticalInset: CGFloat = 14
-    private let horizontalInset: CGFloat = 18
+    private let verticalInset: CGFloat = 10
+    private let horizontalInset: CGFloat = 16
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         content()
-            .frame(maxWidth: .infinity)
             .padding(.horizontal, horizontalInset)
             .padding(.vertical, verticalInset)
-            .toastGlassBackground(in: shape)
             .overlay {
                 shape
                     .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
             }
+            .toastGlassBackground(in: shape)
             .contentShape(shape)
             .padding(.horizontal, style.horizontalPadding)
     }
@@ -41,13 +40,13 @@ struct ToastDefaultContentView: View {
         HStack(spacing: 12) {
             if let icon {
                 icon
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(theme.accentBlue)
             }
 
             VStack(alignment: icon == nil ? .center : .leading, spacing: 4) {
                 title
-                    .font(style.calloutFont.weight(.bold))
+                    .font(style.calloutFont.weight(.semibold))
                     .foregroundStyle(theme.labelColor)
 
                 if let subtitle {
@@ -57,7 +56,6 @@ struct ToastDefaultContentView: View {
                         .multilineTextAlignment(icon == nil ? .center : .leading)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: icon == nil ? .center : .leading)
         }
     }
 }
@@ -242,7 +240,7 @@ private extension View {
     @ViewBuilder
     func toastGlassBackground<S: Shape>(in shape: S) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular, in: shape)
+            glassEffect(.regular.interactive(), in: shape)
         } else {
             background(
                 shape

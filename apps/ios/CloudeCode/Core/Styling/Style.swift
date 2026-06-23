@@ -28,13 +28,13 @@ struct Style {
 
     // MARK: Fonts
     // Standard iOS text styles at the default (Large) Dynamic Type size.
-    let largeTitleFont: Font = .system(size: 34, weight: .regular)
-    let title1Font: Font = .system(size: 28, weight: .regular)
-    let title2Font: Font = .system(size: 22, weight: .regular)
+    let largeTitleFont: Font = .regular(34)
+    let title1Font: Font = .regular(28)
+    let title2Font: Font = .regular(22)
     let title3Font: Font = .system(size: 20, weight: .regular)
-    let headlineFont: Font = .system(size: 17, weight: .semibold)
-    let bodyFont: Font = .system(size: 17, weight: .regular)
-    let calloutFont: Font = .system(size: 16, weight: .regular)
+    let headlineFont: Font = .semibold(17)
+    let bodyFont: Font = .regular(17)
+    let calloutFont: Font = .regular(16)
     let subheadlineFont: Font = .system(size: 15, weight: .regular)
     let footnoteFont: Font = .system(size: 13, weight: .regular)
     let captionFont: Font = .system(size: 12, weight: .regular)
@@ -56,15 +56,31 @@ struct Style {
         ]
         return fonts[style, default: bodyFont]
     }
+
+    var responseTextFont: Font {
+        Font.body(17)
+    }
 }
 
 extension Font {
-    static func body(_ size: CGFloat) -> Font {
+    static func regular(_ size: CGFloat) -> Font {
         .system(size: size, weight: .regular)
+    }
+
+    static func semibold(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .semibold)
+    }
+
+    static func medium(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .medium)
     }
 
     static func bold(_ size: CGFloat) -> Font {
         .system(size: size, weight: .bold)
+    }
+
+    static func body(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .regular)
     }
 }
 

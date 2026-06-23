@@ -25,10 +25,8 @@ struct AgentSessionRenderItemView: View {
     var body: some View {
         switch item {
         case .text(let item):
+            ChunkedTextView(chunks: [.init(id: 1, text: item.text)])
             Text(verbatim: item.text)
-                .styledFont(.subheadline)
-                .foregroundStyle(theme.labelColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
         case .chunkedText(let item):
             ChunkedTextView(chunks: item.chunks)
         case .reasoning(let item):
@@ -52,6 +50,9 @@ struct AgentSessionRenderItemView: View {
 
 private struct ChunkedTextView: View {
     @Environment(\.theme) private var theme
+    @Environment(\.style) private var style: Style
+
+    private let chunkTextFadeAnimation = Animation.easeIn(duration: 0.16)
 
     let chunks: [ChunkedTextChunk]
 
@@ -59,14 +60,15 @@ private struct ChunkedTextView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(chunks) { chunk in
                 Text(verbatim: chunk.text)
-                    .styledFont(.subheadline)
+                    .font(style.responseTextFont)
                     .foregroundStyle(theme.labelColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.identity.animation(nil))
+                    .contentTransition(.opacity)
+                    .animation(chunkTextFadeAnimation, value: chunk.text)
+                    .transition(.opacity.animation(chunkTextFadeAnimation))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(nil, value: chunks)
     }
 }
 
@@ -74,10 +76,14 @@ private struct ToolActionInlineRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
+    private let actionPillAnimation = Animation.easeIn(duration: 0.16)
+
     let item: AgentSessionRenderItem.ActionItem
     let isActive: Bool
 
     var body: some View {
+        let title = item.title(isActive: isActive)
+
         HStack(spacing: style.gridSize) {
             Image(systemName: item.iconName)
                 .font(style.caption2Font)
@@ -86,10 +92,11 @@ private struct ToolActionInlineRow: View {
 
             HStack(spacing: 2) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title(isActive: isActive))
+                    Text(title)
                         .styledFont(.footnote)
                         .foregroundStyle(theme.secondaryLabelColor)
                         .lineLimit(1)
+                        .contentTransition(.opacity)
                 }
 
                 Image(systemName: "chevron.right")
@@ -100,5 +107,7 @@ private struct ToolActionInlineRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().foregroundStyle(theme.tertiaryBackgroundColor))
+        .animation(actionPillAnimation, value: title)
+        .transition(.opacity.animation(actionPillAnimation))
     }
 }

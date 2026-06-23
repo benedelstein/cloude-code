@@ -4,9 +4,11 @@ import UIKit
 
 struct AssistantMessageView: View {
     private let partSpacing: CGFloat = 12
+    private let renderItemInsertionAnimation = Animation.easeIn(duration: 0.16)
     private let renderItemInsertionTransition = AnyTransition
         .opacity
         .combined(with: .move(edge: .top))
+        .animation(.easeIn(duration: 0.16))
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
@@ -34,9 +36,6 @@ struct AssistantMessageView: View {
                 ) {
                     guard !isStreaming else { return }
                     setWorkExpanded(!workExpanded)
-                    // NOTE - Not using animations here because it looks wonky and doesnt sync with uikit resizing.
-//                    withAnimation(.easeOut(duration: 0.2)) {
-//                    }
                 }
             }
 
@@ -46,7 +45,6 @@ struct AssistantMessageView: View {
                     fullItems: items,
                     indexOffset: 0
                 )
-//                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             renderRows(
@@ -54,8 +52,15 @@ struct AssistantMessageView: View {
                 fullItems: items,
                 indexOffset: finalResponseStartIndex ?? 0
             )
+
+            // may want to just opacity this out with consistent frame
+            // for no layout shift
+            if let finalResponseCopyText {
+                CopyFinalResponseButton(text: finalResponseCopyText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(renderItemInsertionAnimation, value: displayData.renderItems.map(\.key))
         .onAppear(perform: configureInitialCollapse)
         .onChange(of: autoCollapseOnAppear) { _, _ in
             configureInitialCollapse()
@@ -87,6 +92,21 @@ struct AssistantMessageView: View {
         }
     }
 
+    private var finalResponseCopyText: String? {
+        guard !isStreaming else {
+            return nil
+        }
+
+        let startIndex = displayData.finalResponseStartIndex ?? 0
+        let text = displayData.renderItems
+            .dropFirst(startIndex)
+            .compactMap(\.copyableText)
+            .joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return text.isEmpty ? nil : text
+    }
+
     private func configureInitialCollapse() {
         guard displayData.finalResponseStartIndex != nil else {
             onAutoCollapseConsumed()
@@ -106,6 +126,9 @@ struct AssistantMessageView: View {
     }
 
     private func setWorkExpanded(_ expanded: Bool) {
+        // NOTE - Not using animations here because it looks wonky
+        // and doesnt sync with uikit resizing.
+        // Can potentially revisit this later.
         let animationsWereEnabled = UIView.areAnimationsEnabled
         UIView.setAnimationsEnabled(false)
 
@@ -116,7 +139,9 @@ struct AssistantMessageView: View {
         }
 
         DispatchQueue.main.async {
-            UIView.setAnimationsEnabled(animationsWereEnabled)
+            DispatchQueue.main.async {
+                UIView.setAnimationsEnabled(animationsWereEnabled)
+            }
         }
     }
 
@@ -132,5 +157,45 @@ struct AssistantMessageView: View {
             return true
         }
         return false
+    }
+}
+
+private struct CopyFinalResponseButton: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.showToast) private var showToast
+    @Environment(\.lightFeedback) private var lightFeedback
+
+    let text: String
+
+    var body: some View {
+        Button(action: copyText) {
+            Image(systemName: "square.on.square")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.tertiaryLabelColor)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.highlight)
+        .accessibilityLabel("Copy response")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func copyText() {
+        UIPasteboard.general.string = text
+        lightFeedback.impactOccurred()
+        showToast?(verbatimTitle: "Copied", icon: Image(systemName: "square.on.square"))
+    }
+}
+
+private extension AgentSessionRenderItem {
+    var copyableText: String? {
+        switch self {
+        case .text(let item):
+            item.text
+        case .chunkedText(let item):
+            item.text
+        case .reasoning, .actionItem:
+            nil
+        }
     }
 }

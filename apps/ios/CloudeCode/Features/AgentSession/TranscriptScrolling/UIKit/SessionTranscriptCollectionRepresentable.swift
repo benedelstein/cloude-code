@@ -199,7 +199,7 @@ extension SessionTranscriptCollectionRepresentable {
                 && didChangeLayout {
                 scrollToBottom(
                     collectionView,
-                    animated: false,
+                    animated: keyboardTransition == nil && UIView.areAnimationsEnabled,
                     keyboardTransition: keyboardTransition
                 )
             }
@@ -415,7 +415,6 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(reconfiguredIDs)
         dataSource.apply(snapshot, animatingDifferences: false)
-        collectionView.layoutIfNeeded()
     }
 
     func changedItemIDs(
