@@ -42,7 +42,6 @@ import type {
 import { buildUserUiMessage } from "@/shared/utils/build-user-message";
 import { timingSafeCompare } from "@/shared/utils/crypto";
 import { sanitizeGitBranchName } from "@/shared/utils/git-branch";
-import { extractUiMessageText } from "@/shared/utils/uimessage-utils";
 import type {
   AgentEvent,
   SessionStatus,
@@ -62,6 +61,7 @@ import { SessionSyncService } from "@/modules/session-agent/services/session-syn
 import { getProviderAuthService } from "@/modules/ai-auth/services/provider-auth.service";
 import { getProviderCredentialAdapter } from "@/modules/ai-auth/services/provider-credential-adapter.service";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
+import { SessionsRepository } from "@/modules/sessions/repositories/sessions.repository";
 import { createSessionSummaryWriter } from "@/modules/sessions/services/session-access.service";
 import { createPullRequestForSessionContext } from "@/modules/sessions/services/session-pull-request.service";
 import { createUserSessionsPublisher } from "@/modules/sessions/services/user-sessions-publisher.service";
@@ -72,6 +72,7 @@ import { normalizePullRequestState } from "@/modules/session-agent/utils/session
 import { SessionAutoPullRequestService } from "./session-auto-pull-request.service";
 import { SessionPullRequestLifecycleService } from "./session-pull-request-lifecycle.service";
 import { SessionRepoAccessLifecycleService } from "./session-repo-access-lifecycle.service";
+import { SessionTurnNotificationService } from "./session-turn-notification.service";
 
 interface AgentStateInternalAccess {
   _setStateInternal(state: ClientState, source: Connection | "server"): unknown;
@@ -106,6 +107,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   private readonly repoAccessLifecycleService: SessionRepoAccessLifecycleService;
   private readonly autoPullRequestService: SessionAutoPullRequestService;
   private readonly notificationPublisher: NotificationPublisher;
+  private readonly turnNotificationService: SessionTurnNotificationService;
   private initializeSessionStatePromise: Promise<HandleInitResult> | null = null;
 
   initialState: ClientState = {
@@ -157,6 +159,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.attachmentService = new SessionAgentAttachmentProvider(this.env.DB);
     this.githubAppService = new GitHubAppService(this.env, this.logger);
     this.notificationPublisher = new NotificationPublisher(this.env);
+    this.turnNotificationService = new SessionTurnNotificationService({
+      notificationPublisher: this.notificationPublisher,
+      sessionsRepository: new SessionsRepository(this.env.DB),
+    });
     const userSessionsPublisher = createUserSessionsPublisher(
       this.env,
       this.logger.scope("user-sessions-publisher"),
@@ -441,12 +447,12 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
       return;
     }
 
-    await this.notificationPublisher.publishTurnFinished({
+    await this.turnNotificationService.publishTurnFinished({
       toUserId: userId,
       sessionId,
       messageId,
       repoFullName,
-      messagePreview: extractUiMessageText(message),
+      message,
     });
   }
 
