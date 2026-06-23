@@ -11,13 +11,14 @@ export class NotificationPublisher {
     toUserId: string;
     sessionId: string;
     messageId: string;
+    sessionTitle: string;
     repoFullName: string;
     messagePreview?: string;
   }): Promise<void> {
     await this.publish({
       toUserId: params.toUserId,
-      title: "Agent turn finished",
-      body: buildTurnFinishedBody(params.repoFullName, params.messagePreview),
+      title: params.sessionTitle,
+      body: buildTurnFinishedBody(params.messagePreview),
       payload: {
         type: "TURN_FINISHED",
         version: 1,
@@ -48,12 +49,11 @@ export class NotificationPublisher {
 }
 
 function buildTurnFinishedBody(
-  repoFullName: string,
   messagePreview: string | undefined,
 ): string {
   const normalizedPreview = messagePreview?.replace(/\s+/g, " ").trim();
   if (!normalizedPreview) {
-    return `${repoFullName} is ready to review.`;
+    return "";
   }
   if (normalizedPreview.length <= MAX_TURN_FINISHED_BODY_LENGTH) {
     return normalizedPreview;

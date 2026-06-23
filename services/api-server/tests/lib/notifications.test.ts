@@ -52,8 +52,8 @@ function createNotificationEvent(): NotificationQueueMessage {
   return {
     id: "notification-1",
     toUserId: "user-1",
-    title: "Agent turn finished",
-    body: "owner/repo is ready to review.",
+    title: "Fix notification copy",
+    body: "Here is the final answer.",
     payload: {
       type: "TURN_FINISHED",
       version: 1,
@@ -106,13 +106,14 @@ describe("NotificationPublisher", () => {
       toUserId: "user-1",
       sessionId: "123e4567-e89b-12d3-a456-426614174000",
       messageId: "message-1",
+      sessionTitle: "Fix notification copy",
       repoFullName: "owner/repo",
       messagePreview: "Here is the final answer.",
     });
 
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       toUserId: "user-1",
-      title: "Agent turn finished",
+      title: "Fix notification copy",
       body: "Here is the final answer.",
       payload: {
         type: "TURN_FINISHED",
@@ -121,6 +122,27 @@ describe("NotificationPublisher", () => {
         messageId: "message-1",
         repoFullName: "owner/repo",
       },
+    }));
+  });
+
+  it("uses an empty body when the finished turn has no text", async () => {
+    const send = vi.fn<(message: NotificationQueueMessage) => Promise<void>>()
+      .mockResolvedValue();
+    const publisher = new NotificationPublisher({
+      TURN_NOTIFICATION_QUEUE: { send },
+    } as unknown as Env);
+
+    await publisher.publishTurnFinished({
+      toUserId: "user-1",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
+      messageId: "message-1",
+      sessionTitle: "Fix notification copy",
+      repoFullName: "owner/repo",
+    });
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Fix notification copy",
+      body: "",
     }));
   });
 });
