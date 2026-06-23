@@ -180,10 +180,11 @@ extension SessionTranscriptCollectionRepresentable {
             let wasNearBottomBeforeLayout = lastDistanceFromBottom.map {
                 $0 <= SessionTranscriptScrollMetrics.bottomProximityThreshold
             } ?? isNearBottom(collectionView)
-            let boundsChanged = lastLayoutBoundsSize != collectionView.bounds.size
-            let contentSizeChanged = lastLayoutContentSize != collectionView.contentSize
-            let didUpdateContentInsets = updateContentInsets(collectionView, reason: "layout")
-            let didChangeLayout = boundsChanged || contentSizeChanged || didUpdateContentInsets
+            let layoutChange = SessionTranscriptLayoutChange(
+                boundsChanged: lastLayoutBoundsSize != collectionView.bounds.size,
+                contentSizeChanged: lastLayoutContentSize != collectionView.contentSize,
+                didUpdateContentInsets: updateContentInsets(collectionView, reason: "layout")
+            )
             defer {
                 recordLayoutState(collectionView)
             }
@@ -191,20 +192,19 @@ extension SessionTranscriptCollectionRepresentable {
             keyboardTransition = unexpiredKeyboardTransition(
                 keyboardTransition,
                 in: layoutCollectionView,
-                didChangeLayout: didChangeLayout
+                didChangeLayout: layoutChange.didChangeLayout
             )
 
-            if isInitialAnchorComplete
-                && wasNearBottomBeforeLayout
-                && didChangeLayout {
-                scrollToBottom(
-                    collectionView,
-                    animated: keyboardTransition == nil && UIView.areAnimationsEnabled,
-                    keyboardTransition: keyboardTransition
-                )
-            }
+            // Keep the visible bottom pinned after UIKit realizes geometry changes.
+            // The layout-change type decides whether that correction may animate.
+            preserveBottomAfterLayout(
+                collectionView,
+                wasNearBottomBeforeLayout: wasNearBottomBeforeLayout,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
 
-            clearKeyboardTransitionIfNeeded(layoutCollectionView, keyboardTransition, didChangeLayout)
+            clearKeyboardTransitionIfNeeded(layoutCollectionView, keyboardTransition, layoutChange.didChangeLayout)
 
             // During initial load, SwiftUI-hosted cells may self-size across multiple
             // layout passes. Stay hidden until the measured geometry is stable and
@@ -308,6 +308,25 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
     func roundedForScreen(_ value: CGFloat, in view: UIView) -> CGFloat {
         let scale = view.window?.screen.scale ?? UIScreen.main.scale
         return (value * scale).rounded() / scale
+    }
+
+    func preserveBottomAfterLayout(
+        _ collectionView: UICollectionView,
+        wasNearBottomBeforeLayout: Bool,
+        layoutChange: SessionTranscriptLayoutChange,
+        keyboardTransition: KeyboardTransition?
+    ) {
+        guard isInitialAnchorComplete
+            && wasNearBottomBeforeLayout
+            && layoutChange.didChangeLayout else {
+            return
+        }
+
+        scrollToBottom(
+            collectionView,
+            animated: layoutChange.shouldAnimateBottomPreservation(keyboardTransition: keyboardTransition),
+            keyboardTransition: keyboardTransition
+        )
     }
 
     private func continueInitialBottomAnchor(
