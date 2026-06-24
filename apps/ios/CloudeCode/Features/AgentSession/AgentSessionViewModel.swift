@@ -14,8 +14,10 @@ final class AgentSessionViewModel {
     let session: SessionSummaryModel
 
     private let socket: SessionSocket
+    private let sessionMessageStore: SessionMessageStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
+    private var cacheLoadTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
 
@@ -67,39 +69,13 @@ final class AgentSessionViewModel {
     init(
         session: SessionSummaryModel,
         socket: SessionSocket,
+        sessionMessageStore: SessionMessageStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding
     ) {
         self.session = session
         self.socket = socket
+        self.sessionMessageStore = sessionMessageStore
         self.transcriptBuilder = transcriptBuilder
-    }
-
-    func bind() {
-        guard subscriptionTask == nil else {
-            return
-        }
-        // Future caching work should load cached messages before replacing them with socket values.
-
-        subscriptionTask = Task { [weak self, socket] in
-            await socket.connect()
-            for await event in socket.events {
-                guard !Task.isCancelled else {
-                    return
-                }
-                await self?.handle(event)
-            }
-        }
-    }
-
-    func unbind() {
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        connectionState = .disconnected
-        resetPendingResponse()
-
-        Task { [socket] in
-            await socket.disconnect()
-        }
     }
 
     func submitDraft() {
@@ -194,6 +170,14 @@ final class AgentSessionViewModel {
         }
         applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         markLatestAssistantMessageRead(in: snapshotMessages)
+        do {
+            try await sessionMessageStore.replace(
+                sessionId: session.id,
+                with: snapshot.messages
+            )
+        } catch {
+            Logger.warning("Failed to replace session message cache:", error)
+        }
     }
 
     private func applyAgentChunks(
@@ -291,9 +275,45 @@ final class AgentSessionViewModel {
 }
 
 extension AgentSessionViewModel {
+    func bind() {
+        guard subscriptionTask == nil else {
+            return
+        }
+
+        cacheLoadTask = Task { [weak self] in
+            await self?.loadCachedMessages()
+        }
+
+        subscriptionTask = Task { [weak self, socket] in
+            await socket.connect()
+            for await event in socket.events {
+                guard !Task.isCancelled else {
+                    return
+                }
+                await self?.handle(event)
+            }
+        }
+    }
+
+    func unbind() {
+        cacheLoadTask?.cancel()
+        cacheLoadTask = nil
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
+        connectionState = .disconnected
+        resetPendingResponse()
+
+        Task { [socket] in
+            await socket.disconnect()
+        }
+    }
+}
+
+extension AgentSessionViewModel {
     private func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
         upsert(message)
+        sessionMessageStore.upsert(sessionId: session.id, message: message)
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
         }
@@ -303,6 +323,7 @@ extension AgentSessionViewModel {
 
     private func applyUserMessage(_ message: SessionMessage) {
         upsertConfirmedUserMessage(message)
+        sessionMessageStore.upsert(sessionId: session.id, message: message)
         isSending = false
         errorMessage = nil
     }
@@ -348,6 +369,7 @@ extension AgentSessionViewModel {
             metadata: optimisticMessage.removingOptimisticMarker.metadata
         )
         messages[index] = acceptedMessage
+        sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
     }
 
     private func upsertConfirmedUserMessage(_ message: SessionMessage) {
@@ -412,6 +434,22 @@ extension AgentSessionViewModel {
 }
 
 private extension AgentSessionViewModel {
+    func loadCachedMessages() async {
+        do {
+            let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
+            guard !Task.isCancelled, !cachedMessages.isEmpty, messages.isEmpty, !hasLoadedMessages else {
+                return
+            }
+
+            textRenderCache.reset()
+            assistantDisplayDataByMessageId = assistantDisplayData(for: cachedMessages)
+            messages = cachedMessages
+            hasLoadedMessages = true
+        } catch {
+            Logger.warning("Failed to load cached session messages:", error)
+        }
+    }
+
     func replaceStreamAccumulator() {
         let previousAccumulator = streamAccumulator
         Task {

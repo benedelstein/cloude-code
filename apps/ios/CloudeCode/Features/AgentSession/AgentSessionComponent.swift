@@ -5,6 +5,9 @@ import SwiftUI
 
 protocol AgentSessionDependency: Dependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket
+
+    @MainActor
+    var sessionMessageStore: SessionMessageStore { get }
 }
 
 /// Child of `HomeComponent`: agent sessions can only be opened from the
@@ -30,6 +33,7 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
             AgentSessionViewModel(
                 session: session,
                 socket: dependency.makeSessionSocket(sessionId: session.id),
+                sessionMessageStore: dependency.sessionMessageStore,
                 transcriptBuilder: transcriptBuilder
             )
         }

@@ -57,6 +57,11 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
     }
+
+    @MainActor
+    var sessionMessageStore: SessionMessageStore {
+        applicationComponent.sessionMessageStore
+    }
 }
 
 private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {

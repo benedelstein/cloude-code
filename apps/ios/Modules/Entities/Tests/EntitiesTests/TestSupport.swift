@@ -28,6 +28,21 @@ func testSessionSummary(
     )
 }
 
+func testSessionMessage(
+    _ id: String,
+    role: Domain.SessionMessage.Role = .user,
+    text: String = "Message",
+    createdAt: String? = nil
+) -> Domain.SessionMessage {
+    let metadata = createdAt.map { Domain.JSONValue.object(["createdAt": .string($0)]) }
+    return Domain.SessionMessage(
+        id: id,
+        role: role,
+        text: text,
+        metadata: metadata
+    )
+}
+
 /// Polls until `condition` returns a value, for asserting on background
 /// persistence that EntityStore kicks off in unstructured Tasks.
 func pollUntil<T: Sendable>(
