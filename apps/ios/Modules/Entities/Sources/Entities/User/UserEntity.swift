@@ -24,6 +24,7 @@ public final class UserEntity: Entity {
         avatarUrl = snapshot.avatarUrl
     }
 
+    /// Builds a domain snapshot from this persistence row.
     public func makeSnapshot() throws -> Domain.User {
         Domain.User(id: id, login: login, name: name, avatarUrl: avatarUrl)
     }
