@@ -76,7 +76,17 @@ For breaking or non-lightweight changes:
 4. Keep old schema model definitions available for the migration.
 5. Test migration with a persisted container, not only the in-memory test cache.
 
+`Cache.start()` runs before auth/session startup and compares the stored cache
+version in `UserDefaults` with `Cache.version`. Missing and older versions reset
+all SwiftData rows and then store the current version. Newer versions are left
+untouched so a downgraded app does not destroy data written by a newer build.
+
 Increment `Cache.version` only when intentionally resetting the whole cache.
+
+Each `Entity` also has a `cacheVersion`, defaulting to `1`. `Cache.start()`
+checks these after the whole-cache version. Increment an entity's
+`cacheVersion` when only that entity's rows should be reset instead of writing a
+SwiftData migration or resetting the whole cache.
 
 ## Rules
 

@@ -7,6 +7,9 @@ import SwiftData
 public protocol Entity: PersistentModel where ID == String {
     associatedtype Snapshot: Sendable & Identifiable<String>
 
+    /// Increment this version to reset only this entity type's cached rows.
+    static var cacheVersion: Int { get }
+
     init(_ snapshot: Snapshot)
     func update(_ snapshot: Snapshot)
 
@@ -80,5 +83,20 @@ public extension Cache {
         try await runBackgroundTask { context in
             try context.delete(model: E.self, where: predicate)
         }
+    }
+}
+
+public extension Entity {
+    /// Default per-entity cache version.
+    static var cacheVersion: Int { 1 }
+
+    /// Stable metadata key for the entity's cache version.
+    static var cacheVersionKey: String {
+        "cache.entity.\(String(reflecting: Self.self)).version"
+    }
+
+    /// Deletes every persisted row for this entity type.
+    static func deleteAll(in context: ModelContext) throws {
+        try context.delete(model: Self.self)
     }
 }
