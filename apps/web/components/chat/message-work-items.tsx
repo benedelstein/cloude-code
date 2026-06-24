@@ -17,7 +17,7 @@ import { WritePart } from "@/components/parts/write-part";
 
 export type RenderItem =
   | { kind: "text"; key: string; text: string }
-  | { kind: "reasoning"; key: string; part: { text?: string; startedAt?: number; endedAt?: number } }
+  | { kind: "reasoning"; key: string; part: { text?: string; startedAt?: unknown; endedAt?: unknown } }
   | { kind: "action-item"; key: string; item: ActionItem };
 
 export function WorkItems({

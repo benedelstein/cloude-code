@@ -157,7 +157,7 @@ export const FIXTURES: Fixture[] = [
         { type: "text-start", id: "text_1" },
         { type: "text-delta", id: "text_1", delta: "Hel" },
       ],
-      pendingMessageMetadata: { startedAt: 1_782_561_600_000 },
+      pendingMessageMetadata: { startedAt: "2026-06-24T00:00:00.000Z" },
       activeTurn: { userMessageId: "msg_1" },
     },
   },
@@ -181,7 +181,7 @@ export const FIXTURES: Fixture[] = [
         { type: "text-delta", id: "text_1", delta: "lo" },
         { type: "finish", finishReason: "stop" },
       ],
-      messageMetadata: { startedAt: 1_782_561_600_000 },
+      messageMetadata: { startedAt: "2026-06-24T00:00:00.000Z" },
     },
   },
   {

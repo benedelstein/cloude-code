@@ -188,7 +188,7 @@ public final class SessionMessageStore {
     ) -> SessionMessageData {
         SessionMessageData(
             sessionId: sessionId,
-            createdAt: SessionMessageDateParser.date(from: message) ?? fallback,
+            createdAt: message.createdAt ?? fallback,
             message: message
         )
     }
@@ -217,26 +217,5 @@ public final class SessionMessageStore {
 
     private func encodedSize(_ message: Domain.SessionMessage) -> Int {
         (try? JSONEncoder().encode(message).count) ?? 0
-    }
-}
-
-private enum SessionMessageDateParser {
-    static func date(from message: Domain.SessionMessage) -> Date? {
-        guard let createdAt = message.createdAtMetadata else {
-            return nil
-        }
-        return makeFractionalFormatter().date(from: createdAt) ?? makeFormatter().date(from: createdAt)
-    }
-
-    private static func makeFractionalFormatter() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }
-
-    private static func makeFormatter() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
     }
 }

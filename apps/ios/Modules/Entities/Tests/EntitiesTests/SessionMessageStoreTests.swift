@@ -87,14 +87,14 @@ final class SessionMessageStoreTests: XCTestCase {
             parts: [],
             metadata: .object([
                 "createdAt": .string("2026-06-11T00:00:01.000Z"),
-                "startedAt": .number(1),
-                "endedAt": .number(2),
+                "startedAt": .string("2026-06-11T00:00:02.000Z"),
+                "endedAt": .string("2026-06-11T00:00:03.000Z"),
                 "extra": .bool(true),
             ])
         )
 
-        XCTAssertEqual(message.createdAtMetadata, "2026-06-11T00:00:01.000Z")
-        XCTAssertEqual(message.startedAtMetadata, 1)
-        XCTAssertEqual(message.endedAtMetadata, 2)
+        XCTAssertEqual(message.createdAt, Date(timeIntervalSince1970: 1_781_136_001))
+        XCTAssertEqual(message.workStartedAt, Date(timeIntervalSince1970: 1_781_136_002))
+        XCTAssertEqual(message.workEndedAt, Date(timeIntervalSince1970: 1_781_136_003))
     }
 }

@@ -32,9 +32,9 @@ public struct SessionSyncSnapshot: Sendable, Equatable {
 }
 
 public struct SessionStreamMessageMetadata: Sendable, Equatable {
-    public let startedAt: Double
+    public let startedAt: String
 
-    public init(startedAt: Double) {
+    public init(startedAt: String) {
         self.startedAt = startedAt
     }
 }
@@ -45,7 +45,7 @@ extension SessionStreamMessageMetadata {
     }
 
     var jsonValue: Domain.JSONValue {
-        .object(["startedAt": .number(startedAt)])
+        .object(["startedAt": .string(startedAt)])
     }
 }
 

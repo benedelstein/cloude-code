@@ -177,11 +177,11 @@ export class AgentTurnCoordinator {
   }
 
   /** Returns metadata for the current in-flight assistant message, if any. */
-  getPendingMessageMetadata(): { startedAt: number } | undefined {
+  getPendingMessageMetadata(): { startedAt: string } | undefined {
     this.ensureRehydratedState();
     return this.pendingMessageStartedAt === null
       ? undefined
-      : { startedAt: this.pendingMessageStartedAt };
+      : { startedAt: new Date(this.pendingMessageStartedAt).toISOString() };
   }
 
   /**

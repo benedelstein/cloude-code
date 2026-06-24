@@ -72,7 +72,7 @@ describe("MessageItem", () => {
     const { container } = render(React.createElement(MessageItem, {
       message: {
         ...assistantMessage(),
-        metadata: { startedAt: Date.now() - 5_000 },
+        metadata: { startedAt: new Date(Date.now() - 5_000).toISOString() },
       },
       isStreaming: true,
     }));
@@ -86,7 +86,7 @@ describe("MessageItem", () => {
     render(React.createElement(MessageItem, {
       message: {
         ...assistantMessage(),
-        metadata: { startedAt: Date.now() - 5_000 },
+        metadata: { startedAt: new Date(Date.now() - 5_000).toISOString() },
       },
       isStreaming: true,
     }));
@@ -147,7 +147,10 @@ describe("MessageItem", () => {
       message: {
         id: "message-6",
         role: "assistant",
-        metadata: { startedAt: 0, endedAt: 35_000 },
+        metadata: {
+          startedAt: new Date(0).toISOString(),
+          endedAt: new Date(35_000).toISOString(),
+        },
         parts: [
           codexCommandPart("command-1", "pnpm build"),
           codexCommandPart("command-2", "pnpm lint"),

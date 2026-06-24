@@ -1,11 +1,11 @@
 /**
- * Optional epoch-millisecond timestamps stamped onto reasoning and tool parts
- * by `MessageAccumulator`. Both fields are optional so historical records
+ * Optional ISO timestamps stamped onto reasoning and tool parts by
+ * `MessageAccumulator`. Both fields are optional so historical records
  * (persisted before timing was added) round-trip cleanly.
  */
 export interface PartTiming {
-  startedAt?: number;
-  endedAt?: number;
+  startedAt?: string;
+  endedAt?: string;
 }
 
 /**
@@ -14,22 +14,44 @@ export interface PartTiming {
  */
 export type MessageTiming = PartTiming;
 
+export interface ParsedPartTiming {
+  startedAt?: number;
+  endedAt?: number;
+}
+
 /**
  * Read `startedAt` / `endedAt` from any part-like object without forcing a cast
  * at the call site. Returns an empty object when the input is not an object or
  * has no timing fields.
  */
-export function getPartTiming(part: unknown): PartTiming {
+export function getPartTiming(part: unknown): ParsedPartTiming {
   if (!part || typeof part !== "object") {
     return {};
   }
   const candidate = part as { startedAt?: unknown; endedAt?: unknown };
-  const result: PartTiming = {};
-  if (typeof candidate.startedAt === "number") {
-    result.startedAt = candidate.startedAt;
+  const result: ParsedPartTiming = {};
+  const startedAt = timestampToMs(candidate.startedAt);
+  if (startedAt !== undefined) {
+    result.startedAt = startedAt;
   }
-  if (typeof candidate.endedAt === "number") {
-    result.endedAt = candidate.endedAt;
+  const endedAt = timestampToMs(candidate.endedAt);
+  if (endedAt !== undefined) {
+    result.endedAt = endedAt;
   }
   return result;
+}
+
+/**
+ * Converts current ISO timestamps, plus legacy epoch-millisecond values, into
+ * milliseconds for duration math at display boundaries.
+ */
+export function timestampToMs(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isNaN(milliseconds) ? undefined : milliseconds;
 }

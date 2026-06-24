@@ -226,12 +226,13 @@ describe("useCloudflareAgent", () => {
 
   it("uses server streaming metadata on streaming messages", async () => {
     const { result } = renderAgent();
+    const startedAt = "2026-06-24T00:00:00.000Z";
 
     await act(async () => {
       mockAgentState.options?.onMessage({
         data: JSON.stringify({
           type: "agent.chunks",
-          messageMetadata: { startedAt: 1_782_561_600_000 },
+          messageMetadata: { startedAt },
           chunks: [
             { type: "start", messageId: "assistant-1" },
             { type: "text-start", id: "text-1" },
@@ -243,7 +244,7 @@ describe("useCloudflareAgent", () => {
     });
 
     const metadata = result.current.streamingMessage?.metadata as { startedAt?: unknown } | undefined;
-    expect(metadata?.startedAt).toBe(1_782_561_600_000);
+    expect(metadata?.startedAt).toBe(startedAt);
   });
 
   it("filters unknown wire chunks before AI SDK stream consumption", () => {

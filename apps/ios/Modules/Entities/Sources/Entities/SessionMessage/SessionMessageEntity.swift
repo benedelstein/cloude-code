@@ -7,6 +7,9 @@ import SwiftData
 public final class SessionMessageEntity: Entity {
     @Attribute(.unique) public private(set) var id: String
     var role: String
+    // Future optimization: this query shape wants a composite (sessionId, createdAt)
+    // index, but SwiftData indexes have been crash-prone across schema changes.
+    // Add only after profiling shows fetch/sort, not JSON decode, is the bottleneck.
     var sessionId: String
     var createdAt: Date
     var messageData: Data

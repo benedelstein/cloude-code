@@ -23,13 +23,13 @@ type MutableDynamicToolUIPart = Omit<DynamicToolUIPart, "state" | "input" | "out
   output?: unknown;
   errorText?: string;
   approval?: { id: string; approved?: boolean; reason?: string };
-  startedAt?: number;
-  endedAt?: number;
+  startedAt?: string;
+  endedAt?: string;
 };
 
 type MutableReasoningUIPart = ReasoningUIPart & {
-  startedAt?: number;
-  endedAt?: number;
+  startedAt?: string;
+  endedAt?: string;
 };
 
 export interface ProcessChunkResult {
@@ -99,6 +99,7 @@ export class MessageAccumulator {
     options: ProcessChunkOptions = {},
   ): ProcessChunkResult {
     const now = options.receivedAt ?? Date.now();
+    const nowISO = new Date(now).toISOString();
     this.stampMessageStartedIfNeeded(now);
     this.pendingChunks.push(chunk);
     const completedParts: MessagePart[] = [];
@@ -152,7 +153,7 @@ export class MessageAccumulator {
           type: "reasoning",
           text: "",
           state: "streaming",
-          startedAt: now,
+          startedAt: nowISO,
         };
         this.activeReasoningParts.set(chunk.id, reasoningPart);
         this.parts.push(reasoningPart);
@@ -175,7 +176,7 @@ export class MessageAccumulator {
         const reasoningPart = this.activeReasoningParts.get(chunk.id);
         if (reasoningPart) {
           reasoningPart.state = "done";
-          reasoningPart.endedAt = now;
+          reasoningPart.endedAt = nowISO;
           this.activeReasoningParts.delete(chunk.id);
           completedParts.push(reasoningPart);
         }
@@ -191,7 +192,7 @@ export class MessageAccumulator {
           input: undefined,
           title: chunk.title,
           providerExecuted: chunk.providerExecuted,
-          startedAt: now,
+          startedAt: nowISO,
         };
         this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
         this.parts.push(toolPart as DynamicToolUIPart);
@@ -226,7 +227,7 @@ export class MessageAccumulator {
             input: chunk.input,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
-            startedAt: now,
+            startedAt: nowISO,
           };
           this.toolCalls.set(chunk.toolCallId, { part: toolPart, inputText: "" });
           this.parts.push(toolPart as DynamicToolUIPart);
@@ -242,7 +243,7 @@ export class MessageAccumulator {
           existing.part.input = chunk.input;
           existing.part.errorText = chunk.errorText;
           existing.part.state = "output-error";
-          existing.part.endedAt = now;
+          existing.part.endedAt = nowISO;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(existing.part as DynamicToolUIPart);
         } else {
@@ -256,8 +257,8 @@ export class MessageAccumulator {
             errorText: chunk.errorText,
             title: chunk.title,
             providerExecuted: chunk.providerExecuted,
-            startedAt: now,
-            endedAt: now,
+            startedAt: nowISO,
+            endedAt: nowISO,
           };
           this.parts.push(toolPart as DynamicToolUIPart);
           completedParts.push(toolPart as DynamicToolUIPart);
@@ -270,7 +271,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.output = chunk.output;
           toolCall.part.state = "output-available";
-          toolCall.part.endedAt = now;
+          toolCall.part.endedAt = nowISO;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -282,7 +283,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.errorText = chunk.errorText;
           toolCall.part.state = "output-error";
-          toolCall.part.endedAt = now;
+          toolCall.part.endedAt = nowISO;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         }
@@ -309,7 +310,7 @@ export class MessageAccumulator {
         if (toolCall) {
           toolCall.part.state = "output-denied";
           toolCall.part.approval = { ...(toolCall.part.approval ?? { id: "" }), approved: false };
-          toolCall.part.endedAt = now;
+          toolCall.part.endedAt = nowISO;
           this.toolCalls.delete(chunk.toolCallId);
           completedParts.push(toolCall.part as DynamicToolUIPart);
         } else {
@@ -421,7 +422,7 @@ export class MessageAccumulator {
    */
   private stampMessageStartedIfNeeded(now: number): void {
     if (this.metadata?.startedAt === undefined) {
-      this.metadata = { ...(this.metadata ?? {}), startedAt: now };
+      this.metadata = { ...(this.metadata ?? {}), startedAt: new Date(now).toISOString() };
     }
   }
 
@@ -438,7 +439,7 @@ export class MessageAccumulator {
     if (existing.startedAt !== undefined) {
       merged.startedAt = existing.startedAt;
     }
-    merged.endedAt = now;
+    merged.endedAt = new Date(now).toISOString();
     this.metadata = merged;
   }
 
@@ -459,7 +460,7 @@ export class MessageAccumulator {
     for (const [, reasoningPart] of this.activeReasoningParts) {
       reasoningPart.state = "done";
       if (reasoningPart.endedAt === undefined) {
-        reasoningPart.endedAt = now;
+        reasoningPart.endedAt = new Date(now).toISOString();
       }
       completedParts.push(reasoningPart);
     }
@@ -475,7 +476,7 @@ export class MessageAccumulator {
         }
       }
       if (toolCall.part.endedAt === undefined) {
-        toolCall.part.endedAt = now;
+        toolCall.part.endedAt = new Date(now).toISOString();
       }
       completedParts.push(toolCall.part as DynamicToolUIPart);
     }

@@ -196,10 +196,10 @@ public struct EditorReadyEvent: Codable, Equatable, Sendable {
 }
 
 public struct MessageStreamMetadata: Codable, Equatable, Sendable {
-    public var startedAt: Double
+    public var startedAt: ISODateTimeString
 
     public init(
-        startedAt: Double
+        startedAt: ISODateTimeString
     ) {
         self.startedAt = startedAt
     }

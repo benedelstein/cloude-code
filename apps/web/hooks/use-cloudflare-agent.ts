@@ -48,11 +48,11 @@ function keepPreviousIfDeepEqual<T>(previous: T, next: T): T {
   return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
 }
 
-function withLiveStartedAt(message: UIMessage, startedAt: number): UIMessage {
+function withLiveStartedAt(message: UIMessage, startedAt: string): UIMessage {
   const metadata = message.metadata && typeof message.metadata === "object"
     ? message.metadata as Record<string, unknown>
     : {};
-  if (typeof metadata.startedAt === "number") {
+  if (typeof metadata.startedAt === "string" || typeof metadata.startedAt === "number") {
     return message;
   }
   return {
@@ -182,7 +182,7 @@ export function useCloudflareAgent({
 
   const streamControllerRef = useRef<ReadableStreamDefaultController<UIMessageChunk> | null>(null);
   const isConsumingRef = useRef(false);
-  const streamingStartedAtRef = useRef<number | null>(null);
+  const streamingStartedAtRef = useRef<string | null>(null);
   const serverAgentModeRef = useRef<AgentMode>("edit");
   const hasSeenServerActiveTurnRef = useRef(false);
   const latestAssistantMessageIdRef = useRef<string | null>(null);
