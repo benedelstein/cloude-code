@@ -113,7 +113,14 @@ public final class SessionMessageStore {
         )
         let models = entityStore.putDisk([snapshot])
         if loadedSessionIDs.contains(sessionId) {
-            index(modelsFromMemory(sessionId: sessionId) ?? models, for: sessionId)
+            var modelsByID = (modelsFromMemory(sessionId: sessionId) ?? [])
+                .reduce(into: [String: SessionMessageWrapper]()) { result, model in
+                    result[model.id] = model
+                }
+            for model in models {
+                modelsByID[model.id] = model
+            }
+            index(Array(modelsByID.values), for: sessionId)
         }
     }
 

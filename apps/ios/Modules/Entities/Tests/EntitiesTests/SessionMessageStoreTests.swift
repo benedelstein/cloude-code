@@ -63,6 +63,23 @@ final class SessionMessageStoreTests: XCTestCase {
         XCTAssertEqual(persisted.message.text, "Accepted")
     }
 
+    func testUpsertAddsNewMessageToLoadedSessionIndex() async throws {
+        let cache = try makeCache()
+        let store = SessionMessageStore(cache: cache)
+
+        try await store.replace(sessionId: "s1", with: [
+            testSessionMessage("m1", createdAt: "2026-06-11T00:00:01.000Z"),
+        ])
+        store.upsert(
+            sessionId: "s1",
+            message: testSessionMessage("m2", createdAt: "2026-06-11T00:00:02.000Z")
+        )
+
+        let messages = try await store.messages(sessionId: "s1")
+
+        XCTAssertEqual(messages.map(\.id), ["m1", "m2"])
+    }
+
     func testMetadataAccessorsReadKnownTimestampFields() {
         let message = Domain.SessionMessage(
             id: "m1",
