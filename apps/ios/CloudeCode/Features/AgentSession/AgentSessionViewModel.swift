@@ -22,19 +22,25 @@ final class AgentSessionViewModel {
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
+    /// Hydrated, normalized display data per message
     private(set) var assistantDisplayDataByMessageId: [String: MessageDisplayData] = [:]
+    /// Display data for the currently streaming message.
     private(set) var streamingDisplayData: MessageDisplayData?
     @ObservationIgnored private var latestStreamingMessage: SessionMessage?
     @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
-    @ObservationIgnored private var textRenderCache = ChunkedTextRenderCache()
+    @ObservationIgnored private let textRenderCache = ChunkedTextRenderCache()
     private var streamAccumulator: SessionMessageStreamAccumulator?
+    /// Guard so that we do not accumulate to a stream that is no longer active
     private var streamGeneration = 0
     private(set) var streamStatus = SessionMessageStreamStatus()
     // Future optimization: cache a curated subset of client state
     // if needed. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
+    /// Message send is in progress
     private(set) var isSending = false
+    /// Waiting for a message stream response from server.
+    /// Set to true after we send a message
     private(set) var isWaitingForResponse = false
     private(set) var hasLoadedMessages: Bool = false
     var draftText = ""
