@@ -111,16 +111,9 @@ public final class SessionMessageStore {
             sessionId: sessionId,
             fallback: createdAtFallback
         )
-        let models = entityStore.putDisk([snapshot])
+        let newModels = entityStore.putDisk([snapshot])
         if loadedSessionIDs.contains(sessionId) {
-            var modelsByID = (modelsFromMemory(sessionId: sessionId) ?? [])
-                .reduce(into: [String: SessionMessageWrapper]()) { result, model in
-                    result[model.id] = model
-                }
-            for model in models {
-                modelsByID[model.id] = model
-            }
-            index(Array(modelsByID.values), for: sessionId)
+            upsertIntoSessionIndex(newModels, for: sessionId)
         }
     }
 
@@ -159,6 +152,20 @@ public final class SessionMessageStore {
             .filter { $0.sessionId == sessionId }
             .sorted { $0.createdAt < $1.createdAt }
             .map(\.id)
+    }
+
+    private func upsertIntoSessionIndex(_ models: [SessionMessageWrapper], for sessionId: String) {
+        var ids = messageIDsBySessionID[sessionId] ?? []
+        for model in models where model.sessionId == sessionId {
+            ids.removeAll { $0 == model.id }
+            ids.append(model.id)
+        }
+        messageIDsBySessionID[sessionId] = ids.sorted { lhs, rhs in
+            guard let left = entityStore[lhs], let right = entityStore[rhs] else {
+                return lhs < rhs
+            }
+            return left.createdAt < right.createdAt
+        }
     }
 
     private func snapshots(
