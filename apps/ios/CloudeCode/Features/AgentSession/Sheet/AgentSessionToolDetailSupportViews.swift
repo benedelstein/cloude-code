@@ -31,6 +31,17 @@ struct CodePreview: View {
     @Environment(\.lightFeedback) private var lightFeedback
 
     let text: String
+    private let layout: CodePreviewLayout
+
+    init(text: String) {
+        self.text = text
+        layout = .wrapped
+    }
+
+    fileprivate init(text: String, layout: CodePreviewLayout) {
+        self.text = text
+        self.layout = layout
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -56,7 +67,38 @@ struct CodePreview: View {
         .clipShape(RoundedRectangle(cornerRadius: style.gridSize))
     }
 
+    @ViewBuilder
     private var codeContent: some View {
+        switch layout {
+        case .wrapped:
+            wrappedCodeContent
+        case .filePreview:
+            scrollingCodeContent
+        }
+    }
+
+    private var wrappedCodeContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(lines.indices, id: \.self) { index in
+                HStack(alignment: .firstTextBaseline, spacing: style.gridSize) {
+                    if hasLineNumbers {
+                        codeLine(lines[index].lineNumber ?? "", wraps: false)
+                            .foregroundStyle(theme.tertiaryLabelColor)
+                            .frame(minWidth: lineNumberWidth, alignment: .trailing)
+                    }
+
+                    codeLine(lines[index].content, wraps: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(.vertical, style.gridSize)
+        .padding(.leading, style.gridSize)
+        .padding(.trailing, style.gridSize * 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var scrollingCodeContent: some View {
         HStack(alignment: .top, spacing: 0) {
             if hasLineNumbers {
                 lineNumberGutter
@@ -65,7 +107,7 @@ struct CodePreview: View {
             ScrollView(.horizontal, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(lines.indices, id: \.self) { index in
-                        codeLine(lines[index].content)
+                        codeLine(lines[index].content, wraps: false)
                     }
                 }
                 .padding(.vertical, style.gridSize)
@@ -79,7 +121,7 @@ struct CodePreview: View {
     private var lineNumberGutter: some View {
         VStack(alignment: .trailing, spacing: 0) {
             ForEach(lines.indices, id: \.self) { index in
-                codeLine(lines[index].lineNumber ?? "")
+                codeLine(lines[index].lineNumber ?? "", wraps: false)
                     .foregroundStyle(theme.tertiaryLabelColor)
                     .frame(minWidth: lineNumberWidth, alignment: .trailing)
             }
@@ -90,12 +132,12 @@ struct CodePreview: View {
         .background(theme.backgroundColor)
     }
 
-    private func codeLine(_ value: String) -> some View {
+    private func codeLine(_ value: String, wraps: Bool) -> some View {
         Text(verbatim: value.isEmpty ? " " : value)
             .font(.system(.footnote, design: .monospaced))
             .foregroundStyle(theme.labelColor)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .lineLimit(wraps ? nil : 1)
+            .fixedSize(horizontal: !wraps, vertical: false)
     }
 
     private func copyText() {
@@ -115,6 +157,19 @@ struct CodePreview: View {
     private var lineNumberWidth: CGFloat {
         CGFloat(lines.compactMap(\.lineNumber).map(\.count).max() ?? 1) * 8
     }
+}
+
+struct FilePreview: View {
+    let text: String
+
+    var body: some View {
+        CodePreview(text: text, layout: .filePreview)
+    }
+}
+
+private enum CodePreviewLayout {
+    case wrapped
+    case filePreview
 }
 
 private struct CodePreviewLine: Equatable {

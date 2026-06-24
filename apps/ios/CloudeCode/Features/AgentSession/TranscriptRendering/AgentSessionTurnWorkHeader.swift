@@ -38,7 +38,7 @@ struct TurnWorkHeaderView: View {
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(.rect)
     }
 
     @ViewBuilder
@@ -46,9 +46,7 @@ struct TurnWorkHeaderView: View {
         if let startedAt, let endedAt {
             Text("Worked for \(Self.durationString(from: startedAt, to: endedAt))")
         } else if let startedAt, isStreaming {
-            TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                Text("Working for \(Self.durationString(from: startedAt, to: context.date))")
-            }
+            WorkingDurationLabel(startedAt: startedAt)
         } else {
             Text(isStreaming ? "Working" : "Worked")
         }
@@ -59,7 +57,35 @@ struct TurnWorkHeaderView: View {
         return durationFormatter.string(from: TimeInterval(totalSeconds)) ?? "\(totalSeconds)s"
     }
 
-    nonisolated(unsafe) private static let durationFormatter: DateComponentsFormatter = {
+    private static let durationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 2
+        formatter.zeroFormattingBehavior = .dropAll
+        return formatter
+    }()
+}
+
+private struct WorkingDurationLabel: View {
+    private let durationTickAnimation = Animation.easeInOut(duration: 0.2)
+
+    let startedAt: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: startedAt, by: 1)) { context in
+            let totalSeconds = max(0, Int(context.date.timeIntervalSince(startedAt)))
+            Text("Working for \(Self.durationString(seconds: totalSeconds))")
+                .contentTransition(.numericText(value: Double(totalSeconds)))
+                .animation(durationTickAnimation, value: totalSeconds)
+        }
+    }
+
+    private static func durationString(seconds: Int) -> String {
+        durationFormatter.string(from: TimeInterval(seconds)) ?? "\(seconds)s"
+    }
+
+    private static let durationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.hour, .minute, .second]
         formatter.unitsStyle = .abbreviated

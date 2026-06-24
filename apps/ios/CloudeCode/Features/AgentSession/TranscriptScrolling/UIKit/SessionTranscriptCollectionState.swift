@@ -15,6 +15,27 @@ struct SessionTranscriptInitialAnchorGeometry: Equatable {
     let contentSize: CGSize
 }
 
+struct SessionTranscriptLayoutChange {
+    let boundsChanged: Bool
+    let contentSizeChanged: Bool
+    let didUpdateContentInsets: Bool
+
+    var didChangeLayout: Bool {
+        boundsChanged || contentSizeChanged || didUpdateContentInsets
+    }
+
+    func shouldAnimateBottomPreservation(keyboardTransition: KeyboardTransition?) -> Bool {
+        // Only content-size-only updates should animate. Bounds and inset changes
+        // represent viewport movement, such as interactive keyboard dismissal, so
+        // bottom preservation must track those layout changes immediately.
+        contentSizeChanged
+            && !boundsChanged
+            && !didUpdateContentInsets
+            && keyboardTransition == nil
+            && UIView.areAnimationsEnabled
+    }
+}
+
 // Initial bottom anchoring is intentionally modeled as one state value so the
 // snapshot, measurement, correction, and reveal steps cannot drift apart.
 enum SessionTranscriptInitialAnchorState {

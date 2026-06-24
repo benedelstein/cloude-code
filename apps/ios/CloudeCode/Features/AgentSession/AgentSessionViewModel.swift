@@ -422,7 +422,7 @@ private extension AgentSessionViewModel {
         let generation = streamGeneration
 
         messageThrottler = SchedulerLatestValueThrottler(
-            interval: .milliseconds(100),
+            interval: .milliseconds(200),
             scheduler: .main
         ) { [weak self] message in
             guard let self, streamGeneration == generation else {

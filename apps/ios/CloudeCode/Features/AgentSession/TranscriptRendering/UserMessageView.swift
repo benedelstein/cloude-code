@@ -23,6 +23,7 @@ struct UserMessageView: View {
             Spacer(minLength: style.gridSize * 5)
             VStack(alignment: .trailing) {
                 imageViews
+                // future optimization - chunk this text if its long
                 Text(verbatim: message.text)
                     .styledFont(.subheadline)
                     .foregroundStyle(theme.labelColor)
