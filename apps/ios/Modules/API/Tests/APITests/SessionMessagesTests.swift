@@ -108,12 +108,12 @@ struct SessionMessagesTests {
                 SessionStreamChunk(.textStart(.init(id: "text-1"))),
                 SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
             ],
-            messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000)
+            messageMetadata: SessionStreamMessageMetadata(startedAt: "2026-06-24T00:00:00.000Z")
         )
 
         let message = try await recorder.waitForMessage { $0.text == "Hello" }
         #expect(message.metadata == .object([
-            "startedAt": .number(1_782_561_600_000)
+            "startedAt": .string("2026-06-24T00:00:00.000Z")
         ]))
         await accumulator.finish()
     }
@@ -131,10 +131,10 @@ struct SessionMessagesTests {
 
         _ = try await recorder.waitForMessage { $0.text == "Hello" }
 
-        await accumulator.append([], messageMetadata: SessionStreamMessageMetadata(startedAt: 1_782_561_600_000))
+        await accumulator.append([], messageMetadata: SessionStreamMessageMetadata(startedAt: "2026-06-24T00:00:00.000Z"))
 
         let message = try await recorder.waitForMessage {
-            $0.metadata == .object(["startedAt": .number(1_782_561_600_000)])
+            $0.metadata == .object(["startedAt": .string("2026-06-24T00:00:00.000Z")])
         }
         #expect(message.text == "Hello")
         await accumulator.finish()

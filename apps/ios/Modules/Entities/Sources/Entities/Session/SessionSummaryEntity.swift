@@ -55,7 +55,8 @@ public final class SessionSummaryEntity: Entity {
         hasUnread = snapshot.hasUnread
     }
 
-    public var snapshot: Domain.SessionSummary {
+    /// Builds a domain snapshot from this persistence row.
+    public func makeSnapshot() throws -> Domain.SessionSummary {
         Domain.SessionSummary(
             id: id,
             repoId: repoId,

@@ -8,7 +8,8 @@ import Observation
 /// (network, disk, sockets). Models never leave the main actor as data —
 /// they are constructed from and serialized to snapshots.
 @MainActor
-public protocol EntityModel: AnyObject, Identifiable, Observable where ID == String {
+public protocol EntityModel: Identifiable, Observable where ID == String {
+    // does it need to be observable at protocol level?
     associatedtype Snapshot: Sendable & Identifiable<String>
     associatedtype EntityType: Entity where EntityType.Snapshot == Snapshot
 

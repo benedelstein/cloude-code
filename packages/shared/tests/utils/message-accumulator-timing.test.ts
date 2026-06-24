@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageAccumulator } from "@repo/shared";
+import { MessageAccumulator, getPartTiming } from "@repo/shared";
+
+function iso(milliseconds: number): string {
+  return new Date(milliseconds).toISOString();
+}
 
 describe("MessageAccumulator timing", () => {
   beforeEach(() => {
@@ -20,9 +24,9 @@ describe("MessageAccumulator timing", () => {
     accumulator.process({ type: "text-end", id: "t1" });
     const result = accumulator.process({ type: "finish" });
 
-    const metadata = result.finishedMessage!.metadata as { startedAt: number; endedAt: number };
-    expect(metadata.startedAt).toBe(before);
-    expect(metadata.endedAt).toBe(before + 500);
+    const metadata = result.finishedMessage!.metadata as { startedAt: string; endedAt: string };
+    expect(metadata.startedAt).toBe(iso(before));
+    expect(metadata.endedAt).toBe(iso(before + 500));
   });
 
   it("uses receivedAt when replaying persisted chunks", () => {
@@ -36,9 +40,9 @@ describe("MessageAccumulator timing", () => {
       { receivedAt: 1_782_561_602_000 },
     );
 
-    const metadata = result.finishedMessage!.metadata as { startedAt: number; endedAt: number };
-    expect(metadata.startedAt).toBe(1_782_561_600_000);
-    expect(metadata.endedAt).toBe(1_782_561_602_000);
+    const metadata = result.finishedMessage!.metadata as { startedAt: string; endedAt: string };
+    expect(metadata.startedAt).toBe("2026-06-27T12:00:00.000Z");
+    expect(metadata.endedAt).toBe("2026-06-27T12:00:02.000Z");
   });
 
   it("preserves startedAt across finish and stamps endedAt", () => {
@@ -47,9 +51,9 @@ describe("MessageAccumulator timing", () => {
     const start = Date.now();
     vi.advanceTimersByTime(2_000);
     const result = accumulator.process({ type: "finish" });
-    const metadata = result.finishedMessage!.metadata as { startedAt: number; endedAt: number };
-    expect(metadata.startedAt).toBe(start);
-    expect(metadata.endedAt).toBe(start + 2_000);
+    const metadata = result.finishedMessage!.metadata as { startedAt: string; endedAt: string };
+    expect(metadata.startedAt).toBe(iso(start));
+    expect(metadata.endedAt).toBe(iso(start + 2_000));
   });
 
   it("stamps reasoning lifecycle timing", () => {
@@ -62,9 +66,9 @@ describe("MessageAccumulator timing", () => {
     accumulator.process({ type: "reasoning-end", id: "r1" });
     const result = accumulator.process({ type: "finish" });
 
-    const reasoning = result.finishedMessage!.parts[0] as { startedAt?: number; endedAt?: number };
-    expect(reasoning.startedAt).toBe(start);
-    expect(reasoning.endedAt).toBe(start + 1_500);
+    const reasoning = result.finishedMessage!.parts[0] as { startedAt?: string; endedAt?: string };
+    expect(reasoning.startedAt).toBe(iso(start));
+    expect(reasoning.endedAt).toBe(iso(start + 1_500));
   });
 
   it("stamps tool lifecycle timing with tool-input-start", () => {
@@ -78,9 +82,9 @@ describe("MessageAccumulator timing", () => {
     accumulator.process({ type: "tool-output-available", toolCallId: "c1", output: "ok" });
     const result = accumulator.process({ type: "finish" });
 
-    const tool = result.finishedMessage!.parts[0] as { startedAt?: number; endedAt?: number };
-    expect(tool.startedAt).toBe(start);
-    expect(tool.endedAt).toBe(start + 1_200);
+    const tool = result.finishedMessage!.parts[0] as { startedAt?: string; endedAt?: string };
+    expect(tool.startedAt).toBe(iso(start));
+    expect(tool.endedAt).toBe(iso(start + 1_200));
   });
 
   it("stamps tool startedAt when tool-input-available is the first event", () => {
@@ -97,9 +101,9 @@ describe("MessageAccumulator timing", () => {
     accumulator.process({ type: "tool-output-available", toolCallId: "c1", output: "ok" });
     const result = accumulator.process({ type: "finish" });
 
-    const tool = result.finishedMessage!.parts[0] as { startedAt?: number; endedAt?: number };
-    expect(tool.startedAt).toBe(start);
-    expect(tool.endedAt).toBe(start + 300);
+    const tool = result.finishedMessage!.parts[0] as { startedAt?: string; endedAt?: string };
+    expect(tool.startedAt).toBe(iso(start));
+    expect(tool.endedAt).toBe(iso(start + 300));
   });
 
   it("stamps endedAt on in-flight parts during abort", () => {
@@ -109,11 +113,11 @@ describe("MessageAccumulator timing", () => {
     accumulator.process({ type: "tool-input-start", toolCallId: "c1", toolName: "Bash" });
     vi.advanceTimersByTime(700);
     const result = accumulator.process({ type: "abort" });
-    const reasoning = result.finishedMessage!.parts[0] as { endedAt?: number };
-    const tool = result.finishedMessage!.parts[1] as { endedAt?: number };
+    const reasoning = result.finishedMessage!.parts[0] as { endedAt?: string };
+    const tool = result.finishedMessage!.parts[1] as { endedAt?: string };
     expect(reasoning.endedAt).toBeDefined();
     expect(tool.endedAt).toBeDefined();
-    const metadata = result.finishedMessage!.metadata as { aborted: boolean; endedAt: number };
+    const metadata = result.finishedMessage!.metadata as { aborted: boolean; endedAt: string };
     expect(metadata.aborted).toBe(true);
     expect(metadata.endedAt).toBeDefined();
   });
@@ -125,16 +129,16 @@ describe("MessageAccumulator timing", () => {
     vi.advanceTimersByTime(100);
     const result = accumulator.process({
       type: "finish",
-      messageMetadata: { tokensUsed: 42, startedAt: 9_999_999 },
+      messageMetadata: { tokensUsed: 42, startedAt: "3026-05-07T12:00:00.000Z" },
     });
     const metadata = result.finishedMessage!.metadata as {
-      startedAt: number;
-      endedAt: number;
+      startedAt: string;
+      endedAt: string;
       tokensUsed: number;
     };
     expect(metadata.tokensUsed).toBe(42);
-    expect(metadata.startedAt).toBe(start);
-    expect(metadata.endedAt).toBe(start + 100);
+    expect(metadata.startedAt).toBe(iso(start));
+    expect(metadata.endedAt).toBe(iso(start + 100));
   });
 
   it("stamps endedAt on tool-output-error", () => {
@@ -145,8 +149,26 @@ describe("MessageAccumulator timing", () => {
     vi.advanceTimersByTime(250);
     accumulator.process({ type: "tool-output-error", toolCallId: "c1", errorText: "boom" });
     const result = accumulator.process({ type: "finish" });
-    const tool = result.finishedMessage!.parts[0] as { endedAt?: number; state: string };
+    const tool = result.finishedMessage!.parts[0] as { endedAt?: string; state: string };
     expect(tool.endedAt).toBeDefined();
     expect(tool.state).toBe("output-error");
+  });
+
+  it("parses current ISO and legacy numeric part timing for display", () => {
+    expect(getPartTiming({
+      startedAt: "2026-06-24T00:00:00.000Z",
+      endedAt: "2026-06-24T00:00:02.000Z",
+    })).toEqual({
+      startedAt: 1_782_259_200_000,
+      endedAt: 1_782_259_202_000,
+    });
+
+    expect(getPartTiming({
+      startedAt: 1_782_259_200_000,
+      endedAt: 1_782_259_202_000,
+    })).toEqual({
+      startedAt: 1_782_259_200_000,
+      endedAt: 1_782_259_202_000,
+    });
   });
 });

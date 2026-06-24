@@ -34,10 +34,6 @@ public final class EntityStore<M: EntityModel> {
 
     @ObservationIgnored private let cache: Cache?
     @ObservationIgnored private let getAPI: (@Sendable (Set<String>) async throws -> [Snapshot])?
-    @ObservationIgnored private let logger = os.Logger(
-        subsystem: "Entities",
-        category: String(describing: M.self)
-    )
 
     public init(
         cache: Cache? = nil,
@@ -122,7 +118,7 @@ public final class EntityStore<M: EntityModel> {
         }
 
         if !missingIds.isEmpty {
-            logger.warning("missing \(missingIds.count) of \(ids.count) requested")
+            Logger.warning("missing \(missingIds.count) of \(ids.count) requested")
         }
 
         return results
@@ -147,17 +143,26 @@ public final class EntityStore<M: EntityModel> {
         return snapshots.compactMap { objectMap[$0.id] }
     }
 
+    /// Removes models from the in-memory identity map without touching disk.
+    public func deleteMemory(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+
+        for id in ids {
+            objectMap.removeValue(forKey: id)
+        }
+    }
+
     /// Puts to memory, then persists to disk in the background.
     @discardableResult
     public func putDisk(_ snapshots: [Snapshot]) -> [M] {
         guard !snapshots.isEmpty else { return [] }
 
         if let cache {
-            Task { [logger] in
+            Task {
                 do {
                     try await cache.put(M.EntityType.self, snapshots: snapshots)
                 } catch {
-                    logger.error("disk write failed: \(error)")
+                    Logger.error("disk write failed: \(error)")
                 }
             }
         }
@@ -177,11 +182,11 @@ public final class EntityStore<M: EntityModel> {
         guard !ids.isEmpty else { return }
 
         if let cache {
-            Task { [logger] in
+            Task {
                 do {
                     try await cache.delete(M.EntityType.self, ids: ids)
                 } catch {
-                    logger.error("disk delete failed: \(error)")
+                    Logger.error("disk delete failed: \(error)")
                 }
             }
         }

@@ -64,8 +64,8 @@ struct AgentSessionView: View {
         }
         .toolbarTitleDisplayMode(.inline)
         .modifier(Destinations(destination: $destination))
-        .onAppear {
-            store.bind()
+        .task {
+            await store.bind()
         }
         .onDisappear {
             store.unbind()

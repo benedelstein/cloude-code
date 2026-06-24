@@ -13,7 +13,8 @@ public protocol Entity: PersistentModel where ID == String {
     init(_ snapshot: Snapshot)
     func update(_ snapshot: Snapshot)
 
-    var snapshot: Snapshot { get }
+    /// Builds a snapshot from a persisted row.
+    func makeSnapshot() throws -> Snapshot
 
     /// NOTE: SWIFTDATA CAN'T HANDLE GENERICS IN PREDICATES, so each entity
     /// concretely provides its own id lookups.
@@ -45,7 +46,9 @@ public extension Cache {
         descriptor.fetchLimit = limit
         let fetchDescriptor = descriptor
         return try await runBackgroundTask { context in
-            try context.fetch(fetchDescriptor).map(\.snapshot)
+            try context.fetch(fetchDescriptor).map { entity in
+                try entity.makeSnapshot()
+            }
         }
     }
 

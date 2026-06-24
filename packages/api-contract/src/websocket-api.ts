@@ -66,7 +66,7 @@ export const ConnectedEvent = z.object({
 export type ConnectedEvent = z.infer<typeof ConnectedEvent>;
 
 export const MessageStreamMetadata = z.object({
-  startedAt: z.number(),
+  startedAt: z.iso.datetime(),
 });
 export type MessageStreamMetadata = z.infer<typeof MessageStreamMetadata>;
 

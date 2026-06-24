@@ -204,12 +204,13 @@ extension SessionMessage {
 }
 
 extension Optional where Wrapped == Domain.JSONValue {
-    func addingStartedAtIfNeeded(_ startedAt: Double) -> Domain.JSONValue {
+    func addingStartedAtIfNeeded(_ startedAt: String) -> Domain.JSONValue {
+        let key = Domain.SessionMessageMetadata.startedAtKey
         guard case .object(var object) = self else {
-            return .object(["startedAt": .number(startedAt)])
+            return .object([key: .string(startedAt)])
         }
-        if object["startedAt"] == nil {
-            object["startedAt"] = .number(startedAt)
+        if object[key] == nil {
+            object[key] = .string(startedAt)
         }
         return .object(object)
     }

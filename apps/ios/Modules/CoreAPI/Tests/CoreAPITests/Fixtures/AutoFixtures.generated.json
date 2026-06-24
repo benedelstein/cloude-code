@@ -1132,7 +1132,7 @@
       }
     ],
     "messageMetadata": {
-      "startedAt": 1
+      "startedAt": "2026-06-10T12:00:00Z"
     }
   },
   "AgentChunksEvent.autoMinimal": {
@@ -1246,10 +1246,10 @@
     "token": "sample"
   },
   "MessageStreamMetadata.autoFull": {
-    "startedAt": 1
+    "startedAt": "2026-06-10T12:00:00Z"
   },
   "MessageStreamMetadata.autoMinimal": {
-    "startedAt": 1
+    "startedAt": "2026-06-10T12:00:00Z"
   },
   "OperationCancelEvent.autoFull": {
     "type": "operation.cancel"
@@ -1295,7 +1295,7 @@
       }
     ],
     "pendingMessageMetadata": {
-      "startedAt": 1
+      "startedAt": "2026-06-10T12:00:00Z"
     },
     "activeTurn": {
       "userMessageId": "sample"
@@ -1314,7 +1314,7 @@
       }
     ],
     "messageMetadata": {
-      "startedAt": 1
+      "startedAt": "2026-06-10T12:00:00Z"
     }
   },
   "ServerMessage.autoAgentFinish": {
@@ -1444,7 +1444,7 @@
       }
     ],
     "pendingMessageMetadata": {
-      "startedAt": 1
+      "startedAt": "2026-06-10T12:00:00Z"
     },
     "activeTurn": {
       "userMessageId": "sample"

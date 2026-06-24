@@ -15,7 +15,7 @@ export interface SessionSyncServiceDeps {
   getServerState: () => ServerState;
   getClientState: () => ClientState;
   getPendingChunks: () => PendingChunkRecord[] | undefined;
-  getPendingMessageMetadata: () => { startedAt: number } | undefined;
+  getPendingMessageMetadata: () => { startedAt: string } | undefined;
 }
 
 export class SessionSyncService {
@@ -23,7 +23,7 @@ export class SessionSyncService {
   private readonly getServerState: () => ServerState;
   private readonly getClientState: () => ClientState;
   private readonly getPendingChunks: () => PendingChunkRecord[] | undefined;
-  private readonly getPendingMessageMetadata: () => { startedAt: number } | undefined;
+  private readonly getPendingMessageMetadata: () => { startedAt: string } | undefined;
 
   constructor(deps: SessionSyncServiceDeps) {
     this.messageRepository = deps.messageRepository;

@@ -9,6 +9,7 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import {
   normalizeToolPart,
+  timestampToMs,
   type NormalizedToolAction,
   type ProviderId,
 } from "@repo/shared";
@@ -127,7 +128,7 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, c
           items.push({
             kind: "reasoning",
             key: `${message.id}-reasoning-${index}`,
-            part: part as { text?: string; startedAt?: number; endedAt?: number },
+            part: part as { text?: string; startedAt?: unknown; endedAt?: unknown },
           });
           return;
 
@@ -200,8 +201,8 @@ export function MessageItem({ message, isStreaming, userAvatarUrl, providerId, c
   })();
   const showCollapsedTurn = collapsedPrefixLength > 0;
 
-  const startedAt = typeof metadata.startedAt === "number" ? metadata.startedAt : undefined;
-  const endedAt = typeof metadata.endedAt === "number" ? metadata.endedAt : undefined;
+  const startedAt = timestampToMs(metadata.startedAt);
+  const endedAt = timestampToMs(metadata.endedAt);
   const createdAt = messageCreatedAt(message);
   const copyText = getMessageText(message);
   const canCopyMessage = copyText.length > 0 && (isUser || isSettled);
@@ -380,8 +381,9 @@ function messageCreatedAt(message: UIMessage): Date | null {
   }
 
   const rawStartedAt = metadata.startedAt;
-  if (typeof rawStartedAt === "number") {
-    const date = new Date(rawStartedAt);
+  const startedAt = timestampToMs(rawStartedAt);
+  if (startedAt !== undefined) {
+    const date = new Date(startedAt);
     if (!Number.isNaN(date.getTime())) { return date; }
   }
 

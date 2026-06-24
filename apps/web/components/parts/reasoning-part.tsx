@@ -7,7 +7,7 @@ import { useNow } from "@/lib/use-now";
 import { ExpandableSummary } from "./expandable-summary";
 
 interface ReasoningPartProps {
-  part: { text?: string; startedAt?: number; endedAt?: number };
+  part: { text?: string; startedAt?: unknown; endedAt?: unknown };
   isStreaming?: boolean;
 }
 

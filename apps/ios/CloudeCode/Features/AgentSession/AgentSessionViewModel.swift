@@ -14,6 +14,7 @@ final class AgentSessionViewModel {
     let session: SessionSummaryModel
 
     private let socket: SessionSocket
+    private let sessionMessageStore: SessionMessageStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
@@ -21,16 +22,25 @@ final class AgentSessionViewModel {
 
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
+    /// Hydrated, normalized display data per message
     private(set) var assistantDisplayDataByMessageId: [String: MessageDisplayData] = [:]
+    /// Display data for the currently streaming message.
     private(set) var streamingDisplayData: MessageDisplayData?
     @ObservationIgnored private var latestStreamingMessage: SessionMessage?
     @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
-    @ObservationIgnored private var textRenderCache = ChunkedTextRenderCache()
+    @ObservationIgnored private let textRenderCache = ChunkedTextRenderCache()
     private var streamAccumulator: SessionMessageStreamAccumulator?
+    /// Guard so that we do not accumulate to a stream that is no longer active
     private var streamGeneration = 0
     private(set) var streamStatus = SessionMessageStreamStatus()
+    // Future optimization: cache a curated subset of client state
+    // if needed. Do not persist raw SessionClientState; active turns,
+    // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
+    /// Message send is in progress
     private(set) var isSending = false
+    /// Waiting for a message stream response from server.
+    /// Set to true after we send a message
     private(set) var isWaitingForResponse = false
     private(set) var hasLoadedMessages: Bool = false
     var draftText = ""
@@ -67,41 +77,16 @@ final class AgentSessionViewModel {
     init(
         session: SessionSummaryModel,
         socket: SessionSocket,
+        sessionMessageStore: SessionMessageStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding
     ) {
         self.session = session
         self.socket = socket
+        self.sessionMessageStore = sessionMessageStore
         self.transcriptBuilder = transcriptBuilder
     }
 
-    func bind() {
-        guard subscriptionTask == nil else {
-            return
-        }
-        // Future caching work should load cached messages before replacing them with socket values.
-
-        subscriptionTask = Task { [weak self, socket] in
-            await socket.connect()
-            for await event in socket.events {
-                guard !Task.isCancelled else {
-                    return
-                }
-                await self?.handle(event)
-            }
-        }
-    }
-
-    func unbind() {
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        connectionState = .disconnected
-        resetPendingResponse()
-
-        Task { [socket] in
-            await socket.disconnect()
-        }
-    }
-
+    /// Submit the composed message
     func submitDraft() {
         let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, !isSending, !isResponding else {
@@ -194,6 +179,14 @@ final class AgentSessionViewModel {
         }
         applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         markLatestAssistantMessageRead(in: snapshotMessages)
+        do {
+            try await sessionMessageStore.replace(
+                sessionId: session.id,
+                with: snapshot.messages
+            )
+        } catch {
+            Logger.warning("Failed to replace session message cache:", error)
+        }
     }
 
     private func applyAgentChunks(
@@ -291,9 +284,45 @@ final class AgentSessionViewModel {
 }
 
 extension AgentSessionViewModel {
+    func bind() async {
+        guard subscriptionTask == nil else {
+            return
+        }
+
+        let task = Task { [weak self, socket] in
+            await self?.loadCachedMessages()
+            guard !Task.isCancelled else {
+                return
+            }
+            await socket.connect()
+            for await event in socket.events {
+                guard !Task.isCancelled else {
+                    return
+                }
+                await self?.handle(event)
+            }
+        }
+        subscriptionTask = task
+        await task.value
+    }
+
+    func unbind() {
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
+        connectionState = .disconnected
+        resetPendingResponse()
+
+        Task { [socket] in
+            await socket.disconnect()
+        }
+    }
+}
+
+extension AgentSessionViewModel {
     private func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
         upsert(message)
+        sessionMessageStore.upsert(sessionId: session.id, message: message)
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
         }
@@ -303,6 +332,7 @@ extension AgentSessionViewModel {
 
     private func applyUserMessage(_ message: SessionMessage) {
         upsertConfirmedUserMessage(message)
+        sessionMessageStore.upsert(sessionId: session.id, message: message)
         isSending = false
         errorMessage = nil
     }
@@ -348,6 +378,7 @@ extension AgentSessionViewModel {
             metadata: optimisticMessage.removingOptimisticMarker.metadata
         )
         messages[index] = acceptedMessage
+        sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
     }
 
     private func upsertConfirmedUserMessage(_ message: SessionMessage) {
@@ -412,6 +443,22 @@ extension AgentSessionViewModel {
 }
 
 private extension AgentSessionViewModel {
+    func loadCachedMessages() async {
+        do {
+            let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
+            guard !Task.isCancelled, !cachedMessages.isEmpty, messages.isEmpty, !hasLoadedMessages else {
+                return
+            }
+
+            textRenderCache.reset()
+            assistantDisplayDataByMessageId = assistantDisplayData(for: cachedMessages)
+            messages = cachedMessages
+            hasLoadedMessages = true
+        } catch {
+            Logger.warning("Failed to load cached session messages:", error)
+        }
+    }
+
     func replaceStreamAccumulator() {
         let previousAccumulator = streamAccumulator
         Task {

@@ -1,14 +1,23 @@
 import SwiftData
 
 public enum SchemaV1: VersionedSchema {
+    // fixed at declaration time. if you need a new version,
+    // create a new VersionedSchema
     public static let versionIdentifier = Schema.Version(1, 0, 0)
 
     public static var models: [any PersistentModel.Type] {
-        [UserEntity.self, SessionSummaryEntity.self]
+        // Note - adding a new model does not require a new versioned schema.
+        [UserEntity.self, SessionSummaryEntity.self, SessionMessageEntity.self]
     }
 
     public static var entities: [any Entity.Type] {
-        [UserEntity.self, SessionSummaryEntity.self]
+        models.compactMap { model in
+            guard let entity = model as? any Entity.Type else {
+                assertionFailure("\(model) must conform to Entity to be registered in the cache schema.")
+                return nil
+            }
+            return entity
+        }
     }
 }
 

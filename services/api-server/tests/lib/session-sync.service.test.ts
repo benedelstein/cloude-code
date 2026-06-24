@@ -78,14 +78,14 @@ describe("SessionSyncService", () => {
       getServerState: () => createServerState({ activeUserMessageId: "user-message-1" }),
       getClientState: () => createClientState(),
       getPendingChunks: () => [{ sequence: 0, chunk: pendingChunk, receivedAt: 1_782_561_600_000 }],
-      getPendingMessageMetadata: () => ({ startedAt: 1_782_561_600_000 }),
+      getPendingMessageMetadata: () => ({ startedAt: "2026-06-27T12:00:00.000Z" }),
     });
 
     expect(service.buildSyncResponse()).toEqual({
       type: "sync.response",
       messages: [message],
       pendingChunks: [pendingChunk],
-      pendingMessageMetadata: { startedAt: 1_782_561_600_000 },
+      pendingMessageMetadata: { startedAt: "2026-06-27T12:00:00.000Z" },
       activeTurn: { userMessageId: "user-message-1" },
     });
     expect(messageRepository.getAllBySession).toHaveBeenCalledWith(sessionId);
