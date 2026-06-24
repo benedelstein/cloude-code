@@ -18,9 +18,9 @@ public struct SessionMessageMetadata: Sendable, Equatable {
         workEndedAt = metadata.dateValue(forKey: Self.endedAtKey)
     }
 
-    private static let createdAtKey = "createdAt"
-    private static let startedAtKey = "startedAt"
-    private static let endedAtKey = "endedAt"
+    public static let createdAtKey = "createdAt"
+    public static let startedAtKey = "startedAt"
+    public static let endedAtKey = "endedAt"
 }
 
 public extension SessionMessage {

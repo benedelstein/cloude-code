@@ -17,7 +17,6 @@ final class AgentSessionViewModel {
     private let sessionMessageStore: SessionMessageStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
-    private var cacheLoadTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
 
@@ -31,6 +30,9 @@ final class AgentSessionViewModel {
     private var streamAccumulator: SessionMessageStreamAccumulator?
     private var streamGeneration = 0
     private(set) var streamStatus = SessionMessageStreamStatus()
+    // Future optimization: cache a curated subset of client state
+    // if needed. Do not persist raw SessionClientState; active turns,
+    // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
     private(set) var isSending = false
     private(set) var isWaitingForResponse = false
@@ -78,6 +80,7 @@ final class AgentSessionViewModel {
         self.transcriptBuilder = transcriptBuilder
     }
 
+    /// Submit the composed message
     func submitDraft() {
         let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, !isSending, !isResponding else {
@@ -275,16 +278,16 @@ final class AgentSessionViewModel {
 }
 
 extension AgentSessionViewModel {
-    func bind() {
+    func bind() async {
         guard subscriptionTask == nil else {
             return
         }
 
-        cacheLoadTask = Task { [weak self] in
+        let task = Task { [weak self, socket] in
             await self?.loadCachedMessages()
-        }
-
-        subscriptionTask = Task { [weak self, socket] in
+            guard !Task.isCancelled else {
+                return
+            }
             await socket.connect()
             for await event in socket.events {
                 guard !Task.isCancelled else {
@@ -293,11 +296,11 @@ extension AgentSessionViewModel {
                 await self?.handle(event)
             }
         }
+        subscriptionTask = task
+        await task.value
     }
 
     func unbind() {
-        cacheLoadTask?.cancel()
-        cacheLoadTask = nil
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected

@@ -24,7 +24,7 @@ public final class UserEntity: Entity {
         avatarUrl = snapshot.avatarUrl
     }
 
-    public var snapshot: Domain.User {
+    public func makeSnapshot() throws -> Domain.User {
         Domain.User(id: id, login: login, name: name, avatarUrl: avatarUrl)
     }
 

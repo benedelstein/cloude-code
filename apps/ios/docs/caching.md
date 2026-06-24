@@ -52,8 +52,9 @@ Writes use the same identity rules:
 4. Add an `@MainActor @Observable` model class that conforms to `EntityModel`.
    Use `updateIfChanged` in `update(from:)` to avoid needless invalidations.
 5. Add a store typealias, e.g. `public typealias ThingStore = EntityStore<ThingModel>`.
-6. Register the SwiftData row in `SchemaV1.models` or a new schema version in
-   `ModelContainerFactory`.
+6. Register the SwiftData row in the current schema's `models` list in
+   `ModelContainerFactory`. Adding a new independent cached type does not, by
+   itself, require a new `VersionedSchema`.
 7. Wire the store through Needle in `ApplicationComponent`, passing a `getAPI` closure
    only if the store should fetch missing ids from the network.
 
@@ -61,6 +62,17 @@ Current examples: `UserEntity`/`UserModel` and
 `SessionSummaryEntity`/`SessionSummaryModel`.
 
 ## Schema Changes
+
+SwiftData's versioned migration APIs are for moving persisted data between
+specific schema versions. `VersionedSchema` describes one schema version,
+`SchemaMigrationPlan` describes schema evolution, and `MigrationStage` describes
+a migration between two schema versions.
+
+Do not add a new schema version just because a new independent cache table/model
+is registered. SwiftData can create storage for a newly-added model when opening
+the container. If this is uncertain for a specific change, verify with an
+on-disk container created from the previous model list, then reopen it with the
+new model list.
 
 For additive changes that SwiftData can migrate automatically:
 

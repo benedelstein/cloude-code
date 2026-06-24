@@ -159,12 +159,6 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
-    @MainActor var sessionMessageStore: SessionMessageStore {
-        shared {
-            SessionMessageStore(cache: cache)
-        }
-    }
-
     @MainActor
     var homeComponent: HomeComponent {
         shared {

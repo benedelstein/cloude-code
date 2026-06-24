@@ -13,8 +13,6 @@ public protocol Entity: PersistentModel where ID == String {
     init(_ snapshot: Snapshot)
     func update(_ snapshot: Snapshot)
 
-    var snapshot: Snapshot { get }
-
     /// Builds a snapshot from a persisted row.
     func makeSnapshot() throws -> Snapshot
 
@@ -23,13 +21,6 @@ public protocol Entity: PersistentModel where ID == String {
     /// See https://forums.swift.org/t/swiftdata-predicate-does-not-handle-protocol-witness/68256/3
     static func singleItemPredicate(_ id: String) -> Predicate<Self>
     static func multiItemPredicate(_ ids: Set<String>) -> Predicate<Self>
-}
-
-public extension Entity {
-    /// Builds a snapshot from a persisted row.
-    func makeSnapshot() throws -> Snapshot {
-        snapshot
-    }
 }
 
 public extension Cache {

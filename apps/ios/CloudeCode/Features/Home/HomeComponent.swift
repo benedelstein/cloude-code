@@ -9,6 +9,7 @@ protocol HomeDependency: Dependency {
     var notificationHandler: NotificationHandler { get }
     @MainActor
     var sessionSummaryStore: SessionSummaryStore { get }
+    var cache: Cache { get }
     var userSessionsSocket: UserSessionsSocket { get }
 }
 
@@ -53,6 +54,13 @@ final class HomeComponent: Component<HomeDependency> {
                 notificationHandler: dependency.notificationHandler,
                 sessionSummaryStore: dependency.sessionSummaryStore
             )
+        }
+    }
+
+    @MainActor
+    var sessionMessageStore: SessionMessageStore {
+        shared {
+            SessionMessageStore(cache: dependency.cache)
         }
     }
 

@@ -38,6 +38,10 @@ private final class HomeDependencyProvider: HomeDependency {
         applicationComponent.sessionSummaryStore
     }
 
+    var cache: Cache {
+        applicationComponent.cache
+    }
+
     var userSessionsSocket: UserSessionsSocket {
         applicationComponent.userSessionsSocket
     }
@@ -49,9 +53,11 @@ private func homeDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyOb
 
 private final class AgentSessionDependencyProvider: AgentSessionDependency {
     private let applicationComponent: ApplicationComponent
+    private let homeComponent: HomeComponent
 
-    init(applicationComponent: ApplicationComponent) {
+    init(applicationComponent: ApplicationComponent, homeComponent: HomeComponent) {
         self.applicationComponent = applicationComponent
+        self.homeComponent = homeComponent
     }
 
     func makeSessionSocket(sessionId: String) -> SessionSocket {
@@ -60,12 +66,15 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
 
     @MainActor
     var sessionMessageStore: SessionMessageStore {
-        applicationComponent.sessionMessageStore
+        homeComponent.sessionMessageStore
     }
 }
 
 private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
-    AgentSessionDependencyProvider(applicationComponent: parent1(parent1(component)) as! ApplicationComponent)
+    AgentSessionDependencyProvider(
+        applicationComponent: parent1(parent1(component)) as! ApplicationComponent,
+        homeComponent: parent1(component) as! HomeComponent
+    )
 }
 
 #endif

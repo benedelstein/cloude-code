@@ -31,19 +31,6 @@ public final class SessionMessageEntity: Entity {
         messageData = Self.encode(snapshot.message)
     }
 
-    public var snapshot: SessionMessageData {
-        // Generic code should call `makeSnapshot()` so decode failures can be
-        // treated as cache misses. This property exists for `Entity` conformance.
-        guard let snapshot = try? makeSnapshot() else {
-            return SessionMessageData(
-                sessionId: sessionId,
-                createdAt: createdAt,
-                message: Domain.SessionMessage(id: id, role: .unknown(role), parts: [])
-            )
-        }
-        return snapshot
-    }
-
     /// Decodes a persistence row into a cache snapshot.
     public func makeSnapshot() throws -> SessionMessageData {
         SessionMessageData(
