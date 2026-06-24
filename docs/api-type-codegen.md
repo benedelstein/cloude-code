@@ -8,7 +8,7 @@ schemas instead of exposing AI SDK TypeScript types directly, and where those
 schemas may and may not be used.
 
 ```
-packages/api-contract/src/*.ts        (Zod schemas — source of truth)
+packages/api-contract/src/**/*.ts     (Zod schemas — source of truth)
         │
         │  pnpm --filter @repo/api-contract codegen
         ▼
