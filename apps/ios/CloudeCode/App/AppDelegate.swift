@@ -1,18 +1,31 @@
 import Domain
+import Entities
 import FirebaseCore
 import FirebaseMessaging
 import UIKit
 
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    private let cache: Cache
     private let notificationRegistrationService: NotificationRegistrationService
+    private let sessionStore: SessionStore
+    private var launchTask: Task<Void, Never>?
 
     override init() {
         // must call this first. otherwise dependencies will crash.
         registerProviderFactories()
-        notificationRegistrationService = RootComponent.shared.applicationComponent.notificationRegistrationService
+        let component = RootComponent.shared.applicationComponent
+        cache = component.cache
+        notificationRegistrationService = component.notificationRegistrationService
+        sessionStore = component.sessionStore
 
         super.init()
+    }
+
+    func stop() {
+        launchTask?.cancel()
+        launchTask = nil
+        sessionStore.stop()
     }
 
     func application(
@@ -23,6 +36,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Logger.info("App launched")
         // set up notification delegates.
         notificationRegistrationService.start()
+        launchTask = Task { @MainActor in
+            do {
+                try await cache.start()
+            } catch {
+                Logger.warning("Cache startup failed", error)
+            }
+
+            await sessionStore.start()
+        }
 
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             notificationRegistrationService.handleLaunchRemoteNotification(userInfo)

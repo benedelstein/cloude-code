@@ -26,6 +26,9 @@ struct CloudeCodeApp: App {
                 .background {
                     ToastWindowInstaller(controller: toastWindowController)
                 }
+                .onDisappear {
+                    appDelegate.stop()
+                }
         }
     }
 }

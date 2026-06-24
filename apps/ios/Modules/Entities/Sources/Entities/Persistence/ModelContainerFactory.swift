@@ -6,6 +6,10 @@ public enum SchemaV1: VersionedSchema {
     public static var models: [any PersistentModel.Type] {
         [UserEntity.self, SessionSummaryEntity.self]
     }
+
+    public static var entities: [any Entity.Type] {
+        [UserEntity.self, SessionSummaryEntity.self]
+    }
 }
 
 public typealias CurrentSchema = SchemaV1

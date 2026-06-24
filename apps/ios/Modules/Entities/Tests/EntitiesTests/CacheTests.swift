@@ -3,8 +3,17 @@ import XCTest
 @testable import Entities
 
 final class CacheTests: XCTestCase {
-    private func makeCache() throws -> Cache {
-        try Cache(container: ModelContainerFactory().make(inMemory: true))
+    private func makeCache(metadataStore: CacheMetadataStore = CacheMetadataStore()) throws -> Cache {
+        try Cache(
+            container: ModelContainerFactory().make(inMemory: true),
+            metadataStore: metadataStore
+        )
+    }
+
+    private func makeMetadataStore() throws -> CacheMetadataStore {
+        let suiteName = "CacheTests.\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        return CacheMetadataStore(userDefaults: userDefaults)
     }
 
     func testRoundTrip() async throws {
@@ -55,6 +64,105 @@ final class CacheTests: XCTestCase {
         let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
 
         XCTAssertTrue(fetched.isEmpty)
+    }
+
+    func testStartResetsCacheAndWritesCurrentVersionWhenMissing() async throws {
+        let metadataStore = try makeMetadataStore()
+        let cache = try makeCache(metadataStore: metadataStore)
+
+        try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
+        XCTAssertNil(metadataStore.cacheVersion())
+        try await cache.start()
+        let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
+
+        XCTAssertTrue(fetched.isEmpty)
+        XCTAssertEqual(metadataStore.cacheVersion(), Cache.version)
+        XCTAssertEqual(metadataStore.entityVersion(UserEntity.self), UserEntity.cacheVersion)
+        XCTAssertEqual(
+            metadataStore.entityVersion(SessionSummaryEntity.self),
+            SessionSummaryEntity.cacheVersion
+        )
+    }
+
+    func testStartResetsOutdatedCacheAndWritesCurrentVersion() async throws {
+        let metadataStore = try makeMetadataStore()
+        metadataStore.setCacheVersion(Cache.version - 1)
+        let cache = try makeCache(metadataStore: metadataStore)
+
+        try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
+        try await cache.start()
+        let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
+
+        XCTAssertTrue(fetched.isEmpty)
+        XCTAssertEqual(metadataStore.cacheVersion(), Cache.version)
+    }
+
+    func testStartKeepsCurrentVersionCache() async throws {
+        let metadataStore = try makeMetadataStore()
+        metadataStore.setCacheVersion(Cache.version)
+        let cache = try makeCache(metadataStore: metadataStore)
+        let user = testUser("u1")
+
+        try await cache.put(UserEntity.self, snapshots: [user])
+        try await cache.start()
+        let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
+
+        XCTAssertEqual(fetched, [user])
+        XCTAssertEqual(metadataStore.cacheVersion(), Cache.version)
+    }
+
+    func testStartDoesNotResetNewerVersionCache() async throws {
+        let metadataStore = try makeMetadataStore()
+        metadataStore.setCacheVersion(Cache.version + 1)
+        let cache = try makeCache(metadataStore: metadataStore)
+        let user = testUser("u1")
+
+        try await cache.put(UserEntity.self, snapshots: [user])
+        try await cache.start()
+        let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
+
+        XCTAssertEqual(fetched, [user])
+        XCTAssertEqual(metadataStore.cacheVersion(), Cache.version + 1)
+    }
+
+    func testStartWritesMissingEntityVersionWithoutResettingRows() async throws {
+        let metadataStore = try makeMetadataStore()
+        metadataStore.setCacheVersion(Cache.version)
+        let cache = try makeCache(metadataStore: metadataStore)
+        let user = testUser("u1")
+
+        try await cache.put(UserEntity.self, snapshots: [user])
+        try await cache.start()
+        let fetched = try await cache.fetch(UserEntity.self, ids: ["u1"])
+
+        XCTAssertEqual(fetched, [user])
+        XCTAssertEqual(metadataStore.entityVersion(UserEntity.self), UserEntity.cacheVersion)
+    }
+
+    func testStartResetsOnlyOutdatedEntityRows() async throws {
+        let metadataStore = try makeMetadataStore()
+        metadataStore.setCacheVersion(Cache.version)
+        metadataStore.setEntityVersion(UserEntity.cacheVersion - 1, for: UserEntity.self)
+        metadataStore.setEntityVersion(
+            SessionSummaryEntity.cacheVersion,
+            for: SessionSummaryEntity.self
+        )
+        let cache = try makeCache(metadataStore: metadataStore)
+        let summary = testSessionSummary("s1")
+
+        try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
+        try await cache.put(SessionSummaryEntity.self, snapshots: [summary])
+        try await cache.start()
+        let users = try await cache.fetch(UserEntity.self, ids: ["u1"])
+        let summaries = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
+
+        XCTAssertTrue(users.isEmpty)
+        XCTAssertEqual(summaries, [summary])
+        XCTAssertEqual(metadataStore.entityVersion(UserEntity.self), UserEntity.cacheVersion)
+        XCTAssertEqual(
+            metadataStore.entityVersion(SessionSummaryEntity.self),
+            SessionSummaryEntity.cacheVersion
+        )
     }
 
     func testEmptyInputsAreNoOps() async throws {

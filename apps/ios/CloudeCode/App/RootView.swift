@@ -38,8 +38,6 @@ struct RootView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(logStore: logStore)
         }
-        .task { await sessionStore.start() }
-        .onDisappear { sessionStore.stop() }
         .themedRoot()
     }
 }
