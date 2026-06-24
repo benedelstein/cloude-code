@@ -144,7 +144,7 @@ public final class EntityStore<M: EntityModel> {
     }
 
     /// Removes models from the in-memory identity map without touching disk.
-    public func removeMemory(_ ids: Set<String>) {
+    public func deleteMemory(_ ids: Set<String>) {
         guard !ids.isEmpty else { return }
 
         for id in ids {

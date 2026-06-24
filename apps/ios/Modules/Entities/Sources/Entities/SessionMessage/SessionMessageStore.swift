@@ -98,7 +98,7 @@ public final class SessionMessageStore {
             return staleIDs
         }
 
-        entityStore.removeMemory(staleIDs)
+        entityStore.deleteMemory(staleIDs)
         let models = entityStore.putMemory(snapshots)
         index(models, for: sessionId)
         loadedSessionIDs.insert(sessionId)
