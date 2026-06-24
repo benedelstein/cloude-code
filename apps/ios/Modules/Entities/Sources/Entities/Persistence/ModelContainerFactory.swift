@@ -8,7 +8,13 @@ public enum SchemaV1: VersionedSchema {
     }
 
     public static var entities: [any Entity.Type] {
-        [UserEntity.self, SessionSummaryEntity.self, SessionMessageEntity.self]
+        models.compactMap { model in
+            guard let entity = model as? any Entity.Type else {
+                assertionFailure("\(model) must conform to Entity to be registered in the cache schema.")
+                return nil
+            }
+            return entity
+        }
     }
 }
 

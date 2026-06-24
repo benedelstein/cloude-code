@@ -28,7 +28,9 @@ public final class SessionMessageStore {
     /// Returns cached messages for a session, sorted by cached creation date.
     public func messages(sessionId: String) async throws -> [Domain.SessionMessage] {
         if let models = modelsFromMemory(sessionId: sessionId) {
-            return models.map(\.message)
+            let messages = models.map(\.message)
+            logCachedMessagesSize(sessionId: sessionId, messages: messages)
+            return messages
         }
 
         do {
@@ -42,7 +44,9 @@ public final class SessionMessageStore {
             index(models, for: sessionId)
             loadedSessionIDs.insert(sessionId)
 
-            return models.map(\.message)
+            let messages = models.map(\.message)
+            logCachedMessagesSize(sessionId: sessionId, messages: messages)
+            return messages
         } catch {
             try? await deleteUnreadableSessionCache(sessionId: sessionId)
             return []
@@ -200,6 +204,19 @@ public final class SessionMessageStore {
         }
         loadedSessionIDs.remove(sessionId)
         messageIDsBySessionID[sessionId] = nil
+    }
+
+    private func logCachedMessagesSize(sessionId: String, messages: [Domain.SessionMessage]) {
+        Logger.debug(
+            "Session message cache read size",
+            "sessionId=\(sessionId)",
+            "count=\(messages.count)",
+            "totalBytes=\(messages.reduce(0) { $0 + encodedSize($1) })"
+        )
+    }
+
+    private func encodedSize(_ message: Domain.SessionMessage) -> Int {
+        (try? JSONEncoder().encode(message).count) ?? 0
     }
 }
 
