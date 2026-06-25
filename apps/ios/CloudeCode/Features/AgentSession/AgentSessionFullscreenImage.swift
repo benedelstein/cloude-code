@@ -17,7 +17,11 @@ struct SessionImageInfo: Identifiable, Equatable {
     }
 }
 
-struct OpenAgentSessionImageAction {
+struct OpenAgentSessionImageAction: Equatable {
+    static func == (lhs: OpenAgentSessionImageAction, rhs: OpenAgentSessionImageAction) -> Bool {
+        true
+    }
+
     private let action: (SessionImageInfo) -> Void
 
     init(action: @escaping (SessionImageInfo) -> Void = { _ in }) {
@@ -45,7 +49,8 @@ struct AgentSessionFullscreenImageView: View {
 
     @State private var uiImage: UIImage?
     @State private var didFail = false
-    @State private var dismissDragOffset: CGFloat = 0
+    @State private var dismissDragOffset: CGSize = .zero
+    @State private var isCompletingDragDismissal = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -54,29 +59,33 @@ struct AgentSessionFullscreenImageView: View {
 
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .offset(y: dismissDragOffset)
+                .offset(dismissDragOffset)
 
             HStack {
                 CloseButton {
                     dismiss()
                 }
                 Spacer()
-                Button {
-                    // TODO: SAVE THE IMAGE
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
+
+                GlassButton(
+                    systemImage: "square.and.arrow.up",
+                    isDisabled: uiImage == nil
+                ) {
+                    if let uiImage {
+                        presentShareSheet(activityItems: [uiImage])
+                    }
                 }
-                .glassButtonStyle(.glass, tint: nil)
-                .buttonBorderShape(.circle)
+                .accessibilityLabel("Share image")
             }
             .padding()
+            .opacity(isCompletingDragDismissal ? 0 : 1)
+            .allowsHitTesting(!isCompletingDragDismissal)
         }
         .task(id: image.url) {
             await loadImage()
         }
         .presentationBackground(.clear)
         .background(Color.clear)
-        .simultaneousGesture(dismissDragGesture)
         .statusBarHidden(true)
     }
 
@@ -85,7 +94,12 @@ struct AgentSessionFullscreenImageView: View {
         if let uiImage {
             ZoomableImageView(
                 image: uiImage,
-                accessibilityLabel: image.accessibilityLabel
+                accessibilityLabel: image.accessibilityLabel,
+                dragConfiguration: ZoomableImageDragConfiguration(
+                    onChanged: handleDragChanged,
+                    onEnded: handleDragEnded,
+                    onCancelled: resetDismissDrag
+                )
             )
                 .accessibilityLabel(image.accessibilityLabel)
         } else if didFail {
@@ -114,31 +128,45 @@ struct AgentSessionFullscreenImageView: View {
     }
 
     private var backgroundOpacity: Double {
-        let progress = min(max(dismissDragOffset, 0) / backgroundFadeDistance, 1)
+        guard !isCompletingDragDismissal else {
+            return 0
+        }
+
+        let progress = min(max(dismissDragOffset.height, 0) / backgroundFadeDistance, 1)
         return Double(1 - (progress * 0.65))
     }
 
-    private var dismissDragGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                guard isDismissDrag(value) else {
-                    return
-                }
-                dismissDragOffset = max(value.translation.height, 0)
-            }
-            .onEnded { value in
-                guard isDismissDrag(value), value.translation.height > dismissDragThreshold else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                        dismissDragOffset = 0
-                    }
-                    return
-                }
+    private func handleDragChanged(_ translation: CGSize) {
+        guard !isCompletingDragDismissal else {
+            return
+        }
 
-                dismiss()
-            }
+        dismissDragOffset = translation
     }
 
-    private func isDismissDrag(_ value: DragGesture.Value) -> Bool {
-        value.translation.height > 0 && value.translation.height > abs(value.translation.width)
+    private func handleDragEnded(_ translation: CGSize) {
+        guard translation.height > dismissDragThreshold else {
+            resetDismissDrag()
+            return
+        }
+
+        withAnimation(.easeOut(duration: 0.12)) {
+            dismissDragOffset = translation
+            isCompletingDragDismissal = true
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            await MainActor.run {
+                dismiss()
+            }
+        }
+    }
+
+    private func resetDismissDrag() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            dismissDragOffset = .zero
+            isCompletingDragDismissal = false
+        }
     }
 }

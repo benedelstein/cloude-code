@@ -36,7 +36,7 @@ struct RootView: View {
         })
         .environment(\.notificationRegistrationService, notificationRegistrationService)
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(logStore: logStore)
+            SettingsView(logStore: logStore, sessionStore: sessionStore)
         }
         .themedRoot()
     }

@@ -4,24 +4,83 @@ import UIKit
 struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
     let accessibilityLabel: String
+    let dragConfiguration: ZoomableImageDragConfiguration?
+
+    init(
+        image: UIImage,
+        accessibilityLabel: String,
+        dragConfiguration: ZoomableImageDragConfiguration? = nil
+    ) {
+        self.image = image
+        self.accessibilityLabel = accessibilityLabel
+        self.dragConfiguration = dragConfiguration
+    }
 
     func makeUIView(context: Context) -> ZoomingImageScrollView {
         let view = ZoomingImageScrollView()
+        view.isDragEnabled = dragConfiguration != nil
+        view.dragHandler = context.coordinator
         view.setImage(image, accessibilityLabel: accessibilityLabel)
         return view
     }
 
     func updateUIView(_ view: ZoomingImageScrollView, context: Context) {
+        context.coordinator.dragConfiguration = dragConfiguration
+        view.isDragEnabled = dragConfiguration != nil
+        view.dragHandler = context.coordinator
         view.setImage(image, accessibilityLabel: accessibilityLabel)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dragConfiguration: dragConfiguration)
+    }
+
+    final class Coordinator: ZoomingImageScrollViewDragHandling {
+        var dragConfiguration: ZoomableImageDragConfiguration?
+
+        init(dragConfiguration: ZoomableImageDragConfiguration?) {
+            self.dragConfiguration = dragConfiguration
+        }
+
+        func zoomingImageScrollViewDidChangeDrag(_ translation: CGSize) {
+            dragConfiguration?.onChanged(translation)
+        }
+
+        func zoomingImageScrollViewDidEndDrag(_ translation: CGSize) {
+            dragConfiguration?.onEnded(translation)
+        }
+
+        func zoomingImageScrollViewDidCancelDrag() {
+            dragConfiguration?.onCancelled()
+        }
     }
 }
 
-final class ZoomingImageScrollView: UIView, UIScrollViewDelegate {
+struct ZoomableImageDragConfiguration {
+    let onChanged: (CGSize) -> Void
+    let onEnded: (CGSize) -> Void
+    let onCancelled: () -> Void
+}
+
+protocol ZoomingImageScrollViewDragHandling: AnyObject {
+    func zoomingImageScrollViewDidChangeDrag(_ translation: CGSize)
+    func zoomingImageScrollViewDidEndDrag(_ translation: CGSize)
+    func zoomingImageScrollViewDidCancelDrag()
+}
+
+final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     private let scrollView = UIScrollView()
     private let imageView = UIImageView()
 
     private var currentImage: UIImage?
     private var lastBoundsSize: CGSize = .zero
+    private lazy var dismissalPanGestureRecognizer = UIPanGestureRecognizer(
+        target: self,
+        action: #selector(handleDismissalPan(_:))
+    )
+
+    var isDragEnabled = false
+    weak var dragHandler: ZoomingImageScrollViewDragHandling?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -34,13 +93,17 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate {
     }
 
     func setImage(_ image: UIImage, accessibilityLabel: String) {
-        let didChangeImage = currentImage !== image
+        guard currentImage !== image else {
+            imageView.accessibilityLabel = accessibilityLabel
+            return
+        }
+
         currentImage = image
         imageView.image = image
         imageView.accessibilityLabel = accessibilityLabel
         imageView.frame = CGRect(origin: .zero, size: image.size)
         scrollView.contentSize = image.size
-        configureZoom(reset: didChangeImage)
+        configureZoom(reset: true)
     }
 
     override func layoutSubviews() {
@@ -71,9 +134,16 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate {
 
         imageView.contentMode = .scaleAspectFit
         imageView.isAccessibilityElement = true
+        imageView.isUserInteractionEnabled = true
+
+        dismissalPanGestureRecognizer.delegate = self
+        dismissalPanGestureRecognizer.maximumNumberOfTouches = 1
+        dismissalPanGestureRecognizer.cancelsTouchesInView = false
 
         addSubview(scrollView)
         scrollView.addSubview(imageView)
+        imageView.addGestureRecognizer(dismissalPanGestureRecognizer)
+        scrollView.panGestureRecognizer.require(toFail: dismissalPanGestureRecognizer)
     }
 
     private func configureZoom(reset: Bool) {
@@ -111,5 +181,31 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate {
             bottom: verticalInset,
             right: horizontalInset
         )
+    }
+
+    @objc private func handleDismissalPan(_ recognizer: UIPanGestureRecognizer) {
+        let point = recognizer.translation(in: self)
+        let translation = CGSize(width: point.x, height: point.y)
+
+        switch recognizer.state {
+        case .began, .changed:
+            dragHandler?.zoomingImageScrollViewDidChangeDrag(translation)
+        case .ended:
+            dragHandler?.zoomingImageScrollViewDidEndDrag(translation)
+        case .cancelled, .failed:
+            dragHandler?.zoomingImageScrollViewDidCancelDrag()
+        case .possible:
+            break
+        @unknown default:
+            dragHandler?.zoomingImageScrollViewDidCancelDrag()
+        }
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === dismissalPanGestureRecognizer else {
+            return true
+        }
+
+        return isDragEnabled && scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01
     }
 }

@@ -120,20 +120,21 @@ private struct UserMessageRemoteImage: View {
     private var content: some View {
         if let uiImage {
             // todo add nuke image cache
-            Image(uiImage: uiImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: displayWidth, height: height)
-                .clipShape(imageShape)
-                .overlay {
-                    imageShape.stroke(theme.outlineColor, lineWidth: style.outlineThickness)
-                }
-                .contentShape(imageShape)
-                .accessibilityLabel(image.accessibilityLabel)
-                .accessibilityAddTraits(.isButton)
-                .onTapGesture {
-                    openImage(image)
-                }
+            Button {
+                openImage(image)
+            } label: {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: displayWidth, height: height)
+                    .clipShape(imageShape)
+                    .overlay {
+                        imageShape.stroke(theme.outlineColor, lineWidth: style.outlineThickness)
+                    }
+                    .contentShape(imageShape)
+                    .accessibilityLabel(image.accessibilityLabel)
+                    .accessibilityAddTraits(.isButton)
+            }
         } else if didFail {
             imageFailureView
         } else {

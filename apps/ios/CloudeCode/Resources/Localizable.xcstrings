@@ -7,6 +7,9 @@
     "☁️" : {
 
     },
+    "Account" : {
+
+    },
     "Add attachment" : {
 
     },
@@ -26,6 +29,9 @@
 
     },
     "Cloude Code" : {
+
+    },
+    "Copied logs to clipboard" : {
 
     },
     "Copy" : {
@@ -290,7 +296,7 @@
         }
       }
     },
-    "Recent app logs are kept in memory for TestFlight debugging." : {
+    "Recent app logs are kept in memory for debugging." : {
 
     },
     "Responding" : {
@@ -429,7 +435,22 @@
     "Settings" : {
 
     },
+    "Share image" : {
+
+    },
     "Sign in" : {
+
+    },
+    "Sign out" : {
+
+    },
+    "Sign Out" : {
+
+    },
+    "Sign out?" : {
+
+    },
+    "Signs out of Cloude Code on this device." : {
 
     },
     "System" : {

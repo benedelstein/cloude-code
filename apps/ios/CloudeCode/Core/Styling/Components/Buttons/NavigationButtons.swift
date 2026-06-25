@@ -1,14 +1,15 @@
 import SwiftUI
 
-struct CloseButton: View {
+struct GlassButton: View {
     @Environment(\.theme) private var theme
 
-    var isDisabled = false
+    var systemImage: String
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
+            Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(theme.secondaryLabelColor)
                 .frame(width: 40, height: 40)
@@ -16,7 +17,18 @@ struct CloseButton: View {
                 .contentShape(Circle())
         }
         .disabled(isDisabled)
-        .accessibilityLabel("Close")
+    }
+}
+
+struct CloseButton: View {
+    @Environment(\.theme) private var theme
+
+    var isDisabled = false
+    let action: () -> Void
+
+    var body: some View {
+        GlassButton(systemImage: "xmark", isDisabled: isDisabled, action: action)
+            .accessibilityLabel("Close")
     }
 }
 
@@ -27,14 +39,7 @@ struct BackButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "arrow.left")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.secondaryLabelColor)
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle().inset(by: -5))
-        }
-        .disabled(isDisabled)
+        GlassButton(systemImage: "arrow.left", isDisabled: isDisabled, action: action)
         .accessibilityLabel("Back")
     }
 }
