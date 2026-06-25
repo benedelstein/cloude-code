@@ -75,6 +75,8 @@ extension SessionMessage.Part {
                 mediaType: payload.mediaType,
                 filename: payload.filename,
                 url: payload.url,
+                width: payload.width,
+                height: payload.height,
                 providerMetadata: payload.providerMetadata?.domainProviderMetadata
             ))
         case .stepStart:
@@ -156,6 +158,8 @@ extension SessionMessage.Part {
                 mediaType: payload.mediaType,
                 filename: payload.filename,
                 url: payload.url,
+                width: nil,
+                height: nil,
                 providerMetadata: payload.providerMetadata?.domainProviderMetadata
             ))
         case .stepStart:

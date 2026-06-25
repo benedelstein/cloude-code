@@ -89,6 +89,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var fetchImageAction: any FetchImageAction {
+        AuthenticatedFetchImageAction(apiBaseURL: apiBaseURL) { [tokenCoordinator] in
+            try await tokenCoordinator.bearerHeaders()
+        }
+    }
+
     @MainActor var sessionStore: SessionStore {
         shared {
             SessionStore(

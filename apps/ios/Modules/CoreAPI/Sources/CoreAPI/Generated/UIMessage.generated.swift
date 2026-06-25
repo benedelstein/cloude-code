@@ -226,17 +226,23 @@ public enum WireUIMessagePart: Codable, Equatable, Sendable {
         public var mediaType: String
         public var filename: String?
         public var url: String
+        public var width: Int?
+        public var height: Int?
         public var providerMetadata: [String: [String: JSONValue]]?
 
         public init(
             mediaType: String,
             filename: String? = nil,
             url: String,
+            width: Int? = nil,
+            height: Int? = nil,
             providerMetadata: [String: [String: JSONValue]]? = nil
         ) {
             self.mediaType = mediaType
             self.filename = filename
             self.url = url
+            self.width = width
+            self.height = height
             self.providerMetadata = providerMetadata
         }
 
@@ -245,6 +251,8 @@ public enum WireUIMessagePart: Codable, Equatable, Sendable {
             case mediaType
             case filename
             case url
+            case width
+            case height
             case providerMetadata
         }
     }

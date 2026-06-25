@@ -266,6 +266,7 @@ private extension AgentSessionView {
             switch item {
             case .userMessage(let message):
                 UserMessageView(message: message)
+                    .environment(\.openAgentSessionImage, openImageAction)
             case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
                 AssistantMessageView(
                     displayData: displayData,
@@ -279,6 +280,12 @@ private extension AgentSessionView {
                 }
             case .workingIndicator:
                 WorkingIndicatorView()
+            }
+        }
+
+        private var openImageAction: OpenAgentSessionImageAction {
+            OpenAgentSessionImageAction { image in
+                destination = .fullscreen(.image(image))
             }
         }
 

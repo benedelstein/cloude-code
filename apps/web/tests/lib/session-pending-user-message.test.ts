@@ -24,9 +24,11 @@ describe("buildOptimisticUserMessage", () => {
     vi.setSystemTime(new Date("2026-05-22T06:48:52.008Z"));
 
     const attachments = [{
-      filename: "notes.txt",
-      mediaType: "text/plain",
-      contentUrl: "https://example.com/notes.txt",
+      filename: "screenshot.png",
+      mediaType: "image/png",
+      contentUrl: "https://example.com/screenshot.png",
+      width: 640,
+      height: 480,
     }] as AttachmentDescriptor[];
 
     expect(buildOptimisticUserMessage({
@@ -40,9 +42,11 @@ describe("buildOptimisticUserMessage", () => {
         { type: "text", text: "hello world" },
         {
           type: "file",
-          filename: "notes.txt",
-          mediaType: "text/plain",
-          url: "https://example.com/notes.txt",
+          filename: "screenshot.png",
+          mediaType: "image/png",
+          url: "https://example.com/screenshot.png",
+          width: 640,
+          height: 480,
         },
       ],
     });

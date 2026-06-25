@@ -6,6 +6,8 @@ import SwiftUI
 protocol AgentSessionDependency: Dependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket
 
+    var fetchImageAction: any FetchImageAction { get }
+
     @MainActor
     var sessionMessageStore: SessionMessageStore { get }
 }
@@ -38,6 +40,10 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
             )
         }
     }
+
+    var fetchImageAction: any FetchImageAction {
+        dependency.fetchImageAction
+    }
 }
 
 @MainActor
@@ -45,6 +51,8 @@ struct AgentSessionBuilder {
     let makeComponent: (SessionSummaryModel) -> AgentSessionComponent
 
     func build(session: SessionSummaryModel) -> some View {
-        AgentSessionView(store: makeComponent(session).store)
+        let component = makeComponent(session)
+        return AgentSessionView(store: component.store)
+            .environment(\.fetchImageAction, component.fetchImageAction)
     }
 }

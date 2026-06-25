@@ -12,6 +12,8 @@ export const AttachmentDescriptor = z.object({
   filename: z.string().min(1),
   mediaType: z.string().min(1),
   sizeBytes: z.number().int().nonnegative(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
   createdAt: z.string(),
   sessionId: z.uuid().nullable().optional().describe("The session ID the attachment belongs to, if any. Once attached to a session, it cannot be attached to another."),
   contentUrl: z.string().min(1).describe("The URL to the attachment content. This is the URL that the client should use to display the attachment."),

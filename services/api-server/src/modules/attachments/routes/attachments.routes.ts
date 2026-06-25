@@ -9,6 +9,7 @@ import {
   deleteAttachmentRoute,
 } from "./attachments.schema";
 import { createLogger } from "@/shared/logging";
+import { parseImageDimensions } from "../utils/image-dimensions";
 
 type AttachmentsRouteEnv = {
   Bindings: Env;
@@ -90,8 +91,10 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
 
       const attachmentId = crypto.randomUUID();
       const objectKey = attachmentService.buildObjectKey(attachmentId);
+      const bytes = await file.arrayBuffer();
+      const dimensions = parseImageDimensions(bytes, file.type);
 
-      await c.env.ATTACHMENTS_BUCKET.put(objectKey, file.stream(), {
+      await c.env.ATTACHMENTS_BUCKET.put(objectKey, bytes, {
         httpMetadata: { contentType: file.type },
       });
       logger.debug("Uploaded attachment for session", {
@@ -105,6 +108,8 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
         filename: file.name || "image",
         mediaType: file.type,
         sizeBytes: file.size,
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
         sessionId: sessionId ?? null,
       });
       created.push(record);

@@ -44,6 +44,8 @@ const FileUIPartSchema = z.looseObject({
   mediaType: z.string(),
   filename: z.string().optional(),
   url: z.string(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
   providerMetadata: ProviderMetadataSchema.optional(),
 });
 

@@ -7,6 +7,8 @@ export interface CreateAttachmentParams {
   filename: string;
   mediaType: string;
   sizeBytes: number;
+  width: number | null;
+  height: number | null;
   sessionId?: string | null;
 }
 
@@ -17,6 +19,8 @@ interface AttachmentRow {
   filename: string;
   media_type: string;
   size_bytes: number;
+  width: number | null;
+  height: number | null;
   created_at: string;
   session_id: string | null;
   bound_at: string | null;
@@ -48,8 +52,9 @@ export class AttachmentRepository {
     await this.database
       .prepare(
         `INSERT INTO attachments (
-          id, uploader_user_id, object_key, filename, media_type, size_bytes, created_at, session_id, bound_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, uploader_user_id, object_key, filename, media_type, size_bytes, width, height,
+          created_at, session_id, bound_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
@@ -58,6 +63,8 @@ export class AttachmentRepository {
         params.filename,
         params.mediaType,
         params.sizeBytes,
+        params.width,
+        params.height,
         now,
         sessionId,
         boundAt,
@@ -71,6 +78,8 @@ export class AttachmentRepository {
       filename: params.filename,
       mediaType: params.mediaType,
       sizeBytes: params.sizeBytes,
+      width: params.width,
+      height: params.height,
       createdAt: now,
       sessionId,
       boundAt,
@@ -202,6 +211,8 @@ export class AttachmentRepository {
       filename: row.filename,
       mediaType: row.media_type,
       sizeBytes: row.size_bytes,
+      width: row.width,
+      height: row.height,
       createdAt: row.created_at,
       sessionId: row.session_id,
       boundAt: row.bound_at,

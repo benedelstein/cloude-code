@@ -23,6 +23,9 @@ export function createUserUiMessage(
       mediaType: attachment.mediaType,
       filename: attachment.filename,
       url: buildAttachmentContentUrl(attachment.id), // this for persisting to db not for sending to agent.
+      ...(attachment.width !== null && attachment.height !== null
+        ? { width: attachment.width, height: attachment.height }
+        : {}),
     } as UIMessage["parts"][number]);
   }
 

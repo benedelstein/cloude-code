@@ -48,7 +48,7 @@ enum AppGlassButtonStyle {
 /// glass button styles are available.
 struct LegacyGlassButtonStyle: ButtonStyle {
     var variant: AppGlassButtonStyle
-    var tint: Color
+    var tint: Color?
 
     func makeBody(configuration: Configuration) -> some View {
         LegacyGlassButtonStyleBody(configuration: configuration, variant: variant, tint: tint)
@@ -61,7 +61,7 @@ private struct LegacyGlassButtonStyleBody: View {
 
     let configuration: ButtonStyleConfiguration
     let variant: AppGlassButtonStyle
-    let tint: Color
+    let tint: Color?
 
     var body: some View {
         configuration.label
@@ -81,37 +81,43 @@ private struct LegacyGlassButtonStyleBody: View {
     }
 
     private var backgroundFill: AnyShapeStyle {
-        switch variant {
-        case .glass:
-            AnyShapeStyle(.ultraThinMaterial)
-        case .glassProminent:
+        if let tint {
             AnyShapeStyle(tint)
+        } else {
+            AnyShapeStyle(.ultraThinMaterial)
         }
     }
 
     private var shadowColor: Color {
-        switch variant {
-        case .glass:
-            .black.opacity(0.2)
-        case .glassProminent:
+        if let tint {
             tint.opacity(0.35)
+        } else {
+            .black.opacity(0.2)
         }
     }
 }
 
 extension View {
     @ViewBuilder
-    func glassButtonStyle(_ style: AppGlassButtonStyle = .glass, tint: Color) -> some View {
+    func glassButtonStyle(_ style: AppGlassButtonStyle = .glass, tint: Color? = nil) -> some View {
         if #available(iOS 26.0, *) {
             switch style {
             case .glass:
-                self
-                    .buttonStyle(.glass)
-                    .tint(tint)
+                if let tint {
+                    self
+                        .buttonStyle(.glass)
+                        .tint(tint)
+                } else {
+                    self.buttonStyle(.glass)
+                }
             case .glassProminent:
-                self
-                    .buttonStyle(.glassProminent)
-                    .tint(tint)
+                if let tint {
+                    self
+                        .buttonStyle(.glassProminent)
+                        .tint(tint)
+                } else {
+                    self.buttonStyle(.glassProminent)
+                }
             }
         } else {
             self.buttonStyle(LegacyGlassButtonStyle(variant: style, tint: tint))

@@ -8,6 +8,8 @@ public struct AttachmentDescriptor: Codable, Equatable, Sendable {
     public var filename: String
     public var mediaType: String
     public var sizeBytes: Int
+    public var width: Int?
+    public var height: Int?
     public var createdAt: String
     /// The session ID the attachment belongs to, if any. Once attached to a session, it cannot be attached to another.
     public var sessionId: String?
@@ -19,6 +21,8 @@ public struct AttachmentDescriptor: Codable, Equatable, Sendable {
         filename: String,
         mediaType: String,
         sizeBytes: Int,
+        width: Int? = nil,
+        height: Int? = nil,
         createdAt: String,
         sessionId: String? = nil,
         contentUrl: String
@@ -27,6 +31,8 @@ public struct AttachmentDescriptor: Codable, Equatable, Sendable {
         self.filename = filename
         self.mediaType = mediaType
         self.sizeBytes = sizeBytes
+        self.width = width
+        self.height = height
         self.createdAt = createdAt
         self.sessionId = sessionId
         self.contentUrl = contentUrl

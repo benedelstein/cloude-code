@@ -38,6 +38,31 @@ struct SessionMessagesTests {
         #expect(toolPart.output == .string("README.md"))
     }
 
+    @Test func uiMessageMapsFilePartDimensionsToDomainMessage() {
+        let message = WireUIMessage(
+            id: "msg_1",
+            role: .user,
+            parts: [
+                .file(.init(
+                    mediaType: "image/png",
+                    filename: "screenshot.png",
+                    url: "/attachments/123e4567-e89b-12d3-a456-426614174000/content",
+                    width: 640,
+                    height: 480
+                ))
+            ]
+        )
+
+        let sessionMessage = SessionMessage(message)
+
+        guard case .file(let filePart) = sessionMessage.parts.first else {
+            Issue.record("Expected file part to be preserved")
+            return
+        }
+        #expect(filePart.width == 640)
+        #expect(filePart.height == 480)
+    }
+
     @Test func streamChunkExposesTextDelta() {
         let chunk = SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
 

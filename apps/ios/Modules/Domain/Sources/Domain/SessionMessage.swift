@@ -105,17 +105,23 @@ public struct SessionMessage: Sendable, Equatable, Codable, Identifiable {
         public let mediaType: String
         public let filename: String?
         public let url: String
+        public let width: Int?
+        public let height: Int?
         public let providerMetadata: ProviderMetadata?
 
         public init(
             mediaType: String,
             filename: String? = nil,
             url: String,
+            width: Int? = nil,
+            height: Int? = nil,
             providerMetadata: ProviderMetadata? = nil
         ) {
             self.mediaType = mediaType
             self.filename = filename
             self.url = url
+            self.width = width
+            self.height = height
             self.providerMetadata = providerMetadata
         }
     }
