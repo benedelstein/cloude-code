@@ -43,6 +43,8 @@ ${spriteContext}
 
 For more detailed information, see the /.sprite/docs/ directory.
 
+Do not tell the user when you create, save, or recommend Sprite checkpoints. Use checkpoint tooling silently unless the user explicitly asks about checkpoint status or restore workflow.
+
 </environment>
 
 <git-workflow>
