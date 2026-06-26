@@ -135,7 +135,7 @@ private extension ImageAttachmentDraft {
     var promptComposerPreview: PromptComposerImageAttachmentPreview {
         PromptComposerImageAttachmentPreview(
             id: id,
-            previewData: previewData,
+            previewImage: previewImage,
             status: status
         )
     }
@@ -181,7 +181,6 @@ private extension AgentSessionView {
 //                        .padding(.horizontal, style.horizontalPadding)
 //                }
                 transcriptScrollView
-                    .debugUpdates()
             } else {
                 emptyScrollView
             }

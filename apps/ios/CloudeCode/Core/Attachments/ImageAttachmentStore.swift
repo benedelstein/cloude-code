@@ -17,17 +17,15 @@ enum ImageAttachmentDraftStatus: Equatable {
 }
 
 /// Local composer model for one image attachment before it is submitted.
-struct ImageAttachmentDraft: Identifiable, Equatable {
+struct ImageAttachmentDraft: Identifiable {
     let id: UUID
     /// Nil while a selected Photos item is still loading into memory.
     var file: AttachmentUploadFile?
+    /// Downsampled thumbnail used by the composer preview strip.
+    var previewImage: UIImage?
     var status: ImageAttachmentDraftStatus
     /// Server-side upload result used when sending the final prompt.
     var descriptor: UploadedAttachment?
-
-    var previewData: Data? {
-        file?.data
-    }
 }
 
 /// Owns image attachment drafts from local selection through server upload.
@@ -99,6 +97,7 @@ final class ImageAttachmentStore {
             let draft = ImageAttachmentDraft(
                 id: UUID(),
                 file: file,
+                previewImage: nil,
                 status: .uploading,
                 descriptor: nil
             )
@@ -115,7 +114,7 @@ final class ImageAttachmentStore {
         Task { [weak self, loadImageAttachmentFile] in
             for (reservationId, item) in zip(reservationIds, items) {
                 do {
-                    guard let file = try await loadImageAttachmentFile(from: item) else {
+                    guard let loadedFile = try await loadImageAttachmentFile(from: item) else {
                         await self?.failReservedFile(
                             id: reservationId,
                             message: "Failed to load image."
@@ -123,7 +122,7 @@ final class ImageAttachmentStore {
                         continue
                     }
 
-                    await self?.attachReservedFile(id: reservationId, file: file)
+                    await self?.attachReservedFile(id: reservationId, loadedFile: loadedFile)
                 } catch {
                     await self?.failReservedFile(
                         id: reservationId,
@@ -137,10 +136,10 @@ final class ImageAttachmentStore {
     /// Encodes and adds a captured camera image.
     func addCameraImage(_ image: UIImage) {
         Task { [weak self, loadImageAttachmentFile] in
-            guard let file = await loadImageAttachmentFile(from: image) else {
+            guard let loadedFile = await loadImageAttachmentFile(from: image) else {
                 return
             }
-            self?.addFiles([file])
+            self?.addLoadedFiles([loadedFile])
         }
     }
 
@@ -163,6 +162,7 @@ final class ImageAttachmentStore {
             ImageAttachmentDraft(
                 id: UUID(),
                 file: nil,
+                previewImage: nil,
                 status: .uploading,
                 descriptor: nil
             )
@@ -172,17 +172,18 @@ final class ImageAttachmentStore {
     }
 
     /// Replaces a loading placeholder with file data and starts uploading it.
-    private func attachReservedFile(id: UUID, file: AttachmentUploadFile) {
+    private func attachReservedFile(id: UUID, loadedFile: LoadedImageAttachmentFile) {
         guard let index = attachments.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        guard let validFile = validFile(file) else {
+        guard let validFile = validFile(loadedFile.file) else {
             attachments[index].status = .failed("Invalid image.")
             return
         }
 
         attachments[index].file = validFile
+        attachments[index].previewImage = loadedFile.previewImage
         attachments[index].status = .uploading
         upload(attachments[index])
     }
@@ -249,6 +250,35 @@ final class ImageAttachmentStore {
         return file
     }
 
+    private func addLoadedFiles(_ files: [LoadedImageAttachmentFile]) {
+        errorMessage = nil
+        guard !files.isEmpty else { return }
+
+        let availableSlots = remainingSlots
+        guard availableSlots > 0 else {
+            errorMessage = "You can attach up to \(Constants.maxAttachments) images."
+            return
+        }
+
+        let filesToUpload = Array(files.prefix(availableSlots))
+        if files.count > availableSlots {
+            errorMessage = "You can attach up to \(Constants.maxAttachments) images."
+        }
+
+        for loadedFile in filesToUpload {
+            guard let validFile = validFile(loadedFile.file) else { continue }
+            let draft = ImageAttachmentDraft(
+                id: UUID(),
+                file: validFile,
+                previewImage: loadedFile.previewImage,
+                status: .uploading,
+                descriptor: nil
+            )
+            attachments.append(draft)
+            upload(draft)
+        }
+    }
+
     private func upload(_ draft: ImageAttachmentDraft) {
         guard let file = draft.file else { return }
         uploadTasks[draft.id] = Task { [weak self, draft] in
@@ -292,7 +322,7 @@ final class ImageAttachmentStore {
     }
 
     private func deleteUploadedAttachment(_ descriptor: UploadedAttachment) {
-        Task { [attachmentsAPI] in
+        Task.detached { [attachmentsAPI] in
             do {
                 try await attachmentsAPI.deleteAttachment(id: descriptor.attachmentId)
             } catch {

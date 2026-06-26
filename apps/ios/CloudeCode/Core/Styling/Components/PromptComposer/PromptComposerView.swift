@@ -4,9 +4,18 @@ import UIKit
 
 struct PromptComposerImageAttachmentPreview: Identifiable, Equatable {
     let id: UUID
-    /// Local image bytes used for preview; nil while a picker selection is loading.
-    let previewData: Data?
+    /// Downsampled local image used for preview; nil while a picker selection is loading.
+    let previewImage: UIImage?
     let status: ImageAttachmentDraftStatus
+
+    static func == (
+        lhs: PromptComposerImageAttachmentPreview,
+        rhs: PromptComposerImageAttachmentPreview
+    ) -> Bool {
+        lhs.id == rhs.id
+            && lhs.status == rhs.status
+            && lhs.previewImage === rhs.previewImage
+    }
 }
 
 struct PromptComposerView: View {

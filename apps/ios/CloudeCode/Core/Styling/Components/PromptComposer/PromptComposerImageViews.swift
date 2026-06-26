@@ -108,8 +108,7 @@ extension PromptComposerView {
 
         @ViewBuilder
         private var thumbnailImage: some View {
-            if let previewData = attachment.previewData,
-               let image = UIImage(data: previewData) {
+            if let image = attachment.previewImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
