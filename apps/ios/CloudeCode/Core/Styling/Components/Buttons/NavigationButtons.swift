@@ -11,7 +11,7 @@ struct GlassButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.secondaryLabelColor)
+                .foregroundStyle(theme.labelColor)
                 .frame(width: 40, height: 40)
                 .glassBackground(in: Circle())
                 .contentShape(Circle())
@@ -56,7 +56,7 @@ struct ToolbarCloseButton: ToolbarContent {
             Button(action: action) {
                 Image(systemName: "xmark")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(theme.secondaryLabelColor)
+                    .foregroundStyle(theme.labelColor)
                     .contentShape(Rectangle().inset(by: -5))
             }
             .disabled(isDisabled)
@@ -77,7 +77,7 @@ struct ToolbarBackButton: ToolbarContent {
             Button(action: action) {
                 Image(systemName: "arrow.left")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(theme.secondaryLabelColor)
+                    .foregroundStyle(theme.labelColor)
                     .contentShape(Rectangle().inset(by: -5))
             }
             .disabled(isDisabled)

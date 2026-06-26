@@ -53,34 +53,38 @@ struct AgentSessionFullscreenImageView: View {
     @State private var isCompletingDragDismissal = false
 
     var body: some View {
+        NavigationStack {
+            content
+        }
+    }
+
+    var content: some View {
         ZStack(alignment: .topTrailing) {
             Color.black.opacity(backgroundOpacity)
                 .ignoresSafeArea()
 
-            content
+            imageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(dismissDragOffset)
+        }
+        .toolbar {
+            ToolbarCloseButton {
+                dismiss()
+            }
 
-            HStack {
-                CloseButton {
-                    dismiss()
-                }
-                Spacer()
-
-                GlassButton(
-                    systemImage: "square.and.arrow.up",
-                    isDisabled: uiImage == nil
-                ) {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     if let uiImage {
                         presentShareSheet(activityItems: [uiImage])
                     }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
                 }
+                .disabled(uiImage == nil)
                 .accessibilityLabel("Share image")
             }
-            .padding()
-            .opacity(isCompletingDragDismissal ? 0 : 1)
-            .allowsHitTesting(!isCompletingDragDismissal)
         }
+        .toolbarVisibility(isCompletingDragDismissal ? .hidden : .visible, for: .navigationBar)
         .task(id: image.url) {
             await loadImage()
         }
@@ -90,7 +94,7 @@ struct AgentSessionFullscreenImageView: View {
     }
 
     @ViewBuilder
-    private var content: some View {
+    private var imageContent: some View {
         if let uiImage {
             ZoomableImageView(
                 image: uiImage,
@@ -101,7 +105,7 @@ struct AgentSessionFullscreenImageView: View {
                     onCancelled: resetDismissDrag
                 )
             )
-                .accessibilityLabel(image.accessibilityLabel)
+            .accessibilityLabel(image.accessibilityLabel)
         } else if didFail {
             ContentUnavailableView("Image failed to load", systemImage: "photo")
                 .foregroundStyle(.white)

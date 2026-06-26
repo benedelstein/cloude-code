@@ -44,6 +44,9 @@ actor LoadImageAttachmentFileAction {
 
     /// Loads a selected Photos item as a bounded upload image and separate preview thumbnail.
     func callAsFunction(from item: PhotosPickerItem) async throws -> LoadedImageAttachmentFile? {
+        // Prefer a file URL so the original encoded asset stays out of the app
+        // heap while ImageIO reads and downscales from disk. The Data fallback
+        // below still downscales correctly, but first materializes source bytes.
         if let transferredFile = try await item.loadTransferable(type: ImageAttachmentTransferredFile.self) {
             defer { try? FileManager.default.removeItem(at: transferredFile.url) }
             guard let imageSource = makeImageSource(from: transferredFile.url),
@@ -56,6 +59,8 @@ actor LoadImageAttachmentFileAction {
             )
         }
 
+        // Compatibility fallback for providers that cannot vend a file URL. This
+        // path still uses ImageIO downsampling, but it first loads source bytes.
         guard let data = try await item.loadTransferable(type: Data.self) else {
             return nil
         }
