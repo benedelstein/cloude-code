@@ -27,6 +27,7 @@ struct PromptComposerView: View {
     private let onRemoveImageAttachment: (UUID) -> Void
     private let onPhotosSelected: ([PhotosPickerItem]) -> Void
     private let onCameraImageCaptured: (UIImage) -> Void
+    private let inlinePhotoPickerHeight: CGFloat = 350
 
     @State private var isInlinePhotoPickerVisible: Bool = false
     @State private var isPhotoSheetPresented: Bool = false
@@ -68,17 +69,30 @@ struct PromptComposerView: View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
     }
 
+    @Namespace var id
+
     var body: some View {
-        VStack(spacing: 0) {
-            centerContent
-            bottomBar
-                .padding(8)
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                centerContent
+                bottomBar
+                    .padding(8)
+            }
+
+            ZStack {
+                inlinePhotoPickerContent
+            }
+            .frame(height: 350, alignment: .bottom)
+            .frame(height: isInlinePhotoPickerVisible ? 350 : 50, alignment: .bottom)
+            .opacity(isInlinePhotoPickerVisible ? 1 : 0)
+            .zIndex(1)
         }
         .clipShape(composerShape)
         .contentShape(composerShape)
         .promptComposerGlassBackground(
             in: composerShape,
-            fallbackColor: theme.secondaryBackgroundColor
+            fallbackColor: theme.secondaryBackgroundColor,
+            interactive: !isInlinePhotoPickerVisible
         )
         .onTapGesture {
             guard !isInlinePhotoPickerVisible else { return }
@@ -87,7 +101,6 @@ struct PromptComposerView: View {
         .animation(style.springAnimation, value: isInlinePhotoPickerVisible)
         .animation(style.springAnimation, value: imageAttachments)
         .animation(style.springAnimation, value: imageAttachmentErrorMessage)
-        .animation(style.springAnimation, value: isInlinePhotoPickerVisible)
         .photosPicker(
             isPresented: $isPhotoSheetPresented,
             selection: $selectedPhotoItems,
@@ -113,28 +126,21 @@ struct PromptComposerView: View {
 
     private var centerContent: some View {
         VStack(spacing: style.gridSize) {
-            if hasImageAttachmentPreviewContent, !isInlinePhotoPickerVisible {
+            if hasImageAttachmentPreviewContent {
                 AttachmentPreviews(
                     attachments: imageAttachments,
                     errorMessage: imageAttachmentErrorMessage,
                     onRemove: onRemoveImageAttachment
                 )
-                .transition(.opacity)
+                .transition(.opacity.animation(.easeIn(duration: 0.1)))
             }
 
-            if isImageInputEnabled && isInlinePhotoPickerVisible {
-                inlinePhotoPickerContent
-                    .transition(.opacity)
-            }
-
-            if !isInlinePhotoPickerVisible {
-                Editor(
-                    text: $text,
-                    focused: focused,
-                    placeholder: placeholder
-                )
-                .transition(.opacity)
-            }
+            Editor(
+                text: $text,
+                focused: focused,
+                placeholder: placeholder
+            )
+            .transition(.opacity)
         }
     }
 
@@ -159,8 +165,6 @@ struct PromptComposerView: View {
             inlinePhotoPickerControls
                 .padding(8)
         }
-        .frame(height: 250)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var inlinePhotoPickerControls: some View {
@@ -180,7 +184,7 @@ struct PromptComposerView: View {
                 isPhotoSheetPresented = true
             } label: {
                 Label("Show All Photos", systemImage: "photo.stack")
-                    .styledFont(.caption2)
+                    .styledFont(.caption)
             }
             .glassButtonStyle()
         }
@@ -188,21 +192,19 @@ struct PromptComposerView: View {
 
     @ViewBuilder
     var bottomBar: some View {
-        if !isInlinePhotoPickerVisible {
-            HStack(alignment: .bottom, spacing: style.gridSize) {
-                if isImageInputEnabled {
-                    imageSourceControl
-                }
-
-                Spacer()
-
-                SendButton(
-                    isSubmitDisabled: isSubmitDisabled,
-                    isSubmitting: isSubmitting,
-                    size: composerStyle.bottomButtonSize,
-                    onSubmit: onSubmit
-                )
+        HStack(alignment: .bottom, spacing: style.gridSize) {
+            if isImageInputEnabled {
+                imageSourceControl
             }
+
+            Spacer()
+
+            SendButton(
+                isSubmitDisabled: isSubmitDisabled,
+                isSubmitting: isSubmitting,
+                size: composerStyle.bottomButtonSize,
+                onSubmit: onSubmit
+            )
         }
     }
 
@@ -268,28 +270,109 @@ struct PromptComposerView: View {
     }
 }
 
+private extension PromptComposerView {
+    struct InlinePhotoPickerReveal<Content: View>: View {
+        let isVisible: Bool
+        let height: CGFloat
+        let animation: Animation
+        let content: () -> Content
+
+        @State private var isMounted = false
+        @State private var isRevealed = false
+
+        init(
+            isVisible: Bool,
+            height: CGFloat,
+            animation: Animation,
+            @ViewBuilder content: @escaping () -> Content
+        ) {
+            self.isVisible = isVisible
+            self.height = height
+            self.animation = animation
+            self.content = content
+        }
+
+        var body: some View {
+            ZStack(alignment: .bottom) {
+                if isMounted {
+                    content()
+                        .frame(height: height, alignment: .bottom)
+                        .transition(.identity)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: isRevealed ? height : 0, alignment: .bottom)
+            .onAppear {
+                updateVisibility(isVisible, animated: false)
+            }
+            .onChange(of: isVisible) { _, newValue in
+                updateVisibility(newValue, animated: true)
+            }
+        }
+
+        private func updateVisibility(_ shouldReveal: Bool, animated: Bool) {
+            if shouldReveal {
+                mountContent()
+                setRevealed(true, animated: animated)
+            } else {
+                setRevealed(false, animated: animated) {
+                    isMounted = false
+                }
+            }
+        }
+
+        private func mountContent() {
+            guard !isMounted else { return }
+
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                isMounted = true
+            }
+        }
+
+        private func setRevealed(
+            _ revealed: Bool,
+            animated: Bool,
+            completion: (() -> Void)? = nil
+        ) {
+            if animated {
+                withAnimation(animation) {
+                    isRevealed = revealed
+                } completion: {
+                    completion?()
+                }
+            } else {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    isRevealed = revealed
+                }
+                completion?()
+            }
+        }
+    }
+}
+
 private extension View {
     @ViewBuilder
     func promptComposerGlassBackground<S: Shape>(
         in shape: S,
-        fallbackColor: Color
+        fallbackColor: Color,
+        interactive: Bool = true,
+        isGlassEnabled: Bool = true
     ) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: shape)
+            let effect: Glass = {
+                var glass = isGlassEnabled ? Glass.regular : Glass.identity
+                if isGlassEnabled, interactive {
+                    glass = glass.interactive()
+                }
+                return glass
+            }()
+            glassEffect(effect, in: shape)
         } else {
             background(shape.fill(fallbackColor))
-        }
-    }
-
-    @ViewBuilder
-    func focusComposerOnTap(
-        isEnabled: Bool,
-        perform action: @escaping () -> Void
-    ) -> some View {
-        if isEnabled {
-            onTapGesture(perform: action)
-        } else {
-            self
         }
     }
 }

@@ -16,9 +16,8 @@ extension PromptComposerView {
                 font: EditorMetrics.font,
                 textColor: UIColor(theme.labelColor),
                 textInsets: EditorMetrics.textInsets,
-                heightRange: EditorMetrics.heightRange
+                maxVisibleLines: EditorMetrics.maxVisibleLines
             )
-            .border(.red)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
                 placeholderView
@@ -51,13 +50,6 @@ extension PromptComposerView {
                 bottom: topInset,
                 right: horizontalInset
             )
-        }
-
-        static var heightRange: ClosedRange<CGFloat> {
-            let insetHeight = textInsets.top + textInsets.bottom
-            let minimumHeight = font.lineHeight + insetHeight
-            let maximumHeight = (font.lineHeight * CGFloat(maxVisibleLines)) + insetHeight
-            return minimumHeight...maximumHeight
         }
     }
 

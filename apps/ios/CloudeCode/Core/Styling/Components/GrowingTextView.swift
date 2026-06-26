@@ -8,7 +8,7 @@ struct GrowingTextView: UIViewRepresentable {
     let font: UIFont
     let textColor: UIColor
     let textInsets: UIEdgeInsets
-    let heightRange: ClosedRange<CGFloat>
+    let maxVisibleLines: Int
 
     func makeUIView(context: Context) -> SizingTextView {
         let textView = SizingTextView()
@@ -57,6 +57,14 @@ struct GrowingTextView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
+    }
+
+    private var heightRange: ClosedRange<CGFloat> {
+        let visibleLineCount = max(1, maxVisibleLines)
+        let insetHeight = textInsets.top + textInsets.bottom
+        let minimumHeight = font.lineHeight + insetHeight
+        let maximumHeight = (font.lineHeight * CGFloat(visibleLineCount)) + insetHeight
+        return minimumHeight...maximumHeight
     }
 
     private static func fittingHeight(for textView: UITextView, width: CGFloat) -> CGFloat {

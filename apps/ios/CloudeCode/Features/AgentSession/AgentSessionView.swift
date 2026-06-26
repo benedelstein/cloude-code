@@ -7,7 +7,6 @@ struct AgentSessionView: View {
     @Environment(\.style) private var style: Style
 
     @State private var store: AgentSessionViewModel
-    @State private var composerFocused = false
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
@@ -25,24 +24,10 @@ struct AgentSessionView: View {
                 scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
-                PromptComposerView(
-                    text: $store.draftText,
-                    focused: $composerFocused,
-                    placeholder: store.composerPlaceholder,
-                    imageAttachments: store.imageAttachmentDrafts.map(\.promptComposerPreview),
-                    imageAttachmentErrorMessage: store.imageAttachmentErrorMessage,
-                    remainingImageSlots: store.remainingImageAttachmentSlots,
-                    isImageInputEnabled: true,
-                    isSubmitDisabled: !store.canSubmitDraft,
-                    isSubmitting: store.isResponding,
-                    onSubmit: store.submitDraft,
-                    onRemoveImageAttachment: store.removeImageAttachment,
-                    onPhotosSelected: store.addImageAttachmentPhotoItems,
-                    onCameraImageCaptured: store.addImageAttachmentCameraImage
-                )
-                .padding(.horizontal, style.horizontalPadding)
-                .padding(.bottom, style.spacing) // todo zero padding when not keyboard presented. animate smoothly
-                .readSize(updateComposerHeight)
+                ComposerView(vm: store)
+                    .padding(.horizontal, style.horizontalPadding)
+                    .padding(.bottom, style.spacing)
+                    .readSize(updateComposerHeight)
             }
         }
         .overlay {
@@ -196,6 +181,7 @@ private extension AgentSessionView {
 //                        .padding(.horizontal, style.horizontalPadding)
 //                }
                 transcriptScrollView
+                    .debugUpdates()
             } else {
                 emptyScrollView
             }
