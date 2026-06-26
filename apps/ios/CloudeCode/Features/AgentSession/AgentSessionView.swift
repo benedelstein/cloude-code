@@ -7,7 +7,7 @@ struct AgentSessionView: View {
     @Environment(\.style) private var style: Style
 
     @State private var store: AgentSessionViewModel
-    @FocusState private var composerFocused: Bool
+    @State private var composerFocused = false
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()

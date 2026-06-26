@@ -15,7 +15,7 @@ struct PromptComposerView: View {
     @Environment(\.style) private var style: Style
 
     @Binding private var text: String
-    private var focused: FocusState<Bool>.Binding
+    private var focused: Binding<Bool>
     private let placeholder: String
     private let imageAttachments: [PromptComposerImageAttachmentPreview]
     private let imageAttachmentErrorMessage: String?
@@ -36,7 +36,7 @@ struct PromptComposerView: View {
 
     init(
         text: Binding<String>,
-        focused: FocusState<Bool>.Binding,
+        focused: Binding<Bool>,
         placeholder: String,
         imageAttachments: [PromptComposerImageAttachmentPreview] = [],
         imageAttachmentErrorMessage: String? = nil,
