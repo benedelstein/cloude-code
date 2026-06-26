@@ -9,6 +9,8 @@ describe("buildSystemPromptAppend", () => {
     expect(prompt).toContain("cloude/<descriptive-slug>-abcd");
     expect(prompt).toContain("NEVER push to `main`");
     expect(prompt).toContain("automatically creates a pull request");
+    expect(prompt).toContain("Use checkpoint tooling silently");
+    expect(prompt).toContain("unless the user explicitly asks about checkpoint status");
     expect(prompt).toContain("`TaskCreate`");
     expect(prompt).toContain("`TaskUpdate`");
     expect(prompt).toContain("`TaskList`");
