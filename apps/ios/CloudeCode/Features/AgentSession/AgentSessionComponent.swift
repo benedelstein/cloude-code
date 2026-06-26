@@ -8,6 +8,8 @@ protocol AgentSessionDependency: Dependency {
 
     var fetchImageAction: any FetchImageAction { get }
 
+    var attachmentsAPI: any AttachmentsAPIProviding { get }
+
     @MainActor
     var sessionMessageStore: SessionMessageStore { get }
 }
@@ -36,7 +38,8 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 session: session,
                 socket: dependency.makeSessionSocket(sessionId: session.id),
                 sessionMessageStore: dependency.sessionMessageStore,
-                transcriptBuilder: transcriptBuilder
+                transcriptBuilder: transcriptBuilder,
+                attachmentsAPI: dependency.attachmentsAPI
             )
         }
     }

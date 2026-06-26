@@ -1,4 +1,3 @@
-import API
 import Domain
 import Entities
 import SwiftUI
@@ -30,16 +29,20 @@ struct AgentSessionView: View {
                     text: $store.draftText,
                     focused: $composerFocused,
                     placeholder: store.composerPlaceholder,
+                    imageAttachments: store.imageAttachmentDrafts.map(\.promptComposerPreview),
+                    imageAttachmentErrorMessage: store.imageAttachmentErrorMessage,
+                    remainingImageSlots: store.remainingImageAttachmentSlots,
+                    isImageInputEnabled: true,
                     isSubmitDisabled: !store.canSubmitDraft,
                     isSubmitting: store.isResponding,
-                    onSubmit: store.submitDraft
+                    onSubmit: store.submitDraft,
+                    onRemoveImageAttachment: store.removeImageAttachment,
+                    onPhotosSelected: store.addImageAttachmentPhotoItems,
+                    onCameraImageCaptured: store.addImageAttachmentCameraImage
                 )
                 .padding(.horizontal, style.horizontalPadding)
                 .padding(.bottom, style.spacing) // todo zero padding when not keyboard presented. animate smoothly
-                .readSize { size in
-                    guard abs(composerHeight - size.height) > 0.5 else { return }
-                    composerHeight = size.height
-                }
+                .readSize(updateComposerHeight)
             }
         }
         .overlay {
@@ -69,6 +72,13 @@ struct AgentSessionView: View {
         }
         .onDisappear {
             store.unbind()
+        }
+    }
+
+    private func updateComposerHeight(_ size: CGSize) {
+        guard abs(composerHeight - size.height) > 0.5 else { return }
+        withAnimation(style.springAnimation) {
+            composerHeight = size.height
         }
     }
 
@@ -133,6 +143,16 @@ private extension AgentSessionView {
             .padding(.vertical, style.gridSize / 2)
             .accessibilityLabel("Agent is responding")
         }
+    }
+}
+
+private extension ImageAttachmentDraft {
+    var promptComposerPreview: PromptComposerImageAttachmentPreview {
+        PromptComposerImageAttachmentPreview(
+            id: id,
+            previewData: previewData,
+            status: status
+        )
     }
 }
 

@@ -3,9 +3,13 @@ import Combine
 import Domain
 import Entities
 import Foundation
+import PhotosUI
+import SwiftUI
+import UIKit
 
 // swiftlint:disable file_length
 
+/// Coordinates session state, transcript rendering, composer drafts, and socket events.
 @MainActor
 @Observable
 final class AgentSessionViewModel {
@@ -19,7 +23,11 @@ final class AgentSessionViewModel {
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
+    // Keeps the local upload drafts for an optimistic message so they can be
+    // restored if send fails after the composer has already been cleared.
+    @ObservationIgnored private var submittedAttachmentDrafts: [String: [ImageAttachmentDraft]] = [:]
 
+    private let imageAttachments: ImageAttachmentStore
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
     /// Hydrated, normalized display data per message
@@ -47,7 +55,10 @@ final class AgentSessionViewModel {
     var errorMessage: String?
 
     var canSubmitDraft: Bool {
-        !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !imageAttachments.attachments.isEmpty
+        return hasContent
+            && !imageAttachments.hasPendingOrFailedUploads
             && connectionState == .connected
             && !isSending
             && !isResponding
@@ -78,38 +89,17 @@ final class AgentSessionViewModel {
         session: SessionSummaryModel,
         socket: SessionSocket,
         sessionMessageStore: SessionMessageStore,
-        transcriptBuilder: any AgentSessionTranscriptBuilding
+        transcriptBuilder: any AgentSessionTranscriptBuilding,
+        attachmentsAPI: any AttachmentsAPIProviding
     ) {
         self.session = session
         self.socket = socket
         self.sessionMessageStore = sessionMessageStore
         self.transcriptBuilder = transcriptBuilder
-    }
-
-    /// Submit the composed message
-    func submitDraft() {
-        let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty, !isSending, !isResponding else {
-            return
-        }
-
-        draftText = ""
-        let clientMessageId = appendPendingOptimisticUserMessage(content: content)
-        isSending = true
-        isWaitingForResponse = true
-        errorMessage = nil
-
-        Task { [socket] in
-            do {
-                try await socket.sendChat(
-                    content: content,
-                    clientMessageId: clientMessageId
-                )
-                self.isSending = false
-            } catch {
-                self.recordSendError(error, submittedContent: content)
-            }
-        }
+        imageAttachments = ImageAttachmentStore(
+            sessionId: session.id,
+            attachmentsAPI: attachmentsAPI
+        )
     }
 
     // swiftlint:disable:next cyclomatic_complexity
@@ -124,6 +114,7 @@ final class AgentSessionViewModel {
         case .operationError(let operationError):
             errorMessage = operationError.message
             removePendingOptimisticUserMessage(restoreDraft: draftText.isEmpty)
+            restoreLastSubmittedAttachments()
             resetPendingResponse()
         case .chatAccepted(let clientMessageId, let messageId):
             acceptOptimisticUserMessage(
@@ -243,13 +234,17 @@ final class AgentSessionViewModel {
 
     private func recordSendError(
         _ error: any Error,
-        submittedContent: String
+        submittedContent: String,
+        submittedAttachments: [ImageAttachmentDraft],
+        clientMessageId: String
     ) {
         errorMessage = error.localizedDescription
+        submittedAttachmentDrafts[clientMessageId] = nil
         removePendingOptimisticUserMessage(
             restoreDraft: draftText.isEmpty,
             submittedContent: submittedContent
         )
+        imageAttachments.restore(submittedAttachments)
         resetPendingResponse()
     }
 
@@ -279,6 +274,82 @@ final class AgentSessionViewModel {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
             clearOptimisticUserMessageTracking()
+        }
+    }
+}
+
+extension AgentSessionViewModel {
+    /// Image drafts currently shown by the composer attachment strip.
+    var imageAttachmentDrafts: [ImageAttachmentDraft] {
+        imageAttachments.attachments
+    }
+
+    /// Inline composer error for image selection or upload failures.
+    var imageAttachmentErrorMessage: String? {
+        imageAttachments.errorMessage
+    }
+
+    /// Number of additional image attachments the composer can accept.
+    var remainingImageAttachmentSlots: Int {
+        imageAttachments.remainingSlots
+    }
+
+    /// Adds selected Photos items and starts uploading each loaded image.
+    func addImageAttachmentPhotoItems(_ items: [PhotosPickerItem]) {
+        imageAttachments.addPhotoItems(items)
+    }
+
+    /// Adds a captured camera image and starts uploading it.
+    func addImageAttachmentCameraImage(_ image: UIImage) {
+        imageAttachments.addCameraImage(image)
+    }
+
+    /// Removes an image draft from the composer and cleans up uploaded data if needed.
+    func removeImageAttachment(id: UUID) {
+        imageAttachments.removeAttachment(id: id)
+    }
+}
+
+extension AgentSessionViewModel {
+    /// Submit the composed message.
+    func submitDraft() {
+        let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let uploadedAttachments = imageAttachments.uploadedDescriptors
+        guard !content.isEmpty || !uploadedAttachments.isEmpty,
+              !imageAttachments.hasPendingOrFailedUploads,
+              !isSending,
+              !isResponding else {
+            return
+        }
+
+        let submittedDrafts = imageAttachments.attachments
+        draftText = ""
+        imageAttachments.clearAfterSubmit()
+        let clientMessageId = appendPendingOptimisticUserMessage(
+            content: content,
+            attachments: uploadedAttachments
+        )
+        submittedAttachmentDrafts[clientMessageId] = submittedDrafts
+        isSending = true
+        isWaitingForResponse = true
+        errorMessage = nil
+
+        Task { [socket, uploadedAttachments] in
+            do {
+                try await socket.sendChat(
+                    content: content.isEmpty ? nil : content,
+                    attachmentIds: uploadedAttachments.map(\.attachmentId),
+                    clientMessageId: clientMessageId
+                )
+                self.isSending = false
+            } catch {
+                self.recordSendError(
+                    error,
+                    submittedContent: content,
+                    submittedAttachments: submittedDrafts,
+                    clientMessageId: clientMessageId
+                )
+            }
         }
     }
 }
@@ -351,12 +422,18 @@ extension AgentSessionViewModel {
         messages.removeAll { $0.id == id }
     }
 
-    private func appendPendingOptimisticUserMessage(content: String) -> String {
+    private func appendPendingOptimisticUserMessage(
+        content: String,
+        attachments: [UploadedAttachment]
+    ) -> String {
         let clientMessageId = UUID().uuidString.lowercased()
         let message = SessionMessage(
             id: clientMessageId,
             role: .user,
-            text: content,
+            parts: optimisticUserMessageParts(
+                content: content,
+                attachments: attachments
+            ),
             metadata: .object(["optimistic": .bool(true)])
         )
         upsert(message)
@@ -370,6 +447,7 @@ extension AgentSessionViewModel {
         }) else {
             return
         }
+        submittedAttachmentDrafts[clientMessageId] = nil
         let optimisticMessage = messages[index]
         let acceptedMessage = SessionMessage(
             id: messageId,
@@ -439,6 +517,47 @@ extension AgentSessionViewModel {
         message.role == .user
             && message.id != optimisticMessage.id
             && message.text == optimisticMessage.text
+            && imageFileURLs(in: message) == imageFileURLs(in: optimisticMessage)
+    }
+
+    private func optimisticUserMessageParts(
+        content: String,
+        attachments: [UploadedAttachment]
+    ) -> [SessionMessage.Part] {
+        var parts: [SessionMessage.Part] = []
+        if !content.isEmpty {
+            parts.append(.text(.init(text: content)))
+        }
+        parts.append(contentsOf: attachments.map { attachment in
+            .file(.init(
+                mediaType: attachment.mediaType,
+                filename: attachment.filename,
+                url: attachment.contentUrl,
+                width: attachment.width,
+                height: attachment.height
+            ))
+        })
+        return parts
+    }
+
+    private func imageFileURLs(in message: SessionMessage) -> [String] {
+        message.parts.compactMap { part in
+            guard case .file(let file) = part,
+                  file.mediaType.hasPrefix("image/") else {
+                return nil
+            }
+            return file.url
+        }
+    }
+
+    private func restoreLastSubmittedAttachments() {
+        guard let clientMessageId = messages.first(where: \.isOptimisticUserMessage)?.id,
+              let submittedAttachments = submittedAttachmentDrafts.removeValue(
+                forKey: clientMessageId
+              ) else {
+            return
+        }
+        imageAttachments.restore(submittedAttachments)
     }
 }
 

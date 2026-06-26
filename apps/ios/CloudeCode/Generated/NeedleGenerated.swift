@@ -68,6 +68,10 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.fetchImageAction
     }
 
+    var attachmentsAPI: any AttachmentsAPIProviding {
+        applicationComponent.attachmentsAPI
+    }
+
     @MainActor
     var sessionMessageStore: SessionMessageStore {
         homeComponent.sessionMessageStore

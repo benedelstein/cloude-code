@@ -111,7 +111,7 @@ struct SomeView: View {
 }
 ```
 
-You can also use environment with @Observable
+You can also use environment with @Observable:
 
 ```swift
 @Observable

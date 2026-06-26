@@ -77,6 +77,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var attachmentsAPI: any AttachmentsAPIProviding {
+        shared {
+            AttachmentsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
     @MainActor var notificationHandler: NotificationHandler {
         shared {
             NotificationHandler()

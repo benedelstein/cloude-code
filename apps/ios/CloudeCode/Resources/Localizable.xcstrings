@@ -10,7 +10,7 @@
     "Account" : {
 
     },
-    "Add attachment" : {
+    "Add images" : {
 
     },
     "Agent is responding" : {
@@ -20,6 +20,9 @@
 
     },
     "Back" : {
+
+    },
+    "Camera" : {
 
     },
     "Cancel" : {
@@ -64,6 +67,9 @@
     "Diff available" : {
 
     },
+    "Dismiss photo picker" : {
+
+    },
     "Edit %@" : {
       "comment" : "Title for a file edit tool action"
     },
@@ -91,6 +97,9 @@
       }
     },
     "Exit %lld" : {
+
+    },
+    "Failed" : {
 
     },
     "Fetch %@" : {
@@ -195,6 +204,9 @@
     "No sessions" : {
 
     },
+    "Photos" : {
+
+    },
     "Plan" : {
       "comment" : "Title for a plan tool action"
     },
@@ -297,6 +309,9 @@
       }
     },
     "Recent app logs are kept in memory for debugging." : {
+
+    },
+    "Remove image" : {
 
     },
     "Responding" : {
@@ -436,6 +451,9 @@
 
     },
     "Share image" : {
+
+    },
+    "Show All Photos" : {
 
     },
     "Sign in" : {

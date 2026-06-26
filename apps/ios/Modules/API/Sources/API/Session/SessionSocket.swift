@@ -74,9 +74,15 @@ public actor SessionSocket {
         )))
     }
 
-    public func sendChat(content: String, clientMessageId: String) async throws {
+    /// Sends a user chat message with optional attachment references.
+    public func sendChat(
+        content: String?,
+        attachmentIds: [String] = [],
+        clientMessageId: String
+    ) async throws {
         try await send(.chatMessage(ChatMessageEvent(
             content: content,
+            attachments: attachmentIds.isEmpty ? nil : attachmentIds.map(MessageAttachmentRef.init),
             clientMessageId: clientMessageId
         )))
     }
