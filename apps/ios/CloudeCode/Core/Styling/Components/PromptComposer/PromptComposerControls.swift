@@ -18,6 +18,7 @@ extension PromptComposerView {
                 textInsets: EditorMetrics.textInsets,
                 heightRange: EditorMetrics.heightRange
             )
+            .border(.red)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
                 placeholderView
@@ -47,7 +48,7 @@ extension PromptComposerView {
             UIEdgeInsets(
                 top: topInset,
                 left: horizontalInset,
-                bottom: 0,
+                bottom: topInset,
                 right: horizontalInset
             )
         }
