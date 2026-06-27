@@ -53,10 +53,9 @@ public actor UserSessionsSocket {
 
     public init(
         baseURL: URL,
-        urlSession: URLSession = .shared,
         tokenCache: WebSocketTokenCache
     ) {
-        connection = WebSocketConnection(urlSession: urlSession) {
+        connection = WebSocketConnection {
             let token = try await tokenCache.token()
             return try WebSocketURLBuilder.url(baseURL: baseURL, path: "sessions/updates", token: token.token)
         }

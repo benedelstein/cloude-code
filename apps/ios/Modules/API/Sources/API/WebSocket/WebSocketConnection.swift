@@ -24,6 +24,7 @@ public actor WebSocketConnection {
     public nonisolated let events: AsyncStream<WebSocketTransportEvent>
 
     private let makeURL: @Sendable () async throws -> URL
+    private let sessionDelegate: WebSocketSessionDelegate
     private let urlSession: URLSession
     private let continuation: AsyncStream<WebSocketTransportEvent>.Continuation
 
@@ -34,11 +35,18 @@ public actor WebSocketConnection {
 
     private static let maxRetryDelaySeconds: Double = 30
 
+    /// Creates a reconnecting WebSocket connection.
     public init(
-        urlSession: URLSession = .shared,
+        urlSessionConfiguration: URLSessionConfiguration = .default,
         makeURL: @escaping @Sendable () async throws -> URL
     ) {
-        self.urlSession = urlSession
+        let sessionDelegate = WebSocketSessionDelegate()
+        self.sessionDelegate = sessionDelegate
+        self.urlSession = URLSession(
+            configuration: urlSessionConfiguration,
+            delegate: sessionDelegate,
+            delegateQueue: nil
+        )
         self.makeURL = makeURL
         (events, continuation) = AsyncStream.makeStream()
     }
@@ -78,9 +86,12 @@ public actor WebSocketConnection {
                 let url = try await makeURL()
                 Logger.debug("websocket connecting to", url.sanitizedWebSocketLogString)
                 let task = urlSession.webSocketTask(with: url)
-                task.resume()
                 socketTask = task
-                Logger.debug("websocket task resumed")
+                try await awaitOpen(on: task)
+                guard !Task.isCancelled, !isStopped else { return }
+                retryCount = 0
+                Logger.debug("websocket connected")
+                continuation.yield(.stateChanged(.connected))
                 try await receiveLoop(on: task)
             } catch {
                 // Fall through to backoff; covers failed upgrades and drops.
@@ -95,17 +106,22 @@ public actor WebSocketConnection {
         }
     }
 
+    private func awaitOpen(on task: URLSessionWebSocketTask) async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                sessionDelegate.registerOpenContinuation(continuation, for: task)
+                task.resume()
+                Logger.debug("websocket task resumed")
+            }
+        } onCancel: {
+            sessionDelegate.finishOpenWaiter(for: task, with: .failure(CancellationError()))
+        }
+    }
+
     private func receiveLoop(on task: URLSessionWebSocketTask) async throws {
-        var hasConfirmedConnection = false
         while !Task.isCancelled {
             let message = try await task.receive()
             guard !Task.isCancelled, !isStopped else { return }
-            if !hasConfirmedConnection {
-                hasConfirmedConnection = true
-                retryCount = 0
-                Logger.debug("websocket connected")
-                continuation.yield(.stateChanged(.connected))
-            }
             switch message {
             case .string(let text):
                 continuation.yield(.message(Data(text.utf8)))
@@ -122,6 +138,59 @@ public actor WebSocketConnection {
         let delay = Double.random(in: (baseDelay / 2)...baseDelay)
         retryCount += 1
         try? await Task.sleep(for: .seconds(delay))
+    }
+}
+
+private final class WebSocketSessionDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var openContinuations: [ObjectIdentifier: CheckedContinuation<Void, any Error>] = [:]
+
+    func registerOpenContinuation(
+        _ continuation: CheckedContinuation<Void, any Error>,
+        for task: URLSessionWebSocketTask
+    ) {
+        lock.withLock {
+            openContinuations[ObjectIdentifier(task)] = continuation
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        finishOpenWaiter(for: webSocketTask, with: .success(()))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: (any Error)?
+    ) {
+        guard let webSocketTask = task as? URLSessionWebSocketTask else { return }
+        finishOpenWaiter(
+            for: webSocketTask,
+            with: .failure(error ?? URLError(.networkConnectionLost))
+        )
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        finishOpenWaiter(for: webSocketTask, with: .failure(URLError(.networkConnectionLost)))
+    }
+
+    func finishOpenWaiter(
+        for task: URLSessionWebSocketTask,
+        with result: Result<Void, any Error>
+    ) {
+        let continuation = lock.withLock {
+            openContinuations.removeValue(forKey: ObjectIdentifier(task))
+        }
+        continuation?.resume(with: result)
     }
 }
 

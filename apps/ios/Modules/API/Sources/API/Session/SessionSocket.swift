@@ -37,11 +37,10 @@ public actor SessionSocket {
     public init(
         baseURL: URL,
         sessionId: String,
-        urlSession: URLSession = .shared,
         tokenCache: WebSocketTokenCache
     ) {
         let path = "agents/session/\(sessionId)"
-        connection = WebSocketConnection(urlSession: urlSession) {
+        connection = WebSocketConnection {
             let token = try await tokenCache.token()
             return try WebSocketURLBuilder.url(baseURL: baseURL, path: path, token: token.token)
         }
