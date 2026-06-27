@@ -11,6 +11,7 @@ final class HomeRouter: NotificationHandlerDelegate {
 
     @ObservationIgnored private let notificationHandler: NotificationHandler
     @ObservationIgnored private let sessionSummaryStore: SessionSummaryStore
+    @ObservationIgnored private var navigationRequestID = 0
 
     var notificationTap: NotificationRoute? {
         notificationHandler.notificationTap
@@ -51,6 +52,9 @@ final class HomeRouter: NotificationHandlerDelegate {
 
     /// Routes a notification tap by replacing Home's navigation path with the target session.
     func handleNotificationTap(_ route: NotificationRoute) async {
+        navigationRequestID += 1
+        let requestID = navigationRequestID
+
         switch route {
         case .session(let sessionId, _):
             guard path.last?.id != sessionId else {
@@ -62,6 +66,17 @@ final class HomeRouter: NotificationHandlerDelegate {
                 Logger.warning("Notification target session missing:", sessionId)
                 notificationHandler.consumeTap(route)
                 return
+            }
+
+            if !path.isEmpty {
+                path.removeAll()
+                // Future optimization: replace this fixed pause with a scroll view delegate
+                // completion signal once navigation pop exposes a reliable finish callback.
+                try? await Task.sleep(nanoseconds: 400_000_000)
+
+                guard requestID == navigationRequestID, !Task.isCancelled else {
+                    return
+                }
             }
 
             path = [target]
