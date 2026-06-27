@@ -93,11 +93,8 @@ public struct APIClient: Sendable {
             throw APIError.invalidURL
         }
 
-        let boundary = "Boundary-\(UUID().uuidString)"
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = request.method.rawValue
-        urlRequest.httpBody = MultipartFormDataEncoder.encode(parts: request.parts, boundary: boundary)
-        urlRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         for (key, value) in defaultHeaders {
             urlRequest.setValue(value, forHTTPHeaderField: key)
@@ -105,6 +102,12 @@ public struct APIClient: Sendable {
         for (key, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        urlRequest.httpBody = MultipartFormDataEncoder.encode(parts: request.parts, boundary: boundary)
+        // The boundary is part of the wire format: the header tells the server
+        // which byte marker separates fields inside the body we just encoded.
+        urlRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         return urlRequest
     }
 

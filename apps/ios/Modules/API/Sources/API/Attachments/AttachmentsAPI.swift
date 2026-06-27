@@ -30,6 +30,8 @@ private struct UploadAttachments: MultipartAPIRequest {
         if let sessionId {
             uploadParts.append(.field(name: "sessionId", value: sessionId))
         }
+        // Multipart sends multiple files as repeated parts. The server reads
+        // each `File` value from the form data and stores them as attachments.
         uploadParts.append(contentsOf: files.map { file in
             .file(
                 name: "files",

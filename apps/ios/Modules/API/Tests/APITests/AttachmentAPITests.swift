@@ -27,4 +27,22 @@ struct AttachmentAPITests {
         #expect(bodyString.contains("png-bytes"))
         #expect(bodyString.hasSuffix("--TestBoundary--\r\n"))
     }
+
+    @Test func multipartEncoderEscapesDispositionHeaderParameters() throws {
+        let body = MultipartFormDataEncoder.encode(
+            parts: [
+                .file(
+                    name: "files",
+                    filename: "screen\"\r\nInjected: yes.png",
+                    contentType: "image/png",
+                    data: Data("bytes".utf8)
+                )
+            ],
+            boundary: "TestBoundary"
+        )
+
+        let bodyString = try #require(String(data: body, encoding: .utf8))
+        #expect(bodyString.contains("filename=\"screen\\\"  Injected: yes.png\""))
+        #expect(!bodyString.contains("\r\nInjected: yes.png"))
+    }
 }

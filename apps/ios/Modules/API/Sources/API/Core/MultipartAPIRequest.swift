@@ -44,32 +44,42 @@ enum MultipartFormDataEncoder {
     static func encode(parts: [MultipartFormPart], boundary: String) -> Data {
         var data = Data()
         for part in parts {
+            // Each part starts with the same boundary marker. The matching
+            // Content-Type header lets the server split the raw body back into
+            // these individual fields and files.
             data.appendString("--\(boundary)\r\n")
             data.appendString(dispositionHeader(for: part))
             if let contentType = part.contentType {
                 data.appendString("Content-Type: \(contentType)\r\n")
             }
+            // A blank CRLF line separates part headers from the part bytes.
             data.appendString("\r\n")
             data.append(part.data)
             data.appendString("\r\n")
         }
+        // The trailing "--" marks the final boundary; without it the server may
+        // treat the body as incomplete.
         data.appendString("--\(boundary)--\r\n")
         return data
     }
 
     private static func dispositionHeader(for part: MultipartFormPart) -> String {
-        var value = "Content-Disposition: form-data; name=\"\(escaped(part.name))\""
+        var value = "Content-Disposition: form-data; name=\"\(escapedHeaderParameter(part.name))\""
         if let filename = part.filename {
-            value.append("; filename=\"\(escaped(filename))\"")
+            value.append("; filename=\"\(escapedHeaderParameter(filename))\"")
         }
         value.append("\r\n")
         return value
     }
 
-    private static func escaped(_ value: String) -> String {
+    private static func escapedHeaderParameter(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+            // Header parameters are single-line quoted strings. Remove line
+            // breaks so a filename cannot accidentally create another header.
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
     }
 }
 
