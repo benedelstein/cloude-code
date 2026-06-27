@@ -18,6 +18,7 @@ extension SessionTranscriptCollectionRepresentable {
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
+        private var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
         var handledScrollRequestID = 0
         let scrollCoordinator: SessionTranscriptScrollCoordinator
@@ -60,6 +61,22 @@ extension SessionTranscriptCollectionRepresentable {
 
         func indexPath(forItemID id: String) -> IndexPath? {
             dataSource?.indexPath(for: id)
+        }
+
+        func prepareWorkingIndicatorLayoutTransition(_ collectionView: UICollectionView) {
+            guard isInitialAnchorComplete else {
+                workingIndicatorLayoutFrameBeforeUpdate = nil
+                return
+            }
+            guard !collectionView.isTracking && !collectionView.isDragging && !collectionView.isDecelerating else {
+                workingIndicatorLayoutFrameBeforeUpdate = nil
+                return
+            }
+
+            workingIndicatorLayoutFrameBeforeUpdate = visibleFrame(
+                forItemID: SessionTranscriptItem.workingItemID,
+                in: collectionView
+            )
         }
 
         func update(
@@ -128,6 +145,11 @@ extension SessionTranscriptCollectionRepresentable {
             preserveBottomAfterLayout(
                 collectionView,
                 wasNearBottomBeforeLayout: wasNearBottomBeforeLayout,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
+            animateWorkingIndicatorLayoutTransition(
+                in: collectionView,
                 layoutChange: layoutChange,
                 keyboardTransition: keyboardTransition
             )
@@ -251,6 +273,52 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
     func applyContentInset(_ contentInset: UIEdgeInsets, to collectionView: UICollectionView) {
         collectionView.contentInset = contentInset
         collectionView.verticalScrollIndicatorInsets = contentInset
+    }
+
+    func animateWorkingIndicatorLayoutTransition(
+        in collectionView: UICollectionView,
+        layoutChange: SessionTranscriptLayoutChange,
+        keyboardTransition: KeyboardTransition?
+    ) {
+        defer {
+            workingIndicatorLayoutFrameBeforeUpdate = nil
+        }
+
+        guard layoutChange.contentSizeChanged else { return }
+        guard keyboardTransition == nil else { return }
+        guard let previousFrame = workingIndicatorLayoutFrameBeforeUpdate else { return }
+        guard let cell = cell(forItemID: SessionTranscriptItem.workingItemID, in: collectionView) else { return }
+
+        let currentFrame = cell.convert(cell.bounds, to: collectionView)
+        let deltaX = previousFrame.minX - currentFrame.minX
+        let deltaY = previousFrame.minY - currentFrame.minY
+        guard abs(deltaX) > 0.5 || abs(deltaY) > 0.5 else { return }
+
+        cell.layer.removeAllAnimations()
+        cell.transform = CGAffineTransform(translationX: deltaX, y: deltaY)
+        UIView.animate(
+            withDuration: 0.22,
+            delay: 0,
+            options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]
+        ) {
+            cell.transform = .identity
+        }
+    }
+
+    func visibleFrame(forItemID id: String, in collectionView: UICollectionView) -> CGRect? {
+        guard let cell = cell(forItemID: id, in: collectionView) else { return nil }
+
+        if let presentationFrame = cell.layer.presentation()?.frame {
+            return collectionView.convert(presentationFrame, from: cell.superview)
+        }
+
+        return cell.convert(cell.bounds, to: collectionView)
+    }
+
+    func cell(forItemID id: String, in collectionView: UICollectionView) -> UICollectionViewCell? {
+        guard let indexPath = indexPath(forItemID: id) else { return nil }
+
+        return collectionView.cellForItem(at: indexPath)
     }
 
     func roundedForScreen(_ value: CGFloat, in view: UIView) -> CGFloat {

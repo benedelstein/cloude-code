@@ -1,6 +1,8 @@
 import UIKit
 
 final class LayoutReportingCollectionView: UICollectionView {
+    /// Called before UIKit lays out this collection view's subviews.
+    var onBeforeLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
     /// Called after UIKit completes this collection view's layout pass.
     var onLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
     /// Most recent keyboard transition waiting to be consumed by the transcript coordinator.
@@ -29,6 +31,7 @@ final class LayoutReportingCollectionView: UICollectionView {
     }
 
     override func layoutSubviews() {
+        onBeforeLayoutSubviews?(self)
         super.layoutSubviews()
         onLayoutSubviews?(self)
     }
