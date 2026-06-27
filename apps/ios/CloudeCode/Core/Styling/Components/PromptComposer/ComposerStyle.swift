@@ -8,8 +8,9 @@
 import SwiftUI
 
 struct ComposerStyle {
-    var horizontalPadding: CGFloat = 12
+    var contentInset: CGFloat = 8
     var bottomButtonSize: CGFloat = 32
+    let photoPickerHeight: CGFloat = 350
 }
 
 extension EnvironmentValues {

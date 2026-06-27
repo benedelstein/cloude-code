@@ -85,23 +85,26 @@ struct PromptComposerView: View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
     }
 
-    @Namespace var id
-
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 centerContent
                 bottomBar
-                    .padding(8)
+                    .padding(composerStyle.contentInset)
             }
 
             ZStack {
                 inlinePhotoPickerContent
             }
-            .frame(height: 350, alignment: .bottom)
-            .frame(height: isInlinePhotoPickerVisible ? 350 : 50, alignment: .bottom)
+            .frame(height: composerStyle.photoPickerHeight, alignment: .bottom)
+            .frame(
+                height: isInlinePhotoPickerVisible ?
+                    composerStyle.photoPickerHeight :
+                    composerStyle.bottomButtonSize + composerStyle.contentInset * 2,
+                alignment: .bottom
+            )
+            // opacity must go after the frame
             .opacity(isInlinePhotoPickerVisible ? 1 : 0)
-            .allowsHitTesting(isInlinePhotoPickerVisible)
             .zIndex(1)
         }
         .clipShape(composerShape)
@@ -261,7 +264,7 @@ private extension PromptComposerView {
         var body: some View {
             ZStack(alignment: .bottom) {
                 theme.secondaryBackgroundColor // opaque bg
-
+                    .zIndex(0)
                 // conditionally show the picker, but keep the bottom controls
                 // visible so they dont fly up from bottom.
                 // they appear in place
@@ -281,18 +284,26 @@ private extension PromptComposerView {
                     .photosPickerAccessoryVisibility(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
+                    .zIndex(1)
                 }
 
                 controls
-                    .padding(8)
+                    .padding(composerStyle.contentInset)
+                    .zIndex(2)
+//                    .animation(nil, value: isVisible)
             }
+            .allowsHitTesting(isVisible)
             .sensoryFeedback(.selection, trigger: selectedPhotoItems)
             .onChange(of: selectedPhotoItems) {
                 setStagedSelectionVisible(!$1.isEmpty)
             }
             .onChange(of: isVisible) { _, newValue in
                 guard !newValue else { return }
-                resetSelection()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation(nil) {
+                        resetSelection()
+                    }
+                }
             }
         }
 
@@ -309,6 +320,9 @@ private extension PromptComposerView {
 
                 Spacer()
 
+                // fixme - there's a weird fly-up animation
+                // the first time you tap confirm on a session.
+                // this button should remain fixed in its spot.
                 Button {
                     lightFeedback.impactOccurred()
                     if hasStagedSelection {
@@ -320,8 +334,9 @@ private extension PromptComposerView {
                     confirmationLabel
                         .padding(.horizontal, 12)
                         .frame(height: composerStyle.bottomButtonSize)
+                        .contentShape(.capsule)
                         // glassButtonStyle with diff tint doesnt animate well.
-                        .glassBackground(in: .capsule, tint: hasStagedSelection ? theme.accentBlue : nil)
+                        .glassBackground(in: .capsule, tint: hasStagedSelection ? Color.blue : nil)
                 }
                 .buttonStyle(.plain)
                 .animation(style.springAnimation, value: hasStagedSelection)
@@ -343,9 +358,11 @@ private extension PromptComposerView {
         private func confirmSelection() {
             let items = selectedPhotoItems
             guard !items.isEmpty else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 // delay for animation
-                resetSelection()
+                withAnimation(nil) {
+                    resetSelection()
+                }
             }
             onPhotosSelected(items)
         }
