@@ -32,17 +32,13 @@ struct UserMessageView: View {
         }
     }
 
-    private var hasText: Bool {
-        !message.text.isEmpty
-    }
-
     var body: some View {
         HStack(alignment: .top) {
             Spacer(minLength: style.gridSize * 5)
             VStack(alignment: .trailing, spacing: style.gridSize / 2) {
                 imageViews
                 // future optimization - chunk this text if its long
-                if hasText {
+                if !message.text.isEmpty {
                     Text(verbatim: message.text)
                         .styledFont(.subheadline)
                         .foregroundStyle(theme.labelColor)
@@ -57,12 +53,18 @@ struct UserMessageView: View {
     @ViewBuilder
     private var imageViews: some View {
         if !images.isEmpty {
-            HStack(spacing: style.gridSize) {
-                ForEach(images) { image in
-                    userImageView(image)
+            ScrollView(.horizontal) {
+                HStack(spacing: style.gridSize) {
+                    ForEach(images) { image in
+                        userImageView(image)
+                    }
                 }
             }
+            .defaultScrollAnchor(.trailing)
+            .scrollBounceBehavior(.basedOnSize)
             .frame(maxWidth: .infinity, alignment: .trailing)
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
         }
     }
 
@@ -178,7 +180,7 @@ private struct UserMessageRemoteImage: View {
 
     private var imageFailureView: some View {
         let size = displaySize()
-        return Image(systemName: "photo")
+        return Image(systemName: "exclamationmark.triangle")
             .foregroundStyle(theme.secondaryLabelColor)
             .frame(width: size.width, height: size.height)
             .background(imageShape.fill(theme.loadingBackgroundColor))

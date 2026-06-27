@@ -269,23 +269,25 @@ private extension AgentSessionView {
 
         @ViewBuilder
         private func transcriptRow(_ item: SessionTranscriptItem) -> some View {
-            switch item {
-            case .userMessage(let message):
-                UserMessageView(message: message)
-                    .environment(\.openAgentSessionImage, openImageAction)
-            case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
-                AssistantMessageView(
-                    displayData: displayData,
-                    isStreaming: isStreaming,
-                    autoCollapseOnAppear: autoCollapse,
-                    destination: $destination
-                ) {
-                    if autoCollapse {
-                        autoCollapseMessageId = nil
+            Group {
+                switch item {
+                case .userMessage(let message):
+                    UserMessageView(message: message)
+                        .environment(\.openAgentSessionImage, openImageAction)
+                case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
+                    AssistantMessageView(
+                        displayData: displayData,
+                        isStreaming: isStreaming,
+                        autoCollapseOnAppear: autoCollapse,
+                        destination: $destination
+                    ) {
+                        if autoCollapse {
+                            autoCollapseMessageId = nil
+                        }
                     }
+                case .workingIndicator:
+                    WorkingIndicatorView()
                 }
-            case .workingIndicator:
-                WorkingIndicatorView()
             }
         }
 

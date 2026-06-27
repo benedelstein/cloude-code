@@ -21,6 +21,7 @@ struct SessionImageInfo: Identifiable, Equatable {
 }
 
 struct OpenAgentSessionImageAction: Equatable {
+    // needed for view updates optimization
     static func == (lhs: OpenAgentSessionImageAction, rhs: OpenAgentSessionImageAction) -> Bool {
         true
     }
