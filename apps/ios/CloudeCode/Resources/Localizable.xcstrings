@@ -70,9 +70,6 @@
     "Diff available" : {
 
     },
-    "Dismiss photo picker" : {
-
-    },
     "Edit %@" : {
       "comment" : "Title for a file edit tool action"
     },
@@ -444,6 +441,9 @@
         }
       }
     },
+    "Select photos" : {
+
+    },
     "Send" : {
 
     },
@@ -456,7 +456,7 @@
     "Share image" : {
 
     },
-    "Show All Photos" : {
+    "Show all photos" : {
 
     },
     "Sign in" : {

@@ -46,8 +46,7 @@ struct PromptComposerView: View {
     @State private var isInlinePhotoPickerVisible: Bool = false
     @State private var isPhotoSheetPresented: Bool = false
     @State private var isCameraPresented: Bool = false
-    // Backing selection for both inline and sheet PhotosPicker variants.
-    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var sheetSelectedPhotoItems: [PhotosPickerItem] = []
     @State private var notifiedFailedAttachmentIDs: Set<UUID> = []
 
     init(
@@ -121,7 +120,7 @@ struct PromptComposerView: View {
         .animation(style.springAnimation, value: imageSelectionErrorMessage)
         .photosPicker(
             isPresented: $isPhotoSheetPresented,
-            selection: $selectedPhotoItems,
+            selection: $sheetSelectedPhotoItems,
             maxSelectionCount: max(1, remainingImageSlots),
             selectionBehavior: .default,
             matching: .images,
@@ -137,7 +136,7 @@ struct PromptComposerView: View {
             }
             .ignoresSafeArea()
         }
-        .onChange(of: selectedPhotoItems) { _, newValue in
+        .onChange(of: sheetSelectedPhotoItems) { _, newValue in
             handlePhotoSelection(newValue)
         }
         .onChange(of: imageAttachments) { _, newValue in
@@ -169,54 +168,16 @@ struct PromptComposerView: View {
     }
 
     private var inlinePhotoPickerContent: some View {
-        ZStack(alignment: .bottom) {
-            // conditionally show the picker, but keep the bottom controls
-            // visible so they dont fly up from bottom.
-            // they appear in place
-            if isInlinePhotoPickerVisible {
-                PhotosPicker(
-                    selection: $selectedPhotoItems,
-                    maxSelectionCount: max(1, remainingImageSlots),
-                    selectionBehavior: .continuous,
-                    matching: .images,
-                    preferredItemEncoding: .current
-                ) {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .photosPickerStyle(.inline)
-                .photosPickerAccessoryVisibility(.hidden)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
+        InlinePhotoPickerContent(
+            isVisible: isInlinePhotoPickerVisible,
+            remainingImageSlots: remainingImageSlots,
+            onDismiss: { setInlinePhotoPickerVisible(false) },
+            onShowAllPhotos: { isPhotoSheetPresented = true },
+            onPhotosSelected: { items in
+                setInlinePhotoPickerVisible(false)
+                onPhotosSelected(items)
             }
-
-            inlinePhotoPickerControls
-                .padding(8)
-        }
-    }
-
-    private var inlinePhotoPickerControls: some View {
-        HStack {
-            Button {
-                setInlinePhotoPickerVisible(!isInlinePhotoPickerVisible)
-            } label: {
-                xmarkIcon
-                    .foregroundStyle(theme.labelColor)
-                    .glassBackground(in: .circle)
-            }
-            .buttonBorderShape(.circle)
-
-            Spacer()
-
-            Button {
-                isPhotoSheetPresented = true
-            } label: {
-                Label("Show All Photos", systemImage: "photo.stack")
-                    .styledFont(.caption)
-            }
-            .glassButtonStyle()
-        }
+        )
     }
 
     @ViewBuilder
@@ -245,25 +206,11 @@ struct PromptComposerView: View {
 
     private var imageSourceControl: some View {
         ZStack {
-            Group {
-                if isInlinePhotoPickerVisible {
-                    Button {
-                        setInlinePhotoPickerVisible(false)
-                    } label: {
-                        xmarkIcon
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .accessibilityLabel("Dismiss photo picker")
-                } else {
-                    ImageSourceMenu(
-                        isDisabled: isSubmitting || remainingImageSlots <= 0,
-                        onOpenCamera: openCamera,
-                        onOpenPhotos: showInlinePhotoPicker
-                    )
-                }
-            }
-            .transition(.scale.combined(with: .opacity))
+            ImageSourceMenu(
+                isDisabled: isSubmitting || remainingImageSlots <= 0,
+                onOpenCamera: openCamera,
+                onOpenPhotos: showInlinePhotoPicker
+            )
         }
         .frame(width: style.gridSize * 4, height: style.gridSize * 4)
         .animation(style.springAnimation, value: isInlinePhotoPickerVisible)
@@ -289,9 +236,127 @@ struct PromptComposerView: View {
 
     private func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        selectedPhotoItems = []
+        sheetSelectedPhotoItems = []
         setInlinePhotoPickerVisible(false)
         onPhotosSelected(items)
+    }
+}
+
+private extension PromptComposerView {
+    struct InlinePhotoPickerContent: View {
+        @Environment(\.composerStyle) private var composerStyle: ComposerStyle
+        @Environment(\.theme) private var theme: Theme
+        @Environment(\.style) private var style: Style
+
+        let isVisible: Bool
+        let remainingImageSlots: Int
+        let onDismiss: () -> Void
+        let onShowAllPhotos: () -> Void
+        let onPhotosSelected: ([PhotosPickerItem]) -> Void
+
+        // Inline selection is staged until confirmation; sheet selection commits when PhotosUI finishes.
+        @State private var selectedPhotoItems: [PhotosPickerItem] = []
+        @State private var hasStagedSelection: Bool = false
+
+        var body: some View {
+            ZStack(alignment: .bottom) {
+                theme.secondaryBackgroundColor // opaque bg
+
+                // conditionally show the picker, but keep the bottom controls
+                // visible so they dont fly up from bottom.
+                // they appear in place
+                if isVisible {
+                    PhotosPicker(
+                        selection: $selectedPhotoItems,
+                        maxSelectionCount: max(1, remainingImageSlots),
+                        selectionBehavior: .continuous,
+                        matching: .images,
+                        preferredItemEncoding: .current
+                    ) {
+                        Color.clear
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .photosPickerStyle(.inline)
+                    .photosPickerAccessoryVisibility(.hidden)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+
+                controls
+                    .padding(8)
+            }
+            .onChange(of: selectedPhotoItems) { _, newValue in
+                setStagedSelectionVisible(!newValue.isEmpty)
+            }
+            .onChange(of: isVisible) { _, newValue in
+                guard !newValue else { return }
+                resetSelection()
+            }
+        }
+
+        private var controls: some View {
+            HStack {
+                Button {
+                    onDismiss()
+                } label: {
+                    xmarkIcon
+                        .foregroundStyle(theme.labelColor)
+                        .glassBackground(in: .circle)
+                }
+                .buttonBorderShape(.circle)
+
+                Spacer()
+
+                Button {
+                    if hasStagedSelection {
+                        confirmSelection()
+                    } else {
+                        onShowAllPhotos()
+                    }
+                } label: {
+                    confirmationLabel
+                        .contentTransition(.opacity)
+                        .padding(.horizontal, 12)
+                        .frame(height: composerStyle.bottomButtonSize)
+                        // glassButtonStyle with diff tint doesnt animate well.
+                        .glassBackground(in: .capsule, tint: hasStagedSelection ? theme.accentBlue : nil)
+                }
+                .buttonStyle(.plain)
+                .animation(style.springAnimation, value: hasStagedSelection)
+            }
+        }
+
+        private var xmarkIcon: some View {
+            Image(systemName: "xmark")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: composerStyle.bottomButtonSize, height: composerStyle.bottomButtonSize)
+        }
+
+        @ViewBuilder
+        private var confirmationLabel: some View {
+            Text(hasStagedSelection ? "Select photos" : "Show all photos")
+                .font(.semibold(12))
+        }
+
+        private func confirmSelection() {
+            let items = selectedPhotoItems
+            guard !items.isEmpty else { return }
+            resetSelection()
+            onPhotosSelected(items)
+        }
+
+        private func resetSelection() {
+            selectedPhotoItems = []
+            hasStagedSelection = false
+        }
+
+        private func setStagedSelectionVisible(_ isVisible: Bool) {
+            guard hasStagedSelection != isVisible else { return }
+            withAnimation(style.springAnimation) {
+                hasStagedSelection = isVisible
+            }
+        }
     }
 }
 

@@ -55,7 +55,7 @@ struct ToolbarCloseButton: ToolbarContent {
         ToolbarItem(placement: placement) {
             Button(action: action) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(theme.labelColor)
                     .contentShape(Rectangle().inset(by: -5))
             }
@@ -76,7 +76,7 @@ struct ToolbarBackButton: ToolbarContent {
         ToolbarItem(placement: placement) {
             Button(action: action) {
                 Image(systemName: "arrow.left")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(theme.labelColor)
                     .contentShape(Rectangle().inset(by: -5))
             }
