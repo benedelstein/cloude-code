@@ -18,6 +18,7 @@ extension SessionTranscriptCollectionRepresentable {
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
+        private var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
         var handledScrollRequestID = 0
         let scrollCoordinator: SessionTranscriptScrollCoordinator
@@ -60,6 +61,22 @@ extension SessionTranscriptCollectionRepresentable {
 
         func indexPath(forItemID id: String) -> IndexPath? {
             dataSource?.indexPath(for: id)
+        }
+
+        func prepareWorkingIndicatorLayoutTransition(_ collectionView: UICollectionView) {
+            guard isInitialAnchorComplete else {
+                workingIndicatorLayoutFrameBeforeUpdate = nil
+                return
+            }
+            guard !collectionView.isTracking && !collectionView.isDragging && !collectionView.isDecelerating else {
+                workingIndicatorLayoutFrameBeforeUpdate = nil
+                return
+            }
+
+            workingIndicatorLayoutFrameBeforeUpdate = visibleFrame(
+                forItemID: SessionTranscriptItem.workingItemID,
+                in: collectionView
+            )
         }
 
         func update(
@@ -128,6 +145,11 @@ extension SessionTranscriptCollectionRepresentable {
             preserveBottomAfterLayout(
                 collectionView,
                 wasNearBottomBeforeLayout: wasNearBottomBeforeLayout,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
+            animateWorkingIndicatorLayoutTransition(
+                in: collectionView,
                 layoutChange: layoutChange,
                 keyboardTransition: keyboardTransition
             )
@@ -253,6 +275,52 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         collectionView.verticalScrollIndicatorInsets = contentInset
     }
 
+    func animateWorkingIndicatorLayoutTransition(
+        in collectionView: UICollectionView,
+        layoutChange: SessionTranscriptLayoutChange,
+        keyboardTransition: KeyboardTransition?
+    ) {
+        defer {
+            workingIndicatorLayoutFrameBeforeUpdate = nil
+        }
+
+        guard layoutChange.contentSizeChanged else { return }
+        guard keyboardTransition == nil else { return }
+        guard let previousFrame = workingIndicatorLayoutFrameBeforeUpdate else { return }
+        guard let cell = cell(forItemID: SessionTranscriptItem.workingItemID, in: collectionView) else { return }
+
+        let currentFrame = cell.convert(cell.bounds, to: collectionView)
+        let deltaX = previousFrame.minX - currentFrame.minX
+        let deltaY = previousFrame.minY - currentFrame.minY
+        guard abs(deltaX) > 0.5 || abs(deltaY) > 0.5 else { return }
+
+        cell.layer.removeAllAnimations()
+        cell.transform = CGAffineTransform(translationX: deltaX, y: deltaY)
+        UIView.animate(
+            withDuration: 0.22,
+            delay: 0,
+            options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]
+        ) {
+            cell.transform = .identity
+        }
+    }
+
+    func visibleFrame(forItemID id: String, in collectionView: UICollectionView) -> CGRect? {
+        guard let cell = cell(forItemID: id, in: collectionView) else { return nil }
+
+        if let presentationFrame = cell.layer.presentation()?.frame {
+            return collectionView.convert(presentationFrame, from: cell.superview)
+        }
+
+        return cell.convert(cell.bounds, to: collectionView)
+    }
+
+    func cell(forItemID id: String, in collectionView: UICollectionView) -> UICollectionViewCell? {
+        guard let indexPath = indexPath(forItemID: id) else { return nil }
+
+        return collectionView.cellForItem(at: indexPath)
+    }
+
     func roundedForScreen(_ value: CGFloat, in view: UIView) -> CGFloat {
         let scale = view.window?.screen.scale ?? UIScreen.main.scale
         return (value * scale).rounded() / scale
@@ -338,6 +406,10 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         to collectionView: UICollectionView,
         isInitialLoad: Bool
     ) {
+        let changedExistingItemIDs = changedExistingItemIDs(
+            oldItems: lastItems,
+            newItems: items
+        )
         lastItems = items
         lastItemIDs = itemIDs
 
@@ -350,7 +422,11 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
             return
         }
 
-        dataSource?.apply(snapshot, animatingDifferences: false)
+        dataSource?.apply(snapshot, animatingDifferences: false) { [weak self, weak collectionView] in
+            guard let self, let collectionView else { return }
+
+            reconfigureItems(changedExistingItemIDs, in: collectionView)
+        }
     }
 
     private func applyInitialSnapshot(
@@ -389,6 +465,20 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
     ) -> [String] {
         zip(oldItems, newItems).compactMap { oldItem, newItem in
             oldItem == newItem ? nil : newItem.id
+        }
+    }
+
+    func changedExistingItemIDs(
+        oldItems: [SessionTranscriptItem],
+        newItems: [SessionTranscriptItem]
+    ) -> [String] {
+        let oldItemsByID = Dictionary(uniqueKeysWithValues: oldItems.map { ($0.id, $0) })
+        return newItems.compactMap { newItem in
+            guard let oldItem = oldItemsByID[newItem.id], oldItem != newItem else {
+                return nil
+            }
+
+            return newItem.id
         }
     }
 

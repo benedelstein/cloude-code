@@ -34,6 +34,9 @@ struct SessionTranscriptCollectionRepresentable<Row: View>: UIViewRepresentable 
             collectionView.topEdgeEffect.style = .soft
             collectionView.bottomEdgeEffect.style = .soft
         }
+        collectionView.onBeforeLayoutSubviews = { [weak coordinator = context.coordinator] collectionView in
+            coordinator?.prepareWorkingIndicatorLayoutTransition(collectionView)
+        }
         collectionView.onLayoutSubviews = { [weak coordinator = context.coordinator] collectionView in
             coordinator?.handleLayoutSubviews(collectionView)
         }
