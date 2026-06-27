@@ -37,11 +37,10 @@ public actor SessionSocket {
     public init(
         baseURL: URL,
         sessionId: String,
-        urlSession: URLSession = .shared,
         tokenCache: WebSocketTokenCache
     ) {
         let path = "agents/session/\(sessionId)"
-        connection = WebSocketConnection(urlSession: urlSession) {
+        connection = WebSocketConnection {
             let token = try await tokenCache.token()
             return try WebSocketURLBuilder.url(baseURL: baseURL, path: path, token: token.token)
         }
@@ -74,9 +73,15 @@ public actor SessionSocket {
         )))
     }
 
-    public func sendChat(content: String, clientMessageId: String) async throws {
+    /// Sends a user chat message with optional attachment references.
+    public func sendChat(
+        content: String?,
+        attachmentIds: [String] = [],
+        clientMessageId: String
+    ) async throws {
         try await send(.chatMessage(ChatMessageEvent(
             content: content,
+            attachments: attachmentIds.isEmpty ? nil : attachmentIds.map(MessageAttachmentRef.init),
             clientMessageId: clientMessageId
         )))
     }

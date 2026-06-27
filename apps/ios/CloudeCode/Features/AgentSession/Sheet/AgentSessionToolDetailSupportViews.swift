@@ -143,7 +143,7 @@ struct CodePreview: View {
     private func copyText() {
         UIPasteboard.general.string = text
         lightFeedback.impactOccurred()
-        showToast?(verbatimTitle: "Copied", icon: Image(systemName: "doc.on.doc"))
+        showToast?(title: "Copied", icon: Image(systemName: "doc.on.doc"))
     }
 
     private var lines: [CodePreviewLine] {
@@ -221,7 +221,7 @@ struct ValueList: View {
                 Text(value)
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(theme.labelColor)
-//                    .textSelection(.enabled)
+                    .textSelection(.enabled)
             }
         }
     }

@@ -39,6 +39,8 @@ interface AttachmentRow {
   filename: string;
   media_type: string;
   size_bytes: number;
+  width: number | null;
+  height: number | null;
   created_at: string;
   session_id: string | null;
   bound_at: string | null;
@@ -175,6 +177,8 @@ export class AgentAttachmentService {
       filename: row.filename,
       mediaType: row.media_type,
       sizeBytes: row.size_bytes,
+      width: row.width,
+      height: row.height,
       createdAt: row.created_at,
       sessionId: row.session_id,
       boundAt: row.bound_at,

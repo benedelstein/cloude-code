@@ -1,4 +1,3 @@
-import API
 import Domain
 import Entities
 import SwiftUI
@@ -8,7 +7,6 @@ struct AgentSessionView: View {
     @Environment(\.style) private var style: Style
 
     @State private var store: AgentSessionViewModel
-    @FocusState private var composerFocused: Bool
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
@@ -26,20 +24,10 @@ struct AgentSessionView: View {
                 scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
-                PromptComposerView(
-                    text: $store.draftText,
-                    focused: $composerFocused,
-                    placeholder: store.composerPlaceholder,
-                    isSubmitDisabled: !store.canSubmitDraft,
-                    isSubmitting: store.isResponding,
-                    onSubmit: store.submitDraft
-                )
-                .padding(.horizontal, style.horizontalPadding)
-                .padding(.bottom, style.spacing) // todo zero padding when not keyboard presented. animate smoothly
-                .readSize { size in
-                    guard abs(composerHeight - size.height) > 0.5 else { return }
-                    composerHeight = size.height
-                }
+                ComposerView(vm: store)
+                    .padding(.horizontal, style.horizontalPadding)
+                    .padding(.bottom, style.spacing)
+                    .readSize(updateComposerHeight)
             }
         }
         .overlay {
@@ -69,6 +57,13 @@ struct AgentSessionView: View {
         }
         .onDisappear {
             store.unbind()
+        }
+    }
+
+    private func updateComposerHeight(_ size: CGSize) {
+        guard abs(composerHeight - size.height) > 0.5 else { return }
+        withAnimation(style.springAnimation) {
+            composerHeight = size.height
         }
     }
 
@@ -263,22 +258,31 @@ private extension AgentSessionView {
 
         @ViewBuilder
         private func transcriptRow(_ item: SessionTranscriptItem) -> some View {
-            switch item {
-            case .userMessage(let message):
-                UserMessageView(message: message)
-            case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
-                AssistantMessageView(
-                    displayData: displayData,
-                    isStreaming: isStreaming,
-                    autoCollapseOnAppear: autoCollapse,
-                    destination: $destination
-                ) {
-                    if autoCollapse {
-                        autoCollapseMessageId = nil
+            Group {
+                switch item {
+                case .userMessage(let message):
+                    UserMessageView(message: message)
+                        .environment(\.openAgentSessionImage, openImageAction)
+                case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
+                    AssistantMessageView(
+                        displayData: displayData,
+                        isStreaming: isStreaming,
+                        autoCollapseOnAppear: autoCollapse,
+                        destination: $destination
+                    ) {
+                        if autoCollapse {
+                            autoCollapseMessageId = nil
+                        }
                     }
+                case .workingIndicator:
+                    WorkingIndicatorView()
                 }
-            case .workingIndicator:
-                WorkingIndicatorView()
+            }
+        }
+
+        private var openImageAction: OpenAgentSessionImageAction {
+            OpenAgentSessionImageAction { image in
+                destination = .fullscreen(.image(image))
             }
         }
 

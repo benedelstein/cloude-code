@@ -106,17 +106,19 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         }
 
         let applyOffset = {
-            self.applyContentOffset(
-                targetOffset,
-                in: collectionView,
-                animated: keyboardTransition == nil && animated
-            )
+            if keyboardTransition != nil {
+                collectionView.contentOffset = targetOffset
+            } else {
+                self.applyContentOffset(targetOffset, in: collectionView, animated: animated)
+            }
             collectionView.layoutIfNeeded()
         }
 
-        if keyboardTransition != nil {
+        if collectionView.isInteractivelyDismissingKeyboard {
             UIView.performWithoutAnimation(applyOffset)
             collectionView.layer.removeAllAnimations()
+        } else if let keyboardTransition {
+            animateWithKeyboardTransition(keyboardTransition, applyOffset)
         } else if animated {
             applyOffset()
         } else {
@@ -183,5 +185,11 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         guard case .complete = initialAnchorState else { return }
 
         scrollCoordinator.updateDistanceFromBottom(distanceFromBottom(scrollView))
+    }
+}
+
+private extension UIScrollView {
+    var isInteractivelyDismissingKeyboard: Bool {
+        keyboardDismissMode == .interactive && (isTracking || isDragging || isDecelerating)
     }
 }

@@ -17,7 +17,7 @@ extension EnvironmentValues {
     var softFeedback: UIImpactFeedbackGenerator = .init(style: .soft)
 
     @Entry
-    var notification: UINotificationFeedbackGenerator = .init()
+    var notificationFeedback: UINotificationFeedbackGenerator = .init()
 
     @Entry
     var selectionFeedback: UISelectionFeedbackGenerator = .init()

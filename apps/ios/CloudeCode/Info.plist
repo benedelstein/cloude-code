@@ -8,6 +8,8 @@
 	<string>$(API_BASE_URL)</string>
 	<key>BUILD_ENVIRONMENT</key>
 	<string>$(BUILD_ENVIRONMENT)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Use your camera to attach photos to messages.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

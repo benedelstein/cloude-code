@@ -45,7 +45,14 @@ struct MyFeatureBuilder {
 
     func build() -> some View {
         MyFeatureView(viewModel: component.viewModel)
+            // pass in other dependencies via environment, eg child builders
+            .environment(\.childBuilder, ChildBuilder(component: component.childComponent))
     }
+}
+
+extension EnvironmentValues {
+    @Entry
+    var myFeatureBuilder: MyFeatureBuilder?
 }
 ```
 
@@ -62,5 +69,64 @@ struct MyFeatureContainer: View {
             ContentUnavailableView("Missing my feature builder", systemImage: "exclamationmark.triangle")
         }
     }
+}
+```
+
+## Environment DI
+
+SwiftUI itself makes use of @Environment for dependency injection across view trees.
+
+A good pattern to use when injecting dependency logic through view trees is the `Action` pattern -
+swiftui uses this for `DismissAction`.
+
+```swift
+struct SomeAction {
+    // define dependencies the action needs
+    let apiClient: APIClient
+    let userStore: UserStore
+
+    func callAsFunction() {
+        // use dependencies to do something
+    }
+}
+
+extension EnvironmentValues {
+    @Entry
+    var someAction: SomeAction? // make it optional, or give a sensible default if one exists
+}
+```
+
+Callers can use the action like so:
+
+```swift
+struct SomeView: View {
+    @Environment(\.someAction) private var someAction: SomeAction?
+
+    var body: some View {
+        Button("Do something") {
+            // you can call the action directly, callAsFunction is a special swift signature
+            someAction?()
+        }
+    }
+}
+```
+
+You can also use environment with @Observable:
+
+```swift
+@Observable
+final class SomeViewModel {
+    let someAction: SomeAction
+
+    init(someAction: SomeAction) {
+        self.someAction = someAction
+    }
+}
+
+struct SomeView: View {
+    // NOTE: this will crash at runtime if no parent view has injected it.
+    @Environment(SomeViewModel.self) private var viewModel: SomeViewModel
+
+    // ...
 }
 ```

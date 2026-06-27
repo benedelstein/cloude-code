@@ -22,13 +22,13 @@ struct ShowToastAction {
     @MainActor
     func callAsFunction(
         _ config: ToastConfig = .cloudeDefault,
-        verbatimTitle: String,
+        title: Text,
         verbatimSubtitle: String? = nil,
         icon: Image? = nil
     ) {
         callAsFunction(config) {
             ToastDefaultContentView(
-                title: Text(verbatim: verbatimTitle),
+                title: title,
                 subtitle: verbatimSubtitle.map { Text(verbatim: $0) },
                 icon: icon
             )

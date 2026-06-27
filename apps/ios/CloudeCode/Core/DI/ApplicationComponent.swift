@@ -77,6 +77,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var attachmentsAPI: any AttachmentsAPIProviding {
+        shared {
+            AttachmentsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
     @MainActor var notificationHandler: NotificationHandler {
         shared {
             NotificationHandler()
@@ -86,6 +92,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     var sessionsAPI: any SessionsAPIProviding {
         shared {
             SessionsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    var fetchImageAction: any FetchImageAction {
+        AuthenticatedFetchImageAction(apiBaseURL: apiBaseURL) { [tokenCoordinator] in
+            try await tokenCoordinator.bearerHeaders()
         }
     }
 

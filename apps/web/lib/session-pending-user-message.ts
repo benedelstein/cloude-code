@@ -43,6 +43,9 @@ export function buildOptimisticUserMessage({
       mediaType: attachment.mediaType,
       filename: attachment.filename,
       url: attachment.contentUrl,
+      ...(attachment.width !== undefined && attachment.height !== undefined
+        ? { width: attachment.width, height: attachment.height }
+        : {}),
     } as UIMessage["parts"][number]);
   }
 

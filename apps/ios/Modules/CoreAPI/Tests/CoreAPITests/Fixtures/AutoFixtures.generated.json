@@ -769,6 +769,8 @@
     "mediaType": "sample",
     "filename": "sample",
     "url": "sample",
+    "width": 1,
+    "height": 1,
     "providerMetadata": {
       "key": {
         "key": {
@@ -2165,6 +2167,8 @@
     "filename": "sample",
     "mediaType": "sample",
     "sizeBytes": 1,
+    "width": 1,
+    "height": 1,
     "createdAt": "sample",
     "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
     "contentUrl": "sample"
@@ -2190,6 +2194,8 @@
         "filename": "sample",
         "mediaType": "sample",
         "sizeBytes": 1,
+        "width": 1,
+        "height": 1,
         "createdAt": "sample",
         "sessionId": "7e3f9a52-0c4e-4b7a-9b1e-6d2f8c5a1b3d",
         "contentUrl": "sample"

@@ -9,6 +9,8 @@ const attachmentRecord: AttachmentRecord = {
   filename: "screenshot.png",
   mediaType: "image/png",
   sizeBytes: 123,
+  width: 640,
+  height: 480,
   objectKey: "attachments/123e4567-e89b-12d3-a456-426614174000",
   createdAt: "2026-06-03T00:00:00.000Z",
   boundAt: "2026-06-03T00:00:00.000Z",
@@ -47,6 +49,8 @@ describe("buildUserUiMessage", () => {
         type: "file",
         filename: "screenshot.png",
         mediaType: "image/png",
+        width: 640,
+        height: 480,
       },
     ]);
   });

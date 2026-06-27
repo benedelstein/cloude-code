@@ -6,6 +6,10 @@ import SwiftUI
 protocol AgentSessionDependency: Dependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket
 
+    var fetchImageAction: any FetchImageAction { get }
+
+    var attachmentsAPI: any AttachmentsAPIProviding { get }
+
     @MainActor
     var sessionMessageStore: SessionMessageStore { get }
 }
@@ -34,9 +38,14 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 session: session,
                 socket: dependency.makeSessionSocket(sessionId: session.id),
                 sessionMessageStore: dependency.sessionMessageStore,
-                transcriptBuilder: transcriptBuilder
+                transcriptBuilder: transcriptBuilder,
+                attachmentsAPI: dependency.attachmentsAPI
             )
         }
+    }
+
+    var fetchImageAction: any FetchImageAction {
+        dependency.fetchImageAction
     }
 }
 
@@ -45,6 +54,8 @@ struct AgentSessionBuilder {
     let makeComponent: (SessionSummaryModel) -> AgentSessionComponent
 
     func build(session: SessionSummaryModel) -> some View {
-        AgentSessionView(store: makeComponent(session).store)
+        let component = makeComponent(session)
+        return AgentSessionView(store: component.store)
+            .environment(\.fetchImageAction, component.fetchImageAction)
     }
 }

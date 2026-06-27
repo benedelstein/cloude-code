@@ -64,6 +64,14 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
     }
 
+    var fetchImageAction: any FetchImageAction {
+        applicationComponent.fetchImageAction
+    }
+
+    var attachmentsAPI: any AttachmentsAPIProviding {
+        applicationComponent.attachmentsAPI
+    }
+
     @MainActor
     var sessionMessageStore: SessionMessageStore {
         homeComponent.sessionMessageStore

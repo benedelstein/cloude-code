@@ -266,7 +266,6 @@ private struct WebDetailView: View {
     var body: some View {
         DetailSection(title: payload.kind == .fetch ? "URL" : "Query") {
             Text(payload.url ?? payload.query ?? "No details available")
-//                .textSelection(.enabled)
         }
     }
 }
@@ -303,7 +302,7 @@ private struct TextDetailView: View {
             MarkdownText(text: text)
                 .styledFont(.body)
                 .foregroundStyle(theme.labelColor)
-//                .textSelection(.enabled)
+                .textSelection(.enabled)
                 .padding(style.horizontalPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

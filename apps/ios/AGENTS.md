@@ -13,14 +13,30 @@ xcodebuild -project CloudeCode.xcodeproj -scheme CloudeCode -configuration Debug
 
 SwiftLint runs in the app target build phase for Debug builds.
 
-See `docs/` for specific documentation about certain parts of the codebase.
+## Documentation
+
+Be sure to read `docs/` for specific documentation about certain parts of the codebase.
 
 `docs/Styling.md` - iOS styling conventions.
 `docs/caching.md` - how to handle caching
 `docs/dependency-injection.md` - how to handle dependency injection
 `docs/feature-development.md` - how to develop a new feature
 
+Read specific documentation for any part of the codebase you plan to work on, or pattern you plan to use.
+
 ## Important Agent Guidelines
 
 - Add doc comments to all public methods and class definitions. Add concise inline comments where needed, to explain complex logic
 or important considerations.
+- prefer nested subview names over long prefixes. E.g. 
+```swift
+extension AgentSessionView {
+    struct SomeSubview: View {
+        ...
+    }
+}
+// NOT
+struct AgentSessionViewSomeSubview: View {
+    ...
+}
+```

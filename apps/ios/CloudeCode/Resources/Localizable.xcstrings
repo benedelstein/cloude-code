@@ -7,7 +7,10 @@
     "☁️" : {
 
     },
-    "Add attachment" : {
+    "Account" : {
+
+    },
+    "Add images" : {
 
     },
     "Agent is responding" : {
@@ -19,6 +22,9 @@
     "Back" : {
 
     },
+    "Camera" : {
+
+    },
     "Cancel" : {
 
     },
@@ -26,6 +32,12 @@
 
     },
     "Cloude Code" : {
+
+    },
+    "Copied" : {
+
+    },
+    "Copied logs to clipboard" : {
 
     },
     "Copy" : {
@@ -100,6 +112,12 @@
 
     },
     "Generic tool details" : {
+
+    },
+    "Image failed to load" : {
+
+    },
+    "Image upload failed" : {
 
     },
     "Light" : {
@@ -184,6 +202,9 @@
 
     },
     "No sessions" : {
+
+    },
+    "Photos" : {
 
     },
     "Plan" : {
@@ -287,7 +308,10 @@
         }
       }
     },
-    "Recent app logs are kept in memory for TestFlight debugging." : {
+    "Recent app logs are kept in memory for debugging." : {
+
+    },
+    "Remove image" : {
 
     },
     "Responding" : {
@@ -417,6 +441,9 @@
         }
       }
     },
+    "Select photos" : {
+
+    },
     "Send" : {
 
     },
@@ -426,7 +453,25 @@
     "Settings" : {
 
     },
+    "Share image" : {
+
+    },
+    "Show all photos" : {
+
+    },
     "Sign in" : {
+
+    },
+    "Sign out" : {
+
+    },
+    "Sign Out" : {
+
+    },
+    "Sign out?" : {
+
+    },
+    "Signs out of Cloude Code on this device." : {
 
     },
     "System" : {

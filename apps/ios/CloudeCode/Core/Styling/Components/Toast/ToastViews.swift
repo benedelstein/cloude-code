@@ -8,7 +8,7 @@ struct ToastContainerView<Content: View>: View {
 
     let content: () -> Content
 
-    private let cornerRadius: CGFloat = 22
+    private let cornerRadius: CGFloat = 24
     private let verticalInset: CGFloat = 10
     private let horizontalInset: CGFloat = 16
 
@@ -44,7 +44,7 @@ struct ToastDefaultContentView: View {
                     .foregroundStyle(theme.accentBlue)
             }
 
-            VStack(alignment: icon == nil ? .center : .leading, spacing: 4) {
+            VStack(alignment: icon == nil ? .center : .leading, spacing: 2) {
                 title
                     .font(style.calloutFont.weight(.semibold))
                     .foregroundStyle(theme.labelColor)
@@ -210,6 +210,7 @@ extension UIWindow {
             return
         }
 
+        toastViewController.sizingOptions = .intrinsicContentSize
         toastView.translatesAutoresizingMaskIntoConstraints = false
         toastView.backgroundColor = .clear
         toastViewModel.proposedHeight = toastView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
@@ -226,8 +227,9 @@ extension UIWindow {
 
         NSLayoutConstraint.activate([
             toastView.topAnchor.constraint(equalTo: topAnchor),
-            toastView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            toastView.trailingAnchor.constraint(equalTo: trailingAnchor)
+            toastView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            toastView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            toastView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
         ])
     }
 }

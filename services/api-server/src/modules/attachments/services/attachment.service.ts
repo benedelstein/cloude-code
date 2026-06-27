@@ -114,6 +114,9 @@ export class AttachmentService {
       filename: record.filename,
       mediaType: record.mediaType,
       sizeBytes: record.sizeBytes,
+      ...(record.width !== null && record.height !== null
+        ? { width: record.width, height: record.height }
+        : {}),
       createdAt: record.createdAt,
       sessionId: record.sessionId,
       contentUrl: this.buildContentUrl(record.id),

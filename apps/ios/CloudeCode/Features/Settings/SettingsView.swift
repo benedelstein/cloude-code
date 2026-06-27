@@ -4,8 +4,10 @@ import UIKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var isConfirmingSignOut = false
 
     let logStore: AppLogStore
+    let sessionStore: SessionStore
 
     var body: some View {
         NavigationStack {
@@ -19,13 +21,36 @@ struct SettingsView: View {
                 } header: {
                     Text("Diagnostics")
                 } footer: {
-                    Text("Recent app logs are kept in memory for TestFlight debugging.")
+                    Text("Recent app logs are kept in memory for debugging.")
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        isConfirmingSignOut = true
+                    } label: {
+                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            .tint(.red)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Account")
+                } footer: {
+                    Text("Signs out of Cloude Code on this device.")
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarCloseButton {
                     dismiss()
+                }
+            }
+            .alert("Sign out?", isPresented: $isConfirmingSignOut) {
+                Button("Sign out", role: .destructive) {
+                    dismiss()
+                    Task {
+                        await sessionStore.signOut()
+                    }
                 }
             }
         }
@@ -35,6 +60,7 @@ struct SettingsView: View {
 private struct LogsView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
+    @Environment(\.showToast) var showToast: ShowToastAction?
 
     let logStore: AppLogStore
 
@@ -61,6 +87,10 @@ private struct LogsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Copy") {
+                    showToast?(
+                        title: "Copied logs to clipboard",
+                        icon: Image(systemName: "square.on.square")
+                    )
                     UIPasteboard.general.string = logStore.exportText
                 }
                 .disabled(logStore.entries.isEmpty)
@@ -92,7 +122,7 @@ private struct LogRow: View {
             Text(entry.message)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(theme.labelColor)
-//                .textSelection(.enabled)
+                .textSelection(.enabled)
 
             Text(entry.location)
                 .styledFont(.caption)

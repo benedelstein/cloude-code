@@ -26,11 +26,12 @@ struct SessionTranscriptLayoutChange {
 
     func shouldAnimateBottomPreservation(keyboardTransition: KeyboardTransition?) -> Bool {
         // Only content-size-only updates should animate. Bounds and inset changes
-        // represent viewport movement, such as interactive keyboard dismissal, so
+        // represent viewport movement, such as interactive keyboard drag dismissal, so
         // bottom preservation must track those layout changes immediately.
         contentSizeChanged
             && !boundsChanged
             && !didUpdateContentInsets
+            // Keyboard transitions use their own UIKit timing.
             && keyboardTransition == nil
             && UIView.areAnimationsEnabled
     }

@@ -279,6 +279,20 @@ describe("AI SDK-compatible UI message wire schemas", () => {
       input: { cmd: "ls" },
       output: "README.md",
     });
+
+    expect(WireUIMessagePartSchema.parse({
+      type: "file",
+      mediaType: "image/png",
+      url: "/attachments/123e4567-e89b-12d3-a456-426614174000/content",
+      width: 640,
+      height: 480,
+    })).toEqual({
+      type: "file",
+      mediaType: "image/png",
+      url: "/attachments/123e4567-e89b-12d3-a456-426614174000/content",
+      width: 640,
+      height: 480,
+    });
   });
 
   it("preserves future unknown variants", () => {
