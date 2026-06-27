@@ -115,20 +115,6 @@ private extension AgentSessionView {
             composerHeight + 16
         }
     }
-
-    struct WorkingIndicatorView: View {
-        @Environment(\.style) private var style
-
-        var body: some View {
-            HStack {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, style.gridSize / 2)
-            .accessibilityLabel("Agent is responding")
-        }
-    }
 }
 
 extension AgentSessionView {
@@ -176,8 +162,16 @@ private extension AgentSessionView {
             }
         }
 
-        private var hasTranscriptItems: Bool {
+        private var hasMessageTranscriptItems: Bool {
             !messages.isEmpty || store.streamingDisplayData != nil
+        }
+
+        private var hasTranscriptItems: Bool {
+            hasMessageTranscriptItems || isWorkingIndicatorActive
+        }
+
+        private var isWorkingIndicatorActive: Bool {
+            store.isResponding || store.clientState.sessionSetupRun?.status == "running"
         }
 
         private var transcriptItems: [SessionTranscriptItem] {
@@ -205,8 +199,8 @@ private extension AgentSessionView {
                 ))
             }
 
-            if store.isResponding {
-                items.append(.workingIndicator)
+            if hasTranscriptItems {
+                items.append(.workingIndicator(isActive: isWorkingIndicatorActive))
             }
 
             return items
@@ -274,8 +268,8 @@ private extension AgentSessionView {
                             autoCollapseMessageId = nil
                         }
                     }
-                case .workingIndicator:
-                    WorkingIndicatorView()
+                case .workingIndicator(let isActive):
+                    WorkingIndicatorView(isActive: isActive)
                 }
             }
         }

@@ -7,7 +7,7 @@ enum SessionTranscriptItem: Identifiable, Equatable {
         isStreaming: Bool,
         autoCollapse: Bool
     )
-    case workingIndicator
+    case workingIndicator(isActive: Bool)
 
     var id: String {
         switch self {

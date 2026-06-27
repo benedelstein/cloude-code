@@ -28,7 +28,9 @@ struct SessionTranscriptScrollingTests {
             isStreaming: true,
             autoCollapse: false
         ).id == "streaming:assistant-1")
-        #expect(SessionTranscriptItem.workingIndicator.id == "working")
+        #expect(SessionTranscriptItem.workingIndicator(isActive: true).id == "working")
+        #expect(SessionTranscriptItem.workingIndicator(isActive: false).id == "working")
+        #expect(SessionTranscriptItem.workingIndicator(isActive: true) != .workingIndicator(isActive: false))
     }
 
     @Test func repeatedScrollRequestsKeepUniqueIdentities() {

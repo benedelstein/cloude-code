@@ -338,6 +338,10 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         to collectionView: UICollectionView,
         isInitialLoad: Bool
     ) {
+        let changedExistingItemIDs = changedExistingItemIDs(
+            oldItems: lastItems,
+            newItems: items
+        )
         lastItems = items
         lastItemIDs = itemIDs
 
@@ -350,7 +354,11 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
             return
         }
 
-        dataSource?.apply(snapshot, animatingDifferences: false)
+        dataSource?.apply(snapshot, animatingDifferences: false) { [weak self, weak collectionView] in
+            guard let self, let collectionView else { return }
+
+            reconfigureItems(changedExistingItemIDs, in: collectionView)
+        }
     }
 
     private func applyInitialSnapshot(
@@ -389,6 +397,20 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
     ) -> [String] {
         zip(oldItems, newItems).compactMap { oldItem, newItem in
             oldItem == newItem ? nil : newItem.id
+        }
+    }
+
+    func changedExistingItemIDs(
+        oldItems: [SessionTranscriptItem],
+        newItems: [SessionTranscriptItem]
+    ) -> [String] {
+        let oldItemsByID = Dictionary(uniqueKeysWithValues: oldItems.map { ($0.id, $0) })
+        return newItems.compactMap { newItem in
+            guard let oldItem = oldItemsByID[newItem.id], oldItem != newItem else {
+                return nil
+            }
+
+            return newItem.id
         }
     }
 
