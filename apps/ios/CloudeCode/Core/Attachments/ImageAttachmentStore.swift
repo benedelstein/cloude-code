@@ -164,10 +164,15 @@ final class ImageAttachmentStore {
             return
         }
 
-        attachments[index].file = validFile
-        attachments[index].previewImage = loadedFile.previewImage
-        attachments[index].status = .uploading
-        upload(attachments[index])
+        let draft = ImageAttachmentDraft(
+            id: id,
+            file: validFile,
+            previewImage: loadedFile.previewImage,
+            status: .uploading,
+            descriptor: nil
+        )
+        attachments[index] = draft
+        upload(draft)
     }
 
     /// Marks a loading placeholder as failed when local file loading fails.

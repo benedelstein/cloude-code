@@ -131,17 +131,6 @@ private extension AgentSessionView {
     }
 }
 
-private extension ImageAttachmentDraft {
-    var promptComposerPreview: PromptComposerImageAttachmentPreview {
-        PromptComposerImageAttachmentPreview(
-            id: id,
-            previewImage: previewImage,
-            status: status,
-            canRetry: file != nil && status.isFailed
-        )
-    }
-}
-
 extension AgentSessionView {
     struct MessageDisplayData: Identifiable, Equatable {
         let message: SessionMessage

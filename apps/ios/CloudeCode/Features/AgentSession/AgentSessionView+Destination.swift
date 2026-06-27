@@ -23,7 +23,7 @@ extension AgentSessionView {
                 .withModal($destination) { destination in
                     switch destination {
                     case .image(let image):
-                        AgentSessionFullscreenImageView(image: image)
+                        FullscreenImageView(image: image)
                     case .renderItem(let item):
                         AgentSessionToolDetailSheet(item: item)
                             .presentationDetents([PresentationDetent.medium, PresentationDetent.large])
