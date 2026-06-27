@@ -16,11 +16,10 @@ public enum WebSocketTransportEvent: Sendable {
 
 /// Reconnecting WebSocket transport over `URLSessionWebSocketTask`.
 ///
-/// Owns the receive loop and an exponential-backoff reconnect loop
-/// (1s doubling to 30s, reset on a successful upgrade). The upgrade URL is
-/// re-resolved on every attempt so short-lived `?token=` credentials are
-/// refreshed. Frames are surfaced raw; typed decoding lives in the
-/// protocol-specific sockets. `events` is a single-consumer stream.
+/// Owns the receive loop and reconnect loop. The upgrade URL is re-resolved
+/// on every attempt so short-lived `?token=` credentials are refreshed.
+/// Frames are surfaced raw; typed decoding lives in the protocol-specific sockets.
+/// `events` is a single-consumer stream.
 public actor WebSocketConnection {
     public nonisolated let events: AsyncStream<WebSocketTransportEvent>
 
@@ -85,8 +84,7 @@ public actor WebSocketConnection {
                 task.resume()
                 socketTask = task
                 Logger.debug("websocket task resumed")
-                retryCount = 0
-                continuation.yield(.stateChanged(.connected))
+                guard try await establishConnection(on: task) else { return }
                 startPinging(task)
                 try await receiveLoop(on: task)
             } catch {
@@ -116,8 +114,22 @@ public actor WebSocketConnection {
         }
     }
 
+    private func establishConnection(on task: URLSessionWebSocketTask) async throws -> Bool {
+        // `resume()` starts the task but does not prove the WebSocket upgrade
+        // completed. The first pong is the transport-level confirmation that
+        // should reset retries and move observers to `.connected`.
+        // Return false if the pong succeeds after the connection was stopped.
+        try await Self.awaitPong(task)
+        guard !Task.isCancelled, !isStopped else { return false }
+        retryCount = 0
+        Logger.debug("websocket connected")
+        continuation.yield(.stateChanged(.connected))
+        return true
+    }
+
     private func backoff() async {
-        let delay = min(pow(2, Double(retryCount)), Self.maxRetryDelaySeconds)
+        let baseDelay = min(pow(2, Double(retryCount)), Self.maxRetryDelaySeconds)
+        let delay = Double.random(in: (baseDelay / 2)...baseDelay)
         retryCount += 1
         try? await Task.sleep(for: .seconds(delay))
     }
