@@ -70,6 +70,7 @@ struct AgentSessionFullscreenImageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(dismissDragOffset)
         }
+        .ignoresSafeArea(.container, edges: .all)
         .toolbar {
             ToolbarCloseButton {
                 dismiss()
@@ -87,6 +88,7 @@ struct AgentSessionFullscreenImageView: View {
                 .accessibilityLabel("Share image")
             }
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarVisibility(isCompletingDragDismissal ? .hidden : .visible, for: .navigationBar)
         .task(id: image.url) {
             await loadImage()

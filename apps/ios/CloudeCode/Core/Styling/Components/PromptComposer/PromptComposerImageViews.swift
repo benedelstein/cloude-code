@@ -39,8 +39,8 @@ extension PromptComposerView {
         @Environment(\.style) private var style
 
         let attachments: [PromptComposerImageAttachmentPreview]
-        let errorMessage: String?
         let onRemove: (UUID) -> Void
+        let onRetry: (UUID) -> Void
 
         var body: some View {
             VStack(alignment: .leading, spacing: style.gridSize) {
@@ -52,6 +52,8 @@ extension PromptComposerView {
                                     withAnimation {
                                         onRemove(attachment.id)
                                     }
+                                } onRetry: {
+                                    onRetry(attachment.id)
                                 }
                             }
                         }
@@ -59,14 +61,6 @@ extension PromptComposerView {
                         .padding(.top, 12)
                         .padding(.bottom, 2)
                     }
-                }
-
-                if let errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .styledFont(.caption)
-                        .foregroundStyle(theme.errorRed)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 4)
                 }
             }
         }
@@ -80,8 +74,21 @@ extension PromptComposerView {
 
         let attachment: PromptComposerImageAttachmentPreview
         let onRemove: () -> Void
+        let onRetry: () -> Void
 
         var body: some View {
+            Button {
+                guard attachment.canRetry, attachment.status.isFailed else {
+                    return
+                }
+                onRetry()
+            } label: {
+                content
+            }
+            .buttonStyle(.bounce)
+        }
+
+        var content: some View {
             ZStack(alignment: .topTrailing) {
                 thumbnailImage
                     .frame(width: style.gridSize * 8, height: style.gridSize * 8)
@@ -104,6 +111,8 @@ extension PromptComposerView {
                 .accessibilityLabel("Remove image")
             }
             .frame(width: style.gridSize * 8, height: style.gridSize * 8)
+            .contentShape(shape)
+            .accessibilityAddTraits(attachment.canRetry && attachment.status.isFailed ? .isButton : [])
         }
 
         @ViewBuilder
@@ -135,14 +144,13 @@ extension PromptComposerView {
             case .uploaded:
                 EmptyView()
             case .failed:
-                Text("Failed")
-                    .styledFont(.caption2)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(theme.errorRed))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .padding(4)
+                ZStack {
+                    shape.fill(Color.black.opacity(0.25))
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(theme.errorRed)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
 

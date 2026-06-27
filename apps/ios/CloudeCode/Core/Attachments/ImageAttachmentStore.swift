@@ -14,6 +14,20 @@ enum ImageAttachmentDraftStatus: Equatable {
     var isUploaded: Bool {
         self == .uploaded
     }
+
+    var isFailed: Bool {
+        if case .failed = self {
+            return true
+        }
+        return false
+    }
+
+    var failureMessage: String? {
+        guard case .failed(let message) = self else {
+            return nil
+        }
+        return message
+    }
 }
 
 /// Local composer model for one image attachment before it is submitted.
@@ -72,38 +86,6 @@ final class ImageAttachmentStore {
 
     deinit {
         uploadTasks.values.forEach { $0.cancel() }
-    }
-
-    /// Adds already-loaded image files and starts uploading accepted files.
-    func addFiles(_ files: [AttachmentUploadFile]) {
-        errorMessage = nil
-        guard !files.isEmpty else { return }
-
-        let acceptedFiles = validFiles(from: files)
-        guard !acceptedFiles.isEmpty else { return }
-
-        let availableSlots = remainingSlots
-        guard availableSlots > 0 else {
-            errorMessage = "You can attach up to \(Constants.maxAttachments) images."
-            return
-        }
-
-        let filesToUpload = Array(acceptedFiles.prefix(availableSlots))
-        if acceptedFiles.count > availableSlots {
-            errorMessage = "You can attach up to \(Constants.maxAttachments) images."
-        }
-
-        for file in filesToUpload {
-            let draft = ImageAttachmentDraft(
-                id: UUID(),
-                file: file,
-                previewImage: nil,
-                status: .uploading,
-                descriptor: nil
-            )
-            attachments.append(draft)
-            upload(draft)
-        }
     }
 
     /// Adds selected Photos items after loading their image data into reserved placeholder rows.
@@ -178,7 +160,7 @@ final class ImageAttachmentStore {
         }
 
         guard let validFile = validFile(loadedFile.file) else {
-            attachments[index].status = .failed("Invalid image.")
+            attachments[index].status = .failed(errorMessage ?? "Invalid image.")
             return
         }
 
@@ -222,6 +204,20 @@ final class ImageAttachmentStore {
         }
     }
 
+    /// Retries a failed image upload when the original upload file is still available.
+    func retryAttachment(id: UUID) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }),
+              attachments[index].status.isFailed,
+              attachments[index].file != nil else {
+            return
+        }
+
+        errorMessage = nil
+        attachments[index].descriptor = nil
+        attachments[index].status = .uploading
+        upload(attachments[index])
+    }
+
     /// Clears local composer attachments after creating the optimistic message.
     func clearAfterSubmit() {
         attachments.removeAll()
@@ -231,10 +227,6 @@ final class ImageAttachmentStore {
     /// Restores composer attachments when a send fails after optimistic clear.
     func restore(_ submittedAttachments: [ImageAttachmentDraft]) {
         attachments = submittedAttachments
-    }
-
-    private func validFiles(from files: [AttachmentUploadFile]) -> [AttachmentUploadFile] {
-        files.compactMap(validFile)
     }
 
     private func validFile(_ file: AttachmentUploadFile) -> AttachmentUploadFile? {

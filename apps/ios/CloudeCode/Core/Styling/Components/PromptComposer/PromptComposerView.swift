@@ -7,6 +7,7 @@ struct PromptComposerImageAttachmentPreview: Identifiable, Equatable {
     /// Downsampled local image used for preview; nil while a picker selection is loading.
     let previewImage: UIImage?
     let status: ImageAttachmentDraftStatus
+    let canRetry: Bool
 
     static func == (
         lhs: PromptComposerImageAttachmentPreview,
@@ -14,6 +15,7 @@ struct PromptComposerImageAttachmentPreview: Identifiable, Equatable {
     ) -> Bool {
         lhs.id == rhs.id
             && lhs.status == rhs.status
+            && lhs.canRetry == rhs.canRetry
             && lhs.previewImage === rhs.previewImage
     }
 }
@@ -22,18 +24,21 @@ struct PromptComposerView: View {
     @Environment(\.composerStyle) var composerStyle: ComposerStyle
     @Environment(\.theme) private var theme: Theme
     @Environment(\.style) private var style: Style
+    @Environment(\.showToast) private var showToast: ShowToastAction?
+    @Environment(\.notificationFeedback) private var notificationFeedback: UINotificationFeedbackGenerator
 
     @Binding private var text: String
     private var focused: Binding<Bool>
     private let placeholder: String
     private let imageAttachments: [PromptComposerImageAttachmentPreview]
-    private let imageAttachmentErrorMessage: String?
+    private let imageSelectionErrorMessage: String?
     private let remainingImageSlots: Int
     private let isImageInputEnabled: Bool
     private let isSubmitDisabled: Bool
     private let isSubmitting: Bool
     private let onSubmit: () -> Void
     private let onRemoveImageAttachment: (UUID) -> Void
+    private let onRetryImageAttachment: (UUID) -> Void
     private let onPhotosSelected: ([PhotosPickerItem]) -> Void
     private let onCameraImageCaptured: (UIImage) -> Void
     private let inlinePhotoPickerHeight: CGFloat = 350
@@ -43,19 +48,21 @@ struct PromptComposerView: View {
     @State private var isCameraPresented: Bool = false
     // Backing selection for both inline and sheet PhotosPicker variants.
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var notifiedFailedAttachmentIDs: Set<UUID> = []
 
     init(
         text: Binding<String>,
         focused: Binding<Bool>,
         placeholder: String,
         imageAttachments: [PromptComposerImageAttachmentPreview] = [],
-        imageAttachmentErrorMessage: String? = nil,
+        imageSelectionErrorMessage: String? = nil,
         remainingImageSlots: Int = 0,
         isImageInputEnabled: Bool = true,
         isSubmitDisabled: Bool,
         isSubmitting: Bool = false,
         onSubmit: @escaping () -> Void,
         onRemoveImageAttachment: @escaping (UUID) -> Void = { _ in },
+        onRetryImageAttachment: @escaping (UUID) -> Void = { _ in },
         onPhotosSelected: @escaping ([PhotosPickerItem]) -> Void = { _ in },
         onCameraImageCaptured: @escaping (UIImage) -> Void = { _ in }
     ) {
@@ -63,13 +70,14 @@ struct PromptComposerView: View {
         self.focused = focused
         self.placeholder = placeholder
         self.imageAttachments = imageAttachments
-        self.imageAttachmentErrorMessage = imageAttachmentErrorMessage
+        self.imageSelectionErrorMessage = imageSelectionErrorMessage
         self.remainingImageSlots = remainingImageSlots
         self.isImageInputEnabled = isImageInputEnabled
         self.isSubmitDisabled = isSubmitDisabled
         self.isSubmitting = isSubmitting
         self.onSubmit = onSubmit
         self.onRemoveImageAttachment = onRemoveImageAttachment
+        self.onRetryImageAttachment = onRetryImageAttachment
         self.onPhotosSelected = onPhotosSelected
         self.onCameraImageCaptured = onCameraImageCaptured
     }
@@ -110,7 +118,7 @@ struct PromptComposerView: View {
         }
         .animation(style.springAnimation, value: isInlinePhotoPickerVisible)
         .animation(style.springAnimation, value: imageAttachments)
-        .animation(style.springAnimation, value: imageAttachmentErrorMessage)
+        .animation(style.springAnimation, value: imageSelectionErrorMessage)
         .photosPicker(
             isPresented: $isPhotoSheetPresented,
             selection: $selectedPhotoItems,
@@ -132,15 +140,21 @@ struct PromptComposerView: View {
         .onChange(of: selectedPhotoItems) { _, newValue in
             handlePhotoSelection(newValue)
         }
+        .onChange(of: imageAttachments) { _, newValue in
+            showNewFailureHUDs(in: newValue)
+        }
+        .onChange(of: imageSelectionErrorMessage) { _, newValue in
+            showImageSelectionErrorHUDIfNeeded(newValue)
+        }
     }
 
     private var centerContent: some View {
         VStack(spacing: style.gridSize) {
-            if hasImageAttachmentPreviewContent {
+            if !imageAttachments.isEmpty {
                 AttachmentPreviews(
                     attachments: imageAttachments,
-                    errorMessage: imageAttachmentErrorMessage,
-                    onRemove: onRemoveImageAttachment
+                    onRemove: onRemoveImageAttachment,
+                    onRetry: onRetryImageAttachment
                 )
                 .transition(.opacity.animation(.easeIn(duration: 0.1)))
             }
@@ -156,21 +170,26 @@ struct PromptComposerView: View {
 
     private var inlinePhotoPickerContent: some View {
         ZStack(alignment: .bottom) {
-            PhotosPicker(
-                selection: $selectedPhotoItems,
-                maxSelectionCount: max(1, remainingImageSlots),
-                selectionBehavior: .continuous,
-                matching: .images,
-                preferredItemEncoding: .current
-            ) {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
+            // conditionally show the picker, but keep the bottom controls
+            // visible so they dont fly up from bottom.
+            // they appear in place
+            if isInlinePhotoPickerVisible {
+                PhotosPicker(
+                    selection: $selectedPhotoItems,
+                    maxSelectionCount: max(1, remainingImageSlots),
+                    selectionBehavior: .continuous,
+                    matching: .images,
+                    preferredItemEncoding: .current
+                ) {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .photosPickerStyle(.inline)
+                .photosPickerAccessoryVisibility(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
             }
-            .photosPickerStyle(.inline)
-            .photosPickerAccessoryVisibility(.hidden)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
 
             inlinePhotoPickerControls
                 .padding(8)
@@ -274,93 +293,50 @@ struct PromptComposerView: View {
         setInlinePhotoPickerVisible(false)
         onPhotosSelected(items)
     }
+}
 
-    private var hasImageAttachmentPreviewContent: Bool {
-        !imageAttachments.isEmpty || !(imageAttachmentErrorMessage ?? "").isEmpty
-    }
+private struct ImageAttachmentFailure {
+    let id: UUID
+    let message: String
+    let canRetry: Bool
 }
 
 private extension PromptComposerView {
-    struct InlinePhotoPickerReveal<Content: View>: View {
-        let isVisible: Bool
-        let height: CGFloat
-        let animation: Animation
-        let content: () -> Content
-
-        @State private var isMounted = false
-        @State private var isRevealed = false
-
-        init(
-            isVisible: Bool,
-            height: CGFloat,
-            animation: Animation,
-            @ViewBuilder content: @escaping () -> Content
-        ) {
-            self.isVisible = isVisible
-            self.height = height
-            self.animation = animation
-            self.content = content
+    func showNewFailureHUDs(in attachments: [PromptComposerImageAttachmentPreview]) {
+        let failures = attachments.compactMap { attachment -> ImageAttachmentFailure? in
+            guard let message = attachment.status.failureMessage else {
+                return nil
+            }
+            return ImageAttachmentFailure(
+                id: attachment.id,
+                message: message,
+                canRetry: attachment.canRetry
+            )
         }
 
-        var body: some View {
-            ZStack(alignment: .bottom) {
-                if isMounted {
-                    content()
-                        .frame(height: height, alignment: .bottom)
-                        .transition(.identity)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: isRevealed ? height : 0, alignment: .bottom)
-            .onAppear {
-                updateVisibility(isVisible, animated: false)
-            }
-            .onChange(of: isVisible) { _, newValue in
-                updateVisibility(newValue, animated: true)
-            }
+        let failedIDs = Set(failures.map(\.id))
+        notifiedFailedAttachmentIDs.formIntersection(failedIDs)
+
+        for failure in failures where !notifiedFailedAttachmentIDs.contains(failure.id) {
+            showToast?(
+                title: Text("Image upload failed"),
+                verbatimSubtitle: failure.canRetry ? "Tap the red image to retry." : failure.message,
+                icon: Image(systemName: "exclamationmark.circle.fill")
+            )
+            notificationFeedback.notificationOccurred(.error)
+            notifiedFailedAttachmentIDs.insert(failure.id)
+        }
+    }
+
+    func showImageSelectionErrorHUDIfNeeded(_ message: String?) {
+        guard let message, !message.isEmpty, !imageAttachments.contains(where: { $0.status.isFailed }) else {
+            return
         }
 
-        private func updateVisibility(_ shouldReveal: Bool, animated: Bool) {
-            if shouldReveal {
-                mountContent()
-                setRevealed(true, animated: animated)
-            } else {
-                setRevealed(false, animated: animated) {
-                    isMounted = false
-                }
-            }
-        }
-
-        private func mountContent() {
-            guard !isMounted else { return }
-
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                isMounted = true
-            }
-        }
-
-        private func setRevealed(
-            _ revealed: Bool,
-            animated: Bool,
-            completion: (() -> Void)? = nil
-        ) {
-            if animated {
-                withAnimation(animation) {
-                    isRevealed = revealed
-                } completion: {
-                    completion?()
-                }
-            } else {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    isRevealed = revealed
-                }
-                completion?()
-            }
-        }
+        showToast?(
+            title: Text(verbatim: message),
+            icon: Image(systemName: "exclamationmark.circle.fill")
+        )
     }
 }
 

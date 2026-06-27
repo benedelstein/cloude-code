@@ -183,7 +183,10 @@ private struct CopyFinalResponseButton: View {
     private func copyText() {
         UIPasteboard.general.string = text
         lightFeedback.impactOccurred()
-        showToast?(verbatimTitle: "Copied", icon: Image(systemName: "square.on.square"))
+        showToast?(
+            title: "Copied",
+            icon: Image(systemName: "square.on.square")
+        )
     }
 }
 

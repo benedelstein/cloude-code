@@ -41,7 +41,7 @@ struct HomeView: View {
                         return
                     }
                     showToast?(
-                        verbatimTitle: errorMessage,
+                        title: Text(verbatim: errorMessage),
                         icon: Image(systemName: "exclamationmark.circle.fill")
                     )
                 }

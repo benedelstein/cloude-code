@@ -67,7 +67,7 @@ struct BounceHighlightButtonStyle: ButtonStyle {
 }
 
 struct BounceButtonStyle: ButtonStyle {
-    var minimumScale: CGFloat = 0.92
+    var minimumScale: CGFloat = 0.95
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

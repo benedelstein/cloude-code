@@ -27,7 +27,7 @@ final class AgentSessionViewModel {
     // restored if send fails after the composer has already been cleared.
     @ObservationIgnored private var submittedAttachmentDrafts: [String: [ImageAttachmentDraft]] = [:]
 
-    private let imageAttachments: ImageAttachmentStore
+    private let attachmentStore: ImageAttachmentStore
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
     /// Hydrated, normalized display data per message
@@ -56,9 +56,9 @@ final class AgentSessionViewModel {
 
     var canSubmitDraft: Bool {
         let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !imageAttachments.attachments.isEmpty
+            || !attachmentStore.attachments.isEmpty
         return hasContent
-            && !imageAttachments.hasPendingOrFailedUploads
+            && !attachmentStore.hasPendingOrFailedUploads
             && connectionState == .connected
             && !isSending
             && !isResponding
@@ -96,7 +96,7 @@ final class AgentSessionViewModel {
         self.socket = socket
         self.sessionMessageStore = sessionMessageStore
         self.transcriptBuilder = transcriptBuilder
-        imageAttachments = ImageAttachmentStore(
+        attachmentStore = ImageAttachmentStore(
             sessionId: session.id,
             attachmentsAPI: attachmentsAPI
         )
@@ -244,7 +244,7 @@ final class AgentSessionViewModel {
             restoreDraft: draftText.isEmpty,
             submittedContent: submittedContent
         )
-        imageAttachments.restore(submittedAttachments)
+        attachmentStore.restore(submittedAttachments)
         resetPendingResponse()
     }
 
@@ -281,32 +281,37 @@ final class AgentSessionViewModel {
 extension AgentSessionViewModel {
     /// Image drafts currently shown by the composer attachment strip.
     var imageAttachmentDrafts: [ImageAttachmentDraft] {
-        imageAttachments.attachments
+        attachmentStore.attachments
     }
 
-    /// Inline composer error for image selection or upload failures.
-    var imageAttachmentErrorMessage: String? {
-        imageAttachments.errorMessage
+    /// Transient composer error for image selection or validation failures.
+    var imageSelectionErrorMessage: String? {
+        attachmentStore.errorMessage
     }
 
     /// Number of additional image attachments the composer can accept.
     var remainingImageAttachmentSlots: Int {
-        imageAttachments.remainingSlots
+        attachmentStore.remainingSlots
     }
 
     /// Adds selected Photos items and starts uploading each loaded image.
     func addImageAttachmentPhotoItems(_ items: [PhotosPickerItem]) {
-        imageAttachments.addPhotoItems(items)
+        attachmentStore.addPhotoItems(items)
     }
 
     /// Adds a captured camera image and starts uploading it.
     func addImageAttachmentCameraImage(_ image: UIImage) {
-        imageAttachments.addCameraImage(image)
+        attachmentStore.addCameraImage(image)
     }
 
     /// Removes an image draft from the composer and cleans up uploaded data if needed.
     func removeImageAttachment(id: UUID) {
-        imageAttachments.removeAttachment(id: id)
+        attachmentStore.removeAttachment(id: id)
+    }
+
+    /// Retries a failed image attachment upload.
+    func retryImageAttachment(id: UUID) {
+        attachmentStore.retryAttachment(id: id)
     }
 }
 
@@ -314,17 +319,17 @@ extension AgentSessionViewModel {
     /// Submit the composed message.
     func submitDraft() {
         let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let uploadedAttachments = imageAttachments.uploadedDescriptors
+        let uploadedAttachments = attachmentStore.uploadedDescriptors
         guard !content.isEmpty || !uploadedAttachments.isEmpty,
-              !imageAttachments.hasPendingOrFailedUploads,
+              !attachmentStore.hasPendingOrFailedUploads,
               !isSending,
               !isResponding else {
             return
         }
 
-        let submittedDrafts = imageAttachments.attachments
+        let submittedDrafts = attachmentStore.attachments
         draftText = ""
-        imageAttachments.clearAfterSubmit()
+        attachmentStore.clearAfterSubmit()
         let clientMessageId = appendPendingOptimisticUserMessage(
             content: content,
             attachments: uploadedAttachments
@@ -557,7 +562,7 @@ extension AgentSessionViewModel {
               ) else {
             return
         }
-        imageAttachments.restore(submittedAttachments)
+        attachmentStore.restore(submittedAttachments)
     }
 }
 

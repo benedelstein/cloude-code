@@ -115,6 +115,7 @@ private struct UserMessageRemoteImage: View {
 
     var body: some View {
         content
+            // future optimization - use nuke image cache
             .task(id: image.url) {
                 await loadImage()
             }
@@ -140,6 +141,7 @@ private struct UserMessageRemoteImage: View {
                     .accessibilityLabel(image.accessibilityLabel)
                     .accessibilityAddTraits(.isButton)
             }
+            .buttonStyle(.bounce)
         } else if didFail {
             imageFailureView
         } else {

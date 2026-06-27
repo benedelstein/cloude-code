@@ -34,6 +34,9 @@
     "Cloude Code" : {
 
     },
+    "Copied" : {
+
+    },
     "Copied logs to clipboard" : {
 
     },
@@ -99,9 +102,6 @@
     "Exit %lld" : {
 
     },
-    "Failed" : {
-
-    },
     "Fetch %@" : {
       "comment" : "Title for a web fetch tool action"
     },
@@ -118,6 +118,9 @@
 
     },
     "Image failed to load" : {
+
+    },
+    "Image upload failed" : {
 
     },
     "Light" : {

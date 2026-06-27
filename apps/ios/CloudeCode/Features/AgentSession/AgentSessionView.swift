@@ -136,7 +136,8 @@ private extension ImageAttachmentDraft {
         PromptComposerImageAttachmentPreview(
             id: id,
             previewImage: previewImage,
-            status: status
+            status: status,
+            canRetry: file != nil && status.isFailed
         )
     }
 }

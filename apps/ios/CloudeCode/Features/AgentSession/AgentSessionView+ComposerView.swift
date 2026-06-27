@@ -19,13 +19,14 @@ extension AgentSessionView {
                 focused: $composerFocused,
                 placeholder: vm.composerPlaceholder,
                 imageAttachments: vm.imageAttachmentDrafts.map(\.promptComposerPreview),
-                imageAttachmentErrorMessage: vm.imageAttachmentErrorMessage,
+                imageSelectionErrorMessage: vm.imageSelectionErrorMessage,
                 remainingImageSlots: vm.remainingImageAttachmentSlots,
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
                 isSubmitting: vm.isResponding,
                 onSubmit: vm.submitDraft,
                 onRemoveImageAttachment: vm.removeImageAttachment,
+                onRetryImageAttachment: vm.retryImageAttachment,
                 onPhotosSelected: vm.addImageAttachmentPhotoItems,
                 onCameraImageCaptured: vm.addImageAttachmentCameraImage
             )
@@ -38,7 +39,8 @@ private extension ImageAttachmentDraft {
         PromptComposerImageAttachmentPreview(
             id: id,
             previewImage: previewImage,
-            status: status
+            status: status,
+            canRetry: file != nil && status.isFailed
         )
     }
 }

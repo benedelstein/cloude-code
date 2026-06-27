@@ -58,7 +58,7 @@ struct SignedOutView: View {
                 return
             }
             showToast?(
-                verbatimTitle: error,
+                title: Text(verbatim: error),
                 icon: Image(systemName: "exclamationmark.circle.fill")
             )
         }
