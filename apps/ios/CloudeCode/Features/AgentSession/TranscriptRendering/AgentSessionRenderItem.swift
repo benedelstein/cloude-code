@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 
 enum AgentSessionRenderItem: Sendable, Equatable, Identifiable {
     case text(TextItem)
@@ -45,7 +46,7 @@ extension AgentSessionRenderItem {
     struct ChunkedTextItem: Sendable, Hashable {
         let key: String
         let text: String
-        let chunks: [ChunkedTextChunk]
+        let parts: [MarkdownTextPart]
     }
 
     struct ReasoningItem: Sendable, Equatable {
@@ -79,7 +80,29 @@ extension AgentSessionRenderItem {
     }
 }
 
-struct ChunkedTextChunk: Identifiable, Sendable, Hashable {
+enum MarkdownTextPart: Identifiable, Sendable, Hashable {
+    case richText(MarkdownRichTextPart)
+    case codeBlock(MarkdownCodeBlockPart)
+
+    var id: Int {
+        switch self {
+        case .richText(let part):
+            part.id
+        case .codeBlock(let part):
+            part.id
+        }
+    }
+}
+
+struct MarkdownRichTextPart: Identifiable, Sendable, Hashable {
+    let id: Int
+    let source: String
+    let attributedText: AttributedString
+}
+
+struct MarkdownCodeBlockPart: Identifiable, Sendable, Hashable {
     let id: Int
     let text: String
+    let language: String?
+    let isComplete: Bool
 }
