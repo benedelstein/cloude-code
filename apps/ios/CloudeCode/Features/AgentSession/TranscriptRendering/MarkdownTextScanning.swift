@@ -234,10 +234,7 @@ enum MarkdownFenceScanner {
 enum MarkdownInlineState {
     static func hasUnsafeOpenConstruct(in source: String) -> Bool {
         hasTrailingEscape(in: source)
-            || hasOddUnescapedBackticks(in: source)
-            || hasOddUnescapedDelimiter("**", in: source)
-            || hasOddUnescapedDelimiter("*", in: source)
-            || hasOddUnescapedDelimiter("__", in: source)
+            || hasUnsafeInlineDelimiterState(in: source)
             || hasUnclosedMarkdownLink(in: source)
             || hasUnclosedAutolink(in: source)
     }
@@ -256,29 +253,66 @@ enum MarkdownInlineState {
         return count % 2 == 1
     }
 
-    private static func hasOddUnescapedBackticks(in source: String) -> Bool {
-        var count = 0
+    private static func hasUnsafeInlineDelimiterState(in source: String) -> Bool {
+        var state = InlineDelimiterState()
         var index = source.startIndex
+        var escapedNextCharacter = false
+
         while index < source.endIndex {
-            if source[index] == "`", !isEscaped(index, in: source) {
-                count += 1
+            if escapedNextCharacter {
+                escapedNextCharacter = false
+                source.formIndex(after: &index)
+                continue
             }
+
+            let character = source[index]
+            if character == "\\" {
+                escapedNextCharacter = true
+                source.formIndex(after: &index)
+                continue
+            }
+
+            if character == "`" {
+                let runLength = delimiterRunLength(startingAt: index, marker: character, in: source)
+                state.backtickCount += runLength
+                source.formIndex(&index, offsetBy: runLength)
+                continue
+            }
+
+            if character == "*" || character == "_" {
+                let runLength = delimiterRunLength(startingAt: index, marker: character, in: source)
+                let previous = index > source.startIndex ? source[source.index(before: index)] : nil
+                let nextIndex = source.index(index, offsetBy: runLength, limitedBy: source.endIndex)
+                    ?? source.endIndex
+                let next = nextIndex < source.endIndex ? source[nextIndex] : nil
+                state.processEmphasisRun(
+                    marker: character,
+                    length: runLength,
+                    previous: previous,
+                    next: next
+                )
+                index = nextIndex
+                continue
+            }
+
             source.formIndex(after: &index)
         }
-        return count % 2 == 1
+
+        return state.hasUnsafeOpenDelimiter
     }
 
-    private static func hasOddUnescapedDelimiter(_ delimiter: String, in source: String) -> Bool {
-        var count = 0
-        var searchStart = source.startIndex
-        while searchStart < source.endIndex,
-              let range = source.range(of: delimiter, range: searchStart..<source.endIndex) {
-            if !isEscaped(range.lowerBound, in: source) {
-                count += 1
-            }
-            searchStart = range.upperBound
+    private static func delimiterRunLength(
+        startingAt startIndex: String.Index,
+        marker: Character,
+        in source: String
+    ) -> Int {
+        var length = 0
+        var index = startIndex
+        while index < source.endIndex, source[index] == marker {
+            length += 1
+            source.formIndex(after: &index)
         }
-        return count % 2 == 1
+        return length
     }
 
     private static func hasUnclosedMarkdownLink(in source: String) -> Bool {
@@ -305,19 +339,120 @@ enum MarkdownInlineState {
         }
         return source[open...].lastIndex(of: ">") == nil
     }
+}
 
-    private static func isEscaped(_ index: String.Index, in source: String) -> Bool {
-        var slashCount = 0
-        var cursor = index
-        while cursor > source.startIndex {
-            source.formIndex(before: &cursor)
-            guard source[cursor] == "\\" else {
-                break
-            }
-            slashCount += 1
-        }
-        return slashCount % 2 == 1
+private struct InlineDelimiterState {
+    var backtickCount = 0
+    private var openSingleStarCount = 0
+    private var openStrongStarCount = 0
+    private var openSingleUnderscoreCount = 0
+    private var openStrongUnderscoreCount = 0
+
+    var hasUnsafeOpenDelimiter: Bool {
+        backtickCount % 2 == 1
+            || openSingleStarCount > 0
+            || openStrongStarCount > 0
+            || openSingleUnderscoreCount > 0
+            || openStrongUnderscoreCount > 0
     }
+
+    mutating func processEmphasisRun(
+        marker: Character,
+        length: Int,
+        previous: Character?,
+        next: Character?
+    ) {
+        let flanking = EmphasisFlanking(previous: previous, next: next)
+        let canOpen: Bool
+        let canClose: Bool
+        if marker == "_" {
+            canOpen = flanking.isLeftFlanking && (!flanking.isRightFlanking || isPunctuation(previous))
+            canClose = flanking.isRightFlanking && (!flanking.isLeftFlanking || isPunctuation(next))
+        } else {
+            canOpen = flanking.isLeftFlanking
+            canClose = flanking.isRightFlanking
+        }
+
+        guard canOpen || canClose else {
+            return
+        }
+
+        if marker == "_" {
+            Self.processEmphasisUnits(
+                length: length,
+                canOpen: canOpen,
+                canClose: canClose,
+                singleOpenCount: &openSingleUnderscoreCount,
+                strongOpenCount: &openStrongUnderscoreCount
+            )
+        } else {
+            Self.processEmphasisUnits(
+                length: length,
+                canOpen: canOpen,
+                canClose: canClose,
+                singleOpenCount: &openSingleStarCount,
+                strongOpenCount: &openStrongStarCount
+            )
+        }
+    }
+
+    private static func processEmphasisUnits(
+        length: Int,
+        canOpen: Bool,
+        canClose: Bool,
+        singleOpenCount: inout Int,
+        strongOpenCount: inout Int
+    ) {
+        var strongUnits = length / 2
+        var singleUnits = length % 2
+
+        if canClose {
+            let closingStrongUnits = min(strongOpenCount, strongUnits)
+            strongOpenCount -= closingStrongUnits
+            strongUnits -= closingStrongUnits
+
+            let closingSingleUnits = min(singleOpenCount, singleUnits)
+            singleOpenCount -= closingSingleUnits
+            singleUnits -= closingSingleUnits
+        }
+
+        if canOpen {
+            strongOpenCount += strongUnits
+            singleOpenCount += singleUnits
+        }
+    }
+}
+
+private struct EmphasisFlanking {
+    let isLeftFlanking: Bool
+    let isRightFlanking: Bool
+
+    init(previous: Character?, next: Character?) {
+        isLeftFlanking = if let next {
+            !isWhitespace(next) && !(isPunctuation(next) && !isWhitespace(previous) && !isPunctuation(previous))
+        } else {
+            false
+        }
+        isRightFlanking = if let previous {
+            !isWhitespace(previous) && !(isPunctuation(previous) && !isWhitespace(next) && !isPunctuation(next))
+        } else {
+            false
+        }
+    }
+}
+
+private func isWhitespace(_ character: Character?) -> Bool {
+    guard let character else {
+        return true
+    }
+    return character.unicodeScalars.allSatisfy { CharacterSet.whitespacesAndNewlines.contains($0) }
+}
+
+private func isPunctuation(_ character: Character?) -> Bool {
+    guard let character else {
+        return false
+    }
+    return character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
 }
 
 struct MarkdownFence {
