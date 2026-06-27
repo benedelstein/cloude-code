@@ -99,10 +99,14 @@ struct GrowingTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
+            guard !parent.focused else { return }
+
             parent.focused = true
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
+            guard parent.focused else { return }
+
             parent.focused = false
         }
 
@@ -113,9 +117,9 @@ struct GrowingTextView: UIViewRepresentable {
 
         func updateFocus(in textView: UITextView) {
             if parent.focused, !textView.isFirstResponder {
-                DispatchQueue.main.async {
-                    textView.becomeFirstResponder()
-                }
+                textView.becomeFirstResponder()
+            } else if !parent.focused, textView.isFirstResponder {
+                textView.resignFirstResponder()
             }
         }
 

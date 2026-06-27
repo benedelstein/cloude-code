@@ -1,5 +1,4 @@
 import UIKit
-import Domain
 
 /// Keyboard animation metadata captured from UIKit keyboard notifications.
 struct KeyboardTransition {
@@ -77,7 +76,6 @@ final class NotificationKeyboardTransitionObserver: KeyboardTransitionObserving 
             options: keyboardAnimationOptions(from: notification)
         )
 
-        logKeyboardFrameChange(notification, transition: transition)
         onTransition?(transition)
     }
 
@@ -97,25 +95,5 @@ final class NotificationKeyboardTransitionObserver: KeyboardTransitionObserving 
         let curveOptions = UIView.AnimationOptions(rawValue: curveRawValue << 16)
 
         return [.beginFromCurrentState, .allowUserInteraction, .layoutSubviews, curveOptions]
-    }
-
-    private func logKeyboardFrameChange(
-        _ notification: Notification,
-        transition: KeyboardTransition
-    ) {
-        guard let view,
-              let window = view.window,
-              let screenFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let keyboardFrameInWindow = window.convert(screenFrame, from: nil)
-//        Logger.debug(
-//            "xx keyboard frame screen=\(screenFrame) " +
-//                "window=\(keyboardFrameInWindow) " +
-//                "windowBounds=\(window.bounds) " +
-//                "duration=\(transition.duration) " +
-//                "remainingDuration=\(transition.remainingDuration)"
-//        )
     }
 }
