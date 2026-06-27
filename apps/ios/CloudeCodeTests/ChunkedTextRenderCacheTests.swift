@@ -23,6 +23,18 @@ struct ChunkedTextRenderCacheTests {
         #expect(second.map(\.id) == [0])
     }
 
+    @Test func incompleteSingleUnderscoreEmphasisStaysActiveAcrossHardBoundary() {
+        let cache = ChunkedTextRenderCache(maxChunkUTF16Length: 8)
+
+        let first = renderParts(cache: cache, text: "Hello _it")
+        #expect(first.map(\.id) == [0])
+        #expect(expectRichText(first, at: 0)?.source == "Hello _it")
+
+        let second = renderParts(cache: cache, text: "Hello _italic_")
+        #expect(second.map(\.id) == [0])
+        #expect(expectRichText(second, at: 0)?.renderedText == "Hello italic")
+    }
+
     @Test func blankLineFinalizesSafeRichTextAndKeepsTailActive() {
         let cache = ChunkedTextRenderCache()
 
@@ -42,6 +54,14 @@ struct ChunkedTextRenderCacheTests {
 
         #expect(parts.map(\.id) == [0])
         #expect(expectRichText(parts, at: 0)?.source == "Before **unfinished\n\nAfter")
+    }
+
+    @Test func wordInternalUnderscoreDoesNotPreventBlankLineFinalization() {
+        let parts = renderParts(for: "Use user_id here.\n\nNext")
+
+        #expect(parts.map(\.id) == [0, 1])
+        #expect(expectRichText(parts, at: 0)?.source == "Use user_id here.\n\n")
+        #expect(expectRichText(parts, at: 1)?.source == "Next")
     }
 
     @Test func completeCodeFenceBecomesSingleCodeBlock() {
