@@ -163,7 +163,6 @@ struct PromptComposerView: View {
                 focused: focused,
                 placeholder: placeholder
             )
-            .transition(.opacity)
         }
     }
 
@@ -245,6 +244,7 @@ struct PromptComposerView: View {
 private extension PromptComposerView {
     struct InlinePhotoPickerContent: View {
         @Environment(\.composerStyle) private var composerStyle: ComposerStyle
+        @Environment(\.lightFeedback) var lightFeedback: UIImpactFeedbackGenerator
         @Environment(\.theme) private var theme: Theme
         @Environment(\.style) private var style: Style
 
@@ -286,8 +286,9 @@ private extension PromptComposerView {
                 controls
                     .padding(8)
             }
-            .onChange(of: selectedPhotoItems) { _, newValue in
-                setStagedSelectionVisible(!newValue.isEmpty)
+            .sensoryFeedback(.selection, trigger: selectedPhotoItems)
+            .onChange(of: selectedPhotoItems) {
+                setStagedSelectionVisible(!$1.isEmpty)
             }
             .onChange(of: isVisible) { _, newValue in
                 guard !newValue else { return }
@@ -309,6 +310,7 @@ private extension PromptComposerView {
                 Spacer()
 
                 Button {
+                    lightFeedback.impactOccurred()
                     if hasStagedSelection {
                         confirmSelection()
                     } else {
@@ -316,7 +318,6 @@ private extension PromptComposerView {
                     }
                 } label: {
                     confirmationLabel
-                        .contentTransition(.opacity)
                         .padding(.horizontal, 12)
                         .frame(height: composerStyle.bottomButtonSize)
                         // glassButtonStyle with diff tint doesnt animate well.
@@ -342,7 +343,10 @@ private extension PromptComposerView {
         private func confirmSelection() {
             let items = selectedPhotoItems
             guard !items.isEmpty else { return }
-            resetSelection()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                // delay for animation
+                resetSelection()
+            }
             onPhotosSelected(items)
         }
 

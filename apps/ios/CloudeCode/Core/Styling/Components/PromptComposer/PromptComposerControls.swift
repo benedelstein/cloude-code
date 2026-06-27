@@ -13,10 +13,10 @@ extension PromptComposerView {
             GrowingTextView(
                 text: $text,
                 focused: focused,
-                font: EditorMetrics.font,
+                font: EditorStyle.font,
                 textColor: UIColor(theme.labelColor),
-                textInsets: EditorMetrics.textInsets,
-                maxVisibleLines: EditorMetrics.maxVisibleLines
+                textInsets: EditorStyle.textInsets,
+                maxVisibleLines: EditorStyle.maxVisibleLines
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
@@ -30,24 +30,24 @@ extension PromptComposerView {
                 Text(placeholder)
                     .styledFont(.body)
                     .foregroundStyle(theme.tertiaryLabelColor)
-                    .padding(.top, EditorMetrics.textInsets.top)
-                    .padding(.leading, EditorMetrics.textInsets.left)
+                    .padding(.top, EditorStyle.textInsets.top)
+                    .padding(.leading, EditorStyle.textInsets.left)
                     .allowsHitTesting(false)
             }
         }
     }
 
-    private enum EditorMetrics {
+    private enum EditorStyle {
         static let font = UIFont.systemFont(ofSize: 17, weight: .regular)
-        static let horizontalInset: CGFloat = 12
-        static let topInset: CGFloat = 12
+        static let horizontalInset: CGFloat = 16
+        static let topInset: CGFloat = 16
         static let maxVisibleLines = 6
 
         static var textInsets: UIEdgeInsets {
             UIEdgeInsets(
                 top: topInset,
                 left: horizontalInset,
-                bottom: topInset,
+                bottom: 4,
                 right: horizontalInset
             )
         }

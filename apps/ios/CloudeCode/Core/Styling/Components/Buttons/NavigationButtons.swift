@@ -10,7 +10,7 @@ struct GlassButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(theme.labelColor)
                 .frame(width: 40, height: 40)
                 .glassBackground(in: Circle())

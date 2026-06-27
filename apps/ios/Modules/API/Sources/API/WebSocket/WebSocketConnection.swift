@@ -29,12 +29,10 @@ public actor WebSocketConnection {
 
     private var socketTask: URLSessionWebSocketTask?
     private var runTask: Task<Void, Never>?
-    private var pingTask: Task<Void, Never>?
     private var retryCount = 0
     private var isStopped = true
 
     private static let maxRetryDelaySeconds: Double = 30
-    private static let pingInterval: Duration = .seconds(20)
 
     public init(
         urlSession: URLSession = .shared,
@@ -61,7 +59,6 @@ public actor WebSocketConnection {
         isStopped = true
         runTask?.cancel()
         runTask = nil
-        stopPinging()
         socketTask?.cancel(with: .normalClosure, reason: nil)
         socketTask = nil
         continuation.yield(.stateChanged(.disconnected))
@@ -84,14 +81,11 @@ public actor WebSocketConnection {
                 task.resume()
                 socketTask = task
                 Logger.debug("websocket task resumed")
-                guard try await establishConnection(on: task) else { return }
-                startPinging(task)
                 try await receiveLoop(on: task)
             } catch {
                 // Fall through to backoff; covers failed upgrades and drops.
                 Logger.warning("WebSocket connection lost:", error)
             }
-            stopPinging()
             socketTask?.cancel(with: .normalClosure, reason: nil)
             Logger.debug("websocket closed normally")
             socketTask = nil
@@ -102,8 +96,17 @@ public actor WebSocketConnection {
     }
 
     private func receiveLoop(on task: URLSessionWebSocketTask) async throws {
+        var hasConfirmedConnection = false
         while !Task.isCancelled {
-            switch try await task.receive() {
+            let message = try await task.receive()
+            guard !Task.isCancelled, !isStopped else { return }
+            if !hasConfirmedConnection {
+                hasConfirmedConnection = true
+                retryCount = 0
+                Logger.debug("websocket connected")
+                continuation.yield(.stateChanged(.connected))
+            }
+            switch message {
             case .string(let text):
                 continuation.yield(.message(Data(text.utf8)))
             case .data(let data):
@@ -114,94 +117,11 @@ public actor WebSocketConnection {
         }
     }
 
-    private func establishConnection(on task: URLSessionWebSocketTask) async throws -> Bool {
-        // `resume()` starts the task but does not prove the WebSocket upgrade
-        // completed. The first pong is the transport-level confirmation that
-        // should reset retries and move observers to `.connected`.
-        // Return false if the pong succeeds after the connection was stopped.
-        try await Self.awaitPong(task)
-        guard !Task.isCancelled, !isStopped else { return false }
-        retryCount = 0
-        Logger.debug("websocket connected")
-        continuation.yield(.stateChanged(.connected))
-        return true
-    }
-
     private func backoff() async {
         let baseDelay = min(pow(2, Double(retryCount)), Self.maxRetryDelaySeconds)
         let delay = Double.random(in: (baseDelay / 2)...baseDelay)
         retryCount += 1
         try? await Task.sleep(for: .seconds(delay))
-    }
-
-    private func startPinging(_ task: URLSessionWebSocketTask) {
-        // Deadline-based sleeps, not a Timer: advancing `nextPing` from the
-        // schedule (instead of "now + interval") keeps the cadence drift-free
-        // like a repeating Timer, while staying actor-isolated and cancelling
-        // instantly via pingTask.
-        pingTask = Task {
-            var nextPing = ContinuousClock.now + Self.pingInterval
-            while !Task.isCancelled {
-                // Loose tolerance is fine power-wise; deadlines can't drift
-                // because the next one is anchored to the schedule.
-                try? await Task.sleep(until: nextPing, tolerance: .seconds(2))
-                nextPing += Self.pingInterval
-                guard !Task.isCancelled else { return }
-                // Failures surface through the receive loop; ignore here.
-                try? await Self.awaitPong(task)
-            }
-        }
-    }
-
-    private func stopPinging() {
-        pingTask?.cancel()
-        pingTask = nil
-    }
-
-    private static func awaitPong(_ task: URLSessionWebSocketTask) async throws {
-        try await withCheckedThrowingContinuation { (checked: CheckedContinuation<Void, any Error>) in
-            let continuation = OneShotContinuation(checked)
-            task.sendPing { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-}
-
-private final class OneShotContinuation: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Void, any Error>?
-
-    init(_ continuation: CheckedContinuation<Void, any Error>) {
-        self.continuation = continuation
-    }
-
-    func resume() {
-        guard let continuation = take() else {
-            Logger.warning("WebSocket ping completion fired after continuation was already resumed")
-            return
-        }
-        continuation.resume()
-    }
-
-    func resume(throwing error: any Error) {
-        guard let continuation = take() else {
-            Logger.warning("WebSocket ping completion fired after continuation was already resumed", error)
-            return
-        }
-        continuation.resume(throwing: error)
-    }
-
-    private func take() -> CheckedContinuation<Void, any Error>? {
-        lock.withLock {
-            let result = continuation
-            continuation = nil
-            return result
-        }
     }
 }
 

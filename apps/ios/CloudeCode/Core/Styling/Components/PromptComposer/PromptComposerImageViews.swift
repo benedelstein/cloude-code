@@ -23,11 +23,11 @@ extension PromptComposerView {
                 }
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .squareFrame(size: composerStyle.bottomButtonSize)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.highlight)
             .foregroundStyle(theme.secondaryLabelColor)
             .disabled(isDisabled)
             .accessibilityLabel("Add images")
