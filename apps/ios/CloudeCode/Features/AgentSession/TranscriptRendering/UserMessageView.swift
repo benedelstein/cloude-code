@@ -128,7 +128,7 @@ private struct UserMessageRemoteImage: View {
             Button {
                 openImage(image)
             } label: {
-                let size = displaySize
+                let size = displaySize(fallbackSize: uiImage.size)
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
@@ -170,15 +170,17 @@ private struct UserMessageRemoteImage: View {
     }
 
     private var imagePlaceholder: some View {
-        ProgressView()
-            .frame(width: displaySize.width, height: displaySize.height)
+        let size = displaySize()
+        return ProgressView()
+            .frame(width: size.width, height: size.height)
             .background(imageShape.fill(theme.loadingBackgroundColor))
     }
 
     private var imageFailureView: some View {
-        Image(systemName: "photo")
+        let size = displaySize()
+        return Image(systemName: "photo")
             .foregroundStyle(theme.secondaryLabelColor)
-            .frame(width: displaySize.width, height: displaySize.height)
+            .frame(width: size.width, height: size.height)
             .background(imageShape.fill(theme.loadingBackgroundColor))
             .overlay {
                 imageShape.stroke(theme.outlineColor, lineWidth: style.outlineThickness)
@@ -186,10 +188,14 @@ private struct UserMessageRemoteImage: View {
             .accessibilityLabel(Text(verbatim: "Image failed to load"))
     }
 
-    private var displaySize: CGSize {
-        image.displaySize(
-            maxHeight: height,
-            maxWidth: Constants.maxImageWidth
-        )
+    private func displaySize(fallbackSize: CGSize? = nil) -> CGSize {
+        let pixelWidth = image.width.map(CGFloat.init) ?? fallbackSize?.width ?? 0
+        let pixelHeight = image.height.map(CGFloat.init) ?? fallbackSize?.height ?? 0
+        guard pixelWidth > 0, pixelHeight > 0 else {
+            return CGSize(width: height, height: height)
+        }
+
+        let displayWidth = min(height * pixelWidth / pixelHeight, Constants.maxImageWidth)
+        return CGSize(width: displayWidth, height: displayWidth * pixelHeight / pixelWidth)
     }
 }
