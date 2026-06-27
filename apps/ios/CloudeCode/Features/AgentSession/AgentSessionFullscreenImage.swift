@@ -44,6 +44,7 @@ extension EnvironmentValues {
 struct AgentSessionFullscreenImageView: View {
     private let dismissDragThreshold: CGFloat = 140
     private let backgroundFadeDistance: CGFloat = 280
+    private let dismissCompletionDuration: TimeInterval = 0.2
 
     @Environment(\.dismiss) private var dismiss: DismissAction
     @Environment(\.fetchImageAction) private var fetchImageAction
@@ -153,23 +154,37 @@ struct AgentSessionFullscreenImageView: View {
         dismissDragOffset = translation
     }
 
-    private func handleDragEnded(_ translation: CGSize) {
-        guard translation.height > dismissDragThreshold else {
+    private func handleDragEnded(_ translation: CGSize, predictedEndTranslation: CGSize) {
+        guard translation.height > dismissDragThreshold
+            || predictedEndTranslation.height > dismissDragThreshold else {
             resetDismissDrag()
             return
         }
 
-        withAnimation(.easeOut(duration: 0.12)) {
-            dismissDragOffset = translation
+        let targetTranslation = dismissalTargetTranslation(
+            translation: translation,
+            predictedEndTranslation: predictedEndTranslation
+        )
+
+        withAnimation(.easeOut(duration: dismissCompletionDuration)) {
+            dismissDragOffset = targetTranslation
             isCompletingDragDismissal = true
         }
 
         Task {
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(dismissCompletionDuration * 1_000_000_000))
             await MainActor.run {
                 dismiss()
             }
         }
+    }
+
+    private func dismissalTargetTranslation(translation: CGSize, predictedEndTranslation: CGSize) -> CGSize {
+        guard predictedEndTranslation.height > translation.height else {
+            return translation
+        }
+
+        return predictedEndTranslation
     }
 
     private func resetDismissDrag() {

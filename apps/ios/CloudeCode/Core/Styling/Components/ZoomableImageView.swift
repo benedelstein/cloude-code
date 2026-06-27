@@ -46,8 +46,8 @@ struct ZoomableImageView: UIViewRepresentable {
             dragConfiguration?.onChanged(translation)
         }
 
-        func zoomingImageScrollViewDidEndDrag(_ translation: CGSize) {
-            dragConfiguration?.onEnded(translation)
+        func zoomingImageScrollViewDidEndDrag(_ translation: CGSize, predictedEndTranslation: CGSize) {
+            dragConfiguration?.onEnded(translation, predictedEndTranslation)
         }
 
         func zoomingImageScrollViewDidCancelDrag() {
@@ -58,13 +58,13 @@ struct ZoomableImageView: UIViewRepresentable {
 
 struct ZoomableImageDragConfiguration {
     let onChanged: (CGSize) -> Void
-    let onEnded: (CGSize) -> Void
+    let onEnded: (CGSize, CGSize) -> Void
     let onCancelled: () -> Void
 }
 
 protocol ZoomingImageScrollViewDragHandling: AnyObject {
     func zoomingImageScrollViewDidChangeDrag(_ translation: CGSize)
-    func zoomingImageScrollViewDidEndDrag(_ translation: CGSize)
+    func zoomingImageScrollViewDidEndDrag(_ translation: CGSize, predictedEndTranslation: CGSize)
     func zoomingImageScrollViewDidCancelDrag()
 }
 
@@ -191,7 +191,10 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
         case .began, .changed:
             dragHandler?.zoomingImageScrollViewDidChangeDrag(translation)
         case .ended:
-            dragHandler?.zoomingImageScrollViewDidEndDrag(translation)
+            dragHandler?.zoomingImageScrollViewDidEndDrag(
+                translation,
+                predictedEndTranslation: predictedEndTranslation(for: recognizer, translation: translation)
+            )
         case .cancelled, .failed:
             dragHandler?.zoomingImageScrollViewDidCancelDrag()
         case .possible:
@@ -199,6 +202,17 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
         @unknown default:
             dragHandler?.zoomingImageScrollViewDidCancelDrag()
         }
+    }
+
+    private func predictedEndTranslation(for recognizer: UIPanGestureRecognizer, translation: CGSize) -> CGSize {
+        let velocity = recognizer.velocity(in: self)
+        let projectionDistance = UIScrollView.DecelerationRate.normal.rawValue
+            / (1 - UIScrollView.DecelerationRate.normal.rawValue)
+
+        return CGSize(
+            width: translation.width + (velocity.x / 1_000 * projectionDistance),
+            height: translation.height + (velocity.y / 1_000 * projectionDistance)
+        )
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
