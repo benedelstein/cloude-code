@@ -94,6 +94,7 @@ struct PromptComposerView: View {
             .frame(height: 350, alignment: .bottom)
             .frame(height: isInlinePhotoPickerVisible ? 350 : 50, alignment: .bottom)
             .opacity(isInlinePhotoPickerVisible ? 1 : 0)
+            .allowsHitTesting(isInlinePhotoPickerVisible)
             .zIndex(1)
         }
         .clipShape(composerShape)

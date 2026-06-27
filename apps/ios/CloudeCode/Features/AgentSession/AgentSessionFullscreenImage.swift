@@ -8,12 +8,15 @@ struct SessionImageInfo: Identifiable, Equatable {
     let height: Int?
     let accessibilityLabel: String
 
-    func displayWidth(for displayHeight: CGFloat) -> CGFloat? {
+    func displaySize(maxHeight: CGFloat, maxWidth: CGFloat) -> CGSize {
         guard let width, let height, width > 0, height > 0 else {
-            return nil
+            return CGSize(width: maxHeight, height: maxHeight)
         }
 
-        return displayHeight * CGFloat(width) / CGFloat(height)
+        let aspectWidth = maxHeight * CGFloat(width) / CGFloat(height)
+        let displayWidth = min(aspectWidth, maxWidth)
+        let displayHeight = displayWidth * CGFloat(height) / CGFloat(width)
+        return CGSize(width: displayWidth, height: displayHeight)
     }
 }
 

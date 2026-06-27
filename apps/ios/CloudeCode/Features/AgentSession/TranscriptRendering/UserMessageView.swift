@@ -98,6 +98,10 @@ struct UserMessageView: View {
 }
 
 private struct UserMessageRemoteImage: View {
+    private enum Constants {
+        static let maxImageWidth: CGFloat = 260
+    }
+
     @Environment(\.fetchImageAction) private var fetchImageAction
     @Environment(\.openAgentSessionImage) private var openImage
     @Environment(\.theme) private var theme
@@ -123,10 +127,11 @@ private struct UserMessageRemoteImage: View {
             Button {
                 openImage(image)
             } label: {
+                let size = displaySize
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: displayWidth, height: height)
+                    .frame(width: size.width, height: size.height)
                     .clipShape(imageShape)
                     .overlay {
                         imageShape.stroke(theme.outlineColor, lineWidth: style.outlineThickness)
@@ -164,14 +169,14 @@ private struct UserMessageRemoteImage: View {
 
     private var imagePlaceholder: some View {
         ProgressView()
-            .frame(width: reservedWidth, height: height)
+            .frame(width: displaySize.width, height: displaySize.height)
             .background(imageShape.fill(theme.loadingBackgroundColor))
     }
 
     private var imageFailureView: some View {
         Image(systemName: "photo")
             .foregroundStyle(theme.secondaryLabelColor)
-            .frame(width: reservedWidth, height: height)
+            .frame(width: displaySize.width, height: displaySize.height)
             .background(imageShape.fill(theme.loadingBackgroundColor))
             .overlay {
                 imageShape.stroke(theme.outlineColor, lineWidth: style.outlineThickness)
@@ -179,11 +184,10 @@ private struct UserMessageRemoteImage: View {
             .accessibilityLabel(Text(verbatim: "Image failed to load"))
     }
 
-    private var displayWidth: CGFloat? {
-        image.displayWidth(for: height)
-    }
-
-    private var reservedWidth: CGFloat {
-        displayWidth ?? height
+    private var displaySize: CGSize {
+        image.displaySize(
+            maxHeight: height,
+            maxWidth: Constants.maxImageWidth
+        )
     }
 }
