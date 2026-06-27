@@ -115,16 +115,16 @@ final class ImageAttachmentStore {
             for (reservationId, item) in zip(reservationIds, items) {
                 do {
                     guard let loadedFile = try await loadImageAttachmentFile(from: item) else {
-                        await self?.failReservedFile(
+                        self?.failReservedFile(
                             id: reservationId,
                             message: "Failed to load image."
                         )
                         continue
                     }
 
-                    await self?.attachReservedFile(id: reservationId, loadedFile: loadedFile)
+                    self?.attachReservedFile(id: reservationId, loadedFile: loadedFile)
                 } catch {
-                    await self?.failReservedFile(
+                    self?.failReservedFile(
                         id: reservationId,
                         message: error.localizedDescription
                     )
