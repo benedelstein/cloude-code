@@ -122,7 +122,7 @@ private struct LogRow: View {
             Text(entry.message)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(theme.labelColor)
-//                .textSelection(.enabled)
+                .textSelection(.enabled)
 
             Text(entry.location)
                 .styledFont(.caption)

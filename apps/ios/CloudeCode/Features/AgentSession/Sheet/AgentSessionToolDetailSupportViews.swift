@@ -221,7 +221,7 @@ struct ValueList: View {
                 Text(value)
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(theme.labelColor)
-//                    .textSelection(.enabled)
+                    .textSelection(.enabled)
             }
         }
     }
