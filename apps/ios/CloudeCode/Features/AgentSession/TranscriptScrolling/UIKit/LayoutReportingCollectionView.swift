@@ -1,8 +1,7 @@
+import Domain
 import UIKit
 
 final class LayoutReportingCollectionView: UICollectionView {
-    /// Called before UIKit lays out this collection view's subviews.
-    var onBeforeLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
     /// Called after UIKit completes this collection view's layout pass.
     var onLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
     /// Most recent keyboard transition waiting to be consumed by the transcript coordinator.
@@ -31,7 +30,6 @@ final class LayoutReportingCollectionView: UICollectionView {
     }
 
     override func layoutSubviews() {
-        onBeforeLayoutSubviews?(self)
         super.layoutSubviews()
         onLayoutSubviews?(self)
     }
@@ -81,6 +79,15 @@ final class LayoutReportingCollectionView: UICollectionView {
     private func handleKeyboardTransition(_ transition: KeyboardTransition) {
         pendingKeyboardTransition = transition
         setNeedsLayout()
+    }
+
+    private var distanceFromBottom: CGFloat {
+        let visibleBottomY = contentOffset.y + bounds.height - adjustedContentInset.bottom
+        return contentSize.height - visibleBottomY
+    }
+
+    private func format(_ value: CGFloat) -> String {
+        String(format: "%.2f", Double(value))
     }
 
     private func safeAreaTopHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {

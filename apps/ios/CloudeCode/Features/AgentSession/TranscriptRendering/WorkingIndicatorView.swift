@@ -21,7 +21,6 @@ struct WorkingIndicatorView: View {
         .padding(.vertical, style.gridSize / 2)
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(!isActive)
-        .accessibilityLabel("Agent is responding")
         .accessibilityAddTraits(.updatesFrequently)
         .onAppear {
             updateAnimationState()
@@ -36,7 +35,7 @@ struct WorkingIndicatorView: View {
             let shape = WorkingCloudShape(morphProgress: morphProgress)
 
             shape
-                .fill(theme.backgroundColor)
+                .fill(theme.secondaryBackgroundColor)
 
             shape
                 .stroke(
@@ -62,7 +61,7 @@ struct WorkingIndicatorView: View {
     private var metrics: Metrics {
         isActive
             ? Metrics(size: CGSize(width: 38, height: 26), opacity: 1)
-            : Metrics(size: CGSize(width: 24, height: 16), opacity: 0.65)
+            : Metrics(size: CGSize(width: 24, height: 16), opacity: 1)
     }
 
     private var floatOffset: CGFloat {
@@ -119,10 +118,10 @@ struct WorkingIndicatorView: View {
         floatPulse = false
         squigglePulse = false
 
-        withAnimation(.easeInOut(duration: 2.1).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
             morphProgress = 1
         }
-        withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
             floatPulse = true
         }
         withAnimation(.easeInOut(duration: 1.25).repeatForever(autoreverses: true)) {

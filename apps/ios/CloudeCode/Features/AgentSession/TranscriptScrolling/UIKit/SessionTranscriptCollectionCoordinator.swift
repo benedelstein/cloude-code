@@ -1,5 +1,8 @@
 import SwiftUI
+import Domain
 import UIKit
+
+// swiftlint:disable file_length
 
 extension SessionTranscriptCollectionRepresentable {
     final class Coordinator: NSObject, UICollectionViewDelegate {
@@ -8,7 +11,7 @@ extension SessionTranscriptCollectionRepresentable {
         }
 
         private typealias DataSource = UICollectionViewDiffableDataSource<Section, String>
-        private typealias CellRegistration = UICollectionView.CellRegistration<UICollectionViewCell, String>
+        private typealias CellRegistration = UICollectionView.CellRegistration<SessionTranscriptCollectionCell, String>
 
         private var dataSource: DataSource?
         private var itemsByID: [String: SessionTranscriptItem] = [:]
@@ -18,8 +21,14 @@ extension SessionTranscriptCollectionRepresentable {
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
-        private var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
+        private var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
+        private var isUserScrolling = false
+        var isFollowingBottom = true {
+            didSet {
+                print("following bottom? \(isFollowingBottom)")
+            }
+        }
         var handledScrollRequestID = 0
         let scrollCoordinator: SessionTranscriptScrollCoordinator
         private var rowContent: (SessionTranscriptItem) -> Row
@@ -39,11 +48,7 @@ extension SessionTranscriptCollectionRepresentable {
                     return
                 }
 
-                let rowContent = self.rowContent
-                cell.contentConfiguration = UIHostingConfiguration {
-                    rowContent(item)
-                }
-                .margins(.all, 0)
+                configure(cell, with: item)
             }
 
             dataSource = DataSource(collectionView: collectionView) { collectionView, indexPath, id in
@@ -59,24 +64,16 @@ extension SessionTranscriptCollectionRepresentable {
             collectionView.delegate = self
         }
 
-        func indexPath(forItemID id: String) -> IndexPath? {
-            dataSource?.indexPath(for: id)
+        func configure(_ cell: UICollectionViewCell, with item: SessionTranscriptItem) {
+            let rowContent = self.rowContent
+            cell.contentConfiguration = UIHostingConfiguration {
+                rowContent(item)
+            }
+            .margins(.all, 0)
         }
 
-        func prepareWorkingIndicatorLayoutTransition(_ collectionView: UICollectionView) {
-            guard isInitialAnchorComplete else {
-                workingIndicatorLayoutFrameBeforeUpdate = nil
-                return
-            }
-            guard !collectionView.isTracking && !collectionView.isDragging && !collectionView.isDecelerating else {
-                workingIndicatorLayoutFrameBeforeUpdate = nil
-                return
-            }
-
-            workingIndicatorLayoutFrameBeforeUpdate = visibleFrame(
-                forItemID: SessionTranscriptItem.workingItemID,
-                in: collectionView
-            )
+        func indexPath(forItemID id: String) -> IndexPath? {
+            dataSource?.indexPath(for: id)
         }
 
         func update(
@@ -94,6 +91,7 @@ extension SessionTranscriptCollectionRepresentable {
             let didChangeContentInsetConfiguration = nextContentInsetConfiguration != contentInsetConfiguration
             contentInsetConfiguration = nextContentInsetConfiguration
             itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            prepareWorkingIndicatorLayoutTransition(collectionView)
 
             updateKeyboardDismissPadding(keyboardDismissPadding, in: collectionView)
             if didChangeContentInsetConfiguration {
@@ -114,7 +112,7 @@ extension SessionTranscriptCollectionRepresentable {
                 }
 
                 lastItems = items
-                reconfigureItems(changedItemIDs, in: collectionView)
+                updateVisibleItems(changedItemIDs, in: collectionView)
                 return
             }
 
@@ -131,20 +129,28 @@ extension SessionTranscriptCollectionRepresentable {
             let wasNearBottomBeforeLayout = lastDistanceFromBottom.map {
                 $0 <= SessionTranscriptScrollMetrics.bottomProximityThreshold
             } ?? isNearBottom(collectionView)
+            if wasNearBottomBeforeLayout && !isUserScrolling {
+                isFollowingBottom = true
+            }
+            let didUpdateContentInsets = updateContentInsets(collectionView)
             let layoutChange = SessionTranscriptLayoutChange(
                 boundsChanged: lastLayoutBoundsSize != collectionView.bounds.size,
                 contentSizeChanged: lastLayoutContentSize != collectionView.contentSize,
-                didUpdateContentInsets: updateContentInsets(collectionView)
+                didUpdateContentInsets: didUpdateContentInsets
             )
             defer {
                 recordLayoutState(collectionView)
+            }
+
+            if isFollowingBottom && !wasNearBottomBeforeLayout {
+                Logger.debug("bottom tracking lost? \(lastDistanceFromBottom, default: "no last dist")")
             }
 
             // Keep the visible bottom pinned after UIKit realizes geometry changes.
             // The layout-change type decides whether that correction may animate.
             preserveBottomAfterLayout(
                 collectionView,
-                wasNearBottomBeforeLayout: wasNearBottomBeforeLayout,
+                shouldPreserveBottom: isFollowingBottom || wasNearBottomBeforeLayout,
                 layoutChange: layoutChange,
                 keyboardTransition: keyboardTransition
             )
@@ -172,10 +178,19 @@ extension SessionTranscriptCollectionRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if scrollView.isTracking || scrollView.isDragging {
+                isUserScrolling = true
+            }
+
+//            if isUserScrolling {
+//                updateFollowingBottomFromUserScroll(scrollView)
+//            }
             updateScrollToBottomVisibility(scrollView)
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            isUserScrolling = true
+            isFollowingBottom = false
             scrollCoordinator.finishScrollToBottom()
             updateScrollToBottomVisibility(scrollView)
         }
@@ -183,21 +198,28 @@ extension SessionTranscriptCollectionRepresentable {
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             guard !decelerate else { return }
 
+            updateFollowingBottomFromUserScroll(scrollView)
+            isUserScrolling = false
             updateScrollToBottomVisibility(scrollView)
         }
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            updateFollowingBottomFromUserScroll(scrollView)
+            isUserScrolling = false
             updateScrollToBottomVisibility(scrollView)
         }
 
         func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-            scrollCoordinator.finishScrollToBottom()
+            let didRetargetBottom = continueFollowingBottomAfterProgrammaticScroll(scrollView)
+            if !didRetargetBottom {
+                scrollCoordinator.finishScrollToBottom()
+            }
             updateScrollToBottomVisibility(scrollView)
         }
     }
 }
 
-private extension SessionTranscriptCollectionRepresentable.Coordinator {
+extension SessionTranscriptCollectionRepresentable.Coordinator {
     var isWaitingForInitialItems: Bool {
         if case .waitingForItems = initialAnchorState {
             return true
@@ -275,6 +297,30 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         collectionView.verticalScrollIndicatorInsets = contentInset
     }
 
+    func prepareWorkingIndicatorLayoutTransition(_ collectionView: UICollectionView) {
+        guard isInitialAnchorComplete else {
+            workingIndicatorLayoutFrameBeforeUpdate = nil
+            return
+        }
+
+        guard !collectionView.isTracking && !collectionView.isDragging && !collectionView.isDecelerating else {
+            workingIndicatorLayoutFrameBeforeUpdate = nil
+            return
+        }
+
+        let frame = layoutFrame(
+            forItemID: SessionTranscriptItem.workingItemID,
+            in: collectionView
+        )
+        workingIndicatorLayoutFrameBeforeUpdate = frame
+        if let frame {
+            Logger.debug(
+                "captured working indicator layout frame",
+                workingIndicatorGeometryDescription(frame: frame, in: collectionView)
+            )
+        }
+    }
+
     func animateWorkingIndicatorLayoutTransition(
         in collectionView: UICollectionView,
         layoutChange: SessionTranscriptLayoutChange,
@@ -289,13 +335,45 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         guard let previousFrame = workingIndicatorLayoutFrameBeforeUpdate else { return }
         guard let cell = cell(forItemID: SessionTranscriptItem.workingItemID, in: collectionView) else { return }
 
-        let currentFrame = cell.convert(cell.bounds, to: collectionView)
+        let currentFrame = cell.frame
         let deltaX = previousFrame.minX - currentFrame.minX
         let deltaY = previousFrame.minY - currentFrame.minY
         guard abs(deltaX) > 0.5 || abs(deltaY) > 0.5 else { return }
+        if let skipReason = workingIndicatorAnimationSkipReason(
+            from: previousFrame,
+            to: currentFrame,
+            in: collectionView
+        ) {
+            Logger.debug(
+                "skipping working indicator layout animation",
+                "reason=\(skipReason)",
+                workingIndicatorMoveDescription(
+                    from: previousFrame,
+                    to: currentFrame,
+                    in: collectionView
+                )
+            )
+            return
+        }
 
+        Logger.debug(
+            "moving working indicator",
+            workingIndicatorMoveDescription(
+                from: previousFrame,
+                to: currentFrame,
+                in: collectionView
+            )
+        )
+        animateWorkingIndicatorCell(cell, translationX: deltaX, translationY: deltaY)
+    }
+
+    func animateWorkingIndicatorCell(
+        _ cell: UICollectionViewCell,
+        translationX: CGFloat,
+        translationY: CGFloat
+    ) {
         cell.layer.removeAllAnimations()
-        cell.transform = CGAffineTransform(translationX: deltaX, y: deltaY)
+        cell.transform = CGAffineTransform(translationX: translationX, y: translationY)
         UIView.animate(
             withDuration: 0.22,
             delay: 0,
@@ -305,14 +383,63 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         }
     }
 
-    func visibleFrame(forItemID id: String, in collectionView: UICollectionView) -> CGRect? {
-        guard let cell = cell(forItemID: id, in: collectionView) else { return nil }
+    func workingIndicatorAnimationSkipReason(
+        from previousFrame: CGRect,
+        to currentFrame: CGRect,
+        in collectionView: UICollectionView
+    ) -> String? {
+        let deltaX = previousFrame.minX - currentFrame.minX
+        let deltaY = previousFrame.minY - currentFrame.minY
+        let maximumHorizontalDelta = collectionView.bounds.width / 2
+        let maximumVerticalDelta = min(max(collectionView.bounds.height * 0.35, 80), 220)
 
-        if let presentationFrame = cell.layer.presentation()?.frame {
-            return collectionView.convert(presentationFrame, from: cell.superview)
+        guard abs(deltaX) <= maximumHorizontalDelta, abs(deltaY) <= maximumVerticalDelta else {
+            return "delta exceeds limit"
         }
 
-        return cell.convert(cell.bounds, to: collectionView)
+        let animationBounds = collectionView.bounds.insetBy(dx: 0, dy: -maximumVerticalDelta)
+        guard previousFrame.intersects(animationBounds) || currentFrame.intersects(animationBounds) else {
+            return "frames outside visible animation bounds"
+        }
+
+        return nil
+    }
+
+    func workingIndicatorMoveDescription(
+        from previousFrame: CGRect,
+        to currentFrame: CGRect,
+        in collectionView: UICollectionView
+    ) -> String {
+        let delta = CGPoint(
+            x: previousFrame.minX - currentFrame.minX,
+            y: previousFrame.minY - currentFrame.minY
+        )
+        return [
+            "from=\(format(previousFrame))",
+            "to=\(format(currentFrame))",
+            "delta=(x:\(format(delta.x)), y:\(format(delta.y)))",
+            workingIndicatorGeometryDescription(frame: currentFrame, in: collectionView)
+        ].joined(separator: " ")
+    }
+
+    func workingIndicatorGeometryDescription(
+        frame: CGRect,
+        in collectionView: UICollectionView
+    ) -> String {
+        [
+            "frame=\(format(frame))",
+            "visible=\(format(collectionView.bounds))",
+            "offsetY=\(format(collectionView.contentOffset.y))",
+            "contentHeight=\(format(collectionView.contentSize.height))",
+            "boundsHeight=\(format(collectionView.bounds.height))",
+            "isVisible=\(frame.intersects(collectionView.bounds))"
+        ].joined(separator: " ")
+    }
+
+    func layoutFrame(forItemID id: String, in collectionView: UICollectionView) -> CGRect? {
+        guard let cell = cell(forItemID: id, in: collectionView) else { return nil }
+
+        return cell.frame
     }
 
     func cell(forItemID id: String, in collectionView: UICollectionView) -> UICollectionViewCell? {
@@ -328,19 +455,29 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
     func preserveBottomAfterLayout(
         _ collectionView: UICollectionView,
-        wasNearBottomBeforeLayout: Bool,
+        shouldPreserveBottom: Bool,
         layoutChange: SessionTranscriptLayoutChange,
         keyboardTransition: KeyboardTransition?
     ) {
         guard isInitialAnchorComplete
-            && wasNearBottomBeforeLayout
+            && shouldPreserveBottom
             && layoutChange.didChangeLayout else {
             return
         }
 
+        isFollowingBottom = true
+        let shouldAnimate = layoutChange.shouldAnimateBottomPreservation(keyboardTransition: keyboardTransition)
+        Logger.debug(
+            "transcript preserving bottom",
+            "animated=\(shouldAnimate)",
+            "distance=\(String(format: "%.2f", Double(distanceFromBottom(collectionView))))",
+            "contentSizeChanged=\(layoutChange.contentSizeChanged)",
+            "boundsChanged=\(layoutChange.boundsChanged)",
+            "insetsChanged=\(layoutChange.didUpdateContentInsets)"
+        )
         scrollToBottom(
             collectionView,
-            animated: layoutChange.shouldAnimateBottomPreservation(keyboardTransition: keyboardTransition),
+            animated: shouldAnimate,
             keyboardTransition: keyboardTransition
         )
     }
@@ -425,7 +562,7 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         dataSource?.apply(snapshot, animatingDifferences: false) { [weak self, weak collectionView] in
             guard let self, let collectionView else { return }
 
-            reconfigureItems(changedExistingItemIDs, in: collectionView)
+            updateVisibleItems(changedExistingItemIDs, in: collectionView)
         }
     }
 
@@ -447,16 +584,65 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
         }
     }
 
-    func reconfigureItems(_ itemIDs: [String], in collectionView: UICollectionView) {
+    func updateVisibleItems(_ itemIDs: [String], in collectionView: UICollectionView) {
         guard let dataSource else { return }
 
         let existingIDs = Set(dataSource.snapshot().itemIdentifiers)
-        let reconfiguredIDs = itemIDs.filter { existingIDs.contains($0) }
-        guard !reconfiguredIDs.isEmpty else { return }
+        let updatedIDs = itemIDs.filter { existingIDs.contains($0) }
+        guard !updatedIDs.isEmpty else { return }
+        updateVisibleCellsWithoutAnimation(updatedIDs, in: collectionView)
+    }
 
-        var snapshot = dataSource.snapshot()
-        snapshot.reconfigureItems(reconfiguredIDs)
-        dataSource.apply(snapshot, animatingDifferences: false)
+    func updateVisibleCellsWithoutAnimation(
+        _ itemIDs: [String],
+        in collectionView: UICollectionView
+    ) {
+        UIView.performWithoutAnimation {
+            for id in itemIDs {
+                guard let item = itemsByID[id], let cell = cell(forItemID: id, in: collectionView) else { continue }
+
+                configure(cell, with: item)
+                cell.setNeedsLayout()
+                cell.layoutIfNeeded()
+            }
+        }
+        collectionView.layer.removeAllAnimations()
+    }
+
+    func logApplyGeometry(
+        _ event: String,
+        collectionView: UICollectionView,
+        changedItemIDs: [String]
+    ) {
+        Logger.debug(
+            "transcript diffable",
+            event,
+            "changed=\(changedItemIDs.joined(separator: ","))",
+            "offsetY=\(format(collectionView.contentOffset.y))",
+            "contentHeight=\(format(collectionView.contentSize.height))",
+            "boundsHeight=\(format(collectionView.bounds.height))",
+            "bottomInset=\(format(collectionView.adjustedContentInset.bottom))",
+            "distanceFromBottom=\(format(distanceFromBottom(collectionView)))",
+            "isTracking=\(collectionView.isTracking)",
+            "isDragging=\(collectionView.isDragging)",
+            "isDecelerating=\(collectionView.isDecelerating)"
+        )
+    }
+
+    func logApplyGeometryOnNextTick(
+        _ event: String,
+        collectionView: UICollectionView,
+        changedItemIDs: [String]
+    ) {
+        DispatchQueue.main.async { [weak self, weak collectionView] in
+            guard let self, let collectionView else { return }
+
+            logApplyGeometry(
+                event,
+                collectionView: collectionView,
+                changedItemIDs: changedItemIDs
+            )
+        }
     }
 
     func changedItemIDs(
@@ -480,6 +666,19 @@ private extension SessionTranscriptCollectionRepresentable.Coordinator {
 
             return newItem.id
         }
+    }
+
+    private func format(_ value: CGFloat) -> String {
+        String(format: "%.2f", Double(value))
+    }
+
+    private func format(_ rect: CGRect) -> String {
+        [
+            "x:\(format(rect.minX))",
+            "y:\(format(rect.minY))",
+            "w:\(format(rect.width))",
+            "h:\(format(rect.height))"
+        ].joined(separator: " ")
     }
 
     func completeInitialBottomAnchor(_ collectionView: UICollectionView) {

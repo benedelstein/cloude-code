@@ -14,6 +14,7 @@ import UIKit
 @Observable
 final class AgentSessionViewModel {
     typealias MessageDisplayData = AgentSessionView.MessageDisplayData
+    typealias TranscriptMessage = AgentSessionView.TranscriptMessage
     /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
     let session: SessionSummaryModel
 
@@ -30,11 +31,13 @@ final class AgentSessionViewModel {
     private let attachmentStore: ImageAttachmentStore
     private(set) var connectionState: WebSocketConnectionState = .disconnected
     private(set) var messages: [SessionMessage] = []
-    /// Hydrated, normalized display data per message
-    private(set) var assistantDisplayDataByMessageId: [String: MessageDisplayData] = [:]
-    /// Display data for the currently streaming message.
-    private(set) var streamingDisplayData: MessageDisplayData?
-    @ObservationIgnored private var latestStreamingMessage: SessionMessage?
+    /// UI transcript rows with collection-view identity separated from server message identity.
+    private(set) var transcriptMessages: [TranscriptMessage] = []
+    /// Hydrated, normalized display data per transcript row.
+    private(set) var assistantDisplayDataByRowID: [String: MessageDisplayData] = [:]
+    // The active streaming row keeps this id from first chunk through final
+    // message so collection view can update the existing cell in place.
+    private var streamingTranscriptRowID: String?
     @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
     @ObservationIgnored private let textRenderCache = ChunkedTextRenderCache()
     private var streamAccumulator: SessionMessageStreamAccumulator?
@@ -157,11 +160,11 @@ final class AgentSessionViewModel {
             in: snapshot.messages
         )
         textRenderCache.reset()
-        assistantDisplayDataByMessageId = assistantDisplayData(for: snapshotMessages)
         messages = snapshotMessages
+        rebuildTranscriptMessagesFromCanonicalMessages()
         replaceStreamAccumulator()
         if snapshot.pendingChunks.isEmpty {
-            clearStreamingState()
+            clearStreamingState(removeActiveTranscript: true)
         } else {
             await streamAccumulator?.append(
                 snapshot.pendingChunks,
@@ -192,12 +195,14 @@ final class AgentSessionViewModel {
     }
 
     func upsert(_ message: SessionMessage) {
-        upsertDisplayData(for: message)
-        if let index = messages.firstIndex(where: { $0.id == message.id }) {
-            messages[index] = message
-        } else {
-            messages.append(message)
-        }
+        upsertCanonicalMessage(message)
+        upsertTranscriptMessage(
+            TranscriptMessage(
+                id: transcriptRowID(for: message),
+                message: message,
+                isStreaming: false
+            )
+        )
     }
 
     private func markLatestAssistantMessageRead(in messages: [SessionMessage]) {
@@ -257,7 +262,7 @@ final class AgentSessionViewModel {
         messageThrottler?.cancel()
         messageThrottler = nil
         streamGeneration += 1
-        clearStreamingState()
+        clearStreamingState(removeActiveTranscript: true)
         clientState.activeTurnUserMessageId = nil
         isSending = false
         isWaitingForResponse = false
@@ -397,7 +402,16 @@ extension AgentSessionViewModel {
 extension AgentSessionViewModel {
     private func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
-        upsert(message)
+        upsertCanonicalMessage(message)
+        // Mutate the streaming transcript row into the final assistant row instead
+        // of inserting message:<server id>, which would replace the visible cell.
+        let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
+        upsertTranscriptMessage(TranscriptMessage(
+            id: rowID,
+            message: message,
+            isStreaming: false
+        ))
+        streamingTranscriptRowID = nil
         sessionMessageStore.upsert(sessionId: session.id, message: message)
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
@@ -418,13 +432,23 @@ extension AgentSessionViewModel {
         guard let index = messages.firstIndex(where: { $0.id == id }) else {
             return false
         }
+        let rowID = transcriptMessages.last { $0.message.id == id }?.id
+            ?? transcriptRowID(for: message)
         messages[index] = message
-        upsertDisplayData(for: message)
+        upsertTranscriptMessage(
+            TranscriptMessage(
+                id: rowID,
+                message: message,
+                isStreaming: false
+            )
+        )
         return true
     }
 
     private func removeMessage(id: String) {
         messages.removeAll { $0.id == id }
+        transcriptMessages.removeAll { $0.message.id == id }
+        rebuildTranscriptDisplayData()
     }
 
     private func appendPendingOptimisticUserMessage(
@@ -461,6 +485,9 @@ extension AgentSessionViewModel {
             metadata: optimisticMessage.removingOptimisticMarker.metadata
         )
         messages[index] = acceptedMessage
+        if let transcriptIndex = transcriptMessages.firstIndex(where: { $0.message.id == clientMessageId }) {
+            transcriptMessages[transcriptIndex].message = acceptedMessage
+        }
         sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
     }
 
@@ -575,8 +602,8 @@ private extension AgentSessionViewModel {
             }
 
             textRenderCache.reset()
-            assistantDisplayDataByMessageId = assistantDisplayData(for: cachedMessages)
             messages = cachedMessages
+            rebuildTranscriptMessagesFromCanonicalMessages()
             hasLoadedMessages = true
         } catch {
             Logger.warning("Failed to load cached session messages:", error)
@@ -641,53 +668,99 @@ private extension AgentSessionViewModel {
     }
 
     func applyStreamingMessage(_ message: SessionMessage) {
-        latestStreamingMessage = message
-        rebuildStreamingDisplayData()
+        let rowID = activeStreamingTranscriptRowID()
+        upsertTranscriptMessage(TranscriptMessage(
+            id: rowID,
+            message: message,
+            isStreaming: true
+        ))
     }
 
-    func clearStreamingState() {
+    func clearStreamingState(removeActiveTranscript: Bool) {
         streamStatus = .init()
-        latestStreamingMessage = nil
-        streamingDisplayData = nil
+        guard removeActiveTranscript, let streamingTranscriptRowID else {
+            self.streamingTranscriptRowID = nil
+            return
+        }
+
+        transcriptMessages.removeAll {
+            $0.id == streamingTranscriptRowID && $0.isStreaming
+        }
+        assistantDisplayDataByRowID[streamingTranscriptRowID] = nil
+        self.streamingTranscriptRowID = nil
     }
 
     func rebuildTranscriptDisplayData() {
-        rebuildAssistantDisplayData()
-        rebuildStreamingDisplayData()
-    }
-
-    func rebuildAssistantDisplayData() {
-        assistantDisplayDataByMessageId = assistantDisplayData(for: messages)
-    }
-
-    func assistantDisplayData(
-        for messages: [SessionMessage]
-    ) -> [String: AgentSessionView.MessageDisplayData] {
-        messages.reduce(into: [:]) { result, message in
-            guard message.role != .user else {
-                return
-            }
-            result[message.id] = makeDisplayData(for: message, isStreaming: false)
+        assistantDisplayDataByRowID = transcriptMessages.reduce(into: [:]) { result, transcriptMessage in
+            guard transcriptMessage.message.role != .user else { return }
+            result[transcriptMessage.id] = makeDisplayData(
+                id: transcriptMessage.id,
+                for: transcriptMessage.message,
+                isStreaming: transcriptMessage.isStreaming
+            )
         }
     }
 
-    private func rebuildStreamingDisplayData() {
-        guard let message = latestStreamingMessage else {
-            streamingDisplayData = nil
+    func rebuildTranscriptMessagesFromCanonicalMessages() {
+        transcriptMessages = messages.map { message in
+            TranscriptMessage(
+                id: transcriptRowID(for: message),
+                message: message,
+                isStreaming: false
+            )
+        }
+        rebuildTranscriptDisplayData()
+    }
+
+    func activeStreamingTranscriptRowID() -> String {
+        if let streamingTranscriptRowID {
+            return streamingTranscriptRowID
+        }
+
+        let rowID = "streaming-turn:\(streamGeneration)"
+        streamingTranscriptRowID = rowID
+        return rowID
+    }
+
+    func transcriptRowID(for message: SessionMessage) -> String {
+        if let existingMessage = transcriptMessages.last(where: { transcriptMessage in
+            !transcriptMessage.isStreaming && transcriptMessage.message.id == message.id
+        }) {
+            return existingMessage.id
+        }
+
+        return SessionTranscriptItem.messageItemID(for: message.id)
+    }
+
+    func upsertTranscriptMessage(_ transcriptMessage: TranscriptMessage) {
+        if let index = transcriptMessages.lastIndex(where: { $0.id == transcriptMessage.id }) {
+            transcriptMessages[index] = transcriptMessage
+        } else {
+            transcriptMessages.append(transcriptMessage)
+        }
+
+        if transcriptMessage.message.role == .user {
+            assistantDisplayDataByRowID[transcriptMessage.id] = nil
             return
         }
-        streamingDisplayData = makeDisplayData(for: message, isStreaming: true)
+
+        assistantDisplayDataByRowID[transcriptMessage.id] = makeDisplayData(
+            id: transcriptMessage.id,
+            for: transcriptMessage.message,
+            isStreaming: transcriptMessage.isStreaming
+        )
     }
 
-    private func upsertDisplayData(for message: SessionMessage) {
-        guard message.role == .assistant else {
-            assistantDisplayDataByMessageId[message.id] = nil
-            return
+    func upsertCanonicalMessage(_ message: SessionMessage) {
+        if let index = messages.lastIndex(where: { $0.id == message.id }) {
+            messages[index] = message
+        } else {
+            messages.append(message)
         }
-        assistantDisplayDataByMessageId[message.id] = makeDisplayData(for: message, isStreaming: false)
     }
 
     private func makeDisplayData(
+        id: String,
         for message: SessionMessage,
         isStreaming: Bool
     ) -> AgentSessionView.MessageDisplayData {
@@ -701,6 +774,7 @@ private extension AgentSessionViewModel {
         )
 
         return AgentSessionView.MessageDisplayData(
+            id: id,
             message: message,
             renderItems: renderItems,
             finalResponseStartIndex: finalResponseStartIndex

@@ -3,9 +3,11 @@ import Domain
 enum SessionTranscriptItem: Identifiable, Equatable {
     case userMessage(SessionMessage)
     case assistantMessage(
+        // This is the transcript row id, not necessarily displayData.message.id.
+        // Streaming rows keep it stable when the final server message id arrives.
+        id: String,
         AgentSessionView.MessageDisplayData,
-        isStreaming: Bool,
-        autoCollapse: Bool
+        isStreaming: Bool
     )
     case workingIndicator(isActive: Bool)
 
@@ -13,12 +15,8 @@ enum SessionTranscriptItem: Identifiable, Equatable {
         switch self {
         case .userMessage(let message):
             Self.messageItemID(for: message.id)
-        case .assistantMessage(let displayData, let isStreaming, _):
-            if isStreaming {
-                Self.streamingItemID(for: displayData.id)
-            } else {
-                Self.messageItemID(for: displayData.id)
-            }
+        case .assistantMessage(let id, _, _):
+            id
         case .workingIndicator:
             Self.workingItemID
         }
@@ -26,10 +24,6 @@ enum SessionTranscriptItem: Identifiable, Equatable {
 
     static func messageItemID(for messageID: String) -> String {
         "message:\(messageID)"
-    }
-
-    static func streamingItemID(for messageID: String) -> String {
-        "streaming:\(messageID)"
     }
 
     static var workingItemID: String {

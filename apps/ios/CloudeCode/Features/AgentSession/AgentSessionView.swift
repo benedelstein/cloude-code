@@ -119,13 +119,19 @@ private extension AgentSessionView {
 
 extension AgentSessionView {
     struct MessageDisplayData: Identifiable, Equatable {
+        let id: String
         let message: SessionMessage
         let renderItems: [AgentSessionRenderItem]
         let finalResponseStartIndex: Int?
+    }
 
-        var id: String {
-            message.id
-        }
+    // Keep collection row identity separate from SessionMessage.id. A streaming
+    // assistant row starts before the server id exists, then receives the final
+    // message id; preserving this row id avoids delete/insert churn and cell jumps.
+    struct TranscriptMessage: Identifiable, Equatable {
+        let id: String
+        var message: SessionMessage
+        var isStreaming: Bool
     }
 }
 
@@ -133,16 +139,13 @@ private extension AgentSessionView {
     struct SessionScrollView: View {
         @Environment(\.style) private var style
 
-        @State private var latestStreamingMessageId: String?
-        @State private var autoCollapseMessageId: String?
-
         let store: AgentSessionViewModel
         @Binding var destination: Modal<AgentSessionView.Destination>?
         let keyboardDismissPadding: CGFloat
         let scrollCoordinator: SessionTranscriptScrollCoordinator
 
-        var messages: [SessionMessage] {
-            store.messages
+        var messages: [AgentSessionView.TranscriptMessage] {
+            store.transcriptMessages
         }
 
         var body: some View {
@@ -163,7 +166,7 @@ private extension AgentSessionView {
         }
 
         private var hasMessageTranscriptItems: Bool {
-            !messages.isEmpty || store.streamingDisplayData != nil
+            !messages.isEmpty
         }
 
         private var hasTranscriptItems: Bool {
@@ -176,27 +179,19 @@ private extension AgentSessionView {
 
         private var transcriptItems: [SessionTranscriptItem] {
             var items = messages.compactMap { message -> SessionTranscriptItem? in
-                if message.isUser {
-                    return .userMessage(message)
+                if message.message.isUser {
+                    return .userMessage(message.message)
                 }
 
-                guard let displayData = store.assistantDisplayDataByMessageId[message.id] else {
+                guard let displayData = store.assistantDisplayDataByRowID[message.id] else {
                     return nil
                 }
 
                 return .assistantMessage(
+                    id: message.id,
                     displayData,
-                    isStreaming: false,
-                    autoCollapse: autoCollapseMessageId == message.id
+                    isStreaming: message.isStreaming
                 )
-            }
-
-            if let streamingDisplayData = store.streamingDisplayData {
-                items.append(.assistantMessage(
-                    streamingDisplayData,
-                    isStreaming: true,
-                    autoCollapse: false
-                ))
             }
 
             if hasTranscriptItems {
@@ -217,9 +212,6 @@ private extension AgentSessionView {
             ) { item in
                 transcriptRow(item)
                     .padding(.horizontal, style.horizontalPadding)
-            }
-            .onChange(of: store.streamingDisplayData?.id) { oldValue, newValue in
-                handleStreamingMessageIdChange(oldValue: oldValue, newValue: newValue)
             }
 
             if #available(iOS 26.0, *) {
@@ -257,17 +249,12 @@ private extension AgentSessionView {
                 case .userMessage(let message):
                     UserMessageView(message: message)
                         .environment(\.openAgentSessionImage, openImageAction)
-                case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
+                case .assistantMessage(_, let displayData, let isStreaming):
                     AssistantMessageView(
                         displayData: displayData,
                         isStreaming: isStreaming,
-                        autoCollapseOnAppear: autoCollapse,
                         destination: $destination
-                    ) {
-                        if autoCollapse {
-                            autoCollapseMessageId = nil
-                        }
-                    }
+                    )
                 case .workingIndicator(let isActive):
                     WorkingIndicatorView(isActive: isActive)
                 }
@@ -278,18 +265,6 @@ private extension AgentSessionView {
             OpenAgentSessionImageAction { image in
                 destination = .fullscreen(.image(image))
             }
-        }
-
-        private func handleStreamingMessageIdChange(oldValue: String?, newValue: String?) {
-            if let newValue {
-                latestStreamingMessageId = newValue
-                return
-            }
-
-            if let finishedMessageId = oldValue ?? latestStreamingMessageId {
-                autoCollapseMessageId = finishedMessageId
-            }
-            latestStreamingMessageId = nil
         }
     }
 }

@@ -3,21 +3,15 @@ import Domain
 import UIKit
 
 struct AssistantMessageView: View {
+    @Environment(\.style) var style: Style
+
     private let partSpacing: CGFloat = 12
-    private let renderItemInsertionAnimation = Animation.easeIn(duration: 0.16)
-    private let renderItemInsertionTransition = AnyTransition
-        .opacity
-        .combined(with: .move(edge: .top))
-        .animation(.easeIn(duration: 0.16))
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
-    let autoCollapseOnAppear: Bool
     @Binding var destination: Modal<AgentSessionView.Destination>?
-    var onAutoCollapseConsumed: () -> Void = {}
 
     @State private var workExpanded = false
-    @State private var hasConsumedAutoCollapse = false
 
     @ViewBuilder
     var body: some View {
@@ -37,6 +31,7 @@ struct AssistantMessageView: View {
                     guard !isStreaming else { return }
                     setWorkExpanded(!workExpanded)
                 }
+                .transition(style.fadeTransition)
             }
 
             if showsCollapsibleWorkTrace, let finalResponseStartIndex, workExpanded {
@@ -60,11 +55,6 @@ struct AssistantMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(renderItemInsertionAnimation, value: displayData.renderItems.map(\.key))
-        .onAppear(perform: configureInitialCollapse)
-        .onChange(of: autoCollapseOnAppear) { _, _ in
-            configureInitialCollapse()
-        }
     }
 
     @ViewBuilder
@@ -88,7 +78,7 @@ struct AssistantMessageView: View {
             ) {
                 destination = .sheet(.renderItem(item))
             }
-            .transition(renderItemInsertionTransition)
+            .transition(style.fadeTransition)
         }
     }
 
@@ -105,24 +95,6 @@ struct AssistantMessageView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return text.isEmpty ? nil : text
-    }
-
-    private func configureInitialCollapse() {
-        guard displayData.finalResponseStartIndex != nil else {
-            onAutoCollapseConsumed()
-            return
-        }
-        guard autoCollapseOnAppear, !hasConsumedAutoCollapse else {
-            return
-        }
-
-        workExpanded = true
-        hasConsumedAutoCollapse = true
-        onAutoCollapseConsumed()
-
-        DispatchQueue.main.async {
-            setWorkExpanded(false)
-        }
     }
 
     private func setWorkExpanded(_ expanded: Bool) {

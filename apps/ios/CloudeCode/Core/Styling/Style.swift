@@ -25,6 +25,8 @@ struct Style {
 
     // MARK: Animation
     let springAnimation: Animation = .spring(response: 0.4, dampingFraction: 0.95)
+    var fadeAnimation: Animation { .easeIn(duration: 0.2) }
+    var fadeTransition: AnyTransition { .opacity.animation(fadeAnimation) }
 
     // MARK: Fonts
     // Standard iOS text styles at the default (Large) Dynamic Type size.
