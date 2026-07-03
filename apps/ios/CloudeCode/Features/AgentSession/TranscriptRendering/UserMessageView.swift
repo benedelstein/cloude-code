@@ -49,6 +49,7 @@ struct UserMessageView: View {
             }
         }
         .transition(style.fadeTransition)
+        .id(message.id)
     }
 
     @ViewBuilder

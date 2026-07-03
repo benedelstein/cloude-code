@@ -55,6 +55,7 @@ struct AssistantMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // .id(displayData.id)
     }
 
     @ViewBuilder

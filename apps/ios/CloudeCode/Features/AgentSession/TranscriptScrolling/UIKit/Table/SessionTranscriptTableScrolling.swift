@@ -146,6 +146,10 @@ extension SessionTranscriptTableRepresentable.Coordinator {
     ) {
         guard isInitialAnchorComplete && layoutChange.didChangeLayout else { return }
         guard !isAtBottom(tableView) else { return }
+        // A negative distance means the bottom sits above the viewport — a
+        // transient height collapse or bounce, never streaming growth. Following
+        // must only ever chase the bottom downward; wait for real heights.
+        guard distanceFromBottom(tableView) > 0 else { return }
 
         if layoutChange.shouldAnimateBottomPreservation(keyboardTransition: keyboardTransition) {
             // An in-flight follow animation retargets the newest bottom from
@@ -230,6 +234,9 @@ extension SessionTranscriptTableRepresentable.Coordinator {
     func continueFollowingBottomAfterProgrammaticScroll(_ scrollView: UIScrollView) -> Bool {
         guard isFollowingBottom, let tableView = scrollView as? UITableView else { return false }
         guard !isAtBottom(tableView) else { return false }
+        // Same downward-only rule as preserveBottomAfterLayout: a bottom above
+        // the viewport is a transient collapse, not a scroll target.
+        guard distanceFromBottom(tableView) > 0 else { return false }
 
         // Streaming can grow content while an animated scroll is in flight. Retarget
         // the newest bottom instead of treating the stale endpoint as user intent.

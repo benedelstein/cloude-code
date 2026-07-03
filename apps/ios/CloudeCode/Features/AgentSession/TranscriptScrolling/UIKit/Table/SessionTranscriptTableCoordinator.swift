@@ -162,13 +162,11 @@ extension SessionTranscriptTableRepresentable {
                 isAnimatingProgrammaticScroll = false
             }
 
-            if !isUserScrolling && isFollowingBottom {
-                preserveBottomAfterLayout(
-                    tableView,
-                    layoutChange: layoutChange,
-                    keyboardTransition: keyboardTransition
-                )
-            }
+            preserveBottomIfFollowing(
+                tableView,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
 
             // The initial transcript stays hidden until automatic row heights settle
             // and the table has really landed at the bottom.
@@ -384,11 +382,14 @@ extension SessionTranscriptTableRepresentable.Coordinator {
             return
         }
 
-        dataSource?.apply(snapshot, animatingDifferences: false) { [weak self, weak tableView] in
-            guard let self, let tableView else { return }
-
-            updateVisibleItems(changedExistingItemIDs, in: tableView)
+        // Rows that survive the structural diff with changed content reconfigure
+        // in the same apply; the diff alone would treat their identical IDs as
+        // unchanged and leave stale cells behind.
+        snapshot.reconfigureItems(changedExistingItemIDs)
+        UIView.performWithoutAnimation {
+            dataSource?.apply(snapshot, animatingDifferences: false)
         }
+        tableView.layer.removeAllAnimations()
     }
 
     private func applyInitialSnapshot(
@@ -406,6 +407,20 @@ extension SessionTranscriptTableRepresentable.Coordinator {
             initialAnchorState = .anchoring(lastGeometry: nil, attempts: 0)
             tableView.setNeedsLayout()
         }
+    }
+
+    func preserveBottomIfFollowing(
+        _ tableView: UITableView,
+        layoutChange: SessionTranscriptLayoutChange,
+        keyboardTransition: KeyboardTransition?
+    ) {
+        guard !isUserScrolling && isFollowingBottom else { return }
+
+        preserveBottomAfterLayout(
+            tableView,
+            layoutChange: layoutChange,
+            keyboardTransition: keyboardTransition
+        )
     }
 
     func updateVisibleItems(_ itemIDs: [String], in tableView: UITableView) {
