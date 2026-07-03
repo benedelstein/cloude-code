@@ -95,7 +95,7 @@ extension SessionTranscriptTableRepresentable {
             rowContent: @escaping (SessionTranscriptItem) -> Row
         ) {
             self.rowContent = rowContent
-            tableView.estimatedRowHeight = tableEstimatedRowHeight
+//            tableView.estimatedRowHeight = tableEstimatedRowHeight
 
             let nextContentInsetConfiguration = SessionTranscriptContentInsetConfiguration(
                 contentPadding: contentPadding,
