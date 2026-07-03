@@ -1,6 +1,5 @@
 import Domain
 import SwiftUI
-import UIKit
 
 struct AgentSessionRenderItemView: View {
     @Environment(\.theme) private var theme
@@ -87,33 +86,17 @@ private struct MarkdownTextPartsView: View {
 private struct TranscriptCodeBlockView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
-    @Environment(\.showToast) private var showToast
-    @Environment(\.lightFeedback) private var lightFeedback
 
     let part: MarkdownCodeBlockPart
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        CodePreviewChrome(
+            text: part.text,
+            copyAccessibilityLabel: "Copy code",
+            background: .secondary
+        ) {
             codeContent
-
-            Button(action: copyText) {
-                Image(systemName: "square.on.square")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .padding(6)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 6).fill(theme.secondaryBackgroundColor)
-                    )
-            }
-            .accessibilityLabel("Copy code")
-            .padding(style.gridSize / 2)
         }
-        .background(
-            RoundedRectangle(cornerRadius: style.gridSize)
-                .fill(theme.secondaryBackgroundColor)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: style.gridSize))
         .overlay(alignment: .topLeading) {
             if let language = part.language, !language.isEmpty {
                 Text(language)
@@ -123,6 +106,7 @@ private struct TranscriptCodeBlockView: View {
                     .padding(.vertical, style.gridSize / 2)
             }
         }
+        .accessibilityValue(part.isComplete ? "Complete" : "Streaming")
     }
 
     private var codeContent: some View {
@@ -135,12 +119,6 @@ private struct TranscriptCodeBlockView: View {
             .padding(.leading, style.gridSize)
             .padding(.trailing, style.gridSize * 5)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func copyText() {
-        UIPasteboard.general.string = part.text
-        lightFeedback.impactOccurred()
-        showToast?(title: "Copied", icon: Image(systemName: "doc.on.doc"))
     }
 }
 

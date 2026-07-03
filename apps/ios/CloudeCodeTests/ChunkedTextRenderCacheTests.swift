@@ -12,6 +12,13 @@ struct ChunkedTextRenderCacheTests {
         #expect(richText?.renderedText == "Hello bold and italic site")
     }
 
+    @Test func blockMarkdownRenderedCharactersPreserveLineBreaks() {
+        let source = "- one\n- **two**\n- three\n\nFirst paragraph.\n\nSecond paragraph."
+        let parts = renderParts(for: source)
+
+        #expect(renderedText(from: parts) == "- one\n- two\n- three\n\nFirst paragraph.\n\nSecond paragraph.")
+    }
+
     @Test func incompleteEmphasisUpdatesWhenDelimiterArrives() {
         let cache = ChunkedTextRenderCache()
 
@@ -23,8 +30,8 @@ struct ChunkedTextRenderCacheTests {
         #expect(second.map(\.id) == [0])
     }
 
-    @Test func incompleteSingleUnderscoreEmphasisStaysActiveAcrossHardBoundary() {
-        let cache = ChunkedTextRenderCache(maxChunkUTF16Length: 8)
+    @Test func incompleteSingleUnderscoreEmphasisStaysActiveBeforeHardBoundary() {
+        let cache = ChunkedTextRenderCache(maxChunkUTF16Length: 80)
 
         let first = renderParts(cache: cache, text: "Hello _it")
         #expect(first.map(\.id) == [0])
@@ -49,11 +56,12 @@ struct ChunkedTextRenderCacheTests {
         #expect(expectRichText(second, at: 1)?.source == "Second paragraph.")
     }
 
-    @Test func unsafeInlineMarkdownPreventsBlankLineFinalization() {
+    @Test func blankLineClosesUnsafeInlineMarkdownForFinalization() {
         let parts = renderParts(for: "Before **unfinished\n\nAfter")
 
-        #expect(parts.map(\.id) == [0])
-        #expect(expectRichText(parts, at: 0)?.source == "Before **unfinished\n\nAfter")
+        #expect(parts.map(\.id) == [0, 1])
+        #expect(expectRichText(parts, at: 0)?.source == "Before **unfinished\n\n")
+        #expect(expectRichText(parts, at: 1)?.source == "After")
     }
 
     @Test func wordInternalUnderscoreDoesNotPreventBlankLineFinalization() {
@@ -116,12 +124,66 @@ struct ChunkedTextRenderCacheTests {
         #expect(expectCodeBlock(parts, at: 0)?.text == longCode.trimmingSuffix("\n"))
     }
 
+    @Test func proseWithUnmatchedLinkLikeTextStillFinalizesAtHardCap() {
+        let text = String(repeating: "the range [0, 1) keeps going ", count: 4)
+        let parts = renderParts(for: text, maxChunkUTF16Length: 32)
+
+        #expect(parts.count > 1)
+        #expect(expectRichText(parts, at: 0)?.source.utf16.count == 32)
+        #expect(expectRichText(parts, at: parts.count - 1)?.source.utf16.count ?? 0 <= 32)
+    }
+
+    @Test func proseWithLessThanAndLaterURLStillFinalizesAtHardCap() {
+        let text = "a < b while we keep writing until https://example.com appears in ordinary prose"
+        let parts = renderParts(for: text, maxChunkUTF16Length: 28)
+
+        #expect(parts.count > 1)
+        #expect(expectRichText(parts, at: 0)?.source.utf16.count == 28)
+        #expect(expectRichText(parts, at: parts.count - 1)?.source.utf16.count ?? 0 <= 28)
+    }
+
+    @Test func emphasisMarkersInsideCodeSpanDoNotBlockBlankLineFinalization() {
+        let parts = renderParts(for: "Pass `**kwargs` to the function.\n\nMore")
+
+        #expect(parts.map(\.id) == [0, 1])
+        #expect(expectRichText(parts, at: 0)?.source == "Pass `**kwargs` to the function.\n\n")
+        #expect(expectRichText(parts, at: 0)?.renderedText == "Pass **kwargs to the function.\n\n")
+        #expect(expectRichText(parts, at: 1)?.source == "More")
+    }
+
+    @Test func inlineTripleBackticksAfterMidLineSplitDoNotBecomeCodeFence() {
+        let cache = ChunkedTextRenderCache(
+            maxChunkUTF16Length: 11,
+            softBoundaryLookbackUTF16Length: 11,
+            minimumSoftBoundaryUTF16Length: 0
+        )
+        let parts = renderParts(cache: cache, text: "alpha beta ``` inline ticks stay prose")
+
+        #expect(parts.count > 1)
+        #expect(parts.allSatisfy { part in
+            if case .richText = part {
+                return true
+            }
+            return false
+        })
+        #expect(renderedText(from: parts).contains("``` inline ticks stay prose"))
+    }
+
+    @Test func multiParagraphTextBeforeFenceSplitsBeforeCodeBlock() {
+        let parts = renderParts(for: "First paragraph.\n\nSecond paragraph.\n\n```swift\nlet value = 1\n```")
+
+        #expect(parts.map(\.id) == [0, 1, 2])
+        #expect(expectRichText(parts, at: 0)?.source == "First paragraph.\n\n")
+        #expect(expectRichText(parts, at: 1)?.source == "Second paragraph.\n\n")
+        #expect(expectCodeBlock(parts, at: 2)?.text == "let value = 1")
+    }
+
     @Test func inlineCodeLinkAutolinkAndEscapeRemainActiveUntilClosed() {
         let cases = [
-            "Inline `code\n\nnext",
-            "Link [label](https://example.com\n\nnext",
-            "Autolink <https://example.com\n\nnext",
-            "Escaped slash \\\n\nnext"
+            "Inline `code next",
+            "Link [label](https://example.com next",
+            "Autolink <https://example.com next",
+            "Escaped slash \\"
         ]
 
         for text in cases {
@@ -220,6 +282,15 @@ private func expectCodeBlock(
         return nil
     }
     return part
+}
+
+private func renderedText(from parts: [MarkdownTextPart]) -> String {
+    parts.compactMap { part -> String? in
+        guard case .richText(let richText) = part else {
+            return nil
+        }
+        return richText.renderedText
+    }.joined()
 }
 
 private extension MarkdownRichTextPart {

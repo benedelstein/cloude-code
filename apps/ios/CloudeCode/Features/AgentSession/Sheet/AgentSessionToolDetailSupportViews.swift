@@ -1,7 +1,6 @@
 import Domain
 import Foundation
 import SwiftUI
-import UIKit
 
 struct DetailSection<Content: View>: View {
     @Environment(\.theme) private var theme
@@ -25,10 +24,8 @@ struct DetailSection<Content: View>: View {
 }
 
 struct CodePreview: View {
-    @Environment(\.theme) private var theme
     @Environment(\.style) private var style
-    @Environment(\.showToast) private var showToast
-    @Environment(\.lightFeedback) private var lightFeedback
+    @Environment(\.theme) private var theme
 
     let text: String
     private let layout: CodePreviewLayout
@@ -44,27 +41,13 @@ struct CodePreview: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        CodePreviewChrome(
+            text: text,
+            copyAccessibilityLabel: "Copy",
+            background: .primary
+        ) {
             codeContent
-
-            Button(action: copyText) {
-                Image(systemName: "square.on.square")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .padding(6)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 6).fill(theme.secondaryBackgroundColor)
-                    )
-            }
-            .accessibilityLabel("Copy")
-            .padding(style.gridSize / 2)
         }
-        .background(
-            RoundedRectangle(cornerRadius: style.gridSize)
-                .fill(theme.backgroundColor)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: style.gridSize))
     }
 
     @ViewBuilder
@@ -138,12 +121,6 @@ struct CodePreview: View {
             .foregroundStyle(theme.labelColor)
             .lineLimit(wraps ? nil : 1)
             .fixedSize(horizontal: !wraps, vertical: false)
-    }
-
-    private func copyText() {
-        UIPasteboard.general.string = text
-        lightFeedback.impactOccurred()
-        showToast?(title: "Copied", icon: Image(systemName: "doc.on.doc"))
     }
 
     private var lines: [CodePreviewLine] {

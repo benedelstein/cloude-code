@@ -1,6 +1,8 @@
 import Foundation
 
+/// Builds renderable markdown transcript parts from source slices.
 enum MarkdownTextPartFactory {
+    /// Creates a rich text part by parsing inline markdown while preserving source line breaks.
     static func richTextPart(id: Int, source: String) -> MarkdownTextPart {
         .richText(.init(
             id: id,
@@ -11,14 +13,16 @@ enum MarkdownTextPartFactory {
 
     private static func markdownAttributedString(from source: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .full,
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
         )
         return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
     }
 }
 
+/// Builds the current, non-finalized markdown parts from an active transcript tail.
 enum MarkdownActivePartBuilder {
+    /// Returns render parts for the active source range, preserving code fence structure.
     static func parts(
         in text: String,
         from startOffset: Int,
@@ -43,29 +47,16 @@ private extension MarkdownActivePartBuilder {
 
         mutating func parts(from startOffset: Int) -> [MarkdownTextPart] {
             var cursor = startOffset
-            while cursor < totalUTF16Count {
-                guard let openingFence = MarkdownFenceScanner.openingFence(in: text, from: cursor) else {
-                    appendRichText(cursor..<totalUTF16Count)
-                    return parts
+            while let segment = MarkdownTextSegmenter.nextSegment(in: text, from: cursor) {
+                switch segment {
+                case .richText(let segment):
+                    appendRichText(segment.range)
+                case .codeBlock(let segment):
+                    appendCodeBlock(segment)
                 }
-
-                appendTextBeforeFence(openingFence, cursor: cursor)
-                guard let closedFence = MarkdownFenceScanner.closedFence(opening: openingFence, in: text) else {
-                    appendCodeBlock(openingFence.bodyStartOffset..<totalUTF16Count, openingFence, isComplete: false)
-                    return parts
-                }
-
-                appendCodeBlock(closedFence.bodyRange, openingFence, isComplete: true)
-                cursor = closedFence.endOffset
+                cursor = segment.endOffset
             }
             return parts
-        }
-
-        private mutating func appendTextBeforeFence(_ openingFence: MarkdownFence, cursor: Int) {
-            guard openingFence.startOffset > cursor else {
-                return
-            }
-            appendRichText(cursor..<openingFence.startOffset)
         }
 
         private mutating func appendRichText(_ range: Range<Int>) {
@@ -77,166 +68,118 @@ private extension MarkdownActivePartBuilder {
             partID += 1
         }
 
-        private mutating func appendCodeBlock(
-            _ range: Range<Int>,
-            _ openingFence: MarkdownFence,
-            isComplete: Bool
-        ) {
+        private mutating func appendCodeBlock(_ segment: MarkdownCodeBlockSegment) {
             parts.append(.codeBlock(.init(
                 id: partID,
-                text: text.substring(utf16Offsets: range),
-                language: openingFence.language,
-                isComplete: isComplete
+                text: text.substring(utf16Offsets: segment.bodyRange),
+                language: segment.language,
+                isComplete: segment.isComplete
             )))
             partID += 1
         }
     }
 }
 
-enum MarkdownFenceScanner {
-    static func openingFence(in text: String, from startOffset: Int) -> MarkdownFence? {
-        for line in lines(in: text, from: startOffset) {
-            guard let fence = fenceLine(in: line.content) else {
-                continue
-            }
-
-            return .init(
-                startOffset: line.startOffset,
-                bodyStartOffset: line.endIncludingLineFeedOffset,
-                marker: fence.marker,
-                markerLength: fence.markerLength,
-                language: fence.info
-            )
-        }
-        return nil
-    }
-
-    static func closedFence(opening: MarkdownFence, in text: String) -> ClosedMarkdownFence? {
-        for line in lines(in: text, from: opening.bodyStartOffset) {
-            guard let fence = fenceLine(in: line.content),
-                  fence.marker == opening.marker,
-                  fence.markerLength >= opening.markerLength,
-                  fence.info == nil else {
-                continue
-            }
-
-            return .init(
-                bodyRange: opening.bodyStartOffset..<max(
-                    opening.bodyStartOffset,
-                    strippingTrailingLineFeed(before: line.startOffset, in: text)
-                ),
-                endOffset: line.endIncludingLineFeedOffset
-            )
-        }
-        return nil
-    }
-
-    private static func strippingTrailingLineFeed(before offset: Int, in text: String) -> Int {
-        guard offset > 0 else {
-            return offset
-        }
-
-        let utf16 = text.utf16
-        let previousIndex = utf16.index(utf16.startIndex, offsetBy: offset - 1)
-        return utf16[previousIndex] == UTF16Character.lineFeed ? offset - 1 : offset
-    }
-
-    private static func lines(in text: String, from startOffset: Int) -> [MarkdownLine] {
+/// Splits transcript markdown into rich text and fenced-code segments without deciding cache finality.
+enum MarkdownTextSegmenter {
+    /// Returns the next source segment at or after `startOffset`.
+    static func nextSegment(in text: String, from startOffset: Int) -> MarkdownTextSegment? {
         let totalUTF16Count = text.utf16.count
         guard startOffset < totalUTF16Count else {
-            return []
+            return nil
         }
 
-        var lines: [MarkdownLine] = []
-        var lineStart = startOffset
-        let utf16 = text.utf16
-        var offset = startOffset
-        var index = utf16.index(utf16.startIndex, offsetBy: startOffset)
+        guard let openingFence = MarkdownFenceScanner.openingFence(in: text, from: startOffset) else {
+            return .richText(.init(range: startOffset..<totalUTF16Count))
+        }
+
+        if openingFence.startOffset > startOffset {
+            return .richText(.init(range: startOffset..<openingFence.startOffset))
+        }
+
+        guard let closedFence = MarkdownFenceScanner.closedFence(opening: openingFence, in: text) else {
+            return .codeBlock(.init(
+                bodyRange: openingFence.bodyStartOffset..<totalUTF16Count,
+                language: openingFence.language,
+                isComplete: false,
+                endOffset: totalUTF16Count
+            ))
+        }
+
+        return .codeBlock(.init(
+            bodyRange: closedFence.bodyRange,
+            language: openingFence.language,
+            isComplete: true,
+            endOffset: closedFence.endOffset
+        ))
+    }
+}
+
+/// A markdown source segment that can be rendered as one transcript part.
+enum MarkdownTextSegment {
+    case richText(MarkdownRichTextSegment)
+    case codeBlock(MarkdownCodeBlockSegment)
+
+    var endOffset: Int {
+        switch self {
+        case .richText(let segment):
+            segment.range.upperBound
+        case .codeBlock(let segment):
+            segment.endOffset
+        }
+    }
+}
+
+/// A rich text source range outside fenced code blocks.
+struct MarkdownRichTextSegment {
+    let range: Range<Int>
+}
+
+/// A fenced code block source range and its parsed fence metadata.
+struct MarkdownCodeBlockSegment {
+    let bodyRange: Range<Int>
+    let language: String?
+    let isComplete: Bool
+    let endOffset: Int
+}
+
+/// Tracks inline markdown constructs that are unsafe to freeze in the active paragraph.
+enum MarkdownInlineState {
+    /// Returns whether the current paragraph contains an unclosed inline construct.
+    static func hasUnsafeOpenConstruct(in source: String) -> Bool {
+        let source = currentParagraph(in: source)
+        return hasTrailingEscape(in: source)
+            || hasUnsafeInlineDelimiterState(in: source)
+            || hasUnclosedMarkdownLink(in: source)
+            || hasUnclosedAutolink(in: source)
+    }
+
+    private static func currentParagraph(in source: String) -> String {
+        let utf16 = source.utf16
+        var previousWasLineFeed = false
+        var lastBlankLineEndOffset = 0
+        var offset = 0
+        var index = utf16.startIndex
 
         while index < utf16.endIndex {
-            if utf16[index] == UTF16Character.lineFeed {
-                lines.append(line(in: text, startOffset: lineStart, endOffset: offset))
-                lineStart = offset + 1
+            let value = utf16[index]
+            if value == UTF16Character.lineFeed {
+                if previousWasLineFeed {
+                    lastBlankLineEndOffset = offset + 1
+                }
+                previousWasLineFeed = true
+            } else if !UTF16Character.isHorizontalWhitespace(value) {
+                previousWasLineFeed = false
             }
 
             offset += 1
             utf16.formIndex(after: &index)
         }
 
-        if lineStart <= totalUTF16Count {
-            lines.append(line(in: text, startOffset: lineStart, endOffset: totalUTF16Count))
+        guard lastBlankLineEndOffset > 0 else {
+            return source
         }
-
-        return lines
-    }
-
-    private static func line(in text: String, startOffset: Int, endOffset: Int) -> MarkdownLine {
-        .init(
-            startOffset: startOffset,
-            endOffset: endOffset,
-            endIncludingLineFeedOffset: min(endOffset + 1, text.utf16.count),
-            content: text.substring(utf16Offsets: startOffset..<endOffset)
-        )
-    }
-
-    private static func fenceLine(in line: String) -> MarkdownFenceLine? {
-        guard let markerStart = fenceMarkerStart(in: line) else {
-            return nil
-        }
-
-        var index = markerStart
-        let marker = line[index]
-        guard marker == "`" || marker == "~" else {
-            return nil
-        }
-
-        let markerLength = consumeFenceMarker(marker, in: line, index: &index)
-        guard markerLength >= 3 else {
-            return nil
-        }
-
-        let info = String(line[index...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard info.isEmpty || marker == "~" || !info.contains("`") else {
-            return nil
-        }
-
-        return .init(
-            marker: marker,
-            markerLength: markerLength,
-            info: info.isEmpty ? nil : info
-        )
-    }
-
-    private static func fenceMarkerStart(in line: String) -> String.Index? {
-        var index = line.startIndex
-        var indentation = 0
-        while index < line.endIndex, line[index] == " ", indentation < 4 {
-            indentation += 1
-            line.formIndex(after: &index)
-        }
-        return indentation <= 3 && index < line.endIndex ? index : nil
-    }
-
-    private static func consumeFenceMarker(
-        _ marker: Character,
-        in line: String,
-        index: inout String.Index
-    ) -> Int {
-        var markerLength = 0
-        while index < line.endIndex, line[index] == marker {
-            markerLength += 1
-            line.formIndex(after: &index)
-        }
-        return markerLength
-    }
-}
-
-enum MarkdownInlineState {
-    static func hasUnsafeOpenConstruct(in source: String) -> Bool {
-        hasTrailingEscape(in: source)
-            || hasUnsafeInlineDelimiterState(in: source)
-            || hasUnclosedMarkdownLink(in: source)
-            || hasUnclosedAutolink(in: source)
+        return source.substring(utf16Offsets: lastBlankLineEndOffset..<utf16.count)
     }
 
     private static func hasTrailingEscape(in source: String) -> Bool {
@@ -259,46 +202,66 @@ enum MarkdownInlineState {
         var escapedNextCharacter = false
 
         while index < source.endIndex {
-            if escapedNextCharacter {
-                escapedNextCharacter = false
-                source.formIndex(after: &index)
-                continue
-            }
-
-            let character = source[index]
-            if character == "\\" {
-                escapedNextCharacter = true
-                source.formIndex(after: &index)
-                continue
-            }
-
-            if character == "`" {
-                let runLength = delimiterRunLength(startingAt: index, marker: character, in: source)
-                state.backtickCount += runLength
-                source.formIndex(&index, offsetBy: runLength)
-                continue
-            }
-
-            if character == "*" || character == "_" {
-                let runLength = delimiterRunLength(startingAt: index, marker: character, in: source)
-                let previous = index > source.startIndex ? source[source.index(before: index)] : nil
-                let nextIndex = source.index(index, offsetBy: runLength, limitedBy: source.endIndex)
-                    ?? source.endIndex
-                let next = nextIndex < source.endIndex ? source[nextIndex] : nil
-                state.processEmphasisRun(
-                    marker: character,
-                    length: runLength,
-                    previous: previous,
-                    next: next
-                )
-                index = nextIndex
-                continue
-            }
-
-            source.formIndex(after: &index)
+            advanceInlineDelimiterState(
+                in: source,
+                index: &index,
+                state: &state,
+                escapedNextCharacter: &escapedNextCharacter
+            )
         }
 
         return state.hasUnsafeOpenDelimiter
+    }
+
+    private static func advanceInlineDelimiterState(
+        in source: String,
+        index: inout String.Index,
+        state: inout InlineDelimiterState,
+        escapedNextCharacter: inout Bool
+    ) {
+        if escapedNextCharacter {
+            escapedNextCharacter = false
+            source.formIndex(after: &index)
+            return
+        }
+
+        let character = source[index]
+        if character == "`" {
+            processBacktickRun(in: source, index: &index, state: &state)
+        } else if state.isInsideCodeSpan {
+            source.formIndex(after: &index)
+        } else if character == "\\" {
+            escapedNextCharacter = true
+            source.formIndex(after: &index)
+        } else if character == "*" || character == "_" {
+            processEmphasisRun(in: source, index: &index, state: &state)
+        } else {
+            source.formIndex(after: &index)
+        }
+    }
+
+    private static func processBacktickRun(
+        in source: String,
+        index: inout String.Index,
+        state: inout InlineDelimiterState
+    ) {
+        let runLength = delimiterRunLength(startingAt: index, marker: source[index], in: source)
+        state.processBacktickRun(length: runLength)
+        source.formIndex(&index, offsetBy: runLength)
+    }
+
+    private static func processEmphasisRun(
+        in source: String,
+        index: inout String.Index,
+        state: inout InlineDelimiterState
+    ) {
+        let marker = source[index]
+        let runLength = delimiterRunLength(startingAt: index, marker: marker, in: source)
+        let previous = index > source.startIndex ? source[source.index(before: index)] : nil
+        let nextIndex = source.index(index, offsetBy: runLength, limitedBy: source.endIndex) ?? source.endIndex
+        let next = nextIndex < source.endIndex ? source[nextIndex] : nil
+        state.processEmphasisRun(marker: marker, length: runLength, previous: previous, next: next)
+        index = nextIndex
     }
 
     private static func delimiterRunLength(
@@ -342,18 +305,30 @@ enum MarkdownInlineState {
 }
 
 private struct InlineDelimiterState {
-    var backtickCount = 0
+    private var openCodeSpanDelimiterLength: Int?
     private var openSingleStarCount = 0
     private var openStrongStarCount = 0
     private var openSingleUnderscoreCount = 0
     private var openStrongUnderscoreCount = 0
 
+    var isInsideCodeSpan: Bool {
+        openCodeSpanDelimiterLength != nil
+    }
+
     var hasUnsafeOpenDelimiter: Bool {
-        backtickCount % 2 == 1
+        openCodeSpanDelimiterLength != nil
             || openSingleStarCount > 0
             || openStrongStarCount > 0
             || openSingleUnderscoreCount > 0
             || openStrongUnderscoreCount > 0
+    }
+
+    mutating func processBacktickRun(length: Int) {
+        if openCodeSpanDelimiterLength == length {
+            openCodeSpanDelimiterLength = nil
+        } else if openCodeSpanDelimiterLength == nil {
+            openCodeSpanDelimiterLength = length
+        }
     }
 
     mutating func processEmphasisRun(
@@ -455,43 +430,20 @@ private func isPunctuation(_ character: Character?) -> Bool {
     return character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
 }
 
-struct MarkdownFence {
-    let startOffset: Int
-    let bodyStartOffset: Int
-    let marker: Character
-    let markerLength: Int
-    let language: String?
-}
-
-struct ClosedMarkdownFence {
-    let bodyRange: Range<Int>
-    let endOffset: Int
-}
-
-private struct MarkdownLine {
-    let startOffset: Int
-    let endOffset: Int
-    let endIncludingLineFeedOffset: Int
-    let content: String
-}
-
-private struct MarkdownFenceLine {
-    let marker: Character
-    let markerLength: Int
-    let info: String?
-}
-
+/// UTF-16 code units used by transcript markdown scanners.
 enum UTF16Character {
     static let horizontalTab: UInt16 = 9
     static let lineFeed: UInt16 = 10
     static let space: UInt16 = 32
 
+    /// Returns whether a code unit is horizontal whitespace.
     static func isHorizontalWhitespace(_ value: UInt16) -> Bool {
         value == space || value == horizontalTab
     }
 }
 
 extension String {
+    /// Returns a substring addressed by UTF-16 offsets in this string.
     func substring(utf16Offsets offsets: Range<Int>) -> String {
         let start = String.Index(utf16Offset: offsets.lowerBound, in: self)
         let end = String.Index(utf16Offset: offsets.upperBound, in: self)

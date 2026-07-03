@@ -1,23 +1,24 @@
 import Foundation
 
+/// Converts raw assistant text render items into stable markdown transcript parts.
 final class ChunkedTextRenderCache {
     private var textCachesByPartKey: [String: MarkdownTextPartCache] = [:]
     private let maxActiveTextUTF16Length: Int
     private let softBoundaryLookbackUTF16Length: Int
     private let minimumSoftBoundaryUTF16Length: Int
 
+    /// Creates a cache that bounds repeated parsing of active rich-text tails.
     init(
-        maxLineBreaksPerChunk: Int = 5,
         maxChunkUTF16Length: Int = 2_400,
         softBoundaryLookbackUTF16Length: Int = 600,
         minimumSoftBoundaryUTF16Length: Int = 800
     ) {
-        _ = maxLineBreaksPerChunk
         maxActiveTextUTF16Length = max(1, maxChunkUTF16Length)
         self.softBoundaryLookbackUTF16Length = max(0, softBoundaryLookbackUTF16Length)
         self.minimumSoftBoundaryUTF16Length = max(0, minimumSoftBoundaryUTF16Length)
     }
 
+    /// Returns render items with assistant text converted to structured markdown parts.
     func renderItems(
         from items: [AgentSessionRenderItem]
     ) -> [AgentSessionRenderItem] {
@@ -41,6 +42,7 @@ final class ChunkedTextRenderCache {
         }
     }
 
+    /// Clears all per-text-item markdown render caches.
     func reset() {
         textCachesByPartKey = [:]
     }
@@ -48,6 +50,7 @@ final class ChunkedTextRenderCache {
 
 private final class MarkdownTextPartCache {
     private var previousText = ""
+    private var previousUTF16Count = 0
     private var activeStartUTF16Offset = 0
     private var finalizedParts: [MarkdownTextPart] = []
     private var nextPartID = 0
@@ -67,17 +70,33 @@ private final class MarkdownTextPartCache {
     }
 
     func parts(for text: String) -> [MarkdownTextPart] {
-        if !text.hasPrefix(previousText) {
+        let totalUTF16Count = text.utf16.count
+        if shouldReset(for: text, totalUTF16Count: totalUTF16Count) {
             reset()
         }
 
         previousText = text
+        previousUTF16Count = totalUTF16Count
         finalizeStableParts(in: text)
         return finalizedParts + activeParts(in: text)
     }
 
+    private func shouldReset(for text: String, totalUTF16Count: Int) -> Bool {
+        guard previousUTF16Count > 0 || !previousText.isEmpty else {
+            return false
+        }
+        if totalUTF16Count < previousUTF16Count {
+            return true
+        }
+        if totalUTF16Count == previousUTF16Count {
+            return text != previousText
+        }
+        return false
+    }
+
     private func reset() {
         previousText = ""
+        previousUTF16Count = 0
         activeStartUTF16Offset = 0
         finalizedParts = []
         nextPartID = 0
@@ -87,85 +106,76 @@ private final class MarkdownTextPartCache {
         let totalUTF16Count = text.utf16.count
 
         while activeStartUTF16Offset < totalUTF16Count {
-            if let openingFence = MarkdownFenceScanner.openingFence(
-                in: text,
-                from: activeStartUTF16Offset
-            ) {
-                if openingFence.startOffset > activeStartUTF16Offset {
-                    guard finalizeTextBeforeFence(openingFence, in: text) else {
-                        return
-                    }
-                    continue
-                }
-
-                guard let closedFence = MarkdownFenceScanner.closedFence(
-                    opening: openingFence,
-                    in: text
-                ) else {
-                    return
-                }
-
-                appendCodeBlock(
-                    text.substring(utf16Offsets: closedFence.bodyRange),
-                    language: openingFence.language,
-                    isComplete: true
-                )
-                activeStartUTF16Offset = closedFence.endOffset
-                continue
-            }
-
-            guard let boundary = stableTextBoundary(in: text) else {
+            guard let segment = MarkdownTextSegmenter.nextSegment(in: text, from: activeStartUTF16Offset) else {
                 return
             }
 
-            appendRichText(text.substring(utf16Offsets: activeStartUTF16Offset..<boundary))
-            activeStartUTF16Offset = boundary
+            switch segment {
+            case .richText(let segment):
+                guard finalizeRichText(in: segment.range, text: text) else {
+                    return
+                }
+            case .codeBlock(let segment):
+                guard segment.isComplete else {
+                    return
+                }
+                appendCodeBlock(
+                    text.substring(utf16Offsets: segment.bodyRange),
+                    language: segment.language,
+                    isComplete: segment.isComplete
+                )
+                activeStartUTF16Offset = segment.endOffset
+            }
         }
     }
 
-    private func finalizeTextBeforeFence(
-        _ openingFence: MarkdownFence,
-        in text: String
-    ) -> Bool {
-        let source = text.substring(utf16Offsets: activeStartUTF16Offset..<openingFence.startOffset)
-        guard !source.isEmpty else {
-            activeStartUTF16Offset = openingFence.startOffset
-            return true
-        }
-        guard !MarkdownInlineState.hasUnsafeOpenConstruct(in: source) else {
+    private func finalizeRichText(in range: Range<Int>, text: String) -> Bool {
+        let allowsEndBoundary = range.upperBound < text.utf16.count
+        guard let boundary = stableTextBoundary(
+            in: text,
+            upperBound: range.upperBound,
+            allowsEndBoundary: allowsEndBoundary
+        ) else {
             return false
         }
 
-        appendRichText(source)
-        activeStartUTF16Offset = openingFence.startOffset
+        appendRichText(text.substring(utf16Offsets: activeStartUTF16Offset..<boundary))
+        activeStartUTF16Offset = boundary
         return true
     }
 
-    private func stableTextBoundary(in text: String) -> Int? {
-        let totalUTF16Count = text.utf16.count
-        guard activeStartUTF16Offset < totalUTF16Count else {
+    private func stableTextBoundary(
+        in text: String,
+        upperBound: Int,
+        allowsEndBoundary: Bool
+    ) -> Int? {
+        guard activeStartUTF16Offset < upperBound else {
             return nil
         }
 
-        if let blankLineBoundary = blankLineBoundary(in: text),
+        if let blankLineBoundary = blankLineBoundary(in: text, upperBound: upperBound),
            canFinalizeText(in: text, boundary: blankLineBoundary) {
             return blankLineBoundary
         }
 
-        guard totalUTF16Count - activeStartUTF16Offset > maxActiveTextUTF16Length else {
-            return nil
+        if upperBound - activeStartUTF16Offset > maxActiveTextUTF16Length {
+            return hardLengthBoundary(in: text, upperBound: upperBound)
         }
 
-        return hardLengthBoundary(in: text)
+        if allowsEndBoundary, canFinalizeText(in: text, boundary: upperBound) {
+            return upperBound
+        }
+
+        return nil
     }
 
-    private func blankLineBoundary(in text: String) -> Int? {
+    private func blankLineBoundary(in text: String, upperBound: Int) -> Int? {
         let utf16 = text.utf16
         var previousWasLineFeed = false
         var offset = activeStartUTF16Offset
         var index = utf16.index(utf16.startIndex, offsetBy: activeStartUTF16Offset)
 
-        while index < utf16.endIndex {
+        while index < utf16.endIndex, offset < upperBound {
             let value = utf16[index]
             if value == UTF16Character.lineFeed {
                 if previousWasLineFeed {
@@ -183,15 +193,14 @@ private final class MarkdownTextPartCache {
         return nil
     }
 
-    private func hardLengthBoundary(in text: String) -> Int? {
-        let totalUTF16Count = text.utf16.count
-        let hardBoundary = min(activeStartUTF16Offset + maxActiveTextUTF16Length, totalUTF16Count)
+    private func hardLengthBoundary(in text: String, upperBound: Int) -> Int {
+        let hardBoundary = min(activeStartUTF16Offset + maxActiveTextUTF16Length, upperBound)
         let lowerBound = max(
             activeStartUTF16Offset + minimumSoftBoundaryUTF16Length,
             hardBoundary - softBoundaryLookbackUTF16Length
         )
         guard lowerBound < hardBoundary else {
-            return canFinalizeText(in: text, boundary: hardBoundary) ? hardBoundary : nil
+            return hardBoundary
         }
 
         let utf16 = text.utf16
@@ -209,7 +218,7 @@ private final class MarkdownTextPartCache {
             }
         }
 
-        return canFinalizeText(in: text, boundary: hardBoundary) ? hardBoundary : nil
+        return hardBoundary
     }
 
     private func canFinalizeText(in text: String, boundary: Int) -> Bool {
