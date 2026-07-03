@@ -1,21 +1,21 @@
 import Domain
 import UIKit
 
-final class LayoutReportingCollectionView: UICollectionView, SessionTranscriptKeyboardTransitionReporting {
-    /// Called after UIKit completes this collection view's layout pass.
-    var onLayoutSubviews: ((LayoutReportingCollectionView) -> Void)?
+final class LayoutReportingTableView: UITableView, SessionTranscriptKeyboardTransitionReporting {
+    /// Called after UIKit completes this table view's layout pass.
+    var onLayoutSubviews: ((LayoutReportingTableView) -> Void)?
     /// Most recent keyboard transition waiting to be consumed by the transcript coordinator.
     private(set) var pendingKeyboardTransition: KeyboardTransition?
     private let keyboardTransitionObserver: KeyboardTransitionObserving
 
-    /// Creates a collection view that reports layout passes and keyboard transitions.
+    /// Creates a table view that reports layout passes and keyboard transitions.
     init(
         frame: CGRect,
-        collectionViewLayout layout: UICollectionViewLayout,
+        style: UITableView.Style,
         keyboardTransitionObserver: KeyboardTransitionObserving = NotificationKeyboardTransitionObserver()
     ) {
         self.keyboardTransitionObserver = keyboardTransitionObserver
-        super.init(frame: frame, collectionViewLayout: layout)
+        super.init(frame: frame, style: style)
         configureKeyboardTransitionObserver()
     }
 
@@ -39,7 +39,7 @@ final class LayoutReportingCollectionView: UICollectionView, SessionTranscriptKe
         updateKeyboardObservers()
     }
 
-    /// Returns the insets needed when this view overlaps safe areas or visible navigation bars.
+    /// Returns manual insets for the safe areas and navigation bars this table intentionally overlaps.
     func contentInsets() -> UIEdgeInsets {
         guard let window, let viewportFrame = viewportFrame(in: window) else {
             return safeAreaInsets
@@ -77,38 +77,30 @@ final class LayoutReportingCollectionView: UICollectionView, SessionTranscriptKe
     }
 
     private func handleKeyboardTransition(_ transition: KeyboardTransition) {
+        // Layout consumes this later so offset updates can use the keyboard's timing.
         pendingKeyboardTransition = transition
         setNeedsLayout()
     }
 
-    private var distanceFromBottom: CGFloat {
-        let visibleBottomY = contentOffset.y + bounds.height - adjustedContentInset.bottom
-        return contentSize.height - visibleBottomY
-    }
-
-    private func format(_ value: CGFloat) -> String {
-        String(format: "%.2f", Double(value))
-    }
-
     private func safeAreaTopHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
-        // Add only the top safe-area portion that overlaps this view's frame.
         max(0, window.safeAreaInsets.top - viewportFrame.minY)
     }
 
     private func safeAreaBottomHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
-        // Add only the bottom safe-area portion that overlaps this view's frame.
         let safeAreaBottomY = window.bounds.maxY - window.safeAreaInsets.bottom
+        // Count only the bottom safe-area portion actually covered by this table.
         return max(0, viewportFrame.maxY - safeAreaBottomY)
     }
 
     private func navigationBarHeight(in window: UIWindow, viewportFrame: CGRect) -> CGFloat {
-        // Add visible navigation-bar overlap because this view opts out of automatic inset adjustment.
         visibleNavigationBars(from: window.rootViewController).reduce(0) { currentHeight, navigationBar in
             guard !navigationBar.isHidden else {
                 return currentHeight
             }
 
             let navigationBarFrame = navigationBar.convert(navigationBar.bounds, to: window)
+            // The table opts out of automatic inset adjustment, so visible nav bars
+            // have to be included here instead of relying on UIKit.
             return max(currentHeight, navigationBarFrame.maxY - viewportFrame.minY)
         }
     }
@@ -133,6 +125,8 @@ final class LayoutReportingCollectionView: UICollectionView, SessionTranscriptKe
 
             seenViewControllerIDs.insert(id)
 
+            // Walk the active controller tree because the table may sit under nested
+            // navigation, tab, split, or presented controllers.
             if let navigationController = viewController as? UINavigationController {
                 append(navigationController.navigationBar)
                 visit(navigationController.visibleViewController)
@@ -150,12 +144,10 @@ final class LayoutReportingCollectionView: UICollectionView, SessionTranscriptKe
             visit(viewController.presentedViewController)
         }
 
-        // recursively look for a navigation bar in view, starting from root
         visit(rootViewController)
         return navigationBars
     }
 
-    // return the frame of the view in global coordinates
     private func viewportFrame(in window: UIWindow) -> CGRect? {
         guard self.window === window else { return nil }
 

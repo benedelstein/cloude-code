@@ -125,7 +125,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             UIView.performWithoutAnimation(applyOffset)
             collectionView.layer.removeAllAnimations()
         } else if let keyboardTransition {
-            animateWithKeyboardTransition(keyboardTransition, applyOffset)
+            SessionTranscriptKeyboardAnimation.animate(with: keyboardTransition, applyOffset)
         } else if animated {
             applyOffset()
         } else {
@@ -196,11 +196,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
     }
 
     func updateFollowingBottomFromUserScroll(_ scrollView: UIScrollView) {
-        let isNearBottom = distanceFromBottom(scrollView) <= SessionTranscriptScrollMetrics.bottomProximityThreshold
-        if isNearBottom {
-            print("following bottom near bottom")
-        }
-        isFollowingBottom = isNearBottom
+        isFollowingBottom = distanceFromBottom(scrollView) <= SessionTranscriptScrollMetrics.bottomProximityThreshold
     }
 
     func continueFollowingBottomAfterProgrammaticScroll(_ scrollView: UIScrollView) -> Bool {
@@ -212,11 +208,5 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         // stale animation endpoint as user scroll state.
         scrollToBottom(collectionView, animated: true)
         return true
-    }
-}
-
-private extension UIScrollView {
-    var isInteractivelyDismissingKeyboard: Bool {
-        keyboardDismissMode == .interactive && (isTracking || isDragging || isDecelerating)
     }
 }

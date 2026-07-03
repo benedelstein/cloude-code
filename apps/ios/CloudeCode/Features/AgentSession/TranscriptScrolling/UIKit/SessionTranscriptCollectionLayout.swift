@@ -1,11 +1,69 @@
-import Domain
 import UIKit
 
 extension SessionTranscriptCollectionRepresentable {
     func makeLayout() -> UICollectionViewLayout {
+        SessionTranscriptCollectionLayout(rowSpacing: rowSpacing)
+    }
+}
+
+private final class SessionTranscriptCollectionLayout: UICollectionViewCompositionalLayout {
+    init(rowSpacing: CGFloat) {
+        super.init { _, _ in
+            Self.makeSection(rowSpacing: rowSpacing)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func invalidationContext(
+        forPreferredLayoutAttributes preferredAttributes: UICollectionViewLayoutAttributes,
+        withOriginalAttributes originalAttributes: UICollectionViewLayoutAttributes
+    ) -> UICollectionViewLayoutInvalidationContext {
+        let context = super.invalidationContext(
+            forPreferredLayoutAttributes: preferredAttributes,
+            withOriginalAttributes: originalAttributes
+        )
+        guard let collectionView else { return context }
+        guard !collectionView.isTracking &&
+                !collectionView.isDragging &&
+                !collectionView.isDecelerating else {
+            return context
+        }
+
+        // The coordinator owns bottom preservation after self-sizing changes.
+        // Disable the layout's implicit offset correction so both paths do not
+        // move the transcript in the same layout pass.
+        context.contentOffsetAdjustment = .zero
+        return context
+    }
+
+    private static func makeSection(rowSpacing: CGFloat) -> NSCollectionLayoutSection {
+        let itemSize = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1),
+            heightDimension: .estimated(120)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        let group = NSCollectionLayoutGroup.vertical(
+            layoutSize: itemSize,
+            repeatingSubitem: item,
+            count: 1
+        )
+        let section = NSCollectionLayoutSection(group: group)
+        section.interGroupSpacing = rowSpacing
+        return section
+    }
+}
+
+/*
+// Previous FlowLayout experiment. Kept commented out because it can suppress
+// FlowLayout's automatic contentOffset adjustment, but its self-sizing passes
+// have been glitchier than the compositional layout path above.
+extension SessionTranscriptCollectionRepresentable {
+    func makeLayout() -> UICollectionViewLayout {
         let layout = SessionTranscriptCollectionLayout()
-        layout.estimatedItemSize = UICollectionViewFlowLayout.automaticSize
-        layout.itemSize = UICollectionViewFlowLayout.automaticSize
         layout.minimumLineSpacing = rowSpacing
         layout.minimumInteritemSpacing = 0
         layout.sectionInset = .zero
@@ -21,10 +79,11 @@ private final class SessionTranscriptCollectionLayout: UICollectionViewFlowLayou
 
         scrollDirection = .vertical
         // Self-sizing hosted cells need to be measured at the final row width.
-        // A full-width estimate avoids a width/height feedback loop where the
-        // layout first measures narrow cells and then corrects both dimensions
-        // in later invalidation passes.
-        estimatedItemSize = CGSize(width: max(collectionView.bounds.width, 1), height: 55)
+        // The cell returns the measured height from preferredLayoutAttributesFitting.
+        // Do not use .automaticSize here: FlowLayout passes this estimate into
+        // preferredLayoutAttributesFitting, so the estimate must carry the final
+        // row width even though the height is only a rough starting point.
+        estimatedItemSize = CGSize(width: max(collectionView.bounds.width, 1), height: 120)
     }
 
     override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
@@ -33,88 +92,26 @@ private final class SessionTranscriptCollectionLayout: UICollectionViewFlowLayou
         collectionView?.bounds.size != newBounds.size
     }
 
-//    override func invalidationContext(
-//        forPreferredLayoutAttributes preferredAttributes: UICollectionViewLayoutAttributes,
-//        withOriginalAttributes originalAttributes: UICollectionViewLayoutAttributes
-//    ) -> UICollectionViewLayoutInvalidationContext {
-//        let context = super.invalidationContext(
-//            forPreferredLayoutAttributes: preferredAttributes,
-//            withOriginalAttributes: originalAttributes
-//        )
-//        guard let collectionView, shouldCancelSelfSizingOffsetAdjustment(in: collectionView) else {
-//            return context
-//        }
-//
-//        // FlowLayout normally tries to preserve visual position when a
-//        // self-sizing cell reports a new height. Transcript bottom-following is
-//        // owned by the coordinator, so non-interactive self-sizing passes should
-//        // not also apply UIKit's implicit contentOffset adjustment.
-//        context.contentOffsetAdjustment = .zero
-//        Logger.debug(
-//            "transcript layout cancelled self-sizing offset adjustment",
-//            "indexPath=\(preferredAttributes.indexPath)",
-//            "originalHeight=\(format(originalAttributes.frame.height))",
-//            "preferredHeight=\(format(preferredAttributes.frame.height))",
-//            "distance=\(format(distanceFromBottom(in: collectionView)))"
-//        )
-//        return context
-//    }
-
-    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
-        // TESTME: DO WE NEED THE FULL WIDTH ADJUSTMENT?
-        super.layoutAttributesForElements(in: rect)?.map(fullWidthAttributes)
-    }
-
-    override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
-        super.layoutAttributesForItem(at: indexPath).map(fullWidthAttributes)
-    }
-
-    private func fullWidthAttributes(
-        _ attributes: UICollectionViewLayoutAttributes
-    ) -> UICollectionViewLayoutAttributes {
-        guard let collectionView else { return attributes }
-        attributes.frame.origin.x = 0
-        // force full width to avoid layout crash.
-        attributes.frame.size.width = collectionView.bounds.width
-        return attributes
-    }
-
-    private func shouldCancelSelfSizingOffsetAdjustment(in collectionView: UICollectionView) -> Bool {
-        if isBottomAdjacentInteractiveDrag(in: collectionView) {
-            return true
-        }
-
-        // During direct user scrolling, let UIKit keep the content under the
-        // finger/momentum stable. Outside user interaction, the coordinator
-        // decides whether and how to move the scroll position.
+    override func invalidationContext(
+        forPreferredLayoutAttributes preferredAttributes: UICollectionViewLayoutAttributes,
+        withOriginalAttributes originalAttributes: UICollectionViewLayoutAttributes
+    ) -> UICollectionViewLayoutInvalidationContext {
+        let context = super.invalidationContext(
+            forPreferredLayoutAttributes: preferredAttributes,
+            withOriginalAttributes: originalAttributes
+        )
+        guard let collectionView else { return context }
         guard !collectionView.isTracking &&
                 !collectionView.isDragging &&
                 !collectionView.isDecelerating else {
-            return false
+            return context
         }
 
-        return true
-    }
-
-    private func isBottomAdjacentInteractiveDrag(in collectionView: UICollectionView) -> Bool {
-        guard collectionView.keyboardDismissMode == .interactive else { return false }
-        guard collectionView.isTracking || collectionView.isDragging else { return false }
-
-        // Keyboard dismissal from the transcript bottom also reports as a tracked
-        // scroll gesture. Keep FlowLayout from adding a second offset adjustment
-        // while the keyboard-driven viewport change is being handled elsewhere.
-        return distanceFromBottom(in: collectionView) <= SessionTranscriptScrollMetrics.bottomProximityThreshold
-    }
-
-    private func distanceFromBottom(in scrollView: UIScrollView) -> CGFloat {
-        let visibleBottomY = scrollView.contentOffset.y
-            + scrollView.bounds.height
-            - scrollView.adjustedContentInset.bottom
-
-        return scrollView.contentSize.height - visibleBottomY
-    }
-
-    private func format(_ value: CGFloat) -> String {
-        String(format: "%.2f", Double(value))
+        // The coordinator owns bottom preservation after self-sizing changes.
+        // Disable FlowLayout's implicit offset correction so both paths do not
+        // move the transcript in the same layout pass.
+        context.contentOffsetAdjustment = .zero
+        return context
     }
 }
+*/

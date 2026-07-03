@@ -24,11 +24,7 @@ extension SessionTranscriptCollectionRepresentable {
         private var contentInsetConfiguration = SessionTranscriptContentInsetConfiguration()
         private var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var isUserScrolling = false
-        var isFollowingBottom = true {
-            didSet {
-                print("following bottom? \(isFollowingBottom)")
-            }
-        }
+        var isFollowingBottom = true
         var handledScrollRequestID = 0
         let scrollCoordinator: SessionTranscriptScrollCoordinator
         private var rowContent: (SessionTranscriptItem) -> Row
@@ -76,6 +72,15 @@ extension SessionTranscriptCollectionRepresentable {
             dataSource?.indexPath(for: id)
         }
 
+        func collectionView(
+            _ collectionView: UICollectionView,
+            willDisplay cell: UICollectionViewCell,
+            forItemAt indexPath: IndexPath
+        ) {
+            Logger.debug("will display cell at \(indexPath) - \(cell.bounds.size)")
+            // optimization - possibly cache heights here.
+        }
+
         func update(
             collectionView: UICollectionView,
             items: [SessionTranscriptItem],
@@ -90,7 +95,9 @@ extension SessionTranscriptCollectionRepresentable {
             )
             let didChangeContentInsetConfiguration = nextContentInsetConfiguration != contentInsetConfiguration
             contentInsetConfiguration = nextContentInsetConfiguration
-            itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            itemsByID = items.reduce(into: [:]) {
+                $0[$1.id] = $1
+            }
             prepareWorkingIndicatorLayoutTransition(collectionView)
 
             updateKeyboardDismissPadding(keyboardDismissPadding, in: collectionView)
@@ -125,7 +132,7 @@ extension SessionTranscriptCollectionRepresentable {
         }
 
         func handleLayoutSubviews(_ collectionView: UICollectionView) {
-            let keyboardTransition = activeKeyboardTransition(in: collectionView)
+            let keyboardTransition = SessionTranscriptKeyboardAnimation.activeTransition(in: collectionView)
             let wasNearBottomBeforeLayout = lastDistanceFromBottom.map {
                 $0 <= SessionTranscriptScrollMetrics.bottomProximityThreshold
             } ?? isNearBottom(collectionView)
@@ -148,12 +155,14 @@ extension SessionTranscriptCollectionRepresentable {
 
             // Keep the visible bottom pinned after UIKit realizes geometry changes.
             // The layout-change type decides whether that correction may animate.
-            preserveBottomAfterLayout(
-                collectionView,
-                shouldPreserveBottom: isFollowingBottom || wasNearBottomBeforeLayout,
-                layoutChange: layoutChange,
-                keyboardTransition: keyboardTransition
-            )
+            if !isUserScrolling && (isFollowingBottom || wasNearBottomBeforeLayout) {
+//                preserveBottomAfterLayout(
+//                    collectionView,
+//                    shouldPreserveBottom: isFollowingBottom || wasNearBottomBeforeLayout,
+//                    layoutChange: layoutChange,
+//                    keyboardTransition: keyboardTransition
+//                )
+            }
             animateWorkingIndicatorLayoutTransition(
                 in: collectionView,
                 layoutChange: layoutChange,
@@ -263,14 +272,6 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         guard collectionView.keyboardLayoutGuide.keyboardDismissPadding != padding else { return }
 
         collectionView.keyboardLayoutGuide.keyboardDismissPadding = padding
-    }
-
-    func activeKeyboardTransition(in collectionView: UICollectionView) -> KeyboardTransition? {
-        let layoutCollectionView = collectionView as? LayoutReportingCollectionView
-        return activeKeyboardTransition(
-            layoutCollectionView?.pendingKeyboardTransition,
-            in: layoutCollectionView
-        )
     }
 
     func contentInset(in collectionView: UICollectionView) -> UIEdgeInsets {
@@ -550,6 +551,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         lastItems = items
         lastItemIDs = itemIDs
 
+        // new snapshot from scratch
         var snapshot = NSDiffableDataSourceSnapshot<Section, String>()
         snapshot.appendSections([.main])
         snapshot.appendItems(itemIDs, toSection: .main)
@@ -598,13 +600,19 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         in collectionView: UICollectionView
     ) {
         UIView.performWithoutAnimation {
-            for id in itemIDs {
-                guard let item = itemsByID[id], let cell = cell(forItemID: id, in: collectionView) else { continue }
-
-                configure(cell, with: item)
-                cell.setNeedsLayout()
-                cell.layoutIfNeeded()
-            }
+            guard var snapshot = dataSource?.snapshot() else { return }
+            snapshot.reconfigureItems(itemIDs)
+            dataSource?.apply(snapshot, animatingDifferences: false)
+//            collectionView.reconfigureItems(at: indexPaths)
+//            for id in itemIDs {
+//                guard let item = itemsByID[id], let cell = cell(forItemID: id, in: collectionView) else { continue }
+//
+//                configure(cell, with: item)
+//                let indexPath = indexPath(forItemID: id)
+//                collectionView.reconfigureItems(at: indexPath)
+//                cell.setNeedsLayout()
+//                cell.layoutIfNeeded()
+//            }
         }
         collectionView.layer.removeAllAnimations()
     }
