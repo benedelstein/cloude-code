@@ -4,14 +4,13 @@ import UIKit
 
 struct AssistantMessageView: View {
     @Environment(\.style) var style: Style
+    @Environment(SessionTranscriptRowViewModel.self) private var rowViewModel
 
     private let partSpacing: CGFloat = 12
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
     @Binding var destination: Modal<AgentSessionView.Destination>?
-
-    @State private var workExpanded = false
 
     @ViewBuilder
     var body: some View {
@@ -22,19 +21,19 @@ struct AssistantMessageView: View {
 
             if isStreaming || showsCollapsibleWorkTrace {
                 TurnWorkHeaderView(
-                    expanded: workExpanded || isStreaming,
+                    expanded: rowViewModel.workExpanded || isStreaming,
                     startedAt: displayData.message.workStartedAt,
                     endedAt: displayData.message.workEndedAt,
                     isStreaming: isStreaming,
                     collapsible: showsCollapsibleWorkTrace
                 ) {
                     guard !isStreaming else { return }
-                    setWorkExpanded(!workExpanded)
+                    setWorkExpanded(!rowViewModel.workExpanded)
                 }
                 .transition(style.fadeTransition)
             }
 
-            if showsCollapsibleWorkTrace, let finalResponseStartIndex, workExpanded {
+            if showsCollapsibleWorkTrace, let finalResponseStartIndex, rowViewModel.workExpanded {
                 renderRows(
                     Array(items.prefix(finalResponseStartIndex)),
                     fullItems: items,
@@ -108,7 +107,7 @@ struct AssistantMessageView: View {
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            workExpanded = expanded
+            rowViewModel.workExpanded = expanded
         }
 
         DispatchQueue.main.async {

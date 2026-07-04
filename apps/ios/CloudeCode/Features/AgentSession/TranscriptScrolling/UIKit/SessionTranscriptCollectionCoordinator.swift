@@ -18,6 +18,7 @@ extension SessionTranscriptCollectionRepresentable {
         private(set) var initialAnchorState: SessionTranscriptInitialAnchorState = .waitingForItems
         private var lastItems: [SessionTranscriptItem] = []
         private var lastItemIDs: [String] = []
+        private let rowViewModelCache = SessionTranscriptRowViewModelCache()
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
@@ -64,6 +65,7 @@ extension SessionTranscriptCollectionRepresentable {
             let rowContent = self.rowContent
             cell.contentConfiguration = UIHostingConfiguration {
                 rowContent(item)
+                    .environment(rowViewModelCache.viewModel(for: item.id))
             }
             .margins(.all, 0)
         }
@@ -550,6 +552,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         )
         lastItems = items
         lastItemIDs = itemIDs
+        rowViewModelCache.prune(keepingItemIDs: itemIDs)
 
         // new snapshot from scratch
         var snapshot = NSDiffableDataSourceSnapshot<Section, String>()

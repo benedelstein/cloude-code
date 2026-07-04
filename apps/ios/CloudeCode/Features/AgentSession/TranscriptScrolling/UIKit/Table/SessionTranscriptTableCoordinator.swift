@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 
 private let tableCellReuseID = "SessionTranscriptTableCell"
-let tableEstimatedRowHeight: CGFloat = 120
 
 extension SessionTranscriptTableRepresentable {
     final class Coordinator: NSObject, UITableViewDelegate {
@@ -20,10 +19,17 @@ extension SessionTranscriptTableRepresentable {
         private(set) var initialAnchorState: SessionTranscriptInitialAnchorState = .waitingForItems
         private var lastItems: [SessionTranscriptItem] = []
         private var lastItemIDs: [String] = []
+        private let rowViewModelCache = SessionTranscriptRowViewModelCache()
+        var rowHeightCache: [String: CGFloat] = [:]
+        var rowHeightCacheWidth: CGFloat?
+        // Diagnostic: estimates handed to UIKit, awaiting reconciliation logging
+        // against the measured height at display time.
+        var servedEstimatesByItemID: [String: CGFloat] = [:]
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
         private var contentInsetConfiguration = ContentInsetConfiguration()
+        var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var isUserScrolling = false
         var isFollowingBottom = true
         var isAnimatingProgrammaticScroll = false
@@ -78,12 +84,17 @@ extension SessionTranscriptTableRepresentable {
             cell.contentConfiguration = UIHostingConfiguration {
                 rowContent(item)
                     .padding(.bottom, rowSpacing)
+                    .environment(rowViewModelCache.viewModel(for: item.id))
             }
             .margins(.all, 0)
         }
 
         func indexPath(forItemID id: String) -> IndexPath? {
             dataSource?.indexPath(for: id)
+        }
+
+        func itemID(at indexPath: IndexPath) -> String? {
+            dataSource?.itemIdentifier(for: indexPath)
         }
 
         /// Update tableview state from swiftui changes
@@ -95,7 +106,6 @@ extension SessionTranscriptTableRepresentable {
             rowContent: @escaping (SessionTranscriptItem) -> Row
         ) {
             self.rowContent = rowContent
-//            tableView.estimatedRowHeight = tableEstimatedRowHeight
 
             let nextContentInsetConfiguration = SessionTranscriptContentInsetConfiguration(
                 contentPadding: contentPadding,
@@ -106,6 +116,7 @@ extension SessionTranscriptTableRepresentable {
             itemsByID = items.reduce(into: [:]) {
                 $0[$1.id] = $1
             }
+            prepareWorkingIndicatorLayoutTransition(tableView)
 
             updateKeyboardDismissPadding(keyboardDismissPadding, in: tableView)
             if didChangeContentInsetConfiguration {
@@ -128,6 +139,7 @@ extension SessionTranscriptTableRepresentable {
                 }
 
                 lastItems = items
+                invalidateRowHeights(forItemIDs: changedItemIDs)
                 updateVisibleItems(changedItemIDs, in: tableView)
                 return
             }
@@ -164,6 +176,11 @@ extension SessionTranscriptTableRepresentable {
 
             preserveBottomIfFollowing(
                 tableView,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
+            animateWorkingIndicatorLayoutTransition(
+                in: tableView,
                 layoutChange: layoutChange,
                 keyboardTransition: keyboardTransition
             )
@@ -223,12 +240,13 @@ extension SessionTranscriptTableRepresentable {
             updateScrollToBottomVisibility(scrollView)
         }
 
-        // future optimization - cache cell heights and retrun from cache instead of estimate.
-//        func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-//            // Keep the delegate hook in place so table-view estimate experiments
-//            // stay localized here; start with one explicit baseline estimate.
-//            tableEstimatedRowHeight
-//        }
+        func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+            recordRowHeight(for: cell, at: indexPath, in: tableView)
+        }
+
+        func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+            estimatedRowHeight(at: indexPath, in: tableView)
+        }
     }
 }
 
@@ -372,6 +390,9 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         )
         lastItems = items
         lastItemIDs = itemIDs
+        invalidateRowHeights(forItemIDs: changedExistingItemIDs)
+        pruneRowHeightCache(keepingItemIDs: itemIDs)
+        rowViewModelCache.prune(keepingItemIDs: itemIDs)
 
         var snapshot = NSDiffableDataSourceSnapshot<Section, String>()
         snapshot.appendSections([.main])

@@ -34,15 +34,9 @@ struct SessionTranscriptTableRepresentable<Row: View>: UIViewRepresentable {
         // implements the tableView(_:heightForRowAt:) method.
         // Prefer the use of this property over the delegate method
         tableView.rowHeight = UITableView.automaticDimension
-        // Apple: Providing a nonnegative estimate of the height of rows can improve
-        // the performance of loading the table view. If the table contains variable height
-        // rows, it might be expensive to calculate all their heights when the table loads.
-        // Estimation allows you to defer some of the cost of geometry calculation from
-        // load time to scrolling time.
-        //
-        // Ben - each cell height can vary wildly, so this isn't super helpful, but
-        // better than nothing.
-        tableView.estimatedRowHeight = tableEstimatedRowHeight
+        // Row height estimates come from the coordinator's estimatedHeightForRowAt
+        // delegate method (cached measured heights), which supersedes the
+        // estimatedRowHeight property entirely.
         tableView.sectionHeaderTopPadding = 0
         if #available(iOS 26.0, *) {
             tableView.topEdgeEffect.style = .soft

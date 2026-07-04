@@ -11,6 +11,12 @@ final class SessionTranscriptTableCell: UITableViewCell {
         configure()
     }
 
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        layer.removeAllAnimations()
+        transform = .identity
+    }
+
     private func configure() {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
