@@ -6,7 +6,9 @@ How one user turn moves from the browser to the Sprite VM and back. The current 
 
 - `SessionAgentDO` (`services/api-server/src/runtime/session-agent.do.ts`) - source of truth for session state, SQLite repositories, WebSocket clients, and webhook RPC handlers.
 - `SessionChatDispatchService` (`services/api-server/src/modules/session-agent/services/session-chat-dispatch.service.ts`) - validates chat payloads, persists the user message, registers the active turn, and asks the process manager to dispatch it.
+- `SessionAgentAttachmentProvider` (`services/api-server/src/runtime/session-agent-attachment-provider.ts`) - resolves message attachment ids to records already bound to the current session before messages are persisted or dispatched.
 - `SpriteAgentProcessManager` (`services/api-server/src/modules/session-agent/services/agent-process/sprite-agent-process-manager.service.ts`) - owns vm-agent process reuse, fresh process spawn, credential sync, cancel, and kill.
+- `AgentAttachmentService` (`services/api-server/src/modules/session-agent/services/agent-attachment.service.ts`) - downloads session-bound attachment blobs from R2 and converts them to `AgentInputAttachment` data URLs before sending them to the vm-agent.
 - `AgentTurnCoordinator` (`services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts`) - owns turn state, WAL replay, chunk accumulation, derived state updates, terminal-chunk finalization, and client broadcasts.
 - `SessionSetupOutputService` (`services/api-server/src/modules/session-agent/services/session-setup-output.service.ts`) - persists startup-script stdout/stderr, broadcasts live `setup.output.chunks`, and keeps large output out of synced client state.
 - `NotificationPublisher` (`services/api-server/src/modules/notifications/services/notification-publisher.service.ts`) - enqueues non-aborted turn-finished push notifications after summary persistence.
@@ -18,9 +20,11 @@ How one user turn moves from the browser to the Sprite VM and back. The current 
 Client WS
   -> SessionAgentDO.handleChatMessage
   -> SessionChatDispatchService.dispatchChatMessage
+  -> SessionAgentAttachmentProvider.getByIdsBoundToSession
   -> MessageRepository.create(user message)
   -> AgentTurnCoordinator.beginTurn(userMessageId)
   -> SpriteAgentProcessManager.dispatchMessage
+     -> AgentAttachmentService.resolveAttachments
      -> try existing vm-agent process via stdin + stdin_ack
      -> otherwise write credentials, agent script, and initial message file
      -> spawn bun agent-webhook.js in a detachable Sprite session
@@ -55,7 +59,11 @@ Only one user turn may be active per session. A second `chat.message` while `act
 
 ## Dispatch
 
+`SessionChatDispatchService` resolves requested attachment ids with `SessionAgentAttachmentProvider.getByIdsBoundToSession(...)` before building the user `UIMessage`. The stored message keeps attachment parts with `/attachments/{attachmentId}/content` URLs for client display, plus width/height metadata when available. A message with only attachments is valid; empty content and no attachments is rejected.
+
 `SessionChatDispatchService` persists the user `UIMessage` before spawning so the session history is durable even if process startup fails. It calls `AgentTurnCoordinator.beginTurn()` before process dispatch so webhooks racing in from a fast vm-agent are not treated as stale.
+
+`SpriteAgentProcessManager.dispatchMessage(...)` converts the turn input into an `AgentInputMessage` before either warm-process stdin or fresh spawn. `AgentAttachmentService.resolveAttachments(...)` re-reads the attachment ids bound to the session, downloads each R2 object, and produces `AgentInputAttachment` records with `filename`, `mediaType`, and `dataUrl`. The vm-agent harness turns those records into AI SDK image content parts.
 
 `SpriteAgentProcessManager` prefers warm reuse:
 
@@ -124,6 +132,8 @@ Duplicate webhook batches are deduped by the WAL sequence constraint. Missing ch
 - Turn coordinator: [agent-turn-coordinator.service.ts](../services/api-server/src/modules/session-agent/services/agent-turn-coordinator.service.ts)
 - Setup output service: [session-setup-output.service.ts](../services/api-server/src/modules/session-agent/services/session-setup-output.service.ts)
 - Setup output repository: [setup-output.repository.ts](../services/api-server/src/modules/session-agent/repositories/setup-output.repository.ts)
+- Session attachment provider: [session-agent-attachment-provider.ts](../services/api-server/src/runtime/session-agent-attachment-provider.ts)
+- Agent attachment service: [agent-attachment.service.ts](../services/api-server/src/modules/session-agent/services/agent-attachment.service.ts)
 - Notification publisher: [notification-publisher.service.ts](../services/api-server/src/modules/notifications/services/notification-publisher.service.ts)
 - Notification queue consumer: [notification-queue-consumer.service.ts](../services/api-server/src/modules/notifications/services/notification-queue-consumer.service.ts)
 - Automatic PR queue: [session-auto-pull-request.service.ts](../services/api-server/src/runtime/session-auto-pull-request.service.ts)
