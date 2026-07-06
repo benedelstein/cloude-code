@@ -189,9 +189,6 @@ extension SessionTranscriptCollectionRepresentable {
                 isUserScrolling = true
             }
 
-//            if isUserScrolling {
-//                updateFollowingBottomFromUserScroll(scrollView)
-//            }
             updateScrollToBottomVisibility(scrollView)
         }
 
@@ -624,54 +621,8 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             guard var snapshot = dataSource?.snapshot() else { return }
             snapshot.reconfigureItems(itemIDs)
             dataSource?.apply(snapshot, animatingDifferences: false)
-//            collectionView.reconfigureItems(at: indexPaths)
-//            for id in itemIDs {
-//                guard let item = itemsByID[id], let cell = cell(forItemID: id, in: collectionView) else { continue }
-//
-//                configure(cell, with: item)
-//                let indexPath = indexPath(forItemID: id)
-//                collectionView.reconfigureItems(at: indexPath)
-//                cell.setNeedsLayout()
-//                cell.layoutIfNeeded()
-//            }
         }
         collectionView.layer.removeAllAnimations()
-    }
-
-    func logApplyGeometry(
-        _ event: String,
-        collectionView: UICollectionView,
-        changedItemIDs: [String]
-    ) {
-        Logger.debug(
-            "transcript diffable",
-            event,
-            "changed=\(changedItemIDs.joined(separator: ","))",
-            "offsetY=\(format(collectionView.contentOffset.y))",
-            "contentHeight=\(format(collectionView.contentSize.height))",
-            "boundsHeight=\(format(collectionView.bounds.height))",
-            "bottomInset=\(format(collectionView.adjustedContentInset.bottom))",
-            "distanceFromBottom=\(format(distanceFromBottom(collectionView)))",
-            "isTracking=\(collectionView.isTracking)",
-            "isDragging=\(collectionView.isDragging)",
-            "isDecelerating=\(collectionView.isDecelerating)"
-        )
-    }
-
-    func logApplyGeometryOnNextTick(
-        _ event: String,
-        collectionView: UICollectionView,
-        changedItemIDs: [String]
-    ) {
-        DispatchQueue.main.async { [weak self, weak collectionView] in
-            guard let self, let collectionView else { return }
-
-            logApplyGeometry(
-                event,
-                collectionView: collectionView,
-                changedItemIDs: changedItemIDs
-            )
-        }
     }
 
     func changedItemIDs(

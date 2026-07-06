@@ -48,6 +48,11 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         animateWorkingIndicatorCell(cell, translationX: deltaX, translationY: deltaY)
     }
 
+    /// FLIP transition (First, Last, Invert, Play): the cell's frame was
+    /// captured before the update (First) and compared to its post-layout frame
+    /// (Last); here the delta transform places it back at the old position
+    /// (Invert) and animates to identity (Play), so the indicator visibly
+    /// slides to its new spot instead of teleporting.
     func animateWorkingIndicatorCell(
         _ cell: UITableViewCell,
         translationX: CGFloat,

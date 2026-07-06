@@ -178,19 +178,25 @@ private extension AgentSessionView {
         }
 
         private var transcriptItems: [SessionTranscriptItem] {
-            var items = messages.compactMap { message -> SessionTranscriptItem? in
-                if message.message.isUser {
-                    return .userMessage(message.message)
+            // TranscriptMessage.id is the stable row id assigned when the row is
+            // created (streaming assistant rows and optimistic user rows keep it
+            // when the server id arrives), so rows never churn identity.
+            var items = messages.compactMap { transcriptMessage -> SessionTranscriptItem? in
+                if transcriptMessage.message.isUser {
+                    return .userMessage(
+                        id: transcriptMessage.id,
+                        transcriptMessage.message
+                    )
                 }
 
-                guard let displayData = store.assistantDisplayDataByRowID[message.id] else {
+                guard let displayData = store.assistantDisplayDataByRowID[transcriptMessage.id] else {
                     return nil
                 }
 
                 return .assistantMessage(
-                    id: message.id,
+                    id: transcriptMessage.id,
                     displayData,
-                    isStreaming: message.isStreaming
+                    isStreaming: transcriptMessage.isStreaming
                 )
             }
 
@@ -248,7 +254,7 @@ private extension AgentSessionView {
         private func transcriptRow(_ item: SessionTranscriptItem) -> some View {
             Group {
                 switch item {
-                case .userMessage(let message):
+                case .userMessage(_, let message):
                     UserMessageView(message: message)
                         .environment(\.openAgentSessionImage, openImageAction)
                 case .assistantMessage(_, let displayData, let isStreaming):
@@ -261,6 +267,9 @@ private extension AgentSessionView {
                     WorkingIndicatorView(isActive: isActive)
                 }
             }
+            // Rows are hosted inside reused UIKit cells; the stable row id gives
+            // SwiftUI explicit identity so state doesn't leak across cell reuse.
+            .id(item.id)
         }
 
         private var openImageAction: OpenAgentSessionImageAction {

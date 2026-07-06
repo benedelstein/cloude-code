@@ -36,6 +36,9 @@ private final class SessionTranscriptCollectionLayout: UICollectionViewCompositi
         // The coordinator owns bottom preservation after self-sizing changes.
         // Disable the layout's implicit offset correction so both paths do not
         // move the transcript in the same layout pass.
+        // Note: in practice this did not work too well — offset adjustments were
+        // still observed near the bottom, which is part of why the table-view
+        // path exists as an alternative.
         context.contentOffsetAdjustment = .zero
         return context
     }

@@ -740,7 +740,11 @@ private extension AgentSessionViewModel {
         }
 
         if transcriptMessage.message.role == .user {
-            assistantDisplayDataByRowID[transcriptMessage.id] = nil
+            // Only clear an existing entry; unconditionally writing nil would
+            // publish a no-op @Observable change on every user-message upsert.
+            if assistantDisplayDataByRowID[transcriptMessage.id] != nil {
+                assistantDisplayDataByRowID[transcriptMessage.id] = nil
+            }
             return
         }
 

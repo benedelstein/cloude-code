@@ -46,8 +46,7 @@ struct SessionTranscriptTableRepresentable<Row: View>: UIViewRepresentable {
             coordinator?.handleLayoutSubviews(tableView)
         }
 
-        context.coordinator.installDataSource(on: tableView)
-        context.coordinator.installScrollDelegate(on: tableView)
+        context.coordinator.configure(on: tableView)
         Logger.debug("created session table view")
         return tableView
     }
