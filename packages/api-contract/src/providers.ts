@@ -24,7 +24,7 @@ export type ClaudeEffort = z.infer<typeof ClaudeEffort>;
 
 export const AgentSettingsClaude = z.object({
   provider: z.literal(CLAUDE_PROVIDER_ID),
-  model: ClaudeModel.default("claude-opus-4-8"),
+  model: ClaudeModel.default("claude-fable-5"),
   effort: ClaudeEffort.default("high"),
   maxTokens: z.number().int().default(8192),
 });

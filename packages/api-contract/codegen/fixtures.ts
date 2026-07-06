@@ -253,11 +253,11 @@ export const FIXTURES: Fixture[] = [
           providerName: "Claude Code",
           connected: true,
           requiresReauth: false,
-          defaultModel: "claude-opus-4-8",
+          defaultModel: "claude-fable-5",
           defaultEffort: "high",
           authMethods: ["oauth"],
           models: [
-            { id: "claude-fable-5", displayName: "Claude Fable 5", isDefault: false, selectable: true },
+            { id: "claude-fable-5", displayName: "Claude Fable 5", isDefault: true, selectable: true },
           ],
           efforts: [{ id: "high", displayName: "High", isDefault: true, selectable: true }],
           metadata: { beta: true },

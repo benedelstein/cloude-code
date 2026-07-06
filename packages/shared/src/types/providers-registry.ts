@@ -68,7 +68,7 @@ export const CLAUDE_EFFORT_DISPLAY_NAMES: Record<ClaudeEffort, string> = {
 const CLAUDE_MODELS: ProviderModelDefinition<ClaudeModel>[] = ClaudeModel.options.map((id) => ({
   id,
   displayName: CLAUDE_MODEL_DISPLAY_NAMES[id],
-  isDefault: id === "claude-opus-4-8",
+  isDefault: id === "claude-fable-5",
 }));
 
 const CLAUDE_EFFORTS: ProviderEffortDefinition<ClaudeEffort>[] = ClaudeEffort.options.map((id) => ({
@@ -80,7 +80,7 @@ const CLAUDE_EFFORTS: ProviderEffortDefinition<ClaudeEffort>[] = ClaudeEffort.op
 export const CLAUDE_PROVIDER: ProviderDefinition<typeof CLAUDE_PROVIDER_ID, ClaudeModel, ClaudeEffort> = {
   id: CLAUDE_PROVIDER_ID,
   displayName: "Claude Code",
-  defaultModel: "claude-opus-4-8",
+  defaultModel: "claude-fable-5",
   defaultEffort: "high",
   authMethods: ["oauth"],
   todoToolName: "TaskCreate",
