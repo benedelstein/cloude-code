@@ -49,6 +49,12 @@ extension AgentSessionRenderItem {
     }
 
     /// Markdown-aware assistant text with raw source retained for copy/detail behavior.
+    ///
+    /// Parts stay nested under one item because a single raw text part streams in over time:
+    /// its stable `key` anchors transcript diffing and the render cache while the derived
+    /// `parts` array keeps changing (the active tail re-parses and re-splits every tick).
+    /// Flattening parts into top-level render items would leak that churn into transcript
+    /// identity and lose the raw `text` needed for copy and the detail sheet.
     struct ChunkedTextItem: Sendable, Hashable {
         let key: String
         let text: String

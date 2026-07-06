@@ -72,7 +72,6 @@ private struct MarkdownTextPartsView: View {
                         .transition(.opacity.animation(partFadeAnimation))
                 case .codeBlock(let part):
                     TranscriptCodeBlockView(part: part)
-                        .contentTransition(.opacity)
                         .animation(partFadeAnimation, value: part.text)
                         .transition(.opacity.animation(partFadeAnimation))
                 }

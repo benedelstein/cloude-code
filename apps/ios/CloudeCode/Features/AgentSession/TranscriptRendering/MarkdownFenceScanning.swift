@@ -178,7 +178,10 @@ enum MarkdownFenceScanner {
 struct MarkdownFence {
     let startOffset: Int
     let bodyStartOffset: Int
+    /// The fence delimiter character, backtick or tilde.
     let marker: Character
+    /// Number of marker characters in the opening run (at least 3, e.g. 3 for ```` ``` ````).
+    /// A closing fence must repeat the same marker at least this many times.
     let markerLength: Int
     let language: String?
 }

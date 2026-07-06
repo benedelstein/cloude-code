@@ -11,6 +11,9 @@ enum MarkdownTextPartFactory {
         ))
     }
 
+    /// Inline-only parsing emits `inlinePresentationIntent` runs (emphasis, code, …) rather than
+    /// concrete fonts or colors; SwiftUI `Text` resolves those intents against the base
+    /// `.font`/`.foregroundStyle` applied by the rendering view.
     private static func markdownAttributedString(from source: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
