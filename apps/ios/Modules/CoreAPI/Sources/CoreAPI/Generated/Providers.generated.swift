@@ -46,7 +46,7 @@ public struct AgentSettingsClaude: Codable, Equatable, Sendable {
     public var maxTokens: Int
 
     public init(
-        model: ClaudeModel = .claudeOpus48,
+        model: ClaudeModel = .claudeFable5,
         effort: ClaudeEffort = .high,
         maxTokens: Int = 8192
     ) {

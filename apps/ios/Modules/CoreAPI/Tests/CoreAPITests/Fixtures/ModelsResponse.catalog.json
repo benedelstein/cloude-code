@@ -5,7 +5,7 @@
       "providerName": "Claude Code",
       "connected": true,
       "requiresReauth": false,
-      "defaultModel": "claude-opus-4-8",
+      "defaultModel": "claude-fable-5",
       "defaultEffort": "high",
       "authMethods": [
         "oauth"
@@ -14,7 +14,7 @@
         {
           "id": "claude-fable-5",
           "displayName": "Claude Fable 5",
-          "isDefault": false,
+          "isDefault": true,
           "selectable": true
         }
       ],
