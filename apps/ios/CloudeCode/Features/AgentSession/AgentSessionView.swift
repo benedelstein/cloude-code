@@ -195,6 +195,8 @@ private extension AgentSessionView {
             }
 
             if hasTranscriptItems {
+                // Keep this row mounted even when inactive so the cloud can settle
+                // into its resting state instead of disappearing between turns.
                 items.append(.workingIndicator(isActive: isWorkingIndicatorActive))
             }
 

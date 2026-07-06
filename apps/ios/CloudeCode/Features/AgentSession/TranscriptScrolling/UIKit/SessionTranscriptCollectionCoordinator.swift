@@ -155,16 +155,12 @@ extension SessionTranscriptCollectionRepresentable {
                 Logger.debug("bottom tracking lost? \(lastDistanceFromBottom, default: "no last dist")")
             }
 
-            // Keep the visible bottom pinned after UIKit realizes geometry changes.
-            // The layout-change type decides whether that correction may animate.
-            if !isUserScrolling && (isFollowingBottom || wasNearBottomBeforeLayout) {
-//                preserveBottomAfterLayout(
-//                    collectionView,
-//                    shouldPreserveBottom: isFollowingBottom || wasNearBottomBeforeLayout,
-//                    layoutChange: layoutChange,
-//                    keyboardTransition: keyboardTransition
-//                )
-            }
+            preserveCollectionBottomIfNeeded(
+                collectionView,
+                wasNearBottomBeforeLayout: wasNearBottomBeforeLayout,
+                layoutChange: layoutChange,
+                keyboardTransition: keyboardTransition
+            )
             animateWorkingIndicatorLayoutTransition(
                 in: collectionView,
                 layoutChange: layoutChange,
@@ -259,6 +255,28 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
         lastLayoutContentSize = collectionView.contentSize
         lastDistanceFromBottom = distanceFromBottom(collectionView)
         updateScrollToBottomVisibility(collectionView)
+    }
+
+    private func preserveCollectionBottomIfNeeded(
+        _ collectionView: UICollectionView,
+        wasNearBottomBeforeLayout: Bool,
+        layoutChange: SessionTranscriptLayoutChange,
+        keyboardTransition: KeyboardTransition?
+    ) {
+        // Keep the visible bottom pinned after UIKit realizes geometry changes.
+        // The collection path is kept for manual comparison, but it is not the
+        // default because self-sizing cells can still resize after this pass,
+        // and compositional layout can apply its own offset adjustments near
+        // the bottom. Those two mechanisms make bottom preservation less
+        // deterministic here than in the table-view path.
+        guard !isUserScrolling && (isFollowingBottom || wasNearBottomBeforeLayout) else { return }
+
+        preserveBottomAfterLayout(
+            collectionView,
+            shouldPreserveBottom: isFollowingBottom || wasNearBottomBeforeLayout,
+            layoutChange: layoutChange,
+            keyboardTransition: keyboardTransition
+        )
     }
 
     func updateContentInsets(_ collectionView: UICollectionView) -> Bool {
