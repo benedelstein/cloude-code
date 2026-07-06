@@ -12,23 +12,35 @@ extension SessionTranscriptTableRepresentable {
             case main
         }
 
+        // The diffable data source stores only item ids (strings), per Apple's
+        // guidance: snapshots model item identity, not item structure. Content
+        // changes for an existing id are handled separately via reconfigure in
+        // update(...), so streaming edits never register as insert/delete.
         private typealias DataSource = UITableViewDiffableDataSource<Section, String>
 
+        // Optional because the data source needs the table view at init, and the
+        // coordinator is created in makeCoordinator before makeUIView builds it.
         private var dataSource: DataSource?
         private var itemsByID: [String: SessionTranscriptItem] = [:]
         private(set) var initialAnchorState: SessionTranscriptInitialAnchorState = .waitingForItems
         private var lastItems: [SessionTranscriptItem] = []
         private var lastItemIDs: [String] = []
         private let rowViewModelCache = SessionTranscriptRowViewModelCache()
+        // Measured row heights keyed by item id, served back to UIKit as row
+        // height estimates. Valid only for rowHeightCacheWidth: the cache is
+        // dropped whenever the table width changes (see
+        // resetRowHeightCacheIfNeeded), and individual entries are invalidated
+        // when an item's content changes. Follow-up: fold width and dynamic type
+        // size into the cache keys instead of resetting globally.
         var rowHeightCache: [String: CGFloat] = [:]
         var rowHeightCacheWidth: CGFloat?
-        // Diagnostic: estimates handed to UIKit, awaiting reconciliation logging
-        // against the measured height at display time.
-        var servedEstimatesByItemID: [String: CGFloat] = [:]
         private var lastLayoutBoundsSize: CGSize?
         private var lastLayoutContentSize: CGSize?
         private var lastDistanceFromBottom: CGFloat?
         private var contentInsetConfiguration = ContentInsetConfiguration()
+        // Working-indicator cell frame captured before a data update, compared
+        // against its post-layout frame to drive the FLIP slide animation in
+        // animateWorkingIndicatorLayoutTransition.
         var workingIndicatorLayoutFrameBeforeUpdate: CGRect?
         private var isUserScrolling = false
         var isFollowingBottom = true
@@ -48,7 +60,8 @@ extension SessionTranscriptTableRepresentable {
             self.rowContent = rowContent
         }
 
-        func installDataSource(on tableView: UITableView) {
+        /// One-time coordinator setup: cell registration, data source, delegate.
+        func configure(on tableView: UITableView) {
             tableView.register(
                 SessionTranscriptTableCell.self,
                 forCellReuseIdentifier: tableCellReuseID
@@ -70,9 +83,6 @@ extension SessionTranscriptTableRepresentable {
                 self.configure(transcriptCell, with: item)
                 return transcriptCell
             }
-        }
-
-        func installScrollDelegate(on tableView: UITableView) {
             tableView.delegate = self
         }
 
@@ -170,6 +180,11 @@ extension SessionTranscriptTableRepresentable {
                 recordLayoutState(tableView)
             }
 
+            // Safety net: scrollViewDidEndScrollingAnimation is the normal reset,
+            // but UIKit skips that callback when an animated scroll is cut short
+            // (an offset applied without animation, or removeAllAnimations during
+            // keyboard/inset changes). A stuck flag would permanently suppress
+            // animated bottom-follow, so clear it once layout shows we landed.
             if isAnimatingProgrammaticScroll && isAtBottom(tableView) {
                 isAnimatingProgrammaticScroll = false
             }
@@ -289,6 +304,8 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         return true
     }
 
+    /// Sets the point at which the interactive drag-down gesture starts
+    /// dismissing the keyboard, to the top of the composer.
     private func updateKeyboardDismissPadding(_ padding: CGFloat, in tableView: UITableView) {
         guard tableView.keyboardLayoutGuide.keyboardDismissPadding != padding else { return }
 
@@ -298,6 +315,10 @@ extension SessionTranscriptTableRepresentable.Coordinator {
     func contentInset(in tableView: UITableView) -> UIEdgeInsets {
         let obstructionInsets = (tableView as? LayoutReportingTableView)?
             .contentInsets() ?? tableView.safeAreaInsets
+        // Insets are snapped to the pixel grid. contentPadding and the composer
+        // height can be fractional; the same rounding runs on every pass, so the
+        // != guard in updateContentInsets compares identical values and sub-point
+        // drift can't trigger repeated inset updates.
         return UIEdgeInsets(
             top: roundedForScreen(
                 contentInsetConfiguration.contentPadding + obstructionInsets.top,
@@ -318,7 +339,13 @@ extension SessionTranscriptTableRepresentable.Coordinator {
 
     func applyContentInset(_ contentInset: UIEdgeInsets, to tableView: UITableView) {
         tableView.contentInset = contentInset
-        tableView.verticalScrollIndicatorInsets = contentInset
+        // The indicator should hug the real obstructions (nav bar, composer,
+        // keyboard), not the extra breathing room around the content, so strip
+        // contentPadding back out of the indicator insets.
+        var indicatorInsets = contentInset
+        indicatorInsets.top -= contentInsetConfiguration.contentPadding
+        indicatorInsets.bottom -= contentInsetConfiguration.contentPadding
+        tableView.verticalScrollIndicatorInsets = indicatorInsets
     }
 
     func roundedForScreen(_ value: CGFloat, in view: UIView) -> CGFloat {
@@ -457,8 +484,9 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         _ itemIDs: [String],
         in tableView: UITableView
     ) {
-        // Text streaming should update hosted cells in place; UIKit row animations
-        // make the baseline harder to compare against the collection path.
+        // Reconfigure the changed rows in place, with UIKit's implicit row
+        // animations suppressed: streaming updates arrive several times per
+        // second, and the default fade/move animation flickers on every chunk.
         UIView.performWithoutAnimation {
             guard var snapshot = dataSource?.snapshot() else { return }
             snapshot.reconfigureItems(itemIDs)

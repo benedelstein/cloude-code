@@ -1,10 +1,15 @@
 import Domain
 
 enum SessionTranscriptItem: Identifiable, Equatable {
-    case userMessage(SessionMessage)
+    // Both message cases carry the transcript row id, not necessarily the
+    // SessionMessage id. Streaming assistant rows keep it stable when the final
+    // server message id arrives, and optimistic user rows keep it stable when
+    // the server-accepted id replaces the client-generated one.
+    case userMessage(
+        id: String,
+        SessionMessage
+    )
     case assistantMessage(
-        // This is the transcript row id, not necessarily displayData.message.id.
-        // Streaming rows keep it stable when the final server message id arrives.
         id: String,
         AgentSessionView.MessageDisplayData,
         isStreaming: Bool
@@ -13,8 +18,8 @@ enum SessionTranscriptItem: Identifiable, Equatable {
 
     var id: String {
         switch self {
-        case .userMessage(let message):
-            Self.messageItemID(for: message.id)
+        case .userMessage(let id, _):
+            id
         case .assistantMessage(let id, _, _):
             id
         case .workingIndicator:

@@ -1,6 +1,11 @@
 import UIKit
 import Domain
 
+// Self-sizing for the compositional transcript layout (estimated item heights).
+// The layout asks each cell for its preferred attributes; instead of trusting
+// what super returns for the SwiftUI-hosted content (which can lag a content
+// update), the cell re-measures the content view at the layout's row width and
+// reports that height, rounded up to a whole point.
 final class SessionTranscriptCollectionCell: UICollectionViewCell {
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: UICollectionViewLayoutAttributes

@@ -95,7 +95,6 @@ private struct ToolActionInlineRow: View {
                         .styledFont(.footnote)
                         .foregroundStyle(theme.secondaryLabelColor)
                         .lineLimit(1)
-//                        .contentTransition(.opacity)
                 }
 
                 Image(systemName: "chevron.right")
