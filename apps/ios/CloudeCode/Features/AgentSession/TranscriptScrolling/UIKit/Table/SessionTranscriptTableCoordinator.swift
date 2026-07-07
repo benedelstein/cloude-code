@@ -2,6 +2,7 @@ import Domain
 import SwiftUI
 import UIKit
 
+// swiftlint:disable file_length 
 private let tableCellReuseID = "SessionTranscriptTableCell"
 
 extension SessionTranscriptTableRepresentable {
