@@ -759,11 +759,11 @@ extension AgentSessionViewModel {
         messagesByID[message.id] = message
 
         if message.role == .user {
-            // Only clear an existing entry; unconditionally writing nil would
-            // publish a no-op @Observable change on every user-message upsert.
-            if assistantDisplayDataByRowID[rowID] != nil {
-                assistantDisplayDataByRowID[rowID] = nil
-            }
+            // A row never changes role, so there is no assistant entry to clear.
+            assert(
+                assistantDisplayDataByRowID[rowID] == nil,
+                "User message upserted into row \(rowID) holding assistant display data"
+            )
         } else {
             assistantDisplayDataByRowID[rowID] = makeDisplayData(
                 id: rowID,
