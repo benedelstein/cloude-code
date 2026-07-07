@@ -758,13 +758,7 @@ extension AgentSessionViewModel {
         }
         messagesByID[message.id] = message
 
-        if message.role == .user {
-            // A row never changes role, so there is no assistant entry to clear.
-            assert(
-                assistantDisplayDataByRowID[rowID] == nil,
-                "User message upserted into row \(rowID) holding assistant display data"
-            )
-        } else {
+        if message.role != .user {
             assistantDisplayDataByRowID[rowID] = makeDisplayData(
                 id: rowID,
                 for: message,
