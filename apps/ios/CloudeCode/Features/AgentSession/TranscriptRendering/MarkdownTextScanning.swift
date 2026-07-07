@@ -147,6 +147,12 @@ struct MarkdownCodeBlockSegment {
 }
 
 /// Tracks inline markdown constructs that are unsafe to freeze in the active paragraph.
+///
+/// This approximates CommonMark's inline rules and deliberately errs toward "unsafe":
+/// a false positive only delays finalization (the hard length cap still guarantees
+/// progress), while a false negative would split an emphasis span, code span, link, or
+/// autolink across two parts and render its delimiters literally. Only the current
+/// paragraph is inspected because a blank line closes all inline constructs.
 enum MarkdownInlineState {
     /// Returns whether the current paragraph contains an unclosed inline construct.
     static func hasUnsafeOpenConstruct(in source: String) -> Bool {

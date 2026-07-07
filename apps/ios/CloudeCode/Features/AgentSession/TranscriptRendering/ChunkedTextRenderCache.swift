@@ -1,6 +1,11 @@
 import Foundation
 
 /// Converts raw assistant text render items into stable markdown transcript parts.
+///
+/// Strategy: each text item keeps a finalized prefix (parsed once, never touched again)
+/// and an active tail that re-parses every tick. Parts finalize at complete code fences,
+/// blank lines, or an unconditional hard length cap — see `docs/markdown-chunking.md`
+/// for boundary rules and the accepted performance trade-offs.
 final class ChunkedTextRenderCache {
     private var textCachesByPartKey: [String: MarkdownTextPartCache] = [:]
     private let maxActiveTextUTF16Length: Int
@@ -144,6 +149,11 @@ private final class MarkdownTextPartCache {
         return true
     }
 
+    /// Finds the furthest safe finalization boundary: a blank line if one passes the
+    /// inline-safety check, else the hard length cap (soft whitespace boundary preferred,
+    /// but the cap itself is unconditional so finalization always makes progress), else
+    /// the segment end. The segment end is never a boundary at end of text
+    /// (`allowsEndBoundary`), because trailing text may still grow.
     private func stableTextBoundary(
         in text: String,
         upperBound: Int,
