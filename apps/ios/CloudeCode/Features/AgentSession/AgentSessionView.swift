@@ -128,9 +128,10 @@ extension AgentSessionView {
     // Keep collection row identity separate from SessionMessage.id. A streaming
     // assistant row starts before the server id exists, then receives the final
     // message id; preserving this row id avoids delete/insert churn and cell jumps.
-    struct TranscriptMessage: Identifiable, Equatable {
+    // The message content lives in the view model's `messagesByID`.
+    struct TranscriptRow: Identifiable, Equatable {
         let id: String
-        var message: SessionMessage
+        var messageID: String
         var isStreaming: Bool
     }
 }
@@ -144,8 +145,8 @@ private extension AgentSessionView {
         let keyboardDismissPadding: CGFloat
         let scrollCoordinator: SessionTranscriptScrollCoordinator
 
-        var messages: [AgentSessionView.TranscriptMessage] {
-            store.transcriptMessages
+        var rows: [AgentSessionView.TranscriptRow] {
+            store.transcriptRows
         }
 
         var body: some View {
@@ -166,7 +167,7 @@ private extension AgentSessionView {
         }
 
         private var hasMessageTranscriptItems: Bool {
-            !messages.isEmpty
+            !rows.isEmpty
         }
 
         private var hasTranscriptItems: Bool {
@@ -178,25 +179,26 @@ private extension AgentSessionView {
         }
 
         private var transcriptItems: [SessionTranscriptItem] {
-            // TranscriptMessage.id is the stable row id assigned when the row is
+            // TranscriptRow.id is the stable row id assigned when the row is
             // created (streaming assistant rows and optimistic user rows keep it
             // when the server id arrives), so rows never churn identity.
-            var items = messages.compactMap { transcriptMessage -> SessionTranscriptItem? in
-                if transcriptMessage.message.isUser {
-                    return .userMessage(
-                        id: transcriptMessage.id,
-                        transcriptMessage.message
-                    )
+            var items = rows.compactMap { row -> SessionTranscriptItem? in
+                guard let message = store.messagesByID[row.messageID] else {
+                    assertionFailure("Transcript row \(row.id) has no message \(row.messageID)")
+                    return nil
+                }
+                if message.isUser {
+                    return .userMessage(id: row.id, message)
                 }
 
-                guard let displayData = store.assistantDisplayDataByRowID[transcriptMessage.id] else {
+                guard let displayData = store.assistantDisplayDataByRowID[row.id] else {
                     return nil
                 }
 
                 return .assistantMessage(
-                    id: transcriptMessage.id,
+                    id: row.id,
                     displayData,
-                    isStreaming: transcriptMessage.isStreaming
+                    isStreaming: row.isStreaming
                 )
             }
 

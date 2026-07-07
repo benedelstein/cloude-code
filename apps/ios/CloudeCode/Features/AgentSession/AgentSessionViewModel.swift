@@ -14,7 +14,7 @@ import UIKit
 @Observable
 final class AgentSessionViewModel {
     typealias MessageDisplayData = AgentSessionView.MessageDisplayData
-    typealias TranscriptMessage = AgentSessionView.TranscriptMessage
+    typealias TranscriptRow = AgentSessionView.TranscriptRow
     /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
     let session: SessionSummaryModel
 
@@ -30,9 +30,13 @@ final class AgentSessionViewModel {
 
     private let attachmentStore: ImageAttachmentStore
     private(set) var connectionState: WebSocketConnectionState = .disconnected
-    private(set) var messages: [SessionMessage] = []
-    /// UI transcript rows with collection-view identity separated from server message identity.
-    private(set) var transcriptMessages: [TranscriptMessage] = []
+    /// Ordered transcript rows. A row's `id` is stable for its lifetime; its
+    /// `messageID` is reassigned in place when a message gains its server id
+    /// (optimistic -> accepted, streaming -> final).
+    private(set) var transcriptRows: [TranscriptRow] = []
+    /// Message content keyed by message id. `transcriptRows` owns ordering;
+    /// every row's `messageID` resolves here.
+    private(set) var messagesByID: [String: SessionMessage] = [:]
     /// Hydrated, normalized display data per transcript row.
     private(set) var assistantDisplayDataByRowID: [String: MessageDisplayData] = [:]
     // The active streaming row keeps this id from first chunk through final
@@ -160,8 +164,7 @@ final class AgentSessionViewModel {
             in: snapshot.messages
         )
         textRenderCache.reset()
-        messages = snapshotMessages
-        rebuildTranscriptMessagesFromCanonicalMessages()
+        rebuildTranscript(from: snapshotMessages)
         replaceStreamAccumulator()
         if snapshot.pendingChunks.isEmpty {
             clearStreamingState(removeActiveTranscript: true)
@@ -195,13 +198,10 @@ final class AgentSessionViewModel {
     }
 
     func upsert(_ message: SessionMessage) {
-        upsertCanonicalMessage(message)
         upsertTranscriptMessage(
-            TranscriptMessage(
-                id: transcriptRowID(for: message),
-                message: message,
-                isStreaming: false
-            )
+            rowID: transcriptRowID(for: message),
+            message: message,
+            isStreaming: false
         )
     }
 
@@ -400,17 +400,12 @@ extension AgentSessionViewModel {
 }
 
 extension AgentSessionViewModel {
-    private func applyAgentFinish(_ message: SessionMessage) {
+    func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
-        upsertCanonicalMessage(message)
         // Mutate the streaming transcript row into the final assistant row instead
         // of inserting message:<server id>, which would replace the visible cell.
         let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
-        upsertTranscriptMessage(TranscriptMessage(
-            id: rowID,
-            message: message,
-            isStreaming: false
-        ))
+        upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
         sessionMessageStore.upsert(sessionId: session.id, message: message)
         if message.role == .assistant {
@@ -427,28 +422,25 @@ extension AgentSessionViewModel {
         errorMessage = nil
     }
 
-    /// Returns true if replaced, false if the message id was not found
-    private func replaceMessage(id: String, with message: SessionMessage) -> Bool {
-        guard let index = messages.firstIndex(where: { $0.id == id }) else {
+    /// Replaces the message currently identified by `messageID` (a message id,
+    /// not a row id), keeping the row it renders in.
+    /// Returns false if no row shows that message.
+    private func replaceMessage(messageID: String, with message: SessionMessage) -> Bool {
+        guard let row = transcriptRows.last(where: { $0.messageID == messageID }) else {
             return false
         }
-        let rowID = transcriptMessages.last { $0.message.id == id }?.id
-            ?? transcriptRowID(for: message)
-        messages[index] = message
-        upsertTranscriptMessage(
-            TranscriptMessage(
-                id: rowID,
-                message: message,
-                isStreaming: false
-            )
-        )
+        upsertTranscriptMessage(rowID: row.id, message: message, isStreaming: false)
         return true
     }
 
-    private func removeMessage(id: String) {
-        messages.removeAll { $0.id == id }
-        transcriptMessages.removeAll { $0.message.id == id }
-        rebuildTranscriptDisplayData()
+    private func removeMessage(messageID: String) {
+        for row in transcriptRows where row.messageID == messageID {
+            if assistantDisplayDataByRowID[row.id] != nil {
+                assistantDisplayDataByRowID[row.id] = nil
+            }
+        }
+        transcriptRows.removeAll { $0.messageID == messageID }
+        messagesByID[messageID] = nil
     }
 
     private func appendPendingOptimisticUserMessage(
@@ -470,38 +462,36 @@ extension AgentSessionViewModel {
     }
 
     /// Replaces an optimistically client-set message with the server-side id
-    private func acceptOptimisticUserMessage(clientMessageId: String, messageId: String) {
-        guard let index = messages.firstIndex(where: { message in
-            message.id == clientMessageId && message.isOptimisticUserMessage
-        }) else {
+    func acceptOptimisticUserMessage(clientMessageId: String, messageId: String) {
+        guard let optimisticMessage = messagesByID[clientMessageId],
+              optimisticMessage.isOptimisticUserMessage,
+              let row = transcriptRows.last(where: { $0.messageID == clientMessageId }) else {
             return
         }
         submittedAttachmentDrafts[clientMessageId] = nil
-        let optimisticMessage = messages[index]
         let acceptedMessage = SessionMessage(
             id: messageId,
             role: optimisticMessage.role,
             parts: optimisticMessage.parts,
             metadata: optimisticMessage.removingOptimisticMarker.metadata
         )
-        messages[index] = acceptedMessage
-        if let transcriptIndex = transcriptMessages.firstIndex(where: { $0.message.id == clientMessageId }) {
-            transcriptMessages[transcriptIndex].message = acceptedMessage
-        }
+        // The row keeps its id; the upsert reassigns its messageID and retires
+        // the client-id entry from messagesByID.
+        upsertTranscriptMessage(rowID: row.id, message: acceptedMessage, isStreaming: false)
         sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
     }
 
     private func upsertConfirmedUserMessage(_ message: SessionMessage) {
         // if we already have an optimistic message for this message, mutate and replace it
         // if not, just upsert
-        guard let optimisticMessage = messages.first(where: {
+        guard let optimisticMessage = orderedMessages.first(where: {
             $0.isOptimisticUserMessage && isServerConfirmation(message, of: $0)
         }) else {
             upsert(message)
             return
         }
 
-        if !replaceMessage(id: optimisticMessage.id, with: message) {
+        if !replaceMessage(messageID: optimisticMessage.id, with: message) {
             upsert(message)
         }
     }
@@ -511,7 +501,7 @@ extension AgentSessionViewModel {
     ) -> [SessionMessage] {
         var mergedMessages = serverMessages
 
-        for optimisticMessage in messages where optimisticMessage.isOptimisticUserMessage {
+        for optimisticMessage in orderedMessages where optimisticMessage.isOptimisticUserMessage {
             let hasServerMessage = serverMessages.contains {
                 $0.id == optimisticMessage.id || isServerConfirmation($0, of: optimisticMessage)
             }
@@ -524,8 +514,8 @@ extension AgentSessionViewModel {
     }
 
     private func clearOptimisticUserMessageTracking() {
-        for message in messages where message.isOptimisticUserMessage {
-            _ = replaceMessage(id: message.id, with: message.removingOptimisticMarker)
+        for message in orderedMessages where message.isOptimisticUserMessage {
+            _ = replaceMessage(messageID: message.id, with: message.removingOptimisticMarker)
         }
     }
 
@@ -533,10 +523,10 @@ extension AgentSessionViewModel {
         restoreDraft: Bool,
         submittedContent: String? = nil
     ) {
-        guard let optimisticMessage = messages.first(where: \.isOptimisticUserMessage) else {
+        guard let optimisticMessage = orderedMessages.first(where: \.isOptimisticUserMessage) else {
             return
         }
-        removeMessage(id: optimisticMessage.id)
+        removeMessage(messageID: optimisticMessage.id)
         if restoreDraft {
             draftText = submittedContent ?? optimisticMessage.text
         }
@@ -583,7 +573,7 @@ extension AgentSessionViewModel {
     }
 
     private func restoreLastSubmittedAttachments() {
-        guard let clientMessageId = messages.first(where: \.isOptimisticUserMessage)?.id,
+        guard let clientMessageId = orderedMessages.first(where: \.isOptimisticUserMessage)?.id,
               let submittedAttachments = submittedAttachmentDrafts.removeValue(
                 forKey: clientMessageId
               ) else {
@@ -593,24 +583,28 @@ extension AgentSessionViewModel {
     }
 }
 
-private extension AgentSessionViewModel {
-    func loadCachedMessages() async {
+extension AgentSessionViewModel {
+    /// Messages in transcript order. Prefer `messagesByID` for id lookups.
+    private var orderedMessages: [SessionMessage] {
+        transcriptRows.compactMap { messagesByID[$0.messageID] }
+    }
+
+    private func loadCachedMessages() async {
         do {
             let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
-            guard !Task.isCancelled, !cachedMessages.isEmpty, messages.isEmpty, !hasLoadedMessages else {
+            guard !Task.isCancelled, !cachedMessages.isEmpty, messagesByID.isEmpty, !hasLoadedMessages else {
                 return
             }
 
             textRenderCache.reset()
-            messages = cachedMessages
-            rebuildTranscriptMessagesFromCanonicalMessages()
+            rebuildTranscript(from: cachedMessages)
             hasLoadedMessages = true
         } catch {
             Logger.warning("Failed to load cached session messages:", error)
         }
     }
 
-    func replaceStreamAccumulator() {
+    private func replaceStreamAccumulator() {
         let previousAccumulator = streamAccumulator
         Task {
             await previousAccumulator?.finish()
@@ -649,7 +643,7 @@ private extension AgentSessionViewModel {
         )
     }
 
-    func applyStreamStatus(_ status: SessionMessageStreamStatus) {
+    private func applyStreamStatus(_ status: SessionMessageStreamStatus) {
         guard streamStatus != status else {
             return
         }
@@ -668,12 +662,11 @@ private extension AgentSessionViewModel {
     }
 
     func applyStreamingMessage(_ message: SessionMessage) {
-        let rowID = activeStreamingTranscriptRowID()
-        upsertTranscriptMessage(TranscriptMessage(
-            id: rowID,
+        upsertTranscriptMessage(
+            rowID: activeStreamingTranscriptRowID(),
             message: message,
             isStreaming: true
-        ))
+        )
     }
 
     func clearStreamingState(removeActiveTranscript: Bool) {
@@ -683,33 +676,43 @@ private extension AgentSessionViewModel {
             return
         }
 
-        transcriptMessages.removeAll {
-            $0.id == streamingTranscriptRowID && $0.isStreaming
+        if let row = transcriptRows.last(where: { $0.id == streamingTranscriptRowID && $0.isStreaming }) {
+            messagesByID[row.messageID] = nil
+            transcriptRows.removeAll { $0.id == row.id }
         }
         assistantDisplayDataByRowID[streamingTranscriptRowID] = nil
         self.streamingTranscriptRowID = nil
     }
 
     func rebuildTranscriptDisplayData() {
-        assistantDisplayDataByRowID = transcriptMessages.reduce(into: [:]) { result, transcriptMessage in
-            guard transcriptMessage.message.role != .user else { return }
-            result[transcriptMessage.id] = makeDisplayData(
-                id: transcriptMessage.id,
-                for: transcriptMessage.message,
-                isStreaming: transcriptMessage.isStreaming
+        assistantDisplayDataByRowID = transcriptRows.reduce(into: [:]) { result, row in
+            guard let message = messagesByID[row.messageID], message.role != .user else { return }
+            result[row.id] = makeDisplayData(
+                id: row.id,
+                for: message,
+                isStreaming: row.isStreaming
             )
         }
     }
 
-    func rebuildTranscriptMessagesFromCanonicalMessages() {
-        transcriptMessages = messages.map { message in
-            TranscriptMessage(
+    /// Rebuilds rows and content from an ordered canonical message list
+    /// (server snapshot or disk cache).
+    func rebuildTranscript(from messages: [SessionMessage]) {
+        // transcriptRowID(for:) consults the outgoing rows, so rows keep their
+        // ids across the rebuild.
+        transcriptRows = messages.map { message in
+            TranscriptRow(
                 id: transcriptRowID(for: message),
-                message: message,
+                messageID: message.id,
                 isStreaming: false
             )
         }
+        messagesByID = Dictionary(messages.map { ($0.id, $0) }) { _, latest in latest }
+        // The rebuilt rows are all non-streaming, so a retained streaming row id
+        // would dangle and make the next applyAgentFinish append a duplicate row.
+        streamingTranscriptRowID = nil
         rebuildTranscriptDisplayData()
+        assertTranscriptStateConsistency()
     }
 
     func activeStreamingTranscriptRowID() -> String {
@@ -723,44 +726,61 @@ private extension AgentSessionViewModel {
     }
 
     func transcriptRowID(for message: SessionMessage) -> String {
-        if let existingMessage = transcriptMessages.last(where: { transcriptMessage in
-            !transcriptMessage.isStreaming && transcriptMessage.message.id == message.id
+        if let existingRow = transcriptRows.last(where: { row in
+            !row.isStreaming && row.messageID == message.id
         }) {
-            return existingMessage.id
+            return existingRow.id
         }
 
         return SessionTranscriptItem.messageItemID(for: message.id)
     }
 
-    func upsertTranscriptMessage(_ transcriptMessage: TranscriptMessage) {
-        if let index = transcriptMessages.lastIndex(where: { $0.id == transcriptMessage.id }) {
-            transcriptMessages[index] = transcriptMessage
+    /// The single write path for transcript content, keyed by row id. A message
+    /// id change (optimistic -> accepted, streaming -> final server id) is an
+    /// in-place row update: the stale `messagesByID` entry is retired and the
+    /// row's `messageID` reassigned, never touching the row id.
+    func upsertTranscriptMessage(rowID: String, message: SessionMessage, isStreaming: Bool) {
+        if let index = transcriptRows.lastIndex(where: { $0.id == rowID }) {
+            let previousMessageID = transcriptRows[index].messageID
+            if previousMessageID != message.id {
+                messagesByID[previousMessageID] = nil
+            }
+            transcriptRows[index].messageID = message.id
+            transcriptRows[index].isStreaming = isStreaming
         } else {
-            transcriptMessages.append(transcriptMessage)
+            transcriptRows.append(TranscriptRow(
+                id: rowID,
+                messageID: message.id,
+                isStreaming: isStreaming
+            ))
         }
+        messagesByID[message.id] = message
 
-        if transcriptMessage.message.role == .user {
+        if message.role == .user {
             // Only clear an existing entry; unconditionally writing nil would
             // publish a no-op @Observable change on every user-message upsert.
-            if assistantDisplayDataByRowID[transcriptMessage.id] != nil {
-                assistantDisplayDataByRowID[transcriptMessage.id] = nil
+            if assistantDisplayDataByRowID[rowID] != nil {
+                assistantDisplayDataByRowID[rowID] = nil
             }
-            return
+        } else {
+            assistantDisplayDataByRowID[rowID] = makeDisplayData(
+                id: rowID,
+                for: message,
+                isStreaming: isStreaming
+            )
         }
-
-        assistantDisplayDataByRowID[transcriptMessage.id] = makeDisplayData(
-            id: transcriptMessage.id,
-            for: transcriptMessage.message,
-            isStreaming: transcriptMessage.isStreaming
-        )
+        assertTranscriptStateConsistency()
     }
 
-    func upsertCanonicalMessage(_ message: SessionMessage) {
-        if let index = messages.lastIndex(where: { $0.id == message.id }) {
-            messages[index] = message
-        } else {
-            messages.append(message)
+    private func assertTranscriptStateConsistency() {
+        #if DEBUG
+        for row in transcriptRows {
+            assert(
+                messagesByID[row.messageID] != nil,
+                "Transcript row \(row.id) references missing message \(row.messageID)"
+            )
         }
+        #endif
     }
 
     private func makeDisplayData(
