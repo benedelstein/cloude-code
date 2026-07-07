@@ -514,8 +514,10 @@ extension AgentSessionViewModel {
     }
 
     private func clearOptimisticUserMessageTracking() {
-        for message in orderedMessages where message.isOptimisticUserMessage {
-            _ = replaceMessage(messageID: message.id, with: message.removingOptimisticMarker)
+        // Content-only update: the message id and row are unchanged, so mutate
+        // the map directly instead of going through the row upsert.
+        for (id, message) in messagesByID where message.isOptimisticUserMessage {
+            messagesByID[id] = message.removingOptimisticMarker
         }
     }
 
