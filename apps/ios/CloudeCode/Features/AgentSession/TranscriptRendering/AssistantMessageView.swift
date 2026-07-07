@@ -3,21 +3,14 @@ import Domain
 import UIKit
 
 struct AssistantMessageView: View {
+    @Environment(\.style) var style: Style
+    @Environment(SessionTranscriptRowViewModel.self) private var rowViewModel
+
     private let partSpacing: CGFloat = 12
-    private let renderItemInsertionAnimation = Animation.easeIn(duration: 0.16)
-    private let renderItemInsertionTransition = AnyTransition
-        .opacity
-        .combined(with: .move(edge: .top))
-        .animation(.easeIn(duration: 0.16))
 
     let displayData: AgentSessionView.MessageDisplayData
     let isStreaming: Bool
-    let autoCollapseOnAppear: Bool
     @Binding var destination: Modal<AgentSessionView.Destination>?
-    var onAutoCollapseConsumed: () -> Void = {}
-
-    @State private var workExpanded = false
-    @State private var hasConsumedAutoCollapse = false
 
     @ViewBuilder
     var body: some View {
@@ -28,18 +21,19 @@ struct AssistantMessageView: View {
 
             if isStreaming || showsCollapsibleWorkTrace {
                 TurnWorkHeaderView(
-                    expanded: workExpanded || isStreaming,
+                    expanded: rowViewModel.workExpanded || isStreaming,
                     startedAt: displayData.message.workStartedAt,
                     endedAt: displayData.message.workEndedAt,
                     isStreaming: isStreaming,
                     collapsible: showsCollapsibleWorkTrace
                 ) {
                     guard !isStreaming else { return }
-                    setWorkExpanded(!workExpanded)
+                    setWorkExpanded(!rowViewModel.workExpanded)
                 }
+                .transition(style.fadeTransition)
             }
 
-            if showsCollapsibleWorkTrace, let finalResponseStartIndex, workExpanded {
+            if showsCollapsibleWorkTrace, let finalResponseStartIndex, rowViewModel.workExpanded {
                 renderRows(
                     Array(items.prefix(finalResponseStartIndex)),
                     fullItems: items,
@@ -60,11 +54,6 @@ struct AssistantMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(renderItemInsertionAnimation, value: displayData.renderItems.map(\.key))
-        .onAppear(perform: configureInitialCollapse)
-        .onChange(of: autoCollapseOnAppear) { _, _ in
-            configureInitialCollapse()
-        }
     }
 
     @ViewBuilder
@@ -88,7 +77,7 @@ struct AssistantMessageView: View {
             ) {
                 destination = .sheet(.renderItem(item))
             }
-            .transition(renderItemInsertionTransition)
+            .transition(style.fadeTransition)
         }
     }
 
@@ -107,24 +96,6 @@ struct AssistantMessageView: View {
         return text.isEmpty ? nil : text
     }
 
-    private func configureInitialCollapse() {
-        guard displayData.finalResponseStartIndex != nil else {
-            onAutoCollapseConsumed()
-            return
-        }
-        guard autoCollapseOnAppear, !hasConsumedAutoCollapse else {
-            return
-        }
-
-        workExpanded = true
-        hasConsumedAutoCollapse = true
-        onAutoCollapseConsumed()
-
-        DispatchQueue.main.async {
-            setWorkExpanded(false)
-        }
-    }
-
     private func setWorkExpanded(_ expanded: Bool) {
         // NOTE - Not using animations here because it looks wonky
         // and doesnt sync with uikit resizing.
@@ -135,7 +106,7 @@ struct AssistantMessageView: View {
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            workExpanded = expanded
+            rowViewModel.workExpanded = expanded
         }
 
         DispatchQueue.main.async {

@@ -115,31 +115,24 @@ private extension AgentSessionView {
             composerHeight + 16
         }
     }
-
-    struct WorkingIndicatorView: View {
-        @Environment(\.style) private var style
-
-        var body: some View {
-            HStack {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, style.gridSize / 2)
-            .accessibilityLabel("Agent is responding")
-        }
-    }
 }
 
 extension AgentSessionView {
     struct MessageDisplayData: Identifiable, Equatable {
+        let id: String
         let message: SessionMessage
         let renderItems: [AgentSessionRenderItem]
         let finalResponseStartIndex: Int?
+    }
 
-        var id: String {
-            message.id
-        }
+    // Keep collection row identity separate from SessionMessage.id. A streaming
+    // assistant row starts before the server id exists, then receives the final
+    // message id; preserving this row id avoids delete/insert churn and cell jumps.
+    // The message content lives in the view model's `messagesByID`.
+    struct TranscriptRow: Identifiable, Equatable {
+        let id: String
+        var messageID: String
+        var isStreaming: Bool
     }
 }
 
@@ -147,16 +140,13 @@ private extension AgentSessionView {
     struct SessionScrollView: View {
         @Environment(\.style) private var style
 
-        @State private var latestStreamingMessageId: String?
-        @State private var autoCollapseMessageId: String?
-
         let store: AgentSessionViewModel
         @Binding var destination: Modal<AgentSessionView.Destination>?
         let keyboardDismissPadding: CGFloat
         let scrollCoordinator: SessionTranscriptScrollCoordinator
 
-        var messages: [SessionMessage] {
-            store.messages
+        var rows: [AgentSessionView.TranscriptRow] {
+            store.transcriptRows
         }
 
         var body: some View {
@@ -176,37 +166,46 @@ private extension AgentSessionView {
             }
         }
 
+        private var hasMessageTranscriptItems: Bool {
+            !rows.isEmpty
+        }
+
         private var hasTranscriptItems: Bool {
-            !messages.isEmpty || store.streamingDisplayData != nil
+            hasMessageTranscriptItems || isWorkingIndicatorActive
+        }
+
+        private var isWorkingIndicatorActive: Bool {
+            store.isResponding || store.clientState.sessionSetupRun?.status == "running"
         }
 
         private var transcriptItems: [SessionTranscriptItem] {
-            var items = messages.compactMap { message -> SessionTranscriptItem? in
+            // TranscriptRow.id is the stable row id assigned when the row is
+            // created (streaming assistant rows and optimistic user rows keep it
+            // when the server id arrives), so rows never churn identity.
+            var items = rows.compactMap { row -> SessionTranscriptItem? in
+                guard let message = store.messagesByID[row.messageID] else {
+                    assertionFailure("Transcript row \(row.id) has no message \(row.messageID)")
+                    return nil
+                }
                 if message.isUser {
-                    return .userMessage(message)
+                    return .userMessage(id: row.id, message)
                 }
 
-                guard let displayData = store.assistantDisplayDataByMessageId[message.id] else {
+                guard let displayData = store.assistantDisplayDataByRowID[row.id] else {
                     return nil
                 }
 
                 return .assistantMessage(
+                    id: row.id,
                     displayData,
-                    isStreaming: false,
-                    autoCollapse: autoCollapseMessageId == message.id
+                    isStreaming: row.isStreaming
                 )
             }
 
-            if let streamingDisplayData = store.streamingDisplayData {
-                items.append(.assistantMessage(
-                    streamingDisplayData,
-                    isStreaming: true,
-                    autoCollapse: false
-                ))
-            }
-
-            if store.isResponding {
-                items.append(.workingIndicator)
+            if hasTranscriptItems {
+                // Keep this row mounted even when inactive so the cloud can settle
+                // into its resting state instead of disappearing between turns.
+                items.append(.workingIndicator(isActive: isWorkingIndicatorActive))
             }
 
             return items
@@ -223,9 +222,6 @@ private extension AgentSessionView {
             ) { item in
                 transcriptRow(item)
                     .padding(.horizontal, style.horizontalPadding)
-            }
-            .onChange(of: store.streamingDisplayData?.id) { oldValue, newValue in
-                handleStreamingMessageIdChange(oldValue: oldValue, newValue: newValue)
             }
 
             if #available(iOS 26.0, *) {
@@ -260,42 +256,28 @@ private extension AgentSessionView {
         private func transcriptRow(_ item: SessionTranscriptItem) -> some View {
             Group {
                 switch item {
-                case .userMessage(let message):
+                case .userMessage(_, let message):
                     UserMessageView(message: message)
                         .environment(\.openAgentSessionImage, openImageAction)
-                case .assistantMessage(let displayData, let isStreaming, let autoCollapse):
+                case .assistantMessage(_, let displayData, let isStreaming):
                     AssistantMessageView(
                         displayData: displayData,
                         isStreaming: isStreaming,
-                        autoCollapseOnAppear: autoCollapse,
                         destination: $destination
-                    ) {
-                        if autoCollapse {
-                            autoCollapseMessageId = nil
-                        }
-                    }
-                case .workingIndicator:
-                    WorkingIndicatorView()
+                    )
+                case .workingIndicator(let isActive):
+                    WorkingIndicatorView(isActive: isActive)
                 }
             }
+            // Rows are hosted inside reused UIKit cells; the stable row id gives
+            // SwiftUI explicit identity so state doesn't leak across cell reuse.
+            .id(item.id)
         }
 
         private var openImageAction: OpenAgentSessionImageAction {
             OpenAgentSessionImageAction { image in
                 destination = .fullscreen(.image(image))
             }
-        }
-
-        private func handleStreamingMessageIdChange(oldValue: String?, newValue: String?) {
-            if let newValue {
-                latestStreamingMessageId = newValue
-                return
-            }
-
-            if let finishedMessageId = oldValue ?? latestStreamingMessageId {
-                autoCollapseMessageId = finishedMessageId
-            }
-            latestStreamingMessageId = nil
         }
     }
 }

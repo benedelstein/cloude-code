@@ -48,6 +48,7 @@ struct UserMessageView: View {
                 }
             }
         }
+        .transition(style.fadeTransition)
     }
 
     @ViewBuilder

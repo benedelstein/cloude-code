@@ -1,4 +1,5 @@
 import UIKit
+import Domain
 
 extension SessionTranscriptCollectionRepresentable.Coordinator {
     func handleScrollRequestIfNeeded(
@@ -12,10 +13,12 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         switch scrollRequest.destination {
         case .top:
+            isFollowingBottom = false
             scrollToTop(collectionView, animated: scrollRequest.animated)
         case .bottom:
             handleScrollToBottomRequest(scrollRequest, in: collectionView)
         case .message(let id):
+            isFollowingBottom = false
             scrollToItem(
                 id: SessionTranscriptItem.messageItemID(for: id),
                 alignment: scrollRequest.alignment,
@@ -23,6 +26,7 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
                 in: collectionView
             )
         case .item(let id):
+            isFollowingBottom = false
             scrollToItem(
                 id: id,
                 alignment: scrollRequest.alignment,
@@ -40,11 +44,13 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
 
         guard abs(collectionView.contentOffset.y - targetOffset.y)
             > SessionTranscriptScrollMetrics.bottomDistanceEpsilon else {
+            isFollowingBottom = true
             scrollCoordinator.finishScrollToBottom()
             updateScrollToBottomVisibility(collectionView)
             return
         }
 
+        isFollowingBottom = true
         scrollToBottom(collectionView, animated: scrollRequest.animated)
         if !scrollRequest.animated {
             scrollCoordinator.finishScrollToBottom()
@@ -114,11 +120,12 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
             collectionView.layoutIfNeeded()
         }
 
+        Logger.debug("scrolling to bottom - animated: \(animated), keyboard: \(keyboardTransition != nil)")
         if collectionView.isInteractivelyDismissingKeyboard {
             UIView.performWithoutAnimation(applyOffset)
             collectionView.layer.removeAllAnimations()
         } else if let keyboardTransition {
-            animateWithKeyboardTransition(keyboardTransition, applyOffset)
+            SessionTranscriptKeyboardAnimation.animate(with: keyboardTransition, applyOffset)
         } else if animated {
             applyOffset()
         } else {
@@ -184,12 +191,22 @@ extension SessionTranscriptCollectionRepresentable.Coordinator {
     func updateScrollToBottomVisibility(_ scrollView: UIScrollView) {
         guard case .complete = initialAnchorState else { return }
 
-        scrollCoordinator.updateDistanceFromBottom(distanceFromBottom(scrollView))
+        let distance = distanceFromBottom(scrollView)
+        scrollCoordinator.updateDistanceFromBottom(distance)
     }
-}
 
-private extension UIScrollView {
-    var isInteractivelyDismissingKeyboard: Bool {
-        keyboardDismissMode == .interactive && (isTracking || isDragging || isDecelerating)
+    func updateFollowingBottomFromUserScroll(_ scrollView: UIScrollView) {
+        isFollowingBottom = distanceFromBottom(scrollView) <= SessionTranscriptScrollMetrics.bottomProximityThreshold
+    }
+
+    func continueFollowingBottomAfterProgrammaticScroll(_ scrollView: UIScrollView) -> Bool {
+        guard isFollowingBottom, let collectionView = scrollView as? UICollectionView else { return false }
+        guard !isAtBottom(collectionView) else { return false }
+
+        // Streaming can grow content while an animated bottom-preservation scroll
+        // is in flight. Keep following the newest bottom instead of treating the
+        // stale animation endpoint as user scroll state.
+        scrollToBottom(collectionView, animated: true)
+        return true
     }
 }

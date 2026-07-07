@@ -29,7 +29,6 @@ public final class SessionMessageStore {
     public func messages(sessionId: String) async throws -> [Domain.SessionMessage] {
         if let models = modelsFromMemory(sessionId: sessionId) {
             let messages = models.map(\.message)
-            logCachedMessagesSize(sessionId: sessionId, messages: messages)
             return messages
         }
 
@@ -45,7 +44,6 @@ public final class SessionMessageStore {
             loadedSessionIDs.insert(sessionId)
 
             let messages = models.map(\.message)
-            logCachedMessagesSize(sessionId: sessionId, messages: messages)
             return messages
         } catch {
             try? await deleteUnreadableSessionCache(sessionId: sessionId)
@@ -204,15 +202,6 @@ public final class SessionMessageStore {
         }
         loadedSessionIDs.remove(sessionId)
         messageIDsBySessionID[sessionId] = nil
-    }
-
-    private func logCachedMessagesSize(sessionId: String, messages: [Domain.SessionMessage]) {
-        Logger.debug(
-            "Session message cache read size",
-            "sessionId=\(sessionId)",
-            "count=\(messages.count)",
-            "totalBytes=\(messages.reduce(0) { $0 + encodedSize($1) })"
-        )
     }
 
     private func encodedSize(_ message: Domain.SessionMessage) -> Int {

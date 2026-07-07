@@ -50,11 +50,12 @@ struct SessionTranscriptPositionScrollView<Row: View>: View {
                     .allowsHitTesting(false)
             }
         }
-//        .opacity(show ? 1 : 0)
+        .opacity(show ? 1 : 0)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .defaultScrollAnchor(.top, for: .alignment)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollPosition($scrollPosition, anchor: .bottom)
+//        .animation(.default, value: items)
         .scrollDismissesKeyboard(.interactively)
         .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
             scrollController.update(with: scrollView)

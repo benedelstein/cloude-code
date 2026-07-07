@@ -48,7 +48,7 @@ public struct ConsoleLogDestination: LogDestination {
     public func log(_ entry: LogEntry) {
         let fileName = URL(fileURLWithPath: entry.file).deletingPathExtension().lastPathComponent
         Swift.print(
-            "[\(entry.level.rawValue)] \(fileName).\(entry.function):\(entry.line) - \(entry.message)",
+            "[\(entry.level.rawValue)] \(fileName):\(entry.line) - \(entry.message)",
             terminator: entry.terminator
         )
     }

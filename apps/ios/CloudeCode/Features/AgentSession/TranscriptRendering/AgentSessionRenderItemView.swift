@@ -52,31 +52,30 @@ private struct ChunkedTextView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style: Style
 
-    private let chunkTextFadeAnimation = Animation.easeIn(duration: 0.16)
-
     let chunks: [ChunkedTextChunk]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(chunks) { chunk in
+                // future optimization use an animation to fade in each char
+                // one by one instead of trusting chunk.text accumulation batches
                 Text(verbatim: chunk.text)
+                    // NOTE - the animation is causing render glitches so leaivng it out for now.
+                    // .animation(chunkTextFadeAnimation, value: chunk.text)
                     .font(style.responseTextFont)
                     .foregroundStyle(theme.labelColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentTransition(.opacity)
-                    .animation(chunkTextFadeAnimation, value: chunk.text)
-                    .transition(.opacity.animation(chunkTextFadeAnimation))
+                    .transition(style.fadeTransition)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(style.fadeTransition)
     }
 }
 
 private struct ToolActionInlineRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
-
-    private let actionPillAnimation = Animation.easeIn(duration: 0.16)
 
     let item: AgentSessionRenderItem.ActionItem
     let isActive: Bool
@@ -96,7 +95,6 @@ private struct ToolActionInlineRow: View {
                         .styledFont(.footnote)
                         .foregroundStyle(theme.secondaryLabelColor)
                         .lineLimit(1)
-                        .contentTransition(.opacity)
                 }
 
                 Image(systemName: "chevron.right")
@@ -107,7 +105,7 @@ private struct ToolActionInlineRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().foregroundStyle(theme.tertiaryBackgroundColor))
-        .animation(actionPillAnimation, value: title)
-        .transition(.opacity.animation(actionPillAnimation))
+        .animation(style.fadeAnimation, value: title)
+        .transition(style.fadeTransition)
     }
 }
