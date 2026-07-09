@@ -25,11 +25,11 @@ apps/ios/Modules/CoreAPI/
 
 Selection works like protobuf: pointing the generator at a source module includes **every exported Zod schema** in it. There is no per-type registration.
 
-**The package is the contract**: `@repo/api-contract` contains nothing but client-facing schemas, the way a protobuf definitions package contains nothing but `.proto` files. Every `src/` file must be registered in `SOURCES` (codegen fails listing any file you forgot, so the rule is enforced, not remembered). Server-internal types (vm-agent protocol, bot integration schemas, environment snapshots, the provider registry) live in `@repo/shared` instead — there is no exclusion list.
+**The package is the contract**: `@repo/api-contract` contains nothing but client-facing schemas, the way a protobuf definitions package contains nothing but `.proto` files. Every non-barrel `src/**/*.ts` file must be registered in `SOURCES` (codegen fails listing any file you forgot, so the rule is enforced, not remembered). `index.ts` barrel files are skipped by `listContractSourceFiles(...)` in `packages/api-contract/codegen/manifest.ts`. Server-internal types (vm-agent protocol, bot integration schemas, environment snapshots, the provider registry) live in `@repo/shared` instead — there is no exclusion list.
 
 1. **Edit or add the schema** in `packages/api-contract/src/` as usual (Zod object/enum/discriminatedUnion with the dual `const Schema` + `type T = z.infer` export pattern). A new export in an existing file transpiles automatically under its export name — no registration.
 2. **Only for exceptions**, touch `manifest.ts`:
-   - New source *file* → one line in `SOURCES` (module + output group; one generated Swift file per group) plus an `export *` line in `src/index.ts`; codegen reminds you with a hard error.
+   - New source *file* → one line in `SOURCES` (module + output group; one generated Swift file per group) plus the needed barrel export from `src/index.ts` or a nested `index.ts`; codegen reminds you with a hard error for non-`index.ts` files.
    - Type that must **not** ship to iOS → it doesn't belong in this package; define it in `@repo/shared`.
    - Swift name overrides, reserved-word `renames` (`private` → `isPrivate`), doc strings → `OVERRIDES`.
    - Enums/unions are **decode-tolerant by default** (unrecognized server values decode to `.unknown` instead of throwing). Mark `frozen: true` in `OVERRIDES` only for client→server-only unions where an unknown case is dead code (`ClientMessage`).
