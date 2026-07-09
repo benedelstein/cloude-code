@@ -102,18 +102,10 @@ private struct TranscriptCodeBlockView: View {
         CodePreviewChrome(
             text: part.text,
             copyAccessibilityLabel: "Copy code",
-            background: .secondary
+            background: .secondary,
+            title: part.language
         ) {
             codeContent
-        }
-        .overlay(alignment: .topLeading) {
-            if let language = part.language, !language.isEmpty {
-                Text(language)
-                    .font(style.caption2Font)
-                    .foregroundStyle(theme.tertiaryLabelColor)
-                    .padding(.horizontal, style.gridSize)
-                    .padding(.vertical, style.gridSize / 2)
-            }
         }
         .accessibilityValue(part.isComplete ? "Complete" : "Streaming")
     }
@@ -125,7 +117,7 @@ private struct TranscriptCodeBlockView: View {
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(theme.labelColor)
                 .textSelection(.enabled)
-                .padding(.top, part.language == nil ? style.gridSize : style.gridSize * 3)
+                .padding(.top, style.gridSize)
                 .padding(.bottom, style.gridSize)
                 .padding(.leading, style.gridSize)
                 .padding(.trailing, style.gridSize * 5)

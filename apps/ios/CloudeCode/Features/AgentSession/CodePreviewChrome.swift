@@ -25,28 +25,40 @@ struct CodePreviewChrome<Content: View>: View {
     private let text: String
     private let copyAccessibilityLabel: String
     private let background: Background
+    private let title: String?
     private let content: Content
 
-    /// Creates chrome with a copy affordance around caller-supplied code content.
+    /// Creates chrome with an optional title row above the content and a copy affordance.
     init(
         text: String,
         copyAccessibilityLabel: String,
         background: Background,
+        title: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.text = text
         self.copyAccessibilityLabel = copyAccessibilityLabel
         self.background = background
+        self.title = title
         self.content = content()
     }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            content
+            VStack(alignment: .leading, spacing: 0) {
+                if let title, !title.isEmpty {
+                    Text(title)
+                        .font(style.caption2Font.bold())
+                        .foregroundStyle(theme.labelColor)
+                        .padding(.horizontal, style.gridSize)
+                        .padding(.vertical, style.gridSize)
+                }
+                content
+            }
 
             Button(action: copyText) {
                 Image(systemName: "square.on.square")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.secondaryLabelColor)
                     .padding(6)
                     .contentShape(Rectangle())
@@ -54,14 +66,15 @@ struct CodePreviewChrome<Content: View>: View {
                         RoundedRectangle(cornerRadius: 6).fill(theme.secondaryBackgroundColor)
                     )
             }
+            .buttonStyle(.highlight)
             .accessibilityLabel(copyAccessibilityLabel)
             .padding(style.gridSize / 2)
         }
         .background(
-            RoundedRectangle(cornerRadius: style.gridSize)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(background.color(in: theme))
         )
-        .clipShape(RoundedRectangle(cornerRadius: style.gridSize))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func copyText() {
