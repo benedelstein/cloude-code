@@ -29,12 +29,17 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack(path: $router.path) {
-            content
+            contentWithFAB
                 .background(theme.backgroundColor)
                 .navigationTitle("Sessions")
                 .toolbar { settingsToolbar }
-                .navigationDestination(for: SessionSummaryModel.self) { session in
-                    sessionBuilder.build(session: session)
+                .navigationDestination(for: HomeDestination.self) { destination in
+                    switch destination {
+                    case .session(let session):
+                        sessionBuilder.build(session: session)
+                    case .newSession:
+                        sessionBuilder.buildNewSession()
+                    }
                 }
                 .onChange(of: viewModel.errorMessage) { _, errorMessage in
                     guard let errorMessage else {
@@ -88,6 +93,26 @@ struct HomeView: View {
     }
 
     @ViewBuilder
+    private var contentWithFAB: some View {
+        content
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    router.pushNewSession()
+                } label: {
+                    Image(systemName: "plus.bubble.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(theme.labelColor)
+                        .frame(width: 56, height: 56)
+                        .contentShape(Circle())
+                        .glassBackground(in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New session")
+                .padding(style.horizontalPadding)
+            }
+    }
+
+    @ViewBuilder
     private var content: some View {
         if viewModel.isLoading {
             ProgressView()
@@ -124,7 +149,7 @@ struct HomeView: View {
     }
 
     private func sessionLink(for session: SessionSummaryModel) -> some View {
-        NavigationLink(value: session) {
+        NavigationLink(value: HomeDestination.session(session)) {
             SessionRow(session: session)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {

@@ -51,7 +51,7 @@ final class ImageAttachmentStore {
         static let maxAttachmentBytes = 10 * 1024 * 1024
     }
 
-    private let sessionId: String?
+    private var sessionId: String?
     private let attachmentsAPI: any AttachmentsAPIProviding
     @ObservationIgnored private let loadImageAttachmentFile: LoadImageAttachmentFileAction
     // Removed uploads may still finish; keep their ids so the returned server
@@ -82,6 +82,11 @@ final class ImageAttachmentStore {
         self.sessionId = sessionId
         self.attachmentsAPI = attachmentsAPI
         self.loadImageAttachmentFile = loadImageAttachmentFile
+    }
+
+    /// Binds future uploads to a newly created session after draft-mode creation succeeds.
+    func adoptSessionId(_ sessionId: String) {
+        self.sessionId = sessionId
     }
 
     deinit {

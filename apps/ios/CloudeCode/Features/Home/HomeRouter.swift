@@ -4,10 +4,15 @@ import Foundation
 import Observation
 import UserNotifications
 
+enum HomeDestination: Hashable {
+    case session(SessionSummaryModel)
+    case newSession(id: UUID)
+}
+
 @MainActor
 @Observable
 final class HomeRouter: NotificationHandlerDelegate {
-    var path: [SessionSummaryModel] = []
+    var path: [HomeDestination] = []
 
     @ObservationIgnored private let notificationHandler: NotificationHandler
     @ObservationIgnored private let sessionSummaryStore: SessionSummaryStore
@@ -44,7 +49,7 @@ final class HomeRouter: NotificationHandlerDelegate {
     ) -> UNNotificationPresentationOptions {
         switch route {
         case .session(let sessionId, _):
-            path.last?.id == sessionId
+            path.last?.sessionId == sessionId
                 ? []
                 : NotificationHandler.defaultPresentationOptions
         }
@@ -57,7 +62,7 @@ final class HomeRouter: NotificationHandlerDelegate {
 
         switch route {
         case .session(let sessionId, _):
-            guard path.last?.id != sessionId else {
+            guard path.last?.sessionId != sessionId else {
                 notificationHandler.consumeTap(route)
                 return
             }
@@ -79,9 +84,14 @@ final class HomeRouter: NotificationHandlerDelegate {
                 }
             }
 
-            path = [target]
+            path = [.session(target)]
             notificationHandler.consumeTap(route)
         }
+    }
+
+    /// Pushes an independent draft session destination.
+    func pushNewSession() {
+        path.append(.newSession(id: UUID()))
     }
 
     /// Routes the currently pending notification tap, if one exists.
@@ -100,5 +110,15 @@ final class HomeRouter: NotificationHandlerDelegate {
             Logger.warning("Notification target session lookup failed:", sessionId, error)
             return nil
         }
+    }
+}
+
+private extension HomeDestination {
+    @MainActor
+    var sessionId: String? {
+        guard case .session(let session) = self else {
+            return nil
+        }
+        return session.id
     }
 }

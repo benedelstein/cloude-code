@@ -28,6 +28,14 @@ private final class HomeDependencyProvider: HomeDependency {
         applicationComponent.sessionsAPI
     }
 
+    var reposAPI: any ReposAPIProviding {
+        applicationComponent.reposAPI
+    }
+
+    var modelsAPI: any ModelsAPIProviding {
+        applicationComponent.modelsAPI
+    }
+
     @MainActor
     var notificationHandler: NotificationHandler {
         applicationComponent.notificationHandler
@@ -36,6 +44,11 @@ private final class HomeDependencyProvider: HomeDependency {
     @MainActor
     var sessionSummaryStore: SessionSummaryStore {
         applicationComponent.sessionSummaryStore
+    }
+
+    @MainActor
+    var newSessionPreferences: NewSessionPreferences {
+        applicationComponent.newSessionPreferences
     }
 
     var cache: Cache {
@@ -64,6 +77,18 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
     }
 
+    var sessionsAPI: any SessionsAPIProviding {
+        applicationComponent.sessionsAPI
+    }
+
+    var reposAPI: any ReposAPIProviding {
+        applicationComponent.reposAPI
+    }
+
+    var modelsAPI: any ModelsAPIProviding {
+        applicationComponent.modelsAPI
+    }
+
     var fetchImageAction: any FetchImageAction {
         applicationComponent.fetchImageAction
     }
@@ -75,6 +100,16 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
     @MainActor
     var sessionMessageStore: SessionMessageStore {
         homeComponent.sessionMessageStore
+    }
+
+    @MainActor
+    var sessionSummaryStore: SessionSummaryStore {
+        applicationComponent.sessionSummaryStore
+    }
+
+    @MainActor
+    var newSessionPreferences: NewSessionPreferences {
+        applicationComponent.newSessionPreferences
     }
 }
 

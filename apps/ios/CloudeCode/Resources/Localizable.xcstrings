@@ -19,6 +19,9 @@
     "Back" : {
 
     },
+    "Branch" : {
+
+    },
     "Camera" : {
 
     },
@@ -68,6 +71,12 @@
 
     },
     "Diff available" : {
+
+    },
+    "Disconnected" : {
+
+    },
+    "Done" : {
 
     },
     "Edit %@" : {
@@ -195,10 +204,22 @@
         }
       }
     },
+    "Model" : {
+
+    },
+    "Model catalog is unavailable." : {
+
+    },
+    "New session" : {
+
+    },
     "No logs yet" : {
 
     },
     "No messages yet" : {
+
+    },
+    "No models" : {
 
     },
     "No sessions" : {
@@ -311,7 +332,19 @@
     "Recent app logs are kept in memory for debugging." : {
 
     },
+    "Reconnect required" : {
+
+    },
     "Remove image" : {
+
+    },
+    "Repos" : {
+
+    },
+    "Repository" : {
+
+    },
+    "Repository unavailable" : {
 
     },
     "Responding" : {
@@ -440,6 +473,9 @@
           }
         }
       }
+    },
+    "Select model" : {
+
     },
     "Select photos" : {
 

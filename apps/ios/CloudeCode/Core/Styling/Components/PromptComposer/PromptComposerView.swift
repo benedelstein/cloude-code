@@ -20,7 +20,7 @@ struct PromptComposerImageAttachmentPreview: Identifiable, Equatable {
     }
 }
 
-struct PromptComposerView: View {
+struct PromptComposerView<TrailingAccessory: View>: View {
     @Environment(\.composerStyle) var composerStyle: ComposerStyle
     @Environment(\.theme) private var theme: Theme
     @Environment(\.style) private var style: Style
@@ -36,6 +36,7 @@ struct PromptComposerView: View {
     private let isImageInputEnabled: Bool
     private let isSubmitDisabled: Bool
     private let isSubmitting: Bool
+    private let trailingAccessory: TrailingAccessory
     private let onSubmit: () -> Void
     private let onRemoveImageAttachment: (UUID) -> Void
     private let onRetryImageAttachment: (UUID) -> Void
@@ -59,6 +60,7 @@ struct PromptComposerView: View {
         isImageInputEnabled: Bool = true,
         isSubmitDisabled: Bool,
         isSubmitting: Bool = false,
+        @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         onSubmit: @escaping () -> Void,
         onRemoveImageAttachment: @escaping (UUID) -> Void = { _ in },
         onRetryImageAttachment: @escaping (UUID) -> Void = { _ in },
@@ -74,6 +76,7 @@ struct PromptComposerView: View {
         self.isImageInputEnabled = isImageInputEnabled
         self.isSubmitDisabled = isSubmitDisabled
         self.isSubmitting = isSubmitting
+        self.trailingAccessory = trailingAccessory()
         self.onSubmit = onSubmit
         self.onRemoveImageAttachment = onRemoveImageAttachment
         self.onRetryImageAttachment = onRetryImageAttachment
@@ -197,6 +200,8 @@ struct PromptComposerView: View {
                 size: composerStyle.bottomButtonSize,
                 onSubmit: onSubmit
             )
+
+            trailingAccessory
         }
     }
 
@@ -241,6 +246,43 @@ struct PromptComposerView: View {
         sheetSelectedPhotoItems = []
         setInlinePhotoPickerVisible(false)
         onPhotosSelected(items)
+    }
+}
+
+extension PromptComposerView where TrailingAccessory == EmptyView {
+    init(
+        text: Binding<String>,
+        focused: Binding<Bool>,
+        placeholder: String,
+        imageAttachments: [PromptComposerImageAttachmentPreview] = [],
+        imageSelectionErrorMessage: String? = nil,
+        remainingImageSlots: Int = 0,
+        isImageInputEnabled: Bool = true,
+        isSubmitDisabled: Bool,
+        isSubmitting: Bool = false,
+        onSubmit: @escaping () -> Void,
+        onRemoveImageAttachment: @escaping (UUID) -> Void = { _ in },
+        onRetryImageAttachment: @escaping (UUID) -> Void = { _ in },
+        onPhotosSelected: @escaping ([PhotosPickerItem]) -> Void = { _ in },
+        onCameraImageCaptured: @escaping (UIImage) -> Void = { _ in }
+    ) {
+        self.init(
+            text: text,
+            focused: focused,
+            placeholder: placeholder,
+            imageAttachments: imageAttachments,
+            imageSelectionErrorMessage: imageSelectionErrorMessage,
+            remainingImageSlots: remainingImageSlots,
+            isImageInputEnabled: isImageInputEnabled,
+            isSubmitDisabled: isSubmitDisabled,
+            isSubmitting: isSubmitting,
+            trailingAccessory: EmptyView.init,
+            onSubmit: onSubmit,
+            onRemoveImageAttachment: onRemoveImageAttachment,
+            onRetryImageAttachment: onRetryImageAttachment,
+            onPhotosSelected: onPhotosSelected,
+            onCameraImageCaptured: onCameraImageCaptured
+        )
     }
 }
 

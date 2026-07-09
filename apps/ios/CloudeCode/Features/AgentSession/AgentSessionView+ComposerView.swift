@@ -14,6 +14,24 @@ extension AgentSessionView {
         @State private var composerFocused = false
 
         var body: some View {
+            VStack(spacing: 8) {
+                if vm.isDraftMode, let draft = vm.draft {
+                    RepoBranchPickerBar(draft: draft)
+                }
+
+                if vm.isDraftMode, let draft = vm.draft {
+                    promptComposer {
+                        ModelPickerButton(draft: draft)
+                    }
+                } else {
+                    promptComposer()
+                }
+            }
+        }
+
+        private func promptComposer<TrailingAccessory: View>(
+            @ViewBuilder trailingAccessory: () -> TrailingAccessory = { EmptyView() }
+        ) -> some View {
             PromptComposerView(
                 text: $vm.draftText,
                 focused: $composerFocused,
@@ -24,6 +42,7 @@ extension AgentSessionView {
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
                 isSubmitting: vm.isResponding,
+                trailingAccessory: trailingAccessory,
                 onSubmit: vm.submitDraft,
                 onRemoveImageAttachment: vm.removeImageAttachment,
                 onRetryImageAttachment: vm.retryImageAttachment,

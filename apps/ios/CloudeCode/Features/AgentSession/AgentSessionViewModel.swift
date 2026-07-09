@@ -1,5 +1,6 @@
 import API
 import Combine
+import CoreAPI
 import Domain
 import Entities
 import Foundation
@@ -16,11 +17,14 @@ final class AgentSessionViewModel {
     typealias MessageDisplayData = AgentSessionView.MessageDisplayData
     typealias TranscriptRow = AgentSessionView.TranscriptRow
     /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
-    let session: SessionSummaryModel
+    private(set) var session: SessionSummaryModel?
 
-    private let socket: SessionSocket
+    private var socket: SessionSocket?
+    private let makeSocket: (String) -> SessionSocket
     private let sessionMessageStore: SessionMessageStore
+    private let sessionSummaryStore: SessionSummaryStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
+    let draft: NewSessionDraft?
     private var subscriptionTask: Task<Void, Never>?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
@@ -64,11 +68,18 @@ final class AgentSessionViewModel {
     var canSubmitDraft: Bool {
         let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachmentStore.attachments.isEmpty
+        let canSendInCurrentMode = isDraftMode
+            ? draft?.selectedRepo != nil
+            : connectionState == .connected
         return hasContent
             && !attachmentStore.hasPendingOrFailedUploads
-            && connectionState == .connected
+            && canSendInCurrentMode
             && !isSending
             && !isResponding
+    }
+
+    var isDraftMode: Bool {
+        session == nil
     }
 
     var isResponding: Bool {
@@ -82,7 +93,10 @@ final class AgentSessionViewModel {
     }
 
     var composerPlaceholder: String {
-        switch connectionState {
+        if isDraftMode {
+            return isResponding ? "Agent is responding..." : "Send a message..."
+        }
+        return switch connectionState {
         case .connecting:
             "Connecting..."
         case .connected:
@@ -93,18 +107,23 @@ final class AgentSessionViewModel {
     }
 
     init(
-        session: SessionSummaryModel,
-        socket: SessionSocket,
+        session: SessionSummaryModel?,
+        makeSocket: @escaping (String) -> SessionSocket,
         sessionMessageStore: SessionMessageStore,
+        sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
-        attachmentsAPI: any AttachmentsAPIProviding
+        attachmentsAPI: any AttachmentsAPIProviding,
+        draft: NewSessionDraft?
     ) {
         self.session = session
-        self.socket = socket
+        self.socket = session.map { makeSocket($0.id) }
+        self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
+        self.sessionSummaryStore = sessionSummaryStore
         self.transcriptBuilder = transcriptBuilder
+        self.draft = draft
         attachmentStore = ImageAttachmentStore(
-            sessionId: session.id,
+            sessionId: session?.id,
             attachmentsAPI: attachmentsAPI
         )
     }
@@ -176,13 +195,15 @@ final class AgentSessionViewModel {
         }
         applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         markLatestAssistantMessageRead(in: snapshotMessages)
-        do {
-            try await sessionMessageStore.replace(
-                sessionId: session.id,
-                with: snapshot.messages
-            )
-        } catch {
-            Logger.warning("Failed to replace session message cache:", error)
+        if let session {
+            do {
+                try await sessionMessageStore.replace(
+                    sessionId: session.id,
+                    with: snapshot.messages
+                )
+            } catch {
+                Logger.warning("Failed to replace session message cache:", error)
+            }
         }
     }
 
@@ -216,6 +237,9 @@ final class AgentSessionViewModel {
         guard lastMarkReadSentMessageId != messageId else {
             return
         }
+        guard let socket else {
+            return
+        }
         lastMarkReadSentMessageId = messageId
         clearUnreadIfCurrentAssistantMessage(messageId)
 
@@ -229,7 +253,7 @@ final class AgentSessionViewModel {
     }
 
     private func clearUnreadIfCurrentAssistantMessage(_ messageId: String) {
-        guard session.lastAssistantMessageId == messageId else {
+        guard let session, session.lastAssistantMessageId == messageId else {
             return
         }
         session.hasUnread = false
@@ -279,6 +303,20 @@ final class AgentSessionViewModel {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
             clearOptimisticUserMessageTracking()
+        }
+    }
+}
+
+private enum DraftSendError: LocalizedError {
+    case missingDraft
+    case missingSocket
+
+    var errorDescription: String? {
+        switch self {
+        case .missingDraft:
+            "New session state is unavailable."
+        case .missingSocket:
+            "Session connection is unavailable."
         }
     }
 }
@@ -344,6 +382,68 @@ extension AgentSessionViewModel {
         isWaitingForResponse = true
         errorMessage = nil
 
+        if isDraftMode {
+            sendDraftSessionMessage(
+                content: content,
+                uploadedAttachments: uploadedAttachments,
+                submittedDrafts: submittedDrafts,
+                clientMessageId: clientMessageId
+            )
+            return
+        }
+
+        sendExistingSessionMessage(
+            content: content,
+            uploadedAttachments: uploadedAttachments,
+            submittedDrafts: submittedDrafts,
+            clientMessageId: clientMessageId
+        )
+    }
+
+    private func sendDraftSessionMessage(
+        content: String,
+        uploadedAttachments: [UploadedAttachment],
+        submittedDrafts: [ImageAttachmentDraft],
+        clientMessageId: String
+    ) {
+        Task { [uploadedAttachments] in
+            do {
+                let response = try await draft?.createSession(
+                    content: content,
+                    attachmentIds: uploadedAttachments.map(\.attachmentId)
+                )
+                guard let response else {
+                    throw DraftSendError.missingDraft
+                }
+                adoptCreatedSession(response)
+                self.isSending = false
+            } catch {
+                self.recordSendError(
+                    error,
+                    submittedContent: content,
+                    submittedAttachments: submittedDrafts,
+                    clientMessageId: clientMessageId
+                )
+            }
+        }
+    }
+
+    private func sendExistingSessionMessage(
+        content: String,
+        uploadedAttachments: [UploadedAttachment],
+        submittedDrafts: [ImageAttachmentDraft],
+        clientMessageId: String
+    ) {
+        guard let socket else {
+            recordSendError(
+                DraftSendError.missingSocket,
+                submittedContent: content,
+                submittedAttachments: submittedDrafts,
+                clientMessageId: clientMessageId
+            )
+            return
+        }
+
         Task { [socket, uploadedAttachments] in
             do {
                 try await socket.sendChat(
@@ -362,6 +462,31 @@ extension AgentSessionViewModel {
             }
         }
     }
+
+    private func adoptCreatedSession(_ response: CreateSessionResponse) {
+        guard let draft, let selectedRepo = draft.selectedRepo else {
+            return
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let summary = SessionSummary(
+            id: response.sessionId,
+            repoId: selectedRepo.id,
+            repoFullName: selectedRepo.fullName,
+            title: response.title,
+            archived: false,
+            workingState: "responding",
+            createdAt: now,
+            updatedAt: now,
+            hasUnread: false
+        )
+        session = sessionSummaryStore.putDisk([summary]).first
+        attachmentStore.adoptSessionId(response.sessionId)
+
+        let socket = makeSocket(response.sessionId)
+        self.socket = socket
+        startSocketPipeline(socket: socket, loadCache: false)
+    }
 }
 
 extension AgentSessionViewModel {
@@ -370,8 +495,21 @@ extension AgentSessionViewModel {
             return
         }
 
+        guard let socket else {
+            await draft?.load()
+            hasLoadedMessages = true
+            return
+        }
+
+        startSocketPipeline(socket: socket, loadCache: true)
+        await subscriptionTask?.value
+    }
+
+    private func startSocketPipeline(socket: SessionSocket, loadCache: Bool) {
         let task = Task { [weak self, socket] in
-            await self?.loadCachedMessages()
+            if loadCache {
+                await self?.loadCachedMessages()
+            }
             guard !Task.isCancelled else {
                 return
             }
@@ -384,7 +522,6 @@ extension AgentSessionViewModel {
             }
         }
         subscriptionTask = task
-        await task.value
     }
 
     func unbind() {
@@ -392,6 +529,10 @@ extension AgentSessionViewModel {
         subscriptionTask = nil
         connectionState = .disconnected
         resetPendingResponse()
+
+        guard let socket else {
+            return
+        }
 
         Task { [socket] in
             await socket.disconnect()
@@ -407,7 +548,9 @@ extension AgentSessionViewModel {
         let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
         upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
-        sessionMessageStore.upsert(sessionId: session.id, message: message)
+        if let session {
+            sessionMessageStore.upsert(sessionId: session.id, message: message)
+        }
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
         }
@@ -417,7 +560,9 @@ extension AgentSessionViewModel {
 
     private func applyUserMessage(_ message: SessionMessage) {
         upsertConfirmedUserMessage(message)
-        sessionMessageStore.upsert(sessionId: session.id, message: message)
+        if let session {
+            sessionMessageStore.upsert(sessionId: session.id, message: message)
+        }
         isSending = false
         errorMessage = nil
     }
@@ -478,7 +623,9 @@ extension AgentSessionViewModel {
         // The row keeps its id; the upsert reassigns its messageID and retires
         // the client-id entry from messagesByID.
         upsertTranscriptMessage(rowID: row.id, message: acceptedMessage, isStreaming: false)
-        sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
+        if let session {
+            sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
+        }
     }
 
     private func upsertConfirmedUserMessage(_ message: SessionMessage) {
@@ -592,6 +739,9 @@ extension AgentSessionViewModel {
     }
 
     private func loadCachedMessages() async {
+        guard let session else {
+            return
+        }
         do {
             let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
             guard !Task.isCancelled, !cachedMessages.isEmpty, messagesByID.isEmpty, !hasLoadedMessages else {

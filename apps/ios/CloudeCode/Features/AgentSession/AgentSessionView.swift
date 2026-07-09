@@ -5,6 +5,7 @@ import SwiftUI
 struct AgentSessionView: View {
     @Environment(\.theme) private var theme: Theme
     @Environment(\.style) private var style: Style
+    @Environment(\.showToast) private var showToast
 
     @State private var store: AgentSessionViewModel
     @State private var destination: Modal<Destination>?
@@ -38,7 +39,7 @@ struct AgentSessionView: View {
         }
         .background(theme.backgroundColor)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(store.session.title ?? "Untitled session")
+        .navigationTitle(navigationTitle)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 sessionHeader
@@ -55,6 +56,15 @@ struct AgentSessionView: View {
         .task {
             await store.bind()
         }
+        .onChange(of: store.errorMessage) { _, errorMessage in
+            guard let errorMessage else {
+                return
+            }
+            showToast?(
+                title: Text(verbatim: errorMessage),
+                icon: Image(systemName: "exclamationmark.circle.fill")
+            )
+        }
         .onDisappear {
             store.unbind()
         }
@@ -69,19 +79,23 @@ struct AgentSessionView: View {
 
     private var sessionHeader: some View {
         VStack(alignment: .center, spacing: 0) {
-            Text(store.session.title ?? "Untitled session")
+            Text(navigationTitle)
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
                 .lineLimit(1)
 
             HStack(spacing: style.gridSize) {
-                Text(store.clientState.repoFullName ?? store.session.repoFullName)
+                Text(store.clientState.repoFullName ?? store.session?.repoFullName ?? "No repository selected")
                     .lineLimit(1)
             }
             .styledFont(.caption)
             .foregroundStyle(theme.secondaryLabelColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var navigationTitle: String {
+        store.session?.title ?? (store.isDraftMode ? "New session" : "Untitled session")
     }
 }
 

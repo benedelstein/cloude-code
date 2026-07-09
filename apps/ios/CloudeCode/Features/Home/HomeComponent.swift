@@ -5,10 +5,14 @@ import SwiftUI
 
 protocol HomeDependency: Dependency {
     var sessionsAPI: any SessionsAPIProviding { get }
+    var reposAPI: any ReposAPIProviding { get }
+    var modelsAPI: any ModelsAPIProviding { get }
     @MainActor
     var notificationHandler: NotificationHandler { get }
     @MainActor
     var sessionSummaryStore: SessionSummaryStore { get }
+    @MainActor
+    var newSessionPreferences: NewSessionPreferences { get }
     var cache: Cache { get }
     var userSessionsSocket: UserSessionsSocket { get }
 }
@@ -68,6 +72,11 @@ final class HomeComponent: Component<HomeDependency> {
     func makeAgentSessionComponent(session: SessionSummaryModel) -> AgentSessionComponent {
         AgentSessionComponent(parent: self, session: session)
     }
+
+    @MainActor
+    func makeNewAgentSessionComponent() -> AgentSessionComponent {
+        AgentSessionComponent(parent: self, session: nil)
+    }
 }
 
 @MainActor
@@ -79,7 +88,11 @@ struct HomeBuilder {
             viewModel: component.viewModel,
             router: component.router,
             sessionBuilder: AgentSessionBuilder { [component] session in
-                component.makeAgentSessionComponent(session: session)
+                if let session {
+                    component.makeAgentSessionComponent(session: session)
+                } else {
+                    component.makeNewAgentSessionComponent()
+                }
             }
         )
     }
