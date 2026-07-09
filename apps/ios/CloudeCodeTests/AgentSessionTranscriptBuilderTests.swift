@@ -132,6 +132,41 @@ struct AgentSessionTranscriptBuilderTests {
         }
     }
 
+    @Test func preservesSpecificGroupingBeforeLiveStateHydratesProvider() {
+        let items = builder.build(
+            message: message(parts: [
+                tool("update_plan", callId: "plan-1", input: ["plan": .array([])]),
+                tool("exec", callId: "exec-1", input: [
+                    "type": .string("commandExecution"),
+                    "command": .string("pwd")
+                ]),
+                tool("exec", callId: "exec-2", input: [
+                    "type": .string("commandExecution"),
+                    "command": .string("ls")
+                ]),
+                tool("patch", callId: "patch-1", input: [
+                    "type": .string("fileChange"),
+                    "changes": .array([.object([
+                        "path": .string("/a.swift"),
+                        "kind": .object(["type": .string("update")]),
+                        "diff": .string("@@ ...")
+                    ])])
+                ])
+            ]),
+            providerId: .unknown("")
+        )
+
+        #expect(items.count == 3)
+        #expect(items.map(\.actionKind) == [.todo, .bash, .edit])
+
+        if case .actionItem(.group(let group)) = items[1] {
+            #expect(group.actions.count == 2)
+            #expect(group.title() == "Ran 2 commands")
+        } else {
+            Issue.record("Expected inferred Codex commands to retain bash grouping")
+        }
+    }
+
     @Test func treatsUnsupportedPartsAsGroupingBoundaries() {
         let items = builder.build(
             message: message(parts: [
@@ -243,5 +278,18 @@ private extension AgentSessionRenderItem.ActionItem {
     var isSingle: Bool {
         if case .single = self { return true }
         return false
+    }
+}
+
+private extension AgentSessionRenderItem {
+    var actionKind: ToolKind? {
+        switch self {
+        case .actionItem(.single(let single)):
+            single.action.kind
+        case .actionItem(.group(let group)):
+            group.kind
+        case .text, .chunkedText, .reasoning:
+            nil
+        }
     }
 }

@@ -232,11 +232,24 @@ struct AgentSessionToolNormalizationTests {
             toolPart: part("Bash", input: ["command": .string("pwd")]),
             providerId: nil
         )
+        let unhydrated = ToolActionNormalizer.normalize(
+            toolPart: part("exec", input: [
+                "type": .string("commandExecution"),
+                "command": .string("pwd")
+            ]),
+            providerId: .unknown("")
+        )
+        let unhydratedClaude = ToolActionNormalizer.normalize(
+            toolPart: part("Bash", input: ["command": .string("pwd")]),
+            providerId: .unknown("")
+        )
 
         #expect(claude.first?.kind == .bash)
         #expect(codex.first?.kind == .bash)
         #expect(unknown.first?.kind == .other)
         #expect(missing.first?.kind == .other)
+        #expect(unhydrated.first?.kind == .bash)
+        #expect(unhydratedClaude.first?.kind == .bash)
     }
 
     private func part(
