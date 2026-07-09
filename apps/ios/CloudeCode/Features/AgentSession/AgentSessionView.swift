@@ -271,6 +271,7 @@ private extension AgentSessionView {
             }
             // Rows are hosted inside reused UIKit cells; the stable row id gives
             // SwiftUI explicit identity so state doesn't leak across cell reuse.
+            // see https://lucasvandongen.dev/swiftui_uitableviewcell_reuse_id.php
             .id(item.id)
         }
 
