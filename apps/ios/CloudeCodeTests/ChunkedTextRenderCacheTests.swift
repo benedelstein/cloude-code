@@ -12,11 +12,31 @@ struct ChunkedTextRenderCacheTests {
         #expect(richText?.renderedText == "Hello bold and italic site")
     }
 
-    @Test func blockMarkdownRenderedCharactersPreserveLineBreaks() {
+    @Test func blockMarkdownPreservesLineBreaksInDisplayText() {
         let source = "- one\n- **two**\n- three\n\nFirst paragraph.\n\nSecond paragraph."
         let parts = renderParts(for: source)
 
-        #expect(renderedText(from: parts) == "- one\n- two\n- three\n\nFirst paragraph.\n\nSecond paragraph.")
+        #expect(parts.map(\.id) == [0])
+        #expect(expectRichText(parts, at: 0)?.renderedText
+            == "- one\n- two\n- three\n\nFirst paragraph.\n\nSecond paragraph.")
+    }
+
+    @Test func finalizedPartDisplayTextDropsOnlyTheBoundaryLineFeed() {
+        let parts = renderParts(for: "First paragraph.\n\nSecond paragraph.", maxParagraphsPerPart: 1)
+
+        #expect(expectRichText(parts, at: 0)?.source == "First paragraph.\n\n")
+        #expect(expectRichText(parts, at: 0)?.renderedText == "First paragraph.\n")
+        #expect(expectRichText(parts, at: 1)?.renderedText == "Second paragraph.")
+    }
+
+    @Test func paragraphsBatchUntilTheConfiguredBlankLineCount() {
+        let cache = ChunkedTextRenderCache()
+        let paragraphs = (1...6).map { "Paragraph \($0)." }
+        let parts = renderParts(cache: cache, text: paragraphs.joined(separator: "\n\n"))
+
+        #expect(parts.map(\.id) == [0, 1])
+        #expect(expectRichText(parts, at: 0)?.source == paragraphs.prefix(5).map { $0 + "\n\n" }.joined())
+        #expect(expectRichText(parts, at: 1)?.source == "Paragraph 6.")
     }
 
     @Test func incompleteEmphasisUpdatesWhenDelimiterArrives() {
@@ -43,7 +63,7 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func blankLineFinalizesSafeRichTextAndKeepsTailActive() {
-        let cache = ChunkedTextRenderCache()
+        let cache = ChunkedTextRenderCache(maxParagraphsPerPart: 1)
 
         let first = renderParts(cache: cache, text: "First paragraph.\n\nSec")
         #expect(first.map(\.id) == [0, 1])
@@ -57,7 +77,7 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func blankLineClosesUnsafeInlineMarkdownForFinalization() {
-        let parts = renderParts(for: "Before **unfinished\n\nAfter")
+        let parts = renderParts(for: "Before **unfinished\n\nAfter", maxParagraphsPerPart: 1)
 
         #expect(parts.map(\.id) == [0, 1])
         #expect(expectRichText(parts, at: 0)?.source == "Before **unfinished\n\n")
@@ -65,7 +85,7 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func wordInternalUnderscoreDoesNotPreventBlankLineFinalization() {
-        let parts = renderParts(for: "Use user_id here.\n\nNext")
+        let parts = renderParts(for: "Use user_id here.\n\nNext", maxParagraphsPerPart: 1)
 
         #expect(parts.map(\.id) == [0, 1])
         #expect(expectRichText(parts, at: 0)?.source == "Use user_id here.\n\n")
@@ -143,11 +163,11 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func emphasisMarkersInsideCodeSpanDoNotBlockBlankLineFinalization() {
-        let parts = renderParts(for: "Pass `**kwargs` to the function.\n\nMore")
+        let parts = renderParts(for: "Pass `**kwargs` to the function.\n\nMore", maxParagraphsPerPart: 1)
 
         #expect(parts.map(\.id) == [0, 1])
         #expect(expectRichText(parts, at: 0)?.source == "Pass `**kwargs` to the function.\n\n")
-        #expect(expectRichText(parts, at: 0)?.renderedText == "Pass **kwargs to the function.\n\n")
+        #expect(expectRichText(parts, at: 0)?.renderedText == "Pass **kwargs to the function.\n")
         #expect(expectRichText(parts, at: 1)?.source == "More")
     }
 
@@ -169,13 +189,12 @@ struct ChunkedTextRenderCacheTests {
         #expect(renderedText(from: parts).contains("``` inline ticks stay prose"))
     }
 
-    @Test func multiParagraphTextBeforeFenceSplitsBeforeCodeBlock() {
+    @Test func multiParagraphTextBeforeFenceFlushesAsOneBatchedPart() {
         let parts = renderParts(for: "First paragraph.\n\nSecond paragraph.\n\n```swift\nlet value = 1\n```")
 
-        #expect(parts.map(\.id) == [0, 1, 2])
-        #expect(expectRichText(parts, at: 0)?.source == "First paragraph.\n\n")
-        #expect(expectRichText(parts, at: 1)?.source == "Second paragraph.\n\n")
-        #expect(expectCodeBlock(parts, at: 2)?.text == "let value = 1")
+        #expect(parts.map(\.id) == [0, 1])
+        #expect(expectRichText(parts, at: 0)?.source == "First paragraph.\n\nSecond paragraph.\n\n")
+        #expect(expectCodeBlock(parts, at: 1)?.text == "let value = 1")
     }
 
     @Test func inlineCodeLinkAutolinkAndEscapeRemainActiveUntilClosed() {
@@ -194,7 +213,7 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func textShrinkResetsCachedPartIdentity() {
-        let cache = ChunkedTextRenderCache()
+        let cache = ChunkedTextRenderCache(maxParagraphsPerPart: 1)
 
         let first = renderParts(cache: cache, text: "First\n\nSecond")
         #expect(first.map(\.id) == [0, 1])
@@ -205,7 +224,7 @@ struct ChunkedTextRenderCacheTests {
     }
 
     @Test func changedPrefixResetsCachedPartIdentity() {
-        let cache = ChunkedTextRenderCache()
+        let cache = ChunkedTextRenderCache(maxParagraphsPerPart: 1)
 
         let first = renderParts(cache: cache, text: "First\n\nSecond")
         #expect(first.map(\.id) == [0, 1])
@@ -215,8 +234,43 @@ struct ChunkedTextRenderCacheTests {
         #expect(expectRichText(second, at: 0)?.source == "Other\n\n")
     }
 
-    @Test func independentTextItemKeysKeepIndependentCaches() {
+    @Test func closingFenceAtEndOfTextIsNotFrozenAndCanReopen() {
         let cache = ChunkedTextRenderCache()
+
+        let closed = renderParts(cache: cache, text: "```\nbody\n```")
+        #expect(expectCodeBlock(closed, at: 0)?.isComplete == true)
+
+        // ```x is not a valid closing fence, so the block must reopen.
+        let reopened = renderParts(cache: cache, text: "```\nbody\n```x")
+        #expect(reopened.count == 1)
+        #expect(expectCodeBlock(reopened, at: 0)?.isComplete == false)
+        #expect(expectCodeBlock(reopened, at: 0)?.text == "body\n```x")
+    }
+
+    @Test func streamedAndOneShotPartsCarryIdenticalContent() {
+        let text = "Intro **bold** text\n\n```swift\nlet x = 1\n```\n\n- a\n- b\n\nEnd `code` _em_."
+
+        let streamingCache = ChunkedTextRenderCache()
+        var current = ""
+        var streamedParts: [MarkdownTextPart] = []
+        for character in text {
+            current.append(character)
+            streamedParts = renderParts(cache: streamingCache, text: current)
+        }
+
+        #expect(concatenatedContent(of: streamedParts) == concatenatedContent(of: renderParts(for: text)))
+    }
+
+    @Test func hardCapSplitInSurrogatePairTextPreservesAllCharacters() {
+        let text = String(repeating: "😀", count: 80)
+        let parts = renderParts(for: text, maxChunkUTF16Length: 45)
+
+        #expect(parts.count > 1)
+        #expect(concatenatedContent(of: parts) == text)
+    }
+
+    @Test func independentTextItemKeysKeepIndependentCaches() {
+        let cache = ChunkedTextRenderCache(maxParagraphsPerPart: 1)
 
         let first = renderParts(cache: cache, key: "first", text: "One\n\nTwo")
         let second = renderParts(cache: cache, key: "second", text: "Alpha")
@@ -231,9 +285,13 @@ struct ChunkedTextRenderCacheTests {
 
 private func renderParts(
     for text: String,
-    maxChunkUTF16Length: Int = 2_400
+    maxChunkUTF16Length: Int = 2_400,
+    maxParagraphsPerPart: Int = 5
 ) -> [MarkdownTextPart] {
-    let cache = ChunkedTextRenderCache(maxChunkUTF16Length: maxChunkUTF16Length)
+    let cache = ChunkedTextRenderCache(
+        maxChunkUTF16Length: maxChunkUTF16Length,
+        maxParagraphsPerPart: maxParagraphsPerPart
+    )
     return renderParts(cache: cache, text: text)
 }
 
@@ -282,6 +340,19 @@ private func expectCodeBlock(
         return nil
     }
     return part
+}
+
+/// Joins part contents in order (code block bodies marked) so two chunkings of the
+/// same text can be compared for content equality regardless of split positions.
+private func concatenatedContent(of parts: [MarkdownTextPart]) -> String {
+    parts.map { part in
+        switch part {
+        case .richText(let part):
+            part.source
+        case .codeBlock(let part):
+            "<code>" + part.text + "</code>"
+        }
+    }.joined()
 }
 
 private func renderedText(from parts: [MarkdownTextPart]) -> String {

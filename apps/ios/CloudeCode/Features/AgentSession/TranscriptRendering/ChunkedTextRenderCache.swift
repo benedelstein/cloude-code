@@ -4,23 +4,26 @@ import Foundation
 ///
 /// Strategy: each text item keeps a finalized prefix (parsed once, never touched again)
 /// and an active tail that re-parses every tick. Parts finalize at complete code fences,
-/// blank lines, or an unconditional hard length cap — see `docs/markdown-chunking.md`
-/// for boundary rules and the accepted performance trade-offs.
+/// batches of blank lines, or an unconditional hard length cap — see
+/// `docs/markdown-chunking.md` for boundary rules and the accepted performance trade-offs.
 final class ChunkedTextRenderCache {
     private var textCachesByPartKey: [String: MarkdownTextPartCache] = [:]
     private let maxActiveTextUTF16Length: Int
     private let softBoundaryLookbackUTF16Length: Int
     private let minimumSoftBoundaryUTF16Length: Int
+    private let maxParagraphsPerPart: Int
 
     /// Creates a cache that bounds repeated parsing of active rich-text tails.
     init(
         maxChunkUTF16Length: Int = 2_400,
         softBoundaryLookbackUTF16Length: Int = 600,
-        minimumSoftBoundaryUTF16Length: Int = 800
+        minimumSoftBoundaryUTF16Length: Int = 800,
+        maxParagraphsPerPart: Int = 5
     ) {
         maxActiveTextUTF16Length = max(1, maxChunkUTF16Length)
         self.softBoundaryLookbackUTF16Length = max(0, softBoundaryLookbackUTF16Length)
         self.minimumSoftBoundaryUTF16Length = max(0, minimumSoftBoundaryUTF16Length)
+        self.maxParagraphsPerPart = max(1, maxParagraphsPerPart)
     }
 
     /// Returns render items with assistant text converted to structured markdown parts.
@@ -35,7 +38,8 @@ final class ChunkedTextRenderCache {
             let cache = textCachesByPartKey[textItem.key] ?? MarkdownTextPartCache(
                 maxActiveTextUTF16Length: maxActiveTextUTF16Length,
                 softBoundaryLookbackUTF16Length: softBoundaryLookbackUTF16Length,
-                minimumSoftBoundaryUTF16Length: minimumSoftBoundaryUTF16Length
+                minimumSoftBoundaryUTF16Length: minimumSoftBoundaryUTF16Length,
+                maxParagraphsPerPart: maxParagraphsPerPart
             )
             textCachesByPartKey[textItem.key] = cache
 
@@ -63,15 +67,18 @@ private final class MarkdownTextPartCache {
     private let maxActiveTextUTF16Length: Int
     private let softBoundaryLookbackUTF16Length: Int
     private let minimumSoftBoundaryUTF16Length: Int
+    private let maxParagraphsPerPart: Int
 
     init(
         maxActiveTextUTF16Length: Int,
         softBoundaryLookbackUTF16Length: Int,
-        minimumSoftBoundaryUTF16Length: Int
+        minimumSoftBoundaryUTF16Length: Int,
+        maxParagraphsPerPart: Int
     ) {
         self.maxActiveTextUTF16Length = maxActiveTextUTF16Length
         self.softBoundaryLookbackUTF16Length = softBoundaryLookbackUTF16Length
         self.minimumSoftBoundaryUTF16Length = minimumSoftBoundaryUTF16Length
+        self.maxParagraphsPerPart = maxParagraphsPerPart
     }
 
     func parts(for text: String) -> [MarkdownTextPart] {
@@ -121,7 +128,11 @@ private final class MarkdownTextPartCache {
                     return
                 }
             case .codeBlock(let segment):
-                guard segment.isComplete else {
+                // A fence that closes exactly at end of text is not frozen yet: the
+                // closing line can still grow (```x un-closes it) and its trailing
+                // linefeed has not arrived, so freezing now would leak that linefeed
+                // into the next rich part as a stray blank line.
+                guard segment.isComplete, segment.endOffset < totalUTF16Count else {
                     return
                 }
                 appendCodeBlock(
@@ -149,11 +160,16 @@ private final class MarkdownTextPartCache {
         return true
     }
 
-    /// Finds the furthest safe finalization boundary: a blank line if one passes the
-    /// inline-safety check, else the hard length cap (soft whitespace boundary preferred,
-    /// but the cap itself is unconditional so finalization always makes progress), else
-    /// the segment end. The segment end is never a boundary at end of text
-    /// (`allowsEndBoundary`), because trailing text may still grow.
+    /// Finds the furthest safe finalization boundary: a full batch of paragraphs ending
+    /// at a blank line that passes the inline-safety check, else the hard length cap
+    /// (soft whitespace boundary preferred, but the cap itself is unconditional so
+    /// finalization always makes progress), else the segment end. The segment end is
+    /// never a boundary at end of text (`allowsEndBoundary`), because trailing text may
+    /// still grow.
+    ///
+    /// Blank lines under the batch size stay active: finalizing at every blank line
+    /// would emit one part per paragraph, and parts are only worth their re-parse
+    /// savings in multi-paragraph batches.
     private func stableTextBoundary(
         in text: String,
         upperBound: Int,
@@ -163,12 +179,20 @@ private final class MarkdownTextPartCache {
             return nil
         }
 
-        if let blankLineBoundary = blankLineBoundary(in: text, upperBound: upperBound),
-           canFinalizeText(in: text, boundary: blankLineBoundary) {
-            return blankLineBoundary
+        let exceedsHardCap = upperBound - activeStartUTF16Offset > maxActiveTextUTF16Length
+        let scanUpperBound = min(activeStartUTF16Offset + maxActiveTextUTF16Length, upperBound)
+        let blankLineBoundaries = blankLineBoundaries(
+            in: text,
+            upperBound: scanUpperBound,
+            limit: maxParagraphsPerPart
+        )
+        if blankLineBoundaries.count >= maxParagraphsPerPart || (exceedsHardCap && !blankLineBoundaries.isEmpty) {
+            for boundary in blankLineBoundaries.reversed() where canFinalizeText(in: text, boundary: boundary) {
+                return boundary
+            }
         }
 
-        if upperBound - activeStartUTF16Offset > maxActiveTextUTF16Length {
+        if exceedsHardCap {
             return hardLengthBoundary(in: text, upperBound: upperBound)
         }
 
@@ -179,19 +203,22 @@ private final class MarkdownTextPartCache {
         return nil
     }
 
-    private func blankLineBoundary(in text: String, upperBound: Int) -> Int? {
+    private func blankLineBoundaries(in text: String, upperBound: Int, limit: Int) -> [Int] {
         let utf16 = text.utf16
+        var boundaries: [Int] = []
         var previousWasLineFeed = false
         var offset = activeStartUTF16Offset
         var index = utf16.index(utf16.startIndex, offsetBy: activeStartUTF16Offset)
 
-        while index < utf16.endIndex, offset < upperBound {
+        while index < utf16.endIndex, offset < upperBound, boundaries.count < limit {
             let value = utf16[index]
             if value == UTF16Character.lineFeed {
                 if previousWasLineFeed {
-                    return offset + 1
+                    boundaries.append(offset + 1)
+                    previousWasLineFeed = false
+                } else {
+                    previousWasLineFeed = true
                 }
-                previousWasLineFeed = true
             } else if !UTF16Character.isHorizontalWhitespace(value) {
                 previousWasLineFeed = false
             }
@@ -200,7 +227,7 @@ private final class MarkdownTextPartCache {
             utf16.formIndex(after: &index)
         }
 
-        return nil
+        return boundaries
     }
 
     private func hardLengthBoundary(in text: String, upperBound: Int) -> Int {

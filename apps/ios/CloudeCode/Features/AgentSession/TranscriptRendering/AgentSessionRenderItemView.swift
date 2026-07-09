@@ -54,26 +54,36 @@ private struct MarkdownTextPartsView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style: Style
 
-    private let partFadeAnimation = Animation.easeIn(duration: 0.16)
-
     let parts: [MarkdownTextPart]
 
+    /// Parts with visible content; blank rich-text parts only carry paragraph
+    /// separators, which the stack spacing already provides.
+    private var visibleParts: [MarkdownTextPart] {
+        parts.filter { part in
+            guard case .richText(let part) = part else {
+                return true
+            }
+            return !part.attributedText.characters.isEmpty
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: style.gridSize) {
-            ForEach(parts) { part in
+        // Zero spacing: rich text parts keep their own newlines (minus the one
+        // boundary linefeed), so stacked parts reproduce the raw text's heights.
+        // NOTE: - do not apply animations or content transitions here, it glitches out.
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(visibleParts) { part in
                 switch part {
                 case .richText(let part):
                     Text(part.attributedText)
                         .font(style.responseTextFont)
                         .foregroundStyle(theme.labelColor)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentTransition(.opacity)
-                        .animation(partFadeAnimation, value: part.source)
-                        .transition(.opacity.animation(partFadeAnimation))
+                        .transition(style.fadeTransition)
                 case .codeBlock(let part):
                     TranscriptCodeBlockView(part: part)
-                        .animation(partFadeAnimation, value: part.text)
-                        .transition(.opacity.animation(partFadeAnimation))
+                        .transition(style.fadeTransition)
                 }
             }
         }
@@ -109,15 +119,19 @@ private struct TranscriptCodeBlockView: View {
     }
 
     private var codeContent: some View {
-        Text(verbatim: part.text.isEmpty ? " " : part.text)
-            .font(.system(.footnote, design: .monospaced))
-            .foregroundStyle(theme.labelColor)
-            .textSelection(.enabled)
-            .padding(.top, part.language == nil ? style.gridSize : style.gridSize * 3)
-            .padding(.bottom, style.gridSize)
-            .padding(.leading, style.gridSize)
-            .padding(.trailing, style.gridSize * 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollView(.horizontal) {
+            Text(verbatim: part.text.isEmpty ? " " : part.text)
+                .fixedSize(horizontal: true, vertical: true)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(theme.labelColor)
+                .textSelection(.enabled)
+                .padding(.top, part.language == nil ? style.gridSize : style.gridSize * 3)
+                .padding(.bottom, style.gridSize)
+                .padding(.leading, style.gridSize)
+                .padding(.trailing, style.gridSize * 5)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

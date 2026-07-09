@@ -1,13 +1,26 @@
 import Foundation
 
 /// Builds renderable markdown transcript parts from source slices.
+///
+/// FUTURE: only inline markdown (emphasis, code spans, links) and fenced code blocks
+/// render today. Block-level constructs — headers, lists, checkboxes, dividers,
+/// tables, block quotes — display as literal source text and need dedicated part
+/// types and views.
 enum MarkdownTextPartFactory {
     /// Creates a rich text part by parsing inline markdown while preserving source line breaks.
+    ///
+    /// The displayed text keeps every newline except the single boundary linefeed that
+    /// ended this part. Parts stack with zero spacing, so the preserved newlines render
+    /// exactly the heights the raw text would have as one contiguous string.
     static func richTextPart(id: Int, source: String) -> MarkdownTextPart {
-        .richText(.init(
+        var displaySource = source
+        if displaySource.hasSuffix("\n") {
+            displaySource.removeLast()
+        }
+        return .richText(.init(
             id: id,
             source: source,
-            attributedText: markdownAttributedString(from: source)
+            attributedText: markdownAttributedString(from: displaySource)
         ))
     }
 
