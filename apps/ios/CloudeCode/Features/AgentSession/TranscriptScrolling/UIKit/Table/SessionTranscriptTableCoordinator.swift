@@ -291,6 +291,7 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         guard tableView.bounds.height > 0 else { return }
         guard tableView.contentSize.height > 0 else { return }
 
+        // todo put these all in a nested struct. like LastLayout
         lastLayoutBoundsSize = tableView.bounds.size
         lastLayoutContentSize = tableView.contentSize
         lastDistanceFromBottom = distanceFromBottom(tableView)
@@ -362,6 +363,7 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         let nextAttempts = attempts + 1
 
         if nextAttempts > maximumInitialAnchorLayoutAttempts {
+            Logger.warning("hit maximum initial anchor layout attempts \(nextAttempts)")
             scrollToBottom(tableView, animated: false)
             completeInitialBottomAnchor(tableView)
             return

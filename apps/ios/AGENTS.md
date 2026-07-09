@@ -2,7 +2,7 @@
 
 SwiftUI iOS client for Cloude Code, using Needle for DI and local Swift packages for compile-time isolation. Bundle ID: `llc.bze.CloudeCode`.
 
-Before module, layering, package-boundary, DI, or persistence changes, read `ARCHITECTURE.md` (in this directory) — it covers package organization, the dependency graph, and layering invariants.
+Before module, layering, package-boundary, DI, or persistence changes, you must read `ARCHITECTURE.md` (in this directory) — it covers package organization, the dependency graph, and layering invariants.
 
 ## Commands
 
@@ -17,7 +17,7 @@ SwiftLint runs in the app target build phase for Debug builds.
 
 Be sure to read `docs/` for specific documentation about certain parts of the codebase.
 
-`docs/Styling.md` - iOS styling conventions.
+`docs/Styling.md` - iOS styling conventions. Follow styleguides and do not invent new conventions.
 `docs/caching.md` - how to handle caching
 `docs/dependency-injection.md` - how to handle dependency injection
 `docs/feature-development.md` - how to develop a new feature
@@ -26,17 +26,18 @@ Read specific documentation for any part of the codebase you plan to work on, or
 
 ## Important Agent Guidelines
 
-- Add doc comments to all public methods and class definitions. Add concise inline comments where needed, to explain complex logic
+- Add doc comments to **all** public methods and class definitions. Add concise inline comments where needed, to explain complex logic
 or important considerations.
 - prefer nested subview names over long prefixes. E.g. 
-```swift
-extension AgentSessionView {
-    struct SomeSubview: View {
+    ```swift
+    extension AgentSessionView {
+        struct SomeSubview: View {
+            ...
+        }
+    }
+    // NOT
+    struct AgentSessionViewSomeSubview: View {
         ...
     }
-}
-// NOT
-struct AgentSessionViewSomeSubview: View {
-    ...
-}
-```
+    ```
+    This prevents long class names and keeps features encapsulated.

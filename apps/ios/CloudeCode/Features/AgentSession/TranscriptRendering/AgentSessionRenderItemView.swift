@@ -25,10 +25,12 @@ struct AgentSessionRenderItemView: View {
     var body: some View {
         switch item {
         case .text(let item):
-            ChunkedTextView(chunks: [.init(id: 1, text: item.text)])
             Text(verbatim: item.text)
+                .font(style.responseTextFont)
+                .foregroundStyle(theme.labelColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .chunkedText(let item):
-            ChunkedTextView(chunks: item.chunks)
+            MarkdownTextPartsView(parts: item.parts)
         case .reasoning(let item):
             VStack(alignment: .leading, spacing: style.gridSize / 2) {
                 Label("Thinking", systemImage: "brain")
@@ -48,28 +50,80 @@ struct AgentSessionRenderItemView: View {
     }
 }
 
-private struct ChunkedTextView: View {
+private struct MarkdownTextPartsView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style: Style
 
-    let chunks: [ChunkedTextChunk]
+    let parts: [MarkdownTextPart]
+
+    /// Parts with visible content; blank rich-text parts only carry paragraph
+    /// separators, which the stack spacing already provides.
+    private var visibleParts: [MarkdownTextPart] {
+        parts.filter { part in
+            guard case .richText(let part) = part else {
+                return true
+            }
+            return !part.attributedText.characters.isEmpty
+        }
+    }
 
     var body: some View {
+        // Zero spacing: rich text parts keep their own newlines (minus the one
+        // boundary linefeed), so stacked parts reproduce the raw text's heights.
+        // NOTE: - do not apply animations or content transitions here, it glitches out.
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(chunks) { chunk in
-                // future optimization use an animation to fade in each char
-                // one by one instead of trusting chunk.text accumulation batches
-                Text(verbatim: chunk.text)
-                    // NOTE - the animation is causing render glitches so leaivng it out for now.
-                    // .animation(chunkTextFadeAnimation, value: chunk.text)
-                    .font(style.responseTextFont)
-                    .foregroundStyle(theme.labelColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(style.fadeTransition)
+            ForEach(visibleParts) { part in
+                switch part {
+                case .richText(let part):
+                    Text(part.attributedText)
+                        .font(style.responseTextFont)
+                        .foregroundStyle(theme.labelColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(style.fadeTransition)
+                case .codeBlock(let part):
+                    TranscriptCodeBlockView(part: part)
+                        .transition(style.fadeTransition)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .transition(style.fadeTransition)
+    }
+}
+
+private struct TranscriptCodeBlockView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.style) private var style
+
+    let part: MarkdownCodeBlockPart
+
+    var body: some View {
+        CodePreviewChrome(
+            text: part.text,
+            copyAccessibilityLabel: "Copy code",
+            background: .secondary,
+            title: part.language
+        ) {
+            codeContent
+        }
+        .accessibilityValue(part.isComplete ? "Complete" : "Streaming")
+    }
+
+    private var codeContent: some View {
+        ScrollView(.horizontal) {
+            Text(verbatim: part.text.isEmpty ? " " : part.text)
+                .fixedSize(horizontal: true, vertical: true)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(theme.labelColor)
+                .textSelection(.enabled)
+                .padding(.top, style.gridSize)
+                .padding(.bottom, style.gridSize)
+                .padding(.leading, style.gridSize)
+                .padding(.trailing, style.gridSize * 5)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
