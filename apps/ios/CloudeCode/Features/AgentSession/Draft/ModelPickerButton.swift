@@ -9,6 +9,7 @@ struct ModelPickerButton: View {
     let draft: NewSessionDraft
     let providerId: ProviderId?
     let restrictsProvider: Bool
+    let isLoadingSelection: Bool
     @State private var isSheetPresented = false
 
     var body: some View {
@@ -27,6 +28,8 @@ struct ModelPickerButton: View {
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .disabled(isLoadingSelection)
+        .redacted(reason: isLoadingSelection ? .placeholder : [])
         .sheet(isPresented: $isSheetPresented) {
             ModelPickerSheet(
                 draft: draft,

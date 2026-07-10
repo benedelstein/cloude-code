@@ -361,6 +361,10 @@ extension AgentSessionViewModel {
         return false
     }
 
+    var isModelSelectionLoading: Bool {
+        !isDraftMode && !hasInitializedSessionModelSelection
+    }
+
     var modelProviderId: ProviderId? {
         if isDraftMode {
             return isCreatingSession

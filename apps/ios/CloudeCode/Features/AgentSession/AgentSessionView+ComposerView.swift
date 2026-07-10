@@ -27,7 +27,8 @@ extension AgentSessionView {
                         ModelPickerButton(
                             draft: draft,
                             providerId: vm.modelProviderId,
-                            restrictsProvider: vm.isCreatingSession || !vm.isDraftMode
+                            restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
+                            isLoadingSelection: vm.isModelSelectionLoading
                         )
                     }
                 }
