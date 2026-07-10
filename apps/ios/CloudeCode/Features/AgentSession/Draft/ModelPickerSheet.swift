@@ -6,8 +6,10 @@ struct ModelPickerSheet: View {
     @Environment(\.theme) private var theme
 
     let modelPicker: ModelPickerState
+    let selectedModel: ModelPickerState.SelectedModel?
     let providerId: ProviderId?
     let restrictsProvider: Bool
+    let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
     @State private var query = ""
     @State private var collapsedProviderIDs = Set<String>()
 
@@ -75,15 +77,11 @@ struct ModelPickerSheet: View {
         ForEach(models, id: \.id) { model in
             ModelRow(
                 displayName: model.displayName,
-                isSelected: modelPicker.selectedModel?.providerId == provider.providerId
-                    && modelPicker.selectedModel?.modelId == model.id,
+                isSelected: selectedModel?.providerId == provider.providerId
+                    && selectedModel?.modelId == model.id,
                 isEnabled: provider.canSelectModels && model.selectable
             ) {
-                modelPicker.selectModel(
-                    provider: provider,
-                    model: model,
-                    persistsSelection: !restrictsProvider
-                )
+                onSelectModel(provider, model)
                 dismiss()
             }
         }
@@ -155,7 +153,7 @@ struct ModelPickerSheet: View {
     }
 
     private func priority(for provider: ProviderCatalogEntry) -> Int {
-        if provider.providerId == modelPicker.selectedModel?.providerId {
+        if provider.providerId == selectedModel?.providerId {
             return 0
         }
         return provider.canSelectModels ? 1 : 2

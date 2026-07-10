@@ -7,15 +7,18 @@ struct ModelPickerButton: View {
     @Environment(\.style) private var style
 
     let modelPicker: ModelPickerState
+    let selectedModel: ModelPickerState.SelectedModel?
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let isLoadingSelection: Bool
+    let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
+    let onSelectEffort: (ProviderCatalogEntry, ProviderCatalogEffort) -> Void
     @State private var isSheetPresented = false
 
     var body: some View {
         Menu {
             Section("Model") {
-                Button(selectedModel?.displayName ?? "Select a model") {
+                Button(displayedModel?.displayName ?? "Select a model") {
                     isSheetPresented = true
                 }
             }
@@ -33,8 +36,10 @@ struct ModelPickerButton: View {
         .sheet(isPresented: $isSheetPresented) {
             ModelPickerSheet(
                 modelPicker: modelPicker,
+                selectedModel: displayedModel,
                 providerId: providerId,
-                restrictsProvider: restrictsProvider
+                restrictsProvider: restrictsProvider,
+                onSelectModel: onSelectModel
             )
         }
     }
@@ -42,16 +47,12 @@ struct ModelPickerButton: View {
     @ViewBuilder
     private var effortMenu: some View {
         if let provider = selectedProvider {
-            Menu(selectedModel?.effortDisplayName ?? "Select an effort level") {
+            Menu(displayedModel?.effortDisplayName ?? "Select an effort level") {
                 ForEach(provider.efforts, id: \.id) { effort in
                     Button {
-                        modelPicker.selectEffort(
-                            provider: provider,
-                            effort: effort,
-                            persistsSelection: !restrictsProvider
-                        )
+                        onSelectEffort(provider, effort)
                     } label: {
-                        if selectedModel?.effortId == effort.id {
+                        if displayedModel?.effortId == effort.id {
                             Label(effort.displayName, systemImage: "checkmark")
                         } else {
                             Text(effort.displayName)
@@ -68,7 +69,7 @@ struct ModelPickerButton: View {
 
     private var menuLabel: some View {
         HStack(spacing: style.gridSize * 0.75) {
-            if let model = selectedModel {
+            if let model = displayedModel {
                 ProviderIconView(providerId: model.providerId)
                     .frame(width: 16, height: 16)
                 Text(model.displayName)
@@ -88,16 +89,16 @@ struct ModelPickerButton: View {
     }
 
     private var selectedProvider: ProviderCatalogEntry? {
-        guard let selectedModel else {
+        guard let displayedModel else {
             return nil
         }
         return modelPicker.modelCatalog?.providers.first {
-            $0.providerId == selectedModel.providerId
+            $0.providerId == displayedModel.providerId
         }
     }
 
-    private var selectedModel: ModelPickerState.SelectedModel? {
-        guard let selectedModel = modelPicker.selectedModel,
+    private var displayedModel: ModelPickerState.SelectedModel? {
+        guard let selectedModel,
               !restrictsProvider || selectedModel.providerId == providerId else {
             return nil
         }

@@ -85,10 +85,7 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     @MainActor
     private var modelPicker: ModelPickerState {
         shared {
-            ModelPickerState(
-                modelsAPI: dependency.modelsAPI,
-                preferences: dependency.newSessionPreferences
-            )
+            ModelPickerState(modelsAPI: dependency.modelsAPI)
         }
     }
 }

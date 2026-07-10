@@ -25,7 +25,8 @@ final class AgentSessionViewModel {
     private let sessionSummaryStore: SessionSummaryStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
-    private var hasInitializedSessionModelSelection: Bool
+    // Preserves a user's local choice until live client state reports it as current.
+    private var sessionModelOverride: ModelPickerState.SelectedModel?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
     // Keeps the local upload drafts for an optimistic message so they can be
@@ -71,7 +72,7 @@ final class AgentSessionViewModel {
         let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachmentStore.attachments.isEmpty
         let canSendInCurrentMode = isDraftMode
-            ? draft?.selectedRepo != nil
+            ? draft?.selectedRepo != nil && draft?.isModelSelectionReady == true
             : connectionState == .connected
         return hasContent
             && !attachmentStore.hasPendingOrFailedUploads
@@ -97,7 +98,6 @@ final class AgentSessionViewModel {
     ) {
         self.context = context
         modelPickerState = modelPicker
-        hasInitializedSessionModelSelection = context.draft != nil
         self.socket = context.session.map { makeSocket($0.id) }
         self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
@@ -147,10 +147,12 @@ final class AgentSessionViewModel {
         }
     }
 
-    private func applyLiveState(_ state: SessionClientState) {
+    func applyLiveState(_ state: SessionClientState) {
         let previousProvider = clientState.agentSettings.provider
         clientState = state
-        initializeSessionModelSelectionIfNeeded()
+        if sessionModelOverride?.matches(state.agentSettings) == true {
+            sessionModelOverride = nil
+        }
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
         if previousProvider != state.agentSettings.provider {
             rebuildTranscriptDisplayData()
@@ -357,6 +359,13 @@ extension AgentSessionViewModel {
         modelPickerState
     }
 
+    var modelSelection: ModelPickerState.SelectedModel? {
+        if let draft {
+            return draft.selectedModel
+        }
+        return sessionModelOverride ?? currentSessionModelSelection
+    }
+
     var isDraftMode: Bool {
         if case .draft = context {
             return true
@@ -365,27 +374,27 @@ extension AgentSessionViewModel {
     }
 
     var isModelSelectionLoading: Bool {
-        !isDraftMode && !hasInitializedSessionModelSelection
+        if let draft {
+            return draft.selectedModel == nil
+                && modelPicker.modelCatalog == nil
+                && modelPicker.errorMessage == nil
+        }
+        return clientState.agentSettings.model.isEmpty
     }
 
     var modelProviderId: ProviderId? {
         if isDraftMode {
             return isCreatingSession
-                ? modelPicker.selectedModel?.providerId
+                ? draft?.selectedModel?.providerId
                 : nil
         }
-        if let providerId = clientState.agentSettings.provider.providerId {
-            return providerId
-        }
-        return hasInitializedSessionModelSelection
-            ? modelPicker.selectedModel?.providerId
-            : nil
+        return clientState.agentSettings.provider.providerId
     }
 }
 
 extension AgentSessionViewModel {
     private var selectedModelOverride: (model: String?, effort: String?)? {
-        guard let selectedModel = modelPicker.selectedModel,
+        guard let selectedModel = sessionModelOverride,
               selectedModel.providerId == modelProviderId else {
             return nil
         }
@@ -396,18 +405,56 @@ extension AgentSessionViewModel {
         )
     }
 
-    private func initializeSessionModelSelectionIfNeeded() {
-        guard !hasInitializedSessionModelSelection,
-              let providerId = clientState.agentSettings.provider.providerId,
-              !clientState.agentSettings.model.isEmpty,
-              modelPicker.selectSessionModel(
-                  providerId: providerId,
-                  modelId: clientState.agentSettings.model,
-                  effortId: clientState.agentSettings.effort
-              ) else {
+    private var currentSessionModelSelection: ModelPickerState.SelectedModel? {
+        let settings = clientState.agentSettings
+        guard let providerId = settings.provider.providerId,
+              !settings.model.isEmpty else {
+            return nil
+        }
+        let provider = modelPicker.modelCatalog?.providers.first { $0.providerId == providerId }
+        let model = provider?.models.first { $0.id == settings.model }
+        let effort = provider?.efforts.first { $0.id == settings.effort }
+        let effortId = settings.effort.isEmpty ? nil : settings.effort
+        // Client state is authoritative; catalog metadata only improves the labels.
+        return ModelPickerState.SelectedModel(
+            providerId: providerId,
+            modelId: settings.model,
+            displayName: model?.displayName ?? settings.model,
+            effortId: effortId,
+            effortDisplayName: effort?.displayName ?? effortId
+        )
+    }
+
+    /// Selects a model for the draft or stages it for the next existing-session message.
+    func selectModel(provider: ProviderCatalogEntry, model: ProviderCatalogModel) {
+        if let draft {
+            draft.selectModel(provider: provider, model: model)
             return
         }
-        hasInitializedSessionModelSelection = true
+        guard provider.providerId == modelProviderId else {
+            return
+        }
+        sessionModelOverride = modelPicker.selection(
+            provider: provider,
+            model: model,
+            preservingEffortFrom: modelSelection
+        )
+    }
+
+    /// Selects an effort for the draft or stages it for the next existing-session message.
+    func selectEffort(provider: ProviderCatalogEntry, effort: ProviderCatalogEffort) {
+        if let draft {
+            draft.selectEffort(provider: provider, effort: effort)
+            return
+        }
+        guard provider.providerId == modelProviderId else {
+            return
+        }
+        sessionModelOverride = modelPicker.selection(
+            provider: provider,
+            effort: effort,
+            for: modelSelection
+        )
     }
 
     /// Image drafts currently shown by the composer attachment strip.
@@ -639,7 +686,6 @@ extension AgentSessionViewModel {
 
     private func loadModelCatalog() async {
         await modelPicker.load()
-        initializeSessionModelSelectionIfNeeded()
     }
 
     func unbind() {
@@ -655,6 +701,15 @@ extension AgentSessionViewModel {
         Task { [socket] in
             await socket.disconnect()
         }
+    }
+}
+
+private extension ModelPickerState.SelectedModel {
+    func matches(_ settings: SessionClientState.AgentSettings) -> Bool {
+        let effort = settings.effort.isEmpty ? nil : settings.effort
+        return providerId == settings.provider.providerId
+            && modelId == settings.model
+            && effortId == effort
     }
 }
 

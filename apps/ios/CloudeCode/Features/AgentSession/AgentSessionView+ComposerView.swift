@@ -25,9 +25,16 @@ extension AgentSessionView {
                 promptComposer {
                     ModelPickerButton(
                         modelPicker: vm.modelPicker,
+                        selectedModel: vm.modelSelection,
                         providerId: vm.modelProviderId,
                         restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
-                        isLoadingSelection: vm.isModelSelectionLoading
+                        isLoadingSelection: vm.isModelSelectionLoading,
+                        onSelectModel: { provider, model in
+                            vm.selectModel(provider: provider, model: model)
+                        },
+                        onSelectEffort: { provider, effort in
+                            vm.selectEffort(provider: provider, effort: effort)
+                        }
                     )
                 }
             }

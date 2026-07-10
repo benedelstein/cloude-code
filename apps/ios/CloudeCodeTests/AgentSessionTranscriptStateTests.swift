@@ -125,10 +125,7 @@ private extension AgentSessionTranscriptStateTests {
                 updatedAt: "2026-01-01T00:00:00Z",
                 hasUnread: false
             ))),
-            modelPicker: ModelPickerState(
-                modelsAPI: StubModelsAPI(),
-                preferences: NewSessionPreferences()
-            ),
+            modelPicker: ModelPickerState(modelsAPI: StubModelsAPI()),
             makeSocket: { sessionId in
                 // Never dialed: these tests exercise state transitions without connecting.
                 SessionSocket(
