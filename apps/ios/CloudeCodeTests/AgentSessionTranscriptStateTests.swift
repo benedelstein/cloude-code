@@ -79,6 +79,91 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.messagesByID["partial-1"] == nil)
         #expect(viewModel.assistantDisplayDataByRowID.isEmpty)
     }
+
+    @Test func cachedMessagesBuildImmediatelyWithCachedProvider() async throws {
+        let messageStore = SessionMessageStore()
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [assistantMessage(id: "a1")]
+        )
+        let builder = RecordingTranscriptBuilder()
+        let viewModel = makeViewModel(
+            provider: .claudeCode,
+            sessionMessageStore: messageStore,
+            transcriptBuilder: builder
+        )
+
+        await viewModel.loadCachedMessages()
+
+        #expect(viewModel.hasLoadedMessages)
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["a1"])
+        #expect(builder.providers == [.claudeCode])
+    }
+
+    @Test func cachedMessagesWaitForLiveProviderWhenSummaryProviderIsMissing() async throws {
+        let messageStore = SessionMessageStore()
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [assistantMessage(id: "a1")]
+        )
+        let builder = RecordingTranscriptBuilder()
+        let viewModel = makeViewModel(
+            provider: nil,
+            sessionMessageStore: messageStore,
+            transcriptBuilder: builder
+        )
+
+        await viewModel.loadCachedMessages()
+
+        #expect(!viewModel.hasLoadedMessages)
+        #expect(viewModel.transcriptRows.isEmpty)
+        #expect(builder.providers.isEmpty)
+
+        viewModel.applyLiveState(liveState(provider: .openaiCodex))
+
+        #expect(viewModel.hasLoadedMessages)
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["a1"])
+        #expect(builder.providers == [.openaiCodex])
+    }
+
+    @Test func matchingLiveProviderDoesNotRebuildCachedTranscript() async throws {
+        let messageStore = SessionMessageStore()
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [assistantMessage(id: "a1")]
+        )
+        let builder = RecordingTranscriptBuilder()
+        let viewModel = makeViewModel(
+            provider: .claudeCode,
+            sessionMessageStore: messageStore,
+            transcriptBuilder: builder
+        )
+        await viewModel.loadCachedMessages()
+
+        viewModel.applyLiveState(liveState(provider: .claudeCode))
+
+        #expect(builder.providers == [.claudeCode])
+    }
+
+    @Test func differingLiveProviderRebuildsCachedTranscript() async throws {
+        let messageStore = SessionMessageStore()
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [assistantMessage(id: "a1")]
+        )
+        let builder = RecordingTranscriptBuilder()
+        let viewModel = makeViewModel(
+            provider: .claudeCode,
+            sessionMessageStore: messageStore,
+            transcriptBuilder: builder
+        )
+        await viewModel.loadCachedMessages()
+
+        viewModel.applyLiveState(liveState(provider: .openaiCodex))
+
+        #expect(builder.providers == [.claudeCode, .openaiCodex])
+        #expect(viewModel.session.provider == .claudeCode)
+    }
 }
 
 private extension AgentSessionTranscriptStateTests {
@@ -88,6 +173,22 @@ private extension AgentSessionTranscriptStateTests {
             providerId: AgentProviderID?
         ) -> [AgentSessionRenderItem] {
             []
+        }
+
+        func finalResponseStartIndex(renderItems: [AgentSessionRenderItem]) -> Int? {
+            nil
+        }
+    }
+
+    final class RecordingTranscriptBuilder: AgentSessionTranscriptBuilding {
+        private(set) var providers: [AgentProviderID?] = []
+
+        func build(
+            message: SessionMessage,
+            providerId: AgentProviderID?
+        ) -> [AgentSessionRenderItem] {
+            providers.append(providerId)
+            return []
         }
 
         func finalResponseStartIndex(renderItems: [AgentSessionRenderItem]) -> Int? {
@@ -106,12 +207,18 @@ private extension AgentSessionTranscriptStateTests {
         func deleteAttachment(id attachmentId: String) async throws {}
     }
 
-    func makeViewModel() -> AgentSessionViewModel {
-        AgentSessionViewModel(
+    func makeViewModel(
+        provider: AgentProviderID? = nil,
+        sessionMessageStore: SessionMessageStore? = nil,
+        transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder()
+    ) -> AgentSessionViewModel {
+        let sessionMessageStore = sessionMessageStore ?? SessionMessageStore()
+        return AgentSessionViewModel(
             session: SessionSummaryModel(SessionSummary(
                 id: "session-1",
                 repoId: 1,
                 repoFullName: "octo/repo",
+                provider: provider,
                 archived: false,
                 workingState: "idle",
                 createdAt: "2026-01-01T00:00:00Z",
@@ -124,10 +231,21 @@ private extension AgentSessionTranscriptStateTests {
                 sessionId: "session-1",
                 tokenCache: WebSocketTokenCache { throw URLError(.userAuthenticationRequired) }
             ),
-            sessionMessageStore: SessionMessageStore(),
-            transcriptBuilder: StubTranscriptBuilder(),
+            sessionMessageStore: sessionMessageStore,
+            transcriptBuilder: transcriptBuilder,
             attachmentsAPI: StubAttachmentsAPI()
         )
+    }
+
+    func liveState(provider: AgentProviderID) -> SessionClientState {
+        var state = SessionClientState.empty
+        state.agentSettings = .init(
+            provider: provider,
+            model: "model",
+            effort: "high",
+            maxTokens: 8_192
+        )
+        return state
     }
 
     func userMessage(id: String, text: String = "hello") -> SessionMessage {

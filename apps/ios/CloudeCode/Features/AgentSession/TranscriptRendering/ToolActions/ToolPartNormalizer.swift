@@ -26,48 +26,8 @@ enum ToolActionNormalizer {
             ClaudeCodeToolPartNormalizer().normalize(toolPart)
         case .openaiCodex:
             OpenAICodexToolPartNormalizer().normalize(toolPart)
-        case .unknown(let providerId) where providerId.isEmpty:
-            normalizeBeforeProviderHydration(toolPart)
-        case nil:
-            [.other(from: toolPart)]
-        case .unknown:
-            [.other(from: toolPart)]
-        }
-    }
-
-    private static func normalizeBeforeProviderHydration(
-        _ toolPart: NormalizableToolPart
-    ) -> [NormalizedToolAction] {
-        // Cached messages render before live state supplies the session provider.
-        // Known providers have distinct tool signatures, so preserve their
-        // specific rows instead of briefly collapsing everything into `.other`.
-        switch inferredProvider(for: toolPart) {
-        case .claudeCode:
-            ClaudeCodeToolPartNormalizer().normalize(toolPart)
-        case .openaiCodex:
-            OpenAICodexToolPartNormalizer().normalize(toolPart)
         case .unknown, nil:
             [.other(from: toolPart)]
-        }
-    }
-
-    private static func inferredProvider(
-        for toolPart: NormalizableToolPart
-    ) -> AgentProviderID? {
-        let inputType = toolPart.input?.objectValue?.string("type")
-        if let inputType, ["commandExecution", "fileChange", "webSearch"].contains(inputType) {
-            return .openaiCodex
-        }
-
-        switch toolPart.toolName {
-        case "exec", "patch", "web_search", "update_plan":
-            return .openaiCodex
-        case "Read", "Edit", "MultiEdit", "Write", "Bash", "Grep", "Glob",
-             "WebFetch", "WebSearch", "TodoWrite", "TaskCreate", "TaskUpdate",
-             "TaskList", "TaskGet", "ExitPlanMode":
-            return .claudeCode
-        default:
-            return nil
         }
     }
 }

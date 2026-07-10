@@ -20,6 +20,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     repo_id: 1,
     installation_id: 10,
     repo_full_name: "owner/repo",
+    provider_id: null,
     title: "Sidebar work",
     archived: 0,
     access_blocked_at: null,
@@ -72,6 +73,34 @@ function createMockDatabase(options: {
 }
 
 describe("SessionsRepository sidebar state", () => {
+  it("writes the provider in the initial session insert", async () => {
+    const { database, calls } = createMockDatabase();
+    const repository = new SessionsRepository(database);
+
+    await repository.create({
+      id: "session-1",
+      userId: "user-1",
+      repoId: 1,
+      installationId: 10,
+      repoFullName: "owner/repo",
+      source: "web",
+      provider: "openai-codex",
+    });
+
+    expect(calls[0]?.query).toContain("provider_id");
+    expect(calls[0]?.bindings).toEqual([
+      "session-1",
+      "user-1",
+      1,
+      10,
+      "owner/repo",
+      "web",
+      "openai-codex",
+      null,
+      null,
+    ]);
+  });
+
   it("maps sidebar summary columns from D1 rows", async () => {
     const { database } = createMockDatabase({
       firstRow: createSessionRow({
@@ -80,6 +109,7 @@ describe("SessionsRepository sidebar state", () => {
         pull_request_url: "https://github.com/owner/repo/pull/4",
         pull_request_number: 4,
         pull_request_state: "open",
+        provider_id: "claude-code",
       }),
     });
 
@@ -94,10 +124,21 @@ describe("SessionsRepository sidebar state", () => {
           number: 4,
           state: "open",
         },
+        provider: "claude-code",
         createdAt: "2026-05-24T10:00:00Z",
         lastAssistantMessageId: null,
         hasUnread: false,
       });
+  });
+
+  it("preserves a null provider for a legacy session row", async () => {
+    const { database } = createMockDatabase({
+      firstRow: createSessionRow({ provider_id: null }),
+    });
+    const repository = new SessionsRepository(database);
+
+    await expect(repository.getById("123e4567-e89b-12d3-a456-426614174000"))
+      .resolves.toMatchObject({ provider: null });
   });
 
   it("derives unread state from assistant and read cursors", async () => {
@@ -204,6 +245,7 @@ describe("SessionsRepository sidebar state", () => {
             created_at: "2026-05-24 12:00:00",
             updated_at: "2026-05-25 12:00:00",
             working_state: "responding",
+            provider_id: "openai-codex",
           }),
           createSessionRow({
             id: "session-older",
@@ -230,6 +272,7 @@ describe("SessionsRepository sidebar state", () => {
     expect(page.groups).toHaveLength(1);
     expect(page.groups[0]?.sessions[0]).toMatchObject({
       id: "session-new",
+      provider: "openai-codex",
       workingState: "responding",
     });
     expect(decodeRepoCursor(page.nextRepoCursor ?? "")).toEqual({

@@ -248,8 +248,8 @@ struct AgentSessionToolNormalizationTests {
         #expect(codex.first?.kind == .bash)
         #expect(unknown.first?.kind == .other)
         #expect(missing.first?.kind == .other)
-        #expect(unhydrated.first?.kind == .bash)
-        #expect(unhydratedClaude.first?.kind == .bash)
+        #expect(unhydrated.first?.kind == .other)
+        #expect(unhydratedClaude.first?.kind == .other)
     }
 
     private func part(
