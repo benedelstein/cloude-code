@@ -1,4 +1,5 @@
 import API
+import CoreAPI
 import Domain
 import Entities
 import Foundation
@@ -106,6 +107,12 @@ private extension AgentSessionTranscriptStateTests {
         func deleteAttachment(id attachmentId: String) async throws {}
     }
 
+    struct StubModelsAPI: ModelsAPIProviding {
+        func models() async throws -> ModelsResponse {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func makeViewModel() -> AgentSessionViewModel {
         AgentSessionViewModel(
             context: .session(SessionSummaryModel(SessionSummary(
@@ -118,6 +125,10 @@ private extension AgentSessionTranscriptStateTests {
                 updatedAt: "2026-01-01T00:00:00Z",
                 hasUnread: false
             ))),
+            modelPicker: ModelPickerState(
+                modelsAPI: StubModelsAPI(),
+                preferences: NewSessionPreferences()
+            ),
             makeSocket: { sessionId in
                 // Never dialed: these tests exercise state transitions without connecting.
                 SessionSocket(

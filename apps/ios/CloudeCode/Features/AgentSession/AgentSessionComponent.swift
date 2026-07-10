@@ -48,7 +48,7 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
         shared {
             AgentSessionViewModel(
                 context: context,
-                modelOptions: newSessionDraft,
+                modelPicker: modelPicker,
                 makeSocket: dependency.makeSessionSocket(sessionId:),
                 sessionMessageStore: dependency.sessionMessageStore,
                 sessionSummaryStore: dependency.sessionSummaryStore,
@@ -76,6 +76,16 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
             NewSessionDraft(
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
+                modelPicker: modelPicker,
+                preferences: dependency.newSessionPreferences
+            )
+        }
+    }
+
+    @MainActor
+    private var modelPicker: ModelPickerState {
+        shared {
+            ModelPickerState(
                 modelsAPI: dependency.modelsAPI,
                 preferences: dependency.newSessionPreferences
             )

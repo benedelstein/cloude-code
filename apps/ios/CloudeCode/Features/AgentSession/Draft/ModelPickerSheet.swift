@@ -5,7 +5,7 @@ struct ModelPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
 
-    let draft: NewSessionDraft
+    let modelPicker: ModelPickerState
     let providerId: ProviderId?
     let restrictsProvider: Bool
     @State private var query = ""
@@ -14,7 +14,7 @@ struct ModelPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                if let catalog = draft.modelCatalog {
+                if let catalog = modelPicker.modelCatalog {
                     if filteredProviders(in: catalog).isEmpty {
                         EmptyStateView(
                             title: "No models found",
@@ -28,7 +28,7 @@ struct ModelPickerSheet: View {
                             providerSection(provider)
                         }
                     }
-                } else if draft.isLoadingCatalog {
+                } else if modelPicker.isLoading {
                     loadingRows
                 } else {
                     ErrorStateView(
@@ -75,11 +75,11 @@ struct ModelPickerSheet: View {
         ForEach(models, id: \.id) { model in
             ModelRow(
                 displayName: model.displayName,
-                isSelected: draft.selectedModel?.providerId == provider.providerId
-                    && draft.selectedModel?.modelId == model.id,
+                isSelected: modelPicker.selectedModel?.providerId == provider.providerId
+                    && modelPicker.selectedModel?.modelId == model.id,
                 isEnabled: provider.canSelectModels && model.selectable
             ) {
-                draft.selectModel(
+                modelPicker.selectModel(
                     provider: provider,
                     model: model,
                     persistsSelection: !restrictsProvider
@@ -155,7 +155,7 @@ struct ModelPickerSheet: View {
     }
 
     private func priority(for provider: ProviderCatalogEntry) -> Int {
-        if provider.providerId == draft.selectedModel?.providerId {
+        if provider.providerId == modelPicker.selectedModel?.providerId {
             return 0
         }
         return provider.canSelectModels ? 1 : 2

@@ -185,8 +185,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
 
     @MainActor var newSessionPreferences: NewSessionPreferences {
         shared {
-            NewSessionPreferences()
+            NewSessionPreferences(userDefaults: userDefaults)
         }
+    }
+
+    var userDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroupIdentifier) ?? .standard
     }
 
     @MainActor

@@ -6,7 +6,7 @@ struct ModelPickerButton: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let draft: NewSessionDraft
+    let modelPicker: ModelPickerState
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let isLoadingSelection: Bool
@@ -32,7 +32,7 @@ struct ModelPickerButton: View {
         .redacted(reason: isLoadingSelection ? .placeholder : [])
         .sheet(isPresented: $isSheetPresented) {
             ModelPickerSheet(
-                draft: draft,
+                modelPicker: modelPicker,
                 providerId: providerId,
                 restrictsProvider: restrictsProvider
             )
@@ -45,7 +45,7 @@ struct ModelPickerButton: View {
             Menu(selectedModel?.effortDisplayName ?? "Select an effort level") {
                 ForEach(provider.efforts, id: \.id) { effort in
                     Button {
-                        draft.selectEffort(
+                        modelPicker.selectEffort(
                             provider: provider,
                             effort: effort,
                             persistsSelection: !restrictsProvider
@@ -91,13 +91,13 @@ struct ModelPickerButton: View {
         guard let selectedModel else {
             return nil
         }
-        return draft.modelCatalog?.providers.first {
+        return modelPicker.modelCatalog?.providers.first {
             $0.providerId == selectedModel.providerId
         }
     }
 
-    private var selectedModel: NewSessionDraft.SelectedModel? {
-        guard let selectedModel = draft.selectedModel,
+    private var selectedModel: ModelPickerState.SelectedModel? {
+        guard let selectedModel = modelPicker.selectedModel,
               !restrictsProvider || selectedModel.providerId == providerId else {
             return nil
         }

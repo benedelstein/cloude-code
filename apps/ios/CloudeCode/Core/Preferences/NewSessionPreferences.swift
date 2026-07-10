@@ -22,7 +22,7 @@ final class NewSessionPreferences {
     private let decoder = JSONDecoder()
 
     // todo use appgroup user defaults from app component
-    init(userDefaults: UserDefaults = .standard) {
+    init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
     }
 

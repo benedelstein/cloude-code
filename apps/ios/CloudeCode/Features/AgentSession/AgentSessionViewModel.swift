@@ -18,14 +18,13 @@ final class AgentSessionViewModel {
     typealias TranscriptRow = AgentSessionView.TranscriptRow
 
     private var context: Context
-    private let modelOptions: NewSessionDraft?
+    private let modelPickerState: ModelPickerState
     private var socket: SessionSocket?
     private let makeSocket: (String) -> SessionSocket
     private let sessionMessageStore: SessionMessageStore
     private let sessionSummaryStore: SessionSummaryStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
-    private var modelCatalogTask: Task<Void, Never>?
     private var hasInitializedSessionModelSelection: Bool
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
@@ -89,7 +88,7 @@ final class AgentSessionViewModel {
 
     init(
         context: Context,
-        modelOptions: NewSessionDraft? = nil,
+        modelPicker: ModelPickerState,
         makeSocket: @escaping (String) -> SessionSocket,
         sessionMessageStore: SessionMessageStore,
         sessionSummaryStore: SessionSummaryStore,
@@ -97,7 +96,7 @@ final class AgentSessionViewModel {
         attachmentsAPI: any AttachmentsAPIProviding
     ) {
         self.context = context
-        self.modelOptions = modelOptions ?? context.draft
+        modelPickerState = modelPicker
         hasInitializedSessionModelSelection = context.draft != nil
         self.socket = context.session.map { makeSocket($0.id) }
         self.makeSocket = makeSocket
@@ -351,7 +350,11 @@ extension AgentSessionViewModel {
     }
 
     var draft: NewSessionDraft? {
-        modelOptions
+        context.draft
+    }
+
+    var modelPicker: ModelPickerState {
+        modelPickerState
     }
 
     var isDraftMode: Bool {
@@ -368,21 +371,21 @@ extension AgentSessionViewModel {
     var modelProviderId: ProviderId? {
         if isDraftMode {
             return isCreatingSession
-                ? modelOptions?.selectedModel?.providerId
+                ? modelPicker.selectedModel?.providerId
                 : nil
         }
         if let providerId = clientState.agentSettings.provider.providerId {
             return providerId
         }
         return hasInitializedSessionModelSelection
-            ? modelOptions?.selectedModel?.providerId
+            ? modelPicker.selectedModel?.providerId
             : nil
     }
 }
 
 extension AgentSessionViewModel {
     private var selectedModelOverride: (model: String?, effort: String?)? {
-        guard let selectedModel = modelOptions?.selectedModel,
+        guard let selectedModel = modelPicker.selectedModel,
               selectedModel.providerId == modelProviderId else {
             return nil
         }
@@ -395,10 +398,9 @@ extension AgentSessionViewModel {
 
     private func initializeSessionModelSelectionIfNeeded() {
         guard !hasInitializedSessionModelSelection,
-              let modelOptions,
               let providerId = clientState.agentSettings.provider.providerId,
               !clientState.agentSettings.model.isEmpty,
-              modelOptions.selectSessionModel(
+              modelPicker.selectSessionModel(
                   providerId: providerId,
                   modelId: clientState.agentSettings.model,
                   effortId: clientState.agentSettings.effort
@@ -593,7 +595,7 @@ extension AgentSessionViewModel {
         let socket = makeSocket(response.sessionId)
         self.socket = socket
         connectionState = .connecting
-        startSocketPipeline(socket: socket, loadCache: false)
+        _ = startSocketPipeline(socket: socket, loadCache: false)
     }
 }
 
@@ -605,21 +607,17 @@ extension AgentSessionViewModel {
 
         guard let socket else {
             hasLoadedMessages = true
-            await modelOptions?.load()
+            await draft?.load()
             return
         }
 
-        if let modelOptions {
-            modelCatalogTask = Task { [weak self, modelOptions] in
-                await modelOptions.loadModelCatalog()
-                self?.initializeSessionModelSelectionIfNeeded()
-            }
-        }
-        startSocketPipeline(socket: socket, loadCache: true)
-        await subscriptionTask?.value
+        async let modelLoad: Void = loadModelCatalog()
+        let subscriptionTask = startSocketPipeline(socket: socket, loadCache: true)
+        async let subscribeStream = subscriptionTask.value
+        _ = await (modelLoad, subscribeStream)
     }
 
-    private func startSocketPipeline(socket: SessionSocket, loadCache: Bool) {
+    private func startSocketPipeline(socket: SessionSocket, loadCache: Bool) -> Task<Void, Never> {
         let task = Task { [weak self, socket] in
             if loadCache {
                 await self?.loadCachedMessages()
@@ -636,11 +634,15 @@ extension AgentSessionViewModel {
             }
         }
         subscriptionTask = task
+        return task
+    }
+
+    private func loadModelCatalog() async {
+        await modelPicker.load()
+        initializeSessionModelSelectionIfNeeded()
     }
 
     func unbind() {
-        modelCatalogTask?.cancel()
-        modelCatalogTask = nil
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected

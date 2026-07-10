@@ -23,14 +23,12 @@ extension AgentSessionView {
                 }
 
                 promptComposer {
-                    if let draft = vm.draft {
-                        ModelPickerButton(
-                            draft: draft,
-                            providerId: vm.modelProviderId,
-                            restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
-                            isLoadingSelection: vm.isModelSelectionLoading
-                        )
-                    }
+                    ModelPickerButton(
+                        modelPicker: vm.modelPicker,
+                        providerId: vm.modelProviderId,
+                        restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
+                        isLoadingSelection: vm.isModelSelectionLoading
+                    )
                 }
             }
             .task {
