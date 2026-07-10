@@ -47,13 +47,13 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     var store: AgentSessionViewModel {
         shared {
             AgentSessionViewModel(
-                session: session,
+                context: context,
+                modelOptions: newSessionDraft,
                 makeSocket: dependency.makeSessionSocket(sessionId:),
                 sessionMessageStore: dependency.sessionMessageStore,
                 sessionSummaryStore: dependency.sessionSummaryStore,
                 transcriptBuilder: transcriptBuilder,
-                attachmentsAPI: dependency.attachmentsAPI,
-                draft: draft
+                attachmentsAPI: dependency.attachmentsAPI
             )
         }
     }
@@ -63,11 +63,16 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     }
 
     @MainActor
-    private var draft: NewSessionDraft? {
-        guard session == nil else {
-            return nil
+    private var context: AgentSessionViewModel.Context {
+        if let session {
+            return .session(session)
         }
-        return shared {
+        return .draft(newSessionDraft)
+    }
+
+    @MainActor
+    private var newSessionDraft: NewSessionDraft {
+        shared {
             NewSessionDraft(
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
@@ -88,9 +93,12 @@ struct AgentSessionBuilder {
             .environment(\.fetchImageAction, component.fetchImageAction)
     }
 
-    func buildNewSession() -> some View {
+    func buildNewSession(onSessionCreated: @escaping (String) -> Void) -> some View {
         let component = makeComponent(nil)
-        return AgentSessionView(store: component.store)
+        return AgentSessionView(
+            store: component.store,
+            onSessionCreated: onSessionCreated
+        )
             .environment(\.fetchImageAction, component.fetchImageAction)
     }
 }

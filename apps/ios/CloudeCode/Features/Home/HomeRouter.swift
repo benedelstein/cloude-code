@@ -17,6 +17,7 @@ final class HomeRouter: NotificationHandlerDelegate {
     @ObservationIgnored private let notificationHandler: NotificationHandler
     @ObservationIgnored private let sessionSummaryStore: SessionSummaryStore
     @ObservationIgnored private var navigationRequestID = 0
+    @ObservationIgnored private var createdSessionIDs: [UUID: String] = [:]
 
     var notificationTap: NotificationRoute? {
         notificationHandler.notificationTap
@@ -49,7 +50,7 @@ final class HomeRouter: NotificationHandlerDelegate {
     ) -> UNNotificationPresentationOptions {
         switch route {
         case .session(let sessionId, _):
-            path.last?.sessionId == sessionId
+            activeSessionId == sessionId
                 ? []
                 : NotificationHandler.defaultPresentationOptions
         }
@@ -62,7 +63,7 @@ final class HomeRouter: NotificationHandlerDelegate {
 
         switch route {
         case .session(let sessionId, _):
-            guard path.last?.sessionId != sessionId else {
+            guard activeSessionId != sessionId else {
                 notificationHandler.consumeTap(route)
                 return
             }
@@ -75,6 +76,7 @@ final class HomeRouter: NotificationHandlerDelegate {
 
             if !path.isEmpty {
                 path.removeAll()
+                createdSessionIDs.removeAll()
                 // Future optimization: replace this fixed pause with a scroll view delegate
                 // completion signal once navigation pop exposes a reliable finish callback.
                 try? await Task.sleep(nanoseconds: 400_000_000)
@@ -94,6 +96,14 @@ final class HomeRouter: NotificationHandlerDelegate {
         path.append(.newSession(id: UUID()))
     }
 
+    /// Associates a created session with its existing draft route without rebuilding the active screen.
+    func adoptDraftSession(id sessionId: String, for draftId: UUID) {
+        guard path.contains(where: { $0.draftId == draftId }) else {
+            return
+        }
+        createdSessionIDs[draftId] = sessionId
+    }
+
     /// Routes the currently pending notification tap, if one exists.
     func handlePendingNotificationTap() async {
         guard let route = notificationHandler.notificationTap else {
@@ -111,14 +121,27 @@ final class HomeRouter: NotificationHandlerDelegate {
             return nil
         }
     }
+
+    private var activeSessionId: String? {
+        path.last?.sessionId(createdSessionIDs: createdSessionIDs)
+    }
 }
 
 private extension HomeDestination {
     @MainActor
-    var sessionId: String? {
-        guard case .session(let session) = self else {
+    func sessionId(createdSessionIDs: [UUID: String]) -> String? {
+        switch self {
+        case .session(let session):
+            session.id
+        case .newSession(let id):
+            createdSessionIDs[id]
+        }
+    }
+
+    var draftId: UUID? {
+        guard case .newSession(let id) = self else {
             return nil
         }
-        return session.id
+        return id
     }
 }

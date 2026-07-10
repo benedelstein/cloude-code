@@ -9,6 +9,8 @@ final class NewSessionDraft {
         let providerId: ProviderId
         let modelId: String
         let displayName: String
+        let effortId: String?
+        let effortDisplayName: String?
     }
 
     struct SelectedRepo: Equatable, Identifiable {
@@ -21,8 +23,9 @@ final class NewSessionDraft {
     private let reposAPI: any ReposAPIProviding
     private let modelsAPI: any ModelsAPIProviding
     private let preferences: NewSessionPreferences
+    private var branchesByRepoID: [Int: [Branch]] = [:]
 
-    private(set) var catalog: ModelsResponse?
+    private(set) var modelCatalog: ModelsResponse?
     private(set) var repos: [Repo] = []
     private(set) var isLoading = false
     private(set) var isLoadingRepos = false
@@ -43,11 +46,14 @@ final class NewSessionDraft {
         self.reposAPI = reposAPI
         self.modelsAPI = modelsAPI
         self.preferences = preferences
-        selectedModel = preferences.lastSelectedModel.map {
+        let lastSelectedModel = preferences.lastSelectedModel
+        selectedModel = lastSelectedModel.map {
             SelectedModel(
                 providerId: ProviderId(rawValue: $0.providerId),
                 modelId: $0.modelId,
-                displayName: $0.displayName
+                displayName: $0.displayName,
+                effortId: $0.effortId,
+                effortDisplayName: $0.effortDisplayName
             )
         }
         selectedRepo = preferences.lastSelectedRepo.map {
@@ -80,10 +86,29 @@ final class NewSessionDraft {
 
         do {
             let (catalog, reposResponse) = try await (catalogResponse, reposResponse)
-            self.catalog = catalog
+            self.modelCatalog = catalog
             repos = reposResponse.repos
             resolveSelectedModel(with: catalog)
             resolveSelectedRepo(with: reposResponse.repos)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Loads the model catalog without fetching repository choices.
+    func loadModelCatalog() async {
+        guard !isLoadingCatalog else {
+            return
+        }
+        isLoadingCatalog = true
+        defer {
+            isLoadingCatalog = false
+        }
+
+        do {
+            let catalog = try await modelsAPI.models()
+            modelCatalog = catalog
+            resolveSelectedModel(with: catalog)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -102,19 +127,93 @@ final class NewSessionDraft {
         return try await reposAPI.searchRepos(query: trimmedQuery, limit: limit).repos
     }
 
-    /// Loads branches for a repository.
-    func branches(for repo: Repo, limit: Int = 100) async throws -> [Branch] {
-        try await reposAPI.branches(repoId: repo.id, limit: limit, cursor: nil).branches
+    /// Returns the branches cached for a repository during this draft session.
+    func cachedBranches(repoId: Int) -> [Branch]? {
+        branchesByRepoID[repoId]
+    }
+
+    /// Loads and caches the branches available for a repository.
+    func branches(repoId: Int, limit: Int = 100) async throws -> [Branch] {
+        if let cachedBranches = branchesByRepoID[repoId] {
+            return cachedBranches
+        }
+
+        let branches = try await reposAPI.branches(repoId: repoId, limit: limit, cursor: nil).branches
+        branchesByRepoID[repoId] = branches
+        return branches
     }
 
     /// Selects a model and stores it for future drafts.
-    func selectModel(provider: ProviderCatalogEntry, model: ProviderCatalogModel) {
+    func selectModel(
+        provider: ProviderCatalogEntry,
+        model: ProviderCatalogModel,
+        persistsSelection: Bool = true
+    ) {
+        let selectedEffort: ProviderCatalogEffort? = selectedModel.flatMap { selection in
+            guard selection.providerId == provider.providerId else {
+                return nil
+            }
+            return provider.efforts.first {
+                $0.id == selection.effortId && $0.selectable
+            }
+        }
+        let effort = selectedEffort
+            ?? provider.efforts.first { $0.id == provider.defaultEffort && $0.selectable }
+            ?? provider.efforts.first(where: \.selectable)
+
         selectedModel = SelectedModel(
             providerId: provider.providerId,
             modelId: model.id,
-            displayName: model.displayName
+            displayName: model.displayName,
+            effortId: effort?.id,
+            effortDisplayName: effort?.displayName
         )
-        preferences.persistModel(provider: provider, model: model)
+        if persistsSelection {
+            preferences.persistModel(provider: provider, model: model, effort: effort)
+        }
+    }
+
+    /// Selects an effort level for the current model and stores it for future drafts.
+    func selectEffort(
+        provider: ProviderCatalogEntry,
+        effort: ProviderCatalogEffort,
+        persistsSelection: Bool = true
+    ) {
+        guard effort.selectable,
+              let selectedModel,
+              selectedModel.providerId == provider.providerId,
+              let model = provider.models.first(where: { $0.id == selectedModel.modelId }) else {
+            return
+        }
+
+        self.selectedModel = SelectedModel(
+            providerId: selectedModel.providerId,
+            modelId: selectedModel.modelId,
+            displayName: selectedModel.displayName,
+            effortId: effort.id,
+            effortDisplayName: effort.displayName
+        )
+        if persistsSelection {
+            preferences.persistModel(provider: provider, model: model, effort: effort)
+        }
+    }
+
+    /// Selects the model reported by an existing session without changing new-session preferences.
+    @discardableResult
+    func selectSessionModel(providerId: ProviderId, modelId: String, effortId: String) -> Bool {
+        guard let provider = modelCatalog?.providers.first(where: { $0.providerId == providerId }),
+              let model = provider.models.first(where: { $0.id == modelId }) else {
+            return false
+        }
+        let effort = provider.efforts.first { $0.id == effortId }
+        selectedModel = SelectedModel(
+            providerId: providerId,
+            modelId: modelId,
+            displayName: model.displayName,
+            effortId: effort?.id,
+            effortDisplayName: effort?.displayName
+        )
+        return true
     }
 
     /// Selects a repository and branch, resetting to the repository default when no branch is supplied.
@@ -126,6 +225,11 @@ final class NewSessionDraft {
         )
         selectedBranch = branch ?? repo.defaultBranch
         preferences.persistRepo(repo)
+    }
+
+    /// Selects a branch for the current repository.
+    func selectBranch(_ branch: String) {
+        selectedBranch = branch
     }
 
     /// Builds and sends the create-session request for this draft.
@@ -143,7 +247,11 @@ final class NewSessionDraft {
         let request = CreateSessionRequest(
             repoId: selectedRepo.id,
             settings: selectedModel.map {
-                AgentSettingsInput(provider: $0.providerId, model: $0.modelId)
+                AgentSettingsInput(
+                    provider: $0.providerId,
+                    model: $0.modelId,
+                    effort: $0.effortId
+                )
             },
             branch: branch,
             initialMessage: initialMessage
@@ -155,7 +263,8 @@ final class NewSessionDraft {
         if let selectedModel,
            let provider = catalog.providers.first(where: { $0.providerId == selectedModel.providerId }),
            provider.isSelectable,
-           provider.models.contains(where: { $0.id == selectedModel.modelId && $0.selectable }) {
+           let model = provider.models.first(where: { $0.id == selectedModel.modelId && $0.selectable }) {
+            selectModel(provider: provider, model: model)
             return
         }
 

@@ -28,11 +28,11 @@ Verified foundations this design relies on:
 
 ## Decisions
 
-### 1. Optional `session` + socket factory on the existing VM (not an enum context, not a second VM)
+### 1. Explicit context enum on the existing VM
 
-`AgentSessionViewModel` gains `private(set) var session: SessionSummaryModel?`, `private var socket: SessionSocket?`, an injected `makeSocket: (String) -> SessionSocket` factory, and `let draft: NewSessionDraft?` (exactly one of `session`/`draft` non-nil). `isDraftMode = (session == nil)`.
+`AgentSessionViewModel` gains a `Context` enum with exactly two cases: `.session(SessionSummaryModel)` and `.draft(NewSessionDraft)`. `session`, `draft`, and `isDraftMode` are derived from that context. An injected `makeSocket: (String) -> SessionSocket` factory creates the socket immediately for `.session` and after successful creation for `.draft`.
 
-- *Why not an enum context?* Every `session.id` call site (message store keys, markRead, header) would become a pattern match; an optional keeps the diff minimal and the `nil → set` transition natural.
+- *Why an enum context?* Separate optional `session` and `draft` inputs allow invalid combinations where both are nil or both are set. The enum makes those states unrepresentable while preserving convenient computed optional accessors at guarded call sites.
 - *Why not a separate draft VM/screen?* The requirement is the same scaffold with the same transcript machinery (optimistic rows, working indicator, streaming) live the moment the id binds — duplicating it would fork ~800 lines of transcript state handling.
 - All `session.id`/`socket` uses (`applySyncResponse`, `applyAgentFinish`, `applyUserMessage`, `acceptOptimisticUserMessage`, `loadCachedMessages`, `markReadIfNeeded`) guard on nil — nothing persists to disk before an id exists.
 - `bind()` body extracts into `startSocketPipeline(socket:loadCache:)`. Existing sessions: unchanged. Draft: `await draft?.load()` (concurrent `/models` + `/repos`, resolve persisted defaults) and set `hasLoadedMessages = true` so the view shows the empty state, not a spinner.
@@ -42,7 +42,7 @@ Verified foundations this design relies on:
 
 `submitDraft()` runs the shared optimistic steps first (clear composer, `appendPendingOptimisticUserMessage`, `isSending`/`isWaitingForResponse = true` — the working indicator appears immediately), then branches. Draft branch: `draft.createSession(content:attachmentIds:)` → on success `adoptCreatedSession(response)`:
 
-1. Build a `SessionSummary` (id/title from the response, repo fields from `draft.selectedRepo`, `workingState: "responding"`) and `session = sessionSummaryStore.putDisk([summary]).first` — the canonical model dedups with the `summaryCreated` user-sessions socket event Home already handles.
+1. Build a `SessionSummary` (id/title from the response, repo fields from `draft.selectedRepo`, `workingState: "responding"`) and transition `context` to `.session(sessionSummaryStore.putSnapshotsToDisk([summary])[0])` — the canonical model dedups with the `summaryCreated` user-sessions socket event Home already handles.
 2. `attachmentStore.adoptSessionId(response.sessionId)` (new setter on `ImageAttachmentStore`).
 3. `socket = makeSocket(response.sessionId)`; `startSocketPipeline(socket:loadCache: false)`. The initial `syncResponse` reconciles the optimistic message via `isServerConfirmation` and persists messages through existing paths.
 
@@ -57,13 +57,13 @@ A `@MainActor @Observable` object (`Features/AgentSession/Draft/NewSessionDraft.
 
 ### 4. Navigation: `HomeDestination` enum, FAB overlay
 
-`HomeRouter.path` becomes `[HomeDestination]` with `case session(SessionSummaryModel)` and `case newSession(id: UUID)` (UUID keeps repeated pushes distinct). `presentationOptionsFor`/`handleNotificationTap` pattern-match on `.session`. The FAB is a `.overlay(alignment: .bottomTrailing)` on Home content — `plus.bubble.fill` in a 56pt circle using the existing `glassBackground(in:tint:)`.
+`HomeRouter.path` becomes `[HomeDestination]` with `case session(SessionSummaryModel)` and `case newSession(id: UUID)` (UUID keeps repeated pushes distinct). `presentationOptionsFor`/`handleNotificationTap` resolve the active session id from either a session destination or a created-session association on a draft UUID. The FAB is a `.overlay(alignment: .bottomTrailing)` on Home content — `plus.bubble.fill` in a 56pt circle using the existing `glassBackground(in:tint:)`.
 
-- *Why change the path element type instead of a second `navigationDestination`?* One path array keeps router logic (notification replace-path routing) in one place; a marker type alongside `SessionSummaryModel` would split `path.last` semantics.
+- *Why change the path element type instead of a second `navigationDestination`?* One path array keeps router logic (notification replace-path routing) in one place; a marker type alongside `SessionSummaryModel` would split `path.last` semantics. When a draft becomes a session, the router records the created session id against that draft UUID instead of replacing the navigation destination: replacing it would recreate the active transcript, while the association lets foreground notification suppression and tap routing recognize the visible live session.
 
-### 5. Composer extension via a generic trailing-accessory slot
+### 5. Composer extension via a generic send-accessory slot
 
-`PromptComposerView` gains a defaulted `@ViewBuilder trailingAccessory` generic parameter rendered after `SendButton` — the component stays VM-free and reusable. The repo/branch bar lives *outside* `PromptComposerView`, in the `ComposerView` adapter: `VStack { if isDraftMode { RepoBranchPickerBar } ; PromptComposerView(...) }` — its own glass rect, per requirement, and it disappears automatically when `session != nil` (existing `readSize`/`composerHeight` animates the shrink).
+`PromptComposerView` gains a defaulted `@ViewBuilder trailingAccessory` generic parameter rendered immediately before `SendButton` — the component stays VM-free and reusable. The repo/branch control lives *outside* `PromptComposerView`, in the `ComposerView` adapter: `VStack { if isDraftMode { RepoBranchPickerBar } ; PromptComposerView(...) }`. It is an intrinsic-width glass capsule: the repository segment opens the searchable repository sheet, and the base-branch segment appears only after repository selection and opens its own branch sheet. The control disappears automatically when `session != nil` (existing `readSize`/`composerHeight` animates the shrink).
 
 ### 6. Model list from `GET /models`; persistence in the app target
 

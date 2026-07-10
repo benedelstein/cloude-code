@@ -7,14 +7,14 @@ The iOS app can only view sessions created on the web — there is no way to sta
 ## What Changes
 
 - Glass FAB (bottom-right) on the Home sessions list that pushes a **draft session screen** — the existing `AgentSessionView` scaffold operating without a session id (one transcript scrollview the whole time; zero rows in draft).
-- `AgentSessionViewModel` becomes id-optional: optional `session`, socket created lazily via an injected factory, a `NewSessionDraft` coordinator owning catalog/repo state.
+- `AgentSessionViewModel` gains a single context enum: either an existing session model or a `NewSessionDraft` coordinator. The socket is created eagerly for the session case and lazily after the draft creates its session.
 - Composer gains, in draft mode only:
-  - a **repo/branch picker bar** above the main composer rect in its own glass rect (half sheet, medium + large detents, with search; branch list per repo). Disappears once the session is created.
-  - a **model/provider picker button** to the right of the send button showing `<provider icon> <model name>` or "Select model" (half sheet, no search; disconnected providers rendered disabled; no connect flow).
+  - a compact **repo/branch picker pill** above the main composer rect (half sheet, medium + large detents, with search; the base-branch segment appears only after a repo is selected). It disappears once the session is created.
+  - a **model/provider picker button** immediately to the left of the send button showing `<provider icon> <model name>` or "Select model" (half sheet, no search; disconnected providers rendered disabled; no connect flow).
 - On send: the user message is inserted optimistically with the working indicator shown immediately, then `POST /sessions` fires with the message as `initialMessage` (same as web). On success, the VM adopts the session id and starts the normal socket pipeline; on failure, the optimistic message is retracted and draft text/attachments restored, with an error toast.
 - Last selected model and repo persist in UserDefaults, validated against `/models` connection state on load.
 - New networking clients in `Modules/API`: `ReposAPI` (`GET /repos`, `/repos/search`, `/repos/{id}/branches`) and `ModelsAPI` (`GET /models`).
-- `HomeRouter.path` element type changes from `SessionSummaryModel` to a `HomeDestination` enum (session / newSession) — internal refactor, notification-tap routing preserved.
+- `HomeRouter.path` element type changes from `SessionSummaryModel` to a `HomeDestination` enum (session / newSession). A created draft associates its real session id with the stable draft route so foreground-notification suppression and notification taps recognize the active session without recreating the transcript view.
 - Deferred with TODOs: effort-level picker, edit/plan mode toggle, `/models` response caching.
 
 ## Capabilities

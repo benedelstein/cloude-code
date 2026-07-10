@@ -194,14 +194,14 @@ struct PromptComposerView<TrailingAccessory: View>: View {
 
             Spacer()
 
+            trailingAccessory
+
             SendButton(
                 isSubmitDisabled: isSubmitDisabled,
                 isSubmitting: isSubmitting,
                 size: composerStyle.bottomButtonSize,
                 onSubmit: onSubmit
             )
-
-            trailingAccessory
         }
     }
 
@@ -332,7 +332,6 @@ private extension PromptComposerView {
                 controls
                     .padding(composerStyle.contentInset)
                     .zIndex(2)
-//                    .animation(nil, value: isVisible)
             }
             .allowsHitTesting(isVisible)
             .sensoryFeedback(.selection, trigger: selectedPhotoItems)

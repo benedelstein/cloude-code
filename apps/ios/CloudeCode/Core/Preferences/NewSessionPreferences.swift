@@ -7,6 +7,8 @@ final class NewSessionPreferences {
         let providerId: String
         let modelId: String
         let displayName: String
+        let effortId: String?
+        let effortDisplayName: String?
     }
 
     struct LastSelectedRepo: Codable, Equatable {
@@ -19,6 +21,7 @@ final class NewSessionPreferences {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    // todo use appgroup user defaults from app component
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
@@ -41,11 +44,17 @@ final class NewSessionPreferences {
         }
     }
 
-    func persistModel(provider: ProviderCatalogEntry, model: ProviderCatalogModel) {
+    func persistModel(
+        provider: ProviderCatalogEntry,
+        model: ProviderCatalogModel,
+        effort: ProviderCatalogEffort?
+    ) {
         lastSelectedModel = LastSelectedModel(
             providerId: provider.providerId.rawValue,
             modelId: model.id,
-            displayName: model.displayName
+            displayName: model.displayName,
+            effortId: effort?.id,
+            effortDisplayName: effort?.displayName
         )
     }
 

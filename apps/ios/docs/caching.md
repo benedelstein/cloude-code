@@ -33,12 +33,12 @@ Stores are then shared dependencies, for example `UserStore` and
 
 1. Memory: return canonical `EntityModel` instances already in `objectMap`.
 2. Disk: fetch domain snapshots from `Cache`, then merge into `objectMap`.
-3. Network: optional `getAPI`, then `putDisk(_:)` to merge memory and persist.
+3. Network: optional `getAPI`, then `putSnapshotsToDisk(_:)` to merge memory and persist.
 
 Writes use the same identity rules:
 
 - `putMemory(_:)` updates existing model instances in place or creates them.
-- `putDisk(_:)` writes snapshots to SwiftData in a background task, then updates memory.
+- `putSnapshotsToDisk(_:)` writes snapshots to SwiftData in a background task, then updates memory.
 - `save(_:)` persists current model state by converting models back to snapshots.
 - `delete(_:)` removes ids from memory and disk.
 

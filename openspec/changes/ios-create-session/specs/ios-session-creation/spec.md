@@ -47,11 +47,16 @@ On send in draft mode, the app SHALL insert the user's message into the transcri
 - **THEN** the send button is disabled; selecting a repo enables it even though no socket is connected
 
 ### Requirement: Session adoption after successful creation
-When creation succeeds, the view model SHALL adopt the returned session id: persist a canonical session summary (so the Home list shows the session without duplicating the server's summary-created event), bind the attachment store to the id, create and connect the session websocket, and let the initial sync response reconcile the optimistic message and persist messages through the existing paths. The navigation title SHALL adopt the server-generated title.
+When creation succeeds, the view model SHALL adopt the returned session id: persist a canonical session summary (so the Home list shows the session without duplicating the server's summary-created event), bind the attachment store to the id, create and connect the session websocket, and let the initial sync response reconcile the optimistic message and persist messages through the existing paths. The navigation title SHALL adopt the server-generated title. The Home router SHALL associate the created session id with the stable draft navigation destination so notification handling recognizes the visible live session without rebuilding its transcript view.
 
 #### Scenario: Seamless transition to a live session
 - **WHEN** creation succeeds
 - **THEN** the same screen connects the socket, streams the agent response below the optimistic message, and the optimistic message is reconciled with the server echo without duplication
+
+#### Scenario: Finished notification for a created session is suppressed while visible
+- **WHEN** a draft has created its session and remains visible
+- **AND** a turn-finished notification arrives for that created session
+- **THEN** the app suppresses the foreground notification and leaves the active draft route in place
 
 #### Scenario: Home list consistency
 - **WHEN** the user navigates back after creating a session

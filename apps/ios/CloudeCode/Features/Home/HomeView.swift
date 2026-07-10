@@ -31,14 +31,17 @@ struct HomeView: View {
         NavigationStack(path: $router.path) {
             contentWithFAB
                 .background(theme.backgroundColor)
+                .ignoresSafeArea(.keyboard)
                 .navigationTitle("Sessions")
                 .toolbar { settingsToolbar }
                 .navigationDestination(for: HomeDestination.self) { destination in
                     switch destination {
                     case .session(let session):
                         sessionBuilder.build(session: session)
-                    case .newSession:
-                        sessionBuilder.buildNewSession()
+                    case .newSession(let draftId):
+                        sessionBuilder.buildNewSession { sessionId in
+                            router.adoptDraftSession(id: sessionId, for: draftId)
+                        }
                     }
                 }
                 .onChange(of: viewModel.errorMessage) { _, errorMessage in
@@ -99,14 +102,16 @@ struct HomeView: View {
                 Button {
                     router.pushNewSession()
                 } label: {
-                    Image(systemName: "plus.bubble.fill")
+                    Image(systemName: "plus.message.fill")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(theme.labelColor)
-                        .frame(width: 56, height: 56)
+                        .frame(width: 48, height: 48)
                         .contentShape(Circle())
-                        .glassBackground(in: Circle())
+//                        .glassBackground(in: Circle())
                 }
-                .buttonStyle(.plain)
+                .glassButtonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
+//                .buttonStyle(.plain)
                 .accessibilityLabel("New session")
                 .padding(style.horizontalPadding)
             }
@@ -118,11 +123,12 @@ struct HomeView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.isEmpty && viewModel.hasLoaded {
-            ContentUnavailableView(
-                "No sessions",
-                systemImage: "sidebar.left",
-                description: Text("Create a session to see it here.")
-            )
+            EmptyStateView(
+                title: "No sessions",
+                subtitle: "Create a session to see it here."
+            ) {
+                Image(systemName: "sidebar.left")
+            }
         } else {
             sessionsList
         }

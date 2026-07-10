@@ -3,33 +3,63 @@
 ## ADDED Requirements
 
 ### Requirement: Repo/branch picker bar
-In draft mode the composer SHALL show a repo/branch picker bar rendered above the main composer rect in its own glass container, displaying the selected repo's full name and branch, or a "Select repository" prompt when none is selected. The bar SHALL NOT render once the session is created.
+In draft mode the composer SHALL show a compact, intrinsic-width repo/branch picker pill above the main composer rect. The repository segment SHALL render first and display the selected repo's full name or "Repository" when none is selected. Once a repository is selected, the control SHALL append a base-branch segment. The control SHALL NOT render once the session is created.
 
 #### Scenario: Bar renders above the composer in draft mode
 - **WHEN** the draft screen is visible
-- **THEN** the repo/branch bar appears as a separate glass rect above the composer input
+- **THEN** the compact repo/branch pill appears above the composer input
+
+#### Scenario: Base branch follows repository selection
+- **WHEN** the user has selected a repository
+- **THEN** the compact control shows the repository segment followed by the selected base branch segment
 
 #### Scenario: Bar absent for existing sessions
 - **WHEN** the screen shows an existing (or just-created) session
 - **THEN** no repo/branch bar renders
 
-### Requirement: Repo/branch picker sheet
-Tapping the repo/branch bar SHALL open a half sheet (medium detent, expandable to full height) listing the user's repos with a search field (server-backed search; the unfiltered list when the query is empty). Selecting a repo SHALL present its branches with the repo's default branch preselected; confirming SHALL update the bar and persist the selection.
+### Requirement: Repository picker sheet
+Tapping the repository segment SHALL open a half sheet (medium detent, expandable to full height) listing the user's repos with a search field (server-backed search; the unfiltered list when the query is empty). Selecting a repository SHALL update the repository segment, reset the base branch to the repository default, persist the repository selection, and dismiss the sheet.
 
 #### Scenario: Search narrows the repo list
 - **WHEN** the user types in the sheet's search field
 - **THEN** the list updates to matching repos via the repos search endpoint
 
-#### Scenario: Default branch preselected
+#### Scenario: Selecting a repository reveals the base branch control
 - **WHEN** the user selects a repo
-- **THEN** the branch list shows with the repo's default branch checked
+- **THEN** the compact control appends a base branch segment showing the repo's default branch
+
+#### Scenario: Selected repository is marked
+- **WHEN** the repository picker lists the currently selected repository
+- **THEN** that repository row displays a checkmark
 
 #### Scenario: Sheet expands to full height
 - **WHEN** the user drags the sheet upward
 - **THEN** it expands to the large detent
 
+### Requirement: Base branch picker sheet
+Tapping the base branch segment SHALL open a half sheet (medium detent, expandable to full height) listing branches for the selected repository with its default branch selected. Selecting a branch SHALL update the segment and dismiss the sheet.
+
+#### Scenario: Default branch preselected
+- **WHEN** the user opens the base branch sheet after selecting a repository
+- **THEN** the repository's default branch is checked and rendered as the stable first row before all loaded branches
+
+### Requirement: Picker loading presentation
+Initial repository and model catalog loads SHALL render non-interactive redacted rows in the list. Initial branch loading SHALL render the selected repository's known default branch as a normal row, followed by non-interactive redacted rows. While a repository search refines an existing result set, the picker SHALL retain the existing rows and append one non-interactive redacted repository row. The picker SHALL NOT render a standalone progress row.
+
+#### Scenario: Repository search retains previous results while loading
+- **WHEN** the user enters a repository search query
+- **THEN** the list retains the current repository rows and appends a redacted repository row until the matching results arrive
+
+#### Scenario: Initial picker load shows skeleton rows
+- **WHEN** a picker requires its initial network data
+- **THEN** it renders redacted rows until that data is available
+
+#### Scenario: Known default branch remains available during branch loading
+- **WHEN** the base branch picker is loading branches for a selected repository
+- **THEN** the repository's default branch renders as the first normal row before the redacted branch rows
+
 ### Requirement: Model/provider picker button
-In draft mode the composer SHALL show a model picker button to the right of the send button, displaying the selected model as a provider icon plus display name (e.g. "Opus 4.8"), or "Select model" when none is selected.
+In draft mode the composer SHALL show a model picker button immediately to the left of the send button, displaying the selected model as a provider icon plus display name (e.g. "Opus 4.8"), or "Select model" when none is selected.
 
 #### Scenario: Last model shown on entry
 - **WHEN** the draft screen appears and a previously selected model is persisted and still valid

@@ -16,16 +16,17 @@ import UIKit
 final class AgentSessionViewModel {
     typealias MessageDisplayData = AgentSessionView.MessageDisplayData
     typealias TranscriptRow = AgentSessionView.TranscriptRow
-    /// Canonical cached model — updates from the cache/socket propagate here. (reference type)
-    private(set) var session: SessionSummaryModel?
 
+    private var context: Context
+    private let modelOptions: NewSessionDraft?
     private var socket: SessionSocket?
     private let makeSocket: (String) -> SessionSocket
     private let sessionMessageStore: SessionMessageStore
     private let sessionSummaryStore: SessionSummaryStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
-    let draft: NewSessionDraft?
     private var subscriptionTask: Task<Void, Never>?
+    private var modelCatalogTask: Task<Void, Never>?
+    private var hasInitializedSessionModelSelection: Bool
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
     // Keeps the local upload drafts for an optimistic message so they can be
@@ -58,6 +59,8 @@ final class AgentSessionViewModel {
     private(set) var clientState = SessionClientState.empty
     /// Message send is in progress
     private(set) var isSending = false
+    /// The initial request is creating a new session.
+    private(set) var isCreatingSession = false
     /// Waiting for a message stream response from server.
     /// Set to true after we send a message
     private(set) var isWaitingForResponse = false
@@ -78,52 +81,31 @@ final class AgentSessionViewModel {
             && !isResponding
     }
 
-    var isDraftMode: Bool {
-        session == nil
-    }
-
     var isResponding: Bool {
         isWaitingForResponse
             || streamStatus.isActive
             || clientState.activeTurnUserMessageId != nil
     }
 
-    var isConnected: Bool {
-        connectionState == .connected
-    }
-
-    var composerPlaceholder: String {
-        if isDraftMode {
-            return isResponding ? "Agent is responding..." : "Send a message..."
-        }
-        return switch connectionState {
-        case .connecting:
-            "Connecting..."
-        case .connected:
-            isResponding ? "Agent is responding..." : "Send a message..."
-        case .disconnected:
-            "Reconnecting..."
-        }
-    }
-
     init(
-        session: SessionSummaryModel?,
+        context: Context,
+        modelOptions: NewSessionDraft? = nil,
         makeSocket: @escaping (String) -> SessionSocket,
         sessionMessageStore: SessionMessageStore,
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
-        attachmentsAPI: any AttachmentsAPIProviding,
-        draft: NewSessionDraft?
+        attachmentsAPI: any AttachmentsAPIProviding
     ) {
-        self.session = session
-        self.socket = session.map { makeSocket($0.id) }
+        self.context = context
+        self.modelOptions = modelOptions ?? context.draft
+        hasInitializedSessionModelSelection = context.draft != nil
+        self.socket = context.session.map { makeSocket($0.id) }
         self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
         self.sessionSummaryStore = sessionSummaryStore
         self.transcriptBuilder = transcriptBuilder
-        self.draft = draft
         attachmentStore = ImageAttachmentStore(
-            sessionId: session?.id,
+            sessionId: context.session?.id,
             attachmentsAPI: attachmentsAPI
         )
     }
@@ -169,6 +151,7 @@ final class AgentSessionViewModel {
     private func applyLiveState(_ state: SessionClientState) {
         let previousProvider = clientState.agentSettings.provider
         clientState = state
+        initializeSessionModelSelectionIfNeeded()
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
         if previousProvider != state.agentSettings.provider {
             rebuildTranscriptDisplayData()
@@ -257,8 +240,7 @@ final class AgentSessionViewModel {
             return
         }
         session.hasUnread = false
-        // Persisting unread state belongs with the session summary store once that dependency is available.
-        // sessionSummaryStore.putDisk(session)
+        sessionSummaryStore.save([session])
     }
 
     private func recordSendError(
@@ -289,6 +271,7 @@ final class AgentSessionViewModel {
         clearStreamingState(removeActiveTranscript: true)
         clientState.activeTurnUserMessageId = nil
         isSending = false
+        isCreatingSession = false
         isWaitingForResponse = false
         hasSeenServerActiveTurn = false
     }
@@ -322,6 +305,105 @@ private enum DraftSendError: LocalizedError {
 }
 
 extension AgentSessionViewModel {
+    var isConnected: Bool {
+        connectionState == .connected
+    }
+
+    var composerPlaceholder: String {
+        if isCreatingSession {
+            return "Creating session..."
+        }
+        if isDraftMode {
+            return "Send a message..."
+        }
+        return switch connectionState {
+        case .connecting:
+            "Connecting..."
+        case .connected:
+            isResponding ? "Agent is responding..." : "Send a message..."
+        case .disconnected:
+            "Reconnecting..."
+        }
+    }
+
+    enum Context {
+        case session(SessionSummaryModel)
+        case draft(NewSessionDraft)
+
+        var session: SessionSummaryModel? {
+            guard case .session(let session) = self else {
+                return nil
+            }
+            return session
+        }
+
+        var draft: NewSessionDraft? {
+            guard case .draft(let draft) = self else {
+                return nil
+            }
+            return draft
+        }
+    }
+
+    /// Canonical cached model; cache and socket updates propagate through this reference.
+    var session: SessionSummaryModel? {
+        context.session
+    }
+
+    var draft: NewSessionDraft? {
+        modelOptions
+    }
+
+    var isDraftMode: Bool {
+        if case .draft = context {
+            return true
+        }
+        return false
+    }
+
+    var modelProviderId: ProviderId? {
+        if isDraftMode {
+            return isCreatingSession
+                ? modelOptions?.selectedModel?.providerId
+                : nil
+        }
+        if let providerId = clientState.agentSettings.provider.providerId {
+            return providerId
+        }
+        return hasInitializedSessionModelSelection
+            ? modelOptions?.selectedModel?.providerId
+            : nil
+    }
+}
+
+extension AgentSessionViewModel {
+    private var selectedModelOverride: (model: String?, effort: String?)? {
+        guard let selectedModel = modelOptions?.selectedModel,
+              selectedModel.providerId == modelProviderId else {
+            return nil
+        }
+        let settings = clientState.agentSettings
+        return (
+            model: selectedModel.modelId == settings.model ? nil : selectedModel.modelId,
+            effort: selectedModel.effortId == settings.effort ? nil : selectedModel.effortId
+        )
+    }
+
+    private func initializeSessionModelSelectionIfNeeded() {
+        guard !hasInitializedSessionModelSelection,
+              let modelOptions,
+              let providerId = clientState.agentSettings.provider.providerId,
+              !clientState.agentSettings.model.isEmpty,
+              modelOptions.selectSessionModel(
+                  providerId: providerId,
+                  modelId: clientState.agentSettings.model,
+                  effortId: clientState.agentSettings.effort
+              ) else {
+            return
+        }
+        hasInitializedSessionModelSelection = true
+    }
+
     /// Image drafts currently shown by the composer attachment strip.
     var imageAttachmentDrafts: [ImageAttachmentDraft] {
         attachmentStore.attachments
@@ -358,6 +440,19 @@ extension AgentSessionViewModel {
     }
 }
 
+private extension AgentProviderID {
+    var providerId: ProviderId? {
+        switch self {
+        case .claudeCode:
+            .claudeCode
+        case .openaiCodex:
+            .openaiCodex
+        case .unknown:
+            nil
+        }
+    }
+}
+
 extension AgentSessionViewModel {
     /// Submit the composed message.
     func submitDraft() {
@@ -383,6 +478,7 @@ extension AgentSessionViewModel {
         errorMessage = nil
 
         if isDraftMode {
+            isCreatingSession = true
             sendDraftSessionMessage(
                 content: content,
                 uploadedAttachments: uploadedAttachments,
@@ -407,6 +503,9 @@ extension AgentSessionViewModel {
         clientMessageId: String
     ) {
         Task { [uploadedAttachments] in
+            defer {
+                self.isCreatingSession = false
+            }
             do {
                 let response = try await draft?.createSession(
                     content: content,
@@ -446,10 +545,13 @@ extension AgentSessionViewModel {
 
         Task { [socket, uploadedAttachments] in
             do {
+                let selectedModel = self.selectedModelOverride
                 try await socket.sendChat(
                     content: content.isEmpty ? nil : content,
                     attachmentIds: uploadedAttachments.map(\.attachmentId),
-                    clientMessageId: clientMessageId
+                    clientMessageId: clientMessageId,
+                    model: selectedModel?.model,
+                    effort: selectedModel?.effort
                 )
                 self.isSending = false
             } catch {
@@ -480,11 +582,13 @@ extension AgentSessionViewModel {
             updatedAt: now,
             hasUnread: false
         )
-        session = sessionSummaryStore.putDisk([summary]).first
+        let session = sessionSummaryStore.putSnapshotsToDisk([summary])[0]
+        context = .session(session)
         attachmentStore.adoptSessionId(response.sessionId)
 
         let socket = makeSocket(response.sessionId)
         self.socket = socket
+        connectionState = .connecting
         startSocketPipeline(socket: socket, loadCache: false)
     }
 }
@@ -496,11 +600,17 @@ extension AgentSessionViewModel {
         }
 
         guard let socket else {
-            await draft?.load()
             hasLoadedMessages = true
+            await modelOptions?.load()
             return
         }
 
+        if let modelOptions {
+            modelCatalogTask = Task { [weak self, modelOptions] in
+                await modelOptions.loadModelCatalog()
+                self?.initializeSessionModelSelectionIfNeeded()
+            }
+        }
         startSocketPipeline(socket: socket, loadCache: true)
         await subscriptionTask?.value
     }
@@ -525,6 +635,8 @@ extension AgentSessionViewModel {
     }
 
     func unbind() {
+        modelCatalogTask?.cancel()
+        modelCatalogTask = nil
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected

@@ -10,21 +10,32 @@ import SwiftUI
 
 extension AgentSessionView {
     struct ComposerView: View {
+        @Environment(\.style) var style: Style
+
         @Bindable var vm: AgentSessionViewModel
         @State private var composerFocused = false
 
         var body: some View {
-            VStack(spacing: 8) {
-                if vm.isDraftMode, let draft = vm.draft {
+            VStack(alignment: .leading, spacing: 8) {
+                if vm.isDraftMode, !vm.isCreatingSession, let draft = vm.draft {
                     RepoBranchPickerBar(draft: draft)
+                        .transition(style.fadeTransition)
                 }
 
-                if vm.isDraftMode, let draft = vm.draft {
-                    promptComposer {
-                        ModelPickerButton(draft: draft)
+                promptComposer {
+                    if let draft = vm.draft {
+                        ModelPickerButton(
+                            draft: draft,
+                            providerId: vm.modelProviderId,
+                            restrictsProvider: vm.isCreatingSession || !vm.isDraftMode
+                        )
                     }
-                } else {
-                    promptComposer()
+                }
+            }
+            .task {
+                if vm.isDraftMode {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    composerFocused = true
                 }
             }
         }
@@ -41,7 +52,7 @@ extension AgentSessionView {
                 remainingImageSlots: vm.remainingImageAttachmentSlots,
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
-                isSubmitting: vm.isResponding,
+                isSubmitting: vm.isCreatingSession || vm.isResponding,
                 trailingAccessory: trailingAccessory,
                 onSubmit: vm.submitDraft,
                 onRemoveImageAttachment: vm.removeImageAttachment,

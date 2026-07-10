@@ -11,9 +11,14 @@ struct AgentSessionView: View {
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
+    private let onSessionCreated: ((String) -> Void)?
 
-    init(store: AgentSessionViewModel) {
+    init(
+        store: AgentSessionViewModel,
+        onSessionCreated: ((String) -> Void)? = nil
+    ) {
         _store = State(initialValue: store)
+        self.onSessionCreated = onSessionCreated
     }
 
     var body: some View {
@@ -64,6 +69,12 @@ struct AgentSessionView: View {
                 title: Text(verbatim: errorMessage),
                 icon: Image(systemName: "exclamationmark.circle.fill")
             )
+        }
+        .onChange(of: store.session?.id) { _, sessionId in
+            guard let sessionId else {
+                return
+            }
+            onSessionCreated?(sessionId)
         }
         .onDisappear {
             store.unbind()
@@ -252,11 +263,11 @@ private extension AgentSessionView {
         private var emptyScrollView: some View {
             ScrollView {
                 if store.hasLoadedMessages {
-                    ContentUnavailableView(
-                        "No messages yet",
-                        systemImage: "text.bubble"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
+//                    ContentUnavailableView(
+//                        "No messages yet",
+//                        systemImage: "text.bubble"
+//                    )
+//                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
                 } else {
                     // todo loading skeleton
                     ProgressView()

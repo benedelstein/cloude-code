@@ -50,7 +50,9 @@ struct AgentSessionToolDetailSheet: View {
             if let action = item.groupActions[safe: index] {
                 ToolActionDetailView(action: action)
             } else {
-                ContentUnavailableView("Tool not found", systemImage: "wrench.and.screwdriver")
+                ErrorStateView(title: "Tool not found") {
+                    Image(systemName: "wrench.and.screwdriver")
+                }
             }
         }
     }

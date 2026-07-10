@@ -5,45 +5,79 @@ struct RepoBranchPickerBar: View {
     @Environment(\.style) private var style
 
     let draft: NewSessionDraft
-    @State private var isSheetPresented = false
+    @State private var isRepositorySheetPresented = false
+    @State private var isBranchSheetPresented = false
 
     var body: some View {
-        Button {
-            isSheetPresented = true
-        } label: {
-            HStack(spacing: style.gridSize) {
-                Image(systemName: "folder")
-                    .frame(width: 20, height: 20)
+        HStack(spacing: style.gridSize) {
+            repositoryButton
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(draft.selectedRepo?.fullName ?? "Select repository")
-                        .styledFont(.subheadline)
-                        .foregroundStyle(theme.labelColor)
-                        .lineLimit(1)
-
-                    if let branch = draft.selectedBranch {
-                        Text(branch)
-                            .styledFont(.caption)
-                            .foregroundStyle(theme.secondaryLabelColor)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption)
-                    .foregroundStyle(theme.tertiaryLabelColor)
+            if let selectedRepo = draft.selectedRepo {
+                branchButton(for: selectedRepo)
             }
-            .padding(.horizontal, style.spacing)
-            .padding(.vertical, style.gridSize)
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .glassBackground(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $isSheetPresented) {
-            RepoBranchPickerSheet(draft: draft)
+        .fixedSize(horizontal: true, vertical: false)
+        .sheet(isPresented: $isRepositorySheetPresented) {
+            RepoPickerSheet(draft: draft)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $isBranchSheetPresented) {
+            if let selectedRepo = draft.selectedRepo {
+                BranchPickerSheet(draft: draft, selectedRepo: selectedRepo)
+                    .presentationDetents([.medium, .large])
+            }
+        }
+    }
+
+    private var repositoryButton: some View {
+        Button {
+            isRepositorySheetPresented = true
+        } label: {
+            HStack(spacing: style.gridSize) {
+                Image(.folderGit2)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+
+                Text(draft.selectedRepo?.fullName ?? "Repository")
+                    .styledFont(.caption)
+                    .foregroundStyle(theme.labelColor)
+                    .lineLimit(1)
+                    .frame(maxWidth: 132, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .contentShape(Capsule())
+            .glassBackground(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Select repository")
+    }
+
+    private func branchButton(for selectedRepo: NewSessionDraft.SelectedRepo) -> some View {
+        Button {
+            isBranchSheetPresented = true
+        } label: {
+            HStack(spacing: style.gridSize) {
+                Image(.gitBranch)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+
+                Text(draft.selectedBranch ?? selectedRepo.defaultBranch)
+                    .styledFont(.caption)
+                    .foregroundStyle(theme.labelColor)
+                    .lineLimit(1)
+                    .frame(maxWidth: 100, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .contentShape(Capsule())
+            .glassBackground(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Select base branch")
     }
 }

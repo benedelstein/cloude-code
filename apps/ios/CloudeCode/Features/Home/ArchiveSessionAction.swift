@@ -14,7 +14,7 @@ struct ArchiveSessionAction {
         do {
             try await sessionsAPI.archive(sessionId: session.id)
         } catch {
-            sessionSummaryStore.putDisk([snapshot])
+            sessionSummaryStore.putSnapshotsToDisk([snapshot])
             throw error
         }
     }

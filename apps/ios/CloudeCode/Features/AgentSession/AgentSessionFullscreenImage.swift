@@ -115,8 +115,10 @@ extension AgentSessionView {
                 )
                 .accessibilityLabel(image.accessibilityLabel)
             } else if didFail {
-                ContentUnavailableView("Image failed to load", systemImage: "photo")
-                    .foregroundStyle(.white)
+                ErrorStateView(title: "Image failed to load") {
+                    Image(systemName: "photo")
+                }
+                .environment(\.theme, .dark)
             } else {
                 ProgressView()
                     .tint(.white)

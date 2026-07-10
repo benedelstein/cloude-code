@@ -108,7 +108,7 @@ private extension AgentSessionTranscriptStateTests {
 
     func makeViewModel() -> AgentSessionViewModel {
         AgentSessionViewModel(
-            session: SessionSummaryModel(SessionSummary(
+            context: .session(SessionSummaryModel(SessionSummary(
                 id: "session-1",
                 repoId: 1,
                 repoFullName: "octo/repo",
@@ -117,14 +117,17 @@ private extension AgentSessionTranscriptStateTests {
                 createdAt: "2026-01-01T00:00:00Z",
                 updatedAt: "2026-01-01T00:00:00Z",
                 hasUnread: false
-            )),
-            socket: SessionSocket(
-                // Never dialed: tests exercise state transitions without connecting.
-                baseURL: URL(fileURLWithPath: "/dev/null"),
-                sessionId: "session-1",
-                tokenCache: WebSocketTokenCache { throw URLError(.userAuthenticationRequired) }
-            ),
+            ))),
+            makeSocket: { sessionId in
+                // Never dialed: these tests exercise state transitions without connecting.
+                SessionSocket(
+                    baseURL: URL(fileURLWithPath: "/dev/null"),
+                    sessionId: sessionId,
+                    tokenCache: WebSocketTokenCache { throw URLError(.userAuthenticationRequired) }
+                )
+            },
             sessionMessageStore: SessionMessageStore(),
+            sessionSummaryStore: SessionSummaryStore(),
             transcriptBuilder: StubTranscriptBuilder(),
             attachmentsAPI: StubAttachmentsAPI()
         )

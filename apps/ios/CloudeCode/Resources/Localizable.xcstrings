@@ -19,9 +19,6 @@
     "Back" : {
 
     },
-    "Branch" : {
-
-    },
     "Camera" : {
 
     },
@@ -32,6 +29,9 @@
 
     },
     "Cloude Code" : {
+
+    },
+    "Collapsed" : {
 
     },
     "Complete" : {
@@ -105,7 +105,13 @@
         }
       }
     },
+    "Effort Level" : {
+
+    },
     "Exit %lld" : {
+
+    },
+    "Expanded" : {
 
     },
     "Fetch %@" : {
@@ -213,13 +219,19 @@
     "New session" : {
 
     },
+    "No branches found" : {
+
+    },
     "No logs yet" : {
 
     },
-    "No messages yet" : {
+    "No models" : {
 
     },
-    "No models" : {
+    "No models found" : {
+
+    },
+    "No repositories found" : {
 
     },
     "No sessions" : {
@@ -336,9 +348,6 @@
 
     },
     "Remove image" : {
-
-    },
-    "Repos" : {
 
     },
     "Repository" : {
@@ -474,10 +483,28 @@
         }
       }
     },
+    "Select an effort level" : {
+
+    },
+    "Select base branch" : {
+
+    },
+    "Select Base Branch" : {
+
+    },
     "Select model" : {
 
     },
+    "Select Model" : {
+
+    },
     "Select photos" : {
+
+    },
+    "Select repository" : {
+
+    },
+    "Select Repository" : {
 
     },
     "Send" : {
@@ -544,6 +571,9 @@
 
     },
     "Tool not found" : {
+
+    },
+    "Try a different search." : {
 
     },
     "Unread message" : {
