@@ -174,7 +174,10 @@ public final class EntityStore<M: EntityModel> {
     }
 
     /// Persists current model state (e.g. after view-side mutations).
-    public func save(_ models: [M]) {
+    ///
+    /// - returns:  the canonical cached model instances, not necessarily the ones you passed in.
+    @discardableResult
+    public func save(_ models: [M]) -> [M] {
         putSnapshotsToDisk(models.map(\.snapshot))
     }
 
