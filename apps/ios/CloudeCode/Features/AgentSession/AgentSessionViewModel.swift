@@ -52,6 +52,12 @@ final class AgentSessionViewModel {
     // if needed. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
+    private var transcriptProvider: AgentProviderID {
+        let clientProvider = clientState.agentSettings.provider
+        return clientProvider == .unknown("")
+            ? session.provider ?? clientProvider
+            : clientProvider
+    }
     /// Message send is in progress
     private(set) var isSending = false
     /// Waiting for a message stream response from server.
@@ -148,10 +154,10 @@ final class AgentSessionViewModel {
     }
 
     func applyLiveState(_ state: SessionClientState) {
-        let previousProvider = clientState.agentSettings.provider
+        let previousProvider = transcriptProvider
         clientState = state
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
-        if session.provider == nil, previousProvider != state.agentSettings.provider {
+        if previousProvider != transcriptProvider {
             rebuildTranscriptDisplayData()
         }
     }
@@ -786,7 +792,7 @@ extension AgentSessionViewModel {
     ) -> AgentSessionView.MessageDisplayData {
         var renderItems = transcriptBuilder.build(
             message: message,
-            providerId: session.provider ?? clientState.agentSettings.provider
+            providerId: transcriptProvider
         )
         renderItems = textRenderCache.renderItems(from: renderItems)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(

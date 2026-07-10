@@ -143,7 +143,7 @@ struct AgentSessionTranscriptStateTests {
         #expect(builder.providers == [.claudeCode])
     }
 
-    @Test func cachedSummaryProviderTakesPrecedenceOverDifferingLiveProvider() async throws {
+    @Test func liveProviderReplacesDifferingCachedSummaryProvider() async throws {
         let messageStore = SessionMessageStore()
         try await messageStore.replace(
             sessionId: "session-1",
@@ -158,8 +158,9 @@ struct AgentSessionTranscriptStateTests {
         await viewModel.loadCachedMessages()
 
         viewModel.applyLiveState(liveState(provider: .openaiCodex))
+        viewModel.applyLiveState(liveState(provider: .openaiCodex))
 
-        #expect(builder.providers == [.claudeCode])
+        #expect(builder.providers == [.claudeCode, .openaiCodex])
         #expect(viewModel.session.provider == .claudeCode)
     }
 }
