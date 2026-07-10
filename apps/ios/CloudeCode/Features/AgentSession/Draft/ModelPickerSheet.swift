@@ -115,8 +115,12 @@ struct ModelPickerSheet: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                // One constant image with a rotation and fixed width so
+                // toggling expansion never shifts the header layout.
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 14)
                 ProviderIconView(providerId: provider.providerId)
                     .frame(width: 14, height: 14)
                 Text(provider.providerName)

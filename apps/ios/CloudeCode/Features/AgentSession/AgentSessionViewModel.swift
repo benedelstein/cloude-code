@@ -4,70 +4,73 @@ import CoreAPI
 import Domain
 import Entities
 import Foundation
-import PhotosUI
 import SwiftUI
-import UIKit
-
-// swiftlint:disable file_length
 
 /// Coordinates session state, transcript rendering, composer drafts, and socket events.
+///
+/// Behavior is split across `AgentSessionViewModel+*.swift` extension files
+/// (model selection, attachments, sending, socket lifecycle, transcript), so
+/// most stored state is internal rather than private.
 @MainActor
 @Observable
 final class AgentSessionViewModel {
     typealias MessageDisplayData = AgentSessionView.MessageDisplayData
     typealias TranscriptRow = AgentSessionView.TranscriptRow
 
-    private var context: Context
+    var context: Context
     let modelCatalogStore: ModelCatalogStore
-    private let preferences: NewSessionPreferences
-    private var socket: SessionSocket?
-    private let makeSocket: (String) -> SessionSocket
-    private let sessionMessageStore: SessionMessageStore
-    private let sessionSummaryStore: SessionSummaryStore
-    private let transcriptBuilder: any AgentSessionTranscriptBuilding
-    private var subscriptionTask: Task<Void, Never>?
+    let preferences: NewSessionPreferences
+    var socket: SessionSocket?
+    let makeSocket: (String) -> SessionSocket
+    /// Fires the created session id when a draft turns into a real session;
+    /// `HomeRouter` listens to the derived publisher to adopt the draft route.
+    let sessionCreatedSubject: PassthroughSubject<String, Never>
+    let sessionMessageStore: SessionMessageStore
+    let sessionSummaryStore: SessionSummaryStore
+    let transcriptBuilder: any AgentSessionTranscriptBuilding
+    var subscriptionTask: Task<Void, Never>?
     /// The user's explicit pick: the whole selection for a draft (no client
     /// state exists yet), or a staged next-turn override for an existing
     /// session that is cleared once live client state reports it as current.
-    private var localModelSelection: ModelSelection?
+    var localModelSelection: ModelSelection?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
     // Keeps the local upload drafts for an optimistic message so they can be
     // restored if send fails after the composer has already been cleared.
-    @ObservationIgnored private var submittedAttachmentDrafts: [String: [ImageAttachmentDraft]] = [:]
+    @ObservationIgnored var submittedAttachmentDrafts: [String: [ImageAttachmentDraft]] = [:]
 
-    private let attachmentStore: ImageAttachmentStore
-    private(set) var connectionState: WebSocketConnectionState = .disconnected
+    let attachmentStore: ImageAttachmentStore
+    var connectionState: WebSocketConnectionState = .disconnected
     /// Ordered transcript rows. A row's `id` is stable for its lifetime; its
     /// `messageID` is reassigned in place when a message gains its server id
     /// (optimistic -> accepted, streaming -> final).
-    private(set) var transcriptRows: [TranscriptRow] = []
+    var transcriptRows: [TranscriptRow] = []
     /// Message content keyed by message id. `transcriptRows` owns ordering;
     /// every row's `messageID` resolves here.
-    private(set) var messagesByID: [String: SessionMessage] = [:]
+    var messagesByID: [String: SessionMessage] = [:]
     /// Hydrated, normalized display data per transcript row.
-    private(set) var assistantDisplayDataByRowID: [String: MessageDisplayData] = [:]
+    var assistantDisplayDataByRowID: [String: MessageDisplayData] = [:]
     // The active streaming row keeps this id from first chunk through final
     // message so collection view can update the existing cell in place.
-    private var streamingTranscriptRowID: String?
-    @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
-    @ObservationIgnored private let textRenderCache = ChunkedTextRenderCache()
-    private var streamAccumulator: SessionMessageStreamAccumulator?
+    var streamingTranscriptRowID: String?
+    @ObservationIgnored var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
+    @ObservationIgnored let textRenderCache = ChunkedTextRenderCache()
+    var streamAccumulator: SessionMessageStreamAccumulator?
     /// Guard so that we do not accumulate to a stream that is no longer active
-    private var streamGeneration = 0
-    private(set) var streamStatus = SessionMessageStreamStatus()
+    var streamGeneration = 0
+    var streamStatus = SessionMessageStreamStatus()
     // Future optimization: cache a curated subset of client state
     // if needed. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
     /// Message send is in progress
-    private(set) var isSending = false
+    var isSending = false
     /// The initial request is creating a new session.
-    private(set) var isCreatingSession = false
+    var isCreatingSession = false
     /// Waiting for a message stream response from server.
     /// Set to true after we send a message
-    private(set) var isWaitingForResponse = false
-    private(set) var hasLoadedMessages: Bool = false
+    var isWaitingForResponse = false
+    var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
 
@@ -98,9 +101,11 @@ final class AgentSessionViewModel {
         sessionMessageStore: SessionMessageStore,
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
-        attachmentsAPI: any AttachmentsAPIProviding
+        attachmentsAPI: any AttachmentsAPIProviding,
+        sessionCreatedSubject: PassthroughSubject<String, Never>
     ) {
         self.context = context
+        self.sessionCreatedSubject = sessionCreatedSubject
         self.modelCatalogStore = modelCatalogStore
         self.preferences = preferences
         if context.draft != nil {
@@ -118,7 +123,7 @@ final class AgentSessionViewModel {
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func handle(_ event: SessionSocketEvent) async {
+    func handle(_ event: SessionSocketEvent) async {
         switch event {
         case .connectionChanged(let state):
             Logger.debug("Agent session socket state changed:", "\(state)")
@@ -212,14 +217,6 @@ final class AgentSessionViewModel {
         await streamAccumulator?.append(chunks, messageMetadata: messageMetadata)
     }
 
-    func upsert(_ message: SessionMessage) {
-        upsertTranscriptMessage(
-            rowID: transcriptRowID(for: message),
-            message: message,
-            isStreaming: false
-        )
-    }
-
     private func markLatestAssistantMessageRead(in messages: [SessionMessage]) {
         guard let messageId = messages.reversed().first(where: { $0.role == .assistant })?.id else {
             return
@@ -227,7 +224,7 @@ final class AgentSessionViewModel {
         markReadIfNeeded(messageId: messageId)
     }
 
-    private func markReadIfNeeded(messageId: String) {
+    func markReadIfNeeded(messageId: String) {
         guard lastMarkReadSentMessageId != messageId else {
             return
         }
@@ -254,23 +251,7 @@ final class AgentSessionViewModel {
         sessionSummaryStore.save([session])
     }
 
-    private func recordSendError(
-        _ error: any Error,
-        submittedContent: String,
-        submittedAttachments: [ImageAttachmentDraft],
-        clientMessageId: String
-    ) {
-        errorMessage = error.localizedDescription
-        submittedAttachmentDrafts[clientMessageId] = nil
-        removePendingOptimisticUserMessage(
-            restoreDraft: draftText.isEmpty,
-            submittedContent: submittedContent
-        )
-        attachmentStore.restore(submittedAttachments)
-        resetPendingResponse()
-    }
-
-    private func resetPendingResponse() {
+    func resetPendingResponse() {
         let streamAccumulator = self.streamAccumulator
         Task {
             await streamAccumulator?.finish()
@@ -297,23 +278,6 @@ final class AgentSessionViewModel {
             hasSeenServerActiveTurn = false
             isWaitingForResponse = false
             clearOptimisticUserMessageTracking()
-        }
-    }
-}
-
-private enum DraftSendError: LocalizedError {
-    case missingDraft
-    case missingSocket
-    case modelUnavailable
-
-    var errorDescription: String? {
-        switch self {
-        case .missingDraft:
-            "New session state is unavailable."
-        case .missingSocket:
-            "Session connection is unavailable."
-        case .modelUnavailable:
-            "Wait for the model catalog before sending."
         }
     }
 }
@@ -368,772 +332,10 @@ extension AgentSessionViewModel {
         context.draft
     }
 
-    var modelSelection: ModelSelection? {
-        localModelSelection ?? serverModelSelection
-    }
-
     var isDraftMode: Bool {
         if case .draft = context {
             return true
         }
         return false
-    }
-
-    var isModelSelectionLoading: Bool {
-        if isDraftMode {
-            return localModelSelection == nil
-                && modelCatalogStore.catalog == nil
-                && modelCatalogStore.errorMessage == nil
-        }
-        return clientState.agentSettings.model.isEmpty
-    }
-
-    /// Whether the current selection can be sent. Only drafts validate against
-    /// the catalog; an existing session's selection comes from the server.
-    var isModelSelectionValid: Bool {
-        guard isDraftMode else {
-            return true
-        }
-        return localModelSelection?.isValid(in: modelCatalogStore.catalog) == true
-    }
-
-    var modelProviderId: ProviderId? {
-        if isDraftMode {
-            return modelSelection?.providerId
-        }
-        return clientState.agentSettings.provider.providerId
-    }
-}
-
-extension AgentSessionViewModel {
-    /// Model/effort fields to send with the next message when the staged
-    /// selection differs from the session's current settings.
-    private var stagedModelChange: (model: String?, effort: String?)? {
-        guard let selectedModel = localModelSelection,
-              selectedModel.providerId == modelProviderId else {
-            return nil
-        }
-        let settings = clientState.agentSettings
-        return (
-            model: selectedModel.modelId == settings.model ? nil : selectedModel.modelId,
-            effort: selectedModel.effortId == settings.effort ? nil : selectedModel.effortId
-        )
-    }
-
-    private var serverModelSelection: ModelSelection? {
-        let settings = clientState.agentSettings
-        guard let providerId = settings.provider.providerId,
-              !settings.model.isEmpty else {
-            return nil
-        }
-        let provider = modelCatalogStore.catalog?.providers.first { $0.providerId == providerId }
-        let model = provider?.models.first { $0.id == settings.model }
-        let effort = provider?.efforts.first { $0.id == settings.effort }
-        let effortId = settings.effort.isEmpty ? nil : settings.effort
-        // Client state is authoritative; catalog metadata only improves the labels.
-        return ModelSelection(
-            providerId: providerId,
-            modelId: settings.model,
-            displayName: model?.displayName ?? settings.model,
-            effortId: effortId,
-            effortDisplayName: effort?.displayName ?? effortId
-        )
-    }
-
-    /// Selects a model for the draft or stages it for the next existing-session message.
-    func selectModel(provider: ProviderCatalogEntry, model: ProviderCatalogModel) {
-        guard isDraftMode || provider.providerId == modelProviderId else {
-            return
-        }
-        let selection = ModelSelection.selecting(
-            provider: provider,
-            model: model,
-            preservingEffortFrom: modelSelection
-        )
-        localModelSelection = selection
-        persistDraftModelSelection(selection)
-    }
-
-    /// Selects an effort for the draft or stages it for the next existing-session message.
-    func selectEffort(provider: ProviderCatalogEntry, effort: ProviderCatalogEffort) {
-        guard isDraftMode || provider.providerId == modelProviderId else {
-            return
-        }
-        guard let selection = ModelSelection.selecting(
-            provider: provider,
-            effort: effort,
-            for: modelSelection
-        ) else {
-            return
-        }
-        localModelSelection = selection
-        persistDraftModelSelection(selection)
-    }
-
-    /// Re-validates the draft's selection once the catalog is available and
-    /// stores the resolved pick as the default for future drafts.
-    private func resolveDraftModelSelection() {
-        guard isDraftMode, let catalog = modelCatalogStore.catalog else {
-            return
-        }
-        localModelSelection = ModelSelection.resolved(from: localModelSelection, in: catalog)
-        if let localModelSelection {
-            persistDraftModelSelection(localModelSelection)
-        }
-    }
-
-    private func persistDraftModelSelection(_ selection: ModelSelection) {
-        guard isDraftMode else {
-            return
-        }
-        preferences.lastSelectedModel = selection.preferenceValue
-    }
-
-    /// Image drafts currently shown by the composer attachment strip.
-    var imageAttachmentDrafts: [ImageAttachmentDraft] {
-        attachmentStore.attachments
-    }
-
-    /// Transient composer error for image selection or validation failures.
-    var imageSelectionErrorMessage: String? {
-        attachmentStore.errorMessage
-    }
-
-    /// Number of additional image attachments the composer can accept.
-    var remainingImageAttachmentSlots: Int {
-        attachmentStore.remainingSlots
-    }
-
-    /// Adds selected Photos items and starts uploading each loaded image.
-    func addImageAttachmentPhotoItems(_ items: [PhotosPickerItem]) {
-        attachmentStore.addPhotoItems(items)
-    }
-
-    /// Adds a captured camera image and starts uploading it.
-    func addImageAttachmentCameraImage(_ image: UIImage) {
-        attachmentStore.addCameraImage(image)
-    }
-
-    /// Removes an image draft from the composer and cleans up uploaded data if needed.
-    func removeImageAttachment(id: UUID) {
-        attachmentStore.removeAttachment(id: id)
-    }
-
-    /// Retries a failed image attachment upload.
-    func retryImageAttachment(id: UUID) {
-        attachmentStore.retryAttachment(id: id)
-    }
-}
-
-extension AgentSessionViewModel {
-    /// Submit the composed message.
-    func submitDraft() {
-        let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let uploadedAttachments = attachmentStore.uploadedDescriptors
-        guard !content.isEmpty || !uploadedAttachments.isEmpty,
-              !attachmentStore.hasPendingOrFailedUploads,
-              !isSending,
-              !isResponding else {
-            return
-        }
-
-        let submittedDrafts = attachmentStore.attachments
-        draftText = ""
-        attachmentStore.clearAfterSubmit()
-        let clientMessageId = appendPendingOptimisticUserMessage(
-            content: content,
-            attachments: uploadedAttachments
-        )
-        submittedAttachmentDrafts[clientMessageId] = submittedDrafts
-        isSending = true
-        isWaitingForResponse = true
-        errorMessage = nil
-
-        if isDraftMode {
-            isCreatingSession = true
-            sendDraftSessionMessage(
-                content: content,
-                uploadedAttachments: uploadedAttachments,
-                submittedDrafts: submittedDrafts,
-                clientMessageId: clientMessageId
-            )
-            return
-        }
-
-        sendExistingSessionMessage(
-            content: content,
-            uploadedAttachments: uploadedAttachments,
-            submittedDrafts: submittedDrafts,
-            clientMessageId: clientMessageId
-        )
-    }
-
-    private func sendDraftSessionMessage(
-        content: String,
-        uploadedAttachments: [UploadedAttachment],
-        submittedDrafts: [ImageAttachmentDraft],
-        clientMessageId: String
-    ) {
-        Task { [uploadedAttachments] in
-            defer {
-                self.isCreatingSession = false
-            }
-            do {
-                guard let selectedModel = self.localModelSelection, self.isModelSelectionValid else {
-                    throw DraftSendError.modelUnavailable
-                }
-                let response = try await draft?.createSession(
-                    content: content,
-                    attachmentIds: uploadedAttachments.map(\.attachmentId),
-                    model: selectedModel
-                )
-                guard let response else {
-                    throw DraftSendError.missingDraft
-                }
-                adoptCreatedSession(response)
-                self.isSending = false
-            } catch {
-                self.recordSendError(
-                    error,
-                    submittedContent: content,
-                    submittedAttachments: submittedDrafts,
-                    clientMessageId: clientMessageId
-                )
-            }
-        }
-    }
-
-    private func sendExistingSessionMessage(
-        content: String,
-        uploadedAttachments: [UploadedAttachment],
-        submittedDrafts: [ImageAttachmentDraft],
-        clientMessageId: String
-    ) {
-        guard let socket else {
-            recordSendError(
-                DraftSendError.missingSocket,
-                submittedContent: content,
-                submittedAttachments: submittedDrafts,
-                clientMessageId: clientMessageId
-            )
-            return
-        }
-
-        Task { [socket, uploadedAttachments] in
-            do {
-                let selectedModel = self.stagedModelChange
-                try await socket.sendChat(
-                    content: content.isEmpty ? nil : content,
-                    attachmentIds: uploadedAttachments.map(\.attachmentId),
-                    clientMessageId: clientMessageId,
-                    model: selectedModel?.model,
-                    effort: selectedModel?.effort
-                )
-                self.isSending = false
-            } catch {
-                self.recordSendError(
-                    error,
-                    submittedContent: content,
-                    submittedAttachments: submittedDrafts,
-                    clientMessageId: clientMessageId
-                )
-            }
-        }
-    }
-
-    private func adoptCreatedSession(_ response: CreateSessionResponse) {
-        guard let draft, let selectedRepo = draft.selectedRepo else {
-            return
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let summary = SessionSummary(
-            id: response.sessionId,
-            repoId: selectedRepo.id,
-            repoFullName: selectedRepo.fullName,
-            title: response.title,
-            archived: false,
-            workingState: "responding",
-            createdAt: now,
-            updatedAt: now,
-            hasUnread: false
-        )
-        let session = sessionSummaryStore.putSnapshotsToDisk([summary])[0]
-        context = .session(session)
-        attachmentStore.adoptSessionId(response.sessionId)
-
-        let socket = makeSocket(response.sessionId)
-        self.socket = socket
-        connectionState = .connecting
-        _ = startSocketPipeline(socket: socket, loadCache: false)
-    }
-}
-
-extension AgentSessionViewModel {
-    func bind() async {
-        guard subscriptionTask == nil else {
-            return
-        }
-
-        guard let socket else {
-            hasLoadedMessages = true
-            async let catalogLoad: Void = modelCatalogStore.load()
-            await draft?.load()
-            await catalogLoad
-            resolveDraftModelSelection()
-            return
-        }
-
-        async let modelLoad: Void = modelCatalogStore.load()
-        let subscriptionTask = startSocketPipeline(socket: socket, loadCache: true)
-        async let subscribeStream = subscriptionTask.value
-        _ = await (modelLoad, subscribeStream)
-    }
-
-    private func startSocketPipeline(socket: SessionSocket, loadCache: Bool) -> Task<Void, Never> {
-        let task = Task { [weak self, socket] in
-            if loadCache {
-                await self?.loadCachedMessages()
-            }
-            guard !Task.isCancelled else {
-                return
-            }
-            await socket.connect()
-            for await event in socket.events {
-                guard !Task.isCancelled else {
-                    return
-                }
-                await self?.handle(event)
-            }
-        }
-        subscriptionTask = task
-        return task
-    }
-
-    func unbind() {
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        connectionState = .disconnected
-        resetPendingResponse()
-
-        guard let socket else {
-            return
-        }
-
-        Task { [socket] in
-            await socket.disconnect()
-        }
-    }
-}
-
-extension AgentSessionViewModel {
-    func applyAgentFinish(_ message: SessionMessage) {
-        messageThrottler?.flush()
-        // Mutate the streaming transcript row into the final assistant row instead
-        // of inserting message:<server id>, which would replace the visible cell.
-        let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
-        upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
-        streamingTranscriptRowID = nil
-        if let session {
-            sessionMessageStore.upsert(sessionId: session.id, message: message)
-        }
-        if message.role == .assistant {
-            markReadIfNeeded(messageId: message.id)
-        }
-        clearOptimisticUserMessageTracking()
-        resetPendingResponse()
-    }
-
-    private func applyUserMessage(_ message: SessionMessage) {
-        upsertConfirmedUserMessage(message)
-        if let session {
-            sessionMessageStore.upsert(sessionId: session.id, message: message)
-        }
-        isSending = false
-        errorMessage = nil
-    }
-
-    /// Replaces the message currently identified by `messageID` (a message id,
-    /// not a row id), keeping the row it renders in.
-    /// Returns false if no row shows that message.
-    private func replaceMessage(messageID: String, with message: SessionMessage) -> Bool {
-        guard let row = transcriptRows.last(where: { $0.messageID == messageID }) else {
-            return false
-        }
-        upsertTranscriptMessage(rowID: row.id, message: message, isStreaming: false)
-        return true
-    }
-
-    private func removeMessage(messageID: String) {
-        for row in transcriptRows where row.messageID == messageID {
-            if assistantDisplayDataByRowID[row.id] != nil {
-                assistantDisplayDataByRowID[row.id] = nil
-            }
-        }
-        transcriptRows.removeAll { $0.messageID == messageID }
-        messagesByID[messageID] = nil
-    }
-
-    private func appendPendingOptimisticUserMessage(
-        content: String,
-        attachments: [UploadedAttachment]
-    ) -> String {
-        let clientMessageId = UUID().uuidString.lowercased()
-        let message = SessionMessage(
-            id: clientMessageId,
-            role: .user,
-            parts: optimisticUserMessageParts(
-                content: content,
-                attachments: attachments
-            ),
-            metadata: .object(["optimistic": .bool(true)])
-        )
-        upsert(message)
-        return clientMessageId
-    }
-
-    /// Replaces an optimistically client-set message with the server-side id
-    func acceptOptimisticUserMessage(clientMessageId: String, messageId: String) {
-        guard let optimisticMessage = messagesByID[clientMessageId],
-              optimisticMessage.isOptimisticUserMessage,
-              let row = transcriptRows.last(where: { $0.messageID == clientMessageId }) else {
-            return
-        }
-        submittedAttachmentDrafts[clientMessageId] = nil
-        let acceptedMessage = SessionMessage(
-            id: messageId,
-            role: optimisticMessage.role,
-            parts: optimisticMessage.parts,
-            metadata: optimisticMessage.removingOptimisticMarker.metadata
-        )
-        // The row keeps its id; the upsert reassigns its messageID and retires
-        // the client-id entry from messagesByID.
-        upsertTranscriptMessage(rowID: row.id, message: acceptedMessage, isStreaming: false)
-        if let session {
-            sessionMessageStore.upsert(sessionId: session.id, message: acceptedMessage)
-        }
-    }
-
-    private func upsertConfirmedUserMessage(_ message: SessionMessage) {
-        // if we already have an optimistic message for this message, mutate and replace it
-        // if not, just upsert
-        guard let optimisticMessage = orderedMessages.first(where: {
-            $0.isOptimisticUserMessage && isServerConfirmation(message, of: $0)
-        }) else {
-            upsert(message)
-            return
-        }
-
-        if !replaceMessage(messageID: optimisticMessage.id, with: message) {
-            upsert(message)
-        }
-    }
-
-    private func messagesIncludingOptimisticUserMessages(
-        in serverMessages: [SessionMessage]
-    ) -> [SessionMessage] {
-        var mergedMessages = serverMessages
-
-        for optimisticMessage in orderedMessages where optimisticMessage.isOptimisticUserMessage {
-            let hasServerMessage = serverMessages.contains {
-                $0.id == optimisticMessage.id || isServerConfirmation($0, of: optimisticMessage)
-            }
-            if !hasServerMessage {
-                mergedMessages.append(optimisticMessage)
-            }
-        }
-
-        return mergedMessages
-    }
-
-    private func clearOptimisticUserMessageTracking() {
-        // Content-only update: the message id and row are unchanged, so mutate
-        // the map directly instead of going through the row upsert.
-        for (id, message) in messagesByID where message.isOptimisticUserMessage {
-            messagesByID[id] = message.removingOptimisticMarker
-        }
-    }
-
-    private func removePendingOptimisticUserMessage(
-        restoreDraft: Bool,
-        submittedContent: String? = nil
-    ) {
-        guard let optimisticMessage = orderedMessages.first(where: \.isOptimisticUserMessage) else {
-            return
-        }
-        removeMessage(messageID: optimisticMessage.id)
-        if restoreDraft {
-            draftText = submittedContent ?? optimisticMessage.text
-        }
-    }
-
-    private func isServerConfirmation(
-        _ message: SessionMessage,
-        of optimisticMessage: SessionMessage
-    ) -> Bool {
-        message.role == .user
-            && message.id != optimisticMessage.id
-            && message.text == optimisticMessage.text
-            && imageFileURLs(in: message) == imageFileURLs(in: optimisticMessage)
-    }
-
-    private func optimisticUserMessageParts(
-        content: String,
-        attachments: [UploadedAttachment]
-    ) -> [SessionMessage.Part] {
-        var parts: [SessionMessage.Part] = []
-        if !content.isEmpty {
-            parts.append(.text(.init(text: content)))
-        }
-        parts.append(contentsOf: attachments.map { attachment in
-            .file(.init(
-                mediaType: attachment.mediaType,
-                filename: attachment.filename,
-                url: attachment.contentUrl,
-                width: attachment.width,
-                height: attachment.height
-            ))
-        })
-        return parts
-    }
-
-    private func imageFileURLs(in message: SessionMessage) -> [String] {
-        message.parts.compactMap { part in
-            guard case .file(let file) = part,
-                  file.mediaType.hasPrefix("image/") else {
-                return nil
-            }
-            return file.url
-        }
-    }
-
-    private func restoreLastSubmittedAttachments() {
-        guard let clientMessageId = orderedMessages.first(where: \.isOptimisticUserMessage)?.id,
-              let submittedAttachments = submittedAttachmentDrafts.removeValue(
-                forKey: clientMessageId
-              ) else {
-            return
-        }
-        attachmentStore.restore(submittedAttachments)
-    }
-}
-
-extension AgentSessionViewModel {
-    /// Messages in transcript order. Prefer `messagesByID` for id lookups.
-    private var orderedMessages: [SessionMessage] {
-        transcriptRows.compactMap { messagesByID[$0.messageID] }
-    }
-
-    private func loadCachedMessages() async {
-        guard let session else {
-            return
-        }
-        do {
-            let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
-            guard !Task.isCancelled, !cachedMessages.isEmpty, messagesByID.isEmpty, !hasLoadedMessages else {
-                return
-            }
-
-            textRenderCache.reset()
-            rebuildTranscript(from: cachedMessages)
-            hasLoadedMessages = true
-        } catch {
-            Logger.warning("Failed to load cached session messages:", error)
-        }
-    }
-
-    private func replaceStreamAccumulator() {
-        let previousAccumulator = streamAccumulator
-        Task {
-            await previousAccumulator?.finish()
-        }
-        messageThrottler?.cancel()
-        streamGeneration += 1
-        let generation = streamGeneration
-
-        messageThrottler = SchedulerLatestValueThrottler(
-            interval: .milliseconds(200),
-            scheduler: .main
-        ) { [weak self] message in
-            guard let self, streamGeneration == generation else {
-                return
-            }
-            applyStreamingMessage(message)
-        }
-
-        streamAccumulator = SessionMessageStreamAccumulator(
-            onStatus: { [weak self] status in
-                Task { @MainActor [weak self] in
-                    guard let self, streamGeneration == generation else {
-                        return
-                    }
-                    applyStreamStatus(status)
-                }
-            },
-            onMessage: { [weak self] message in
-                Task { @MainActor [weak self] in
-                    guard let self, streamGeneration == generation else {
-                        return
-                    }
-                    messageThrottler?.submit(message)
-                }
-            }
-        )
-    }
-
-    private func applyStreamStatus(_ status: SessionMessageStreamStatus) {
-        guard streamStatus != status else {
-            return
-        }
-
-        let previousErrorDescription = streamStatus.errorDescription
-        streamStatus = status
-
-        guard
-            let errorDescription = status.errorDescription,
-            errorDescription != previousErrorDescription
-        else {
-            return
-        }
-
-        errorMessage = errorDescription
-    }
-
-    func applyStreamingMessage(_ message: SessionMessage) {
-        upsertTranscriptMessage(
-            rowID: activeStreamingTranscriptRowID(),
-            message: message,
-            isStreaming: true
-        )
-    }
-
-    func clearStreamingState(removeActiveTranscript: Bool) {
-        streamStatus = .init()
-        guard removeActiveTranscript, let streamingTranscriptRowID else {
-            self.streamingTranscriptRowID = nil
-            return
-        }
-
-        if let row = transcriptRows.last(where: { $0.id == streamingTranscriptRowID && $0.isStreaming }) {
-            messagesByID[row.messageID] = nil
-            transcriptRows.removeAll { $0.id == row.id }
-        }
-        assistantDisplayDataByRowID[streamingTranscriptRowID] = nil
-        self.streamingTranscriptRowID = nil
-    }
-
-    func rebuildTranscriptDisplayData() {
-        assistantDisplayDataByRowID = transcriptRows.reduce(into: [:]) { result, row in
-            guard let message = messagesByID[row.messageID], message.role != .user else { return }
-            result[row.id] = makeDisplayData(
-                id: row.id,
-                for: message,
-                isStreaming: row.isStreaming
-            )
-        }
-    }
-
-    /// Rebuilds rows and content from an ordered canonical message list
-    /// (server snapshot or disk cache).
-    func rebuildTranscript(from messages: [SessionMessage]) {
-        // transcriptRowID(for:) consults the outgoing rows, so rows keep their
-        // ids across the rebuild.
-        transcriptRows = messages.map { message in
-            TranscriptRow(
-                id: transcriptRowID(for: message),
-                messageID: message.id,
-                isStreaming: false
-            )
-        }
-        messagesByID = Dictionary(messages.map { ($0.id, $0) }) { _, latest in latest }
-        // The rebuilt rows are all non-streaming, so a retained streaming row id
-        // would dangle and make the next applyAgentFinish append a duplicate row.
-        streamingTranscriptRowID = nil
-        rebuildTranscriptDisplayData()
-        assertTranscriptStateConsistency()
-    }
-
-    func activeStreamingTranscriptRowID() -> String {
-        if let streamingTranscriptRowID {
-            return streamingTranscriptRowID
-        }
-
-        let rowID = "streaming-turn:\(streamGeneration)"
-        streamingTranscriptRowID = rowID
-        return rowID
-    }
-
-    func transcriptRowID(for message: SessionMessage) -> String {
-        if let existingRow = transcriptRows.last(where: { row in
-            !row.isStreaming && row.messageID == message.id
-        }) {
-            return existingRow.id
-        }
-
-        return SessionTranscriptItem.messageItemID(for: message.id)
-    }
-
-    /// The single write path for transcript content, keyed by row id. A message
-    /// id change (optimistic -> accepted, streaming -> final server id) is an
-    /// in-place row update: the stale `messagesByID` entry is retired and the
-    /// row's `messageID` reassigned, never touching the row id.
-    func upsertTranscriptMessage(rowID: String, message: SessionMessage, isStreaming: Bool) {
-        if let index = transcriptRows.lastIndex(where: { $0.id == rowID }) {
-            let previousMessageID = transcriptRows[index].messageID
-            if previousMessageID != message.id {
-                messagesByID[previousMessageID] = nil
-            }
-            transcriptRows[index].messageID = message.id
-            transcriptRows[index].isStreaming = isStreaming
-        } else {
-            transcriptRows.append(TranscriptRow(
-                id: rowID,
-                messageID: message.id,
-                isStreaming: isStreaming
-            ))
-        }
-        messagesByID[message.id] = message
-
-        if message.role != .user {
-            assistantDisplayDataByRowID[rowID] = makeDisplayData(
-                id: rowID,
-                for: message,
-                isStreaming: isStreaming
-            )
-        }
-        assertTranscriptStateConsistency()
-    }
-
-    private func assertTranscriptStateConsistency() {
-        #if DEBUG
-        for row in transcriptRows {
-            assert(
-                messagesByID[row.messageID] != nil,
-                "Transcript row \(row.id) references missing message \(row.messageID)"
-            )
-        }
-        #endif
-    }
-
-    private func makeDisplayData(
-        id: String,
-        for message: SessionMessage,
-        isStreaming: Bool
-    ) -> AgentSessionView.MessageDisplayData {
-        var renderItems = transcriptBuilder.build(
-            message: message,
-            providerId: clientState.agentSettings.provider
-        )
-        renderItems = textRenderCache.renderItems(from: renderItems)
-        let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
-            renderItems: renderItems
-        )
-
-        return AgentSessionView.MessageDisplayData(
-            id: id,
-            message: message,
-            renderItems: renderItems,
-            finalResponseStartIndex: finalResponseStartIndex
-        )
     }
 }

@@ -38,10 +38,8 @@ struct HomeView: View {
                     switch destination {
                     case .session(let session):
                         sessionBuilder.build(session: session)
-                    case .newSession(let draftId):
-                        sessionBuilder.buildNewSession { sessionId in
-                            router.adoptDraftSession(id: sessionId, for: draftId)
-                        }
+                    case .newSession:
+                        sessionBuilder.buildNewSession()
                     }
                 }
                 .onChange(of: viewModel.errorMessage) { _, errorMessage in

@@ -14,11 +14,11 @@ struct ProviderIconView: View {
     private var providerImage: some View {
         switch providerId {
         case .claudeCode:
-            Image("ProviderAnthropic")
+            Image(.providerAnthropic)
                 .resizable()
                 .renderingMode(.original)
         case .openaiCodex:
-            Image("ProviderOpenai")
+            Image(.providerOpenai)
                 .resizable()
                 .renderingMode(.template)
         case .unknown:

@@ -1,4 +1,5 @@
 import API
+import Combine
 import Entities
 import NeedleFoundation
 import SwiftUI
@@ -31,9 +32,15 @@ protocol AgentSessionDependency: Dependency {
 /// authenticated Home screen.
 final class AgentSessionComponent: Component<AgentSessionDependency> {
     private let session: SessionSummaryModel?
+    private let sessionCreatedSubject: PassthroughSubject<String, Never>
 
-    init(parent: Scope, session: SessionSummaryModel?) {
+    init(
+        parent: Scope,
+        session: SessionSummaryModel?,
+        sessionCreatedSubject: PassthroughSubject<String, Never>
+    ) {
         self.session = session
+        self.sessionCreatedSubject = sessionCreatedSubject
         super.init(parent: parent)
     }
 
@@ -55,7 +62,8 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionMessageStore: dependency.sessionMessageStore,
                 sessionSummaryStore: dependency.sessionSummaryStore,
                 transcriptBuilder: transcriptBuilder,
-                attachmentsAPI: dependency.attachmentsAPI
+                attachmentsAPI: dependency.attachmentsAPI,
+                sessionCreatedSubject: sessionCreatedSubject
             )
         }
     }
@@ -89,17 +97,16 @@ struct AgentSessionBuilder {
     let makeComponent: (SessionSummaryModel?) -> AgentSessionComponent
 
     func build(session: SessionSummaryModel) -> some View {
-        let component = makeComponent(session)
-        return AgentSessionView(store: component.store)
-            .environment(\.fetchImageAction, component.fetchImageAction)
+        makeView(session: session)
     }
 
-    func buildNewSession(onSessionCreated: @escaping (String) -> Void) -> some View {
-        let component = makeComponent(nil)
-        return AgentSessionView(
-            store: component.store,
-            onSessionCreated: onSessionCreated
-        )
+    func buildNewSession() -> some View {
+        makeView(session: nil)
+    }
+
+    private func makeView(session: SessionSummaryModel?) -> some View {
+        let component = makeComponent(session)
+        return AgentSessionView(store: component.store)
             .environment(\.fetchImageAction, component.fetchImageAction)
     }
 }

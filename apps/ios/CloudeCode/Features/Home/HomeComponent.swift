@@ -1,4 +1,5 @@
 import API
+import Combine
 import Entities
 import NeedleFoundation
 import SwiftUI
@@ -51,12 +52,22 @@ final class HomeComponent: Component<HomeDependency> {
         }
     }
 
+    /// Bridges "a draft created its session" from agent session view models to the
+    /// router without threading closures through the view hierarchy.
+    @MainActor
+    var sessionCreatedSubject: PassthroughSubject<String, Never> {
+        shared {
+            PassthroughSubject<String, Never>()
+        }
+    }
+
     @MainActor
     var router: HomeRouter {
         shared {
             HomeRouter(
                 notificationHandler: dependency.notificationHandler,
-                sessionSummaryStore: dependency.sessionSummaryStore
+                sessionSummaryStore: dependency.sessionSummaryStore,
+                sessionCreated: sessionCreatedSubject.eraseToAnyPublisher()
             )
         }
     }
@@ -79,12 +90,20 @@ final class HomeComponent: Component<HomeDependency> {
 
     @MainActor
     func makeAgentSessionComponent(session: SessionSummaryModel) -> AgentSessionComponent {
-        AgentSessionComponent(parent: self, session: session)
+        AgentSessionComponent(
+            parent: self,
+            session: session,
+            sessionCreatedSubject: sessionCreatedSubject
+        )
     }
 
     @MainActor
     func makeNewAgentSessionComponent() -> AgentSessionComponent {
-        AgentSessionComponent(parent: self, session: nil)
+        AgentSessionComponent(
+            parent: self,
+            session: nil,
+            sessionCreatedSubject: sessionCreatedSubject
+        )
     }
 }
 

@@ -11,14 +11,9 @@ struct AgentSessionView: View {
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
-    private let onSessionCreated: ((String) -> Void)?
 
-    init(
-        store: AgentSessionViewModel,
-        onSessionCreated: ((String) -> Void)? = nil
-    ) {
+    init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
-        self.onSessionCreated = onSessionCreated
     }
 
     var body: some View {
@@ -69,12 +64,6 @@ struct AgentSessionView: View {
                 title: Text(verbatim: errorMessage),
                 icon: Image(systemName: "exclamationmark.circle.fill")
             )
-        }
-        .onChange(of: store.session?.id) { _, sessionId in
-            guard let sessionId else {
-                return
-            }
-            onSessionCreated?(sessionId)
         }
         .onDisappear {
             store.unbind()

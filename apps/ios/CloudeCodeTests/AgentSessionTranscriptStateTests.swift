@@ -1,4 +1,5 @@
 import API
+import Combine
 import CoreAPI
 import Domain
 import Entities
@@ -141,7 +142,8 @@ private extension AgentSessionTranscriptStateTests {
             sessionMessageStore: SessionMessageStore(),
             sessionSummaryStore: SessionSummaryStore(),
             transcriptBuilder: StubTranscriptBuilder(),
-            attachmentsAPI: StubAttachmentsAPI()
+            attachmentsAPI: StubAttachmentsAPI(),
+            sessionCreatedSubject: PassthroughSubject<String, Never>()
         )
     }
 

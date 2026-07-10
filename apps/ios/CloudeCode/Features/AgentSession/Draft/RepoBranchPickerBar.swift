@@ -33,23 +33,11 @@ struct RepoBranchPickerBar: View {
         Button {
             isRepositorySheetPresented = true
         } label: {
-            HStack(spacing: style.gridSize) {
-                Image(.folderGit2)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-
-                Text(draft.selectedRepo?.fullName ?? "Repository")
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.labelColor)
-                    .lineLimit(1)
-                    .frame(maxWidth: 132, alignment: .leading)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .contentShape(Capsule())
-            .glassBackground(in: Capsule())
+            pickerLabel(
+                icon: .folderGit2,
+                title: draft.selectedRepo?.fullName ?? "Repository",
+                maxTitleWidth: 132
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select repository")
@@ -59,25 +47,37 @@ struct RepoBranchPickerBar: View {
         Button {
             isBranchSheetPresented = true
         } label: {
-            HStack(spacing: style.gridSize) {
-                Image(.gitBranch)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-
-                Text(draft.selectedBranch ?? selectedRepo.defaultBranch)
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.labelColor)
-                    .lineLimit(1)
-                    .frame(maxWidth: 100, alignment: .leading)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .contentShape(Capsule())
-            .glassBackground(in: Capsule())
+            pickerLabel(
+                icon: .gitBranch,
+                title: draft.selectedBranch ?? selectedRepo.defaultBranch,
+                maxTitleWidth: 100
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select base branch")
+    }
+
+    private func pickerLabel(
+        icon: ImageResource,
+        title: String,
+        maxTitleWidth: CGFloat
+    ) -> some View {
+        HStack(spacing: style.gridSize) {
+            Image(icon)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+
+            Text(title)
+                .styledFont(.caption)
+                .foregroundStyle(theme.labelColor)
+                .lineLimit(1)
+                .frame(maxWidth: maxTitleWidth, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .contentShape(Capsule())
+        .glassBackground(in: Capsule())
     }
 }

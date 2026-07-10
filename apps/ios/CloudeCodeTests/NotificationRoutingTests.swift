@@ -1,4 +1,5 @@
 @testable import CloudeCode
+import Combine
 import CoreAPI
 import Domain
 import Entities
@@ -35,7 +36,11 @@ struct NotificationRoutingTests {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
         let visible = store.putMemory([sessionSummary(id: "session-1")])[0]
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         router.path = [.session(visible)]
         router.start()
 
@@ -49,7 +54,11 @@ struct NotificationRoutingTests {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
         let visible = store.putMemory([sessionSummary(id: "session-1")])[0]
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         router.path = [.session(visible)]
         router.start()
 
@@ -62,10 +71,14 @@ struct NotificationRoutingTests {
     @Test func suppressesForegroundNotificationForCreatedDraftSession() {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
-        let draftId = UUID()
-        router.path = [.newSession(id: draftId)]
-        router.adoptDraftSession(id: "session-1", for: draftId)
+        let sessionCreated = PassthroughSubject<String, Never>()
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: sessionCreated.eraseToAnyPublisher()
+        )
+        router.path = [.newSession(id: UUID())]
+        sessionCreated.send("session-1")
         router.start()
 
         let options = handler.presentationOptions(forForeground: turnFinishedPayload(sessionId: "session-1"))
@@ -78,7 +91,11 @@ struct NotificationRoutingTests {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
         let visible = store.putMemory([sessionSummary(id: "session-1")])[0]
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         router.path = [.session(visible)]
 
         handler.handleNotificationTap(turnFinishedPayload(sessionId: "session-1"))
@@ -91,11 +108,15 @@ struct NotificationRoutingTests {
     @Test func tapForCreatedDraftSessionLeavesPathUnchangedAndConsumesRoute() async {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
-        let draftId = UUID()
-        let draftDestination = HomeDestination.newSession(id: draftId)
+        let sessionCreated = PassthroughSubject<String, Never>()
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: sessionCreated.eraseToAnyPublisher()
+        )
+        let draftDestination = HomeDestination.newSession(id: UUID())
         router.path = [draftDestination]
-        router.adoptDraftSession(id: "session-1", for: draftId)
+        sessionCreated.send("session-1")
 
         handler.handleNotificationTap(turnFinishedPayload(sessionId: "session-1"))
         await router.handlePendingNotificationTap()
@@ -111,7 +132,11 @@ struct NotificationRoutingTests {
             sessionSummary(id: "session-1"),
             sessionSummary(id: "session-2")
         ])
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         router.path = [.session(sessions[0])]
 
         handler.handleNotificationTap(turnFinishedPayload(sessionId: "session-2"))
@@ -128,7 +153,11 @@ struct NotificationRoutingTests {
         let diskOnly = sessionSummary(id: "session-2")
         try await cache.put(SessionSummaryEntity.self, snapshots: [diskOnly])
         let store = SessionSummaryStore(cache: cache)
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         let visibleModel = store.putMemory([visible])[0]
         router.path = [.session(visibleModel)]
 
@@ -143,7 +172,11 @@ struct NotificationRoutingTests {
         let handler = NotificationHandler()
         let store = SessionSummaryStore()
         let visible = store.putMemory([sessionSummary(id: "session-1")])[0]
-        let router = HomeRouter(notificationHandler: handler, sessionSummaryStore: store)
+        let router = HomeRouter(
+            notificationHandler: handler,
+            sessionSummaryStore: store,
+            sessionCreated: Empty<String, Never>().eraseToAnyPublisher()
+        )
         router.path = [.session(visible)]
 
         handler.handleNotificationTap(turnFinishedPayload(sessionId: "missing-session"))

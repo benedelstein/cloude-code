@@ -1,3 +1,4 @@
+import Combine
 import Domain
 import Entities
 import Foundation
@@ -17,7 +18,13 @@ final class HomeRouter: NotificationHandlerDelegate {
     @ObservationIgnored private let notificationHandler: NotificationHandler
     @ObservationIgnored private let sessionSummaryStore: SessionSummaryStore
     @ObservationIgnored private var navigationRequestID = 0
+    /// Maps a `.newSession` destination's local draft UUID to the server session id
+    /// once that draft creates its session. `HomeDestination.newSession` is keyed by
+    /// a client-side UUID so the pushed screen keeps its identity (no rebuild) when
+    /// the session comes into existence; this table lets `activeSessionId` resolve
+    /// those destinations to real session ids for notification suppression/routing.
     @ObservationIgnored private var createdSessionIDs: [UUID: String] = [:]
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
     var notificationTap: NotificationRoute? {
         notificationHandler.notificationTap
@@ -25,10 +32,20 @@ final class HomeRouter: NotificationHandlerDelegate {
 
     init(
         notificationHandler: NotificationHandler,
-        sessionSummaryStore: SessionSummaryStore
+        sessionSummaryStore: SessionSummaryStore,
+        sessionCreated: AnyPublisher<String, Never>
     ) {
         self.notificationHandler = notificationHandler
         self.sessionSummaryStore = sessionSummaryStore
+
+        sessionCreated
+            .sink { [weak self] sessionId in
+                // The subject only fires from MainActor view-model code.
+                MainActor.assumeIsolated {
+                    self?.adoptDraftSession(id: sessionId)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     /// Installs this router as the foreground notification presenter while Home is active.
@@ -96,9 +113,10 @@ final class HomeRouter: NotificationHandlerDelegate {
         path.append(.newSession(id: UUID()))
     }
 
-    /// Associates a created session with its existing draft route without rebuilding the active screen.
-    func adoptDraftSession(id sessionId: String, for draftId: UUID) {
-        guard path.contains(where: { $0.draftId == draftId }) else {
+    /// Associates a created session with the active draft route without rebuilding the screen.
+    /// Sessions are only created from the topmost draft destination.
+    func adoptDraftSession(id sessionId: String) {
+        guard let draftId = path.last?.draftId else {
             return
         }
         createdSessionIDs[draftId] = sessionId

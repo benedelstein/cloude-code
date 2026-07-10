@@ -11,6 +11,13 @@ final class NewSessionDraft {
         let defaultBranch: String
     }
 
+    /// Repo selection with the branch nested inside it, so clearing or replacing
+    /// the repo can never leave a stale branch behind.
+    struct RepoSelection: Equatable {
+        let repo: SelectedRepo
+        var branch: String
+    }
+
     private let sessionsAPI: any SessionsAPIProviding
     private let reposAPI: any ReposAPIProviding
     private let preferences: NewSessionPreferences
@@ -21,8 +28,15 @@ final class NewSessionDraft {
     private(set) var isLoadingRepos = false
     private(set) var errorMessage: String?
 
-    var selectedRepo: SelectedRepo?
-    var selectedBranch: String?
+    var repoSelection: RepoSelection?
+
+    var selectedRepo: SelectedRepo? {
+        repoSelection?.repo
+    }
+
+    var selectedBranch: String? {
+        repoSelection?.branch
+    }
 
     init(
         sessionsAPI: any SessionsAPIProviding,
@@ -32,14 +46,16 @@ final class NewSessionDraft {
         self.sessionsAPI = sessionsAPI
         self.reposAPI = reposAPI
         self.preferences = preferences
-        selectedRepo = preferences.lastSelectedRepo.map {
-            SelectedRepo(
-                id: $0.id,
-                fullName: $0.fullName,
-                defaultBranch: $0.defaultBranch
+        repoSelection = preferences.lastSelectedRepo.map {
+            RepoSelection(
+                repo: SelectedRepo(
+                    id: $0.id,
+                    fullName: $0.fullName,
+                    defaultBranch: $0.defaultBranch
+                ),
+                branch: $0.defaultBranch
             )
         }
-        selectedBranch = selectedRepo?.defaultBranch
     }
 
     /// Loads repository defaults for the draft screen.
@@ -95,18 +111,20 @@ final class NewSessionDraft {
 
     /// Selects a repository and branch, resetting to the repository default when no branch is supplied.
     func selectRepo(_ repo: Repo, branch: String? = nil) {
-        selectedRepo = SelectedRepo(
-            id: repo.id,
-            fullName: repo.fullName,
-            defaultBranch: repo.defaultBranch
+        repoSelection = RepoSelection(
+            repo: SelectedRepo(
+                id: repo.id,
+                fullName: repo.fullName,
+                defaultBranch: repo.defaultBranch
+            ),
+            branch: branch ?? repo.defaultBranch
         )
-        selectedBranch = branch ?? repo.defaultBranch
         preferences.persistRepo(repo)
     }
 
     /// Selects a branch for the current repository.
     func selectBranch(_ branch: String) {
-        selectedBranch = branch
+        repoSelection?.branch = branch
     }
 
     /// Builds and sends the create-session request for this draft.
@@ -115,7 +133,7 @@ final class NewSessionDraft {
         attachmentIds: [String],
         model: ModelSelection
     ) async throws -> CreateSessionResponse {
-        guard let selectedRepo else {
+        guard let repoSelection else {
             throw DraftError.repoRequired
         }
 
@@ -124,9 +142,9 @@ final class NewSessionDraft {
             content: content.isEmpty ? nil : content,
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds
         )
-        let branch = selectedBranch == selectedRepo.defaultBranch ? nil : selectedBranch
+        let branch = repoSelection.branch == repoSelection.repo.defaultBranch ? nil : repoSelection.branch
         let request = CreateSessionRequest(
-            repoId: selectedRepo.id,
+            repoId: repoSelection.repo.id,
             settings: AgentSettingsInput(
                 provider: model.providerId,
                 model: model.modelId,
@@ -139,14 +157,13 @@ final class NewSessionDraft {
     }
 
     private func resolveSelectedRepo(with loadedRepos: [Repo]) {
-        if let selectedRepo,
-           let repo = loadedRepos.first(where: { $0.id == selectedRepo.id }) {
-            selectRepo(repo, branch: selectedBranch)
+        if let repoSelection,
+           let repo = loadedRepos.first(where: { $0.id == repoSelection.repo.id }) {
+            selectRepo(repo, branch: repoSelection.branch)
             return
         }
 
-        selectedRepo = nil
-        selectedBranch = nil
+        repoSelection = nil
     }
 }
 

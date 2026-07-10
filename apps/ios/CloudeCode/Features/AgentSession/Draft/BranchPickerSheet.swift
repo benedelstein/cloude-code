@@ -33,8 +33,12 @@ struct BranchPickerSheet: View {
                     if let errorMessage {
                         Text(errorMessage)
                             .foregroundStyle(theme.secondaryLabelColor)
+                            .listRowBackground(Color.clear)
                     }
 
+                    // The default branch is pinned to the top: it renders
+                    // immediately (no layout shift once branches load) and
+                    // it is usually the branch the user wants to pick.
                     if showsDefaultBranch {
                         defaultBranchRow
                     }
@@ -46,6 +50,7 @@ struct BranchPickerSheet: View {
                         ) {
                             Image(systemName: "arrow.triangle.branch")
                         }
+                        .listRowBackground(Color.clear)
                         .transition(style.fadeTransition)
                     }
 
@@ -61,6 +66,9 @@ struct BranchPickerSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            // Explicit animation on the search text: transitions alone
+            // stopped animating on iOS 26.
+            .animation(style.fadeAnimation, value: query)
             .contentMargins(.top, 0, for: .scrollContent)
             .navigationTitle("Select Base Branch")
             .navigationBarTitleDisplayMode(.inline)
@@ -95,7 +103,8 @@ struct BranchPickerSheet: View {
     private var defaultBranchRow: some View {
         BranchRow(
             name: selectedRepo.defaultBranch,
-            isSelected: selectedRepo.defaultBranch == draft.selectedBranch
+            isSelected: selectedRepo.defaultBranch == draft.selectedBranch,
+            showsDefaultBadge: true
         ) {
             draft.selectBranch(selectedRepo.defaultBranch)
             dismiss()
@@ -140,17 +149,20 @@ struct BranchPickerSheet: View {
         let name: String
         let isSelected: Bool
         let isEnabled: Bool
+        let showsDefaultBadge: Bool
         let onSelect: () -> Void
 
         init(
             name: String,
             isSelected: Bool,
             isEnabled: Bool = true,
+            showsDefaultBadge: Bool = false,
             onSelect: @escaping () -> Void
         ) {
             self.name = name
             self.isSelected = isSelected
             self.isEnabled = isEnabled
+            self.showsDefaultBadge = showsDefaultBadge
             self.onSelect = onSelect
         }
 
@@ -159,6 +171,9 @@ struct BranchPickerSheet: View {
                 HStack {
                     Text(name)
                         .foregroundStyle(theme.labelColor)
+                    if showsDefaultBadge {
+                        defaultBadge
+                    }
                     Spacer()
                     if isSelected {
                         Image(systemName: "checkmark")
@@ -167,6 +182,15 @@ struct BranchPickerSheet: View {
                 }
             }
             .disabled(!isEnabled)
+        }
+
+        private var defaultBadge: some View {
+            Text("default")
+                .styledFont(.caption)
+                .foregroundStyle(theme.secondaryLabelColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().foregroundStyle(theme.tertiaryBackgroundColor))
         }
     }
 }
