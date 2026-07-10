@@ -30,4 +30,4 @@
 - [x] 5.2 Run iOS package/cache/API tests and focused AgentSession transcript state/normalization tests on a supported simulator.
 - [x] 5.3 Run repository `pnpm build`, `pnpm lint`, and `pnpm typecheck`, plus strict SwiftLint and the generic iOS Simulator build required by `AGENTS.md`.
 - [x] 5.4 Audit the final diff for generated-file and migration correctness, update the draft PR description, commit, and push the replacement implementation.
-- [ ] 5.5 Ask a subagent to review the updated PR, address actionable findings, and rerun affected validation before marking the PR ready.
+- [x] 5.5 Ask a subagent to review the updated PR, address actionable findings, and rerun affected validation before marking the PR ready.
