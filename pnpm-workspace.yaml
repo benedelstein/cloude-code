@@ -4,6 +4,13 @@ packages:
   - "apps/*"
   - "scripts/"
 
+allowBuilds:
+  "ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/bc3d83700ea2781749300721e2e5279038f1c64e": true
+  core-js-pure: true
+  esbuild: true
+  sharp: true
+  workerd: true
+
 # shared package version catalog
 # package.jsons should use "<package>": "catalog:"
 catalog:

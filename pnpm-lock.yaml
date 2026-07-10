@@ -286,8 +286,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3(zod@4.3.6)
       ai-sdk-provider-codex-cli:
-        specifier: github:benedelstein/ai-sdk-provider-codex-cli#5f1938512b9295d7cfce236ed298d5d84217f8d7
-        version: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/5f1938512b9295d7cfce236ed298d5d84217f8d7(zod@4.3.6)
+        specifier: github:benedelstein/ai-sdk-provider-codex-cli#bc3d83700ea2781749300721e2e5279038f1c64e
+        version: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/bc3d83700ea2781749300721e2e5279038f1c64e(zod@4.3.6)
     devDependencies:
       '@types/bun':
         specifier: ^1.2.0
@@ -2472,9 +2472,9 @@ packages:
     peerDependencies:
       zod: ^4.0.0
 
-  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/5f1938512b9295d7cfce236ed298d5d84217f8d7:
-    resolution: {tarball: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/5f1938512b9295d7cfce236ed298d5d84217f8d7}
-    version: 1.2.1
+  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/bc3d83700ea2781749300721e2e5279038f1c64e:
+    resolution: {gitHosted: true, integrity: sha512-llf9DHv9ZmXoPy80kIXKn9Pp5qRlM7gU4aosYVLHSzy22pME7C9e/72cYMGvcof9k9aY6YlUXqw2MUuSdY4eGw==, tarball: https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/bc3d83700ea2781749300721e2e5279038f1c64e}
+    version: 1.2.2
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.0.0 || ^4.0.0
@@ -6406,7 +6406,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk': 0.2.19(zod@4.3.6)
       zod: 4.3.6
 
-  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/5f1938512b9295d7cfce236ed298d5d84217f8d7(zod@4.3.6):
+  ai-sdk-provider-codex-cli@https://codeload.github.com/benedelstein/ai-sdk-provider-codex-cli/tar.gz/bc3d83700ea2781749300721e2e5279038f1c64e(zod@4.3.6):
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.15(zod@4.3.6)
