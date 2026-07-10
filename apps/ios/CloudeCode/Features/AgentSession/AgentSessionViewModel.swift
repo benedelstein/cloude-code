@@ -45,8 +45,6 @@ final class AgentSessionViewModel {
     @ObservationIgnored private var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
     @ObservationIgnored private let textRenderCache = ChunkedTextRenderCache()
     private var streamAccumulator: SessionMessageStreamAccumulator?
-    private var stagedTranscriptMessages: [SessionMessage]?
-    private var resolvedTranscriptProvider: AgentProviderID?
     /// Guard so that we do not accumulate to a stream that is no longer active
     private var streamGeneration = 0
     private(set) var streamStatus = SessionMessageStreamStatus()
@@ -105,7 +103,6 @@ final class AgentSessionViewModel {
         self.socket = socket
         self.sessionMessageStore = sessionMessageStore
         self.transcriptBuilder = transcriptBuilder
-        resolvedTranscriptProvider = session.provider
         attachmentStore = ImageAttachmentStore(
             sessionId: session.id,
             attachmentsAPI: attachmentsAPI
@@ -151,25 +148,23 @@ final class AgentSessionViewModel {
     }
 
     func applyLiveState(_ state: SessionClientState) {
-        let previousProvider = resolvedTranscriptProvider
-        resolvedTranscriptProvider = state.agentSettings.provider
+        let previousProvider = clientState.agentSettings.provider
         clientState = state
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
-        if let stagedTranscriptMessages {
-            self.stagedTranscriptMessages = nil
-            textRenderCache.reset()
-            rebuildTranscript(from: stagedTranscriptMessages)
-            hasLoadedMessages = true
-        } else if previousProvider != state.agentSettings.provider {
+        if session.provider == nil, previousProvider != state.agentSettings.provider {
             rebuildTranscriptDisplayData()
         }
     }
 
     private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {
+        if !hasLoadedMessages {
+            hasLoadedMessages = true
+        }
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
             in: snapshot.messages
         )
-        applyTranscriptMessages(snapshotMessages)
+        textRenderCache.reset()
+        rebuildTranscript(from: snapshotMessages)
         replaceStreamAccumulator()
         if snapshot.pendingChunks.isEmpty {
             clearStreamingState(removeActiveTranscript: true)
@@ -603,22 +598,12 @@ extension AgentSessionViewModel {
                 return
             }
 
-            applyTranscriptMessages(cachedMessages)
+            textRenderCache.reset()
+            rebuildTranscript(from: cachedMessages)
+            hasLoadedMessages = true
         } catch {
             Logger.warning("Failed to load cached session messages:", error)
         }
-    }
-
-    private func applyTranscriptMessages(_ messages: [SessionMessage]) {
-        guard resolvedTranscriptProvider != nil else {
-            stagedTranscriptMessages = messages
-            return
-        }
-
-        stagedTranscriptMessages = nil
-        textRenderCache.reset()
-        rebuildTranscript(from: messages)
-        hasLoadedMessages = true
     }
 
     private func replaceStreamAccumulator() {
@@ -801,7 +786,7 @@ extension AgentSessionViewModel {
     ) -> AgentSessionView.MessageDisplayData {
         var renderItems = transcriptBuilder.build(
             message: message,
-            providerId: resolvedTranscriptProvider
+            providerId: session.provider ?? clientState.agentSettings.provider
         )
         renderItems = textRenderCache.renderItems(from: renderItems)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(

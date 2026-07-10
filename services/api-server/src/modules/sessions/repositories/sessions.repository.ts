@@ -88,7 +88,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
     id: row.id,
     repoId: row.repo_id,
     repoFullName: row.repo_full_name,
-    provider: row.provider_id,
+    provider: row.provider_id ?? undefined,
     title: row.title,
     archived: row.archived === 1,
     workingState: row.working_state,

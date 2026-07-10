@@ -210,7 +210,7 @@ export const SessionSummary = z.object({
   id: z.uuid(),
   repoId: z.number().int(),
   repoFullName: z.string(),
-  provider: ProviderId.nullable().optional(),
+  provider: ProviderId.optional(),
   title: z.string().nullable(),
   archived: z.boolean(),
   workingState: SessionWorkingState,

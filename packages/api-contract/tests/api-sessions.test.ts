@@ -85,7 +85,7 @@ describe("session api schemas", () => {
     })).not.toThrow();
   });
 
-  it("accepts absent or null provider metadata for legacy summaries", () => {
+  it("accepts absent provider metadata and rejects null", () => {
     const summary = {
       id: "123e4567-e89b-12d3-a456-426614174000",
       repoId: 1,
@@ -103,7 +103,7 @@ describe("session api schemas", () => {
     };
 
     expect(SessionSummary.parse(summary).provider).toBeUndefined();
-    expect(SessionSummary.parse({ ...summary, provider: null }).provider).toBeNull();
+    expect(SessionSummary.safeParse({ ...summary, provider: null }).success).toBe(false);
   });
 
   it("accepts pull request client lifecycle states", () => {
@@ -139,7 +139,6 @@ describe("session api schemas", () => {
       id: "123e4567-e89b-12d3-a456-426614174000",
       repoId: 1,
       repoFullName: "owner/repo",
-      provider: null,
       title: "Fix sidebar",
       archived: false,
       workingState: "busy",

@@ -131,14 +131,16 @@ describe("SessionsRepository sidebar state", () => {
       });
   });
 
-  it("preserves a null provider for a legacy session row", async () => {
+  it("omits the provider for a legacy session row", async () => {
     const { database } = createMockDatabase({
       firstRow: createSessionRow({ provider_id: null }),
     });
     const repository = new SessionsRepository(database);
 
-    await expect(repository.getById("123e4567-e89b-12d3-a456-426614174000"))
-      .resolves.toMatchObject({ provider: null });
+    const summary = await repository.getById("123e4567-e89b-12d3-a456-426614174000");
+
+    expect(summary?.provider).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(summary))).not.toHaveProperty("provider");
   });
 
   it("derives unread state from assistant and read cursors", async () => {

@@ -100,7 +100,7 @@ struct AgentSessionTranscriptStateTests {
         #expect(builder.providers == [.claudeCode])
     }
 
-    @Test func cachedMessagesWaitForLiveProviderWhenSummaryProviderIsMissing() async throws {
+    @Test func cachedMessagesUseLegacyFallbackWhenSummaryProviderIsMissing() async throws {
         let messageStore = SessionMessageStore()
         try await messageStore.replace(
             sessionId: "session-1",
@@ -115,15 +115,13 @@ struct AgentSessionTranscriptStateTests {
 
         await viewModel.loadCachedMessages()
 
-        #expect(!viewModel.hasLoadedMessages)
-        #expect(viewModel.transcriptRows.isEmpty)
-        #expect(builder.providers.isEmpty)
+        #expect(viewModel.hasLoadedMessages)
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["a1"])
+        #expect(builder.providers == [.unknown("")])
 
         viewModel.applyLiveState(liveState(provider: .openaiCodex))
 
-        #expect(viewModel.hasLoadedMessages)
-        #expect(viewModel.transcriptRows.map(\.messageID) == ["a1"])
-        #expect(builder.providers == [.openaiCodex])
+        #expect(builder.providers == [.unknown(""), .openaiCodex])
     }
 
     @Test func matchingLiveProviderDoesNotRebuildCachedTranscript() async throws {
@@ -145,7 +143,7 @@ struct AgentSessionTranscriptStateTests {
         #expect(builder.providers == [.claudeCode])
     }
 
-    @Test func differingLiveProviderRebuildsCachedTranscript() async throws {
+    @Test func cachedSummaryProviderTakesPrecedenceOverDifferingLiveProvider() async throws {
         let messageStore = SessionMessageStore()
         try await messageStore.replace(
             sessionId: "session-1",
@@ -161,7 +159,7 @@ struct AgentSessionTranscriptStateTests {
 
         viewModel.applyLiveState(liveState(provider: .openaiCodex))
 
-        #expect(builder.providers == [.claudeCode, .openaiCodex])
+        #expect(builder.providers == [.claudeCode])
         #expect(viewModel.session.provider == .claudeCode)
     }
 }
