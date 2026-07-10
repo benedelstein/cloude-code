@@ -6,8 +6,8 @@ struct ModelPickerButton: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
-    let modelPicker: ModelPickerState
-    let selectedModel: ModelPickerState.SelectedModel?
+    let modelCatalog: ModelCatalogStore
+    let selectedModel: ModelSelection?
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let isLoadingSelection: Bool
@@ -35,7 +35,7 @@ struct ModelPickerButton: View {
         .redacted(reason: isLoadingSelection ? .placeholder : [])
         .sheet(isPresented: $isSheetPresented) {
             ModelPickerSheet(
-                modelPicker: modelPicker,
+                modelCatalog: modelCatalog,
                 selectedModel: displayedModel,
                 providerId: providerId,
                 restrictsProvider: restrictsProvider,
@@ -92,12 +92,12 @@ struct ModelPickerButton: View {
         guard let displayedModel else {
             return nil
         }
-        return modelPicker.modelCatalog?.providers.first {
+        return modelCatalog.catalog?.providers.first {
             $0.providerId == displayedModel.providerId
         }
     }
 
-    private var displayedModel: ModelPickerState.SelectedModel? {
+    private var displayedModel: ModelSelection? {
         guard let selectedModel,
               !restrictsProvider || selectedModel.providerId == providerId else {
             return nil

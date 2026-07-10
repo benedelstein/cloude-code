@@ -18,15 +18,18 @@ final class AgentSessionViewModel {
     typealias TranscriptRow = AgentSessionView.TranscriptRow
 
     private var context: Context
-    private let modelPickerState: ModelPickerState
+    let modelCatalogStore: ModelCatalogStore
+    private let preferences: NewSessionPreferences
     private var socket: SessionSocket?
     private let makeSocket: (String) -> SessionSocket
     private let sessionMessageStore: SessionMessageStore
     private let sessionSummaryStore: SessionSummaryStore
     private let transcriptBuilder: any AgentSessionTranscriptBuilding
     private var subscriptionTask: Task<Void, Never>?
-    // Preserves a user's local choice until live client state reports it as current.
-    private var sessionModelOverride: ModelPickerState.SelectedModel?
+    /// The user's explicit pick: the whole selection for a draft (no client
+    /// state exists yet), or a staged next-turn override for an existing
+    /// session that is cleared once live client state reports it as current.
+    private var localModelSelection: ModelSelection?
     private var hasSeenServerActiveTurn = false
     private var lastMarkReadSentMessageId: String?
     // Keeps the local upload drafts for an optimistic message so they can be
@@ -72,7 +75,7 @@ final class AgentSessionViewModel {
         let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachmentStore.attachments.isEmpty
         let canSendInCurrentMode = isDraftMode
-            ? draft?.selectedRepo != nil && draft?.isModelSelectionReady == true
+            ? draft?.selectedRepo != nil && isModelSelectionValid
             : connectionState == .connected
         return hasContent
             && !attachmentStore.hasPendingOrFailedUploads
@@ -89,7 +92,8 @@ final class AgentSessionViewModel {
 
     init(
         context: Context,
-        modelPicker: ModelPickerState,
+        modelCatalogStore: ModelCatalogStore,
+        preferences: NewSessionPreferences,
         makeSocket: @escaping (String) -> SessionSocket,
         sessionMessageStore: SessionMessageStore,
         sessionSummaryStore: SessionSummaryStore,
@@ -97,7 +101,11 @@ final class AgentSessionViewModel {
         attachmentsAPI: any AttachmentsAPIProviding
     ) {
         self.context = context
-        modelPickerState = modelPicker
+        self.modelCatalogStore = modelCatalogStore
+        self.preferences = preferences
+        if context.draft != nil {
+            localModelSelection = ModelSelection(preference: preferences.lastSelectedModel)
+        }
         self.socket = context.session.map { makeSocket($0.id) }
         self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
@@ -150,8 +158,10 @@ final class AgentSessionViewModel {
     func applyLiveState(_ state: SessionClientState) {
         let previousProvider = clientState.agentSettings.provider
         clientState = state
-        if sessionModelOverride?.matches(state.agentSettings) == true {
-            sessionModelOverride = nil
+        // A non-matching override persists until the server confirms it: live
+        // state may still reflect the previous turn's settings.
+        if localModelSelection?.matches(state.agentSettings) == true {
+            localModelSelection = nil
         }
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
         if previousProvider != state.agentSettings.provider {
@@ -294,6 +304,7 @@ final class AgentSessionViewModel {
 private enum DraftSendError: LocalizedError {
     case missingDraft
     case missingSocket
+    case modelUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -301,6 +312,8 @@ private enum DraftSendError: LocalizedError {
             "New session state is unavailable."
         case .missingSocket:
             "Session connection is unavailable."
+        case .modelUnavailable:
+            "Wait for the model catalog before sending."
         }
     }
 }
@@ -355,15 +368,8 @@ extension AgentSessionViewModel {
         context.draft
     }
 
-    var modelPicker: ModelPickerState {
-        modelPickerState
-    }
-
-    var modelSelection: ModelPickerState.SelectedModel? {
-        if let draft {
-            return draft.selectedModel
-        }
-        return sessionModelOverride ?? currentSessionModelSelection
+    var modelSelection: ModelSelection? {
+        localModelSelection ?? serverModelSelection
     }
 
     var isDraftMode: Bool {
@@ -374,27 +380,36 @@ extension AgentSessionViewModel {
     }
 
     var isModelSelectionLoading: Bool {
-        if let draft {
-            return draft.selectedModel == nil
-                && modelPicker.modelCatalog == nil
-                && modelPicker.errorMessage == nil
+        if isDraftMode {
+            return localModelSelection == nil
+                && modelCatalogStore.catalog == nil
+                && modelCatalogStore.errorMessage == nil
         }
         return clientState.agentSettings.model.isEmpty
     }
 
+    /// Whether the current selection can be sent. Only drafts validate against
+    /// the catalog; an existing session's selection comes from the server.
+    var isModelSelectionValid: Bool {
+        guard isDraftMode else {
+            return true
+        }
+        return localModelSelection?.isValid(in: modelCatalogStore.catalog) == true
+    }
+
     var modelProviderId: ProviderId? {
         if isDraftMode {
-            return isCreatingSession
-                ? draft?.selectedModel?.providerId
-                : nil
+            return modelSelection?.providerId
         }
         return clientState.agentSettings.provider.providerId
     }
 }
 
 extension AgentSessionViewModel {
-    private var selectedModelOverride: (model: String?, effort: String?)? {
-        guard let selectedModel = sessionModelOverride,
+    /// Model/effort fields to send with the next message when the staged
+    /// selection differs from the session's current settings.
+    private var stagedModelChange: (model: String?, effort: String?)? {
+        guard let selectedModel = localModelSelection,
               selectedModel.providerId == modelProviderId else {
             return nil
         }
@@ -405,18 +420,18 @@ extension AgentSessionViewModel {
         )
     }
 
-    private var currentSessionModelSelection: ModelPickerState.SelectedModel? {
+    private var serverModelSelection: ModelSelection? {
         let settings = clientState.agentSettings
         guard let providerId = settings.provider.providerId,
               !settings.model.isEmpty else {
             return nil
         }
-        let provider = modelPicker.modelCatalog?.providers.first { $0.providerId == providerId }
+        let provider = modelCatalogStore.catalog?.providers.first { $0.providerId == providerId }
         let model = provider?.models.first { $0.id == settings.model }
         let effort = provider?.efforts.first { $0.id == settings.effort }
         let effortId = settings.effort.isEmpty ? nil : settings.effort
         // Client state is authoritative; catalog metadata only improves the labels.
-        return ModelPickerState.SelectedModel(
+        return ModelSelection(
             providerId: providerId,
             modelId: settings.model,
             displayName: model?.displayName ?? settings.model,
@@ -427,34 +442,51 @@ extension AgentSessionViewModel {
 
     /// Selects a model for the draft or stages it for the next existing-session message.
     func selectModel(provider: ProviderCatalogEntry, model: ProviderCatalogModel) {
-        if let draft {
-            draft.selectModel(provider: provider, model: model)
+        guard isDraftMode || provider.providerId == modelProviderId else {
             return
         }
-        guard provider.providerId == modelProviderId else {
-            return
-        }
-        sessionModelOverride = modelPicker.selection(
+        let selection = ModelSelection.selecting(
             provider: provider,
             model: model,
             preservingEffortFrom: modelSelection
         )
+        localModelSelection = selection
+        persistDraftModelSelection(selection)
     }
 
     /// Selects an effort for the draft or stages it for the next existing-session message.
     func selectEffort(provider: ProviderCatalogEntry, effort: ProviderCatalogEffort) {
-        if let draft {
-            draft.selectEffort(provider: provider, effort: effort)
+        guard isDraftMode || provider.providerId == modelProviderId else {
             return
         }
-        guard provider.providerId == modelProviderId else {
-            return
-        }
-        sessionModelOverride = modelPicker.selection(
+        guard let selection = ModelSelection.selecting(
             provider: provider,
             effort: effort,
             for: modelSelection
-        )
+        ) else {
+            return
+        }
+        localModelSelection = selection
+        persistDraftModelSelection(selection)
+    }
+
+    /// Re-validates the draft's selection once the catalog is available and
+    /// stores the resolved pick as the default for future drafts.
+    private func resolveDraftModelSelection() {
+        guard isDraftMode, let catalog = modelCatalogStore.catalog else {
+            return
+        }
+        localModelSelection = ModelSelection.resolved(from: localModelSelection, in: catalog)
+        if let localModelSelection {
+            persistDraftModelSelection(localModelSelection)
+        }
+    }
+
+    private func persistDraftModelSelection(_ selection: ModelSelection) {
+        guard isDraftMode else {
+            return
+        }
+        preferences.lastSelectedModel = selection.preferenceValue
     }
 
     /// Image drafts currently shown by the composer attachment strip.
@@ -490,19 +522,6 @@ extension AgentSessionViewModel {
     /// Retries a failed image attachment upload.
     func retryImageAttachment(id: UUID) {
         attachmentStore.retryAttachment(id: id)
-    }
-}
-
-private extension AgentProviderID {
-    var providerId: ProviderId? {
-        switch self {
-        case .claudeCode:
-            .claudeCode
-        case .openaiCodex:
-            .openaiCodex
-        case .unknown:
-            nil
-        }
     }
 }
 
@@ -560,9 +579,13 @@ extension AgentSessionViewModel {
                 self.isCreatingSession = false
             }
             do {
+                guard let selectedModel = self.localModelSelection, self.isModelSelectionValid else {
+                    throw DraftSendError.modelUnavailable
+                }
                 let response = try await draft?.createSession(
                     content: content,
-                    attachmentIds: uploadedAttachments.map(\.attachmentId)
+                    attachmentIds: uploadedAttachments.map(\.attachmentId),
+                    model: selectedModel
                 )
                 guard let response else {
                     throw DraftSendError.missingDraft
@@ -598,7 +621,7 @@ extension AgentSessionViewModel {
 
         Task { [socket, uploadedAttachments] in
             do {
-                let selectedModel = self.selectedModelOverride
+                let selectedModel = self.stagedModelChange
                 try await socket.sendChat(
                     content: content.isEmpty ? nil : content,
                     attachmentIds: uploadedAttachments.map(\.attachmentId),
@@ -654,11 +677,14 @@ extension AgentSessionViewModel {
 
         guard let socket else {
             hasLoadedMessages = true
+            async let catalogLoad: Void = modelCatalogStore.load()
             await draft?.load()
+            await catalogLoad
+            resolveDraftModelSelection()
             return
         }
 
-        async let modelLoad: Void = loadModelCatalog()
+        async let modelLoad: Void = modelCatalogStore.load()
         let subscriptionTask = startSocketPipeline(socket: socket, loadCache: true)
         async let subscribeStream = subscriptionTask.value
         _ = await (modelLoad, subscribeStream)
@@ -684,10 +710,6 @@ extension AgentSessionViewModel {
         return task
     }
 
-    private func loadModelCatalog() async {
-        await modelPicker.load()
-    }
-
     func unbind() {
         subscriptionTask?.cancel()
         subscriptionTask = nil
@@ -701,15 +723,6 @@ extension AgentSessionViewModel {
         Task { [socket] in
             await socket.disconnect()
         }
-    }
-}
-
-private extension ModelPickerState.SelectedModel {
-    func matches(_ settings: SessionClientState.AgentSettings) -> Bool {
-        let effort = settings.effort.isEmpty ? nil : settings.effort
-        return providerId == settings.provider.providerId
-            && modelId == settings.model
-            && effortId == effort
     }
 }
 

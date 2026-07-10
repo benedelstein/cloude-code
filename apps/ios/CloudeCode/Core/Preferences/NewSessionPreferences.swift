@@ -44,20 +44,6 @@ final class NewSessionPreferences {
         }
     }
 
-    func persistModel(
-        provider: ProviderCatalogEntry,
-        model: ProviderCatalogModel,
-        effort: ProviderCatalogEffort?
-    ) {
-        lastSelectedModel = LastSelectedModel(
-            providerId: provider.providerId.rawValue,
-            modelId: model.id,
-            displayName: model.displayName,
-            effortId: effort?.id,
-            effortDisplayName: effort?.displayName
-        )
-    }
-
     func persistRepo(_ repo: Repo) {
         lastSelectedRepo = LastSelectedRepo(
             id: repo.id,

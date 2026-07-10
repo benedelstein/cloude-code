@@ -10,7 +10,8 @@ protocol AgentSessionDependency: Dependency {
 
     var reposAPI: any ReposAPIProviding { get }
 
-    var modelsAPI: any ModelsAPIProviding { get }
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore { get }
 
     var fetchImageAction: any FetchImageAction { get }
 
@@ -48,7 +49,8 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
         shared {
             AgentSessionViewModel(
                 context: context,
-                modelPicker: modelPicker,
+                modelCatalogStore: dependency.modelCatalogStore,
+                preferences: dependency.newSessionPreferences,
                 makeSocket: dependency.makeSessionSocket(sessionId:),
                 sessionMessageStore: dependency.sessionMessageStore,
                 sessionSummaryStore: dependency.sessionSummaryStore,
@@ -76,16 +78,8 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
             NewSessionDraft(
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
-                modelPicker: modelPicker,
                 preferences: dependency.newSessionPreferences
             )
-        }
-    }
-
-    @MainActor
-    private var modelPicker: ModelPickerState {
-        shared {
-            ModelPickerState(modelsAPI: dependency.modelsAPI)
         }
     }
 }

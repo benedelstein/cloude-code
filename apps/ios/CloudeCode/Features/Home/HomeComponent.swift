@@ -68,6 +68,15 @@ final class HomeComponent: Component<HomeDependency> {
         }
     }
 
+    /// Shared across all agent sessions so the model catalog is fetched once
+    /// per app session instead of on every session open.
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore {
+        shared {
+            ModelCatalogStore(modelsAPI: dependency.modelsAPI)
+        }
+    }
+
     @MainActor
     func makeAgentSessionComponent(session: SessionSummaryModel) -> AgentSessionComponent {
         AgentSessionComponent(parent: self, session: session)

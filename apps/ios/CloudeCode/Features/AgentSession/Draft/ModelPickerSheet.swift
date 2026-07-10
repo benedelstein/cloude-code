@@ -5,8 +5,8 @@ struct ModelPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
 
-    let modelPicker: ModelPickerState
-    let selectedModel: ModelPickerState.SelectedModel?
+    let modelCatalog: ModelCatalogStore
+    let selectedModel: ModelSelection?
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
@@ -16,8 +16,9 @@ struct ModelPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                if let catalog = modelPicker.modelCatalog {
-                    if filteredProviders(in: catalog).isEmpty {
+                if let catalog = modelCatalog.catalog {
+                    let providers = filteredProviders(in: catalog)
+                    if providers.isEmpty {
                         EmptyStateView(
                             title: "No models found",
                             subtitle: "Try a different search."
@@ -26,11 +27,11 @@ struct ModelPickerSheet: View {
                         }
                         .listRowBackground(Color.clear)
                     } else {
-                        ForEach(filteredProviders(in: catalog), id: \.providerId.rawValue) { provider in
+                        ForEach(providers, id: \.providerId.rawValue) { provider in
                             providerSection(provider)
                         }
                     }
-                } else if modelPicker.isLoading {
+                } else if modelCatalog.isLoading {
                     loadingRows
                 } else {
                     ErrorStateView(
@@ -55,6 +56,10 @@ struct ModelPickerSheet: View {
                 }
             }
             .presentationDetents([.medium, .large])
+            // Self-heals after an earlier load failure; no-ops once loaded.
+            .task {
+                await modelCatalog.load()
+            }
         }
     }
 
@@ -79,7 +84,7 @@ struct ModelPickerSheet: View {
                 displayName: model.displayName,
                 isSelected: selectedModel?.providerId == provider.providerId
                     && selectedModel?.modelId == model.id,
-                isEnabled: provider.canSelectModels && model.selectable
+                isEnabled: provider.isSelectable && model.selectable
             ) {
                 onSelectModel(provider, model)
                 dismiss()
@@ -116,7 +121,7 @@ struct ModelPickerSheet: View {
                     .frame(width: 14, height: 14)
                 Text(provider.providerName)
                 Spacer()
-                if !provider.canSelectModels {
+                if !provider.isSelectable {
                     Text(provider.requiresReauth ? "Reconnect required" : "Disconnected")
                         .foregroundStyle(theme.tertiaryLabelColor)
                 }
@@ -136,27 +141,18 @@ struct ModelPickerSheet: View {
     }
 
     private func filteredProviders(in catalog: ModelsResponse) -> [ProviderCatalogEntry] {
-        let providers = catalog.providers.filter { provider in
+        // The store pre-sorts providers (selectable first); only the selected
+        // provider needs hoisting here because it depends on the selection.
+        var providers = catalog.providers.filter { provider in
             (!restrictsProvider || provider.providerId == providerId)
                 && !filteredModels(for: provider).isEmpty
         }
-
-        return providers.enumerated()
-            .sorted { left, right in
-                let leftPriority = priority(for: left.element)
-                let rightPriority = priority(for: right.element)
-                return leftPriority == rightPriority
-                    ? left.offset < right.offset
-                    : leftPriority < rightPriority
-            }
-            .map(\.element)
-    }
-
-    private func priority(for provider: ProviderCatalogEntry) -> Int {
-        if provider.providerId == selectedModel?.providerId {
-            return 0
+        if let selectedIndex = providers.firstIndex(where: {
+            $0.providerId == selectedModel?.providerId
+        }), selectedIndex > 0 {
+            providers.insert(providers.remove(at: selectedIndex), at: 0)
         }
-        return provider.canSelectModels ? 1 : 2
+        return providers
     }
 
     private func filteredModels(for provider: ProviderCatalogEntry) -> [ProviderCatalogModel] {
@@ -201,11 +197,5 @@ struct ModelPickerSheet: View {
             .disabled(!isEnabled)
             .opacity(isEnabled ? 1 : 0.4)
         }
-    }
-}
-
-private extension ProviderCatalogEntry {
-    var canSelectModels: Bool {
-        connected && !requiresReauth
     }
 }

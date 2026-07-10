@@ -85,8 +85,9 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.reposAPI
     }
 
-    var modelsAPI: any ModelsAPIProviding {
-        applicationComponent.modelsAPI
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore {
+        homeComponent.modelCatalogStore
     }
 
     var fetchImageAction: any FetchImageAction {

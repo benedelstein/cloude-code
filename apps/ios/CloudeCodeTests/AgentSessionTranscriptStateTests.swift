@@ -125,7 +125,11 @@ private extension AgentSessionTranscriptStateTests {
                 updatedAt: "2026-01-01T00:00:00Z",
                 hasUnread: false
             ))),
-            modelPicker: ModelPickerState(modelsAPI: StubModelsAPI()),
+            modelCatalogStore: ModelCatalogStore(modelsAPI: StubModelsAPI()),
+            // Unused in session mode: preferences only seed draft selections.
+            preferences: NewSessionPreferences(userDefaults: UserDefaults(
+                suiteName: "AgentSessionTranscriptStateTests"
+            ) ?? .standard),
             makeSocket: { sessionId in
                 // Never dialed: these tests exercise state transitions without connecting.
                 SessionSocket(

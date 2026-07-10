@@ -24,7 +24,7 @@ extension AgentSessionView {
 
                 promptComposer {
                     ModelPickerButton(
-                        modelPicker: vm.modelPicker,
+                        modelCatalog: vm.modelCatalogStore,
                         selectedModel: vm.modelSelection,
                         providerId: vm.modelProviderId,
                         restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
