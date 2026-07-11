@@ -67,6 +67,7 @@ describe("session api schemas", () => {
       id: "123e4567-e89b-12d3-a456-426614174000",
       repoId: 1,
       repoFullName: "owner/repo",
+      provider: "openai-codex",
       title: "Fix sidebar",
       archived: false,
       workingState: "responding",
@@ -82,6 +83,27 @@ describe("session api schemas", () => {
       lastAssistantMessageId: "assistant-message-1",
       hasUnread: true,
     })).not.toThrow();
+  });
+
+  it("accepts absent provider metadata and rejects null", () => {
+    const summary = {
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      repoId: 1,
+      repoFullName: "owner/repo",
+      title: null,
+      archived: false,
+      workingState: "idle",
+      pushedBranch: null,
+      pullRequest: null,
+      createdAt: "2026-05-22T00:00:00.000Z",
+      updatedAt: "2026-05-22T00:00:00.000Z",
+      lastMessageAt: null,
+      lastAssistantMessageId: null,
+      hasUnread: false,
+    };
+
+    expect(SessionSummary.parse(summary).provider).toBeUndefined();
+    expect(SessionSummary.safeParse({ ...summary, provider: null }).success).toBe(false);
   });
 
   it("accepts pull request client lifecycle states", () => {

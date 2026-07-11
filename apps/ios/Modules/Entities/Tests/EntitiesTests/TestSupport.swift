@@ -9,12 +9,14 @@ func testUser(_ id: String, name: String? = nil) -> Domain.User {
 func testSessionSummary(
     _ id: String,
     repoId: Int = 1,
-    title: String? = "Session"
+    title: String? = "Session",
+    provider: AgentProviderID? = nil
 ) -> Domain.SessionSummary {
     Domain.SessionSummary(
         id: id,
         repoId: repoId,
         repoFullName: "owner/repo-\(repoId)",
+        provider: provider,
         title: title,
         archived: false,
         workingState: "idle",

@@ -95,19 +95,6 @@ private extension SessionClientState.AgentSettings {
     }
 }
 
-private extension AgentProviderID {
-    init(_ provider: CoreAPI.ProviderId) {
-        switch provider {
-        case .claudeCode:
-            self = .claudeCode
-        case .openaiCodex:
-            self = .openaiCodex
-        case .unknown(let value):
-            self = .unknown(value)
-        }
-    }
-}
-
 private extension SessionClientState.Plan {
     init(_ plan: CoreAPI.SessionPlanMetadata) {
         self.init(lastUpdated: plan.lastUpdated)

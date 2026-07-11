@@ -1,4 +1,5 @@
 import {
+  DEFAULT_AGENT_SETTINGS,
   type ArchiveSessionResponse,
   type CreateSessionRequest,
   type CreateSessionResponse,
@@ -250,6 +251,11 @@ export class SessionsService {
     });
 
     const attachmentIds = [...new Set(params.request.initialMessage.attachmentIds ?? [])];
+    const provider = params.request.settings?.provider ?? DEFAULT_AGENT_SETTINGS.provider;
+    const settings = {
+      ...params.request.settings,
+      provider,
+    };
     const initialMessage = {
       ...params.request.initialMessage,
       attachmentIds,
@@ -263,6 +269,7 @@ export class SessionsService {
       installationId: repoAccessResult.value.installationId,
       repoFullName: repoAccessResult.value.repoFullName,
       source: params.source ?? "web",
+      provider,
       sourceEnvironmentId: environmentSnapshot.sourceEnvironmentId,
       sourceEnvironmentName: environmentSnapshot.sourceEnvironmentName,
     });
@@ -288,7 +295,7 @@ export class SessionsService {
         sessionId,
         userId: params.userId,
         repoFullName: repoAccessResult.value.repoFullName,
-        settings: params.request.settings,
+        settings,
         agentMode: params.request.agentMode,
         branch: params.request.branch,
         environmentSnapshot,

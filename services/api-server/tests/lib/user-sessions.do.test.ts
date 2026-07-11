@@ -45,6 +45,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     repo_id: 42,
     installation_id: 99,
     repo_full_name: "owner/repo",
+    provider_id: "claude-code",
     title: "Sidebar work",
     archived: 0,
     access_blocked_at: null,
@@ -209,6 +210,7 @@ describe("UserSessionsDO", () => {
       type: "session.summary.updated",
       session: {
         id: SESSION_ID,
+        provider: "claude-code",
         workingState: "responding",
         pushedBranch: "cloude/sidebar-abcd",
         pullRequest: { number: 4, state: "open" },
