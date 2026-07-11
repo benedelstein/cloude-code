@@ -34,6 +34,9 @@ export const AgentSettingsClaude = z.object({
 export const OPENAI_CODEX_PROVIDER_ID = "openai-codex" as const;
 
 export const OpenAICodexModel = z.enum([
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
   "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",
@@ -49,7 +52,7 @@ export type OpenAICodexEffort = z.infer<typeof OpenAICodexEffort>;
 
 export const AgentSettingsCodex = z.object({
   provider: z.literal(OPENAI_CODEX_PROVIDER_ID),
-  model: OpenAICodexModel.default("gpt-5.5"),
+  model: OpenAICodexModel.default("gpt-5.6-sol"),
   effort: OpenAICodexEffort.default("high"),
   maxTokens: z.number().int().default(8192),
 });
