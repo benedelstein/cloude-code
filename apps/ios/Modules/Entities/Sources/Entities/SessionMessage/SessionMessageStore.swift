@@ -113,7 +113,7 @@ public final class SessionMessageStore {
             sessionId: sessionId,
             fallback: createdAtFallback
         )
-        let newModels = entityStore.putDisk([snapshot])
+        let newModels = entityStore.putSnapshotsToDisk([snapshot])
         if loadedSessionIDs.contains(sessionId) {
             upsertIntoSessionIndex(newModels, for: sessionId)
         }

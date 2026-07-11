@@ -38,10 +38,10 @@ extension PromptComposerView {
     }
 
     private enum EditorStyle {
-        static let font = UIFont.systemFont(ofSize: 17, weight: .regular)
-        static let horizontalInset: CGFloat = 16
-        static let topInset: CGFloat = 16
-        static let maxVisibleLines = 6
+        static var font: UIFont { UIFont.systemFont(ofSize: 17, weight: .regular) }
+        static var horizontalInset: CGFloat { 16 }
+        static var topInset: CGFloat { 16 }
+        static var maxVisibleLines: Int { 6 }
 
         static var textInsets: UIEdgeInsets {
             UIEdgeInsets(

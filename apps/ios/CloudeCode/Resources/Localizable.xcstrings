@@ -31,6 +31,9 @@
     "Cloude Code" : {
 
     },
+    "Collapsed" : {
+
+    },
     "Complete" : {
 
     },
@@ -52,6 +55,9 @@
     "Dark" : {
 
     },
+    "default" : {
+
+    },
     "Delete" : {
 
     },
@@ -68,6 +74,12 @@
 
     },
     "Diff available" : {
+
+    },
+    "Disconnected" : {
+
+    },
+    "Done" : {
 
     },
     "Edit %@" : {
@@ -96,7 +108,13 @@
         }
       }
     },
+    "Effort Level" : {
+
+    },
     "Exit %lld" : {
+
+    },
+    "Expanded" : {
 
     },
     "Fetch %@" : {
@@ -195,10 +213,28 @@
         }
       }
     },
+    "Model" : {
+
+    },
+    "Model catalog is unavailable." : {
+
+    },
+    "New session" : {
+
+    },
+    "No branches found" : {
+
+    },
     "No logs yet" : {
 
     },
-    "No messages yet" : {
+    "No models" : {
+
+    },
+    "No models found" : {
+
+    },
+    "No repositories found" : {
 
     },
     "No sessions" : {
@@ -311,7 +347,16 @@
     "Recent app logs are kept in memory for debugging." : {
 
     },
+    "Reconnect required" : {
+
+    },
     "Remove image" : {
+
+    },
+    "Repository" : {
+
+    },
+    "Repository unavailable" : {
 
     },
     "Responding" : {
@@ -441,7 +486,28 @@
         }
       }
     },
+    "Select an effort level" : {
+
+    },
+    "Select base branch" : {
+
+    },
+    "Select Base Branch" : {
+
+    },
+    "Select model" : {
+
+    },
+    "Select Model" : {
+
+    },
     "Select photos" : {
+
+    },
+    "Select repository" : {
+
+    },
+    "Select Repository" : {
 
     },
     "Send" : {
@@ -508,6 +574,9 @@
 
     },
     "Tool not found" : {
+
+    },
+    "Try a different search." : {
 
     },
     "Unread message" : {

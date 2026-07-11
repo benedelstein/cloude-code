@@ -107,6 +107,7 @@ struct GrowingTextView: UIViewRepresentable {
         func textViewDidEndEditing(_ textView: UITextView) {
             guard parent.focused else { return }
 
+            // todo: modifying state during view update
             parent.focused = false
         }
 

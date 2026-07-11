@@ -95,6 +95,18 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var reposAPI: any ReposAPIProviding {
+        shared {
+            ReposAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    var modelsAPI: any ModelsAPIProviding {
+        shared {
+            ModelsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
     var fetchImageAction: any FetchImageAction {
         AuthenticatedFetchImageAction(apiBaseURL: apiBaseURL) { [tokenCoordinator] in
             try await tokenCoordinator.bearerHeaders()
@@ -169,6 +181,16 @@ final class ApplicationComponent: Component<ApplicationDependency> {
             // todo add a summary get endpoint rn we just have a get that returns data from the do.
             SessionSummaryStore(cache: cache)
         }
+    }
+
+    @MainActor var newSessionPreferences: NewSessionPreferences {
+        shared {
+            NewSessionPreferences(userDefaults: userDefaults)
+        }
+    }
+
+    var userDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroupIdentifier) ?? .standard
     }
 
     @MainActor

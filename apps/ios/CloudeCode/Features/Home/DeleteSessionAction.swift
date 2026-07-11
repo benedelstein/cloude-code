@@ -13,7 +13,7 @@ struct DeleteSessionAction {
         do {
             try await sessionsAPI.delete(sessionId: session.id)
         } catch {
-            sessionSummaryStore.putDisk([snapshot])
+            sessionSummaryStore.putSnapshotsToDisk([snapshot])
             throw error
         }
     }

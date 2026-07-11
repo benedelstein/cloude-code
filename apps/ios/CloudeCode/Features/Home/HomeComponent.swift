@@ -1,14 +1,19 @@
 import API
+import Combine
 import Entities
 import NeedleFoundation
 import SwiftUI
 
 protocol HomeDependency: Dependency {
     var sessionsAPI: any SessionsAPIProviding { get }
+    var reposAPI: any ReposAPIProviding { get }
+    var modelsAPI: any ModelsAPIProviding { get }
     @MainActor
     var notificationHandler: NotificationHandler { get }
     @MainActor
     var sessionSummaryStore: SessionSummaryStore { get }
+    @MainActor
+    var newSessionPreferences: NewSessionPreferences { get }
     var cache: Cache { get }
     var userSessionsSocket: UserSessionsSocket { get }
 }
@@ -47,12 +52,22 @@ final class HomeComponent: Component<HomeDependency> {
         }
     }
 
+    /// Bridges "a draft created its session" from agent session view models to the
+    /// router without threading closures through the view hierarchy.
+    @MainActor
+    var sessionCreatedSubject: PassthroughSubject<String, Never> {
+        shared {
+            PassthroughSubject<String, Never>()
+        }
+    }
+
     @MainActor
     var router: HomeRouter {
         shared {
             HomeRouter(
                 notificationHandler: dependency.notificationHandler,
-                sessionSummaryStore: dependency.sessionSummaryStore
+                sessionSummaryStore: dependency.sessionSummaryStore,
+                sessionCreated: sessionCreatedSubject.eraseToAnyPublisher()
             )
         }
     }
@@ -64,9 +79,31 @@ final class HomeComponent: Component<HomeDependency> {
         }
     }
 
+    /// Shared across all agent sessions so the model catalog is fetched once
+    /// per app session instead of on every session open.
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore {
+        shared {
+            ModelCatalogStore(modelsAPI: dependency.modelsAPI)
+        }
+    }
+
     @MainActor
     func makeAgentSessionComponent(session: SessionSummaryModel) -> AgentSessionComponent {
-        AgentSessionComponent(parent: self, session: session)
+        AgentSessionComponent(
+            parent: self,
+            session: session,
+            sessionCreatedSubject: sessionCreatedSubject
+        )
+    }
+
+    @MainActor
+    func makeNewAgentSessionComponent() -> AgentSessionComponent {
+        AgentSessionComponent(
+            parent: self,
+            session: nil,
+            sessionCreatedSubject: sessionCreatedSubject
+        )
     }
 }
 
@@ -79,7 +116,11 @@ struct HomeBuilder {
             viewModel: component.viewModel,
             router: component.router,
             sessionBuilder: AgentSessionBuilder { [component] session in
-                component.makeAgentSessionComponent(session: session)
+                if let session {
+                    component.makeAgentSessionComponent(session: session)
+                } else {
+                    component.makeNewAgentSessionComponent()
+                }
             }
         )
     }

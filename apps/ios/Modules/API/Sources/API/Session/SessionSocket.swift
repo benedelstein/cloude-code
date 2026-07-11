@@ -77,12 +77,16 @@ public actor SessionSocket {
     public func sendChat(
         content: String?,
         attachmentIds: [String] = [],
-        clientMessageId: String
+        clientMessageId: String,
+        model: String? = nil,
+        effort: String? = nil
     ) async throws {
         try await send(.chatMessage(ChatMessageEvent(
             content: content,
             attachments: attachmentIds.isEmpty ? nil : attachmentIds.map(MessageAttachmentRef.init),
-            clientMessageId: clientMessageId
+            clientMessageId: clientMessageId,
+            model: model,
+            effort: effort
         )))
     }
 

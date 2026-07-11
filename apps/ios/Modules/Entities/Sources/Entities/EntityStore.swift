@@ -113,7 +113,7 @@ public final class EntityStore<M: EntityModel> {
 
         if !missingIds.isEmpty, let getAPI, scopes.contains(.network) {
             let fromNetwork = try await getAPI(missingIds)
-            results.append(contentsOf: putDisk(fromNetwork))
+            results.append(contentsOf: putSnapshotsToDisk(fromNetwork))
             missingIds.subtract(fromNetwork.map(\.id))
         }
 
@@ -152,9 +152,12 @@ public final class EntityStore<M: EntityModel> {
         }
     }
 
-    /// Puts to memory, then persists to disk in the background.
+    /// Merges snapshots into canonical models, then persists them to disk in the background.
+    ///
+    /// - Parameter snapshots: Snapshots received from the API, socket, or other external source.
+    /// - Returns: The canonical models corresponding to the supplied snapshots.
     @discardableResult
-    public func putDisk(_ snapshots: [Snapshot]) -> [M] {
+    public func putSnapshotsToDisk(_ snapshots: [Snapshot]) -> [M] {
         guard !snapshots.isEmpty else { return [] }
 
         if let cache {
@@ -171,8 +174,11 @@ public final class EntityStore<M: EntityModel> {
     }
 
     /// Persists current model state (e.g. after view-side mutations).
-    public func save(_ models: [M]) {
-        putDisk(models.map(\.snapshot))
+    ///
+    /// - returns:  the canonical cached model instances, not necessarily the ones you passed in.
+    @discardableResult
+    public func save(_ models: [M]) -> [M] {
+        putSnapshotsToDisk(models.map(\.snapshot))
     }
 
     // MARK: - Delete

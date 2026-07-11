@@ -150,12 +150,12 @@ final class HomeViewModel {
         case .connected:
             break
         case .summaryCreated(let summary):
-            sessionSummaryStore.putDisk([summary])
+            sessionSummaryStore.putSnapshotsToDisk([summary])
         case .summaryUpdated(let summary):
             guard sessionSummaryStore[summary.id] != nil else {
                 return
             }
-            sessionSummaryStore.putDisk([summary])
+            sessionSummaryStore.putSnapshotsToDisk([summary])
         case .summaryRemoved(let id):
             sessionSummaryStore.delete([id])
         case .resyncRequired:
@@ -168,7 +168,7 @@ final class HomeViewModel {
         let freshIDs = Set(page.summaries.map(\.id))
         let staleIDs = Set(sessionSummaryStore.objectMap.keys).subtracting(freshIDs)
         sessionSummaryStore.delete(staleIDs)
-        sessionSummaryStore.putDisk(page.summaries)
+        sessionSummaryStore.putSnapshotsToDisk(page.summaries)
     }
 
     private static func groups(from sessions: [SessionSummaryModel]) -> [HomeSessionGroup] {

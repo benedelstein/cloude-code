@@ -10,5 +10,7 @@ enum Constants {
 
     /// Userdefaults keys
     enum UserDefaults {
+        static let lastSelectedNewSessionModel = "lastSelectedNewSessionModel"
+        static let lastSelectedNewSessionRepo = "lastSelectedNewSessionRepo"
     }
 }

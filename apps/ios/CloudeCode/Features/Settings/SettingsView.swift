@@ -68,10 +68,9 @@ private struct LogsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: style.gridSize) {
                 if logStore.entries.isEmpty {
-                    ContentUnavailableView(
-                        "No logs yet",
-                        systemImage: "doc.text"
-                    )
+                    EmptyStateView(title: "No logs yet") {
+                        Image(systemName: "doc.text")
+                    }
                     .frame(maxWidth: .infinity, minHeight: style.gridSize * 24)
                 } else {
                     ForEach(logStore.entries) { entry in
