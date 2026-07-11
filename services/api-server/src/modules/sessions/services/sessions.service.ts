@@ -666,18 +666,15 @@ export class SessionsService {
     userId: string;
     executionCtx?: ExecutionContext;
   }): Promise<SessionsServiceResult<DeleteSessionResponse>> {
-    const authorizedSessionAgent = await this.getAuthorizedSessionAgent(params);
-    if (!authorizedSessionAgent.ok) {
-      return authorizedSessionAgent;
+    const ownershipResult = await this.assertSessionOwnership(params.sessionId, params.userId);
+    if (!ownershipResult.ok) {
+      return ownershipResult;
     }
 
     await this.sessionsRepository.deleteAndQueueAttachmentGc(params.sessionId);
     await this.publishSessionSummaryRemoved(params.userId, params.sessionId);
 
-    const cleanupPromise = this.cleanupDeletedSessionAgent(
-      params.sessionId,
-      authorizedSessionAgent.value,
-    );
+    const cleanupPromise = this.cleanupDeletedSessionAgent(params.sessionId);
     if (params.executionCtx) {
       params.executionCtx.waitUntil(cleanupPromise);
     } else {
@@ -687,12 +684,11 @@ export class SessionsService {
     return success({ deleted: true });
   }
 
-  private async cleanupDeletedSessionAgent(
-    sessionId: string,
-    sessionAgent: SessionAgentRpc,
-  ): Promise<void> {
+  private async cleanupDeletedSessionAgent(sessionId: string): Promise<void> {
     let result: HandleDeleteSessionResult;
     try {
+      // Agent lookup performs a live setName RPC, so keep it inside best-effort cleanup.
+      const sessionAgent = await this.getSessionAgent(sessionId);
       result = await sessionAgent.handleDeleteSession() as HandleDeleteSessionResult;
     } catch (error) {
       if (!isDestroyedSessionAgentError(error)) {
