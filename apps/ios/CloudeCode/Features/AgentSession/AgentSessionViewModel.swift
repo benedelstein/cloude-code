@@ -29,6 +29,10 @@ final class AgentSessionViewModel {
     let sessionSummaryStore: SessionSummaryStore
     let transcriptBuilder: any AgentSessionTranscriptBuilding
     var subscriptionTask: Task<Void, Never>?
+    /// Whether the view is currently on screen (between `bind` and `unbind`).
+    /// Session creation is allowed to finish after the view goes away, but we
+    /// skip starting a socket for it so we don't leave an orphan connection.
+    var isBound = false
     /// The user's explicit pick: the whole selection for a draft (no client
     /// state exists yet), or a staged next-turn override for an existing
     /// session that is cleared once live client state reports it as current.

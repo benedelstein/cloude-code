@@ -159,7 +159,12 @@ final class NewSessionDraft {
     private func resolveSelectedRepo(with loadedRepos: [Repo]) {
         if let repoSelection,
            let repo = loadedRepos.first(where: { $0.id == repoSelection.repo.id }) {
-            selectRepo(repo, branch: repoSelection.branch)
+            // A restored selection's branch is just the default branch we
+            // persisted; follow the freshly loaded default in case it changed.
+            let branch = repoSelection.branch == repoSelection.repo.defaultBranch
+                ? repo.defaultBranch
+                : repoSelection.branch
+            selectRepo(repo, branch: branch)
             return
         }
 

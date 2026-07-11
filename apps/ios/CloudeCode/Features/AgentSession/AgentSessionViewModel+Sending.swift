@@ -163,6 +163,13 @@ extension AgentSessionViewModel {
 
         let socket = makeSocket(response.sessionId)
         self.socket = socket
+        // Creation is deliberately not cancelled when the user navigates away:
+        // the session exists server-side and was persisted above so it shows
+        // up in the session list. Only connecting the socket is pointless once
+        // the screen is gone; a later bind() will connect it.
+        guard isBound else {
+            return
+        }
         connectionState = .connecting
         _ = startSocketPipeline(socket: socket)
     }

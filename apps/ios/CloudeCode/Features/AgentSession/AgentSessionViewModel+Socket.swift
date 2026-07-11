@@ -3,6 +3,7 @@ import Foundation
 
 extension AgentSessionViewModel {
     func bind() async {
+        isBound = true
         guard subscriptionTask == nil else {
             return
         }
@@ -46,6 +47,7 @@ extension AgentSessionViewModel {
     }
 
     func unbind() {
+        isBound = false
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected
