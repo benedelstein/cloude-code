@@ -7,7 +7,8 @@
  * the sprite so the setup websocket can disconnect.
  *
  * Usage:
- *   tsx scripts/test-sprite-vm-agent-ndjson.ts <sprite-name> [provider=claude-code|openai-codex] [model=gpt-5.3-codex] [message="say hi"] [agentMode=edit]
+ *   tsx scripts/test-sprite-vm-agent-ndjson.ts <sprite-name>
+ *     [provider=claude-code|openai-codex] [model=gpt-5.6-sol] [message="say hi"] [agentMode=edit]
  *
  * Env:
  *   SPRITES_API_KEY
@@ -31,7 +32,8 @@ if (!SPRITES_API_KEY) {
 const spriteName = process.argv[2];
 if (!spriteName) {
   console.error(
-    'Usage: tsx scripts/test-sprite-vm-agent-ndjson.ts <sprite-name> [provider=claude-code|openai-codex] [model=gpt-5.3-codex] [message="say hi"] [agentMode=edit]',
+    "Usage: tsx scripts/test-sprite-vm-agent-ndjson.ts <sprite-name> " +
+      '[provider=claude-code|openai-codex] [model=gpt-5.6-sol] [message="say hi"] [agentMode=edit]',
   );
   process.exit(1);
 }
@@ -47,8 +49,7 @@ const options = new Map(
 );
 
 const provider = options.get("provider") ?? "openai-codex";
-const model =
-  options.get("model") ?? (provider === "openai-codex" ? "gpt-5.3-codex" : "sonnet");
+const model = options.get("model") ?? (provider === "openai-codex" ? "gpt-5.6-sol" : "sonnet");
 const message = options.get("message") ?? "Say hello, then stop.";
 const agentMode = options.get("agentMode") ?? "edit";
 
