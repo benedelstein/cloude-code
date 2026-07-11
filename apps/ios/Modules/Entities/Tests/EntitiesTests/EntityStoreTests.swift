@@ -59,7 +59,7 @@ final class EntityStoreTests: XCTestCase {
         let fetches = await recorder.fetches
         XCTAssertEqual(fetches, [["remoteOnly"]], "disk hits must not be re-fetched")
 
-        // Network results flow back to disk via putDisk's background task.
+        // Network results flow back to disk via putSnapshotsToDisk's background task.
         let persisted = try await pollUntil {
             let snapshots = try await cache.fetch(UserEntity.self, ids: ["remoteOnly"])
             return snapshots.isEmpty ? nil : snapshots

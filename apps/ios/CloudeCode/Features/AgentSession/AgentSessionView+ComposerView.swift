@@ -10,10 +10,47 @@ import SwiftUI
 
 extension AgentSessionView {
     struct ComposerView: View {
+        @Environment(\.style) var style: Style
+
         @Bindable var vm: AgentSessionViewModel
+        let showsRepoBranchPicker: Bool
         @State private var composerFocused = false
 
         var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                if showsRepoBranchPicker, let draft = vm.draft {
+                    RepoBranchPickerBar(draft: draft)
+                        .transition(.blurReplace)
+                }
+
+                promptComposer {
+                    ModelPickerButton(
+                        modelCatalog: vm.modelCatalogStore,
+                        selectedModel: vm.modelSelection,
+                        providerId: vm.modelProviderId,
+                        restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
+                        isLoadingSelection: vm.isModelSelectionLoading,
+                        onSelectModel: { provider, model in
+                            vm.selectModel(provider: provider, model: model)
+                        },
+                        onSelectEffort: { provider, effort in
+                            vm.selectEffort(provider: provider, effort: effort)
+                        }
+                    )
+                }
+            }
+            .animation(style.fadeAnimation, value: showsRepoBranchPicker)
+            .task {
+                if vm.isDraftMode {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    composerFocused = true
+                }
+            }
+        }
+
+        private func promptComposer<TrailingAccessory: View>(
+            @ViewBuilder trailingAccessory: () -> TrailingAccessory = { EmptyView() }
+        ) -> some View {
             PromptComposerView(
                 text: $vm.draftText,
                 focused: $composerFocused,
@@ -23,8 +60,9 @@ extension AgentSessionView {
                 remainingImageSlots: vm.remainingImageAttachmentSlots,
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
-                isSubmitting: vm.isResponding,
-                onSubmit: vm.submitDraft,
+                isSubmitting: vm.isCreatingSession || vm.isResponding,
+                trailingAccessory: trailingAccessory,
+                onSubmit: vm.submitUserMessage,
                 onRemoveImageAttachment: vm.removeImageAttachment,
                 onRetryImageAttachment: vm.retryImageAttachment,
                 onPhotosSelected: vm.addImageAttachmentPhotoItems,

@@ -5,6 +5,7 @@ import SwiftUI
 struct AgentSessionView: View {
     @Environment(\.theme) private var theme: Theme
     @Environment(\.style) private var style: Style
+    @Environment(\.showToast) private var showToast
 
     @State private var store: AgentSessionViewModel
     @State private var destination: Modal<Destination>?
@@ -13,6 +14,10 @@ struct AgentSessionView: View {
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
+    }
+
+    private var showsRepoBranchPicker: Bool {
+        store.isDraftMode && !store.isCreatingSession && store.draft != nil
     }
 
     var body: some View {
@@ -24,7 +29,7 @@ struct AgentSessionView: View {
                 scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
-                ComposerView(vm: store)
+                ComposerView(vm: store, showsRepoBranchPicker: showsRepoBranchPicker)
                     .padding(.horizontal, style.horizontalPadding)
                     .padding(.bottom, style.spacing)
                     .readSize(updateComposerHeight)
@@ -38,7 +43,7 @@ struct AgentSessionView: View {
         }
         .background(theme.backgroundColor)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(store.session.title ?? "Untitled session")
+        .navigationTitle(navigationTitle)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 sessionHeader
@@ -55,6 +60,15 @@ struct AgentSessionView: View {
         .task {
             await store.bind()
         }
+        .onChange(of: store.errorMessage) { _, errorMessage in
+            guard let errorMessage else {
+                return
+            }
+            showToast?(
+                title: Text(verbatim: errorMessage),
+                icon: Image(systemName: "exclamationmark.circle.fill")
+            )
+        }
         .onDisappear {
             store.unbind()
         }
@@ -69,19 +83,23 @@ struct AgentSessionView: View {
 
     private var sessionHeader: some View {
         VStack(alignment: .center, spacing: 0) {
-            Text(store.session.title ?? "Untitled session")
+            Text(navigationTitle)
                 .styledFont(.headline)
                 .foregroundStyle(theme.labelColor)
                 .lineLimit(1)
 
             HStack(spacing: style.gridSize) {
-                Text(store.clientState.repoFullName ?? store.session.repoFullName)
+                Text(store.clientState.repoFullName ?? store.session?.repoFullName ?? "No repository selected")
                     .lineLimit(1)
             }
             .styledFont(.caption)
             .foregroundStyle(theme.secondaryLabelColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var navigationTitle: String {
+        store.session?.title ?? (store.isDraftMode ? "New session" : "Untitled session")
     }
 }
 
@@ -150,20 +168,16 @@ private extension AgentSessionView {
         }
 
         var body: some View {
-            if hasTranscriptItems {
-//                SessionTranscriptPositionScrollView(
-//                    items: transcriptItems,
-//                    keyboardDismissPadding: keyboardDismissPadding,
-//                    rowSpacing: style.spacing,
-//                    contentPadding: style.spacing
-//                ) { item in
-//                    transcriptRow(item)
-//                        .padding(.horizontal, style.horizontalPadding)
-//                }
-                transcriptScrollView
-            } else {
-                emptyScrollView
-            }
+            // Always render the transcript scroll view so its structural identity
+            // is stable; swapping it out (empty <-> transcript) re-hosts the
+            // bottom safeAreaBar and breaks composer animations on first send.
+            transcriptScrollView
+                .overlay {
+                    if !hasTranscriptItems, !store.hasLoadedMessages {
+                        // todo loading skeleton
+                        ProgressView()
+                    }
+                }
         }
 
         private var hasMessageTranscriptItems: Bool {
@@ -233,23 +247,6 @@ private extension AgentSessionView {
                 scrollView
                     .scrollClipDisabled()
             }
-        }
-
-        private var emptyScrollView: some View {
-            ScrollView {
-                if store.hasLoadedMessages {
-                    ContentUnavailableView(
-                        "No messages yet",
-                        systemImage: "text.bubble"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
-                } else {
-                    // todo loading skeleton
-                    ProgressView()
-                        .containerRelativeFrame([.vertical, .horizontal])
-                }
-            }
-            .scrollDismissesKeyboard(.interactively)
         }
 
         @ViewBuilder

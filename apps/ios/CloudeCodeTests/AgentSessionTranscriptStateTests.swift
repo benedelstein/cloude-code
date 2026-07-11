@@ -1,4 +1,6 @@
 import API
+import Combine
+import CoreAPI
 import Domain
 import Entities
 import Foundation
@@ -161,7 +163,7 @@ struct AgentSessionTranscriptStateTests {
         viewModel.applyLiveState(liveState(provider: .openaiCodex))
 
         #expect(builder.providers == [.claudeCode, .openaiCodex])
-        #expect(viewModel.session.provider == .claudeCode)
+        #expect(viewModel.session?.provider == .claudeCode)
     }
 }
 
@@ -206,6 +208,12 @@ private extension AgentSessionTranscriptStateTests {
         func deleteAttachment(id attachmentId: String) async throws {}
     }
 
+    struct StubModelsAPI: ModelsAPIProviding {
+        func models() async throws -> ModelsResponse {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func makeViewModel(
         provider: AgentProviderID? = nil,
         sessionMessageStore: SessionMessageStore? = nil,
@@ -213,7 +221,7 @@ private extension AgentSessionTranscriptStateTests {
     ) -> AgentSessionViewModel {
         let sessionMessageStore = sessionMessageStore ?? SessionMessageStore()
         return AgentSessionViewModel(
-            session: SessionSummaryModel(SessionSummary(
+            context: .session(SessionSummaryModel(SessionSummary(
                 id: "session-1",
                 repoId: 1,
                 repoFullName: "octo/repo",
@@ -223,16 +231,25 @@ private extension AgentSessionTranscriptStateTests {
                 createdAt: "2026-01-01T00:00:00Z",
                 updatedAt: "2026-01-01T00:00:00Z",
                 hasUnread: false
-            )),
-            socket: SessionSocket(
-                // Never dialed: tests exercise state transitions without connecting.
-                baseURL: URL(fileURLWithPath: "/dev/null"),
-                sessionId: "session-1",
-                tokenCache: WebSocketTokenCache { throw URLError(.userAuthenticationRequired) }
-            ),
+            ))),
+            modelCatalogStore: ModelCatalogStore(modelsAPI: StubModelsAPI()),
+            // Unused in session mode: preferences only seed draft selections.
+            preferences: NewSessionPreferences(userDefaults: UserDefaults(
+                suiteName: "AgentSessionTranscriptStateTests"
+            ) ?? .standard),
+            makeSocket: { sessionId in
+                // Never dialed: these tests exercise state transitions without connecting.
+                SessionSocket(
+                    baseURL: URL(fileURLWithPath: "/dev/null"),
+                    sessionId: sessionId,
+                    tokenCache: WebSocketTokenCache { throw URLError(.userAuthenticationRequired) }
+                )
+            },
             sessionMessageStore: sessionMessageStore,
+            sessionSummaryStore: SessionSummaryStore(),
             transcriptBuilder: transcriptBuilder,
-            attachmentsAPI: StubAttachmentsAPI()
+            attachmentsAPI: StubAttachmentsAPI(),
+            sessionCreatedSubject: PassthroughSubject<String, Never>()
         )
     }
 

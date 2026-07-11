@@ -29,12 +29,18 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack(path: $router.path) {
-            content
+            contentWithFAB
                 .background(theme.backgroundColor)
+                .ignoresSafeArea(.keyboard)
                 .navigationTitle("Sessions")
                 .toolbar { settingsToolbar }
-                .navigationDestination(for: SessionSummaryModel.self) { session in
-                    sessionBuilder.build(session: session)
+                .navigationDestination(for: HomeDestination.self) { destination in
+                    switch destination {
+                    case .session(let session):
+                        sessionBuilder.build(session: session)
+                    case .newSession:
+                        sessionBuilder.buildNewSession()
+                    }
                 }
                 .onChange(of: viewModel.errorMessage) { _, errorMessage in
                     guard let errorMessage else {
@@ -88,16 +94,39 @@ struct HomeView: View {
     }
 
     @ViewBuilder
+    private var contentWithFAB: some View {
+        content
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    router.pushNewSession()
+                } label: {
+                    Image(systemName: "plus.message.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(theme.labelColor)
+                        .frame(width: 48, height: 48)
+                        .contentShape(Circle())
+//                        .glassBackground(in: Circle())
+                }
+                .glassButtonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
+//                .buttonStyle(.plain)
+                .accessibilityLabel("New session")
+                .padding(style.horizontalPadding)
+            }
+    }
+
+    @ViewBuilder
     private var content: some View {
         if viewModel.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.isEmpty && viewModel.hasLoaded {
-            ContentUnavailableView(
-                "No sessions",
-                systemImage: "sidebar.left",
-                description: Text("Create a session to see it here.")
-            )
+            EmptyStateView(
+                title: "No sessions",
+                subtitle: "Create a session to see it here."
+            ) {
+                Image(systemName: "sidebar.left")
+            }
         } else {
             sessionsList
         }
@@ -124,7 +153,7 @@ struct HomeView: View {
     }
 
     private func sessionLink(for session: SessionSummaryModel) -> some View {
-        NavigationLink(value: session) {
+        NavigationLink(value: HomeDestination.session(session)) {
             SessionRow(session: session)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
