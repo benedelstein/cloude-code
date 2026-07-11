@@ -7,10 +7,15 @@ struct AgentSessionView: View {
     @Environment(\.style) private var style: Style
     @Environment(\.showToast) private var showToast
 
+    @Environment(\.dismiss) private var dismiss
+
     @State private var store: AgentSessionViewModel
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
+    @State private var renameTitle = ""
+    @State private var isRenamePresented = false
+    @State private var isDeletePresented = false
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
@@ -49,14 +54,39 @@ struct AgentSessionView: View {
                 sessionHeader
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                } label: {
-                    Image(systemName: "ellipsis")
+                if !store.isDraftMode {
+                    sessionMenu
                 }
             }
         }
         .toolbarTitleDisplayMode(.inline)
         .modifier(Destinations(destination: $destination))
+        .alert("Rename session", isPresented: $isRenamePresented) {
+            TextField("Title", text: $renameTitle)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                Task {
+                    await store.renameCurrentSession(to: renameTitle)
+                }
+            }
+        } message: {
+            Text("Enter a new name for this session.")
+        }
+        .alert(
+            "Delete session?",
+            isPresented: $isDeletePresented
+        ) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    if await store.deleteCurrentSession() {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes \(store.session?.title ?? "this session").")
+        }
         .task {
             await store.bind()
         }
@@ -79,6 +109,38 @@ struct AgentSessionView: View {
         withAnimation(style.springAnimation) {
             composerHeight = size.height
         }
+    }
+
+    private var sessionMenu: some View {
+        Menu {
+            Button {
+                renameTitle = store.session?.title ?? ""
+                isRenamePresented = true
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+
+            Button {
+                Task {
+                    if await store.archiveCurrentSession() {
+                        dismiss()
+                    }
+                }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    isDeletePresented = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .accessibilityLabel("Session options")
     }
 
     private var sessionHeader: some View {

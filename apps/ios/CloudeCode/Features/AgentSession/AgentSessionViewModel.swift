@@ -27,6 +27,9 @@ final class AgentSessionViewModel {
     let sessionCreatedSubject: PassthroughSubject<String, Never>
     let sessionMessageStore: SessionMessageStore
     let sessionSummaryStore: SessionSummaryStore
+    let archiveSessionAction: ArchiveSessionAction
+    let renameSessionAction: RenameSessionAction
+    let deleteSessionAction: DeleteSessionAction
     let transcriptBuilder: any AgentSessionTranscriptBuilding
     var subscriptionTask: Task<Void, Never>?
     /// Whether the view is currently on screen (between `bind` and `unbind`).
@@ -106,7 +109,10 @@ final class AgentSessionViewModel {
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
         attachmentsAPI: any AttachmentsAPIProviding,
-        sessionCreatedSubject: PassthroughSubject<String, Never>
+        sessionCreatedSubject: PassthroughSubject<String, Never>,
+        archiveSessionAction: ArchiveSessionAction,
+        renameSessionAction: RenameSessionAction,
+        deleteSessionAction: DeleteSessionAction
     ) {
         self.context = context
         self.sessionCreatedSubject = sessionCreatedSubject
@@ -119,6 +125,9 @@ final class AgentSessionViewModel {
         self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
         self.sessionSummaryStore = sessionSummaryStore
+        self.archiveSessionAction = archiveSessionAction
+        self.renameSessionAction = renameSessionAction
+        self.deleteSessionAction = deleteSessionAction
         self.transcriptBuilder = transcriptBuilder
         attachmentStore = ImageAttachmentStore(
             sessionId: context.session?.id,

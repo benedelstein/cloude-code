@@ -63,7 +63,19 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionSummaryStore: dependency.sessionSummaryStore,
                 transcriptBuilder: transcriptBuilder,
                 attachmentsAPI: dependency.attachmentsAPI,
-                sessionCreatedSubject: sessionCreatedSubject
+                sessionCreatedSubject: sessionCreatedSubject,
+                archiveSessionAction: ArchiveSessionAction(
+                    sessionsAPI: dependency.sessionsAPI,
+                    sessionSummaryStore: dependency.sessionSummaryStore
+                ),
+                renameSessionAction: RenameSessionAction(
+                    sessionsAPI: dependency.sessionsAPI,
+                    sessionSummaryStore: dependency.sessionSummaryStore
+                ),
+                deleteSessionAction: DeleteSessionAction(
+                    sessionsAPI: dependency.sessionsAPI,
+                    sessionSummaryStore: dependency.sessionSummaryStore
+                )
             )
         }
     }

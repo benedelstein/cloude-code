@@ -114,6 +114,37 @@ private extension AgentSessionTranscriptStateTests {
         }
     }
 
+    struct StubSessionsAPI: SessionsAPIProviding {
+        func listSessions(
+            repoId: Int?,
+            repoCursor: String?,
+            sessionCursor: String?,
+            repoLimit: Int?,
+            sessionLimit: Int?
+        ) async throws -> SessionSummaryPage { throw URLError(.badServerResponse) }
+        func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse {
+            throw URLError(.badServerResponse)
+        }
+        func session(id: String) async throws -> SessionInfoResponse { throw URLError(.badServerResponse) }
+        func messages(sessionId: String) async throws -> [SessionMessage] { throw URLError(.badServerResponse) }
+        func plan(sessionId: String) async throws -> SessionPlanResponse { throw URLError(.badServerResponse) }
+        func updateTitle(sessionId: String, title: String) async throws -> UpdateSessionTitleResponse {
+            throw URLError(.badServerResponse)
+        }
+        func createPullRequest(sessionId: String) async throws -> PullRequestResponse {
+            throw URLError(.badServerResponse)
+        }
+        func pullRequest(sessionId: String) async throws -> PullRequestStatusResponse {
+            throw URLError(.badServerResponse)
+        }
+        func archive(sessionId: String) async throws { throw URLError(.badServerResponse) }
+        func delete(sessionId: String) async throws { throw URLError(.badServerResponse) }
+        func sessionWebSocketToken(sessionId: String) async throws -> WebSocketToken {
+            throw URLError(.badServerResponse)
+        }
+        func userSessionsWebSocketToken() async throws -> WebSocketToken { throw URLError(.badServerResponse) }
+    }
+
     func makeViewModel() -> AgentSessionViewModel {
         AgentSessionViewModel(
             context: .session(SessionSummaryModel(SessionSummary(
@@ -143,7 +174,19 @@ private extension AgentSessionTranscriptStateTests {
             sessionSummaryStore: SessionSummaryStore(),
             transcriptBuilder: StubTranscriptBuilder(),
             attachmentsAPI: StubAttachmentsAPI(),
-            sessionCreatedSubject: PassthroughSubject<String, Never>()
+            sessionCreatedSubject: PassthroughSubject<String, Never>(),
+            archiveSessionAction: ArchiveSessionAction(
+                sessionsAPI: StubSessionsAPI(),
+                sessionSummaryStore: SessionSummaryStore()
+            ),
+            renameSessionAction: RenameSessionAction(
+                sessionsAPI: StubSessionsAPI(),
+                sessionSummaryStore: SessionSummaryStore()
+            ),
+            deleteSessionAction: DeleteSessionAction(
+                sessionsAPI: StubSessionsAPI(),
+                sessionSummaryStore: SessionSummaryStore()
+            )
         )
     }
 
