@@ -14,8 +14,8 @@ extension AgentSessionViewModel {
             // right away instead of seeing a loading state.
             hasLoadedMessages = true
             async let catalogLoad: Void = modelCatalogStore.load()
-            await draft?.load()
-            await catalogLoad
+            async let draftLoad: Void? = draft?.load()
+            _ = await (catalogLoad, draftLoad)
             resolveDraftModelSelection()
             return
         }
