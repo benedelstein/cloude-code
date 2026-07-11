@@ -23,7 +23,6 @@ final class NewSessionPreferences {
 
     private let userDefaults: UserDefaults
 
-    // todo use appgroup user defaults from app component
     init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
     }
