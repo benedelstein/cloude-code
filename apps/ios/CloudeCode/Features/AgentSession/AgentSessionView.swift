@@ -16,6 +16,10 @@ struct AgentSessionView: View {
         _store = State(initialValue: store)
     }
 
+    private var showsRepoBranchPicker: Bool {
+        store.isDraftMode && !store.isCreatingSession && store.draft != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SessionScrollView(
@@ -25,7 +29,7 @@ struct AgentSessionView: View {
                 scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
-                ComposerView(vm: store)
+                ComposerView(vm: store, showsRepoBranchPicker: showsRepoBranchPicker)
                     .padding(.horizontal, style.horizontalPadding)
                     .padding(.bottom, style.spacing)
                     .readSize(updateComposerHeight)
@@ -164,20 +168,16 @@ private extension AgentSessionView {
         }
 
         var body: some View {
-            if hasTranscriptItems {
-//                SessionTranscriptPositionScrollView(
-//                    items: transcriptItems,
-//                    keyboardDismissPadding: keyboardDismissPadding,
-//                    rowSpacing: style.spacing,
-//                    contentPadding: style.spacing
-//                ) { item in
-//                    transcriptRow(item)
-//                        .padding(.horizontal, style.horizontalPadding)
-//                }
-                transcriptScrollView
-            } else {
-                emptyScrollView
-            }
+            // Always render the transcript scroll view so its structural identity
+            // is stable; swapping it out (empty <-> transcript) re-hosts the
+            // bottom safeAreaBar and breaks composer animations on first send.
+            transcriptScrollView
+                .overlay {
+                    if !hasTranscriptItems, !store.hasLoadedMessages {
+                        // todo loading skeleton
+                        ProgressView()
+                    }
+                }
         }
 
         private var hasMessageTranscriptItems: Bool {
@@ -247,23 +247,6 @@ private extension AgentSessionView {
                 scrollView
                     .scrollClipDisabled()
             }
-        }
-
-        private var emptyScrollView: some View {
-            ScrollView {
-                if store.hasLoadedMessages {
-//                    ContentUnavailableView(
-//                        "No messages yet",
-//                        systemImage: "text.bubble"
-//                    )
-//                    .frame(maxWidth: .infinity, minHeight: style.gridSize * 30)
-                } else {
-                    // todo loading skeleton
-                    ProgressView()
-                        .containerRelativeFrame([.vertical, .horizontal])
-                }
-            }
-            .scrollDismissesKeyboard(.interactively)
         }
 
         @ViewBuilder

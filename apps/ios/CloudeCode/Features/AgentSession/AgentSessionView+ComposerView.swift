@@ -13,17 +13,14 @@ extension AgentSessionView {
         @Environment(\.style) var style: Style
 
         @Bindable var vm: AgentSessionViewModel
+        let showsRepoBranchPicker: Bool
         @State private var composerFocused = false
-
-        private var showsRepoBranchPicker: Bool {
-            vm.isDraftMode && !vm.isCreatingSession && vm.draft != nil
-        }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
                 if showsRepoBranchPicker, let draft = vm.draft {
                     RepoBranchPickerBar(draft: draft)
-                        .transition(style.fadeTransition)
+                        .transition(.blurReplace)
                 }
 
                 promptComposer {
@@ -42,9 +39,6 @@ extension AgentSessionView {
                     )
                 }
             }
-            // Explicit animation: transition-only animations stopped firing on
-            // iOS 26, and this also animates the layout shift when the bar
-            // appears or disappears.
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
             .task {
                 if vm.isDraftMode {
