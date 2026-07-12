@@ -58,7 +58,7 @@ final class AgentSessionViewModel {
     // message so collection view can update the existing cell in place.
     var streamingTranscriptRowID: String?
     @ObservationIgnored var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
-    @ObservationIgnored let textRenderCache = ChunkedTextRenderCache()
+    @ObservationIgnored let markdownRenderCache = MarkdownRenderCache()
     var streamAccumulator: SessionMessageStreamAccumulator?
     /// Guard so that we do not accumulate to a stream that is no longer active
     var streamGeneration = 0
@@ -193,7 +193,7 @@ final class AgentSessionViewModel {
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
             in: snapshot.messages
         )
-        textRenderCache.reset()
+        markdownRenderCache.reset()
         rebuildTranscript(from: snapshotMessages)
         replaceStreamAccumulator()
         if snapshot.pendingChunks.isEmpty {

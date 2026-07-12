@@ -1,10 +1,11 @@
 import Domain
 import Foundation
+import MarkdownParsing
 
 /// A normalized transcript row fragment that SwiftUI can render inside an assistant message.
 enum AgentSessionRenderItem: Sendable, Equatable, Identifiable {
     case text(TextItem)
-    case chunkedText(ChunkedTextItem)
+    case markdown(MarkdownItem)
     case reasoning(ReasoningItem)
     case actionItem(ActionItem)
 
@@ -13,7 +14,7 @@ enum AgentSessionRenderItem: Sendable, Equatable, Identifiable {
         switch self {
         case .text(let item):
             item.key
-        case .chunkedText(let item):
+        case .markdown(let item):
             item.key
         case .reasoning(let item):
             item.key
@@ -34,7 +35,7 @@ extension AgentSessionRenderItem {
         if case .text = self {
             return true
         }
-        if case .chunkedText = self {
+        if case .markdown = self {
             return true
         }
         return false
@@ -55,10 +56,10 @@ extension AgentSessionRenderItem {
     /// `parts` array keeps changing (the active tail re-parses and re-splits every tick).
     /// Flattening parts into top-level render items would leak that churn into transcript
     /// identity and lose the raw `text` needed for copy and the detail sheet.
-    struct ChunkedTextItem: Sendable, Hashable {
+    struct MarkdownItem: Sendable, Hashable {
         let key: String
         let text: String
-        let parts: [MarkdownTextPart]
+        let parts: [MarkdownPart]
     }
 
     /// Assistant reasoning text that remains visually distinct from the final response.
@@ -95,35 +96,4 @@ extension AgentSessionRenderItem {
         let action: NormalizedToolAction
         let key: String
     }
-}
-
-/// A structured markdown transcript part emitted from one raw assistant text item.
-enum MarkdownTextPart: Identifiable, Sendable, Hashable {
-    case richText(MarkdownRichTextPart)
-    case codeBlock(MarkdownCodeBlockPart)
-
-    /// Stable part id within a text item.
-    var id: Int {
-        switch self {
-        case .richText(let part):
-            part.id
-        case .codeBlock(let part):
-            part.id
-        }
-    }
-}
-
-/// Inline-markdown rich text with its original source slice.
-struct MarkdownRichTextPart: Identifiable, Sendable, Hashable {
-    let id: Int
-    let source: String
-    let attributedText: AttributedString
-}
-
-/// A fenced code block extracted from assistant markdown.
-struct MarkdownCodeBlockPart: Identifiable, Sendable, Hashable {
-    let id: Int
-    let text: String
-    let language: String?
-    let isComplete: Bool
 }
