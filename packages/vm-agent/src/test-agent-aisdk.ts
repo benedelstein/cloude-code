@@ -3,7 +3,14 @@ import { randomUUID } from "crypto";
 import { createInterface } from "readline";
 import { parseArgs } from "util";
 import type { UIMessageChunk } from "ai";
-import { AgentOutput, CLAUDE_PROVIDER, encodeAgentInput, MessageAccumulator, OPENAI_CODEX_PROVIDER, OPENAI_CODEX_PROVIDER_ID } from "@repo/shared";
+import {
+  AgentOutput,
+  CLAUDE_PROVIDER,
+  encodeAgentInput,
+  MessageAccumulator,
+  OPENAI_CODEX_PROVIDER,
+  OPENAI_CODEX_PROVIDER_ID,
+} from "@repo/shared";
 
 const { values } = parseArgs({
   options: {
@@ -15,8 +22,10 @@ const { values } = parseArgs({
   strict: false,
 });
 
-const provider = String(values.provider ??  OPENAI_CODEX_PROVIDER_ID);
-const defaultModel = provider === "openai-codex" ? "gpt-5.3-codex" : CLAUDE_PROVIDER.defaultModel;
+const provider = String(values.provider ?? OPENAI_CODEX_PROVIDER_ID);
+const defaultModel = provider === OPENAI_CODEX_PROVIDER_ID
+  ? OPENAI_CODEX_PROVIDER.defaultModel
+  : CLAUDE_PROVIDER.defaultModel;
 const model = String(values.model ?? defaultModel);
 const sessionId = values.sessionId ? String(values.sessionId) : undefined;
 const rotateModels = values.rotateModels === true;

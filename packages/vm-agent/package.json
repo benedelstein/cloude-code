@@ -19,7 +19,7 @@
     "@repo/shared": "workspace:*",
     "ai": "catalog:",
     "ai-sdk-provider-claude-code": "^3.3.3",
-    "ai-sdk-provider-codex-cli": "github:benedelstein/ai-sdk-provider-codex-cli#5f1938512b9295d7cfce236ed298d5d84217f8d7"
+    "ai-sdk-provider-codex-cli": "github:benedelstein/ai-sdk-provider-codex-cli#bc3d83700ea2781749300721e2e5279038f1c64e"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "catalog:",

@@ -91,6 +91,9 @@ export const CLAUDE_PROVIDER: ProviderDefinition<typeof CLAUDE_PROVIDER_ID, Clau
 // --- OpenAI Codex -------------------------------------------------------------
 
 export const OPENAI_CODEX_MODEL_DISPLAY_NAMES: Record<OpenAICodexModel, string> = {
+  "gpt-5.6-sol": "5.6 Sol",
+  "gpt-5.6-terra": "5.6 Terra",
+  "gpt-5.6-luna": "5.6 Luna",
   "gpt-5.5": "GPT-5.5",
   "gpt-5.4": "GPT-5.4",
   "gpt-5.4-mini": "GPT-5.4 Mini",
@@ -107,7 +110,22 @@ export const OPENAI_CODEX_EFFORT_DISPLAY_NAMES: Record<OpenAICodexEffort, string
 };
 
 const OPENAI_CODEX_MODELS: ProviderModelDefinition<OpenAICodexModel>[] = [
-  { id: "gpt-5.5", displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.5"], isDefault: true },
+  {
+    id: "gpt-5.6-sol",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.6-sol"],
+    isDefault: true,
+  },
+  {
+    id: "gpt-5.6-terra",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.6-terra"],
+    isDefault: false,
+  },
+  {
+    id: "gpt-5.6-luna",
+    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.6-luna"],
+    isDefault: false,
+  },
+  { id: "gpt-5.5", displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.5"], isDefault: false },
   { id: "gpt-5.4", displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4"], isDefault: false },
   {
     id: "gpt-5.4-mini",
@@ -117,7 +135,7 @@ const OPENAI_CODEX_MODELS: ProviderModelDefinition<OpenAICodexModel>[] = [
   {
     id: "gpt-5.3-codex",
     displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
-    isDefault: true,
+    isDefault: false,
   },
   { id: "gpt-5.2", displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2"], isDefault: false },
 ];
@@ -136,7 +154,7 @@ export const OPENAI_CODEX_PROVIDER: ProviderDefinition<
 > = {
   id: OPENAI_CODEX_PROVIDER_ID,
   displayName: "OpenAI Codex",
-  defaultModel: "gpt-5.5",
+  defaultModel: "gpt-5.6-sol",
   defaultEffort: "high",
   authMethods: ["oauth"],
   todoToolName: "update_plan",

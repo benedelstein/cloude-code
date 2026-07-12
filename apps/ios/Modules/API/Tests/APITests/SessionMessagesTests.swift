@@ -293,6 +293,33 @@ struct SessionMessagesTests {
 
         #expect(summary.domainSummary.id == "session_custom_ID")
     }
+
+    @Test func sessionSummaryMapsKnownAbsentAndUnknownProviders() {
+        func summary(provider: CoreAPI.ProviderId?) -> CoreAPI.SessionSummary {
+            CoreAPI.SessionSummary(
+                id: "session-id",
+                repoId: 1,
+                repoFullName: "ben/cloude-code",
+                provider: provider,
+                archived: false,
+                workingState: .idle,
+                pushedBranch: nil,
+                pullRequest: nil,
+                createdAt: "2026-06-13T00:00:00.000Z",
+                updatedAt: "2026-06-13T00:00:00.000Z",
+                lastMessageAt: nil,
+                lastAssistantMessageId: nil,
+                hasUnread: false
+            )
+        }
+
+        #expect(summary(provider: .claudeCode).domainSummary.provider == .claudeCode)
+        #expect(summary(provider: nil).domainSummary.provider == nil)
+        #expect(
+            summary(provider: .unknown("future-provider")).domainSummary.provider
+                == .unknown("future-provider")
+        )
+    }
 }
 
 private actor StreamEmissionRecorder {

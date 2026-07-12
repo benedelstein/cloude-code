@@ -67,6 +67,14 @@ final class AgentSessionViewModel {
     // if needed. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
     private(set) var clientState = SessionClientState.empty
+    var transcriptProvider: AgentProviderID {
+        let clientProvider = clientState.agentSettings.provider
+        // The summary only seeds cached transcript rendering; hydrated client
+        // state is canonical for the active session.
+        return clientProvider == .unknown("")
+            ? session?.provider ?? clientProvider
+            : clientProvider
+    }
     /// Message send is in progress
     var isSending = false
     /// The initial request is creating a new session.
@@ -165,7 +173,7 @@ final class AgentSessionViewModel {
     }
 
     func applyLiveState(_ state: SessionClientState) {
-        let previousProvider = clientState.agentSettings.provider
+        let previousProvider = transcriptProvider
         clientState = state
         // A non-matching override persists until the server confirms it: live
         // state may still reflect the previous turn's settings.
@@ -173,7 +181,7 @@ final class AgentSessionViewModel {
             localModelSelection = nil
         }
         applyActiveTurnUserMessageId(state.activeTurnUserMessageId)
-        if previousProvider != state.agentSettings.provider {
+        if previousProvider != transcriptProvider {
             rebuildTranscriptDisplayData()
         }
     }

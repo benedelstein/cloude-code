@@ -9,6 +9,7 @@ public final class SessionSummaryModel: EntityModel {
     public let id: String
     public var repoId: Int
     public var repoFullName: String
+    public var provider: AgentProviderID?
     public var title: String?
     public var archived: Bool
     public var workingState: String
@@ -24,6 +25,7 @@ public final class SessionSummaryModel: EntityModel {
         id = snapshot.id
         repoId = snapshot.repoId
         repoFullName = snapshot.repoFullName
+        provider = snapshot.provider
         title = snapshot.title
         archived = snapshot.archived
         workingState = snapshot.workingState
@@ -39,6 +41,7 @@ public final class SessionSummaryModel: EntityModel {
     public func update(from snapshot: Domain.SessionSummary) {
         updateIfChanged(\.repoId, to: snapshot.repoId)
         updateIfChanged(\.repoFullName, to: snapshot.repoFullName)
+        updateIfChanged(\.provider, to: snapshot.provider)
         updateIfChanged(\.title, to: snapshot.title)
         updateIfChanged(\.archived, to: snapshot.archived)
         updateIfChanged(\.workingState, to: snapshot.workingState)
@@ -56,6 +59,7 @@ public final class SessionSummaryModel: EntityModel {
             id: id,
             repoId: repoId,
             repoFullName: repoFullName,
+            provider: provider,
             title: title,
             archived: archived,
             workingState: workingState,

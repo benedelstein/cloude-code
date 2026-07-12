@@ -570,6 +570,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var id: String
     public var repoId: Int
     public var repoFullName: String
+    public var provider: ProviderId?
     public var title: String?
     public var archived: Bool
     public var workingState: SessionWorkingState
@@ -585,6 +586,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         id: String,
         repoId: Int,
         repoFullName: String,
+        provider: ProviderId? = nil,
         title: String? = nil,
         archived: Bool,
         workingState: SessionWorkingState,
@@ -599,6 +601,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         self.id = id
         self.repoId = repoId
         self.repoFullName = repoFullName
+        self.provider = provider
         self.title = title
         self.archived = archived
         self.workingState = workingState

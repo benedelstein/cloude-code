@@ -1,5 +1,6 @@
 import type {
   IntegrationProvider,
+  ProviderId,
   PullRequestState,
   SessionAccessBlockReason,
   SessionRepoGroup,
@@ -25,6 +26,7 @@ export interface CreateSessionParams {
   installationId: number;
   repoFullName: string;
   source: SessionSource;
+  provider: ProviderId;
   sourceEnvironmentId?: string | null;
   sourceEnvironmentName?: string | null;
 }
@@ -35,6 +37,7 @@ interface SessionRow {
   repo_id: number;
   installation_id: number | null;
   repo_full_name: string;
+  provider_id: ProviderId | null;
   title: string | null;
   archived: number;
   access_blocked_at: string | null;
@@ -85,6 +88,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
     id: row.id,
     repoId: row.repo_id,
     repoFullName: row.repo_full_name,
+    provider: row.provider_id ?? undefined,
     title: row.title,
     archived: row.archived === 1,
     workingState: row.working_state,
@@ -117,9 +121,10 @@ export class SessionsRepository {
            installation_id,
            repo_full_name,
            source,
+           provider_id,
            source_environment_id,
            source_environment_name
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         params.id,
@@ -128,6 +133,7 @@ export class SessionsRepository {
         params.installationId,
         params.repoFullName,
         params.source,
+        params.provider,
         params.sourceEnvironmentId ?? null,
         params.sourceEnvironmentName ?? null,
       )

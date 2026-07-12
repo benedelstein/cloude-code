@@ -200,6 +200,7 @@ describe("SessionsService", () => {
         456,
         "owner/repo",
         "web",
+        "claude-code",
         null,
         null,
       ]);
@@ -207,6 +208,7 @@ describe("SessionsService", () => {
         sessionId,
         userId: "123e4567-e89b-12d3-a456-426614174999",
         repoFullName: "owner/repo",
+        agentSettings: { provider: "claude-code" },
         initialMessage: {
           attachmentIds: [attachmentId],
         },
@@ -219,6 +221,34 @@ describe("SessionsService", () => {
     } finally {
       randomUuid.mockRestore();
     }
+  });
+
+  it("uses one explicit provider for the D1 row and session agent", async () => {
+    const sessionId = "123e4567-e89b-12d3-a456-426614174000";
+    vi.spyOn(crypto, "randomUUID")
+      .mockReturnValue(sessionId as ReturnType<typeof crypto.randomUUID>);
+    const handleInit = vi.fn(async (_request: InitSessionAgentRequest) => success(undefined));
+    vi.mocked(getAgentByName).mockResolvedValue({ handleInit } as never);
+    const { calls, database } = createMockDatabase();
+    const { service } = createService(database);
+
+    const result = await service.createSession({
+      userId: "123e4567-e89b-12d3-a456-426614174999",
+      request: {
+        repoId: 42,
+        settings: { provider: "openai-codex", model: "gpt-5.5" },
+        initialMessage: {
+          attachmentIds: ["123e4567-e89b-12d3-a456-426614174001"],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const insertSessionCall = calls.find((call) => call.query.includes("INSERT INTO sessions"));
+    expect(insertSessionCall?.bindings).toContain("openai-codex");
+    expect(handleInit).toHaveBeenCalledWith(expect.objectContaining({
+      agentSettings: { provider: "openai-codex", model: "gpt-5.5" },
+    }));
   });
 
   it("deletes the D1 session row before cleaning up an already-destroyed session agent", async () => {

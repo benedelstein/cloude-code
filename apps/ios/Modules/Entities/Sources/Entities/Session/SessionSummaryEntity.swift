@@ -7,6 +7,7 @@ public final class SessionSummaryEntity: Entity {
     @Attribute(.unique) public private(set) var id: String
     var repoId: Int
     var repoFullName: String
+    var provider: String?
     var title: String?
     var archived: Bool
     var workingState: String
@@ -24,6 +25,7 @@ public final class SessionSummaryEntity: Entity {
         id = snapshot.id
         repoId = snapshot.repoId
         repoFullName = snapshot.repoFullName
+        provider = snapshot.provider?.rawValue
         title = snapshot.title
         archived = snapshot.archived
         workingState = snapshot.workingState
@@ -41,6 +43,7 @@ public final class SessionSummaryEntity: Entity {
     public func update(_ snapshot: Domain.SessionSummary) {
         repoId = snapshot.repoId
         repoFullName = snapshot.repoFullName
+        provider = snapshot.provider?.rawValue
         title = snapshot.title
         archived = snapshot.archived
         workingState = snapshot.workingState
@@ -61,6 +64,7 @@ public final class SessionSummaryEntity: Entity {
             id: id,
             repoId: repoId,
             repoFullName: repoFullName,
+            provider: provider.map(AgentProviderID.init(rawValue:)),
             title: title,
             archived: archived,
             workingState: workingState,

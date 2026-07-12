@@ -20,6 +20,7 @@ extension CoreAPI.SessionSummary {
             id: id,
             repoId: repoId,
             repoFullName: repoFullName,
+            provider: provider.map { AgentProviderID(rawValue: $0.rawValue) },
             title: title,
             archived: archived,
             workingState: workingState.rawValue,

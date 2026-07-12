@@ -16,6 +16,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
     public let id: String
     public let repoId: Int
     public let repoFullName: String
+    public let provider: AgentProviderID?
     public let title: String?
     public let archived: Bool
     public let workingState: String
@@ -31,6 +32,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         id: String,
         repoId: Int,
         repoFullName: String,
+        provider: AgentProviderID? = nil,
         title: String? = nil,
         archived: Bool,
         workingState: String,
@@ -45,6 +47,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         self.id = id
         self.repoId = repoId
         self.repoFullName = repoFullName
+        self.provider = provider
         self.title = title
         self.archived = archived
         self.workingState = workingState

@@ -42,6 +42,7 @@ struct UserMessageView: View {
                     Text(verbatim: message.text)
                         .styledFont(.subheadline)
                         .foregroundStyle(theme.labelColor)
+                        .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(userMessageShape.fill(theme.secondaryBackgroundColor))

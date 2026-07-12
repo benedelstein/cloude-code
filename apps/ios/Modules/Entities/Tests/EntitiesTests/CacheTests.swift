@@ -193,4 +193,24 @@ final class CacheTests: XCTestCase {
         let afterDelete = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
         XCTAssertTrue(afterDelete.isEmpty)
     }
+
+    func testSessionSummaryProviderRoundTripsKnownNilAndUnknownValues() async throws {
+        let cache = try makeCache()
+        let summaries = [
+            testSessionSummary("known", provider: .claudeCode),
+            testSessionSummary("missing", provider: nil),
+            testSessionSummary("future", provider: .unknown("future-provider")),
+        ]
+
+        try await cache.put(SessionSummaryEntity.self, snapshots: summaries)
+
+        let fetched = try await cache.fetch(
+            SessionSummaryEntity.self,
+            ids: Set(summaries.map(\.id))
+        )
+        let providersByID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0.provider) })
+        XCTAssertEqual(providersByID["known"], .some(.claudeCode))
+        XCTAssertEqual(providersByID["missing"], .some(nil))
+        XCTAssertEqual(providersByID["future"], .some(.unknown("future-provider")))
+    }
 }

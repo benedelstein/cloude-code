@@ -408,7 +408,7 @@ extension AgentSessionViewModel {
     ) -> AgentSessionView.MessageDisplayData {
         var renderItems = transcriptBuilder.build(
             message: message,
-            providerId: clientState.agentSettings.provider
+            providerId: transcriptProvider
         )
         renderItems = textRenderCache.renderItems(from: renderItems)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
