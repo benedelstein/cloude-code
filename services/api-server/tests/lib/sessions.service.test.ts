@@ -11,20 +11,6 @@ type PreparedStatement = {
   run: () => Promise<void>;
 };
 
-function createSessionAccessRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "session-1",
-    user_id: "user-1",
-    repo_id: 42,
-    installation_id: 456,
-    repo_full_name: "owner/repo",
-    provider_id: null,
-    access_blocked_at: null,
-    access_block_reason: null,
-    ...overrides,
-  };
-}
-
 function createSessionRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
@@ -271,9 +257,9 @@ describe("SessionsService", () => {
     });
     vi.mocked(getAgentByName).mockResolvedValue({ handleDeleteSession } as never);
     const { batch, calls, database } = createMockDatabase({
-      firstRows: [createSessionAccessRow()],
+      firstRows: [{ owned: 1 }],
     });
-    const { service, userSessionsStub } = createService(database);
+    const { service, userSessionsStub, repoAccessProviders } = createService(database);
 
     const result = await service.deleteSession({
       sessionId: "session-1",
@@ -281,6 +267,12 @@ describe("SessionsService", () => {
     });
 
     expect(result).toEqual(success({ deleted: true }));
+    expect(
+      repoAccessProviders.github.getUserAccessibleInstallationRepoById,
+    ).not.toHaveBeenCalled();
+    expect(
+      repoAccessProviders.userTokens.getValidGitHubCredentialByUserId,
+    ).not.toHaveBeenCalled();
     expect(handleDeleteSession).toHaveBeenCalledTimes(1);
     expect(batch.mock.invocationCallOrder[0]).toBeLessThan(
       handleDeleteSession.mock.invocationCallOrder[0] ?? 0,
@@ -299,5 +291,23 @@ describe("SessionsService", () => {
       userId: "user-1",
       sessionId: "session-1",
     });
+  });
+
+  it("keeps an already-destroyed agent lookup out of the delete correctness path", async () => {
+    vi.mocked(getAgentByName).mockRejectedValue(new Error("destroyed"));
+    const { batch, database } = createMockDatabase({
+      firstRows: [{ owned: 1 }],
+    });
+    const { service } = createService(database);
+
+    const result = await service.deleteSession({
+      sessionId: "session-1",
+      userId: "user-1",
+    });
+
+    expect(result).toEqual(success({ deleted: true }));
+    expect(batch.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(getAgentByName).mock.invocationCallOrder[0] ?? 0,
+    );
   });
 });
