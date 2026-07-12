@@ -10,18 +10,53 @@ import { execSync } from "child_process";
 import { buildSystemPromptAppend, getTodoToolNameForProvider } from "../lib/system-prompt";
 import { OpenAICodexEffort } from "@repo/shared";
 import type { AgentMode, AgentSettings } from "@repo/shared";
-import type { AgentProviderConfig, GetModelOptions, ProviderSetupContext, SetupResult, StreamTextExtras } from "../lib/agent-harness";
+import type {
+  AgentProviderConfig,
+  GetModelOptions,
+  ProviderSetupContext,
+  SetupResult,
+  StreamTextExtras,
+} from "../lib/agent-harness";
 
 type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
+
+const DEFAULT_CODEX_MIN_VERSION = "0.144.0";
+const CODEX_PATH_CANDIDATES = [
+  join(homedir(), ".local", "bin", "codex"),
+  join(homedir(), "bin", "codex"),
+  "/usr/local/bin/codex",
+];
+
+function resolveCodexPath(emit: ProviderSetupContext["emit"]): string | undefined {
+  try {
+    const codexPath = execSync("command -v codex", { encoding: "utf-8" }).trim();
+    if (codexPath) {
+      emit({ type: "debug", message: `Resolved codex path: ${codexPath}` });
+      return codexPath;
+    }
+  } catch {
+    // Fall through to the install locations used by the Codex bootstrap script.
+  }
+
+  for (const candidate of CODEX_PATH_CANDIDATES) {
+    if (existsSync(candidate)) {
+      emit({ type: "debug", message: `Resolved codex path: ${candidate}` });
+      return candidate;
+    }
+  }
+
+  emit({ type: "debug", message: "Could not resolve codex path; using provider default resolution" });
+  return undefined;
+}
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
   const authJson = process.env.CODEX_AUTH_JSON;
   if (!authJson) {
-    // In production (Sprite VM) CLAUDE_CREDENTIALS_JSON must always be provided.
+    // In production (Sprite VM), CODEX_AUTH_JSON must always be provided.
     // For local dev, set VM_AGENT_LOCAL=1 to fall back to the user's existing
-    // ~/.claude/.credentials.json set up by the Claude CLI.
+    // ~/.codex/auth.json set up by the Codex CLI.
     if (process.env.VM_AGENT_LOCAL === "1") {
-      emit({ type: "debug", message: "VM_AGENT_LOCAL=1 — using existing ~/.claude/.credentials.json" });
+      emit({ type: "debug", message: "VM_AGENT_LOCAL=1 — using existing ~/.codex/auth.json" });
       return;
     }
     throw new Error("Missing CODEX_AUTH_JSON. Codex authentication is required.");
@@ -46,20 +81,14 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       getTodoToolNameForProvider(settings.provider),
     );
 
-    let codexPath: string | undefined;
-    try {
-      codexPath = execSync("which codex", { encoding: "utf-8" }).trim();
-      emit({ type: "debug", message: `Resolved codex path: ${codexPath}` });
-    } catch {
-      emit({ type: "debug", message: "Could not resolve codex path via 'which'; using default resolution" });
-    }
+    const codexPath = resolveCodexPath(emit);
 
     const modelId = settings.model;
     let agentSessionId: string | undefined = args.sessionId;
 
     const provider = createCodexAppServer({
       defaultSettings: {
-        minCodexVersion: process.env.CODEX_MIN_VERSION?.trim() || "0.130.0",
+        minCodexVersion: process.env.CODEX_MIN_VERSION?.trim() || DEFAULT_CODEX_MIN_VERSION,
         autoApprove: true,
         sandboxPolicy: getSandboxPolicy(initialAgentMode),
         personality: "pragmatic",

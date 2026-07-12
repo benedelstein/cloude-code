@@ -11,10 +11,14 @@ import {
   ensureSpriteStartupToolchain,
   getProviderStartupToolchainChecks,
 } from "../../src/shared/integrations/sprites/startup-toolchain";
-import { getClaudeStartupToolchainChecks } from "../../src/shared/integrations/sprites/startup-toolchain/providers/claude";
-import { getOpenAICodexStartupToolchainChecks } from "../../src/shared/integrations/sprites/startup-toolchain/providers/openai-codex";
+import {
+  getClaudeStartupToolchainChecks,
+} from "../../src/shared/integrations/sprites/startup-toolchain/providers/claude";
+import {
+  getOpenAICodexStartupToolchainChecks,
+} from "../../src/shared/integrations/sprites/startup-toolchain/providers/openai-codex";
 
-const MIN_CODEX_CLI_VERSION = "0.130.0";
+const MIN_CODEX_CLI_VERSION = "0.144.0";
 
 function createLogger(): Logger {
   return {
@@ -56,7 +60,7 @@ describe("startup toolchain dispatch", () => {
 
   it("skips execution when the startup checkpoint contract is current", async () => {
     const logger = createLogger();
-    const firstSprite = createSprite([{ stdout: "codex is ready: 0.130.0\n", exitCode: 0 }]);
+    const firstSprite = createSprite([{ stdout: "codex is ready: 0.144.0\n", exitCode: 0 }]);
     const firstResult = await ensureSpriteStartupToolchain({
       providerId: "openai-codex",
       sprite: firstSprite,
@@ -82,7 +86,7 @@ describe("startup toolchain dispatch", () => {
 
   it("reruns checks when the Codex minimum version override changes", async () => {
     const logger = createLogger();
-    const firstSprite = createSprite([{ stdout: "codex is ready: 0.130.0\n", exitCode: 0 }]);
+    const firstSprite = createSprite([{ stdout: "codex is ready: 0.144.0\n", exitCode: 0 }]);
     const firstResult = await ensureSpriteStartupToolchain({
       providerId: "openai-codex",
       sprite: firstSprite,
@@ -204,7 +208,7 @@ describe("Claude Code startup check", () => {
 describe("OpenAI Codex startup check", () => {
   it("runs one Codex startup bash script", async () => {
     const sprite = createSprite([{
-      stdout: "codex is current: 0.130.0\n",
+      stdout: "codex is current: 0.144.0\n",
       exitCode: 0,
     }]);
     const [check] = getOpenAICodexStartupToolchainChecks({
@@ -233,7 +237,7 @@ describe("OpenAI Codex startup check", () => {
 
   it("keeps checking, install, and verification in the same script", async () => {
     const sprite = createSprite([{
-      stdout: "codex is ready: 0.130.0\n",
+      stdout: "codex is ready: 0.144.0\n",
       exitCode: 0,
     }]);
     const [check] = getOpenAICodexStartupToolchainChecks({
@@ -279,8 +283,8 @@ describe("OpenAI Codex startup check", () => {
 
   it("fails when the startup script fails", async () => {
     const sprite = createSprite([{
-      stdout: "codex is stale: 0.100.0 < 0.130.0\n",
-      stderr: "codex version 0.100.0 is below required 0.130.0 after install\n",
+      stdout: "codex is stale: 0.100.0 < 0.144.0\n",
+      stderr: "codex version 0.100.0 is below required 0.144.0 after install\n",
       exitCode: 1,
     }]);
     const [check] = getOpenAICodexStartupToolchainChecks({
