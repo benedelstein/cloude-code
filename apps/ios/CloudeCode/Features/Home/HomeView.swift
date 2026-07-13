@@ -96,6 +96,8 @@ struct HomeView: View {
     @ViewBuilder
     private var contentWithFAB: some View {
         content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(theme.secondaryBackgroundColor)
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     router.pushNewSession()
@@ -105,11 +107,9 @@ struct HomeView: View {
                         .foregroundStyle(theme.labelColor)
                         .frame(width: 48, height: 48)
                         .contentShape(Circle())
-//                        .glassBackground(in: Circle())
                 }
                 .glassButtonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
-//                .buttonStyle(.plain)
                 .accessibilityLabel("New session")
                 .padding(style.horizontalPadding)
             }
@@ -117,30 +117,34 @@ struct HomeView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.isEmpty && viewModel.hasLoaded {
-            EmptyStateView(
-                title: "No sessions",
-                subtitle: "Create a session to see it here."
-            ) {
-                Image(systemName: "sidebar.left")
-            }
-        } else {
-            sessionsList
-        }
+        sessionsList
     }
 
     private var sessionsList: some View {
-        List(viewModel.groups) { group in
-            Section(isExpanded: expandedBinding(for: group)) {
-                ForEach(group.sessions) { session in
-                    sessionLink(for: session)
-                        .listRowBackground(theme.backgroundColor)
+        List {
+            if viewModel.isLoading {
+                // todo loading rows
+                ProgressView()
+                    .listRowBackground(Color.clear)
+            } else if viewModel.isEmpty && viewModel.hasLoaded {
+                EmptyStateView(
+                    title: "No sessions"
+                ) {
+                    Image(systemName: "message.fill")
                 }
-            } header: {
-                RepoSectionHeader(group: group)
+                .padding(.top, 24)
+                .listRowBackground(Color.clear)
+            }
+
+            ForEach(viewModel.groups) { group in
+                Section(isExpanded: expandedBinding(for: group)) {
+                    ForEach(group.sessions) { session in
+                        sessionLink(for: session)
+                            .listRowBackground(theme.backgroundColor)
+                    }
+                } header: {
+                    RepoSectionHeader(group: group)
+                }
             }
         }
         .scrollContentBackground(.hidden)

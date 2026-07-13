@@ -49,9 +49,6 @@
     "Copy response" : {
 
     },
-    "Create a session to see it here." : {
-
-    },
     "Dark" : {
 
     },
@@ -353,6 +350,12 @@
     "Remove image" : {
 
     },
+    "Rename" : {
+
+    },
+    "Rename session" : {
+
+    },
     "Repository" : {
 
     },
@@ -511,6 +514,12 @@
 
     },
     "Send" : {
+
+    },
+    "Session actions" : {
+
+    },
+    "Session name" : {
 
     },
     "Sessions" : {
