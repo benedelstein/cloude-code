@@ -36,7 +36,7 @@ struct AgentSessionToolDetailSheet: View {
             ToolActionGroupDetailView(group: group, path: $path)
         case .text(let text):
             TextDetailView(title: "Message", text: text.text)
-        case .chunkedText(let text):
+        case .markdown(let text):
             TextDetailView(title: "Message", text: text.text)
         case .reasoning(let reasoning):
             TextDetailView(title: "Reasoning", text: reasoning.part.text)

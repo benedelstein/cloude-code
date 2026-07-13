@@ -166,7 +166,7 @@ private extension AgentSessionRenderItem {
         switch self {
         case .text(let item):
             item.text
-        case .chunkedText(let item):
+        case .markdown(let item):
             item.text
         case .reasoning, .actionItem:
             nil

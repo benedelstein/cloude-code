@@ -14,6 +14,7 @@
 		B6A000000000000000000012 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000011 /* Valet */; };
 		B6A000000000000000000013 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000015 /* FirebaseMessaging */; };
 		B6A00000000000000000001A /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = B6A000000000000000000019 /* SwiftUIIntrospect */; };
+		B6D000000000000000000002 /* MarkdownParsing in Frameworks */ = {isa = PBXBuildFile; productRef = B6D000000000000000000001 /* MarkdownParsing */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 				B6A00000000000000000001A /* SwiftUIIntrospect in Frameworks */,
 				B6A000000000000000000003 /* NeedleFoundation in Frameworks */,
 				B6A00000000000000000000D /* Entities in Frameworks */,
+				B6D000000000000000000002 /* MarkdownParsing in Frameworks */,
 				B6A000000000000000000012 /* Valet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -163,6 +165,7 @@
 				B6A000000000000000000011 /* Valet */,
 				B6A000000000000000000015 /* FirebaseMessaging */,
 				B6A000000000000000000019 /* SwiftUIIntrospect */,
+				B6D000000000000000000001 /* MarkdownParsing */,
 			);
 			productName = CloudeCode;
 			productReference = B50E874D2FCD709D00240B2E /* CloudeCode.app */;
@@ -250,6 +253,7 @@
 				B6A000000000000000000005 /* XCLocalSwiftPackageReference "Modules/API" */,
 				B6A00000000000000000000B /* XCLocalSwiftPackageReference "Modules/CoreAPI" */,
 				B6A00000000000000000000F /* XCLocalSwiftPackageReference "Modules/Entities" */,
+				B6D000000000000000000000 /* XCLocalSwiftPackageReference "Modules/MarkdownParsing" */,
 				B6A000000000000000000007 /* XCRemoteSwiftPackageReference "needle" */,
 				B6A000000000000000000010 /* XCRemoteSwiftPackageReference "Valet" */,
 				B6A000000000000000000014 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
@@ -1080,6 +1084,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Modules/Entities;
 		};
+		B6D000000000000000000000 /* XCLocalSwiftPackageReference "Modules/MarkdownParsing" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Modules/MarkdownParsing;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1149,6 +1157,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6A000000000000000000018 /* XCRemoteSwiftPackageReference "swiftui-introspect" */;
 			productName = SwiftUIIntrospect;
+		};
+		B6D000000000000000000001 /* MarkdownParsing */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MarkdownParsing;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

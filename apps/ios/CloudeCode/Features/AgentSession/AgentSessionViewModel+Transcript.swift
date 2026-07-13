@@ -220,7 +220,7 @@ extension AgentSessionViewModel {
                 return
             }
 
-            textRenderCache.reset()
+            markdownRenderCache.reset()
             rebuildTranscript(from: cachedMessages)
             hasLoadedMessages = true
         } catch {
@@ -410,7 +410,7 @@ extension AgentSessionViewModel {
             message: message,
             providerId: transcriptProvider
         )
-        renderItems = textRenderCache.renderItems(from: renderItems)
+        renderItems = markdownRenderCache.renderItems(from: renderItems, isStreaming: isStreaming)
         let finalResponseStartIndex = isStreaming ? nil : transcriptBuilder.finalResponseStartIndex(
             renderItems: renderItems
         )
