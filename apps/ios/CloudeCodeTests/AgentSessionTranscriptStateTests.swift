@@ -241,7 +241,7 @@ private extension AgentSessionTranscriptStateTests {
             throw URLError(.badServerResponse)
         }
 
-        func updateTitle(sessionId: String, title: String) async throws -> UpdateSessionTitleResponse {
+        func updateTitle(sessionId: String, title: String) async throws {
             throw URLError(.badServerResponse)
         }
 

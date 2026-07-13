@@ -1,5 +1,4 @@
 import API
-import CoreAPI
 import Entities
 import Foundation
 
@@ -15,11 +14,10 @@ struct RenameSessionAction {
         sessionSummaryStore.save([session])
 
         do {
-            let response = try await sessionsAPI.updateTitle(sessionId: session.id, title: trimmedTitle)
-            if response.title != trimmedTitle {
-                session.title = response.title
-                sessionSummaryStore.save([session])
-            }
+            // The server reconciles the canonical summary out-of-band via the
+            // `session.summary.updated` websocket event, so we only need to
+            // confirm the write succeeded here.
+            try await sessionsAPI.updateTitle(sessionId: session.id, title: trimmedTitle)
         } catch {
             sessionSummaryStore.putSnapshotsToDisk([snapshot])
             throw error

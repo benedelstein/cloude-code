@@ -176,7 +176,7 @@ public protocol SessionsAPIProviding: Sendable {
     func session(id: String) async throws -> SessionInfoResponse
     func messages(sessionId: String) async throws -> [SessionMessage]
     func plan(sessionId: String) async throws -> SessionPlanResponse
-    func updateTitle(sessionId: String, title: String) async throws -> UpdateSessionTitleResponse
+    func updateTitle(sessionId: String, title: String) async throws
     func createPullRequest(sessionId: String) async throws -> PullRequestResponse
     func pullRequest(sessionId: String) async throws -> PullRequestStatusResponse
     func archive(sessionId: String) async throws
@@ -242,8 +242,8 @@ public struct SessionsAPI: SessionsAPIProviding {
         try await client.fetch(GetSessionPlan(sessionId: sessionId, headers: tokenProvider.bearerHeaders()))
     }
 
-    public func updateTitle(sessionId: String, title: String) async throws -> UpdateSessionTitleResponse {
-        try await client.fetch(UpdateSessionTitle(
+    public func updateTitle(sessionId: String, title: String) async throws {
+        _ = try await client.fetch(UpdateSessionTitle(
             sessionId: sessionId,
             body: UpdateSessionTitleRequest(title: title),
             headers: tokenProvider.bearerHeaders()
