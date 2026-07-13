@@ -12,9 +12,9 @@ import {
 } from "../common";
 
 const CODEX_CHECK_ID = "openai-codex.cli";
-const DEFAULT_CODEX_CLI_VERSION = "0.130.0";
+const DEFAULT_CODEX_CLI_VERSION = "0.144.0";
 const CODEX_INSTALL_SCRIPT_URL = "https://chatgpt.com/codex/install.sh";
-const CODEX_SCRIPT_VERSION = "3";
+const CODEX_SCRIPT_VERSION = "4";
 
 function getEffectiveCodexMinVersion(codexMinVersion: string | undefined): string {
   return codexMinVersion?.trim() || DEFAULT_CODEX_CLI_VERSION;
