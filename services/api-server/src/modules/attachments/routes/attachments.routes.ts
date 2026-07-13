@@ -2,7 +2,8 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "@/shared/types";
 import type { AuthContext } from "@/shared/types/auth";
-import { AttachmentService, MAX_ATTACHMENTS_PER_REQUEST, MAX_ATTACHMENT_BYTES } from "../services/attachment.service";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@repo/shared";
+import { AttachmentService, MAX_ATTACHMENT_BYTES } from "../services/attachment.service";
 import {
   uploadAttachmentRoute,
   getAttachmentContentRoute,
@@ -62,9 +63,9 @@ attachmentsRoutes.openapi(uploadAttachmentRoute, async (c) => {
   if (files.length === 0) {
     return c.json({ error: "No files provided" }, 400);
   }
-  if (files.length > MAX_ATTACHMENTS_PER_REQUEST) {
+  if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
     return c.json(
-      { error: `Too many files. Max ${MAX_ATTACHMENTS_PER_REQUEST} per request` },
+      { error: `Too many files. Max ${MAX_ATTACHMENTS_PER_MESSAGE} per request` },
       400,
     );
   }

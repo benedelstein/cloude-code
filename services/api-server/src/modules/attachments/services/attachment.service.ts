@@ -7,7 +7,6 @@ import {
 } from "../repositories/attachment.repository";
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-export const MAX_ATTACHMENTS_PER_REQUEST = 20;
 
 export class AttachmentService {
   private readonly repository: AttachmentRepository;
