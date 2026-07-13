@@ -279,17 +279,7 @@ private extension AgentSessionTranscriptStateTests {
         let sessionSummaryStore = SessionSummaryStore()
         let sessionsAPI = StubSessionsAPI()
         return AgentSessionViewModel(
-            context: .session(SessionSummaryModel(SessionSummary(
-                id: "session-1",
-                repoId: 1,
-                repoFullName: "octo/repo",
-                provider: provider,
-                archived: false,
-                workingState: "idle",
-                createdAt: "2026-01-01T00:00:00Z",
-                updatedAt: "2026-01-01T00:00:00Z",
-                hasUnread: false
-            ))),
+            context: .session(makeSession(provider: provider)),
             modelCatalogStore: ModelCatalogStore(modelsAPI: StubModelsAPI()),
             // Unused in session mode: preferences only seed draft selections.
             preferences: NewSessionPreferences(userDefaults: UserDefaults(
@@ -321,6 +311,20 @@ private extension AgentSessionTranscriptStateTests {
             ),
             sessionCreatedSubject: PassthroughSubject<String, Never>()
         )
+    }
+
+    func makeSession(provider: AgentProviderID?) -> SessionSummaryModel {
+        SessionSummaryModel(SessionSummary(
+            id: "session-1",
+            repoId: 1,
+            repoFullName: "octo/repo",
+            provider: provider,
+            archived: false,
+            workingState: "idle",
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+            hasUnread: false
+        ))
     }
 
     func liveState(provider: AgentProviderID) -> SessionClientState {

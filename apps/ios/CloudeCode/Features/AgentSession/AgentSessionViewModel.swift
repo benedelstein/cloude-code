@@ -143,7 +143,9 @@ final class AgentSessionViewModel {
             attachmentsAPI: attachmentsAPI
         )
     }
+}
 
+extension AgentSessionViewModel {
     func renameSession(to title: String) async -> Bool {
         guard let session, !isPerformingSessionAction else {
             return false
