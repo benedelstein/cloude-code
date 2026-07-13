@@ -59,7 +59,6 @@ struct MarkdownPartsView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
                 PartView(part: part, isFirst: index == 0, isStreaming: isStreaming)
-                    .border(.red)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
