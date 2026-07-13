@@ -12,6 +12,11 @@ protocol AgentSessionDependency: Dependency {
     var reposAPI: any ReposAPIProviding { get }
 
     @MainActor
+    var repoEnvironmentsStore: RepoEnvironmentsStore { get }
+
+    var webBaseURL: URL { get }
+
+    @MainActor
     var modelCatalogStore: ModelCatalogStore { get }
 
     var fetchImageAction: any FetchImageAction { get }
@@ -119,7 +124,9 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
             NewSessionDraft(
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
-                preferences: dependency.newSessionPreferences
+                environmentsStore: dependency.repoEnvironmentsStore,
+                preferences: dependency.newSessionPreferences,
+                webBaseURL: dependency.webBaseURL
             )
         }
     }

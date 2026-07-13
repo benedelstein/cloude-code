@@ -30,6 +30,15 @@ func testSessionSummary(
     )
 }
 
+func testRepoEnvironment(_ id: String, repoId: Int = 1, name: String? = nil) -> Domain.RepoEnvironment {
+    Domain.RepoEnvironment(
+        id: id,
+        repoId: repoId,
+        name: name ?? "env-\(id)",
+        updatedAt: "2026-06-11T00:00:00.000Z"
+    )
+}
+
 func testSessionMessage(
     _ id: String,
     role: Domain.SessionMessage.Role = .user,

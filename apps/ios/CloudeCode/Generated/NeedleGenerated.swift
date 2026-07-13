@@ -86,6 +86,15 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
     }
 
     @MainActor
+    var repoEnvironmentsStore: RepoEnvironmentsStore {
+        applicationComponent.repoEnvironmentsStore
+    }
+
+    var webBaseURL: URL {
+        applicationComponent.webBaseURL
+    }
+
+    @MainActor
     var modelCatalogStore: ModelCatalogStore {
         homeComponent.modelCatalogStore
     }

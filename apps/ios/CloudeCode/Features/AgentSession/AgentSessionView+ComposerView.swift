@@ -19,6 +19,11 @@ extension AgentSessionView {
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
                 if showsRepoBranchPicker, let draft = vm.draft {
+                    if draft.selectedRepo != nil {
+                        EnvironmentPickerButton(draft: draft)
+                            .transition(.blurReplace)
+                    }
+
                     RepoBranchPickerBar(draft: draft)
                         .transition(.blurReplace)
                 }

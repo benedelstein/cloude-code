@@ -1,5 +1,7 @@
 import API
 import CoreAPI
+import Domain
+import Entities
 import Foundation
 
 @MainActor
@@ -11,17 +13,24 @@ final class NewSessionDraft {
         let defaultBranch: String
     }
 
-    /// Repo selection with the branch nested inside it, so clearing or replacing
-    /// the repo can never leave a stale branch behind.
+    /// Repo selection with the branch and environment nested inside it, so
+    /// clearing or replacing the repo can never leave a stale branch or
+    /// environment behind.
     struct RepoSelection: Equatable {
         let repo: SelectedRepo
         var branch: String
+        var environmentId: String?
     }
 
     private let sessionsAPI: any SessionsAPIProviding
     private let reposAPI: any ReposAPIProviding
+    private let environmentsStore: RepoEnvironmentsStore
     private let preferences: NewSessionPreferences
+    private let webBaseURL: URL
     private var branchesByRepoID: [Int: [Branch]] = [:]
+    /// Repos whose environment load failed with nothing cached; treated as
+    /// empty so the picker doesn't stay in its loading state forever.
+    private var environmentsUnavailableRepoIDs: Set<Int> = []
 
     private(set) var repos: [Repo] = []
     private(set) var isLoading = false
@@ -38,14 +47,58 @@ final class NewSessionDraft {
         repoSelection?.branch
     }
 
+    var selectedEnvironmentId: String? {
+        repoSelection?.environmentId
+    }
+
+    /// Environments for the selected repo. nil while nothing has been served
+    /// yet from cache or network (the picker renders a redacted chip).
+    var environments: [Domain.RepoEnvironment]? {
+        guard let repo = selectedRepo else {
+            return nil
+        }
+        if let environments = environmentsStore.environments(repoId: repo.id) {
+            return environments
+        }
+        return environmentsUnavailableRepoIDs.contains(repo.id) ? [] : nil
+    }
+
+    var selectedEnvironment: Domain.RepoEnvironment? {
+        guard let selectedEnvironmentId else {
+            return nil
+        }
+        return environments?.first { $0.id == selectedEnvironmentId }
+    }
+
+    /// Web URL for creating an environment for the selected repo; environment
+    /// creation is not supported natively yet.
+    var createEnvironmentURL: URL? {
+        guard let repo = selectedRepo,
+              var components = URLComponents(
+                  url: webBaseURL.appending(path: "settings/environments/create"),
+                  resolvingAgainstBaseURL: false
+              ) else {
+            return nil
+        }
+        components.queryItems = [
+            URLQueryItem(name: "repoId", value: String(repo.id)),
+            URLQueryItem(name: "repoFullName", value: repo.fullName)
+        ]
+        return components.url
+    }
+
     init(
         sessionsAPI: any SessionsAPIProviding,
         reposAPI: any ReposAPIProviding,
-        preferences: NewSessionPreferences
+        environmentsStore: RepoEnvironmentsStore,
+        preferences: NewSessionPreferences,
+        webBaseURL: URL
     ) {
         self.sessionsAPI = sessionsAPI
         self.reposAPI = reposAPI
+        self.environmentsStore = environmentsStore
         self.preferences = preferences
+        self.webBaseURL = webBaseURL
         repoSelection = preferences.lastSelectedRepo.map {
             RepoSelection(
                 repo: SelectedRepo(
@@ -111,13 +164,17 @@ final class NewSessionDraft {
 
     /// Selects a repository and branch, resetting to the repository default when no branch is supplied.
     func selectRepo(_ repo: Repo, branch: String? = nil) {
+        // Re-selecting the same repo (e.g. refreshing a restored selection)
+        // keeps its resolved environment; a different repo starts over.
+        let environmentId = repoSelection?.repo.id == repo.id ? repoSelection?.environmentId : nil
         repoSelection = RepoSelection(
             repo: SelectedRepo(
                 id: repo.id,
                 fullName: repo.fullName,
                 defaultBranch: repo.defaultBranch
             ),
-            branch: branch ?? repo.defaultBranch
+            branch: branch ?? repo.defaultBranch,
+            environmentId: environmentId
         )
         preferences.persistRepo(repo)
     }
@@ -125,6 +182,32 @@ final class NewSessionDraft {
     /// Selects a branch for the current repository.
     func selectBranch(_ branch: String) {
         repoSelection?.branch = branch
+    }
+
+    /// Selects an environment for the current repository and remembers it.
+    func selectEnvironment(_ environmentId: String?) {
+        guard let repo = selectedRepo else {
+            return
+        }
+        repoSelection?.environmentId = environmentId
+        preferences.persistEnvironmentId(environmentId, repoId: repo.id)
+    }
+
+    /// Loads environments for the selected repo (cache-first, then server
+    /// refresh) and resolves the draft's environment selection.
+    func loadEnvironments() async {
+        guard let repo = selectedRepo else {
+            return
+        }
+        do {
+            try await environmentsStore.load(repoId: repo.id)
+            environmentsUnavailableRepoIDs.remove(repo.id)
+        } catch {
+            if environmentsStore.environments(repoId: repo.id) == nil {
+                environmentsUnavailableRepoIDs.insert(repo.id)
+            }
+        }
+        resolveSelectedEnvironment(repoId: repo.id)
     }
 
     /// Builds and sends the create-session request for this draft.
@@ -145,6 +228,7 @@ final class NewSessionDraft {
         let branch = repoSelection.branch == repoSelection.repo.defaultBranch ? nil : repoSelection.branch
         let request = CreateSessionRequest(
             repoId: repoSelection.repo.id,
+            environmentId: repoSelection.environmentId,
             settings: AgentSettingsInput(
                 provider: model.providerId,
                 model: model.modelId,
@@ -154,6 +238,21 @@ final class NewSessionDraft {
             initialMessage: initialMessage
         )
         return try await sessionsAPI.createSession(request)
+    }
+
+    /// Mirrors web: keep the persisted last-used environment when it still
+    /// exists, otherwise fall back to the first environment, else none.
+    /// Reads the store directly so a failed load (fallback empty list) never
+    /// clears a persisted selection.
+    private func resolveSelectedEnvironment(repoId: Int) {
+        guard repoSelection?.repo.id == repoId,
+              let environments = environmentsStore.environments(repoId: repoId) else {
+            return
+        }
+        let persistedId = preferences.lastEnvironmentId(repoId: repoId)
+        let resolved = environments.first { $0.id == persistedId } ?? environments.first
+        repoSelection?.environmentId = resolved?.id
+        preferences.persistEnvironmentId(resolved?.id, repoId: repoId)
     }
 
     private func resolveSelectedRepo(with loadedRepos: [Repo]) {

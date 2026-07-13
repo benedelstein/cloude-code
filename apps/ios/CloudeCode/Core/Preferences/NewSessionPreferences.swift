@@ -55,4 +55,23 @@ final class NewSessionPreferences {
             defaultBranch: repo.defaultBranch
         )
     }
+
+    /// Returns the last environment selected for a repository, if any.
+    func lastEnvironmentId(repoId: Int) -> String? {
+        userDefaults.string(forKey: environmentKey(repoId: repoId))
+    }
+
+    /// Persists the environment selected for a repository; nil clears it.
+    func persistEnvironmentId(_ environmentId: String?, repoId: Int) {
+        let key = environmentKey(repoId: repoId)
+        if let environmentId {
+            userDefaults.set(environmentId, forKey: key)
+        } else {
+            userDefaults.removeObject(forKey: key)
+        }
+    }
+
+    private func environmentKey(repoId: Int) -> String {
+        Constants.UserDefaults.lastEnvironmentIdPrefix + String(repoId)
+    }
 }

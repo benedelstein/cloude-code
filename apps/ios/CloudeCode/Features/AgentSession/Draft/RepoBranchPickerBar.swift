@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct RepoBranchPickerBar: View {
-    @Environment(\.theme) private var theme
     @Environment(\.style) private var style
 
     let draft: NewSessionDraft
@@ -33,7 +32,7 @@ struct RepoBranchPickerBar: View {
         Button {
             isRepositorySheetPresented = true
         } label: {
-            pickerLabel(
+            PickerChipLabel(
                 icon: .folderGit2,
                 title: draft.selectedRepo?.fullName ?? "Repository",
                 maxTitleWidth: 132
@@ -47,7 +46,7 @@ struct RepoBranchPickerBar: View {
         Button {
             isBranchSheetPresented = true
         } label: {
-            pickerLabel(
+            PickerChipLabel(
                 icon: .gitBranch,
                 title: draft.selectedBranch ?? selectedRepo.defaultBranch,
                 maxTitleWidth: 100
@@ -55,29 +54,5 @@ struct RepoBranchPickerBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select base branch")
-    }
-
-    private func pickerLabel(
-        icon: ImageResource,
-        title: String,
-        maxTitleWidth: CGFloat
-    ) -> some View {
-        HStack(spacing: style.gridSize) {
-            Image(icon)
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: 16, height: 16)
-
-            Text(title)
-                .styledFont(.caption)
-                .foregroundStyle(theme.labelColor)
-                .lineLimit(1)
-                .frame(maxWidth: maxTitleWidth, alignment: .leading)
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 36)
-        .contentShape(Capsule())
-        .glassBackground(in: Capsule())
     }
 }

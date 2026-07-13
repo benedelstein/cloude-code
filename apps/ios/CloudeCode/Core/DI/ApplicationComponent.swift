@@ -1,4 +1,5 @@
 import API
+import Domain
 import Entities
 import Foundation
 import NeedleFoundation
@@ -29,6 +30,16 @@ final class ApplicationComponent: Component<ApplicationDependency> {
             preconditionFailure("missing bundle identifier")
         }
         return identifier
+    }
+
+    /// Web app origin used for flows without native UI (e.g. environment creation).
+    var webBaseURL: URL {
+        // Injected per scheme via Config/*.xcconfig -> Info.plist.
+        guard let string = Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String,
+              let url = URL(string: string) else {
+            preconditionFailure("missing or invalid WEB_BASE_URL in Info.plist")
+        }
+        return url
     }
 
     private var oauthRedirectURI: String {
@@ -104,6 +115,22 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     var modelsAPI: any ModelsAPIProviding {
         shared {
             ModelsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
+        shared {
+            RepoEnvironmentsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    @MainActor var repoEnvironmentsStore: RepoEnvironmentsStore {
+        shared {
+            RepoEnvironmentsStore(cache: cache) { [repoEnvironmentsAPI] repoId in
+                try await repoEnvironmentsAPI.listEnvironments(repoId: repoId).environments.map {
+                    Domain.RepoEnvironment(id: $0.id, repoId: $0.repoId, name: $0.name, updatedAt: $0.updatedAt)
+                }
+            }
         }
     }
 

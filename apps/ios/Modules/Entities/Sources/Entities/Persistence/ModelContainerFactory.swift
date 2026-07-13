@@ -7,7 +7,7 @@ public enum SchemaV1: VersionedSchema {
 
     public static var models: [any PersistentModel.Type] {
         // Note - adding a new model does not require a new versioned schema.
-        [UserEntity.self, SessionSummaryEntity.self, SessionMessageEntity.self]
+        [UserEntity.self, SessionSummaryEntity.self, SessionMessageEntity.self, RepoEnvironmentEntity.self]
     }
 
     public static var entities: [any Entity.Type] {

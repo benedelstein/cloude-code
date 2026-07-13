@@ -12,5 +12,7 @@ enum Constants {
     enum UserDefaults {
         static let lastSelectedNewSessionModel = "lastSelectedNewSessionModel"
         static let lastSelectedNewSessionRepo = "lastSelectedNewSessionRepo"
+        /// Per-repo key prefix; append the repo id. Mirrors web's `lastEnvironmentId:{repoId}`.
+        static let lastEnvironmentIdPrefix = "lastEnvironmentId:"
     }
 }
