@@ -28,6 +28,9 @@ final class AgentSessionViewModel {
     let sessionMessageStore: SessionMessageStore
     let sessionSummaryStore: SessionSummaryStore
     let transcriptBuilder: any AgentSessionTranscriptBuilding
+    let renameSessionAction: RenameSessionAction
+    let archiveSessionAction: ArchiveSessionAction
+    let deleteSessionAction: DeleteSessionAction
     var subscriptionTask: Task<Void, Never>?
     /// Whether the view is currently on screen (between `bind` and `unbind`).
     /// Session creation is allowed to finish after the view goes away, but we
@@ -85,6 +88,7 @@ final class AgentSessionViewModel {
     var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
+    private(set) var isPerformingSessionAction = false
 
     var canSubmitDraft: Bool {
         let hasContent = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -114,6 +118,9 @@ final class AgentSessionViewModel {
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
         attachmentsAPI: any AttachmentsAPIProviding,
+        renameSessionAction: RenameSessionAction,
+        archiveSessionAction: ArchiveSessionAction,
+        deleteSessionAction: DeleteSessionAction,
         sessionCreatedSubject: PassthroughSubject<String, Never>
     ) {
         self.context = context
@@ -128,10 +135,57 @@ final class AgentSessionViewModel {
         self.sessionMessageStore = sessionMessageStore
         self.sessionSummaryStore = sessionSummaryStore
         self.transcriptBuilder = transcriptBuilder
+        self.renameSessionAction = renameSessionAction
+        self.archiveSessionAction = archiveSessionAction
+        self.deleteSessionAction = deleteSessionAction
         attachmentStore = ImageAttachmentStore(
             sessionId: context.session?.id,
             attachmentsAPI: attachmentsAPI
         )
+    }
+
+    func renameSession(to title: String) async -> Bool {
+        guard let session, !isPerformingSessionAction else {
+            return false
+        }
+        return await performSessionAction {
+            try await renameSessionAction(session, title: title)
+        }
+    }
+
+    func archiveSession() async -> Bool {
+        guard let session, !isPerformingSessionAction else {
+            return false
+        }
+        return await performSessionAction {
+            try await archiveSessionAction(session)
+        }
+    }
+
+    func deleteSession() async -> Bool {
+        guard let session, !isPerformingSessionAction else {
+            return false
+        }
+        return await performSessionAction {
+            try await deleteSessionAction(session)
+        }
+    }
+
+    private func performSessionAction(_ action: () async throws -> Void) async -> Bool {
+        isPerformingSessionAction = true
+        errorMessage = nil
+        defer {
+            isPerformingSessionAction = false
+        }
+
+        do {
+            try await action()
+            return true
+        } catch {
+            Logger.error(error)
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     // swiftlint:disable:next cyclomatic_complexity

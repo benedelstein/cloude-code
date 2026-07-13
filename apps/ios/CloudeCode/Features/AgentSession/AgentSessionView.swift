@@ -1,16 +1,21 @@
 import Domain
 import Entities
+import Foundation
 import SwiftUI
 
 struct AgentSessionView: View {
     @Environment(\.theme) private var theme: Theme
     @Environment(\.style) private var style: Style
     @Environment(\.showToast) private var showToast
+    @Environment(\.dismiss) private var dismiss
 
     @State private var store: AgentSessionViewModel
     @State private var destination: Modal<Destination>?
     @State private var composerHeight: CGFloat = 0
     @State private var transcriptScrollCoordinator = SessionTranscriptScrollCoordinator()
+    @State private var renamePromptPresented = false
+    @State private var deleteConfirmationPresented = false
+    @State private var proposedSessionTitle = ""
 
     init(store: AgentSessionViewModel) {
         _store = State(initialValue: store)
@@ -48,15 +53,35 @@ struct AgentSessionView: View {
             ToolbarItem(placement: .principal) {
                 sessionHeader
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                } label: {
-                    Image(systemName: "ellipsis")
+            if store.session != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    sessionActionsMenu
                 }
             }
         }
         .toolbarTitleDisplayMode(.inline)
         .modifier(Destinations(destination: $destination))
+        .alert("Rename session", isPresented: $renamePromptPresented) {
+            TextField("Session name", text: $proposedSessionTitle)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") {
+                Task {
+                    _ = await store.renameSession(to: proposedSessionTitle)
+                }
+            }
+            .disabled(!isProposedSessionTitleValid)
+        }
+        .alert("Delete session?", isPresented: $deleteConfirmationPresented) {
+            Button("Delete", role: .destructive) {
+                Task.detached { [store] in
+                    _ = await store.deleteSession()
+                }
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes \(store.session?.title ?? "this session").")
+        }
         .task {
             await store.bind()
         }
@@ -100,6 +125,43 @@ struct AgentSessionView: View {
 
     private var navigationTitle: String {
         store.session?.title ?? (store.isDraftMode ? "New session" : "Untitled session")
+    }
+
+    private var sessionActionsMenu: some View {
+        Menu {
+            Button {
+                proposedSessionTitle = store.session?.title ?? ""
+                renamePromptPresented = true
+            } label: {
+                Label("Rename session", systemImage: "pencil")
+            }
+
+            Button {
+                Task.detached { [store] in
+                    _ = await store.archiveSession()
+                }
+                dismiss()
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    deleteConfirmationPresented = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .disabled(store.isPerformingSessionAction)
+        .accessibilityLabel("Session actions")
+    }
+
+    private var isProposedSessionTitleValid: Bool {
+        let trimmedTitle = proposedSessionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmedTitle.isEmpty && trimmedTitle.count <= 60
     }
 }
 

@@ -52,6 +52,36 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     }
 
     @MainActor
+    private var renameSessionAction: RenameSessionAction {
+        shared {
+            RenameSessionAction(
+                sessionsAPI: dependency.sessionsAPI,
+                sessionSummaryStore: dependency.sessionSummaryStore
+            )
+        }
+    }
+
+    @MainActor
+    private var archiveSessionAction: ArchiveSessionAction {
+        shared {
+            ArchiveSessionAction(
+                sessionsAPI: dependency.sessionsAPI,
+                sessionSummaryStore: dependency.sessionSummaryStore
+            )
+        }
+    }
+
+    @MainActor
+    private var deleteSessionAction: DeleteSessionAction {
+        shared {
+            DeleteSessionAction(
+                sessionsAPI: dependency.sessionsAPI,
+                sessionSummaryStore: dependency.sessionSummaryStore
+            )
+        }
+    }
+
+    @MainActor
     var store: AgentSessionViewModel {
         shared {
             AgentSessionViewModel(
@@ -63,6 +93,9 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionSummaryStore: dependency.sessionSummaryStore,
                 transcriptBuilder: transcriptBuilder,
                 attachmentsAPI: dependency.attachmentsAPI,
+                renameSessionAction: renameSessionAction,
+                archiveSessionAction: archiveSessionAction,
+                deleteSessionAction: deleteSessionAction,
                 sessionCreatedSubject: sessionCreatedSubject
             )
         }

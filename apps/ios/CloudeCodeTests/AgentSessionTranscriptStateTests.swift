@@ -214,12 +214,70 @@ private extension AgentSessionTranscriptStateTests {
         }
     }
 
+    struct StubSessionsAPI: SessionsAPIProviding {
+        func listSessions(
+            repoId: Int?,
+            repoCursor: String?,
+            sessionCursor: String?,
+            repoLimit: Int?,
+            sessionLimit: Int?
+        ) async throws -> SessionSummaryPage {
+            throw URLError(.badServerResponse)
+        }
+
+        func createSession(_ request: CreateSessionRequest) async throws -> CreateSessionResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func session(id: String) async throws -> SessionInfoResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func messages(sessionId: String) async throws -> [SessionMessage] {
+            throw URLError(.badServerResponse)
+        }
+
+        func plan(sessionId: String) async throws -> SessionPlanResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func updateTitle(sessionId: String, title: String) async throws -> UpdateSessionTitleResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func createPullRequest(sessionId: String) async throws -> PullRequestResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func pullRequest(sessionId: String) async throws -> PullRequestStatusResponse {
+            throw URLError(.badServerResponse)
+        }
+
+        func archive(sessionId: String) async throws {
+            throw URLError(.badServerResponse)
+        }
+
+        func delete(sessionId: String) async throws {
+            throw URLError(.badServerResponse)
+        }
+
+        func sessionWebSocketToken(sessionId: String) async throws -> WebSocketToken {
+            throw URLError(.badServerResponse)
+        }
+
+        func userSessionsWebSocketToken() async throws -> WebSocketToken {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func makeViewModel(
         provider: AgentProviderID? = nil,
         sessionMessageStore: SessionMessageStore? = nil,
         transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder()
     ) -> AgentSessionViewModel {
         let sessionMessageStore = sessionMessageStore ?? SessionMessageStore()
+        let sessionSummaryStore = SessionSummaryStore()
+        let sessionsAPI = StubSessionsAPI()
         return AgentSessionViewModel(
             context: .session(SessionSummaryModel(SessionSummary(
                 id: "session-1",
@@ -246,9 +304,21 @@ private extension AgentSessionTranscriptStateTests {
                 )
             },
             sessionMessageStore: sessionMessageStore,
-            sessionSummaryStore: SessionSummaryStore(),
+            sessionSummaryStore: sessionSummaryStore,
             transcriptBuilder: transcriptBuilder,
             attachmentsAPI: StubAttachmentsAPI(),
+            renameSessionAction: RenameSessionAction(
+                sessionsAPI: sessionsAPI,
+                sessionSummaryStore: sessionSummaryStore
+            ),
+            archiveSessionAction: ArchiveSessionAction(
+                sessionsAPI: sessionsAPI,
+                sessionSummaryStore: sessionSummaryStore
+            ),
+            deleteSessionAction: DeleteSessionAction(
+                sessionsAPI: sessionsAPI,
+                sessionSummaryStore: sessionSummaryStore
+            ),
             sessionCreatedSubject: PassthroughSubject<String, Never>()
         )
     }
