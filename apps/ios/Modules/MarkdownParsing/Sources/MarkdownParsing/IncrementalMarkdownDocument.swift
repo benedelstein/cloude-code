@@ -87,6 +87,10 @@ public struct IncrementalMarkdownDocument: Sendable {
         var candidates = buildCandidates(from: parsedTail.blocks)
         markFinalizedCandidates(&candidates, stableBlockCount: stableCount, isStreaming: isStreaming)
 
+        if !isStreaming {
+            candidates = splitOversizedProseCandidates(candidates, source: source)
+        }
+
         let capped = capLeadingActiveProse(candidates: candidates, source: source)
         finalizedParts.append(contentsOf: capped.finalized)
         candidates = capped.remaining
@@ -485,8 +489,9 @@ private enum InlineBoundarySafety {
         let paragraph = source.components(separatedBy: "\n\n").last ?? source
         var escaped = false
         var codeDelimiterLength: Int?
-        var emphasisMarkers = 0
+        var emphasisDelimiters: [(marker: Character, length: Int)] = []
         var bracketDepth = 0
+        var parenthesisDepth = 0
         var angleDepth = 0
         var index = paragraph.startIndex
 
@@ -514,9 +519,26 @@ private enum InlineBoundarySafety {
             }
             if codeDelimiterLength == nil {
                 switch character {
-                case "*", "_": emphasisMarkers += 1
+                case "*", "_":
+                    // CommonMark balances delimiter runs, not individual marker characters.
+                    let run = paragraph[index...].prefix(while: { $0 == character }).count
+                    let runEnd = paragraph.index(index, offsetBy: run)
+                    let previous = index == paragraph.startIndex ? nil : paragraph[paragraph.index(before: index)]
+                    let next = runEnd == paragraph.endIndex ? nil : paragraph[runEnd]
+                    let canOpen = canOpenEmphasis(marker: character, previous: previous, next: next)
+                    let canClose = canCloseEmphasis(marker: character, previous: previous, next: next)
+                    if canClose, emphasisDelimiters.last?.marker == character,
+                       emphasisDelimiters.last?.length == run {
+                        emphasisDelimiters.removeLast()
+                    } else if canOpen {
+                        emphasisDelimiters.append((character, run))
+                    }
+                    paragraph.formIndex(&index, offsetBy: run)
+                    continue
                 case "[": bracketDepth += 1
                 case "]": bracketDepth = max(0, bracketDepth - 1)
+                case "(": parenthesisDepth += 1
+                case ")": parenthesisDepth = max(0, parenthesisDepth - 1)
                 case "<": angleDepth += 1
                 case ">": angleDepth = max(0, angleDepth - 1)
                 default: break
@@ -527,9 +549,51 @@ private enum InlineBoundarySafety {
 
         return !escaped
             && codeDelimiterLength == nil
-            && emphasisMarkers.isMultiple(of: 2)
+            && emphasisDelimiters.isEmpty
             && bracketDepth == 0
+            && parenthesisDepth == 0
             && angleDepth == 0
+    }
+
+    private static func canOpenEmphasis(
+        marker: Character,
+        previous: Character?,
+        next: Character?
+    ) -> Bool {
+        guard let next, !next.isWhitespace else {
+            return false
+        }
+        let leftFlanking = !next.isPunctuation || previous == nil
+            || previous?.isWhitespace == true || previous?.isPunctuation == true
+        guard leftFlanking else {
+            return false
+        }
+        // Intraword underscores are literal and must not disable prose chunking.
+        if marker == "_", let previous, !previous.isWhitespace, !previous.isPunctuation,
+           !next.isWhitespace, !next.isPunctuation {
+            return false
+        }
+        return true
+    }
+
+    private static func canCloseEmphasis(
+        marker: Character,
+        previous: Character?,
+        next: Character?
+    ) -> Bool {
+        guard let previous, !previous.isWhitespace else {
+            return false
+        }
+        let rightFlanking = !previous.isPunctuation || next == nil
+            || next?.isWhitespace == true || next?.isPunctuation == true
+        guard rightFlanking else {
+            return false
+        }
+        if marker == "_", let next, !previous.isWhitespace, !previous.isPunctuation,
+           !next.isWhitespace, !next.isPunctuation {
+            return false
+        }
+        return true
     }
 }
 

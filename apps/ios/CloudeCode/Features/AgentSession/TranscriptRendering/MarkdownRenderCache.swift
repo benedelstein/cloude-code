@@ -6,6 +6,10 @@ final class MarkdownRenderCache {
     private var documentsByPartKey: [String: IncrementalMarkdownDocument] = [:]
     private let configuration: IncrementalMarkdownDocument.Configuration
 
+    var cachedDocumentCount: Int {
+        documentsByPartKey.count
+    }
+
     /// Creates a cache with configurable prose batching and length limits.
     init(
         maximumProseUTF16Length: Int = 2_400,

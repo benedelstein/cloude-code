@@ -1,4 +1,5 @@
 @testable import CloudeCode
+import Domain
 import MarkdownParsing
 import Testing
 
@@ -42,6 +43,53 @@ struct MarkdownRenderCacheTests {
 
         #expect(streaming.allSatisfy { $0.stability == .active })
         #expect(completed.allSatisfy { $0.stability == .finalized })
+    }
+
+    @Test func nonTextItemsPassThroughAndMixedItemsKeepOrder() {
+        let cache = MarkdownRenderCache()
+        let reasoning = AgentSessionRenderItem.reasoning(.init(
+            key: "reasoning-0",
+            part: .init(text: "Thinking")
+        ))
+        let items: [AgentSessionRenderItem] = [
+            .text(.init(key: "text-0", text: "# First")),
+            reasoning,
+            .text(.init(key: "text-1", text: "Second"))
+        ]
+
+        let rendered = cache.renderItems(from: items, isStreaming: false)
+
+        #expect(rendered.map(\.key) == ["text-0", "reasoning-0", "text-1"])
+        guard case .markdown = rendered[0],
+              rendered[1] == reasoning,
+              case .markdown = rendered[2] else {
+            Issue.record("Expected text conversion with reasoning passed through")
+            return
+        }
+    }
+
+    @Test func resetDiscardsAllCachedDocuments() {
+        let cache = MarkdownRenderCache()
+        _ = renderParts(cache: cache, key: "first", text: "First", isStreaming: true)
+        _ = renderParts(cache: cache, key: "second", text: "Second", isStreaming: true)
+        #expect(cache.cachedDocumentCount == 2)
+
+        cache.reset()
+
+        #expect(cache.cachedDocumentCount == 0)
+    }
+
+    @Test func replacementAndShrinkFlowThroughCacheBoundary() {
+        let cache = MarkdownRenderCache()
+        _ = renderParts(cache: cache, text: "First\n\nSecond", isStreaming: true)
+
+        let replaced = renderParts(cache: cache, text: "Other\n\nSecond", isStreaming: true)
+        let shrunk = renderParts(cache: cache, text: "Short", isStreaming: true)
+
+        #expect(replaced.map(\.source).joined() == "Other\n\nSecond")
+        #expect(replaced.first?.id.utf16SourceOffset == 0)
+        #expect(shrunk.map(\.source).joined() == "Short")
+        #expect(shrunk.first?.id.utf16SourceOffset == 0)
     }
 }
 
