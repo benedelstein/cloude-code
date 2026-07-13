@@ -74,10 +74,9 @@ struct AgentSessionView: View {
         .alert("Delete session?", isPresented: $deleteConfirmationPresented) {
             Button("Delete", role: .destructive) {
                 Task {
-                    if await store.deleteSession() {
-                        dismiss()
-                    }
+                    _ = await store.deleteSession()
                 }
+                dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -139,10 +138,9 @@ struct AgentSessionView: View {
 
             Button {
                 Task {
-                    if await store.archiveSession() {
-                        dismiss()
-                    }
+                    _ = await store.archiveSession()
                 }
+                dismiss()
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
