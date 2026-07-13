@@ -20,6 +20,16 @@ struct ParsedMarkdown {
     let codeRanges: [Range<Int>]
 }
 
+protocol MarkdownParserProtocol: Sendable {
+    func parse(source: String, absoluteUTF16Offset: Int) -> ParsedMarkdown
+}
+
+struct SwiftMarkdownParser: MarkdownParserProtocol {
+    func parse(source: String, absoluteUTF16Offset: Int) -> ParsedMarkdown {
+        parseMarkdown(source: source, absoluteUTF16Offset: absoluteUTF16Offset)
+    }
+}
+
 struct MarkdownSourceMap {
     let source: String
     let absoluteUTF16Offset: Int
@@ -78,16 +88,6 @@ struct MarkdownSourceMap {
         return source.substring(utf16Offsets: localRange)
     }
 
-    func hasBlankLine(between first: Range<Int>, and second: Range<Int>) -> Bool {
-        guard first.upperBound <= second.lowerBound else {
-            return false
-        }
-        let intervening = source(inAbsoluteRange: first.upperBound..<second.lowerBound)
-        return intervening.split(separator: "\n", omittingEmptySubsequences: false)
-            .dropFirst()
-            .dropLast()
-            .contains { line in line.allSatisfy { $0 == " " || $0 == "\t" || $0 == "\r" } }
-    }
 }
 
 func parseMarkdown(source: String, absoluteUTF16Offset: Int) -> ParsedMarkdown {
@@ -271,6 +271,10 @@ private struct MarkdownDocumentBuilder {
 }
 
 private struct MarkdownInlineBuilder {
+    private static let linkDetector = try? NSDataDetector(
+        types: NSTextCheckingResult.CheckingType.link.rawValue
+    )
+
     var result = AttributedString()
     private var intent: InlinePresentationIntent = []
     private var link: URL?
@@ -325,7 +329,7 @@ private struct MarkdownInlineBuilder {
 
     private mutating func appendPlainText(_ text: String) {
         guard link == nil, !intent.contains(.code),
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+              let detector = Self.linkDetector else {
             appendLiteral(text)
             return
         }

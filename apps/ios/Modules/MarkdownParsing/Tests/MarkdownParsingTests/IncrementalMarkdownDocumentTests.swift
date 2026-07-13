@@ -163,7 +163,7 @@ struct IncrementalMarkdownDocumentTests {
         })
     }
 
-    @Test func oversizedOpenInlineCodeStaysActiveUntilASafeBoundaryExists() {
+    @Test func oversizedOpenInlineCodeMakesBoundedProgress() {
         var configuration = IncrementalMarkdownDocument.Configuration()
         configuration.maximumProseUTF16Length = 24
         configuration.softBoundaryLookbackUTF16Length = 12
@@ -173,22 +173,16 @@ struct IncrementalMarkdownDocumentTests {
 
         let open = document.update(source: openSource, isStreaming: true)
 
-        #expect(open.parts.count == 1)
-        #expect(open.parts[0].stability == .active)
+        #expect(open.parts.count > 1)
+        #expect(open.parts.dropLast().allSatisfy { $0.stability == .finalized })
+        #expect(open.parts.last?.stability == .active)
+        #expect(open.parts.allSatisfy { $0.source.utf16.count <= 24 })
         #expect(open.parts.map(\.source).joined() == openSource)
 
         let closedSource = openSource + "` safe trailing words for another part"
         let closed = document.update(source: closedSource, isStreaming: true)
         #expect(closed.parts.count > 1)
         #expect(closed.parts.map(\.source).joined() == closedSource)
-        let rendered = renderedText(in: closed)
-        #expect(rendered == "prefix " + String(repeating: "code word ", count: 8) + " safe trailing words for another part")
-        #expect(closed.parts.contains { part in
-            guard case .prose(let paragraphs) = part.block.content else { return false }
-            return paragraphs.contains { paragraph in
-                paragraph.content.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true }
-            }
-        })
     }
 
     @Test func appendedReferenceSwitchesToWholeDocumentAndUpdatesEarlierLink() {
@@ -512,13 +506,15 @@ struct IncrementalMarkdownDocumentTests {
         }
     }
 
-    @Test func openEmphasisDefersHardCapUntilClosed() {
+    @Test func openEmphasisStillMakesBoundedProgress() {
         var document = IncrementalMarkdownDocument(configuration: hardCapConfiguration)
         let openSource = "prefix **" + String(repeating: "bold words ", count: 8)
         let open = document.update(source: openSource, isStreaming: true)
 
-        #expect(open.parts.count == 1)
-        #expect(open.parts[0].stability == .active)
+        #expect(open.parts.count > 1)
+        #expect(open.parts.dropLast().allSatisfy { $0.stability == .finalized })
+        #expect(open.parts.last?.stability == .active)
+        #expect(open.parts.allSatisfy { $0.source.utf16.count <= 24 })
 
         let closedSource = openSource + "final** safe trailing words safe trailing words"
         let closed = document.update(source: closedSource, isStreaming: true)
@@ -539,6 +535,29 @@ struct IncrementalMarkdownDocumentTests {
         #expect(snapshot.parts.dropFirst().contains { $0.leadingBoundary == .proseContinuation })
         guard case .heading(level: 1, _) = snapshot.parts.last?.block.content else {
             Issue.record("Expected real heading on later physical line")
+            return
+        }
+    }
+
+    @Test func inlineTripleBackticksAfterMidLineSplitDoNotBecomeCodeFence() {
+        var document = IncrementalMarkdownDocument(configuration: hardCapConfiguration)
+        let initialSource = "alpha 😀 beta gamma delta epsilon zeta eta theta"
+        let initial = document.update(source: initialSource, isStreaming: true)
+        #expect(initial.parts.contains { $0.leadingBoundary == .proseContinuation })
+
+        let inlineSource = initialSource + " ``` inline ticks # not heading - not list > not quote"
+        let inline = document.update(source: inlineSource, isStreaming: true)
+        #expect(inline.parts.map(\.source).joined() == inlineSource)
+        #expect(inline.parts.allSatisfy { part in
+            if case .prose = part.block.content { return true }
+            return false
+        })
+
+        let headingSource = inlineSource + "\n\n# Real heading"
+        let heading = document.update(source: headingSource, isStreaming: true)
+        #expect(heading.parts.map(\.source).joined() == headingSource)
+        guard case .heading(level: 1, _) = heading.parts.last?.block.content else {
+            Issue.record("Expected block syntax on a later physical line")
             return
         }
     }
@@ -640,11 +659,41 @@ struct IncrementalMarkdownDocumentTests {
     }
 
     @Test func identicalInputReturnsAnEqualCachedSnapshot() {
-        var document = IncrementalMarkdownDocument()
+        let parser = RecordingMarkdownParser()
+        var document = IncrementalMarkdownDocument(configuration: .init(), parser: parser)
         let first = document.update(source: "# Heading\n\nTail", isStreaming: true)
+        let parseCount = parser.calls.count
         let second = document.update(source: "# Heading\n\nTail", isStreaming: true)
 
         #expect(second == first)
+        #expect(parser.calls.count == parseCount)
+    }
+
+    @Test func finalizedPrefixIsExcludedFromLaterParseCalls() {
+        let parser = RecordingMarkdownParser()
+        var configuration = IncrementalMarkdownDocument.Configuration()
+        configuration.maximumParagraphsPerPart = 1
+        var document = IncrementalMarkdownDocument(configuration: configuration, parser: parser)
+        let firstSource = "First paragraph.\n\nSecond paragraph."
+        let first = document.update(source: firstSource, isStreaming: true)
+        guard let finalized = first.parts.first, finalized.stability == .finalized else {
+            Issue.record("Expected finalized prefix")
+            return
+        }
+
+        let secondSource = firstSource + " More."
+        _ = document.update(source: secondSource, isStreaming: true)
+        let thirdSource = secondSource + " Again."
+        _ = document.update(source: thirdSource, isStreaming: true)
+
+        let calls = parser.calls
+        #expect(calls.count == 3)
+        #expect(calls[0].source == firstSource)
+        #expect(calls[0].absoluteUTF16Offset == 0)
+        #expect(calls[1].source == "Second paragraph. More.")
+        #expect(calls[1].absoluteUTF16Offset == finalized.source.utf16.count)
+        #expect(calls[2].source == "Second paragraph. More. Again.")
+        #expect(calls[2].absoluteUTF16Offset == finalized.source.utf16.count)
     }
 }
 
@@ -653,19 +702,33 @@ private func completed(_ source: String) -> MarkdownRenderSnapshot {
     return document.update(source: source, isStreaming: false)
 }
 
-private func renderedText(in snapshot: MarkdownRenderSnapshot) -> String {
-    snapshot.parts.flatMap { part -> [String] in
-        guard case .prose(let paragraphs) = part.block.content else {
-            return []
-        }
-        return paragraphs.map { String($0.content.characters) }
-    }.joined()
-}
-
 private var hardCapConfiguration: IncrementalMarkdownDocument.Configuration {
     var configuration = IncrementalMarkdownDocument.Configuration()
     configuration.maximumProseUTF16Length = 24
     configuration.softBoundaryLookbackUTF16Length = 12
     configuration.minimumSoftBoundaryUTF16Length = 8
     return configuration
+}
+
+private final class RecordingMarkdownParser: MarkdownParserProtocol, @unchecked Sendable {
+    struct Call: Sendable {
+        let source: String
+        let absoluteUTF16Offset: Int
+    }
+
+    private let lock = NSLock()
+    private var storedCalls: [Call] = []
+
+    var calls: [Call] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedCalls
+    }
+
+    func parse(source: String, absoluteUTF16Offset: Int) -> ParsedMarkdown {
+        lock.lock()
+        storedCalls.append(.init(source: source, absoluteUTF16Offset: absoluteUTF16Offset))
+        lock.unlock()
+        return parseMarkdown(source: source, absoluteUTF16Offset: absoluteUTF16Offset)
+    }
 }

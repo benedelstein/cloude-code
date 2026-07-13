@@ -28,17 +28,23 @@ public struct IncrementalMarkdownDocument: Sendable {
     private var mode: MarkdownRenderSnapshot.Mode = .incrementalTail
     private var cachedSnapshot: MarkdownRenderSnapshot?
     private let configuration: Configuration
+    private let parser: any MarkdownParserProtocol
 
     /// Creates an incremental Markdown document with configurable prose limits.
     ///
     /// - Parameter configuration: Paragraph batching and hard-cap limits.
     public init(configuration: Configuration = .init()) {
+        self.init(configuration: configuration, parser: SwiftMarkdownParser())
+    }
+
+    init(configuration: Configuration, parser: any MarkdownParserProtocol) {
         var configuration = configuration
         configuration.maximumParagraphsPerPart = max(1, configuration.maximumParagraphsPerPart)
         configuration.maximumProseUTF16Length = max(1, configuration.maximumProseUTF16Length)
         configuration.softBoundaryLookbackUTF16Length = max(0, configuration.softBoundaryLookbackUTF16Length)
         configuration.minimumSoftBoundaryUTF16Length = max(0, configuration.minimumSoftBoundaryUTF16Length)
         self.configuration = configuration
+        self.parser = parser
     }
 
     /// Updates the append-only document and returns its current render snapshot.
@@ -129,12 +135,12 @@ public struct IncrementalMarkdownDocument: Sendable {
     private func parseActiveTail(source: String) -> ParsedMarkdown {
         guard tailStartsMidLine else {
             let tail = source.substring(utf16Offsets: activeStartUTF16Offset..<source.utf16.count)
-            return parseMarkdown(source: tail, absoluteUTF16Offset: activeStartUTF16Offset)
+            return parser.parse(source: tail, absoluteUTF16Offset: activeStartUTF16Offset)
         }
 
         let lineStart = source.physicalLineStart(beforeUTF16Offset: activeStartUTF16Offset)
         let contextualSource = source.substring(utf16Offsets: lineStart..<source.utf16.count)
-        let contextual = parseMarkdown(source: contextualSource, absoluteUTF16Offset: lineStart)
+        let contextual = parser.parse(source: contextualSource, absoluteUTF16Offset: lineStart)
         var blocks = contextual.blocks.filter { $0.absoluteSourceRange.upperBound > activeStartUTF16Offset }
 
         if let first = blocks.first, case .paragraph = first.kind,
@@ -162,7 +168,7 @@ public struct IncrementalMarkdownDocument: Sendable {
     }
 
     private mutating func parseWholeDocument(source: String, isStreaming: Bool) -> MarkdownRenderSnapshot {
-        let parsed = parseMarkdown(source: source, absoluteUTF16Offset: 0)
+        let parsed = parser.parse(source: source, absoluteUTF16Offset: 0)
         var candidates = buildCandidates(from: parsed.blocks)
         if candidates.isEmpty, !source.isEmpty {
             let id = MarkdownSourceID(utf16SourceOffset: 0)
@@ -435,12 +441,10 @@ public struct IncrementalMarkdownDocument: Sendable {
             hardBoundary - configuration.softBoundaryLookbackUTF16Length
         )
         guard lowerBound < hardBoundary else {
-            let boundary = source.validUnicodeBoundary(
+            return source.validUnicodeBoundary(
                 atOrBeforeUTF16Offset: hardBoundary,
                 after: range.lowerBound
             )
-            let candidate = source.substring(utf16Offsets: range.lowerBound..<boundary)
-            return InlineBoundarySafety.isSafe(candidate) ? boundary : nil
         }
 
         let fragment = source.substring(utf16Offsets: lowerBound..<hardBoundary)
@@ -479,8 +483,8 @@ public struct IncrementalMarkdownDocument: Sendable {
             atOrBeforeUTF16Offset: hardBoundary,
             after: range.lowerBound
         )
-        let candidate = source.substring(utf16Offsets: range.lowerBound..<boundary)
-        return InlineBoundarySafety.isSafe(candidate) ? boundary : nil
+        // A hard cap must make progress even when the streamed inline syntax never closes.
+        return boundary
     }
 }
 
