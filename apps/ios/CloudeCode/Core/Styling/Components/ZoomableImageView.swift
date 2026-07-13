@@ -5,21 +5,29 @@ struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage
     let accessibilityLabel: String
     let dragConfiguration: ZoomableImageDragConfiguration?
+    let onZoomedStateChanged: ((Bool) -> Void)?
+    let onSingleTap: (() -> Void)?
 
     init(
         image: UIImage,
         accessibilityLabel: String,
-        dragConfiguration: ZoomableImageDragConfiguration? = nil
+        dragConfiguration: ZoomableImageDragConfiguration? = nil,
+        onZoomedStateChanged: ((Bool) -> Void)? = nil,
+        onSingleTap: (() -> Void)? = nil
     ) {
         self.image = image
         self.accessibilityLabel = accessibilityLabel
         self.dragConfiguration = dragConfiguration
+        self.onZoomedStateChanged = onZoomedStateChanged
+        self.onSingleTap = onSingleTap
     }
 
     func makeUIView(context: Context) -> ZoomingImageScrollView {
         let view = ZoomingImageScrollView()
         view.isDragEnabled = dragConfiguration != nil
         view.dragHandler = context.coordinator
+        view.onZoomedStateChanged = onZoomedStateChanged
+        view.onSingleTap = onSingleTap
         view.setImage(image, accessibilityLabel: accessibilityLabel)
         return view
     }
@@ -28,6 +36,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.dragConfiguration = dragConfiguration
         view.isDragEnabled = dragConfiguration != nil
         view.dragHandler = context.coordinator
+        view.onZoomedStateChanged = onZoomedStateChanged
+        view.onSingleTap = onSingleTap
         view.setImage(image, accessibilityLabel: accessibilityLabel)
     }
 
@@ -74,13 +84,20 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     private var currentImage: UIImage?
     private var lastBoundsSize: CGSize = .zero
+    private var isZoomedIn = false
     private lazy var dismissalPanGestureRecognizer = UIPanGestureRecognizer(
         target: self,
         action: #selector(handleDismissalPan(_:))
     )
+    private lazy var singleTapGestureRecognizer = UITapGestureRecognizer(
+        target: self,
+        action: #selector(handleSingleTap)
+    )
 
     var isDragEnabled = false
     weak var dragHandler: ZoomingImageScrollViewDragHandling?
+    var onZoomedStateChanged: ((Bool) -> Void)?
+    var onSingleTap: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -121,6 +138,7 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
+        notifyZoomedStateIfNeeded()
     }
 
     private func configureSubviews() {
@@ -144,6 +162,7 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
         scrollView.addSubview(imageView)
         imageView.addGestureRecognizer(dismissalPanGestureRecognizer)
         scrollView.panGestureRecognizer.require(toFail: dismissalPanGestureRecognizer)
+        addGestureRecognizer(singleTapGestureRecognizer)
     }
 
     private func configureZoom(reset: Bool) {
@@ -167,6 +186,27 @@ final class ZoomingImageScrollView: UIView, UIScrollViewDelegate, UIGestureRecog
         }
 
         centerImage()
+        notifyZoomedStateIfNeeded()
+    }
+
+    private func notifyZoomedStateIfNeeded() {
+        let isZoomed = scrollView.zoomScale > scrollView.minimumZoomScale + 0.01
+        guard isZoomed != isZoomedIn else {
+            return
+        }
+
+        isZoomedIn = isZoomed
+        // Deferred: may fire from layoutSubviews, and the callback mutates SwiftUI state.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            self.onZoomedStateChanged?(self.isZoomedIn)
+        }
+    }
+
+    @objc private func handleSingleTap() {
+        onSingleTap?()
     }
 
     private func centerImage() {

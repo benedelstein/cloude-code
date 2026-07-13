@@ -57,6 +57,7 @@ extension AgentSessionView {
         @State private var didFail = false
         @State private var dismissDragOffset: CGSize = .zero
         @State private var isCompletingDragDismissal = false
+        @State private var isChromeHidden = false
 
         var body: some View {
             NavigationStack {
@@ -92,7 +93,7 @@ extension AgentSessionView {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarVisibility(isCompletingDragDismissal ? .hidden : .visible, for: .navigationBar)
+            .toolbarVisibility(isCompletingDragDismissal || isChromeHidden ? .hidden : .visible, for: .navigationBar)
             .task(id: image.url) {
                 await loadImage()
             }
@@ -111,7 +112,9 @@ extension AgentSessionView {
                         onChanged: handleDragChanged,
                         onEnded: handleDragEnded,
                         onCancelled: resetDismissDrag
-                    )
+                    ),
+                    onZoomedStateChanged: handleZoomedStateChanged,
+                    onSingleTap: handleImageTap
                 )
                 .accessibilityLabel(image.accessibilityLabel)
             } else if didFail {
@@ -189,6 +192,18 @@ extension AgentSessionView {
             }
 
             return predictedEndTranslation
+        }
+
+        private func handleZoomedStateChanged(_ isZoomed: Bool) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isChromeHidden = isZoomed
+            }
+        }
+
+        private func handleImageTap() {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isChromeHidden.toggle()
+            }
         }
 
         private func resetDismissDrag() {
