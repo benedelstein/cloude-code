@@ -27,7 +27,7 @@ const CODEX_PATH_CANDIDATES = [
   "/usr/local/bin/codex",
 ];
 
-function resolveCodexPath(emit: ProviderSetupContext["emit"]): string | undefined {
+function resolveCodexPath(emit: ProviderSetupContext["emit"]): string {
   try {
     const codexPath = execSync("command -v codex", { encoding: "utf-8" }).trim();
     if (codexPath) {
@@ -45,8 +45,9 @@ function resolveCodexPath(emit: ProviderSetupContext["emit"]): string | undefine
     }
   }
 
-  emit({ type: "debug", message: "Could not resolve codex path; using provider default resolution" });
-  return undefined;
+  throw new Error(
+    `Could not resolve Codex CLI path. Expected codex on PATH or at ${CODEX_PATH_CANDIDATES.join(", ")}.`,
+  );
 }
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
