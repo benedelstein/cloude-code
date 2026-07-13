@@ -73,7 +73,7 @@ struct AgentSessionView: View {
         }
         .alert("Delete session?", isPresented: $deleteConfirmationPresented) {
             Button("Delete", role: .destructive) {
-                Task {
+                Task.detached { [store] in
                     _ = await store.deleteSession()
                 }
                 dismiss()
@@ -137,7 +137,7 @@ struct AgentSessionView: View {
             }
 
             Button {
-                Task {
+                Task.detached { [store] in
                     _ = await store.archiveSession()
                 }
                 dismiss()
