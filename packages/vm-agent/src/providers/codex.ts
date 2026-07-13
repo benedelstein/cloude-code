@@ -21,34 +21,6 @@ import type {
 type CodexSettings = Extract<AgentSettings, { provider: "openai-codex" }>;
 
 const DEFAULT_CODEX_MIN_VERSION = "0.144.0";
-const CODEX_PATH_CANDIDATES = [
-  join(homedir(), ".local", "bin", "codex"),
-  join(homedir(), "bin", "codex"),
-  "/usr/local/bin/codex",
-];
-
-function resolveCodexPath(emit: ProviderSetupContext["emit"]): string {
-  try {
-    const codexPath = execSync("command -v codex", { encoding: "utf-8" }).trim();
-    if (codexPath) {
-      emit({ type: "debug", message: `Resolved codex path: ${codexPath}` });
-      return codexPath;
-    }
-  } catch {
-    // Fall through to the install locations used by the Codex bootstrap script.
-  }
-
-  for (const candidate of CODEX_PATH_CANDIDATES) {
-    if (existsSync(candidate)) {
-      emit({ type: "debug", message: `Resolved codex path: ${candidate}` });
-      return candidate;
-    }
-  }
-
-  throw new Error(
-    `Could not resolve Codex CLI path. Expected codex on PATH or at ${CODEX_PATH_CANDIDATES.join(", ")}.`,
-  );
-}
 
 function setupCodexAuth(emit: ProviderSetupContext["emit"]): void {
   const authJson = process.env.CODEX_AUTH_JSON;
@@ -82,7 +54,13 @@ export const codexProvider: AgentProviderConfig<CodexSettings> = {
       getTodoToolNameForProvider(settings.provider),
     );
 
-    const codexPath = resolveCodexPath(emit);
+    let codexPath: string | undefined;
+    try {
+      codexPath = execSync("which codex", { encoding: "utf-8" }).trim();
+      emit({ type: "debug", message: `Resolved codex path: ${codexPath}` });
+    } catch {
+      emit({ type: "debug", message: "Could not resolve codex path via 'which'; using default resolution" });
+    }
 
     const modelId = settings.model;
     let agentSessionId: string | undefined = args.sessionId;
