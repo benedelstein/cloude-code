@@ -30,10 +30,11 @@ Stores are then shared dependencies, for example `UserStore` and
 `SessionSummaryStore`.
 
 Because these dependencies live for the application lifetime,
-`CacheResetWorker` observes `SessionStore.authStatePublisher` and invokes
-`CacheResetAction` whenever authentication resolves to signed out. This covers
-both explicit sign-out and terminal authentication failures without coupling
-`SessionStore` to cache ownership. The action clears user-scoped SwiftData
+`CacheResetWorker` observes `SessionStore.didSignOutPublisher` and invokes
+`CacheResetAction` when an existing session ends. This covers both explicit
+sign-out and terminal authentication failures, including a rejected refresh
+during restore, without clearing caches on an ordinary signed-out launch or
+coupling `SessionStore` to cache ownership. The action clears user-scoped SwiftData
 tables and other cache stores only; it does not reset UI state or user
 preferences.
 Entity stores expose `deleteAll()` as the table boundary, clearing their

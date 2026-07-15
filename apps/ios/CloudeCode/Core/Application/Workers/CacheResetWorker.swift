@@ -6,22 +6,20 @@ import Foundation
 @MainActor
 final class CacheResetWorker: Worker {
     private let cacheResetAction: CacheResetAction
-    private let authStatePublisher: AnyPublisher<SessionStore.State, Never>
+    private let didSignOutPublisher: AnyPublisher<Void, Never>
     private var cancellables = Set<AnyCancellable>()
 
     init(
         cacheResetAction: CacheResetAction,
-        authStatePublisher: AnyPublisher<SessionStore.State, Never>
+        didSignOutPublisher: AnyPublisher<Void, Never>
     ) {
         self.cacheResetAction = cacheResetAction
-        self.authStatePublisher = authStatePublisher
+        self.didSignOutPublisher = didSignOutPublisher
     }
 
     override func didStart() {
-        authStatePublisher
-            .removeDuplicates()
-            .sink { [cacheResetAction] state in
-                guard state == .signedOut else { return }
+        didSignOutPublisher
+            .sink { [cacheResetAction] in
                 Task { @MainActor in
                     Logger.debug("resetting cache due to sign out")
                     do {

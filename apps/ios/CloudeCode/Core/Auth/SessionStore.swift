@@ -39,6 +39,7 @@ final class SessionStore {
     private let signInAPI: any SignInProviding
     private let oauthRedirectURI: String
     private let authStateSubject = CurrentValueSubject<State, Never>(.loading)
+    private let didSignOutSubject = PassthroughSubject<Void, Never>()
 
     var authStatePublisher: AnyPublisher<State, Never> {
         authStateSubject.eraseToAnyPublisher()
@@ -49,6 +50,10 @@ final class SessionStore {
             .map(\.authUserId)
             .removeDuplicates()
             .eraseToAnyPublisher()
+    }
+
+    var didSignOutPublisher: AnyPublisher<Void, Never> {
+        didSignOutSubject.eraseToAnyPublisher()
     }
 
     init(
@@ -83,6 +88,7 @@ final class SessionStore {
             case .signedOut:
                 Logger.debug("Auth event: signedOut")
                 transitionToSignedOut()
+                didSignOutSubject.send()
             case .refreshed:
                 Logger.debug("Auth event: refreshed")
             }

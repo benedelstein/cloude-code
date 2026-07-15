@@ -143,7 +143,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         shared {
             CacheResetWorker(
                 cacheResetAction: cacheResetAction,
-                authStatePublisher: sessionStore.authStatePublisher
+                didSignOutPublisher: sessionStore.didSignOutPublisher
             )
         }
     }

@@ -12,11 +12,12 @@ struct CacheResetAction {
     let repoEnvironmentsStore: RepoEnvironmentsStore
 
     func callAsFunction() async throws {
+        let t0 = Date()
         try await userStore.deleteAll()
         try await sessionSummaryStore.deleteAll()
         try await repoEnvironmentsStore.deleteAll()
         try await sessionMessageStore.deleteAll()
         modelCatalogStore.reset()
-        Logger.debug("Reset caches")
+        Logger.debug("Reset caches in \(Date().timeIntervalSince(t0) * 1000)ms")
     }
 }

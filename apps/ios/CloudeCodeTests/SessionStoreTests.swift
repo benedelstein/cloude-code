@@ -1,5 +1,6 @@
 import API
 @testable import CloudeCode
+import Combine
 import Domain
 import Entities
 import Foundation
@@ -22,6 +23,11 @@ struct SessionStoreTests {
             signInAPI: authAPI,
             oauthRedirectURI: "cloudecode://auth/callback"
         )
+        let signOutCounter = SignOutCounter()
+        let cancellable = store.didSignOutPublisher.sink {
+            MainActor.assumeIsolated { signOutCounter.count += 1 }
+        }
+        defer { cancellable.cancel() }
         let startTask = Task { await store.start() }
         defer { startTask.cancel() }
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
@@ -29,6 +35,7 @@ struct SessionStoreTests {
         await store.signOut()
         try await waitUntil { store.state == .signedOut }
         #expect(await recorder.events == [.revoke])
+        #expect(signOutCounter.count == 1)
     }
 
     @Test func rejectedRefreshAlsoResetsUserState() async throws {
@@ -49,6 +56,11 @@ struct SessionStoreTests {
             signInAPI: authAPI,
             oauthRedirectURI: "cloudecode://auth/callback"
         )
+        let signOutCounter = SignOutCounter()
+        let cancellable = store.didSignOutPublisher.sink {
+            MainActor.assumeIsolated { signOutCounter.count += 1 }
+        }
+        defer { cancellable.cancel() }
         let startTask = Task { await store.start() }
         defer { startTask.cancel() }
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
@@ -56,6 +68,34 @@ struct SessionStoreTests {
         _ = try? await coordinator.refresh()
         try await waitUntil { store.state == .signedOut }
         #expect(await recorder.events.isEmpty)
+        #expect(signOutCounter.count == 1)
+    }
+
+    @Test func ordinarySignedOutLaunchDoesNotPublishSignOut() async throws {
+        let recorder = SignOutEventRecorder()
+        let authAPI = TestAuthAPI(session: Self.session, recorder: recorder)
+        let coordinator = TokenCoordinator(
+            persistence: TestSessionPersistence(session: nil),
+            refresher: authAPI,
+            revoker: authAPI
+        )
+        let store = SessionStore(
+            coordinator: coordinator,
+            userStore: UserStore(),
+            signInAPI: authAPI,
+            oauthRedirectURI: "cloudecode://auth/callback"
+        )
+        let signOutCounter = SignOutCounter()
+        let cancellable = store.didSignOutPublisher.sink {
+            MainActor.assumeIsolated { signOutCounter.count += 1 }
+        }
+        defer { cancellable.cancel() }
+        let startTask = Task { await store.start() }
+        defer { startTask.cancel() }
+
+        try await waitUntil { store.state == .signedOut }
+
+        #expect(signOutCounter.count == .zero)
     }
 
     private static let session = Session(
@@ -75,6 +115,11 @@ struct SessionStoreTests {
         }
         throw SessionStoreTestError.timedOut
     }
+}
+
+@MainActor
+private final class SignOutCounter {
+    var count = 0
 }
 
 private final class TestSessionPersistence: SessionPersisting, @unchecked Sendable {
