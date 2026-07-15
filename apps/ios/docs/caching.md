@@ -34,8 +34,11 @@ Because these dependencies live for the application lifetime,
 `CacheResetAction` whenever authentication resolves to signed out. This covers
 both explicit sign-out and terminal authentication failures without coupling
 `SessionStore` to cache ownership. The action clears user-scoped SwiftData
-tables and the persisted new-session model, repository, and per-repository
-environment selections; it does not reset unrelated `UserDefaults` values.
+tables and other cache stores only; it does not reset UI state or user
+preferences.
+Entity stores expose `deleteAll()` as the table boundary, clearing their
+identity maps and persisted rows together so callers do not access `Cache`
+directly.
 
 `EntityStore` fetches in this order:
 

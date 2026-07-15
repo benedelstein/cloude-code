@@ -34,8 +34,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Account")
-                } footer: {
-                    Text("Signs out of Cloude Code on this device.")
                 }
             }
             .listStyle(.insetGrouped)

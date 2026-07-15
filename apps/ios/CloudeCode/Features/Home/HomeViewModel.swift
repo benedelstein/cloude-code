@@ -73,22 +73,12 @@ final class HomeViewModel {
         socketTask = nil
         didStart = false
         hasConnected = false
-        Task { [userSessionsSocket] in
-            await userSessionsSocket.disconnect()
-        }
-    }
-
-    /// Clears lifecycle and loading state that belongs to the authenticated user.
-    func reset() async {
-        socketTask?.cancel()
-        socketTask = nil
-        didStart = false
-        hasConnected = false
-        isLoading = false
         hasLoaded = false
         errorMessage = nil
         nextRepoCursor = nil
-        await userSessionsSocket.reset()
+        Task { [userSessionsSocket] in
+            await userSessionsSocket.disconnect()
+        }
     }
 
     func refresh(showLoading: Bool = false) async {

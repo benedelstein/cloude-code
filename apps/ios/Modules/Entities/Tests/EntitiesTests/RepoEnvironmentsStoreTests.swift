@@ -186,18 +186,18 @@ final class RepoEnvironmentsStoreTests: XCTestCase {
         XCTAssertEqual(persistedUpdate, updatedOlder)
     }
 
-    func testResetClearsLoadedEnvironments() async throws {
+    func testDeleteAllClearsLoadedEnvironments() async throws {
         let store = RepoEnvironmentsStore { repoId in
             [testRepoEnvironment("e1", repoId: repoId)]
         }
         try await store.load(repoId: 1)
 
-        store.reset()
+        try await store.deleteAll()
 
         XCTAssertNil(store.environments(repoId: 1))
     }
 
-    func testResetPreventsCancelledLoadFromRepopulatingMemory() async {
+    func testDeleteAllPreventsCancelledLoadFromRepopulatingMemory() async {
         let gate = EnvironmentLoadGate()
         let store = RepoEnvironmentsStore { _ in
             await gate.response()
@@ -207,7 +207,7 @@ final class RepoEnvironmentsStoreTests: XCTestCase {
             await Task.yield()
         }
 
-        store.reset()
+        try? await store.deleteAll()
         await gate.resume(with: [testRepoEnvironment("stale")])
         await loadTask.value
 

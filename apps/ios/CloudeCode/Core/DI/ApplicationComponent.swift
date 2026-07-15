@@ -151,16 +151,11 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     @MainActor var cacheResetAction: CacheResetAction {
         shared {
             CacheResetAction(
-                cache: cache,
                 userStore: userStore,
                 sessionSummaryStore: sessionSummaryStore,
-                repoEnvironmentsStore: repoEnvironmentsStore,
                 sessionMessageStore: homeComponent.sessionMessageStore,
                 modelCatalogStore: homeComponent.modelCatalogStore,
-                preferences: newSessionPreferences,
-                homeViewModel: homeComponent.viewModel,
-                homeRouter: homeComponent.router,
-                notificationHandler: notificationHandler
+                repoEnvironmentsStore: repoEnvironmentsStore
             )
         }
     }

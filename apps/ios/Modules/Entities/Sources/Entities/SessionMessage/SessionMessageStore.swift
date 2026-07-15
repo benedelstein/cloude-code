@@ -140,11 +140,11 @@ public final class SessionMessageStore {
         }
     }
 
-    /// Clears every in-memory message and session index without changing disk state.
-    public func reset() {
-        entityStore.reset()
+    /// Clears every cached message and session index from memory and disk.
+    public func deleteAll() async throws {
         loadedSessionIDs.removeAll()
         messageIDsBySessionID.removeAll()
+        try await entityStore.deleteAll()
     }
 
     private func modelsFromMemory(sessionId: String) -> [SessionMessageWrapper]? {

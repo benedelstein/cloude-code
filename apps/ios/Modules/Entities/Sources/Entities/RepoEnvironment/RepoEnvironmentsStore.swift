@@ -48,15 +48,15 @@ public final class RepoEnvironmentsStore {
         entityStore.putSnapshotsToDisk([environment])
     }
 
-    /// Clears all in-memory environments and cancels in-flight loads.
-    public func reset() {
+    /// Clears all environments from memory and disk and cancels in-flight loads.
+    public func deleteAll() async throws {
         loadGeneration += 1
         for task in loadTasksByRepoID.values {
             task.cancel()
         }
         loadTasksByRepoID.removeAll()
         environmentsByRepoID.removeAll()
-        entityStore.reset()
+        try await entityStore.deleteAll()
     }
 
     /// Loads a repo's environments, reusing an in-memory list unless a refresh

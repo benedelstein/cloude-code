@@ -5,10 +5,10 @@ import Entities
 import Foundation
 import Testing
 
-@Suite("Reactive sign-out cache reset")
+@Suite("Session store sign-out")
 @MainActor
 struct SessionStoreTests {
-    @Test func explicitSignOutTriggersCacheResetWorker() async throws {
+    @Test func explicitSignOutClearsAndRevokesSession() async throws {
         let recorder = SignOutEventRecorder()
         let authAPI = TestAuthAPI(session: Self.session, recorder: recorder)
         let coordinator = TokenCoordinator(
@@ -16,35 +16,19 @@ struct SessionStoreTests {
             refresher: authAPI,
             revoker: authAPI
         )
-        let cacheResetAction = CacheResetAction {
-            await recorder.record(.reset)
-        }
         let store = SessionStore(
             coordinator: coordinator,
             userStore: UserStore(),
             signInAPI: authAPI,
             oauthRedirectURI: "cloudecode://auth/callback"
         )
-        let worker = CacheResetWorker(
-            cacheResetAction: cacheResetAction,
-            authStatePublisher: store.authStatePublisher
-        )
-        worker.start()
         let startTask = Task { await store.start() }
-        defer {
-            startTask.cancel()
-            worker.stop()
-        }
+        defer { startTask.cancel() }
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
 
         await store.signOut()
         try await waitUntil { store.state == .signedOut }
-        try await waitUntil { await recorder.events.contains(.reset) }
-
-        let events = await recorder.events
-        #expect(events.contains(.reset))
-        #expect(events.contains(.revoke))
-        #expect(events.filter { $0 == .reset }.count == 1)
+        #expect(await recorder.events == [.revoke])
     }
 
     @Test func rejectedRefreshAlsoResetsUserState() async throws {
@@ -59,32 +43,19 @@ struct SessionStoreTests {
             refresher: authAPI,
             revoker: authAPI
         )
-        let cacheResetAction = CacheResetAction {
-            await recorder.record(.reset)
-        }
         let store = SessionStore(
             coordinator: coordinator,
             userStore: UserStore(),
             signInAPI: authAPI,
             oauthRedirectURI: "cloudecode://auth/callback"
         )
-        let worker = CacheResetWorker(
-            cacheResetAction: cacheResetAction,
-            authStatePublisher: store.authStatePublisher
-        )
-        worker.start()
         let startTask = Task { await store.start() }
-        defer {
-            startTask.cancel()
-            worker.stop()
-        }
+        defer { startTask.cancel() }
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
 
         _ = try? await coordinator.refresh()
         try await waitUntil { store.state == .signedOut }
-        try await waitUntil { await recorder.events.contains(.reset) }
-
-        #expect(await recorder.events == [.reset])
+        #expect(await recorder.events.isEmpty)
     }
 
     private static let session = Session(
@@ -163,7 +134,6 @@ private actor TestAuthAPI: SignInProviding, SessionRefreshing, SessionRevoking {
 
 private actor SignOutEventRecorder {
     enum Event: Equatable {
-        case reset
         case revoke
     }
 

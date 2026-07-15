@@ -98,11 +98,11 @@ final class SessionMessageStoreTests: XCTestCase {
         XCTAssertEqual(message.workEndedAt, Date(timeIntervalSince1970: 1_781_136_003))
     }
 
-    func testResetClearsMessagesAndLoadedSessionIndex() async throws {
+    func testDeleteAllClearsMessagesAndLoadedSessionIndex() async throws {
         let store = SessionMessageStore()
         try await store.replace(sessionId: "s1", with: [testSessionMessage("m1")])
 
-        store.reset()
+        try await store.deleteAll()
 
         XCTAssertTrue(store.loadedSessionIDs.isEmpty)
         let messages = try await store.messages(sessionId: "s1")

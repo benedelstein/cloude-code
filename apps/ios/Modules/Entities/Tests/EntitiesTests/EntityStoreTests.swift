@@ -157,16 +157,16 @@ final class EntityStoreTests: XCTestCase {
         }
     }
 
-    func testResetClearsMemoryWithoutDeletingDisk() async throws {
+    func testDeleteAllClearsMemoryAndDisk() async throws {
         let cache = try makeCache()
         try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
         let store = UserStore(cache: cache)
         _ = try await store.get(["u1"], scopes: [.memory, .disk])
 
-        store.reset()
+        try await store.deleteAll()
 
         XCTAssertNil(store["u1"])
         let persisted = try await cache.fetch(UserEntity.self, ids: ["u1"])
-        XCTAssertEqual(persisted.map(\.id), ["u1"])
+        XCTAssertTrue(persisted.isEmpty)
     }
 }

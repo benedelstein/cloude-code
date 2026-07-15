@@ -23,6 +23,7 @@ final class CacheResetWorker: Worker {
             .sink { [cacheResetAction] state in
                 guard state == .signedOut else { return }
                 Task { @MainActor in
+                    Logger.debug("resetting cache due to sign out")
                     do {
                         try await cacheResetAction()
                     } catch {

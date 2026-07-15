@@ -217,8 +217,10 @@ public final class EntityStore<M: EntityModel> {
         }
     }
 
-    /// Removes every canonical model held in memory without changing disk state.
-    public func reset() {
+    /// Removes every canonical model from memory and deletes its persisted table rows.
+    public func deleteAll() async throws {
         objectMap.removeAll()
+        guard let cache else { return }
+        try await cache.deleteAll(M.EntityType.self)
     }
 }

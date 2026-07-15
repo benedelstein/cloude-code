@@ -67,10 +67,4 @@ final class NotificationHandler: NotificationHandling {
         guard notificationTap == route else { return }
         notificationTap = nil
     }
-
-    /// Clears notification routing state for the previous authenticated user.
-    func reset() {
-        notificationTap = nil
-        delegate = nil
-    }
 }
