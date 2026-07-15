@@ -185,6 +185,34 @@ final class RepoEnvironmentsStoreTests: XCTestCase {
         }
         XCTAssertEqual(persistedUpdate, updatedOlder)
     }
+
+    func testResetClearsLoadedEnvironments() async throws {
+        let store = RepoEnvironmentsStore { repoId in
+            [testRepoEnvironment("e1", repoId: repoId)]
+        }
+        try await store.load(repoId: 1)
+
+        store.reset()
+
+        XCTAssertNil(store.environments(repoId: 1))
+    }
+
+    func testResetPreventsCancelledLoadFromRepopulatingMemory() async {
+        let gate = EnvironmentLoadGate()
+        let store = RepoEnvironmentsStore { _ in
+            await gate.response()
+        }
+        let loadTask = Task { try? await store.load(repoId: 1) }
+        while await !gate.didStart {
+            await Task.yield()
+        }
+
+        store.reset()
+        await gate.resume(with: [testRepoEnvironment("stale")])
+        await loadTask.value
+
+        XCTAssertNil(store.environments(repoId: 1))
+    }
 }
 
 /// Serves canned responses in order, repeating the last one.
@@ -197,6 +225,21 @@ private actor ResponseQueue {
 
     func next() -> [Domain.RepoEnvironment] {
         responses.count > 1 ? responses.removeFirst() : responses[0]
+    }
+}
+
+private actor EnvironmentLoadGate {
+    private(set) var didStart = false
+    private var continuation: CheckedContinuation<[Domain.RepoEnvironment], Never>?
+
+    func response() async -> [Domain.RepoEnvironment] {
+        didStart = true
+        return await withCheckedContinuation { continuation = $0 }
+    }
+
+    func resume(with environments: [Domain.RepoEnvironment]) {
+        continuation?.resume(returning: environments)
+        continuation = nil
     }
 }
 

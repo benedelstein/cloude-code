@@ -71,6 +71,16 @@ final class NewSessionPreferences {
         }
     }
 
+    /// Clears user-scoped draft selections when the authenticated user changes.
+    func reset() {
+        lastSelectedModel = nil
+        lastSelectedRepo = nil
+        for key in userDefaults.dictionaryRepresentation().keys
+            where key.hasPrefix(Constants.UserDefaults.lastEnvironmentIdPrefix) {
+            userDefaults.removeObject(forKey: key)
+        }
+    }
+
     private func environmentKey(repoId: Int) -> String {
         Constants.UserDefaults.lastEnvironmentIdPrefix + String(repoId)
     }

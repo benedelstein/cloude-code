@@ -56,6 +56,21 @@ final class CacheTests: XCTestCase {
         XCTAssertEqual(fetched.map(\.id), ["u2"])
     }
 
+    func testDeleteAllOnlyClearsTheRequestedEntityTable() async throws {
+        let cache = try makeCache()
+        let summary = testSessionSummary("s1")
+
+        try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
+        try await cache.put(SessionSummaryEntity.self, snapshots: [summary])
+
+        try await cache.deleteAll(UserEntity.self)
+
+        let users = try await cache.fetch(UserEntity.self, ids: ["u1"])
+        let summaries = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
+        XCTAssertTrue(users.isEmpty)
+        XCTAssertEqual(summaries, [summary])
+    }
+
     func testResetClearsAllRows() async throws {
         let cache = try makeCache()
 

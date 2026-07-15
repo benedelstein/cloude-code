@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private let cache: Cache
     private let notificationRegistrationService: NotificationRegistrationService
     private let sessionStore: SessionStore
+    private let workers: [any Working]
     private var launchTask: Task<Void, Never>?
 
     override init() {
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         cache = component.cache
         notificationRegistrationService = component.notificationRegistrationService
         sessionStore = component.sessionStore
+        workers = [component.cacheResetWorker]
 
         super.init()
     }
@@ -25,6 +27,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func stop() {
         launchTask?.cancel()
         launchTask = nil
+        workers.stopAll()
         sessionStore.stop()
     }
 
@@ -36,6 +39,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Logger.info("App launched")
         // set up notification delegates.
         notificationRegistrationService.start()
+        workers.startAll()
         launchTask = Task { @MainActor in
             do {
                 try await cache.start()

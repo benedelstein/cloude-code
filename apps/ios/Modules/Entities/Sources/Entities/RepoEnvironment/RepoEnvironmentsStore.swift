@@ -11,6 +11,7 @@ public final class RepoEnvironmentsStore {
     @ObservationIgnored private let entityStore: EntityStore<RepoEnvironmentModel>
     @ObservationIgnored private let listAPI: @Sendable (Int) async throws -> [Domain.RepoEnvironment]
     @ObservationIgnored private var loadTasksByRepoID: [Int: Task<Void, Error>] = [:]
+    @ObservationIgnored private var loadGeneration = 0
 
     /// Environments per repo id. `nil` for a repo means nothing has been
     /// served yet from either disk or network (drive loading UI off this).
@@ -47,6 +48,17 @@ public final class RepoEnvironmentsStore {
         entityStore.putSnapshotsToDisk([environment])
     }
 
+    /// Clears all in-memory environments and cancels in-flight loads.
+    public func reset() {
+        loadGeneration += 1
+        for task in loadTasksByRepoID.values {
+            task.cancel()
+        }
+        loadTasksByRepoID.removeAll()
+        environmentsByRepoID.removeAll()
+        entityStore.reset()
+    }
+
     /// Loads a repo's environments, reusing an in-memory list unless a refresh
     /// is explicitly requested. A cache miss serves disk first, then refreshes
     /// from the network, upserts fresh rows, and prunes stale ones.
@@ -61,29 +73,40 @@ public final class RepoEnvironmentsStore {
             return
         }
 
+        let generation = loadGeneration
         let task = Task { [weak self] in
-            defer { self?.loadTasksByRepoID[repoId] = nil }
-            try await self?.performLoad(repoId: repoId)
+            defer {
+                if self?.loadGeneration == generation {
+                    self?.loadTasksByRepoID[repoId] = nil
+                }
+            }
+            try await self?.performLoad(repoId: repoId, generation: generation)
         }
         loadTasksByRepoID[repoId] = task
         try await task.value
     }
 
-    private func performLoad(repoId: Int) async throws {
+    private func performLoad(repoId: Int, generation: Int) async throws {
         if environmentsByRepoID[repoId] == nil {
-            let cached = try? await entityStore.getFromDisk(
+            let cached = try? await entityStore.snapshotsFromDisk(
                 predicate: #Predicate<RepoEnvironmentEntity> { $0.repoId == repoId },
                 sortBy: [
                     SortDescriptor(\.updatedAt, order: .reverse),
                     SortDescriptor(\.name)
                 ]
             )
+            guard loadGeneration == generation, !Task.isCancelled else {
+                throw CancellationError()
+            }
             if let cached, !cached.isEmpty {
-                environmentsByRepoID[repoId] = Self.sorted(cached.map(\.snapshot))
+                environmentsByRepoID[repoId] = Self.sorted(cached)
             }
         }
 
         let fresh = try await listAPI(repoId)
+        guard loadGeneration == generation, !Task.isCancelled else {
+            throw CancellationError()
+        }
         let freshIDs = Set(fresh.map(\.id))
         let staleIDs = Set((environmentsByRepoID[repoId] ?? []).map(\.id)).subtracting(freshIDs)
         entityStore.delete(staleIDs)

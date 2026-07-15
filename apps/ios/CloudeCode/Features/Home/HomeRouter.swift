@@ -60,6 +60,13 @@ final class HomeRouter: NotificationHandlerDelegate {
         }
     }
 
+    /// Clears navigation state that belongs to the authenticated user.
+    func reset() {
+        navigationRequestID += 1
+        path.removeAll()
+        createdSessionIDs.removeAll()
+    }
+
     /// Suppresses foreground notifications for the currently visible session.
     func notificationHandler(
         _ handler: NotificationHandler,

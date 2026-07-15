@@ -48,6 +48,7 @@ public actor UserSessionsSocket {
     public nonisolated let events: AsyncStream<UserSessionsSocketEvent>
 
     private let connection: WebSocketConnection
+    private let tokenCache: WebSocketTokenCache
     private let continuation: AsyncStream<UserSessionsSocketEvent>.Continuation
     private var pumpTask: Task<Void, Never>?
 
@@ -55,6 +56,7 @@ public actor UserSessionsSocket {
         baseURL: URL,
         tokenCache: WebSocketTokenCache
     ) {
+        self.tokenCache = tokenCache
         connection = WebSocketConnection {
             let token = try await tokenCache.token()
             return try WebSocketURLBuilder.url(baseURL: baseURL, path: "sessions/updates", token: token.token)
@@ -79,6 +81,12 @@ public actor UserSessionsSocket {
         await connection.disconnect()
         pumpTask?.cancel()
         pumpTask = nil
+    }
+
+    /// Disconnects and clears the user-bound WebSocket upgrade token.
+    public func reset() async {
+        await disconnect()
+        await tokenCache.reset()
     }
 
     private static func decode(_ event: WebSocketTransportEvent) -> UserSessionsSocketEvent? {

@@ -87,6 +87,13 @@ public extension Cache {
             try context.delete(model: E.self, where: predicate)
         }
     }
+
+    /// Deletes every persisted row for one entity type without affecting other tables.
+    func deleteAll<E: Entity>(_ type: E.Type) async throws {
+        try await runBackgroundTask { context in
+            try E.deleteAll(in: context)
+        }
+    }
 }
 
 public extension Entity {

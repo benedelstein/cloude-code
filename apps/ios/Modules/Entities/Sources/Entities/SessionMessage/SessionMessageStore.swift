@@ -140,6 +140,13 @@ public final class SessionMessageStore {
         }
     }
 
+    /// Clears every in-memory message and session index without changing disk state.
+    public func reset() {
+        entityStore.reset()
+        loadedSessionIDs.removeAll()
+        messageIDsBySessionID.removeAll()
+    }
+
     private func modelsFromMemory(sessionId: String) -> [SessionMessageWrapper]? {
         guard loadedSessionIDs.contains(sessionId),
               let ids = messageIDsBySessionID[sessionId] else {

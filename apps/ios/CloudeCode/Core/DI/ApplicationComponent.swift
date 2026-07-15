@@ -139,6 +139,32 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    @MainActor var cacheResetWorker: CacheResetWorker {
+        shared {
+            CacheResetWorker(
+                cacheResetAction: cacheResetAction,
+                authStatePublisher: sessionStore.authStatePublisher
+            )
+        }
+    }
+
+    @MainActor var cacheResetAction: CacheResetAction {
+        shared {
+            CacheResetAction(
+                cache: cache,
+                userStore: userStore,
+                sessionSummaryStore: sessionSummaryStore,
+                repoEnvironmentsStore: repoEnvironmentsStore,
+                sessionMessageStore: homeComponent.sessionMessageStore,
+                modelCatalogStore: homeComponent.modelCatalogStore,
+                preferences: newSessionPreferences,
+                homeViewModel: homeComponent.viewModel,
+                homeRouter: homeComponent.router,
+                notificationHandler: notificationHandler
+            )
+        }
+    }
+
     @MainActor var notificationRegistrationService: NotificationRegistrationService {
         shared {
             NotificationRegistrationService(

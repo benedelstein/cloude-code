@@ -78,6 +78,19 @@ final class HomeViewModel {
         }
     }
 
+    /// Clears lifecycle and loading state that belongs to the authenticated user.
+    func reset() async {
+        socketTask?.cancel()
+        socketTask = nil
+        didStart = false
+        hasConnected = false
+        isLoading = false
+        hasLoaded = false
+        errorMessage = nil
+        nextRepoCursor = nil
+        await userSessionsSocket.reset()
+    }
+
     func refresh(showLoading: Bool = false) async {
         if showLoading {
             isLoading = true

@@ -86,7 +86,8 @@ final class NewSessionDraft {
                     fullName: $0.fullName,
                     defaultBranch: $0.defaultBranch
                 ),
-                branch: $0.defaultBranch
+                branch: $0.defaultBranch,
+                environmentId: preferences.lastEnvironmentId(repoId: $0.id)
             )
         }
     }
@@ -145,8 +146,12 @@ final class NewSessionDraft {
     /// Selects a repository and branch, resetting to the repository default when no branch is supplied.
     func selectRepo(_ repo: Repo, branch: String? = nil) {
         // Re-selecting the same repo (e.g. refreshing a restored selection)
-        // keeps its resolved environment; a different repo starts over.
-        let environmentId = repoSelection?.repo.id == repo.id ? repoSelection?.environmentId : nil
+        // keeps its resolved environment. A different repo seeds its persisted
+        // selection immediately so a cache-first load cannot briefly submit
+        // with no environment while the network refresh is still in flight.
+        let environmentId = repoSelection?.repo.id == repo.id
+            ? repoSelection?.environmentId
+            : preferences.lastEnvironmentId(repoId: repo.id)
         repoSelection = RepoSelection(
             repo: SelectedRepo(
                 id: repo.id,

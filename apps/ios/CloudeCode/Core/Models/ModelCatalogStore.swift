@@ -14,6 +14,7 @@ final class ModelCatalogStore {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadGeneration = 0
 
     init(modelsAPI: any ModelsAPIProviding) {
         self.modelsAPI = modelsAPI
@@ -30,18 +31,32 @@ final class ModelCatalogStore {
 
         isLoading = true
         errorMessage = nil
+        let generation = loadGeneration
         let task = Task {
             do {
                 let response = try await modelsAPI.models()
+                guard generation == loadGeneration, !Task.isCancelled else { return }
                 catalog = ModelsResponse(providers: Self.sortedProviders(response.providers))
             } catch {
+                guard generation == loadGeneration, !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
             }
         }
         loadTask = task
         await task.value
+        guard generation == loadGeneration else { return }
         loadTask = nil
         isLoading = false
+    }
+
+    /// Clears the user-scoped catalog and cancels an in-flight load.
+    func reset() {
+        loadGeneration += 1
+        loadTask?.cancel()
+        loadTask = nil
+        catalog = nil
+        isLoading = false
+        errorMessage = nil
     }
 
     /// Sorted once at load so views never sort per render: selectable providers
