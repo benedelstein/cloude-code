@@ -125,6 +125,7 @@ struct HomeView: View {
             if viewModel.isLoading {
                 // todo loading rows
                 ProgressView()
+                    .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
             } else if viewModel.isEmpty && viewModel.hasLoaded {
                 EmptyStateView(

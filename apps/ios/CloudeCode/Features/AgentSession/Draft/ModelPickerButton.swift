@@ -18,8 +18,10 @@ struct ModelPickerButton: View {
     var body: some View {
         Menu {
             Section("Model") {
-                Button(displayedModel?.displayName ?? "Select a model") {
+                Button {
                     isSheetPresented = true
+                } label: {
+                    Text(displayedModel?.displayName ?? "Select a model")
                 }
             }
 

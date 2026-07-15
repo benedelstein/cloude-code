@@ -90,8 +90,8 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.repoEnvironmentsStore
     }
 
-    var webBaseURL: URL {
-        applicationComponent.webBaseURL
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
+        applicationComponent.repoEnvironmentsAPI
     }
 
     @MainActor
@@ -130,6 +130,29 @@ private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) 
     )
 }
 
+private final class EnvironmentEditorDependencyProvider: EnvironmentEditorDependency {
+    private let agentSessionComponent: AgentSessionComponent
+
+    init(agentSessionComponent: AgentSessionComponent) {
+        self.agentSessionComponent = agentSessionComponent
+    }
+
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
+        agentSessionComponent.repoEnvironmentsAPI
+    }
+
+    @MainActor
+    var repoEnvironmentsStore: RepoEnvironmentsStore {
+        agentSessionComponent.repoEnvironmentsStore
+    }
+}
+
+private func environmentEditorDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
+    EnvironmentEditorDependencyProvider(
+        agentSessionComponent: parent1(component) as! AgentSessionComponent
+    )
+}
+
 #endif
 
 private func factoryEmptyDependencyProvider(_ component: NeedleFoundation.Scope) -> AnyObject {
@@ -151,6 +174,10 @@ public func registerProviderFactories() {
     registerProviderFactory(
         "^->RootComponent->ApplicationComponent->HomeComponent->AgentSessionComponent",
         agentSessionDependencyFactory
+    )
+    registerProviderFactory(
+        "^->RootComponent->ApplicationComponent->HomeComponent->AgentSessionComponent->EnvironmentEditorComponent",
+        environmentEditorDependencyFactory
     )
     #endif
 }

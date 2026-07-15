@@ -9,6 +9,12 @@ public final class RepoEnvironmentEntity: Entity {
     var repoId: Int
     var name: String
     var updatedAt: String
+    /// Encoded full domain snapshot. The default lets existing schemas open
+    /// before the per-entity cache version clears legacy partial rows.
+    var snapshotData: Data = Data()
+
+    /// Clears rows written before full environment snapshots were persisted.
+    public static var cacheVersion: Int { 2 }
 
     /// Creates a persistence row from a repo environment snapshot.
     public init(_ snapshot: Domain.RepoEnvironment) {
@@ -16,6 +22,7 @@ public final class RepoEnvironmentEntity: Entity {
         repoId = snapshot.repoId
         name = snapshot.name
         updatedAt = snapshot.updatedAt
+        snapshotData = Self.encode(snapshot)
     }
 
     /// Updates this persistence row from a repo environment snapshot.
@@ -23,11 +30,12 @@ public final class RepoEnvironmentEntity: Entity {
         repoId = snapshot.repoId
         name = snapshot.name
         updatedAt = snapshot.updatedAt
+        snapshotData = Self.encode(snapshot)
     }
 
     /// Builds a domain snapshot from this persistence row.
     public func makeSnapshot() throws -> Domain.RepoEnvironment {
-        Domain.RepoEnvironment(id: id, repoId: repoId, name: name, updatedAt: updatedAt)
+        try JSONDecoder().decode(Domain.RepoEnvironment.self, from: snapshotData)
     }
 
     public static func singleItemPredicate(_ id: String) -> Predicate<RepoEnvironmentEntity> {
@@ -36,5 +44,13 @@ public final class RepoEnvironmentEntity: Entity {
 
     public static func multiItemPredicate(_ ids: Set<String>) -> Predicate<RepoEnvironmentEntity> {
         #Predicate { ids.contains($0.id) }
+    }
+
+    private static func encode(_ snapshot: Domain.RepoEnvironment) -> Data {
+        do {
+            return try JSONEncoder().encode(snapshot)
+        } catch {
+            preconditionFailure("failed to encode repo environment cache row: \(error)")
+        }
     }
 }

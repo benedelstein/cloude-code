@@ -30,12 +30,21 @@ func testSessionSummary(
     )
 }
 
-func testRepoEnvironment(_ id: String, repoId: Int = 1, name: String? = nil) -> Domain.RepoEnvironment {
+func testRepoEnvironment(
+    _ id: String,
+    repoId: Int = 1,
+    name: String? = nil,
+    updatedAt: String = "2026-06-11T00:00:00.000Z"
+) -> Domain.RepoEnvironment {
     Domain.RepoEnvironment(
         id: id,
         repoId: repoId,
         name: name ?? "env-\(id)",
-        updatedAt: "2026-06-11T00:00:00.000Z"
+        network: .custom(extraAllowlist: ["example.com"], includeDefaultAllowlist: true),
+        plainEnvVars: ["API_URL": "https://example.com"],
+        startupScript: "pnpm install",
+        createdAt: "2026-06-10T00:00:00.000Z",
+        updatedAt: updatedAt
     )
 }
 

@@ -32,16 +32,6 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         return identifier
     }
 
-    /// Web app origin used for flows without native UI (e.g. environment creation).
-    var webBaseURL: URL {
-        // Injected per scheme via Config/*.xcconfig -> Info.plist.
-        guard let string = Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String,
-              let url = URL(string: string) else {
-            preconditionFailure("missing or invalid WEB_BASE_URL in Info.plist")
-        }
-        return url
-    }
-
     private var oauthRedirectURI: String {
         // Injected per scheme via Config/*.xcconfig -> Info.plist.
         guard let uri = Bundle.main.object(forInfoDictionaryKey: "OAUTH_REDIRECT_URI") as? String,
@@ -127,9 +117,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
     @MainActor var repoEnvironmentsStore: RepoEnvironmentsStore {
         shared {
             RepoEnvironmentsStore(cache: cache) { [repoEnvironmentsAPI] repoId in
-                try await repoEnvironmentsAPI.listEnvironments(repoId: repoId).environments.map {
-                    Domain.RepoEnvironment(id: $0.id, repoId: $0.repoId, name: $0.name, updatedAt: $0.updatedAt)
-                }
+                try await repoEnvironmentsAPI.listEnvironments(repoId: repoId)
             }
         }
     }

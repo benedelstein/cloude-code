@@ -26,7 +26,6 @@ final class NewSessionDraft {
     private let reposAPI: any ReposAPIProviding
     private let environmentsStore: RepoEnvironmentsStore
     private let preferences: NewSessionPreferences
-    private let webBaseURL: URL
     private var branchesByRepoID: [Int: [Branch]] = [:]
     /// Repos whose environment load failed with nothing cached; treated as
     /// empty so the picker doesn't stay in its loading state forever.
@@ -70,35 +69,16 @@ final class NewSessionDraft {
         return environments?.first { $0.id == selectedEnvironmentId }
     }
 
-    /// Web URL for creating an environment for the selected repo; environment
-    /// creation is not supported natively yet.
-    var createEnvironmentURL: URL? {
-        guard let repo = selectedRepo,
-              var components = URLComponents(
-                  url: webBaseURL.appending(path: "settings/environments/create"),
-                  resolvingAgainstBaseURL: false
-              ) else {
-            return nil
-        }
-        components.queryItems = [
-            URLQueryItem(name: "repoId", value: String(repo.id)),
-            URLQueryItem(name: "repoFullName", value: repo.fullName)
-        ]
-        return components.url
-    }
-
     init(
         sessionsAPI: any SessionsAPIProviding,
         reposAPI: any ReposAPIProviding,
         environmentsStore: RepoEnvironmentsStore,
-        preferences: NewSessionPreferences,
-        webBaseURL: URL
+        preferences: NewSessionPreferences
     ) {
         self.sessionsAPI = sessionsAPI
         self.reposAPI = reposAPI
         self.environmentsStore = environmentsStore
         self.preferences = preferences
-        self.webBaseURL = webBaseURL
         repoSelection = preferences.lastSelectedRepo.map {
             RepoSelection(
                 repo: SelectedRepo(
@@ -193,14 +173,14 @@ final class NewSessionDraft {
         preferences.persistEnvironmentId(environmentId, repoId: repo.id)
     }
 
-    /// Loads environments for the selected repo (cache-first, then server
-    /// refresh) and resolves the draft's environment selection.
-    func loadEnvironments() async {
+    /// Loads environments for the selected repo and resolves the draft's
+    /// selection. Reuses the in-memory list unless a refresh is requested.
+    func loadEnvironments(forceRefresh: Bool = false) async {
         guard let repo = selectedRepo else {
             return
         }
         do {
-            try await environmentsStore.load(repoId: repo.id)
+            try await environmentsStore.load(repoId: repo.id, forceRefresh: forceRefresh)
             environmentsUnavailableRepoIDs.remove(repo.id)
         } catch {
             if environmentsStore.environments(repoId: repo.id) == nil {

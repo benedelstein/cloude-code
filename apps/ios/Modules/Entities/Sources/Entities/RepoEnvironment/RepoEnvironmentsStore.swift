@@ -34,10 +34,28 @@ public final class RepoEnvironmentsStore {
         environmentsByRepoID[repoId]
     }
 
-    /// Loads a repo's environments: disk cache first for instant display, then
-    /// a network refresh that upserts fresh rows and prunes stale ones.
+    /// Inserts or replaces a canonical environment in memory immediately and
+    /// schedules the same snapshot for persistence.
+    public func upsert(_ environment: Domain.RepoEnvironment) {
+        var environments = environmentsByRepoID[environment.repoId] ?? []
+        if let index = environments.firstIndex(where: { $0.id == environment.id }) {
+            environments[index] = environment
+        } else {
+            environments.append(environment)
+        }
+        environmentsByRepoID[environment.repoId] = Self.sorted(environments)
+        entityStore.putSnapshotsToDisk([environment])
+    }
+
+    /// Loads a repo's environments, reusing an in-memory list unless a refresh
+    /// is explicitly requested. A cache miss serves disk first, then refreshes
+    /// from the network, upserts fresh rows, and prunes stale ones.
     /// Concurrent calls for the same repo share one in-flight load.
-    public func load(repoId: Int) async throws {
+    public func load(repoId: Int, forceRefresh: Bool = false) async throws {
+        if !forceRefresh, environmentsByRepoID[repoId] != nil {
+            return
+        }
+
         if let task = loadTasksByRepoID[repoId] {
             try await task.value
             return
@@ -55,10 +73,13 @@ public final class RepoEnvironmentsStore {
         if environmentsByRepoID[repoId] == nil {
             let cached = try? await entityStore.getFromDisk(
                 predicate: #Predicate<RepoEnvironmentEntity> { $0.repoId == repoId },
-                sortBy: [SortDescriptor(\.name)]
+                sortBy: [
+                    SortDescriptor(\.updatedAt, order: .reverse),
+                    SortDescriptor(\.name)
+                ]
             )
             if let cached, !cached.isEmpty {
-                environmentsByRepoID[repoId] = cached.map(\.snapshot)
+                environmentsByRepoID[repoId] = Self.sorted(cached.map(\.snapshot))
             }
         }
 
@@ -67,6 +88,17 @@ public final class RepoEnvironmentsStore {
         let staleIDs = Set((environmentsByRepoID[repoId] ?? []).map(\.id)).subtracting(freshIDs)
         entityStore.delete(staleIDs)
         entityStore.putSnapshotsToDisk(fresh)
-        environmentsByRepoID[repoId] = fresh
+        environmentsByRepoID[repoId] = Self.sorted(fresh)
+    }
+
+    private static func sorted(
+        _ environments: [Domain.RepoEnvironment]
+    ) -> [Domain.RepoEnvironment] {
+        environments.sorted { lhs, rhs in
+            if lhs.updatedAt != rhs.updatedAt {
+                return lhs.updatedAt > rhs.updatedAt
+            }
+            return lhs.name < rhs.name
+        }
     }
 }

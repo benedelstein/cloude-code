@@ -13,6 +13,9 @@
     "Add images" : {
 
     },
+    "Allowed domains" : {
+
+    },
     "Archive" : {
 
     },
@@ -34,6 +37,9 @@
     "Collapsed" : {
 
     },
+    "Coming soon" : {
+
+    },
     "Complete" : {
 
     },
@@ -49,10 +55,22 @@
     "Copy response" : {
 
     },
+    "Couldn’t Load Allowlist" : {
+
+    },
+    "Couldn’t save environment" : {
+
+    },
+    "Create environment" : {
+
+    },
     "Dark" : {
 
     },
     "default" : {
+
+    },
+    "Default Allowlist" : {
 
     },
     "Delete" : {
@@ -108,6 +126,21 @@
     "Effort Level" : {
 
     },
+    "Enter one hostname per line, such as api.example.com or *.example.com." : {
+
+    },
+    "Environment editor is unavailable." : {
+
+    },
+    "Environment is no longer available." : {
+
+    },
+    "Environment name" : {
+
+    },
+    "Environment variables" : {
+
+    },
     "Exit %lld" : {
 
     },
@@ -135,7 +168,16 @@
     "Image upload failed" : {
 
     },
+    "Include default allowlist" : {
+
+    },
+    "Internet access poses security risks. Limit access to known safe domains when possible." : {
+
+    },
     "Light" : {
+
+    },
+    "Loading allowlist…" : {
 
     },
     "Logs" : {
@@ -216,10 +258,22 @@
     "Model catalog is unavailable." : {
 
     },
+    "Network" : {
+
+    },
+    "Network access" : {
+
+    },
+    "New" : {
+
+    },
     "New session" : {
 
     },
     "No branches found" : {
+
+    },
+    "No Environments" : {
 
     },
     "No logs yet" : {
@@ -235,6 +289,9 @@
 
     },
     "No sessions" : {
+
+    },
+    "OK" : {
 
     },
     "Photos" : {
@@ -359,6 +416,9 @@
     "Repository" : {
 
     },
+    "Repository scope cannot be changed after creation." : {
+
+    },
     "Repository unavailable" : {
 
     },
@@ -413,6 +473,9 @@
           }
         }
       }
+    },
+    "Save environment" : {
+
     },
     "Search %@" : {
       "comment" : "Title for a code search tool action"
@@ -489,6 +552,9 @@
         }
       }
     },
+    "Secrets" : {
+
+    },
     "Select an effort level" : {
 
     },
@@ -496,6 +562,12 @@
 
     },
     "Select Base Branch" : {
+
+    },
+    "Select environment" : {
+
+    },
+    "Select Environment" : {
 
     },
     "Select model" : {
@@ -549,6 +621,9 @@
     "Signs out of Cloude Code on this device." : {
 
     },
+    "Startup script" : {
+
+    },
     "Streaming" : {
 
     },
@@ -586,6 +661,9 @@
 
     },
     "Try a different search." : {
+
+    },
+    "Try Again" : {
 
     },
     "Unread message" : {
@@ -646,6 +724,9 @@
         }
       }
     },
+    "Use KEY=value, one per line. Values are stored in plaintext; do not store secrets here." : {
+
+    },
     "Used %lld tools" : {
       "comment" : "Grouped tool title. %lld is the number of completed generic tool actions.",
       "localizations" : {
@@ -691,6 +772,9 @@
           }
         }
       }
+    },
+    "View on web" : {
+
     },
     "Worked" : {
 

@@ -14,7 +14,7 @@ protocol AgentSessionDependency: Dependency {
     @MainActor
     var repoEnvironmentsStore: RepoEnvironmentsStore { get }
 
-    var webBaseURL: URL { get }
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding { get }
 
     @MainActor
     var modelCatalogStore: ModelCatalogStore { get }
@@ -110,6 +110,28 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
         dependency.fetchImageAction
     }
 
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
+        dependency.repoEnvironmentsAPI
+    }
+
+    @MainActor
+    var repoEnvironmentsStore: RepoEnvironmentsStore {
+        dependency.repoEnvironmentsStore
+    }
+
+    func makeEnvironmentEditorComponent(
+        mode: EnvironmentEditorViewModel.Mode
+    ) -> EnvironmentEditorComponent {
+        EnvironmentEditorComponent(parent: self, mode: mode)
+    }
+
+    @MainActor
+    var environmentEditorBuilder: EnvironmentEditorBuilder {
+        EnvironmentEditorBuilder { [self] mode in
+            makeEnvironmentEditorComponent(mode: mode)
+        }
+    }
+
     @MainActor
     private var context: AgentSessionViewModel.Context {
         if let session {
@@ -125,8 +147,7 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
                 environmentsStore: dependency.repoEnvironmentsStore,
-                preferences: dependency.newSessionPreferences,
-                webBaseURL: dependency.webBaseURL
+                preferences: dependency.newSessionPreferences
             )
         }
     }
@@ -148,5 +169,6 @@ struct AgentSessionBuilder {
         let component = makeComponent(session)
         return AgentSessionView(store: component.store)
             .environment(\.fetchImageAction, component.fetchImageAction)
+            .environment(\.environmentEditorBuilder, component.environmentEditorBuilder)
     }
 }

@@ -22,6 +22,7 @@ struct PickerChipLabel: View {
                 .foregroundStyle(theme.labelColor)
                 .lineLimit(1)
                 .frame(maxWidth: maxTitleWidth, alignment: .leading)
+                .fixedSize()
         }
         .padding(.horizontal, 12)
         .frame(height: 36)

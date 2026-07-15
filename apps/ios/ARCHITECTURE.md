@@ -1,6 +1,6 @@
 # Architecture
 
-CloudeCode is the SwiftUI iOS client for cloude-code. It talks to the API server (`services/api-server`) over HTTP and WebSocket, using API types generated from the Zod schemas in `packages/shared`.
+CloudeCode is the SwiftUI iOS client for cloude-code. It talks to the API server (`services/api-server`) over HTTP and WebSocket, using API types generated from the Zod schemas in `packages/api-contract`.
 
 The app is split into an app target (UI, features, DI wiring) and local Swift packages under `Modules/` that provide compile-time isolation for networking, domain types, and persistence. Dependencies are wired with Needle and flow through child components per feature.
 
@@ -19,7 +19,7 @@ CloudeCode
 Local Swift packages, from lowest layer to highest:
 
 - **Domain** (`Modules/Domain/`) - Pure, stateless, `Sendable` domain structs. Zero dependencies. This is the vocabulary the rest of the app speaks.
-- **CoreAPI** (`Modules/CoreAPI/`) - Generated API wire types. `Sources/CoreAPI/Generated/` is transpiled from the Zod schemas in `packages/shared` by `packages/shared/codegen`; never edit generated files by hand. To change a type: edit the schema in `packages/shared/src/types/`, run `pnpm --filter @repo/shared codegen`, and commit both. `Sources/CoreAPI/Support/` (`JSONValue`, `ISODateTime`) is hand-written. Full guide: `docs/api-type-codegen.md` (repo root).
+- **CoreAPI** (`Modules/CoreAPI/`) - Generated API wire types. `Sources/CoreAPI/Generated/` is transpiled from the Zod schemas in `packages/api-contract` by `packages/api-contract/codegen`; never edit generated files by hand. To change a type: edit the schema in `packages/api-contract/src/`, run `pnpm --filter @repo/api-contract codegen`, and commit both. `Sources/CoreAPI/Support/` (`JSONValue`, `ISODateTime`) is hand-written. Full guide: `docs/api-type-codegen.md` (repo root).
 - **API** (`Modules/API/`) - Transport layer: `APIClient`, `APIRequest`, auth token plumbing, and per-surface APIs. Depends on CoreAPI and Domain. Maps CoreAPI wire types to Domain types at the boundary; wire types do not escape this package.
 - **Entities** (`Modules/Entities/`) - Observable state and persistence. `@MainActor` observable model classes (reference identity, `update(from:)` merge) plus the generic identity-mapped `EntityStore<Model>`. `Persistence/` holds `Entity`-conforming SwiftData `@Model` rows (versioned schema + migration plan in `ModelContainerFactory`) confined to `Cache`'s background model actor, whose public API speaks Domain structs. Depends on Domain only.
 
@@ -40,7 +40,7 @@ Isolated utility modules should be placed in a local swift package, if possible.
 
 ```
 Domain          (no dependencies)
-CoreAPI         (no dependencies; generated from packages/shared)
+CoreAPI         (no dependencies; generated from packages/api-contract)
 API             → CoreAPI, Domain, SwiftAISDK
 Entities        → Domain
 CloudeCode app  → API, Domain, Entities (+ Needle)
