@@ -1,4 +1,5 @@
 import API
+import Domain
 import Entities
 import Foundation
 import NeedleFoundation
@@ -107,6 +108,20 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
+        shared {
+            RepoEnvironmentsAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
+    @MainActor var repoEnvironmentsStore: RepoEnvironmentsStore {
+        shared {
+            RepoEnvironmentsStore(cache: cache) { [repoEnvironmentsAPI] repoId in
+                try await repoEnvironmentsAPI.listEnvironments(repoId: repoId)
+            }
+        }
+    }
+
     var fetchImageAction: any FetchImageAction {
         AuthenticatedFetchImageAction(apiBaseURL: apiBaseURL) { [tokenCoordinator] in
             try await tokenCoordinator.bearerHeaders()
@@ -120,6 +135,27 @@ final class ApplicationComponent: Component<ApplicationDependency> {
                 userStore: userStore,
                 signInAPI: unauthenticatedAuthAPI,
                 oauthRedirectURI: oauthRedirectURI
+            )
+        }
+    }
+
+    @MainActor var cacheResetWorker: CacheResetWorker {
+        shared {
+            CacheResetWorker(
+                cacheResetAction: cacheResetAction,
+                didSignOutPublisher: sessionStore.didSignOutPublisher
+            )
+        }
+    }
+
+    @MainActor var cacheResetAction: CacheResetAction {
+        shared {
+            CacheResetAction(
+                userStore: userStore,
+                sessionSummaryStore: sessionSummaryStore,
+                sessionMessageStore: homeComponent.sessionMessageStore,
+                modelCatalogStore: homeComponent.modelCatalogStore,
+                repoEnvironmentsStore: repoEnvironmentsStore
             )
         }
     }

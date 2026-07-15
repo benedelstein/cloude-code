@@ -156,4 +156,17 @@ final class EntityStoreTests: XCTestCase {
             return snapshots.isEmpty ? true : nil
         }
     }
+
+    func testDeleteAllClearsMemoryAndDisk() async throws {
+        let cache = try makeCache()
+        try await cache.put(UserEntity.self, snapshots: [testUser("u1")])
+        let store = UserStore(cache: cache)
+        _ = try await store.get(["u1"], scopes: [.memory, .disk])
+
+        try await store.deleteAll()
+
+        XCTAssertNil(store["u1"])
+        let persisted = try await cache.fetch(UserEntity.self, ids: ["u1"])
+        XCTAssertTrue(persisted.isEmpty)
+    }
 }

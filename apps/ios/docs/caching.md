@@ -29,6 +29,18 @@ models never cross actor boundaries as data. `EntityStore<Model>` is the merge p
 Stores are then shared dependencies, for example `UserStore` and
 `SessionSummaryStore`.
 
+Because these dependencies live for the application lifetime,
+`CacheResetWorker` observes `SessionStore.didSignOutPublisher` and invokes
+`CacheResetAction` when an existing session ends. This covers both explicit
+sign-out and terminal authentication failures, including a rejected refresh
+during restore, without clearing caches on an ordinary signed-out launch or
+coupling `SessionStore` to cache ownership. The action clears user-scoped SwiftData
+tables and other cache stores only; it does not reset UI state or user
+preferences.
+Entity stores expose `deleteAll()` as the table boundary, clearing their
+identity maps and persisted rows together so callers do not access `Cache`
+directly.
+
 `EntityStore` fetches in this order:
 
 1. Memory: return canonical `EntityModel` instances already in `objectMap`.

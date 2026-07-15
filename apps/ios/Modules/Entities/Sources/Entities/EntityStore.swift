@@ -81,6 +81,21 @@ public final class EntityStore<M: EntityModel> {
         return putMemory(snapshots)
     }
 
+    /// Fetches snapshots from disk without inserting them into the in-memory identity map.
+    public func snapshotsFromDisk(
+        predicate: Predicate<M.EntityType>? = nil,
+        sortBy: [SortDescriptor<M.EntityType>] = [],
+        limit: Int? = nil
+    ) async throws -> [Snapshot] {
+        guard let cache else { return [] }
+        return try await cache.fetch(
+            M.EntityType.self,
+            predicate: predicate,
+            sortBy: sortBy,
+            limit: limit
+        )
+    }
+
     /// Loads all cached rows for this entity into the identity map.
     @discardableResult
     public func load() async throws -> [M] {
@@ -200,5 +215,12 @@ public final class EntityStore<M: EntityModel> {
         for id in ids {
             objectMap.removeValue(forKey: id)
         }
+    }
+
+    /// Removes every canonical model from memory and deletes its persisted table rows.
+    public func deleteAll() async throws {
+        objectMap.removeAll()
+        guard let cache else { return }
+        try await cache.deleteAll(M.EntityType.self)
     }
 }

@@ -28,7 +28,7 @@ final class SessionStore {
 
     private(set) var state: State = .loading {
         didSet {
-            authUserSubject.send(state.authUserId)
+            authStateSubject.send(state)
         }
     }
     private(set) var user: UserModel?
@@ -38,10 +38,22 @@ final class SessionStore {
     private let userStore: UserStore
     private let signInAPI: any SignInProviding
     private let oauthRedirectURI: String
-    private let authUserSubject = CurrentValueSubject<String?, Never>(nil)
+    private let authStateSubject = CurrentValueSubject<State, Never>(.loading)
+    private let didSignOutSubject = PassthroughSubject<Void, Never>()
+
+    var authStatePublisher: AnyPublisher<State, Never> {
+        authStateSubject.eraseToAnyPublisher()
+    }
 
     var authUserPublisher: AnyPublisher<String?, Never> {
-        authUserSubject.eraseToAnyPublisher()
+        authStateSubject
+            .map(\.authUserId)
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    var didSignOutPublisher: AnyPublisher<Void, Never> {
+        didSignOutSubject.eraseToAnyPublisher()
     }
 
     init(
@@ -64,7 +76,7 @@ final class SessionStore {
             user = try? await userStore.get([session.userId], scopes: .all).first
         } else {
             Logger.debug("No stored session; signed out")
-            state = .signedOut
+            transitionToSignedOut()
         }
 
         for await event in coordinator.events {
@@ -75,8 +87,8 @@ final class SessionStore {
                 user = try? await userStore.get([session.userId], scopes: .all).first
             case .signedOut:
                 Logger.debug("Auth event: signedOut")
-                user = nil
-                state = .signedOut
+                transitionToSignedOut()
+                didSignOutSubject.send()
             case .refreshed:
                 Logger.debug("Auth event: refreshed")
             }
@@ -88,7 +100,13 @@ final class SessionStore {
     }
 
     func signOut() async {
+        guard state != .signedOut else { return }
         await coordinator.signOut()
+    }
+
+    private func transitionToSignedOut() {
+        user = nil
+        state = .signedOut
     }
 
     /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,

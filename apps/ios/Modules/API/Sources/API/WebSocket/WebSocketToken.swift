@@ -27,6 +27,7 @@ public struct WebSocketToken: Sendable {
 public actor WebSocketTokenCache {
     private let fetch: @Sendable () async throws -> WebSocketToken
     private var cached: WebSocketToken?
+    private var generation = 0
 
     public init(fetch: @escaping @Sendable () async throws -> WebSocketToken) {
         self.fetch = fetch
@@ -36,8 +37,17 @@ public actor WebSocketTokenCache {
         if let cached, !cached.isExpiredOrExpiring() {
             return cached
         }
+        let fetchGeneration = generation
         let fresh = try await fetch()
-        cached = fresh
+        if generation == fetchGeneration {
+            cached = fresh
+        }
         return fresh
+    }
+
+    /// Clears the cached upgrade token when the authenticated user changes.
+    public func reset() {
+        generation += 1
+        cached = nil
     }
 }

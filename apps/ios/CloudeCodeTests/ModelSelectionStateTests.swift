@@ -225,6 +225,20 @@ struct ModelCatalogStoreTests {
 
         #expect(store.catalog?.providers.first?.providerId == connected.providerId)
     }
+
+    @Test func resetClearsCachedCatalog() async {
+        let api = CountingModelsAPI(
+            response: ModelsResponse(providers: [makeProvider()])
+        )
+        let store = ModelCatalogStore(modelsAPI: api)
+        await store.load()
+
+        store.reset()
+
+        #expect(store.catalog == nil)
+        #expect(store.errorMessage == nil)
+        #expect(!store.isLoading)
+    }
 }
 
 @MainActor

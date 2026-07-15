@@ -6,5 +6,6 @@ BUILD_ENVIRONMENT = DEVELOPMENT
 // escaping workaround: xcconfig treats // as a comment
 SLASH = /
 API_BASE_URL = http:$(SLASH)/localhost:8787
+WEB_BASE_URL = http:$(SLASH)/localhost:3000
 DEEP_LINK_SCHEME = cloudecode-dev
 OAUTH_REDIRECT_URI = $(DEEP_LINK_SCHEME):$(SLASH)/auth/callback

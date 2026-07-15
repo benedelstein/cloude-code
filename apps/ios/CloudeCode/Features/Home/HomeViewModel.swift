@@ -73,6 +73,9 @@ final class HomeViewModel {
         socketTask = nil
         didStart = false
         hasConnected = false
+        hasLoaded = false
+        errorMessage = nil
+        nextRepoCursor = nil
         Task { [userSessionsSocket] in
             await userSessionsSocket.disconnect()
         }

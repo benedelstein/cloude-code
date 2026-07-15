@@ -6,6 +6,8 @@
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>API_BASE_URL</key>
 	<string>$(API_BASE_URL)</string>
+	<key>WEB_BASE_URL</key>
+	<string>$(WEB_BASE_URL)</string>
 	<key>BUILD_ENVIRONMENT</key>
 	<string>$(BUILD_ENVIRONMENT)</string>
 	<key>NSCameraUsageDescription</key>

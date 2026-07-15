@@ -140,6 +140,13 @@ public final class SessionMessageStore {
         }
     }
 
+    /// Clears every cached message and session index from memory and disk.
+    public func deleteAll() async throws {
+        loadedSessionIDs.removeAll()
+        messageIDsBySessionID.removeAll()
+        try await entityStore.deleteAll()
+    }
+
     private func modelsFromMemory(sessionId: String) -> [SessionMessageWrapper]? {
         guard loadedSessionIDs.contains(sessionId),
               let ids = messageIDsBySessionID[sessionId] else {
