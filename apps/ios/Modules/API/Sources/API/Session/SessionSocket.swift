@@ -94,6 +94,11 @@ public actor SessionSocket {
         try await send(.sessionMarkRead(SessionMarkReadEvent(messageId: messageId)))
     }
 
+    /// Requests cancellation of the active agent turn.
+    public func cancelOperation() async throws {
+        try await send(.operationCancel(OperationCancelEvent()))
+    }
+
     private func send(_ message: ClientMessage) async throws {
         let data = try JSONEncoder().encode(message)
         guard let text = String(data: data, encoding: .utf8) else {

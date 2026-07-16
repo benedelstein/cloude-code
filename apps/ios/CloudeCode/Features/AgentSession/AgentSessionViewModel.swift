@@ -85,6 +85,8 @@ final class AgentSessionViewModel {
     /// Waiting for a message stream response from server.
     /// Set to true after we send a message
     var isWaitingForResponse = false
+    /// A cancellation request has been sent for the active response.
+    var isCancelling = false
     var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
@@ -101,12 +103,24 @@ final class AgentSessionViewModel {
             && canSendInCurrentMode
             && !isSending
             && !isResponding
+            && !isCancelling
     }
 
     var isResponding: Bool {
         isWaitingForResponse
             || streamStatus.isActive
             || clientState.activeTurnUserMessageId != nil
+    }
+
+    var canInterruptResponse: Bool {
+        isResponding
+            && !isCreatingSession
+            && connectionState == .connected
+            && clientState.sessionSetupRun?.status != "running"
+    }
+
+    var isComposerInputDisabled: Bool {
+        isCreatingSession
     }
 
     init(
@@ -333,6 +347,7 @@ extension AgentSessionViewModel {
         isSending = false
         isCreatingSession = false
         isWaitingForResponse = false
+        isCancelling = false
         hasSeenServerActiveTurn = false
     }
 
@@ -356,20 +371,7 @@ extension AgentSessionViewModel {
     }
 
     var composerPlaceholder: String {
-        if isCreatingSession {
-            return "Creating session..."
-        }
-        if isDraftMode {
-            return "Send a message..."
-        }
-        return switch connectionState {
-        case .connecting:
-            "Connecting..."
-        case .connected:
-            isResponding ? "Agent is responding..." : "Send a message..."
-        case .disconnected:
-            "Reconnecting..."
-        }
+        "Send a message..."
     }
 
     enum Context {

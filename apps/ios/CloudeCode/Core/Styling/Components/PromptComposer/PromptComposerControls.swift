@@ -8,6 +8,7 @@ extension PromptComposerView {
         @Binding var text: String
         var focused: Binding<Bool>
         let placeholder: String
+        let isDisabled: Bool
 
         var body: some View {
             GrowingTextView(
@@ -16,7 +17,8 @@ extension PromptComposerView {
                 font: EditorStyle.font,
                 textColor: UIColor(theme.labelColor),
                 textInsets: EditorStyle.textInsets,
-                maxVisibleLines: EditorStyle.maxVisibleLines
+                maxVisibleLines: EditorStyle.maxVisibleLines,
+                isEditable: !isDisabled
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
@@ -59,21 +61,38 @@ extension PromptComposerView {
 
         let isSubmitDisabled: Bool
         let isSubmitting: Bool
+        let isResponding: Bool
+        let isCancelling: Bool
+        let isInterruptDisabled: Bool
         let size: CGFloat
         let onSubmit: () -> Void
+        let onStop: () -> Void
+
+        private var showsStop: Bool {
+            (isResponding || isCancelling) && !isSubmitting
+        }
 
         var body: some View {
             Button {
                 lightFeedback.impactOccurred()
-                onSubmit()
+                if showsStop {
+                    onStop()
+                } else {
+                    onSubmit()
+                }
             } label: {
                 ZStack {
                     Circle()
-                        .fill(isSubmitting || isSubmitDisabled ? .gray : theme.accentBlue)
+                        .fill(buttonColor)
 
-                    if isSubmitting {
+                    if isSubmitting || isCancelling {
                         ProgressView()
                             .controlSize(.small)
+                            .tint(.white)
+                    } else if showsStop {
+                        Image(systemName: "square.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
                     } else {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 16, weight: .semibold))
@@ -83,9 +102,31 @@ extension PromptComposerView {
                 .frame(width: size, height: size)
             }
             .buttonStyle(.bounce(0.95))
-            .foregroundStyle(isSubmitDisabled ? theme.secondaryLabelColor : theme.accentBlue)
-            .disabled(isSubmitDisabled || isSubmitting)
-            .accessibilityLabel("Send")
+            .disabled(isButtonDisabled)
+            .accessibilityLabel(accessibilityLabel)
+        }
+
+        private var buttonColor: Color {
+            if showsStop {
+                return theme.errorRed
+            }
+            return isSubmitting || isSubmitDisabled ? .gray : theme.accentBlue
+        }
+
+        private var isButtonDisabled: Bool {
+            showsStop
+                ? isCancelling || isInterruptDisabled
+                : isSubmitDisabled || isSubmitting
+        }
+
+        private var accessibilityLabel: String {
+            if isCancelling {
+                return "Stopping response"
+            }
+            if showsStop {
+                return isInterruptDisabled ? "Response cannot be stopped yet" : "Stop response"
+            }
+            return "Send"
         }
     }
 }

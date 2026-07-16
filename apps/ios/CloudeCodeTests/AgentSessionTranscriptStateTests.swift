@@ -165,6 +165,39 @@ struct AgentSessionTranscriptStateTests {
         #expect(builder.providers == [.claudeCode, .openaiCodex])
         #expect(viewModel.session?.provider == .claudeCode)
     }
+
+    @Test func abortedMetadataMarksAssistantMessageInterrupted() {
+        let message = SessionMessage(
+            id: "a1",
+            role: .assistant,
+            text: "partial",
+            metadata: .object(["aborted": .bool(true)])
+        )
+
+        #expect(message.isAborted)
+        #expect(!assistantMessage(id: "a2").isAborted)
+    }
+
+    @Test func respondingSessionKeepsComposerEditableAndOffersInterrupt() {
+        let viewModel = makeViewModel()
+        viewModel.connectionState = .connected
+        viewModel.isWaitingForResponse = true
+        viewModel.draftText = "follow-up"
+
+        #expect(viewModel.composerPlaceholder == "Send a message...")
+        #expect(!viewModel.isComposerInputDisabled)
+        #expect(viewModel.canInterruptResponse)
+        #expect(!viewModel.canSubmitDraft)
+    }
+
+    @Test func creatingSessionUsesDescriptivePlaceholderAndFreezesComposer() {
+        let viewModel = makeViewModel()
+        viewModel.isCreatingSession = true
+
+        #expect(viewModel.composerPlaceholder == "Send a message...")
+        #expect(viewModel.isComposerInputDisabled)
+        #expect(!viewModel.canInterruptResponse)
+    }
 }
 
 private extension AgentSessionTranscriptStateTests {

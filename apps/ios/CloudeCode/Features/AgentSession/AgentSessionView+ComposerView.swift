@@ -42,6 +42,7 @@ extension AgentSessionView {
                             vm.selectEffort(provider: provider, effort: effort)
                         }
                     )
+                    .disabled(vm.isComposerInputDisabled)
                 }
             }
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
@@ -65,9 +66,14 @@ extension AgentSessionView {
                 remainingImageSlots: vm.remainingImageAttachmentSlots,
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
-                isSubmitting: vm.isCreatingSession || vm.isResponding,
+                isSubmitting: vm.isCreatingSession,
+                isResponding: vm.isResponding,
+                isCancelling: vm.isCancelling,
+                isInterruptDisabled: !vm.canInterruptResponse,
+                isInputDisabled: vm.isComposerInputDisabled,
                 trailingAccessory: trailingAccessory,
                 onSubmit: vm.submitUserMessage,
+                onStop: vm.interruptResponse,
                 onRemoveImageAttachment: vm.removeImageAttachment,
                 onRetryImageAttachment: vm.retryImageAttachment,
                 onPhotosSelected: vm.addImageAttachmentPhotoItems,

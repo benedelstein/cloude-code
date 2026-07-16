@@ -36,8 +36,13 @@ struct PromptComposerView<TrailingAccessory: View>: View {
     private let isImageInputEnabled: Bool
     private let isSubmitDisabled: Bool
     private let isSubmitting: Bool
+    private let isResponding: Bool
+    private let isCancelling: Bool
+    private let isInterruptDisabled: Bool
+    private let isInputDisabled: Bool
     private let trailingAccessory: TrailingAccessory
     private let onSubmit: () -> Void
+    private let onStop: () -> Void
     private let onRemoveImageAttachment: (UUID) -> Void
     private let onRetryImageAttachment: (UUID) -> Void
     private let onPhotosSelected: ([PhotosPickerItem]) -> Void
@@ -60,8 +65,13 @@ struct PromptComposerView<TrailingAccessory: View>: View {
         isImageInputEnabled: Bool = true,
         isSubmitDisabled: Bool,
         isSubmitting: Bool = false,
+        isResponding: Bool = false,
+        isCancelling: Bool = false,
+        isInterruptDisabled: Bool = false,
+        isInputDisabled: Bool = false,
         @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         onSubmit: @escaping () -> Void,
+        onStop: @escaping () -> Void = {},
         onRemoveImageAttachment: @escaping (UUID) -> Void = { _ in },
         onRetryImageAttachment: @escaping (UUID) -> Void = { _ in },
         onPhotosSelected: @escaping ([PhotosPickerItem]) -> Void = { _ in },
@@ -76,8 +86,13 @@ struct PromptComposerView<TrailingAccessory: View>: View {
         self.isImageInputEnabled = isImageInputEnabled
         self.isSubmitDisabled = isSubmitDisabled
         self.isSubmitting = isSubmitting
+        self.isResponding = isResponding
+        self.isCancelling = isCancelling
+        self.isInterruptDisabled = isInterruptDisabled
+        self.isInputDisabled = isInputDisabled
         self.trailingAccessory = trailingAccessory()
         self.onSubmit = onSubmit
+        self.onStop = onStop
         self.onRemoveImageAttachment = onRemoveImageAttachment
         self.onRetryImageAttachment = onRetryImageAttachment
         self.onPhotosSelected = onPhotosSelected
@@ -118,7 +133,7 @@ struct PromptComposerView<TrailingAccessory: View>: View {
             interactive: !isInlinePhotoPickerVisible
         )
         .onTapGesture {
-            guard !isInlinePhotoPickerVisible else { return }
+            guard !isInlinePhotoPickerVisible, !isInputDisabled else { return }
             focused.wrappedValue = true
         }
         .animation(style.springAnimation, value: isInlinePhotoPickerVisible)
@@ -167,7 +182,8 @@ struct PromptComposerView<TrailingAccessory: View>: View {
             Editor(
                 text: $text,
                 focused: focused,
-                placeholder: placeholder
+                placeholder: placeholder,
+                isDisabled: isInputDisabled
             )
         }
     }
@@ -199,8 +215,12 @@ struct PromptComposerView<TrailingAccessory: View>: View {
             SendButton(
                 isSubmitDisabled: isSubmitDisabled,
                 isSubmitting: isSubmitting,
+                isResponding: isResponding,
+                isCancelling: isCancelling,
+                isInterruptDisabled: isInterruptDisabled,
                 size: composerStyle.bottomButtonSize,
-                onSubmit: onSubmit
+                onSubmit: onSubmit,
+                onStop: onStop
             )
         }
     }
@@ -214,7 +234,7 @@ struct PromptComposerView<TrailingAccessory: View>: View {
     private var imageSourceControl: some View {
         ZStack {
             ImageSourceMenu(
-                isDisabled: isSubmitting || remainingImageSlots <= 0,
+                isDisabled: isInputDisabled || remainingImageSlots <= 0,
                 onOpenCamera: openCamera,
                 onOpenPhotos: showInlinePhotoPicker
             )
@@ -260,7 +280,12 @@ extension PromptComposerView where TrailingAccessory == EmptyView {
         isImageInputEnabled: Bool = true,
         isSubmitDisabled: Bool,
         isSubmitting: Bool = false,
+        isResponding: Bool = false,
+        isCancelling: Bool = false,
+        isInterruptDisabled: Bool = false,
+        isInputDisabled: Bool = false,
         onSubmit: @escaping () -> Void,
+        onStop: @escaping () -> Void = {},
         onRemoveImageAttachment: @escaping (UUID) -> Void = { _ in },
         onRetryImageAttachment: @escaping (UUID) -> Void = { _ in },
         onPhotosSelected: @escaping ([PhotosPickerItem]) -> Void = { _ in },
@@ -276,8 +301,13 @@ extension PromptComposerView where TrailingAccessory == EmptyView {
             isImageInputEnabled: isImageInputEnabled,
             isSubmitDisabled: isSubmitDisabled,
             isSubmitting: isSubmitting,
+            isResponding: isResponding,
+            isCancelling: isCancelling,
+            isInterruptDisabled: isInterruptDisabled,
+            isInputDisabled: isInputDisabled,
             trailingAccessory: EmptyView.init,
             onSubmit: onSubmit,
+            onStop: onStop,
             onRemoveImageAttachment: onRemoveImageAttachment,
             onRetryImageAttachment: onRetryImageAttachment,
             onPhotosSelected: onPhotosSelected,
