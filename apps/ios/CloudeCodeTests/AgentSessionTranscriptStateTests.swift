@@ -378,6 +378,7 @@ private extension AgentSessionTranscriptStateTests {
             sessionMessageStore: sessionMessageStore,
             sessionSummaryStore: sessionSummaryStore,
             transcriptBuilder: transcriptBuilder,
+            sessionsAPI: sessionsAPI,
             attachmentsAPI: StubAttachmentsAPI(),
             renameSessionAction: RenameSessionAction(
                 sessionsAPI: sessionsAPI,

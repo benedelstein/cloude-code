@@ -97,6 +97,7 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionMessageStore: dependency.sessionMessageStore,
                 sessionSummaryStore: dependency.sessionSummaryStore,
                 transcriptBuilder: transcriptBuilder,
+                sessionsAPI: dependency.sessionsAPI,
                 attachmentsAPI: dependency.attachmentsAPI,
                 renameSessionAction: renameSessionAction,
                 archiveSessionAction: archiveSessionAction,

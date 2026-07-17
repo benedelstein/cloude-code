@@ -28,6 +28,11 @@ extension AgentSessionView {
                         .transition(.blurReplace)
                 }
 
+                if vm.pushedBranchForDisplay != nil {
+                    BranchBar(vm: vm)
+                        .transition(.blurReplace)
+                }
+
                 promptComposer {
                     ModelPickerButton(
                         modelCatalog: vm.modelCatalogStore,
@@ -46,6 +51,7 @@ extension AgentSessionView {
                 }
             }
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
+            .animation(style.fadeAnimation, value: vm.pushedBranchForDisplay)
             .task {
                 if vm.isDraftMode {
                     try? await Task.sleep(for: .milliseconds(100))

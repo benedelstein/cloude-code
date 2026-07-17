@@ -28,6 +28,7 @@ final class AgentSessionViewModel {
     let sessionMessageStore: SessionMessageStore
     let sessionSummaryStore: SessionSummaryStore
     let transcriptBuilder: any AgentSessionTranscriptBuilding
+    let sessionsAPI: any SessionsAPIProviding
     let renameSessionAction: RenameSessionAction
     let archiveSessionAction: ArchiveSessionAction
     let deleteSessionAction: DeleteSessionAction
@@ -62,6 +63,8 @@ final class AgentSessionViewModel {
     var streamingTranscriptRowID: String?
     @ObservationIgnored var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
     @ObservationIgnored let markdownRenderCache = MarkdownRenderCache()
+    @ObservationIgnored var pullRequestPollingTask: Task<Void, Never>?
+    let pullRequestPollInterval: Duration
     var streamAccumulator: SessionMessageStreamAccumulator?
     /// Guard so that we do not accumulate to a stream that is no longer active
     var streamGeneration = 0
@@ -69,7 +72,7 @@ final class AgentSessionViewModel {
     // Future optimization: cache a curated subset of client state
     // if needed. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
-    private(set) var clientState = SessionClientState.empty
+    var clientState = SessionClientState.empty
     var transcriptProvider: AgentProviderID {
         let clientProvider = clientState.agentSettings.provider
         // The summary only seeds cached transcript rendering; hydrated client
@@ -90,6 +93,8 @@ final class AgentSessionViewModel {
     var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
+    var isCreatingPullRequest = false
+    var pullRequestOperationErrorMessage: String?
     private(set) var isPerformingSessionAction = false
 
     var canSubmitDraft: Bool {
@@ -128,11 +133,13 @@ final class AgentSessionViewModel {
         sessionMessageStore: SessionMessageStore,
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
+        sessionsAPI: any SessionsAPIProviding,
         attachmentsAPI: any AttachmentsAPIProviding,
         renameSessionAction: RenameSessionAction,
         archiveSessionAction: ArchiveSessionAction,
         deleteSessionAction: DeleteSessionAction,
-        sessionCreatedSubject: PassthroughSubject<String, Never>
+        sessionCreatedSubject: PassthroughSubject<String, Never>,
+        pullRequestPollInterval: Duration = .seconds(30)
     ) {
         self.context = context
         self.sessionCreatedSubject = sessionCreatedSubject
@@ -146,6 +153,8 @@ final class AgentSessionViewModel {
         self.sessionMessageStore = sessionMessageStore
         self.sessionSummaryStore = sessionSummaryStore
         self.transcriptBuilder = transcriptBuilder
+        self.sessionsAPI = sessionsAPI
+        self.pullRequestPollInterval = pullRequestPollInterval
         self.renameSessionAction = renameSessionAction
         self.archiveSessionAction = archiveSessionAction
         self.deleteSessionAction = deleteSessionAction
@@ -256,6 +265,7 @@ extension AgentSessionViewModel {
         if previousProvider != transcriptProvider {
             rebuildTranscriptDisplayData()
         }
+        reconcilePullRequestState()
     }
 
     private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {
