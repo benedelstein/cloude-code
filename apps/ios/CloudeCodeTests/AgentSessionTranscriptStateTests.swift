@@ -219,6 +219,9 @@ struct AgentSessionTranscriptStateTests {
 
     @Test func respondingSessionKeepsComposerEditableAndOffersInterrupt() {
         let viewModel = makeViewModel()
+        var readyState = liveState(provider: .claudeCode)
+        readyState.status = "ready"
+        viewModel.applyLiveState(readyState)
         viewModel.connectionState = .connected
         viewModel.isWaitingForResponse = true
         viewModel.draftText = "follow-up"
@@ -226,6 +229,15 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.composerPlaceholder == "Send a message...")
         #expect(viewModel.canInterruptResponse)
         #expect(!viewModel.canSubmitDraft)
+    }
+
+    @Test func preparingSessionDoesNotOfferInterruptBeforeLiveStateHydrates() {
+        let viewModel = makeViewModel()
+        viewModel.connectionState = .connected
+        viewModel.isWaitingForResponse = true
+
+        #expect(viewModel.clientState.status == "preparing")
+        #expect(!viewModel.canInterruptResponse)
     }
 
     @Test func creatingSessionUsesStablePlaceholderAndCannotInterrupt() {
