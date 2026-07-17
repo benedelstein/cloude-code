@@ -9,7 +9,6 @@ struct GrowingTextView: UIViewRepresentable {
     let textColor: UIColor
     let textInsets: UIEdgeInsets
     let maxVisibleLines: Int
-    let isEditable: Bool
 
     func makeUIView(context: Context) -> SizingTextView {
         let textView = SizingTextView()
@@ -37,7 +36,6 @@ struct GrowingTextView: UIViewRepresentable {
         textView.font = font
         textView.textColor = textColor
         textView.textContainerInset = textInsets
-        textView.isEditable = isEditable
         context.coordinator.updateFocus(in: textView)
         context.coordinator.updateScrollState(for: textView)
     }
@@ -119,12 +117,6 @@ struct GrowingTextView: UIViewRepresentable {
         }
 
         func updateFocus(in textView: UITextView) {
-            guard parent.isEditable else {
-                if textView.isFirstResponder {
-                    textView.resignFirstResponder()
-                }
-                return
-            }
             if parent.focused, !textView.isFirstResponder {
                 textView.becomeFirstResponder()
             } else if !parent.focused, textView.isFirstResponder {

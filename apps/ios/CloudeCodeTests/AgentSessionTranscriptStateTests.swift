@@ -224,17 +224,15 @@ struct AgentSessionTranscriptStateTests {
         viewModel.draftText = "follow-up"
 
         #expect(viewModel.composerPlaceholder == "Send a message...")
-        #expect(!viewModel.isComposerInputDisabled)
         #expect(viewModel.canInterruptResponse)
         #expect(!viewModel.canSubmitDraft)
     }
 
-    @Test func creatingSessionUsesDescriptivePlaceholderAndFreezesComposer() {
+    @Test func creatingSessionUsesStablePlaceholderAndCannotInterrupt() {
         let viewModel = makeViewModel()
         viewModel.isCreatingSession = true
 
         #expect(viewModel.composerPlaceholder == "Send a message...")
-        #expect(viewModel.isComposerInputDisabled)
         #expect(!viewModel.canInterruptResponse)
     }
 }

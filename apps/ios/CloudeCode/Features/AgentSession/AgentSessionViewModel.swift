@@ -119,10 +119,6 @@ final class AgentSessionViewModel {
             && clientState.sessionSetupRun?.status != "running"
     }
 
-    var isComposerInputDisabled: Bool {
-        isCreatingSession
-    }
-
     init(
         context: Context,
         modelCatalogStore: ModelCatalogStore,

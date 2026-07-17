@@ -21,11 +21,11 @@ extension AgentSessionView {
                 if showsRepoBranchPicker, let draft = vm.draft {
                     if draft.selectedRepo != nil {
                         EnvironmentPickerButton(draft: draft)
-                            .transition(.blurReplace.animation(style.fadeAnimation))
+                            .transition(.blurReplace)
                     }
 
                     RepoBranchPickerBar(draft: draft)
-                        .transition(.blurReplace.animation(style.fadeAnimation))
+                        .transition(.blurReplace)
                 }
 
                 promptComposer {
@@ -42,11 +42,9 @@ extension AgentSessionView {
                             vm.selectEffort(provider: provider, effort: effort)
                         }
                     )
-                    .disabled(vm.isComposerInputDisabled)
+                    .disabled(vm.isCreatingSession)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .border(.red)
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
             .task {
                 if vm.isDraftMode {
@@ -72,7 +70,7 @@ extension AgentSessionView {
                 isResponding: vm.isResponding,
                 isCancelling: vm.isCancelling,
                 isInterruptDisabled: !vm.canInterruptResponse,
-                isInputDisabled: vm.isComposerInputDisabled,
+                isAttachmentInputDisabled: vm.isCreatingSession,
                 trailingAccessory: trailingAccessory,
                 onSubmit: vm.submitUserMessage,
                 onStop: vm.interruptResponse,

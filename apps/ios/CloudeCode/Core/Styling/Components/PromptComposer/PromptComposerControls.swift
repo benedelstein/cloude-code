@@ -8,7 +8,6 @@ extension PromptComposerView {
         @Binding var text: String
         var focused: Binding<Bool>
         let placeholder: String
-        let isDisabled: Bool
 
         var body: some View {
             GrowingTextView(
@@ -17,8 +16,7 @@ extension PromptComposerView {
                 font: EditorStyle.font,
                 textColor: UIColor(theme.labelColor),
                 textInsets: EditorStyle.textInsets,
-                maxVisibleLines: EditorStyle.maxVisibleLines,
-                isEditable: !isDisabled
+                maxVisibleLines: EditorStyle.maxVisibleLines
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
@@ -94,35 +92,31 @@ extension PromptComposerView {
                 }
             } label: {
                 ZStack {
-//                    Group {
-//                        switch state {
-//                        case .send(let isLoading):
-                            SendButtonFace(
-                                color: sendButtonColor,
-                                symbolName: "arrow.up",
-                                symbolFont: .system(size: 16, weight: .semibold),
-                                isLoading: false
-                            )
-//                            .transition(.scale)
-//                        case .stop(let isLoading):
-//                            SendButtonFace(
-//                                color: theme.errorRed,
-//                                symbolName: "square.fill",
-//                                symbolFont: .system(size: 12, weight: .semibold),
-//                                isLoading: isLoading
-//                            )
-//                        }
-//                    }
-//                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    switch state {
+                    case .send(let isLoading):
+                        SendButtonFace(
+                            color: sendButtonColor,
+                            symbolName: "arrow.up",
+                            symbolFont: .system(size: 16, weight: .semibold),
+                            isLoading: isLoading
+                        )
+                        .transition(.scale)
+                    case .stop(let isLoading):
+                        SendButtonFace(
+                            color: theme.errorRed,
+                            symbolName: "square.fill",
+                            symbolFont: .system(size: 12, weight: .semibold),
+                            isLoading: isLoading
+                        )
+                        .transition(.scale)
+                    }
                 }
                 .frame(width: size, height: size)
                 .animation(.easeInOut(duration: 0.15), value: showsStop)
-                .border(.green)
             }
-//            .buttonStyle(.bounce(0.95))
+            .buttonStyle(.bounce(0.95))
             .disabled(isButtonDisabled)
             .accessibilityLabel(accessibilityLabel)
-            .border(.red)
         }
 
         private var sendButtonColor: Color {
