@@ -17,7 +17,7 @@
 - [x] 2.5 Add `adoptSessionId(_:)` to `ImageAttachmentStore`
 - [x] 2.6 Update `AgentSessionComponent`: `init(parent:session: SessionSummaryModel?)`, new deps on `AgentSessionDependency` (`sessionsAPI`, `reposAPI`, `modelsAPI`, `sessionSummaryStore`), construct exactly one view-model context (existing session or new draft), add `AgentSessionBuilder.buildNewSession()`
 - [x] 2.7 Regenerate Needle: `cd apps/ios && needle generate CloudeCode/Generated/NeedleGenerated.swift CloudeCode/`
-- [ ] 2.8 Reconcile `ClientState.pendingUserMessage` into the transcript during live-state hydration, preserve it across an empty pre-provisioning `sync.response`, and cover reconnect/deduplication behavior with tests
+- [x] 2.8 Reconcile `ClientState.pendingUserMessage` into the transcript during live-state hydration, preserve it across an empty pre-provisioning `sync.response`, and cover reconnect/deduplication behavior with tests
 
 ## 3. Views
 
