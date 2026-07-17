@@ -5,7 +5,7 @@ import Foundation
 /// Events emitted by `SessionSocket`.
 public enum SessionSocketEvent: Sendable {
     case connectionChanged(WebSocketConnectionState)
-    case connected(status: String)
+    case connected(status: SessionClientState.Status)
     case syncResponse(SessionSyncSnapshot)
     case operationError(SessionSocketOperationError)
     case chatAccepted(clientMessageId: String, messageId: String)
@@ -150,7 +150,7 @@ public actor SessionSocket {
         case .setupOutputChunks, .unknown:
             return nil
         case .connected(let event):
-            return .connected(status: event.status.rawValue)
+            return .connected(status: .init(rawValue: event.status.rawValue))
         case .operationError(let event):
             return .operationError(SessionSocketOperationError(
                 code: event.code.rawValue,

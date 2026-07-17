@@ -220,7 +220,7 @@ struct AgentSessionTranscriptStateTests {
     @Test func respondingSessionKeepsComposerEditableAndOffersInterrupt() {
         let viewModel = makeViewModel()
         var readyState = liveState(provider: .claudeCode)
-        readyState.status = "ready"
+        readyState.status = .ready
         viewModel.applyLiveState(readyState)
         viewModel.connectionState = .connected
         viewModel.isWaitingForResponse = true
@@ -236,7 +236,7 @@ struct AgentSessionTranscriptStateTests {
         viewModel.connectionState = .connected
         viewModel.isWaitingForResponse = true
 
-        #expect(viewModel.clientState.status == "preparing")
+        #expect(viewModel.clientState.status == .preparing)
         #expect(!viewModel.canInterruptResponse)
     }
 

@@ -257,7 +257,8 @@ struct SessionMessagesTests {
         let clientState = SessionClientState(state)
 
         #expect(clientState.repoFullName == "benedelstein/cloude-code")
-        #expect(clientState.status == "ready")
+        #expect(clientState.status == .ready)
+        #expect(clientState.sessionSetupRun?.status == .running)
         #expect(clientState.sessionSetupRun?.tasks.first?.id == "repository")
         #expect(clientState.agentSettings.provider == .openaiCodex)
         #expect(clientState.agentSettings.model == "gpt-5.5")

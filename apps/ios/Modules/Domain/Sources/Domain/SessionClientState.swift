@@ -1,7 +1,7 @@
 public struct SessionClientState: Sendable, Equatable, Codable {
     public static let empty = SessionClientState(
         repoFullName: nil,
-        status: "preparing",
+        status: .preparing,
         sessionSetupRun: nil,
         agentSettings: AgentSettings(provider: .unknown(""), model: "", effort: "", maxTokens: 0),
         pullRequest: nil,
@@ -19,7 +19,7 @@ public struct SessionClientState: Sendable, Equatable, Codable {
     )
 
     public var repoFullName: String?
-    public var status: String
+    public var status: Status
     public var sessionSetupRun: SessionSetupRun?
     public var agentSettings: AgentSettings
     public var pullRequest: PullRequest?
@@ -37,7 +37,7 @@ public struct SessionClientState: Sendable, Equatable, Codable {
 
     public init(
         repoFullName: String?,
-        status: String,
+        status: Status,
         sessionSetupRun: SessionSetupRun?,
         agentSettings: AgentSettings,
         pullRequest: PullRequest?,
@@ -73,6 +73,31 @@ public struct SessionClientState: Sendable, Equatable, Codable {
 }
 
 public extension SessionClientState {
+    /// The server-reported readiness of a session.
+    enum Status: RawRepresentable, Codable, Equatable, Sendable {
+        case preparing
+        case ready
+        case unknown(String)
+
+        /// Creates a status from its wire representation.
+        public init(rawValue: String) {
+            switch rawValue {
+            case "preparing": self = .preparing
+            case "ready": self = .ready
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        /// The status value used on the wire.
+        public var rawValue: String {
+            switch self {
+            case .preparing: "preparing"
+            case .ready: "ready"
+            case .unknown(let value): value
+            }
+        }
+    }
+
     struct AgentSettings: Sendable, Equatable, Codable {
         public let provider: AgentProviderID
         public let model: String
@@ -129,15 +154,43 @@ public extension SessionClientState {
     }
 
     struct SessionSetupRun: Sendable, Equatable, Codable {
+        /// The lifecycle state of a session setup run.
+        public enum Status: RawRepresentable, Codable, Equatable, Sendable {
+            case running
+            case completed
+            case failed
+            case unknown(String)
+
+            /// Creates a status from its wire representation.
+            public init(rawValue: String) {
+                switch rawValue {
+                case "running": self = .running
+                case "completed": self = .completed
+                case "failed": self = .failed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            /// The status value used on the wire.
+            public var rawValue: String {
+                switch self {
+                case .running: "running"
+                case .completed: "completed"
+                case .failed: "failed"
+                case .unknown(let value): value
+                }
+            }
+        }
+
         public let id: String
-        public let status: String
+        public let status: Status
         public let startedAt: String
         public let completedAt: String?
         public let tasks: [SessionSetupTask]
 
         public init(
             id: String,
-            status: String,
+            status: Status,
             startedAt: String,
             completedAt: String?,
             tasks: [SessionSetupTask]

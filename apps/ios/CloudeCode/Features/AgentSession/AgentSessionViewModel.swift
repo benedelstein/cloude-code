@@ -116,8 +116,8 @@ final class AgentSessionViewModel {
         isResponding
             && !isCreatingSession
             && connectionState == .connected
-            && clientState.status == "ready"
-            && clientState.sessionSetupRun?.status != "running"
+            && clientState.status == .ready
+            && clientState.sessionSetupRun?.status != .running
     }
 
     init(
