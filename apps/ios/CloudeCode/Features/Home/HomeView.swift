@@ -127,6 +127,7 @@ struct HomeView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } else if viewModel.isEmpty && viewModel.hasLoaded {
                 EmptyStateView(
                     title: "No sessions"
@@ -135,23 +136,46 @@ struct HomeView: View {
                 }
                 .padding(.top, 24)
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
             ForEach(viewModel.groups) { group in
                 Section(isExpanded: expandedBinding(for: group)) {
                     ForEach(group.sessions) { session in
                         sessionLink(for: session)
-                            .listRowBackground(theme.backgroundColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .background(
+                                theme.backgroundColor,
+                                in: RoundedRectangle(
+                                    cornerRadius: 20,
+                                    style: .continuous
+                                )
+                            )
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 8,
+                                    leading: style.horizontalPadding,
+                                    bottom: 0,
+                                    trailing: style.horizontalPadding
+                                )
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
                 } header: {
-                    RepoSectionHeader(group: group)
+                    RepoSectionHeader(
+                        group: group,
+                        isExpanded: expandedBinding(for: group)
+                    )
                 }
             }
+            .listRowSpacing(style.gridSize) // idt this works
         }
         .scrollContentBackground(.hidden)
         .background(theme.secondaryBackgroundColor)
         .animation(.default, value: viewModel.groups)
-        .listStyle(.sidebar)
+        .listStyle(.plain)
         .refreshable {
             await viewModel.refresh()
         }
@@ -223,27 +247,44 @@ private struct RepoSectionHeader: View {
     @Environment(\.style) private var style
 
     let group: HomeSessionGroup
+    @Binding var isExpanded: Bool
 
     var body: some View {
-        HStack(spacing: style.gridSize) {
-            Image(.folderGit2)
-                .resizable()
-                .renderingMode(.template)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 16, height: 16)
+        Button {
+            withAnimation(style.springAnimation) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: style.gridSize) {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 16, height: 16)
 
-            Text(group.repoFullName)
-                .styledFont(.subheadline)
-                .lineLimit(1)
+                Image(.folderGit2)
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
 
-            Spacer()
+                Text(group.repoFullName)
+                    .styledFont(.subheadline)
+                    .lineLimit(1)
 
-            Text(group.sessions.count.formatted())
-                .styledFont(.caption)
-                .foregroundStyle(theme.tertiaryLabelColor)
+                Spacer()
+
+                Text(group.sessions.count.formatted())
+                    .styledFont(.caption)
+                    .foregroundStyle(theme.tertiaryLabelColor)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .foregroundStyle(theme.secondaryLabelColor)
         .textCase(nil)
+        .accessibilityLabel(group.repoFullName)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint("Toggles repository sessions")
     }
 }
 
@@ -253,15 +294,25 @@ private struct SessionRow: View {
 
     let session: SessionSummaryModel
 
+    var title: String {
+        session.title ?? "Untitled session"
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: style.gridSize * 1.5) {
-            SessionArtifactIcon(session: session)
-                .frame(width: style.gridSize * 2.5, height: style.gridSize * 2.5)
+            SessionArtifactIcon(session: session, width: style.gridSize * 2)
+                .frame(width: 28, height: 28)
+                .background(
+                    theme.tertiaryBackgroundColor.opacity(0.6),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
 
             VStack(alignment: .leading) {
-                Text(session.title ?? "Untitled session")
+                Text(title)
                     .styledFont(.headline)
                     .foregroundStyle(theme.labelColor)
+                    .id(title)
+                    .transition(.blurReplace.animation(.easeIn))
                     .lineLimit(1)
 
                 if let pushedBranch = session.pushedBranch {
@@ -277,6 +328,8 @@ private struct SessionRow: View {
 
             SessionAttentionSlot(session: session)
         }
+        .animation(style.fadeAnimation, value: title)
+        .animation(style.fadeAnimation, value: session.snapshot)
     }
 }
 
@@ -285,16 +338,20 @@ private struct SessionArtifactIcon: View {
     @Environment(\.style) private var style
 
     let session: SessionSummaryModel
+    var width: CGFloat
 
     var body: some View {
-        if let icon = artifactIcon {
-            Image(icon.0)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .foregroundStyle(icon.1)
-        } else {
-            Color.clear
+        Group {
+            if let icon = artifactIcon {
+                Image(icon.0)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundStyle(icon.1)
+            } else {
+                Color.clear
+            }
         }
+        .frame(width: width, height: width)
     }
 
     private var artifactIcon: (ImageResource, Color)? {
@@ -334,24 +391,27 @@ private struct SessionAttentionSlot: View {
     let session: SessionSummaryModel
 
     var body: some View {
-        if session.workingState == "responding" {
-            ProgressView()
-                .controlSize(.small)
-                .tint(theme.secondaryLabelColor)
-                .accessibilityLabel("Responding")
-        } else if session.hasUnread {
-            Circle()
-                .fill(theme.accentBlue)
-                .frame(width: style.gridSize, height: style.gridSize)
-                .accessibilityLabel("Unread message")
-        } else {
-            TimelineView(.everyMinute) { _ in
-                Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
-                    .styledFont(.caption)
-                    .foregroundStyle(theme.secondaryLabelColor)
-                    .lineLimit(1)
+        Group {
+            if session.workingState == "responding" {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(theme.secondaryLabelColor)
+                    .accessibilityLabel("Responding")
+            } else if session.hasUnread {
+                Circle()
+                    .fill(theme.accentBlue)
+                    .frame(width: style.gridSize, height: style.gridSize)
+                    .accessibilityLabel("Unread message")
+            } else {
+                TimelineView(.everyMinute) { _ in
+                    Text(SessionTimestampFormatter.relativeString(for: session.activityTimestamp))
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+                        .lineLimit(1)
+                }
             }
         }
+        .transition(.blurReplace)
     }
 }
 
