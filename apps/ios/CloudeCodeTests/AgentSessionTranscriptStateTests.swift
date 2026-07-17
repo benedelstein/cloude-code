@@ -166,6 +166,45 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.session?.provider == .claudeCode)
     }
 
+    @Test func livePendingUserMessageReconcilesOptimisticRow() throws {
+        let viewModel = makeViewModel()
+        viewModel.upsert(optimisticUserMessage(id: "client-1"))
+        let rowID = try #require(viewModel.transcriptRows.first).id
+
+        viewModel.applyLiveState(liveState(
+            provider: .claudeCode,
+            pendingUserMessage: userMessage(id: "server-1")
+        ))
+
+        let row = try #require(viewModel.transcriptRows.first)
+        #expect(viewModel.transcriptRows.count == 1)
+        #expect(row.id == rowID)
+        #expect(row.messageID == "server-1")
+        #expect(viewModel.messagesByID["client-1"] == nil)
+        #expect(viewModel.messagesByID["server-1"]?.isOptimisticUserMessage == false)
+    }
+
+    @Test func livePendingUserMessageSurvivesEmptySyncAndDurableConfirmation() async {
+        let viewModel = makeViewModel()
+        let pendingMessage = userMessage(id: "server-1")
+        viewModel.applyLiveState(liveState(
+            provider: .claudeCode,
+            pendingUserMessage: pendingMessage
+        ))
+
+        await viewModel.handle(.syncResponse(SessionSyncSnapshot(
+            messages: [],
+            pendingChunks: [],
+            pendingMessageMetadata: nil,
+            activeTurnUserMessageId: nil
+        )))
+        viewModel.applyLiveState(liveState(provider: .claudeCode))
+        viewModel.applyUserMessage(pendingMessage)
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["server-1"])
+        #expect(viewModel.messagesByID["server-1"]?.text == "hello")
+    }
+
     @Test func abortedMetadataMarksAssistantMessageInterrupted() {
         let message = SessionMessage(
             id: "a1",
@@ -360,7 +399,10 @@ private extension AgentSessionTranscriptStateTests {
         ))
     }
 
-    func liveState(provider: AgentProviderID) -> SessionClientState {
+    func liveState(
+        provider: AgentProviderID,
+        pendingUserMessage: SessionMessage? = nil
+    ) -> SessionClientState {
         var state = SessionClientState.empty
         state.agentSettings = .init(
             provider: provider,
@@ -368,6 +410,7 @@ private extension AgentSessionTranscriptStateTests {
             effort: "high",
             maxTokens: 8_192
         )
+        state.pendingUserMessage = pendingUserMessage
         return state
     }
 

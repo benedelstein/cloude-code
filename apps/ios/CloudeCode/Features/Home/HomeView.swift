@@ -186,11 +186,12 @@ struct HomeView: View {
             SessionRow(session: session)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
+            Button {
                 sessionPendingDelete = session
             } label: {
                 Label("", systemImage: "trash")
             }
+            .tint(.red)
             .accessibilityLabel("Delete")
 
             Button {

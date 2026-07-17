@@ -245,6 +245,11 @@ extension AgentSessionViewModel {
     func applyLiveState(_ state: SessionClientState) {
         let previousProvider = transcriptProvider
         clientState = state
+        // A newly created session keeps its initial message in live state until
+        // provisioning dispatches it into durable message history.
+        if let pendingUserMessage = state.pendingUserMessage {
+            applyPendingUserMessage(pendingUserMessage)
+        }
         // A non-matching override persists until the server confirms it: live
         // state may still reflect the previous turn's settings.
         if localModelSelection?.matches(state.agentSettings) == true {
@@ -261,7 +266,7 @@ extension AgentSessionViewModel {
             hasLoadedMessages = true
         }
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
-            in: snapshot.messages
+            in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
         markdownRenderCache.reset()
         rebuildTranscript(from: snapshotMessages)

@@ -17,15 +17,15 @@ extension AgentSessionView {
         @State private var composerFocused = false
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: style.gridSize) {
                 if showsRepoBranchPicker, let draft = vm.draft {
                     if draft.selectedRepo != nil {
                         EnvironmentPickerButton(draft: draft)
-                            .transition(.blurReplace)
+                            .transition(.blurReplace.animation(style.fadeAnimation))
                     }
 
                     RepoBranchPickerBar(draft: draft)
-                        .transition(.blurReplace)
+                        .transition(.blurReplace.animation(style.fadeAnimation))
                 }
 
                 promptComposer {
@@ -45,6 +45,8 @@ extension AgentSessionView {
                     .disabled(vm.isComposerInputDisabled)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .border(.red)
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
             .task {
                 if vm.isDraftMode {

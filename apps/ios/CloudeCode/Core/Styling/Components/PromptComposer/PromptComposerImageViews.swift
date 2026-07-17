@@ -1,6 +1,24 @@
 import SwiftUI
 import UIKit
 
+struct PromptComposerImageAttachmentPreview: Identifiable, Equatable {
+    let id: UUID
+    /// Downsampled local image used for preview; nil while a picker selection is loading.
+    let previewImage: UIImage?
+    let status: ImageAttachmentDraftStatus
+    let canRetry: Bool
+
+    static func == (
+        lhs: PromptComposerImageAttachmentPreview,
+        rhs: PromptComposerImageAttachmentPreview
+    ) -> Bool {
+        lhs.id == rhs.id
+            && lhs.status == rhs.status
+            && lhs.canRetry == rhs.canRetry
+            && lhs.previewImage === rhs.previewImage
+    }
+}
+
 extension PromptComposerView {
     struct ImageSourceMenu: View {
         @Environment(\.composerStyle) var composerStyle: ComposerStyle

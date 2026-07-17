@@ -44,7 +44,11 @@ Verified foundations this design relies on:
 
 1. Build a `SessionSummary` (id/title from the response, repo fields from `draft.selectedRepo`, `workingState: "responding"`) and transition `context` to `.session(sessionSummaryStore.putSnapshotsToDisk([summary])[0])` — the canonical model dedups with the `summaryCreated` user-sessions socket event Home already handles.
 2. `attachmentStore.adoptSessionId(response.sessionId)` (new setter on `ImageAttachmentStore`).
-3. `socket = makeSocket(response.sessionId)`; `startSocketPipeline(socket:loadCache: false)`. The initial `syncResponse` reconciles the optimistic message via `isServerConfirmation` and persists messages through existing paths.
+3. `socket = makeSocket(response.sessionId)`; `startSocketPipeline(socket:loadCache: false)`. While setup is still
+   running, the initial message lives in `ClientState.pendingUserMessage` and may not appear in the durable
+   `syncResponse` history yet. Live-state hydration reconciles that server-authored pending message with the local
+   optimistic row, and snapshot rebuilding includes the pending message without persisting it as durable history.
+   The later `user.message` event confirms and caches the same server message id without duplicating the row.
 
 - *Why not accept-swap like `chatAccepted`?* There is no `chatAccepted` for an HTTP-created initial message; the sync-response confirmation path already handles exactly this shape.
 - *Why ignore `CreateSessionResponse.websocketToken`?* `SessionSocket` mints its own token via the existing `sessionWebSocketToken` path; reusing the response token adds a second token flow for one saved round-trip.

@@ -55,6 +55,11 @@ extension PromptComposerView {
         }
     }
 
+    private enum SendButtonState: Equatable {
+        case send(isLoading: Bool)
+        case stop(isLoading: Bool)
+    }
+
     struct SendButton: View {
         @Environment(\.theme) private var theme: Theme
         @Environment(\.lightFeedback) private var lightFeedback: UIImpactFeedbackGenerator
@@ -69,7 +74,14 @@ extension PromptComposerView {
         let onStop: () -> Void
 
         private var showsStop: Bool {
-            (isResponding || isCancelling) && !isSubmitting
+            (isCancelling || (isResponding && !isInterruptDisabled)) && !isSubmitting
+        }
+
+        private var state: SendButtonState {
+            if showsStop {
+                return .stop(isLoading: isCancelling)
+            }
+            return .send(isLoading: isSubmitting)
         }
 
         var body: some View {
@@ -82,35 +94,39 @@ extension PromptComposerView {
                 }
             } label: {
                 ZStack {
-                    Circle()
-                        .fill(buttonColor)
-
-                    if isSubmitting || isCancelling {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    } else if showsStop {
-                        Image(systemName: "square.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                    } else {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
+//                    Group {
+//                        switch state {
+//                        case .send(let isLoading):
+                            SendButtonFace(
+                                color: sendButtonColor,
+                                symbolName: "arrow.up",
+                                symbolFont: .system(size: 16, weight: .semibold),
+                                isLoading: false
+                            )
+//                            .transition(.scale)
+//                        case .stop(let isLoading):
+//                            SendButtonFace(
+//                                color: theme.errorRed,
+//                                symbolName: "square.fill",
+//                                symbolFont: .system(size: 12, weight: .semibold),
+//                                isLoading: isLoading
+//                            )
+//                        }
+//                    }
+//                    .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
                 .frame(width: size, height: size)
+                .animation(.easeInOut(duration: 0.15), value: showsStop)
+                .border(.green)
             }
-            .buttonStyle(.bounce(0.95))
+//            .buttonStyle(.bounce(0.95))
             .disabled(isButtonDisabled)
             .accessibilityLabel(accessibilityLabel)
+            .border(.red)
         }
 
-        private var buttonColor: Color {
-            if showsStop {
-                return theme.errorRed
-            }
-            return isSubmitting || isSubmitDisabled ? .gray : theme.accentBlue
+        private var sendButtonColor: Color {
+            isSubmitDisabled ? .gray : theme.accentBlue
         }
 
         private var isButtonDisabled: Bool {
@@ -127,6 +143,33 @@ extension PromptComposerView {
                 return isInterruptDisabled ? "Response cannot be stopped yet" : "Stop response"
             }
             return "Send"
+        }
+    }
+
+    private struct SendButtonFace: View {
+        let color: Color
+        let symbolName: String
+        let symbolFont: Font
+        let isLoading: Bool
+
+        var body: some View {
+            ZStack {
+                Circle()
+                    .fill(color)
+
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                        .transition(.scale)
+                } else {
+                    Image(systemName: symbolName)
+                        .font(symbolFont)
+                        .foregroundStyle(.white)
+                        .transition(.scale)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: isLoading)
         }
     }
 }

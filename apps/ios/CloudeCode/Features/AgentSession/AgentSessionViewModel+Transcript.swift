@@ -39,6 +39,10 @@ extension AgentSessionViewModel {
         errorMessage = nil
     }
 
+    func applyPendingUserMessage(_ message: SessionMessage) {
+        upsertConfirmedUserMessage(message)
+    }
+
     /// Replaces the message currently identified by `messageID` (a message id,
     /// not a row id), keeping the row it renders in.
     /// Returns false if no row shows that message.
@@ -130,6 +134,16 @@ extension AgentSessionViewModel {
         }
 
         return mergedMessages
+    }
+
+    func messagesIncludingPendingUserMessage(
+        in serverMessages: [SessionMessage]
+    ) -> [SessionMessage] {
+        guard let pendingUserMessage = clientState.pendingUserMessage,
+              !serverMessages.contains(where: { $0.id == pendingUserMessage.id }) else {
+            return serverMessages
+        }
+        return serverMessages + [pendingUserMessage]
     }
 
     func clearOptimisticUserMessageTracking() {
