@@ -23,6 +23,24 @@ private enum DraftSendError: LocalizedError {
 }
 
 extension AgentSessionViewModel {
+    /// Interrupt the active agent response while preserving the current draft.
+    func interruptResponse() {
+        guard canInterruptResponse, !isCancelling, let socket else {
+            return
+        }
+
+        isCancelling = true
+        errorMessage = nil
+        Task { [socket] in
+            do {
+                try await socket.cancelOperation()
+            } catch {
+                self.isCancelling = false
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     /// Submit the composed message.
     func submitUserMessage() {
         let content = draftText.trimmingCharacters(in: .whitespacesAndNewlines)

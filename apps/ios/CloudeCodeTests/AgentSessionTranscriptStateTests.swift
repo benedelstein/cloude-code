@@ -165,6 +165,88 @@ struct AgentSessionTranscriptStateTests {
         #expect(builder.providers == [.claudeCode, .openaiCodex])
         #expect(viewModel.session?.provider == .claudeCode)
     }
+
+    @Test func livePendingUserMessageReconcilesOptimisticRow() throws {
+        let viewModel = makeViewModel()
+        viewModel.upsert(optimisticUserMessage(id: "client-1"))
+        let rowID = try #require(viewModel.transcriptRows.first).id
+
+        viewModel.applyLiveState(liveState(
+            provider: .claudeCode,
+            pendingUserMessage: userMessage(id: "server-1")
+        ))
+
+        let row = try #require(viewModel.transcriptRows.first)
+        #expect(viewModel.transcriptRows.count == 1)
+        #expect(row.id == rowID)
+        #expect(row.messageID == "server-1")
+        #expect(viewModel.messagesByID["client-1"] == nil)
+        #expect(viewModel.messagesByID["server-1"]?.isOptimisticUserMessage == false)
+    }
+
+    @Test func livePendingUserMessageSurvivesEmptySyncAndDurableConfirmation() async {
+        let viewModel = makeViewModel()
+        let pendingMessage = userMessage(id: "server-1")
+        viewModel.applyLiveState(liveState(
+            provider: .claudeCode,
+            pendingUserMessage: pendingMessage
+        ))
+
+        await viewModel.handle(.syncResponse(SessionSyncSnapshot(
+            messages: [],
+            pendingChunks: [],
+            pendingMessageMetadata: nil,
+            activeTurnUserMessageId: nil
+        )))
+        viewModel.applyLiveState(liveState(provider: .claudeCode))
+        viewModel.applyUserMessage(pendingMessage)
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["server-1"])
+        #expect(viewModel.messagesByID["server-1"]?.text == "hello")
+    }
+
+    @Test func abortedMetadataMarksAssistantMessageInterrupted() {
+        let message = SessionMessage(
+            id: "a1",
+            role: .assistant,
+            text: "partial",
+            metadata: .object(["aborted": .bool(true)])
+        )
+
+        #expect(message.isAborted)
+        #expect(!assistantMessage(id: "a2").isAborted)
+    }
+
+    @Test func respondingSessionKeepsComposerEditableAndOffersInterrupt() {
+        let viewModel = makeViewModel()
+        var readyState = liveState(provider: .claudeCode)
+        readyState.status = .ready
+        viewModel.applyLiveState(readyState)
+        viewModel.connectionState = .connected
+        viewModel.isWaitingForResponse = true
+        viewModel.draftText = "follow-up"
+
+        #expect(viewModel.composerPlaceholder == "Send a message...")
+        #expect(viewModel.canInterruptResponse)
+        #expect(!viewModel.canSubmitDraft)
+    }
+
+    @Test func preparingSessionDoesNotOfferInterruptBeforeLiveStateHydrates() {
+        let viewModel = makeViewModel()
+        viewModel.connectionState = .connected
+        viewModel.isWaitingForResponse = true
+
+        #expect(viewModel.clientState.status == .preparing)
+        #expect(!viewModel.canInterruptResponse)
+    }
+
+    @Test func creatingSessionUsesStablePlaceholderAndCannotInterrupt() {
+        let viewModel = makeViewModel()
+        viewModel.isCreatingSession = true
+
+        #expect(viewModel.composerPlaceholder == "Send a message...")
+        #expect(!viewModel.canInterruptResponse)
+    }
 }
 
 private extension AgentSessionTranscriptStateTests {
@@ -327,7 +409,10 @@ private extension AgentSessionTranscriptStateTests {
         ))
     }
 
-    func liveState(provider: AgentProviderID) -> SessionClientState {
+    func liveState(
+        provider: AgentProviderID,
+        pendingUserMessage: SessionMessage? = nil
+    ) -> SessionClientState {
         var state = SessionClientState.empty
         state.agentSettings = .init(
             provider: provider,
@@ -335,6 +420,7 @@ private extension AgentSessionTranscriptStateTests {
             effort: "high",
             maxTokens: 8_192
         )
+        state.pendingUserMessage = pendingUserMessage
         return state
     }
 

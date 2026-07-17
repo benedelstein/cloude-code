@@ -85,6 +85,8 @@ final class AgentSessionViewModel {
     /// Waiting for a message stream response from server.
     /// Set to true after we send a message
     var isWaitingForResponse = false
+    /// A cancellation request has been sent for the active response.
+    var isCancelling = false
     var hasLoadedMessages: Bool = false
     var draftText = ""
     var errorMessage: String?
@@ -101,12 +103,21 @@ final class AgentSessionViewModel {
             && canSendInCurrentMode
             && !isSending
             && !isResponding
+            && !isCancelling
     }
 
     var isResponding: Bool {
         isWaitingForResponse
             || streamStatus.isActive
             || clientState.activeTurnUserMessageId != nil
+    }
+
+    var canInterruptResponse: Bool {
+        isResponding
+            && !isCreatingSession
+            && connectionState == .connected
+            && clientState.status == .ready
+            && clientState.sessionSetupRun?.status != .running
     }
 
     init(
@@ -231,6 +242,11 @@ extension AgentSessionViewModel {
     func applyLiveState(_ state: SessionClientState) {
         let previousProvider = transcriptProvider
         clientState = state
+        // A newly created session keeps its initial message in live state until
+        // provisioning dispatches it into durable message history.
+        if let pendingUserMessage = state.pendingUserMessage {
+            applyPendingUserMessage(pendingUserMessage)
+        }
         // A non-matching override persists until the server confirms it: live
         // state may still reflect the previous turn's settings.
         if localModelSelection?.matches(state.agentSettings) == true {
@@ -247,7 +263,7 @@ extension AgentSessionViewModel {
             hasLoadedMessages = true
         }
         let snapshotMessages = messagesIncludingOptimisticUserMessages(
-            in: snapshot.messages
+            in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
         markdownRenderCache.reset()
         rebuildTranscript(from: snapshotMessages)
@@ -333,6 +349,7 @@ extension AgentSessionViewModel {
         isSending = false
         isCreatingSession = false
         isWaitingForResponse = false
+        isCancelling = false
         hasSeenServerActiveTurn = false
     }
 
@@ -356,20 +373,7 @@ extension AgentSessionViewModel {
     }
 
     var composerPlaceholder: String {
-        if isCreatingSession {
-            return "Creating session..."
-        }
-        if isDraftMode {
-            return "Send a message..."
-        }
-        return switch connectionState {
-        case .connecting:
-            "Connecting..."
-        case .connected:
-            isResponding ? "Agent is responding..." : "Send a message..."
-        case .disconnected:
-            "Reconnecting..."
-        }
+        "Send a message..."
     }
 
     enum Context {

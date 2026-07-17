@@ -5,7 +5,7 @@ import Foundation
 /// Events emitted by `SessionSocket`.
 public enum SessionSocketEvent: Sendable {
     case connectionChanged(WebSocketConnectionState)
-    case connected(status: String)
+    case connected(status: SessionClientState.Status)
     case syncResponse(SessionSyncSnapshot)
     case operationError(SessionSocketOperationError)
     case chatAccepted(clientMessageId: String, messageId: String)
@@ -94,6 +94,11 @@ public actor SessionSocket {
         try await send(.sessionMarkRead(SessionMarkReadEvent(messageId: messageId)))
     }
 
+    /// Requests cancellation of the active agent turn.
+    public func cancelOperation() async throws {
+        try await send(.operationCancel(OperationCancelEvent()))
+    }
+
     private func send(_ message: ClientMessage) async throws {
         let data = try JSONEncoder().encode(message)
         guard let text = String(data: data, encoding: .utf8) else {
@@ -145,7 +150,7 @@ public actor SessionSocket {
         case .setupOutputChunks, .unknown:
             return nil
         case .connected(let event):
-            return .connected(status: event.status.rawValue)
+            return .connected(status: .init(rawValue: event.status.rawValue))
         case .operationError(let event):
             return .operationError(SessionSocketOperationError(
                 code: event.code.rawValue,

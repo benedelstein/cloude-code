@@ -17,7 +17,7 @@ extension AgentSessionView {
         @State private var composerFocused = false
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: style.gridSize) {
                 if showsRepoBranchPicker, let draft = vm.draft {
                     if draft.selectedRepo != nil {
                         EnvironmentPickerButton(draft: draft)
@@ -42,6 +42,7 @@ extension AgentSessionView {
                             vm.selectEffort(provider: provider, effort: effort)
                         }
                     )
+                    .disabled(vm.isCreatingSession)
                 }
             }
             .animation(style.fadeAnimation, value: showsRepoBranchPicker)
@@ -65,9 +66,14 @@ extension AgentSessionView {
                 remainingImageSlots: vm.remainingImageAttachmentSlots,
                 isImageInputEnabled: true,
                 isSubmitDisabled: !vm.canSubmitDraft,
-                isSubmitting: vm.isCreatingSession || vm.isResponding,
+                isSubmitting: vm.isCreatingSession,
+                isResponding: vm.isResponding,
+                isCancelling: vm.isCancelling,
+                isInterruptDisabled: !vm.canInterruptResponse,
+                isAttachmentInputDisabled: vm.isCreatingSession,
                 trailingAccessory: trailingAccessory,
                 onSubmit: vm.submitUserMessage,
+                onStop: vm.interruptResponse,
                 onRemoveImageAttachment: vm.removeImageAttachment,
                 onRetryImageAttachment: vm.retryImageAttachment,
                 onPhotosSelected: vm.addImageAttachmentPhotoItems,

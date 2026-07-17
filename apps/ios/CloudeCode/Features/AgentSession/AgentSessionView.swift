@@ -251,7 +251,7 @@ private extension AgentSessionView {
         }
 
         private var isWorkingIndicatorActive: Bool {
-            store.isResponding || store.clientState.sessionSetupRun?.status == "running"
+            store.isResponding || store.clientState.sessionSetupRun?.status == .running
         }
 
         private var transcriptItems: [SessionTranscriptItem] {

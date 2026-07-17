@@ -11,16 +11,21 @@ public struct SessionMessageMetadata: Sendable, Equatable {
     /// Provider/runtime end timestamp from `metadata.endedAt`, when present.
     public let workEndedAt: Date?
 
+    /// Whether the agent turn was interrupted before it completed.
+    public let isAborted: Bool
+
     /// Decodes known session message metadata fields from raw JSON metadata.
     public init(_ metadata: JSONValue?) {
         createdAt = metadata.dateValue(forKey: Self.createdAtKey)
         workStartedAt = metadata.dateValue(forKey: Self.startedAtKey)
         workEndedAt = metadata.dateValue(forKey: Self.endedAtKey)
+        isAborted = metadata.boolValue(forKey: Self.abortedKey) == true
     }
 
     public static let createdAtKey = "createdAt"
     public static let startedAtKey = "startedAt"
     public static let endedAtKey = "endedAt"
+    public static let abortedKey = "aborted"
 }
 
 public extension SessionMessage {
@@ -43,6 +48,11 @@ public extension SessionMessage {
     var workEndedAt: Date? {
         decodedMetadata.workEndedAt
     }
+
+    /// Whether the agent turn was interrupted before it completed.
+    var isAborted: Bool {
+        decodedMetadata.isAborted
+    }
 }
 
 private extension Optional where Wrapped == JSONValue {
@@ -51,6 +61,15 @@ private extension Optional where Wrapped == JSONValue {
             return nil
         }
         return value.dateValue
+    }
+
+    func boolValue(forKey key: String) -> Bool? {
+        guard case .object(let object) = self,
+              let rawValue = object[key],
+              case .bool(let value) = rawValue else {
+            return nil
+        }
+        return value
     }
 }
 

@@ -53,7 +53,7 @@ extension SessionClientState {
     init(_ state: ClientState) {
         self.init(
             repoFullName: state.repoFullName,
-            status: state.status.rawValue,
+            status: .init(rawValue: state.status.rawValue),
             sessionSetupRun: state.sessionSetupRun.map(SessionClientState.SessionSetupRun.init),
             agentSettings: SessionClientState.AgentSettings(state.agentSettings),
             pullRequest: state.pullRequest.map(SessionClientState.PullRequest.init),
@@ -141,7 +141,7 @@ private extension SessionClientState.SessionSetupRun {
     init(_ run: CoreAPI.SessionSetupRun) {
         self.init(
             id: run.id,
-            status: run.status.rawValue,
+            status: .init(rawValue: run.status.rawValue),
             startedAt: run.startedAt,
             completedAt: run.completedAt,
             tasks: run.tasks.map(SessionClientState.SessionSetupTask.init)

@@ -4,6 +4,7 @@ import UIKit
 
 struct AssistantMessageView: View {
     @Environment(\.style) var style: Style
+    @Environment(\.theme) private var theme: Theme
     @Environment(SessionTranscriptRowViewModel.self) private var rowViewModel
 
     private let partSpacing: CGFloat = 12
@@ -46,6 +47,13 @@ struct AssistantMessageView: View {
                 fullItems: items,
                 indexOffset: finalResponseStartIndex ?? 0
             )
+
+            if displayData.message.isAborted {
+                Text("Interrupted")
+                    .styledFont(.caption)
+                    .italic()
+                    .foregroundStyle(theme.secondaryLabelColor)
+            }
 
             // may want to just opacity this out with consistent frame
             // for no layout shift
