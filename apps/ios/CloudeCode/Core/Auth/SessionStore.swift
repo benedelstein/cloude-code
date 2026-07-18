@@ -101,6 +101,7 @@ final class SessionStore {
             case .refreshed(let session):
                 Logger.debug("Auth event: refreshed")
                 if case .refreshing = state {
+                    Logger.debug("transitioning from refreshing to signedIn")
                     initialRefreshTask = nil
                     state = .signedIn(userId: session.userId)
                     user = try? await userStore.get([session.userId], scopes: .all).first

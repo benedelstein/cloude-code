@@ -96,8 +96,14 @@ actor TokenCoordinator: AuthTokenProviding {
             maxAttempts: 3,
             backoff: refreshRetryBackoff,
             shouldRetry: { error in
-                guard let apiError = error as? APIError else { return true }
+                guard let apiError = error as? APIError else {
+                    Logger.debug("retrying refresh due to error \(error.localizedDescription)")
+                    return true
+                }
+                // dont retry for definitive 401 errors
                 if case .unauthenticated = apiError { return false }
+                // retry for intermittent errors and unknown stuff
+                Logger.debug("retrying refresh due to API Error: \(apiError.localizedDescription)")
                 return true
             },
             operation: { [refresher] in
