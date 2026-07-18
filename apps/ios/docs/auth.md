@@ -39,7 +39,7 @@ group keychain, then removes the legacy value. Tokens must not be placed in
 | `UnauthenticatedAuthAPI` | Calls sign-in, refresh, and logout endpoints without a Bearer header. The refresh token in the request body is the credential. |
 | `AuthTokenProviding` | Boundary used by authenticated API types to obtain Bearer headers. `TokenCoordinator` implements it. |
 | `RootView` | Chooses the signed-out screen or Home from `SessionStore.State`. |
-| `HomeViewModel` | Loads cached Home data immediately, then starts fetch/socket work whose API authorization awaits `TokenCoordinator` when refresh is required. |
+| `HomeViewModel` | Loads cached Home data, then starts fetch/socket work whose API authorization awaits `TokenCoordinator` when refresh is required. |
 
 `ApplicationComponent` creates one shared coordinator and injects it into every
 authenticated API surface. Features must not load, save, refresh, or attach
@@ -73,10 +73,10 @@ During `refreshing`, the app has enough local identity to render cached Home
 content, but it does not claim that authenticated network access is ready:
 
 - `RootView` renders Home for both `refreshing` and `signedIn`.
-- `HomeViewModel.loadCachedState()` may run immediately.
-- `HomeViewModel.startOnline()` begins on appearance without inspecting the UI
-  auth state. Its authenticated API calls obtain Bearer headers through the
-  coordinator and await an in-flight refresh when necessary.
+- `HomeViewModel.start()` begins on appearance without inspecting the UI auth
+  state. It loads the cache first, then its authenticated API calls obtain
+  Bearer headers through the coordinator and await an in-flight refresh when
+  necessary.
 - `authUserPublisher` publishes `nil`, so work such as FCM token upload remains
   gated until `signedIn`.
 - Every other authenticated request follows the same `AuthTokenProviding` path
@@ -98,8 +98,9 @@ All refresh paths converge on `TokenCoordinator.refresh()`:
    deadline.
 3. **On demand:** `authToken()` refreshes when the access token is stale. A token
    is considered stale 60 seconds before its recorded expiry.
-4. **Retry:** a transient refresh failure keeps the current session and retries
-   with exponential backoff from one second, capped at 30 seconds.
+4. **Retry:** a transient refresh failure retries up to three total attempts
+   with exponential backoff from one second, capped at 30 seconds. An
+   unauthenticated response bypasses retry and follows the terminal path.
 
 Only one refresh request may be in flight. Concurrent timer, startup, retry,
 and API-request callers await the same task. Before adopting a response, the

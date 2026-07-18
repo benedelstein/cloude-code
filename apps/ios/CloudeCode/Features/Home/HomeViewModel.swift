@@ -19,8 +19,7 @@ final class HomeViewModel {
     private let userSessionsSocket: UserSessionsSocket
     private let archiveSessionAction: ArchiveSessionAction
     private let deleteSessionAction: DeleteSessionAction
-    private var didLoadCachedState = false
-    private var didStartOnline = false
+    private var didStart = false
     private var hasConnected = false
     private var socketTask: Task<Void, Never>?
 
@@ -54,22 +53,13 @@ final class HomeViewModel {
         self.deleteSessionAction = deleteSessionAction
     }
 
-    /// Loads cached sessions without requiring authenticated network access.
-    func loadCachedState() async {
-        guard !didLoadCachedState else {
+    /// Loads cached sessions, then starts refresh and socket work.
+    func start() async {
+        guard !didStart else {
             return
         }
-        didLoadCachedState = true
+        didStart = true
         await loadCache()
-    }
-
-    /// Starts refresh and socket work, awaiting token rotation when necessary.
-    func startOnline() async {
-        guard !didStartOnline else {
-            return
-        }
-        didStartOnline = true
-        await loadCachedState()
         listenForSocketEvents()
         await refresh(showLoading: isEmpty)
         await userSessionsSocket.connect()
@@ -80,8 +70,7 @@ final class HomeViewModel {
     func unload() {
         socketTask?.cancel()
         socketTask = nil
-        didLoadCachedState = false
-        didStartOnline = false
+        didStart = false
         hasConnected = false
         hasLoaded = false
         errorMessage = nil

@@ -35,12 +35,10 @@ actor TokenCoordinator: AuthTokenProviding {
     private let persistence: any SessionPersisting
     private let refresher: any SessionRefreshing
     private let revoker: any SessionRevoking
-    private let refreshRetryBaseInterval: TimeInterval
+    private let refreshRetryBackoff: RetryBackoffStrategy
     private var session: Session?
     private var refreshTask: Task<Session, any Error>?
     private var timerTask: Task<Void, Never>?
-    private var retryTask: Task<Void, Never>?
-    private var refreshRetryAttempt = 0
     private let continuation: AsyncStream<AuthEvent>.Continuation
     nonisolated let events: AsyncStream<AuthEvent>
 
@@ -48,12 +46,15 @@ actor TokenCoordinator: AuthTokenProviding {
         persistence: any SessionPersisting,
         refresher: any SessionRefreshing,
         revoker: any SessionRevoking,
-        refreshRetryBaseInterval: TimeInterval = 1
+        refreshRetryBackoff: RetryBackoffStrategy = .exponential(
+            initial: .seconds(1),
+            maximum: .seconds(30)
+        )
     ) {
         self.persistence = persistence
         self.refresher = refresher
         self.revoker = revoker
-        self.refreshRetryBaseInterval = refreshRetryBaseInterval
+        self.refreshRetryBackoff = refreshRetryBackoff
         (events, continuation) = AsyncStream.makeStream()
     }
 
@@ -91,9 +92,18 @@ actor TokenCoordinator: AuthTokenProviding {
     func refresh() async throws -> Session {
         if let inFlight = refreshTask { return try await inFlight.value } // idempotent
         guard let current = session else { throw APIError.unauthenticated }
-        let task = Task { [refresher] in
-            try await refresher.refresh(refreshToken: current.refreshToken)
-        }
+        let task = Task.retrying(
+            maxAttempts: 3,
+            backoff: refreshRetryBackoff,
+            shouldRetry: { error in
+                guard let apiError = error as? APIError else { return true }
+                if case .unauthenticated = apiError { return false }
+                return true
+            },
+            operation: { [refresher] in
+                try await refresher.refresh(refreshToken: current.refreshToken)
+            }
+        )
         refreshTask = task
         defer { refreshTask = nil }
         do {
@@ -114,9 +124,8 @@ actor TokenCoordinator: AuthTokenProviding {
             clearSession()
             continuation.yield(.signedOut)
             throw APIError.unauthenticated
-        } catch { // other errors: transient, session kept and retried
+        } catch { // other errors: transient retries exhausted, session kept
             Logger.error("Token refresh: transient failure, keeping session —", error)
-            scheduleRefreshRetry()
             throw error
         }
     }
@@ -143,7 +152,6 @@ actor TokenCoordinator: AuthTokenProviding {
 
     private func _adopt(_ new: Session) {
         session = new
-        cancelRefreshRetry()
         do {
             try persistence.save(new)
         } catch {
@@ -163,7 +171,6 @@ actor TokenCoordinator: AuthTokenProviding {
         refreshTask = nil
         timerTask?.cancel()
         timerTask = nil
-        cancelRefreshRetry()
     }
 
     /// Refresh 2 minutes ahead of expiry, anchored to a clock deadline so the
@@ -178,25 +185,5 @@ actor TokenCoordinator: AuthTokenProviding {
             guard !Task.isCancelled else { return }
             _ = try? await self?.refresh()
         }
-    }
-
-    private func scheduleRefreshRetry() {
-        retryTask?.cancel()
-        let exponent = min(refreshRetryAttempt, 5)
-        let delay = min(refreshRetryBaseInterval * pow(2, Double(exponent)), 30)
-        refreshRetryAttempt += 1
-        Logger.debug("Token refresh: retrying in", delay, "seconds")
-        let deadline = ContinuousClock.now + .seconds(delay)
-        retryTask = Task { [weak self] in
-            try? await Task.sleep(until: deadline)
-            guard !Task.isCancelled else { return }
-            _ = try? await self?.refresh()
-        }
-    }
-
-    private func cancelRefreshRetry() {
-        retryTask?.cancel()
-        retryTask = nil
-        refreshRetryAttempt = 0
     }
 }

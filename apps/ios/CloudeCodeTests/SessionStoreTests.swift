@@ -68,6 +68,7 @@ struct SessionStoreTests {
         _ = try? await coordinator.refresh()
         try await waitUntil { store.state == .signedOut }
         #expect(await recorder.events.isEmpty)
+        #expect(await authAPI.refreshCount == 1)
         #expect(signOutCounter.count == 1)
     }
 
@@ -142,7 +143,7 @@ struct SessionStoreTests {
             persistence: TestSessionPersistence(session: Self.staleSession),
             refresher: authAPI,
             revoker: authAPI,
-            refreshRetryBaseInterval: 0.01
+            refreshRetryBackoff: .constant(.milliseconds(10))
         )
         let store = SessionStore(
             coordinator: coordinator,

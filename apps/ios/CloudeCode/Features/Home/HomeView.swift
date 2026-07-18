@@ -78,9 +78,8 @@ struct HomeView: View {
         .task {
             router.start()
             async let notifications: Void = prepareNotifications()
-            await viewModel.loadCachedState()
+            await viewModel.start()
             await router.handlePendingNotificationTap()
-            await viewModel.startOnline()
             await notifications
         }
         .onDisappear {
