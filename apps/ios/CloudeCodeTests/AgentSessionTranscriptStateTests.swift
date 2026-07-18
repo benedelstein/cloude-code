@@ -249,7 +249,7 @@ struct AgentSessionTranscriptStateTests {
     }
 }
 
-private extension AgentSessionTranscriptStateTests {
+extension AgentSessionTranscriptStateTests {
     struct StubTranscriptBuilder: AgentSessionTranscriptBuilding {
         func build(
             message: SessionMessage,
@@ -412,7 +412,8 @@ private extension AgentSessionTranscriptStateTests {
 
     func liveState(
         provider: AgentProviderID,
-        pendingUserMessage: SessionMessage? = nil
+        pendingUserMessage: SessionMessage? = nil,
+        setupRun: SessionClientState.SessionSetupRun? = nil
     ) -> SessionClientState {
         var state = SessionClientState.empty
         state.agentSettings = .init(
@@ -422,6 +423,7 @@ private extension AgentSessionTranscriptStateTests {
             maxTokens: 8_192
         )
         state.pendingUserMessage = pendingUserMessage
+        state.sessionSetupRun = setupRun
         return state
     }
 

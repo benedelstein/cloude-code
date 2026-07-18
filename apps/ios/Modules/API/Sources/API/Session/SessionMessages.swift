@@ -162,8 +162,8 @@ private extension SessionClientState.SessionSetupTask {
             self = Self(payload)
         case .unknown(let type):
             self.init(
-                id: type,
-                status: "unknown",
+                id: .unknown(type),
+                status: .unknown("unknown"),
                 startedAt: nil,
                 completedAt: nil,
                 error: nil,
@@ -176,8 +176,8 @@ private extension SessionClientState.SessionSetupTask {
 
     init(_ task: CoreAPI.CloudContainerSetupTask) {
         self.init(
-            id: task.id,
-            status: task.status.rawValue,
+            id: .init(rawValue: task.id),
+            status: .init(rawValue: task.status.rawValue),
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -189,8 +189,8 @@ private extension SessionClientState.SessionSetupTask {
 
     init(_ task: CoreAPI.RepositorySetupTask) {
         self.init(
-            id: task.id,
-            status: task.status.rawValue,
+            id: .init(rawValue: task.id),
+            status: .init(rawValue: task.status.rawValue),
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -202,21 +202,22 @@ private extension SessionClientState.SessionSetupTask {
 
     init(_ task: CoreAPI.StartupScriptSetupTask) {
         self.init(
-            id: task.id,
-            status: task.status.rawValue,
+            id: .init(rawValue: task.id),
+            status: .init(rawValue: task.status.rawValue),
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
             isBlocking: task.isBlocking,
             canRetry: task.canRetry,
-            output: task.output.map(SessionClientState.SessionSetupTaskOutput.init)
+            output: task.output.map(SessionClientState.SessionSetupTaskOutput.init),
+            skipReason: task.skipReason.map(SessionClientState.SessionSetupTask.SkipReason.init)
         )
     }
 
     init(_ task: CoreAPI.NetworkPolicySetupTask) {
         self.init(
-            id: task.id,
-            status: task.status.rawValue,
+            id: .init(rawValue: task.id),
+            status: .init(rawValue: task.status.rawValue),
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -224,6 +225,22 @@ private extension SessionClientState.SessionSetupTask {
             canRetry: task.canRetry,
             output: nil
         )
+    }
+}
+
+private extension SessionClientState.SessionSetupTask.SkipReason {
+    init(_ reason: CoreAPI.StartupScriptSetupTaskSkipReason) {
+        switch reason {
+        case .noEnvironment(let payload):
+            self = .noEnvironment(repoID: payload.repoId)
+        case .noScript(let payload):
+            self = .noScript(
+                environmentID: payload.environmentId,
+                environmentName: payload.environmentName
+            )
+        case .unknown(let type):
+            self = .unknown(type)
+        }
     }
 }
 

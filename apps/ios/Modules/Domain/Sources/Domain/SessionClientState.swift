@@ -204,24 +204,98 @@ public extension SessionClientState {
     }
 
     struct SessionSetupTask: Sendable, Equatable, Codable, Identifiable {
-        public let id: String
-        public let status: String
+        /// A setup step reported by the session runtime.
+        public enum TaskID: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+            case cloudContainer
+            case repository
+            case setupScript
+            case networkPolicy
+            case unknown(String)
+
+            /// Creates a task identifier from its wire value.
+            public init(rawValue: String) {
+                switch rawValue {
+                case "cloud_container": self = .cloudContainer
+                case "repository": self = .repository
+                case "setup_script": self = .setupScript
+                case "network_policy": self = .networkPolicy
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            /// The task identifier used on the wire.
+            public var rawValue: String {
+                switch self {
+                case .cloudContainer: "cloud_container"
+                case .repository: "repository"
+                case .setupScript: "setup_script"
+                case .networkPolicy: "network_policy"
+                case .unknown(let value): value
+                }
+            }
+        }
+
+        /// The lifecycle state of an individual setup step.
+        public enum Status: RawRepresentable, Codable, Equatable, Sendable {
+            case pending
+            case running
+            case completed
+            case failed
+            case skipped
+            case unknown(String)
+
+            /// Creates a task status from its wire value.
+            public init(rawValue: String) {
+                switch rawValue {
+                case "pending": self = .pending
+                case "running": self = .running
+                case "completed": self = .completed
+                case "failed": self = .failed
+                case "skipped": self = .skipped
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            /// The task status used on the wire.
+            public var rawValue: String {
+                switch self {
+                case .pending: "pending"
+                case .running: "running"
+                case .completed: "completed"
+                case .failed: "failed"
+                case .skipped: "skipped"
+                case .unknown(let value): value
+                }
+            }
+        }
+
+        /// Why the startup script did not run.
+        public enum SkipReason: Sendable, Equatable, Codable {
+            case noEnvironment(repoID: Int)
+            case noScript(environmentID: String, environmentName: String?)
+            case unknown(String)
+        }
+
+        public let id: TaskID
+        public let status: Status
         public let startedAt: String?
         public let completedAt: String?
         public let error: String?
         public let isBlocking: Bool
         public let canRetry: Bool
         public let output: SessionSetupTaskOutput?
+        public let skipReason: SkipReason?
 
         public init(
-            id: String,
-            status: String,
+            id: TaskID,
+            status: Status,
             startedAt: String?,
             completedAt: String?,
             error: String?,
             isBlocking: Bool,
             canRetry: Bool,
-            output: SessionSetupTaskOutput?
+            output: SessionSetupTaskOutput?,
+            skipReason: SkipReason? = nil
         ) {
             self.id = id
             self.status = status
@@ -231,6 +305,7 @@ public extension SessionClientState {
             self.isBlocking = isBlocking
             self.canRetry = canRetry
             self.output = output
+            self.skipReason = skipReason
         }
     }
 

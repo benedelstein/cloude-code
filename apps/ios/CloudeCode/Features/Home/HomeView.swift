@@ -32,7 +32,7 @@ struct HomeView: View {
             contentWithFAB
                 .background(theme.backgroundColor)
                 .ignoresSafeArea(.keyboard)
-                .navigationTitle("Sessions")
+                // .navigationTitle("Sessions")
                 .toolbar { settingsToolbar }
                 .navigationDestination(for: HomeDestination.self) { destination in
                     switch destination {
@@ -104,7 +104,7 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "plus.message.fill")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(theme.labelColor)
+                        .foregroundStyle(.white)
                         .frame(width: 48, height: 48)
                         .contentShape(Circle())
                 }

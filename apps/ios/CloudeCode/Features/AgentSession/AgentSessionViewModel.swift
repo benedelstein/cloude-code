@@ -69,10 +69,11 @@ final class AgentSessionViewModel {
     /// Guard so that we do not accumulate to a stream that is no longer active
     var streamGeneration = 0
     var streamStatus = SessionMessageStreamStatus()
-    // Future optimization: cache a curated subset of client state
-    // if needed. Do not persist raw SessionClientState; active turns,
+    // Future optimization: cache the last known setup run and other curated,
+    // durable client state. Do not persist raw SessionClientState; active turns,
     // pending work, editor readiness, and transient errors are live state.
     var clientState = SessionClientState.empty
+    private(set) var isSetupRunExpanded = false
     var transcriptProvider: AgentProviderID {
         let clientProvider = clientState.agentSettings.provider
         // The summary only seeds cached transcript rendering; hydrated client
@@ -250,6 +251,7 @@ extension AgentSessionViewModel {
 
     func applyLiveState(_ state: SessionClientState) {
         let previousProvider = transcriptProvider
+        updateSetupRunDisclosure(from: clientState.sessionSetupRun, to: state.sessionSetupRun)
         clientState = state
         // A newly created session keeps its initial message in live state until
         // provisioning dispatches it into durable message history.
@@ -266,6 +268,38 @@ extension AgentSessionViewModel {
             rebuildTranscriptDisplayData()
         }
         reconcilePullRequestState()
+    }
+
+    func toggleSetupRunExpansion() {
+        guard clientState.sessionSetupRun != nil else {
+            return
+        }
+        isSetupRunExpanded.toggle()
+    }
+
+    private func updateSetupRunDisclosure(
+        from previousRun: SessionClientState.SessionSetupRun?,
+        to nextRun: SessionClientState.SessionSetupRun?
+    ) {
+        guard let nextRun else {
+            isSetupRunExpanded = false
+            return
+        }
+        guard previousRun?.id == nextRun.id, previousRun?.status == nextRun.status else {
+            isSetupRunExpanded = Self.defaultSetupRunExpansion(for: nextRun)
+            return
+        }
+    }
+
+    private static func defaultSetupRunExpansion(
+        for run: SessionClientState.SessionSetupRun
+    ) -> Bool {
+        switch run.status {
+        case .completed:
+            run.tasks.contains { $0.status == .failed }
+        case .running, .failed, .unknown:
+            true
+        }
     }
 
     private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {

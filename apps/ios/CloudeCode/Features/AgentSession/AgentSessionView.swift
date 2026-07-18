@@ -242,12 +242,8 @@ private extension AgentSessionView {
                 }
         }
 
-        private var hasMessageTranscriptItems: Bool {
-            !rows.isEmpty
-        }
-
         private var hasTranscriptItems: Bool {
-            hasMessageTranscriptItems || isWorkingIndicatorActive
+            !transcriptItems.isEmpty
         }
 
         private var isWorkingIndicatorActive: Bool {
@@ -258,7 +254,7 @@ private extension AgentSessionView {
             // TranscriptRow.id is the stable row id assigned when the row is
             // created (streaming assistant rows and optimistic user rows keep it
             // when the server id arrives), so rows never churn identity.
-            var items = rows.compactMap { row -> SessionTranscriptItem? in
+            let messageItems = rows.compactMap { row -> SessionTranscriptItem? in
                 guard let message = store.messagesByID[row.messageID] else {
                     assertionFailure("Transcript row \(row.id) has no message \(row.messageID)")
                     return nil
@@ -278,13 +274,19 @@ private extension AgentSessionView {
                 )
             }
 
-            if hasTranscriptItems {
-                // Keep this row mounted even when inactive so the cloud can settle
-                // into its resting state instead of disappearing between turns.
-                items.append(.workingIndicator(isActive: isWorkingIndicatorActive))
-            }
+            return SessionTranscriptProjection.build(
+                messageItems: messageItems,
+                setupRun: store.clientState.sessionSetupRun,
+                isSetupRunExpanded: store.isSetupRunExpanded,
+                showsSetupRunPlaceholder: shouldShowSetupRunPlaceholder,
+                isWorkingIndicatorActive: isWorkingIndicatorActive
+            )
+        }
 
-            return items
+        private var shouldShowSetupRunPlaceholder: Bool {
+            store.session != nil
+                && store.hasLoadedMessages
+                && store.clientState.agentSettings.model.isEmpty
         }
 
         @ViewBuilder
@@ -323,6 +325,11 @@ private extension AgentSessionView {
                         displayData: displayData,
                         isStreaming: isStreaming,
                         destination: $destination
+                    )
+                case .setupRun(let state):
+                    SetupRunView(
+                        state: state,
+                        onToggle: store.toggleSetupRunExpansion
                     )
                 case .workingIndicator(let isActive):
                     WorkingIndicatorView(isActive: isActive)

@@ -31,6 +31,9 @@
     "Close" : {
 
     },
+    "Closed pull request" : {
+
+    },
     "Cloude Code" : {
 
     },
@@ -52,6 +55,9 @@
     "Copy" : {
 
     },
+    "Copy branch name" : {
+
+    },
     "Copy response" : {
 
     },
@@ -62,6 +68,12 @@
 
     },
     "Create environment" : {
+
+    },
+    "Creating pull request" : {
+
+    },
+    "Creating..." : {
 
     },
     "Dark" : {
@@ -255,6 +267,9 @@
         }
       }
     },
+    "Merged pull request" : {
+
+    },
     "Model" : {
 
     },
@@ -297,6 +312,9 @@
     "OK" : {
 
     },
+    "Open pull request" : {
+
+    },
     "Photos" : {
 
     },
@@ -327,6 +345,9 @@
       }
     },
     "Plan details" : {
+
+    },
+    "Pushed branch" : {
 
     },
     "Ran %lld commands" : {
@@ -595,9 +616,6 @@
 
     },
     "Session name" : {
-
-    },
-    "Sessions" : {
 
     },
     "Settings" : {

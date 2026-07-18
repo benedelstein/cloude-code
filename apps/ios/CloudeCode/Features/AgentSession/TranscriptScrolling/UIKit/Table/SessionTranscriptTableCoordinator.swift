@@ -98,6 +98,7 @@ extension SessionTranscriptTableRepresentable {
                     .environment(rowViewModelCache.viewModel(for: item.id))
             }
             .margins(.all, 0)
+            .minSize(height: 0)
         }
 
         func indexPath(forItemID id: String) -> IndexPath? {
@@ -480,7 +481,46 @@ extension SessionTranscriptTableRepresentable.Coordinator {
         let existingIDs = Set(dataSource.snapshot().itemIdentifiers)
         let updatedIDs = itemIDs.filter { existingIDs.contains($0) }
         guard !updatedIDs.isEmpty else { return }
-        updateVisibleCellsWithoutAnimation(updatedIDs, in: tableView)
+
+        let deferredIDs = synchronouslyConfigureVisibleItems(updatedIDs, in: tableView)
+        guard !deferredIDs.isEmpty else { return }
+        updateVisibleCellsWithoutAnimation(deferredIDs, in: tableView)
+    }
+
+    private func synchronouslyConfigureVisibleItems(
+        _ itemIDs: [String],
+        in tableView: UITableView
+    ) -> [String] {
+        var didConfigureCell = false
+        var deferredIDs: [String] = []
+
+        UIView.performWithoutAnimation {
+            for itemID in itemIDs {
+                guard let item = itemsByID[itemID],
+                      let indexPath = indexPath(forItemID: itemID),
+                      let cell = tableView.cellForRow(at: indexPath) else {
+                    deferredIDs.append(itemID)
+                    continue
+                }
+
+                configure(cell, with: item)
+                cell.contentView.invalidateIntrinsicContentSize()
+                // Apple documents reconfigureItems as rerunning cell configuration,
+                // and UIHostingConfiguration should update and resize automatically.
+                // In practice, the cell adopted its expanded height while the new
+                // SwiftUI content stayed blank, so flush the hosted layout explicitly.
+                cell.contentView.layoutIfNeeded()
+                didConfigureCell = true
+            }
+
+            guard didConfigureCell else { return }
+            tableView.beginUpdates()
+            tableView.endUpdates()
+        }
+        if didConfigureCell {
+            tableView.layer.removeAllAnimations()
+        }
+        return deferredIDs
     }
 
     func updateVisibleCellsWithoutAnimation(

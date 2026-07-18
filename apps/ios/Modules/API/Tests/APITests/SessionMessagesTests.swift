@@ -259,7 +259,8 @@ struct SessionMessagesTests {
         #expect(clientState.repoFullName == "benedelstein/cloude-code")
         #expect(clientState.status == .ready)
         #expect(clientState.sessionSetupRun?.status == .running)
-        #expect(clientState.sessionSetupRun?.tasks.first?.id == "repository")
+        #expect(clientState.sessionSetupRun?.tasks.first?.id == .repository)
+        #expect(clientState.sessionSetupRun?.tasks.first?.status == .completed)
         #expect(clientState.agentSettings.provider == .openaiCodex)
         #expect(clientState.agentSettings.model == "gpt-5.5")
         #expect(clientState.pullRequest == .creating)
@@ -273,6 +274,50 @@ struct SessionMessagesTests {
         #expect(clientState.providerConnection?.connected == true)
         #expect(clientState.agentMode == "edit")
         #expect(clientState.createdAt == "2026-06-13T00:00:00.000Z")
+    }
+
+    @Test func startupScriptTaskMapsMetadataAndSkipReasonWithoutOutputText() throws {
+        let state = ClientState(
+            status: .preparing,
+            sessionSetupRun: SessionSetupRun(
+                id: "setup_1",
+                status: .running,
+                startedAt: "2026-06-13T00:00:00.000Z",
+                tasks: [
+                    .setupScript(StartupScriptSetupTask(
+                        status: .skipped,
+                        output: SessionSetupTaskOutput(
+                            exitCode: 0,
+                            truncated: true,
+                            stdoutLength: 12_000,
+                            stderrLength: 40,
+                            stdout: "intentionally not mapped",
+                            stderr: "intentionally not mapped"
+                        ),
+                        skipReason: .noScript(.init(
+                            environmentId: "environment_1",
+                            environmentName: "Development"
+                        ))
+                    ))
+                ]
+            ),
+            agentSettings: .openaiCodex(.init(model: .gpt55, effort: .high, maxTokens: 4_096)),
+            agentMode: .edit,
+            createdAt: "2026-06-13T00:00:00.000Z"
+        )
+
+        let task = try #require(SessionClientState(state).sessionSetupRun?.tasks.first)
+
+        #expect(task.id == .setupScript)
+        #expect(task.status == .skipped)
+        #expect(task.output?.exitCode == 0)
+        #expect(task.output?.truncated == true)
+        #expect(task.output?.stdoutLength == 12_000)
+        #expect(task.output?.stderrLength == 40)
+        #expect(task.skipReason == .noScript(
+            environmentID: "environment_1",
+            environmentName: "Development"
+        ))
     }
 
     @Test func sessionSummaryIDsAreOpaqueStrings() {
