@@ -95,17 +95,7 @@ actor TokenCoordinator: AuthTokenProviding {
         let task = Task.retrying(
             maxAttempts: 3,
             backoff: refreshRetryBackoff,
-            shouldRetry: { error in
-                guard let apiError = error as? APIError else {
-                    Logger.debug("retrying refresh due to error \(error.localizedDescription)")
-                    return true
-                }
-                // dont retry for definitive 401 errors
-                if case .unauthenticated = apiError { return false }
-                // retry for intermittent errors and unknown stuff
-                Logger.debug("retrying refresh due to API Error: \(apiError.localizedDescription)")
-                return true
-            },
+            shouldRetry: { Self.shouldRetryRefresh(after: $0) },
             operation: { [refresher] in
                 try await refresher.refresh(refreshToken: current.refreshToken)
             }
@@ -134,6 +124,18 @@ actor TokenCoordinator: AuthTokenProviding {
             Logger.error("Token refresh: transient failure, keeping session —", error)
             throw error
         }
+    }
+
+    private static func shouldRetryRefresh(after error: any Error) -> Bool {
+        guard let apiError = error as? APIError else {
+            Logger.debug("retrying refresh due to error \(error.localizedDescription)")
+            return true
+        }
+        guard case .unauthenticated = apiError else {
+            Logger.debug("retrying refresh due to API Error: \(apiError.localizedDescription)")
+            return true
+        }
+        return false
     }
 
     func adopt(_ new: Session) {
