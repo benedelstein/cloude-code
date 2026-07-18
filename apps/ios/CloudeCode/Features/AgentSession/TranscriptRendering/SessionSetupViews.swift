@@ -24,7 +24,6 @@ extension AgentSessionView {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .border(.red)
         }
 
         private struct Header: View {
