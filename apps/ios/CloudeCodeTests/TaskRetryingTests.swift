@@ -51,6 +51,19 @@ struct TaskRetryingTests {
         #expect(strategy.delay(afterFailedAttempt: 3) == .seconds(4))
         #expect(strategy.delay(afterFailedAttempt: 4) == .seconds(5))
     }
+
+    @Test func linearBackoffIncrementsAndCaps() {
+        let strategy = RetryBackoffStrategy.linear(
+            initial: .seconds(1),
+            increment: .seconds(2),
+            maximum: .seconds(5)
+        )
+
+        #expect(strategy.delay(afterFailedAttempt: 1) == .seconds(1))
+        #expect(strategy.delay(afterFailedAttempt: 2) == .seconds(3))
+        #expect(strategy.delay(afterFailedAttempt: 3) == .seconds(5))
+        #expect(strategy.delay(afterFailedAttempt: 4) == .seconds(5))
+    }
 }
 
 private actor RetryAttemptCounter {

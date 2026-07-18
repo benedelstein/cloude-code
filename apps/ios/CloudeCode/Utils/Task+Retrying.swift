@@ -4,6 +4,7 @@ import Foundation
 enum RetryBackoffStrategy: Sendable {
     case immediate
     case constant(Duration)
+    case linear(initial: Duration, increment: Duration, maximum: Duration)
     case exponential(initial: Duration, maximum: Duration)
 
     func delay(afterFailedAttempt attempt: Int) -> Duration {
@@ -12,6 +13,14 @@ enum RetryBackoffStrategy: Sendable {
             return .zero
         case .constant(let delay):
             return max(.zero, delay)
+        case let .linear(initial, increment, maximum):
+            let maximum = max(.zero, maximum)
+            let increment = max(.zero, increment)
+            var delay = min(max(.zero, initial), maximum)
+            for _ in 1..<max(1, attempt) {
+                delay = min(delay + increment, maximum)
+            }
+            return delay
         case let .exponential(initial, maximum):
             let maximum = max(.zero, maximum)
             var delay = min(max(.zero, initial), maximum)
