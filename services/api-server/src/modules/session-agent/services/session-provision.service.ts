@@ -422,7 +422,7 @@ export class SessionProvisionService {
     const githubRemoteUrl = `https://github.com/${repoFullName}.git`;
 
     // Check if the repo is already cloned (sprite may be persistent)
-    const isCloned = await sprite.execHttp(
+    const isCloned = await sprite.execWs(
       `test -d ${WORKSPACE_DIR}/.git && echo 'exists' || echo 'empty'`,
       {},
     );
@@ -434,7 +434,7 @@ export class SessionProvisionService {
       this.logger.info("Cloning repo on sprite", {
         fields: { repoFullName, spriteName },
       });
-      await sprite.execHttp(`mkdir -p ${WORKSPACE_DIR}`, {});
+      await sprite.execWs(`mkdir -p ${WORKSPACE_DIR}`, {});
 
       // Fetch a read-only token scoped to contents:read for the initial clone
       const cloneTokenResult =
@@ -454,7 +454,7 @@ export class SessionProvisionService {
         `${branchFlag}${shellQuote(githubRemoteUrl)}`,
         shellQuote(WORKSPACE_DIR),
       ].join(" ");
-      const cloneResult = await sprite.execHttp(cloneCommand, {});
+      const cloneResult = await sprite.execWs(cloneCommand, {});
       this.logger.info("Clone completed", {
         fields: {
           durationSeconds: Number(
@@ -472,7 +472,7 @@ export class SessionProvisionService {
     }
 
     // Detect the base branch (whatever branch the clone checked out)
-    const branchResult = await sprite.execHttp(
+    const branchResult = await sprite.execWs(
       `cd ${WORKSPACE_DIR} && git rev-parse --abbrev-ref HEAD`,
       {},
     );
@@ -498,7 +498,7 @@ export class SessionProvisionService {
         : githubRemoteUrl;
 
     // Configure remote URLs, git identity, and proxy auth header
-    await sprite.execHttp(
+    await sprite.execWs(
       dedent`
       set -e
       cd ${WORKSPACE_DIR}
