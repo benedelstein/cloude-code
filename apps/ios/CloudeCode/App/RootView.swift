@@ -20,7 +20,7 @@ struct RootView: View {
                 switch sessionStore.state {
                 case .loading:
                     Color.clear
-                case .signedIn:
+                case .refreshing, .signedIn:
                     HomeBuilder(component: component.homeComponent).build()
                 case .signedOut:
                     SignedOutView(sessionStore: sessionStore)

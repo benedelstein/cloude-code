@@ -36,7 +36,8 @@ Each surface exposes a public `XxxAPIProviding` protocol (so features can be
 tested against fakes) plus a concrete `XxxAPI` struct that holds the shared
 `APIClient` and an `AuthTokenProviding`. Authed requests attach
 `try await tokenProvider.bearerHeaders()`. Both are wired in
-`ApplicationComponent`.
+`ApplicationComponent`. See [`auth.md`](auth.md) for session restoration,
+Keychain storage, access-token refresh, and the UI auth state machine.
 
 ## Return domain structs
 
