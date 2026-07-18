@@ -39,7 +39,7 @@ extension AgentSessionView {
         }
 
         private var containerShape: some Shape {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
         }
 
         @ViewBuilder

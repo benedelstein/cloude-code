@@ -61,6 +61,9 @@ Lower layers never import higher ones. Entities does not know about the network;
 - **App to API server** - All server communication goes through `Modules/API`. Protocol shapes come from CoreAPI, which is generated from the same Zod schemas the server validates against, so client and server cannot drift silently.
 - **Features to dependencies** - Features receive dependencies through Needle child components, not by reaching into globals or constructing shared services themselves.
 
+Authentication session ownership, Keychain persistence, token rotation, and
+the UI auth state machine are documented in [`docs/auth.md`](docs/auth.md).
+
 ## Conventions
 
 - Reusable API, caching, persistence, and shared logic go in local Swift packages under `Modules/` and are linked to the xcode project via SPM.
@@ -74,4 +77,3 @@ Lower layers never import higher ones. Entities does not know about the network;
 - **SwiftData** for on-disk persistence (versioned schema with migration plan).
 - **swift-ai-sdk** for AI SDK message types in the API layer ([https://github.com/teunlao/swift-ai-sdk](https://github.com/teunlao/swift-ai-sdk))
 - **Local SwiftPM packages** for module boundaries; **xcconfig** files for per-environment build settings.
-

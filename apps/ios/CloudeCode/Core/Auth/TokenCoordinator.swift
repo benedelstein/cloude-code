@@ -15,6 +15,12 @@ enum AuthEvent: Sendable {
     case signedOut
 }
 
+enum SessionRestoreResult: Sendable, Equatable {
+    case signedOut
+    case ready(Session)
+    case needsRefresh(Session)
+}
+
 private enum TokenCoordinatorError: Error {
     case staleRefreshResult
 }
@@ -29,6 +35,7 @@ actor TokenCoordinator: AuthTokenProviding {
     private let persistence: any SessionPersisting
     private let refresher: any SessionRefreshing
     private let revoker: any SessionRevoking
+    private let refreshRetryBackoff: RetryBackoffStrategy
     private var session: Session?
     private var refreshTask: Task<Session, any Error>?
     private var timerTask: Task<Void, Never>?
@@ -38,35 +45,40 @@ actor TokenCoordinator: AuthTokenProviding {
     init(
         persistence: any SessionPersisting,
         refresher: any SessionRefreshing,
-        revoker: any SessionRevoking
+        revoker: any SessionRevoking,
+        refreshRetryBackoff: RetryBackoffStrategy = .exponential(
+            initial: .seconds(1),
+            maximum: .seconds(30)
+        )
     ) {
         self.persistence = persistence
         self.refresher = refresher
         self.revoker = revoker
+        self.refreshRetryBackoff = refreshRetryBackoff
         (events, continuation) = AsyncStream.makeStream()
     }
 
-    /// Startup: keychain → nil = signed out; stale access → refresh; valid → arm timer.
-    func restore() async -> Session? {
+    /// Restores local credentials without waiting for network access.
+    func restore() -> SessionRestoreResult {
         let stored: Session?
         do {
             stored = try persistence.load()
         } catch {
             Logger.warning("Token restore: failed to load persisted session", error)
-            return nil
+            return .signedOut
         }
         guard let stored else {
             Logger.debug("Token restore: nothing in keychain")
-            return nil
+            return .signedOut
         }
         session = stored
-        if stored.isAccessTokenStale() {
-            Logger.debug("Token restore: access token stale, refreshing —", stored.logDescription)
-            return try? await refresh() // failure → signedOut event already emitted
+        guard !stored.isAccessTokenStale() else {
+            Logger.debug("Token restore: access token stale —", stored.logDescription)
+            return .needsRefresh(stored)
         }
         Logger.debug("Token restore: access token valid —", stored.logDescription)
         scheduleEagerRefresh(for: stored)
-        return stored
+        return .ready(stored)
     }
 
     // AuthTokenProviding — every authed API request lands here.
@@ -80,9 +92,14 @@ actor TokenCoordinator: AuthTokenProviding {
     func refresh() async throws -> Session {
         if let inFlight = refreshTask { return try await inFlight.value } // idempotent
         guard let current = session else { throw APIError.unauthenticated }
-        let task = Task { [refresher] in
-            try await refresher.refresh(refreshToken: current.refreshToken)
-        }
+        let task = Task.retrying(
+            maxAttempts: 3,
+            backoff: refreshRetryBackoff,
+            shouldRetry: { Self.shouldRetryRefresh(after: $0) },
+            operation: { [refresher] in
+                try await refresher.refresh(refreshToken: current.refreshToken)
+            }
+        )
         refreshTask = task
         defer { refreshTask = nil }
         do {
@@ -103,10 +120,22 @@ actor TokenCoordinator: AuthTokenProviding {
             clearSession()
             continuation.yield(.signedOut)
             throw APIError.unauthenticated
-        } catch { // other errors: transient, session kept. maybe retry??
+        } catch { // other errors: transient retries exhausted, session kept
             Logger.error("Token refresh: transient failure, keeping session —", error)
             throw error
         }
+    }
+
+    private static func shouldRetryRefresh(after error: any Error) -> Bool {
+        guard let apiError = error as? APIError else {
+            Logger.debug("retrying refresh due to error \(error.localizedDescription)")
+            return true
+        }
+        guard case .unauthenticated = apiError else {
+            Logger.debug("retrying refresh due to API Error: \(apiError.localizedDescription)")
+            return true
+        }
+        return false
     }
 
     func adopt(_ new: Session) {
@@ -162,7 +191,7 @@ actor TokenCoordinator: AuthTokenProviding {
         timerTask = Task { [weak self] in
             try? await Task.sleep(until: deadline)
             guard !Task.isCancelled else { return }
-            _ = try? await self?.refresh() // transient failure → on-demand path covers
+            _ = try? await self?.refresh()
         }
     }
 }

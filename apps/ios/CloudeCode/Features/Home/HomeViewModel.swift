@@ -53,8 +53,7 @@ final class HomeViewModel {
         self.deleteSessionAction = deleteSessionAction
     }
 
-    /// Cache first (groups render immediately from cached models), then a
-    /// server fetch replaces both the on-screen values and the cache.
+    /// Loads cached sessions, then starts refresh and socket work.
     func start() async {
         guard !didStart else {
             return

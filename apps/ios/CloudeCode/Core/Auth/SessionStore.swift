@@ -7,18 +7,18 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Auth state for the UI: drives the root view's loading/signedIn/signedOut
-/// switch and exposes the signed-in user.
+/// Auth state for the UI and the locally restored session's readiness.
 @MainActor @Observable
 final class SessionStore {
     enum State: Equatable {
         case loading
+        case refreshing(userId: String)
         case signedIn(userId: String)
         case signedOut
 
         fileprivate var authUserId: String? {
             switch self {
-            case .loading, .signedOut:
+            case .loading, .refreshing, .signedOut:
                 nil
             case .signedIn(let userId):
                 userId
@@ -40,6 +40,7 @@ final class SessionStore {
     private let oauthRedirectURI: String
     private let authStateSubject = CurrentValueSubject<State, Never>(.loading)
     private let didSignOutSubject = PassthroughSubject<Void, Never>()
+    private var initialRefreshTask: Task<Void, Never>?
 
     var authStatePublisher: AnyPublisher<State, Never> {
         authStateSubject.eraseToAnyPublisher()
@@ -69,12 +70,20 @@ final class SessionStore {
     }
 
     func start() async {
-        if let session = await coordinator.restore() {
+        switch await coordinator.restore() {
+        case .ready(let session):
             Logger.debug("Session restored for user", session.userId)
             state = .signedIn(userId: session.userId)
-            // Cache first, network if missing (UserStore cascade).
             user = try? await userStore.get([session.userId], scopes: .all).first
-        } else {
+        case .needsRefresh(let session):
+            Logger.debug("Session restored pending refresh for user", session.userId)
+            state = .refreshing(userId: session.userId)
+            startInitialRefresh()
+            user = try? await userStore.get(
+                [session.userId],
+                scopes: [.memory, .disk]
+            ).first
+        case .signedOut:
             Logger.debug("No stored session; signed out")
             transitionToSignedOut()
         }
@@ -89,14 +98,21 @@ final class SessionStore {
                 Logger.debug("Auth event: signedOut")
                 transitionToSignedOut()
                 didSignOutSubject.send()
-            case .refreshed:
+            case .refreshed(let session):
                 Logger.debug("Auth event: refreshed")
+                if case .refreshing = state {
+                    Logger.debug("transitioning from refreshing to signedIn")
+                    initialRefreshTask = nil
+                    state = .signedIn(userId: session.userId)
+                    user = try? await userStore.get([session.userId], scopes: .all).first
+                }
             }
         }
     }
 
     func stop() {
-        // noop
+        initialRefreshTask?.cancel()
+        initialRefreshTask = nil
     }
 
     func signOut() async {
@@ -105,8 +121,17 @@ final class SessionStore {
     }
 
     private func transitionToSignedOut() {
+        initialRefreshTask?.cancel()
+        initialRefreshTask = nil
         user = nil
         state = .signedOut
+    }
+
+    private func startInitialRefresh() {
+        initialRefreshTask?.cancel()
+        initialRefreshTask = Task { [coordinator] in
+            _ = try? await coordinator.refresh()
+        }
     }
 
     /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,

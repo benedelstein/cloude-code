@@ -68,6 +68,7 @@ struct SessionStoreTests {
         _ = try? await coordinator.refresh()
         try await waitUntil { store.state == .signedOut }
         #expect(await recorder.events.isEmpty)
+        #expect(await authAPI.refreshCount == 1)
         #expect(signOutCounter.count == 1)
     }
 
@@ -98,9 +99,82 @@ struct SessionStoreTests {
         #expect(signOutCounter.count == .zero)
     }
 
+    @Test func staleStoredSessionShowsRefreshingBeforeRefreshCompletes() async throws {
+        let gate = RefreshGate()
+        let recorder = SignOutEventRecorder()
+        let authAPI = TestAuthAPI(
+            session: Self.session,
+            recorder: recorder,
+            refreshGate: gate
+        )
+        let coordinator = TokenCoordinator(
+            persistence: TestSessionPersistence(session: Self.staleSession),
+            refresher: authAPI,
+            revoker: authAPI
+        )
+        let store = SessionStore(
+            coordinator: coordinator,
+            userStore: UserStore(),
+            signInAPI: authAPI,
+            oauthRedirectURI: "cloudecode://auth/callback"
+        )
+        let startTask = Task { await store.start() }
+        defer { startTask.cancel() }
+
+        try await waitUntil {
+            guard store.state == .refreshing(userId: "user-1") else { return false }
+            return await gate.isWaiting
+        }
+
+        await gate.open()
+        try await waitUntil { store.state == .signedIn(userId: "user-1") }
+    }
+
+    @Test func transientStartupRefreshRetriesWhileShowingRefreshingState() async throws {
+        let gate = RefreshGate()
+        let recorder = SignOutEventRecorder()
+        let authAPI = TestAuthAPI(
+            session: Self.session,
+            recorder: recorder,
+            refreshGate: gate,
+            transientFailuresRemaining: 1
+        )
+        let coordinator = TokenCoordinator(
+            persistence: TestSessionPersistence(session: Self.staleSession),
+            refresher: authAPI,
+            revoker: authAPI,
+            refreshRetryBackoff: .constant(.milliseconds(10))
+        )
+        let store = SessionStore(
+            coordinator: coordinator,
+            userStore: UserStore(),
+            signInAPI: authAPI,
+            oauthRedirectURI: "cloudecode://auth/callback"
+        )
+        let startTask = Task { await store.start() }
+        defer { startTask.cancel() }
+
+        try await waitUntil {
+            guard store.state == .refreshing(userId: "user-1") else { return false }
+            return await gate.isWaiting
+        }
+        await gate.open()
+        try await waitUntil { store.state == .signedIn(userId: "user-1") }
+
+        #expect(await authAPI.refreshCount == 2)
+    }
+
     private static let session = Session(
         accessToken: "access-token",
         accessTokenExpiresAt: Date.now.addingTimeInterval(3_600),
+        refreshToken: "refresh-token",
+        refreshTokenExpiresAt: Date.now.addingTimeInterval(86_400),
+        userId: "user-1"
+    )
+
+    private static let staleSession = Session(
+        accessToken: "stale-access-token",
+        accessTokenExpiresAt: Date.now.addingTimeInterval(-60),
         refreshToken: "refresh-token",
         refreshTokenExpiresAt: Date.now.addingTimeInterval(86_400),
         userId: "user-1"
@@ -146,15 +220,22 @@ private actor TestAuthAPI: SignInProviding, SessionRefreshing, SessionRevoking {
     private let session: Session
     private let recorder: SignOutEventRecorder
     private let rejectsRefresh: Bool
+    private let refreshGate: RefreshGate?
+    private var transientFailuresRemaining: Int
+    private(set) var refreshCount = 0
 
     init(
         session: Session,
         recorder: SignOutEventRecorder,
-        rejectsRefresh: Bool = false
+        rejectsRefresh: Bool = false,
+        refreshGate: RefreshGate? = nil,
+        transientFailuresRemaining: Int = 0
     ) {
         self.session = session
         self.recorder = recorder
         self.rejectsRefresh = rejectsRefresh
+        self.refreshGate = refreshGate
+        self.transientFailuresRemaining = transientFailuresRemaining
     }
 
     func authorizePage(redirectUri: String) async throws -> AuthorizePage {
@@ -166,14 +247,38 @@ private actor TestAuthAPI: SignInProviding, SessionRefreshing, SessionRevoking {
     }
 
     func refresh(refreshToken: String) async throws -> Session {
+        refreshCount += 1
+        if transientFailuresRemaining > 0 {
+            transientFailuresRemaining -= 1
+            throw URLError(.networkConnectionLost)
+        }
         if rejectsRefresh {
             throw APIError.unauthenticated
         }
+        await refreshGate?.wait()
         return session
     }
 
     func logout(refreshToken: String) async throws {
         await recorder.record(.revoke)
+    }
+}
+
+private actor RefreshGate {
+    private(set) var isWaiting = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        isWaiting = true
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func open() {
+        continuation?.resume()
+        continuation = nil
+        isWaiting = false
     }
 }
 
