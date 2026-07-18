@@ -1,3 +1,4 @@
+import CoreAPI
 import Domain
 import Entities
 import Foundation
@@ -34,7 +35,11 @@ struct AgentSessionView: View {
                 scrollCoordinator: transcriptScrollCoordinator
             )
             .safeSafeAreaBar(edge: .bottom) {
-                ComposerView(vm: store, showsRepoBranchPicker: showsRepoBranchPicker)
+                ComposerView(
+                    vm: store,
+                    showsRepoBranchPicker: showsRepoBranchPicker,
+                    onConnectProvider: showProviderConnection
+                )
                     .padding(.horizontal, style.horizontalPadding)
                     .padding(.bottom, style.spacing)
                     .readSize(updateComposerHeight)
@@ -104,6 +109,15 @@ struct AgentSessionView: View {
         withAnimation(style.springAnimation) {
             composerHeight = size.height
         }
+    }
+
+    private func showProviderConnection(_ provider: ProviderCatalogEntry) {
+        destination = .sheet(.providerConnection(ProviderConnectionContext(
+            providerId: provider.providerId,
+            providerName: provider.providerName,
+            requiresReauth: provider.requiresReauth,
+            sessionId: store.session?.id
+        )))
     }
 
     private var sessionHeader: some View {

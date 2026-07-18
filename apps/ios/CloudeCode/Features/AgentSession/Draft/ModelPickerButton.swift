@@ -13,7 +13,9 @@ struct ModelPickerButton: View {
     let isLoadingSelection: Bool
     let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
     let onSelectEffort: (ProviderCatalogEntry, ProviderCatalogEffort) -> Void
+    let onConnectProvider: (ProviderCatalogEntry) -> Void
     @State private var isSheetPresented = false
+    @State private var pendingConnectionProvider: ProviderCatalogEntry?
 
     var body: some View {
         Menu {
@@ -35,13 +37,14 @@ struct ModelPickerButton: View {
         .buttonStyle(.plain)
         .disabled(isLoadingSelection)
         .redacted(reason: isLoadingSelection ? .placeholder : [])
-        .sheet(isPresented: $isSheetPresented) {
+        .sheet(isPresented: $isSheetPresented, onDismiss: presentPendingConnection) {
             ModelPickerSheet(
                 modelCatalog: modelCatalog,
                 selectedModel: displayedModel,
                 providerId: providerId,
                 restrictsProvider: restrictsProvider,
-                onSelectModel: onSelectModel
+                onSelectModel: onSelectModel,
+                onConnectProvider: requestProviderConnection
             )
         }
     }
@@ -105,5 +108,16 @@ struct ModelPickerButton: View {
             return nil
         }
         return selectedModel
+    }
+
+    private func requestProviderConnection(_ provider: ProviderCatalogEntry) {
+        pendingConnectionProvider = provider
+        isSheetPresented = false
+    }
+
+    private func presentPendingConnection() {
+        guard let provider = pendingConnectionProvider else { return }
+        pendingConnectionProvider = nil
+        onConnectProvider(provider)
     }
 }

@@ -10,6 +10,7 @@ struct ModelPickerSheet: View {
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
+    let onConnectProvider: (ProviderCatalogEntry) -> Void
     @State private var query = ""
     @State private var collapsedProviderIDs = Set<String>()
 
@@ -109,31 +110,44 @@ struct ModelPickerSheet: View {
     }
 
     private func providerHeader(_ provider: ProviderCatalogEntry, isExpanded: Bool) -> some View {
-        Button {
-            withAnimation {
-                toggleProvider(provider)
+        HStack(spacing: 8) {
+            Button {
+                withAnimation {
+                    toggleProvider(provider)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    // One constant image with a rotation and fixed width so
+                    // toggling expansion never shifts the header layout.
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 14)
+                    ProviderIconView(providerId: provider.providerId)
+                        .frame(width: 14, height: 14)
+                    Text(provider.providerName)
+                }
+                .contentShape(Rectangle())
             }
-        } label: {
-            HStack(spacing: 8) {
-                // One constant image with a rotation and fixed width so
-                // toggling expansion never shifts the header layout.
-                Image(systemName: "chevron.right")
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
+            Spacer()
+
+            if !provider.isSelectable {
+                if provider.providerId.supportsNativeConnection {
+                    Button(provider.requiresReauth ? "Reconnect" : "Connect") {
+                        onConnectProvider(provider)
+                    }
                     .font(.caption.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 14)
-                ProviderIconView(providerId: provider.providerId)
-                    .frame(width: 14, height: 14)
-                Text(provider.providerName)
-                Spacer()
-                if !provider.isSelectable {
-                    Text(provider.requiresReauth ? "Reconnect required" : "Disconnected")
+                    .foregroundStyle(theme.accentBlue)
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Not connected")
                         .foregroundStyle(theme.tertiaryLabelColor)
                 }
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 
     private var trimmedQuery: String {
@@ -200,6 +214,17 @@ struct ModelPickerSheet: View {
             }
             .disabled(!isEnabled)
             .opacity(isEnabled ? 1 : 0.4)
+        }
+    }
+}
+
+private extension ProviderId {
+    var supportsNativeConnection: Bool {
+        switch self {
+        case .claudeCode, .openaiCodex:
+            true
+        case .unknown:
+            false
         }
     }
 }

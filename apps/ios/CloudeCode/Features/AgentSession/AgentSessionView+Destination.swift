@@ -1,9 +1,11 @@
+import CoreAPI
 import SwiftUI
 
 extension AgentSessionView {
     enum Destination: Identifiable, Equatable {
         case image(SessionImageInfo)
         case renderItem(AgentSessionRenderItem)
+        case providerConnection(ProviderConnectionContext)
 
         var id: String {
             switch self {
@@ -11,11 +13,14 @@ extension AgentSessionView {
                 "image_\(image.id)"
             case .renderItem(let item):
                 item.key
+            case .providerConnection(let context):
+                "provider_connection_\(context.providerId.rawValue)"
             }
         }
     }
 
     struct Destinations: ViewModifier {
+        @Environment(\.providerConnectionBuilder) private var providerConnectionBuilder
         @Binding var destination: Modal<Destination>?
 
         func body(content: Content) -> some View {
@@ -28,6 +33,17 @@ extension AgentSessionView {
                         AgentSessionToolDetailSheet(item: item)
                             .presentationDetents([PresentationDetent.medium, PresentationDetent.large])
                             .presentationBackground(.clear)
+                    case .providerConnection(let context):
+                        if let providerConnectionBuilder {
+                            providerConnectionBuilder.build(context: context) {
+                                self.destination = nil
+                            }
+                        } else {
+                            ContentUnavailableView(
+                                "Provider connection unavailable",
+                                systemImage: "exclamationmark.triangle"
+                            )
+                        }
                     }
                 }
         }

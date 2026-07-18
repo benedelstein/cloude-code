@@ -99,6 +99,10 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         homeComponent.modelCatalogStore
     }
 
+    var providerAuthAPI: any ProviderAuthAPIProviding {
+        applicationComponent.providerAuthAPI
+    }
+
     var fetchImageAction: any FetchImageAction {
         applicationComponent.fetchImageAction
     }
@@ -153,6 +157,29 @@ private func environmentEditorDependencyFactory(_ component: NeedleFoundation.Sc
     )
 }
 
+private final class ProviderConnectionDependencyProvider: ProviderConnectionDependency {
+    private let agentSessionComponent: AgentSessionComponent
+
+    init(agentSessionComponent: AgentSessionComponent) {
+        self.agentSessionComponent = agentSessionComponent
+    }
+
+    var providerAuthAPI: any ProviderAuthAPIProviding {
+        agentSessionComponent.providerAuthAPI
+    }
+
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore {
+        agentSessionComponent.modelCatalogStore
+    }
+}
+
+private func providerConnectionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {
+    ProviderConnectionDependencyProvider(
+        agentSessionComponent: parent1(component) as! AgentSessionComponent
+    )
+}
+
 #endif
 
 private func factoryEmptyDependencyProvider(_ component: NeedleFoundation.Scope) -> AnyObject {
@@ -178,6 +205,10 @@ public func registerProviderFactories() {
     registerProviderFactory(
         "^->RootComponent->ApplicationComponent->HomeComponent->AgentSessionComponent->EnvironmentEditorComponent",
         environmentEditorDependencyFactory
+    )
+    registerProviderFactory(
+        "^->RootComponent->ApplicationComponent->HomeComponent->AgentSessionComponent->ProviderConnectionComponent",
+        providerConnectionDependencyFactory
     )
     #endif
 }
