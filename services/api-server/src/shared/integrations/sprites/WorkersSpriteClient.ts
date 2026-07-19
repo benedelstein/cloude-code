@@ -35,6 +35,15 @@ export class WorkersSpriteClient {
 
   /**
    * Execute a command on the sprite via a WebSocket session.
+   *
+   * Keep command execution on WebSockets. The Sprite HTTP exec response uses
+   * channel-prefixed binary records, but Fetch ReadableStream chunks are
+   * arbitrary transport chunks rather than protocol frame boundaries. Records
+   * can therefore be split or coalesced (we observed stdout and the exit record
+   * in one chunk), making exit detection ambiguous. WebSocket message boundaries
+   * preserve the records. Do not reintroduce HTTP exec unless Sprites documents
+   * a self-framing HTTP response format.
+   *
    * @param command the command to execute
    * @param options the options for the command
    * @returns a promise that resolves to the result of the command
