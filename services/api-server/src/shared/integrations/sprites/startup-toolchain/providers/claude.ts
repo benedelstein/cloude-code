@@ -104,7 +104,7 @@ class ClaudeCliCheck implements StartupToolchainCheck {
   ) {
     // Use a non-login shell: Sprite login-shell logout cleanup can turn a
     // successful early exit into exit code 1.
-    const result = await input.sprite.execHttp(
+    const result = await input.sprite.execWs(
       `bash -c ${shellQuote(this.startupScript)}`,
     );
     if (result.exitCode !== 0) {

@@ -19,7 +19,6 @@ import type {
 const mockState = vi.hoisted(() => ({
   events: [] as string[],
   setNetworkPolicy: vi.fn(),
-  execHttp: vi.fn(),
   execWs: vi.fn(),
   ensureSpriteStartupToolchain: vi.fn(),
   getReadOnlyTokenForRepo: vi.fn(),
@@ -32,7 +31,6 @@ vi.mock("@/shared/integrations/sprites/WorkersSpriteClient", () => {
       this.name = name;
     }
     setNetworkPolicy = mockState.setNetworkPolicy;
-    execHttp = mockState.execHttp;
     execWs = mockState.execWs;
   }
   return {
@@ -241,7 +239,11 @@ describe("SessionProvisionService startup toolchain", () => {
         },
       };
     });
-    mockState.execHttp.mockImplementation(async (command: string) => {
+    mockState.execWs.mockImplementation(async (command: string) => {
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
       if (command.startsWith("test -d")) {
         mockState.events.push("cloneCheck");
         return { stdout: "empty", stderr: "", exitCode: 0 };
@@ -255,12 +257,6 @@ describe("SessionProvisionService startup toolchain", () => {
       }
       if (command.includes("git rev-parse")) {
         return { stdout: "main", stderr: "", exitCode: 0 };
-      }
-      return { stdout: "", stderr: "", exitCode: 0 };
-    });
-    mockState.execWs.mockImplementation(async (command: string) => {
-      if (command.includes("timeout")) {
-        mockState.events.push("startupScript");
       }
       return { stdout: "", stderr: "", exitCode: 0 };
     });
@@ -483,7 +479,7 @@ describe("SessionProvisionService startup toolchain", () => {
   });
 
   it("continues provisioning after nonblocking task failures", async () => {
-    mockState.execHttp.mockImplementation(async (command: string) => {
+    mockState.execWs.mockImplementation(async (command: string) => {
       if (command.startsWith("test -d")) {
         return { stdout: "empty", stderr: "", exitCode: 0 };
       }
@@ -559,7 +555,11 @@ describe("SessionProvisionService startup toolchain", () => {
       serverState,
       createClientState(),
     );
-    mockState.execHttp.mockImplementation(async (command: string) => {
+    mockState.execWs.mockImplementation(async (command: string) => {
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
       if (command.startsWith("test -d")) {
         mockState.events.push("cloneCheck");
         return { stdout: "empty", stderr: "", exitCode: 0 };
@@ -570,12 +570,6 @@ describe("SessionProvisionService startup toolchain", () => {
       }
       if (command.includes("git rev-parse")) {
         return { stdout: "main", stderr: "", exitCode: 0 };
-      }
-      return { stdout: "", stderr: "", exitCode: 0 };
-    });
-    mockState.execWs.mockImplementation(async (command: string) => {
-      if (command.includes("timeout")) {
-        mockState.events.push("startupScript");
       }
       return { stdout: "", stderr: "", exitCode: 0 };
     });
@@ -861,7 +855,15 @@ describe("SessionProvisionService startup toolchain", () => {
   it("records startup script failure and continues provisioning", async () => {
     const serverState = createServerState();
     const updatePartialState = vi.fn();
-    mockState.execHttp.mockImplementation(async (command: string) => {
+    mockState.execWs.mockImplementation(async (command: string) => {
+      if (command.includes("timeout")) {
+        mockState.events.push("startupScript");
+        return {
+          stdout: "",
+          stderr: "bash: line 1: pnpm: command not found",
+          exitCode: 127,
+        };
+      }
       if (command.startsWith("test -d")) {
         mockState.events.push("cloneCheck");
         return { stdout: "empty", stderr: "", exitCode: 0 };
@@ -872,17 +874,6 @@ describe("SessionProvisionService startup toolchain", () => {
       }
       if (command.includes("git rev-parse")) {
         return { stdout: "main", stderr: "", exitCode: 0 };
-      }
-      return { stdout: "", stderr: "", exitCode: 0 };
-    });
-    mockState.execWs.mockImplementation(async (command: string) => {
-      if (command.includes("timeout")) {
-        mockState.events.push("startupScript");
-        return {
-          stdout: "",
-          stderr: "bash: line 1: pnpm: command not found",
-          exitCode: 127,
-        };
       }
       return { stdout: "", stderr: "", exitCode: 0 };
     });
@@ -972,7 +963,7 @@ describe("SessionProvisionService startup toolchain", () => {
 });
 
 function getRemoteConfigCommand(): string {
-  const remoteConfigCall = mockState.execHttp.mock.calls.find(([command]) =>
+  const remoteConfigCall = mockState.execWs.mock.calls.find(([command]) =>
     String(command).includes("git remote set-url origin"));
   expect(remoteConfigCall).toBeDefined();
   return String(remoteConfigCall?.[0]);

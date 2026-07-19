@@ -6,7 +6,7 @@ import type { ServerState } from "../../src/modules/session-agent/repositories/s
 const mockState = vi.hoisted(() => ({
   attachSession: vi.fn(),
   createSession: vi.fn(),
-  execHttp: vi.fn(),
+  execWs: vi.fn(),
   writeFile: vi.fn(),
   killSession: vi.fn(),
   getCredentialSnapshot: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@/shared/integrations/sprites", () => {
     }
     attachSession = mockState.attachSession;
     createSession = mockState.createSession;
-    execHttp = mockState.execHttp;
+    execWs = mockState.execWs;
     writeFile = mockState.writeFile;
     killSession = mockState.killSession;
   }
@@ -229,7 +229,7 @@ describe("SpriteAgentProcessManager", () => {
       ok: true,
       value: { agentAttachments: [] },
     });
-    mockState.execHttp.mockResolvedValue({ stdout: "", stderr: "", exitCode: 1 });
+    mockState.execWs.mockResolvedValue({ stdout: "", stderr: "", exitCode: 1 });
     mockState.writeFile.mockResolvedValue(undefined);
     mockState.killSession.mockResolvedValue(undefined);
   });
