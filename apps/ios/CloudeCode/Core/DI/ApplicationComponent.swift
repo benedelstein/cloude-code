@@ -108,6 +108,12 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    var providerAuthAPI: any ProviderAuthAPIProviding {
+        shared {
+            ProviderAuthAPI(client: apiClient, tokenProvider: tokenCoordinator)
+        }
+    }
+
     var repoEnvironmentsAPI: any RepoEnvironmentsAPIProviding {
         shared {
             RepoEnvironmentsAPI(client: apiClient, tokenProvider: tokenCoordinator)

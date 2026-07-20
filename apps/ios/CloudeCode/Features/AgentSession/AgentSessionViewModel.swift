@@ -103,7 +103,7 @@ final class AgentSessionViewModel {
             || !attachmentStore.attachments.isEmpty
         let canSendInCurrentMode = isDraftMode
             ? draft?.selectedRepo != nil && isModelSelectionValid
-            : connectionState == .connected
+            : connectionState == .connected && clientState.providerConnection?.connected != false
         return hasContent
             && !attachmentStore.hasPendingOrFailedUploads
             && canSendInCurrentMode
@@ -295,10 +295,10 @@ extension AgentSessionViewModel {
         for run: SessionClientState.SessionSetupRun
     ) -> Bool {
         switch run.status {
-        case .completed:
-            run.tasks.contains { $0.status == .failed }
-        case .running, .failed, .unknown:
+        case .running:
             true
+        case .completed, .failed, .unknown:
+            false
         }
     }
 

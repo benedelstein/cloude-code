@@ -19,6 +19,8 @@ protocol AgentSessionDependency: Dependency {
     @MainActor
     var modelCatalogStore: ModelCatalogStore { get }
 
+    var providerAuthAPI: any ProviderAuthAPIProviding { get }
+
     var fetchImageAction: any FetchImageAction { get }
 
     var attachmentsAPI: any AttachmentsAPIProviding { get }
@@ -120,6 +122,15 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
         dependency.repoEnvironmentsStore
     }
 
+    var providerAuthAPI: any ProviderAuthAPIProviding {
+        dependency.providerAuthAPI
+    }
+
+    @MainActor
+    var modelCatalogStore: ModelCatalogStore {
+        dependency.modelCatalogStore
+    }
+
     func makeEnvironmentEditorComponent(
         mode: EnvironmentEditorViewModel.Mode
     ) -> EnvironmentEditorComponent {
@@ -130,6 +141,19 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
     var environmentEditorBuilder: EnvironmentEditorBuilder {
         EnvironmentEditorBuilder { [self] mode in
             makeEnvironmentEditorComponent(mode: mode)
+        }
+    }
+
+    func makeProviderConnectionComponent(
+        context: ProviderConnectionContext
+    ) -> ProviderConnectionComponent {
+        ProviderConnectionComponent(parent: self, context: context)
+    }
+
+    @MainActor
+    var providerConnectionBuilder: ProviderConnectionBuilder {
+        ProviderConnectionBuilder { [self] context in
+            makeProviderConnectionComponent(context: context)
         }
     }
 
@@ -171,5 +195,6 @@ struct AgentSessionBuilder {
         return AgentSessionView(store: component.store)
             .environment(\.fetchImageAction, component.fetchImageAction)
             .environment(\.environmentEditorBuilder, component.environmentEditorBuilder)
+            .environment(\.providerConnectionBuilder, component.providerConnectionBuilder)
     }
 }

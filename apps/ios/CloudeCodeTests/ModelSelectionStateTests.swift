@@ -241,6 +241,49 @@ struct ModelCatalogStoreTests {
     }
 }
 
+extension AgentSessionTranscriptStateTests {
+    @Test func providerAuthRequirementBlocksExistingSessionSubmission() {
+        let viewModel = makeViewModel(provider: .claudeCode)
+        var state = liveState(provider: .claudeCode)
+        state.providerConnection = .init(
+            provider: ProviderId.claudeCode.rawValue,
+            connected: false,
+            requiresReauth: true
+        )
+        viewModel.applyLiveState(state)
+        viewModel.connectionState = .connected
+        viewModel.draftText = "Continue"
+
+        #expect(!viewModel.canSubmitDraft)
+
+        state.providerConnection = .init(
+            provider: ProviderId.claudeCode.rawValue,
+            connected: true,
+            requiresReauth: false
+        )
+        viewModel.applyLiveState(state)
+
+        #expect(viewModel.canSubmitDraft)
+    }
+
+    @Test func existingSessionReconnectPreservesServerModelSelection() async {
+        let modelsAPI = CountingModelsAPI(
+            response: ModelsResponse(providers: [makeProvider()])
+        )
+        let viewModel = makeViewModel(
+            provider: .openaiCodex,
+            modelsAPI: modelsAPI
+        )
+        viewModel.applyLiveState(liveState(provider: .openaiCodex))
+        await viewModel.modelCatalogStore.load()
+
+        viewModel.selectDefaultModel(for: .openaiCodex)
+
+        #expect(viewModel.localModelSelection == nil)
+        #expect(viewModel.modelSelection?.modelId == "model")
+    }
+}
+
 @MainActor
 private final class CountingModelsAPI: ModelsAPIProviding {
     private let response: ModelsResponse

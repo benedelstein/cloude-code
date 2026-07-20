@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ModelPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.style) private var style
     @Environment(\.theme) private var theme
 
     let modelCatalog: ModelCatalogStore
@@ -10,6 +11,7 @@ struct ModelPickerSheet: View {
     let providerId: ProviderId?
     let restrictsProvider: Bool
     let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
+    let onConnectProvider: (ProviderCatalogEntry) -> Void
     @State private var query = ""
     @State private var collapsedProviderIDs = Set<String>()
 
@@ -109,31 +111,60 @@ struct ModelPickerSheet: View {
     }
 
     private func providerHeader(_ provider: ProviderCatalogEntry, isExpanded: Bool) -> some View {
-        Button {
-            withAnimation {
-                toggleProvider(provider)
-            }
-        } label: {
-            HStack(spacing: 8) {
-                // One constant image with a rotation and fixed width so
-                // toggling expansion never shifts the header layout.
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 14)
-                ProviderIconView(providerId: provider.providerId)
-                    .frame(width: 14, height: 14)
-                Text(provider.providerName)
-                Spacer()
-                if !provider.isSelectable {
-                    Text(provider.requiresReauth ? "Reconnect required" : "Disconnected")
-                        .foregroundStyle(theme.tertiaryLabelColor)
+        HStack(spacing: style.gridSize) {
+            Button {
+                withAnimation {
+                    toggleProvider(provider)
                 }
+            } label: {
+                HStack(spacing: style.gridSize) {
+                    // One constant image with a rotation and fixed width so
+                    // toggling expansion never shifts the header layout.
+                    Image(systemName: "chevron.right")
+                        .font(style.captionFont.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 14)
+                    ProviderIconView(providerId: provider.providerId)
+                        .frame(width: 14, height: 14)
+                    Text(provider.providerName)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
+            Spacer(minLength: style.gridSize)
+
+            providerConnectionAction(provider)
         }
-        .buttonStyle(.plain)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+    }
+
+    @ViewBuilder
+    private func providerConnectionAction(_ provider: ProviderCatalogEntry) -> some View {
+        if !provider.isSelectable {
+            if provider.providerId.supportsNativeConnection {
+                Button(provider.requiresReauth ? "Reconnect" : "Connect") {
+                    onConnectProvider(provider)
+                }
+                .font(style.footnoteFont.weight(.semibold))
+                .foregroundStyle(theme.accentBlue)
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(theme.accentBlue.opacity(0.12), in: Capsule())
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    Text(verbatim: provider.requiresReauth
+                         ? "Reconnect \(provider.providerName)"
+                         : "Connect \(provider.providerName)")
+                )
+            } else {
+                Text("Not connected")
+                    .font(style.captionFont)
+                    .foregroundStyle(theme.tertiaryLabelColor)
+            }
+        }
     }
 
     private var trimmedQuery: String {
@@ -200,6 +231,17 @@ struct ModelPickerSheet: View {
             }
             .disabled(!isEnabled)
             .opacity(isEnabled ? 1 : 0.4)
+        }
+    }
+}
+
+private extension ProviderId {
+    var supportsNativeConnection: Bool {
+        switch self {
+        case .claudeCode, .openaiCodex:
+            true
+        case .unknown:
+            false
         }
     }
 }

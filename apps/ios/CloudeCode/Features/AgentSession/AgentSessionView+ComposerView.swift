@@ -5,6 +5,8 @@
 //  Created by Ben Edelstein on 6/26/26.
 //
 
+import CoreAPI
+import Domain
 import Foundation
 import SwiftUI
 
@@ -14,6 +16,7 @@ extension AgentSessionView {
 
         @Bindable var vm: AgentSessionViewModel
         let showsRepoBranchPicker: Bool
+        let onConnectProvider: (ProviderCatalogEntry) -> Void
         @State private var composerFocused = false
 
         var body: some View {
@@ -38,6 +41,7 @@ extension AgentSessionView {
                         modelCatalog: vm.modelCatalogStore,
                         selectedModel: vm.modelSelection,
                         providerId: vm.modelProviderId,
+                        providerConnection: vm.clientState.providerConnection,
                         restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
                         isLoadingSelection: vm.isModelSelectionLoading,
                         onSelectModel: { provider, model in
@@ -45,7 +49,8 @@ extension AgentSessionView {
                         },
                         onSelectEffort: { provider, effort in
                             vm.selectEffort(provider: provider, effort: effort)
-                        }
+                        },
+                        onConnectProvider: onConnectProvider
                     )
                     .disabled(vm.isCreatingSession)
                 }

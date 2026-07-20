@@ -22,8 +22,6 @@ struct ProviderIconView: View {
                 .resizable()
                 .renderingMode(.template)
         case .unknown:
-            // swiftlint:disable:next todo
-            // TODO: replace unknown-provider fallback when provider assets are available.
             Image(systemName: "cpu")
                 .resizable()
         }
