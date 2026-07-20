@@ -354,6 +354,7 @@ extension AgentSessionTranscriptStateTests {
 
     func makeViewModel(
         provider: AgentProviderID? = nil,
+        modelsAPI: any ModelsAPIProviding = StubModelsAPI(),
         sessionMessageStore: SessionMessageStore? = nil,
         transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder()
     ) -> AgentSessionViewModel {
@@ -362,7 +363,7 @@ extension AgentSessionTranscriptStateTests {
         let sessionsAPI = StubSessionsAPI()
         return AgentSessionViewModel(
             context: .session(makeSession(provider: provider)),
-            modelCatalogStore: ModelCatalogStore(modelsAPI: StubModelsAPI()),
+            modelCatalogStore: ModelCatalogStore(modelsAPI: modelsAPI),
             // Unused in session mode: preferences only seed draft selections.
             preferences: NewSessionPreferences(userDefaults: UserDefaults(
                 suiteName: "AgentSessionTranscriptStateTests"

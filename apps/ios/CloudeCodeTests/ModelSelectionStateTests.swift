@@ -241,6 +241,25 @@ struct ModelCatalogStoreTests {
     }
 }
 
+extension AgentSessionTranscriptStateTests {
+    @Test func existingSessionReconnectPreservesServerModelSelection() async {
+        let modelsAPI = CountingModelsAPI(
+            response: ModelsResponse(providers: [makeProvider()])
+        )
+        let viewModel = makeViewModel(
+            provider: .openaiCodex,
+            modelsAPI: modelsAPI
+        )
+        viewModel.applyLiveState(liveState(provider: .openaiCodex))
+        await viewModel.modelCatalogStore.load()
+
+        viewModel.selectDefaultModel(for: .openaiCodex)
+
+        #expect(viewModel.localModelSelection == nil)
+        #expect(viewModel.modelSelection?.modelId == "model")
+    }
+}
+
 @MainActor
 private final class CountingModelsAPI: ModelsAPIProviding {
     private let response: ModelsResponse
