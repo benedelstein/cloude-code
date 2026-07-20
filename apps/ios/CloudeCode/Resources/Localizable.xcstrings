@@ -49,6 +49,9 @@
     "Codex connected" : {
 
     },
+    "Collapse" : {
+
+    },
     "Collapsed" : {
 
     },
@@ -223,6 +226,9 @@
 
     },
     "Exit %lld" : {
+
+    },
+    "Expand" : {
 
     },
     "Expanded" : {

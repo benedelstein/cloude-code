@@ -11,6 +11,12 @@ import UIKit
 struct UserMessageView: View {
     @Environment(\.theme) private var theme
     @Environment(\.style) private var style
+    @Environment(SessionTranscriptRowViewModel.self) private var rowViewModel
+
+    private enum Constants {
+        static let collapsedLineLimit = 10
+        static let approximateCollapsedCharacterLimit = 400
+    }
 
     let message: SessionMessage
 
@@ -37,19 +43,50 @@ struct UserMessageView: View {
             Spacer(minLength: style.gridSize * 5)
             VStack(alignment: .trailing, spacing: style.gridSize / 2) {
                 imageViews
-                // future optimization - chunk this text if its long
                 if !message.text.isEmpty {
-                    Text(verbatim: message.text)
-                        .styledFont(.subheadline)
-                        .foregroundStyle(theme.labelColor)
-                        .textSelection(.enabled)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(userMessageShape.fill(theme.secondaryBackgroundColor))
+                    messageText
                 }
             }
         }
         .transition(style.fadeTransition)
+    }
+
+    private var messageText: some View {
+        VStack(alignment: .leading, spacing: style.gridSize / 2) {
+            Text(verbatim: message.text)
+                .styledFont(.subheadline)
+                .foregroundStyle(theme.labelColor)
+                .textSelection(.enabled)
+                .lineLimit(rowViewModel.userMessageExpanded ? nil : Constants.collapsedLineLimit)
+
+            if showsExpansionControl {
+                Button(
+                    rowViewModel.userMessageExpanded ? "Collapse" : "Expand",
+                    action: toggleMessageExpansion
+                )
+                    .styledFont(.caption)
+                    .foregroundStyle(theme.secondaryLabelColor)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(userMessageShape.fill(theme.secondaryBackgroundColor))
+    }
+
+    private var showsExpansionControl: Bool {
+        // Measuring an unbounded hidden Text to detect truncation would recreate
+        // the initial-load cost this collapsed presentation is avoiding.
+        message.text.utf16.count > Constants.approximateCollapsedCharacterLimit
+            || message.text.lazy.filter(\.isNewline).count >= Constants.collapsedLineLimit
+    }
+
+    private func toggleMessageExpansion() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            rowViewModel.userMessageExpanded.toggle()
+        }
     }
 
     @ViewBuilder
