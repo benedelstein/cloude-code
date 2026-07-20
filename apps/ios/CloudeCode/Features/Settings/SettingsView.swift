@@ -46,8 +46,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Provider Connections")
-                } footer: {
-                    Text("Manage model-provider authorization.")
                 }
 
                 Section {
@@ -287,7 +285,6 @@ private extension SettingsView {
         ) -> some View {
             Button(role: role, action: action) {
                 Text(title)
-                    .frame(minWidth: 58)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
