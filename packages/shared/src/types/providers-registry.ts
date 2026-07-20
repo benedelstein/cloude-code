@@ -130,12 +130,6 @@ const OPENAI_CODEX_MODELS: ProviderModelDefinition<OpenAICodexModel>[] = [
     displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.4-mini"],
     isDefault: false,
   },
-  {
-    id: "gpt-5.3-codex",
-    displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.3-codex"],
-    isDefault: false,
-  },
-  { id: "gpt-5.2", displayName: OPENAI_CODEX_MODEL_DISPLAY_NAMES["gpt-5.2"], isDefault: false },
 ];
 
 const OPENAI_CODEX_EFFORTS: ProviderEffortDefinition<OpenAICodexEffort>[] =

@@ -10,5 +10,7 @@ describe("provider registry", () => {
       { id: "gpt-5.6-luna", displayName: "5.6 Luna", isDefault: false },
     ]);
     expect(OPENAI_CODEX_PROVIDER.models.filter((model) => model.isDefault)).toHaveLength(1);
+    expect(OPENAI_CODEX_PROVIDER.models.map((model) => model.id)).not.toContain("gpt-5.3-codex");
+    expect(OPENAI_CODEX_PROVIDER.models.map((model) => model.id)).not.toContain("gpt-5.2");
   });
 });
