@@ -1,8 +1,8 @@
 /**
  * Drives the agent harness with webhook-based delivery. Stream chunks go
- * through the ChunkBatcher and land on POST /chunks; every other output
- * (sessionId, ready, heartbeat, error, debug, process_exit) goes on POST
- * /events, one event per request.
+ * through the ChunkBatcher and land on POST /chunks. Ready, error, sessionId,
+ * and process_exit go to POST /events; stdin/cancel acks and heartbeat stay on
+ * stdout for Sprite attach callers, and debug output stays local logging.
  */
 import {
   type AgentInputMessage,

@@ -1,7 +1,8 @@
 /**
- * Webhook-mode vm-agent entrypoint. The process is spawned fresh per turn
- * with the initial user message loaded from a sprite-local payload file;
- * chunk/event delivery back to the DO flows via HTTPS webhooks.
+ * Webhook-mode vm-agent entrypoint. Fresh spawns load the initial user
+ * message from a sprite-local payload file; reused processes receive later
+ * turns on stdin. Chunk/event delivery back to the DO flows via HTTPS
+ * webhooks.
  */
 import { parseArgs } from "util";
 import { createInterface } from "readline";

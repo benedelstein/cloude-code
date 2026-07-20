@@ -80,6 +80,7 @@ When a session is created, repo access is checked by `assertUserRepoAccess(...)`
 If no installation is found in D1, the code falls back to GitHub API installation lookup and records the result.
 
 Pull request creation also uses `GitHubAppService`. The manual route and the automatic post-turn path both reuse `createPullRequestForSession(...)` so PR text generation, existing-PR handling, and DO state persistence stay in one place.
+`GitHubAppService.createPullRequest(...)` uses an installation Octokit client and calls `octokit.rest.pulls.create(...)`, so the GitHub App installation must have pull-request write permission in addition to contents write permission. GitHub's REST documentation lists `"Pull requests"` repository permission with write access for the create-pull-request endpoint.
 
 ### Git Authentication on the VM
 
@@ -131,6 +132,7 @@ The app listens at `POST /webhooks/github` for:
 | `installation_repositories.added` | Update installation repo rows and invalidate affected repo-access/listing caches |
 | `installation_repositories.removed` | Delete repo rows, invalidate affected caches, and block sessions for removed repos |
 | `github_app_authorization.revoked` | Delete stored GitHub user credentials for the sender without deleting app auth sessions |
+| `pull_request` | Update stored pull request status for sessions whose PR number matches the webhook payload |
 
 Webhook signature verification is handled by `octokit`'s `app.webhooks.verifyAndReceive()`.
 
@@ -175,8 +177,8 @@ Set these via `wrangler secret put`:
 
 1. Create a GitHub App at https://github.com/settings/apps/new
 2. Set webhook URL to `https://<api-domain>/webhooks/github`
-3. Grant permissions: `Contents: Read & write`, `Metadata: Read-only`
-4. Subscribe to events: `Installation`, `Repository`
+3. Grant permissions: `Contents: Read & write`, `Pull requests: Read & write`, `Metadata: Read-only`
+4. Subscribe to events: `Installation`, `Repository`, `Pull request`
 5. Generate a private key and download it
 6. Ensure `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, and `GITHUB_APP_SLUG` are configured in `wrangler.jsonc`, then set secrets:
    ```bash

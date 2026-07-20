@@ -1,14 +1,17 @@
 # Plan: Initial Message File
 
-Status: implemented. `SpriteAgentProcessManager.writeInitialMessageFile(...)`
-writes the per-turn payload with mode `0600`, `buildAgentArgs(...)` passes
+Status: implemented, with later process-reuse drift. `SpriteAgentProcessManager.writeInitialMessageFile(...)`
+writes the fresh-spawn payload with mode `0600`, `buildAgentArgs(...)` passes
 `--initialMessagePath`, and `packages/vm-agent/src/lib/webhook-initial-message.ts`
 reads, validates, and unlinks the file. `--initialMessage` still exists as a
-vm-agent local fallback, but production spawning uses `--initialMessagePath`.
+vm-agent local fallback, but production fresh spawning uses `--initialMessagePath`.
+Subsequent turns and cancels can reuse the running vm-agent process through
+WebSocket-backed stdin with typed `stdin_ack` / `cancel_ack` signals; this plan
+only covers removing the large initial payload from exec argv.
 
 ## Context
 
-Webhook-mode agent turns currently pass the initial user message through sprite exec argv as `--initialMessage`. `SpriteWebsocketSession` encodes exec argv into the request URL, so long prompts or image attachments can exceed URL/request-line limits before the vm-agent process starts.
+Before this change, webhook-mode fresh spawns passed the initial user message through sprite exec argv as `--initialMessage`. `SpriteWebsocketSession` encodes exec argv into the request URL, so long prompts or image attachments can exceed URL/request-line limits before the vm-agent process starts.
 
 Move the large initial message out of argv. Keep the small turn control values in argv so the change stays targeted to the payload that can grow with prompt length and attachment data URLs.
 
@@ -36,7 +39,7 @@ No database migrations, websocket schema changes, or public API changes are need
 
 ### Tradeoffs & Other options considered
 
-Stdin was rejected because webhook mode intentionally runs spawn-and-forget with websocket-backed stdin detached. Reintroducing stdin would make startup depend on write ordering, EOF behavior, and websocket lifetime again.
+Stdin was rejected for the initial payload because startup should not depend on write ordering, EOF behavior, or the setup WebSocket lifetime. This does not prohibit the current warm-process path: after the vm-agent is running, `SpriteAgentProcessManager.tryDispatchToExistingProcess(...)` attaches to the saved process id, writes typed NDJSON to stdin, and waits for an acknowledgement.
 
 A DO-hosted pull endpoint was also considered. It would avoid temporary files, but it adds another authenticated internal route and a network dependency during vm-agent startup. The API server already writes credential files and the agent script to the sprite before exec, so writing one more scoped payload file fits the existing startup flow.
 

@@ -51,6 +51,7 @@ Active turn fields live in `server_state`:
 {
   activeUserMessageId: string | null;
   agentProcessId: number | null;
+  agentProcessRunId: string | null;
   agentSessionId: string | null;
 }
 ```
@@ -73,7 +74,7 @@ Only one user turn may be active per session. A second `chat.message` while `act
 4. If attach fails before writing, fall back to a fresh spawn.
 5. If writing happened but the ack never arrives, fence the uncertain process before deciding whether a new spawn is safe.
 
-Fresh spawn writes the webhook bundle to `~/.cloude/agent-webhook.js`, stages the initial message under `~/.cloude/turns/`, passes `DO_WEBHOOK_URL` and `DO_WEBHOOK_TOKEN`, and captures the Sprite process id from the setup session.
+Fresh spawn writes the webhook bundle to `~/.cloude/agent-webhook.js`, stages the initial message under `~/.cloude/turns/`, passes `DO_WEBHOOK_URL`, `DO_WEBHOOK_TOKEN`, and `AGENT_PROCESS_RUN_ID`, and captures the Sprite process id from the setup session. `SpriteAgentProcessManager.recordAgentProcessState(...)` stores both the Sprite process id and the locally generated run id so later lifecycle webhooks can be correlated to the current vm-agent process.
 
 If provisioning runs a startup script, `SessionProvisionService` sends stdout/stderr through `SessionSetupOutputService`. The service persists full output in `SetupOutputRepository`, broadcasts batched `setup.output.chunks` messages to connected clients, and leaves only output metadata on the public setup task. `GET /sessions/{sessionId}/setup-output` reads the full accumulated output on demand through `SessionQueryService`.
 
@@ -85,6 +86,8 @@ Internal routes in `services/api-server/src/modules/session-agent/routes/interna
 - `POST /internal/session/:sessionId/events` accepts `{ event }` for non-stream agent events such as `ready`, `error`, `sessionId`, and `process_exit`.
 
 The vm-agent writes `ready`, `stdin_ack`, `cancel_ack`, and heartbeat messages to stdout for Sprite attach callers. It posts `ready`, provider `sessionId`, setup/runtime `error`, and final `process_exit` events to the webhook event route. `debug` and heartbeat outputs are local process/logging signals, not webhook events.
+
+`process_exit` includes the vm-agent `processRunId`. `AgentTurnCoordinator.handleProcessExit(...)` ignores exit events when the run id does not match `serverState.agentProcessRunId`, which prevents an old process exit from clearing a newer reused or freshly spawned process.
 
 The vm-agent's `WebhookClient` retries network errors, `429`, and `5xx` responses with bounded exponential backoff. Non-retryable failures are logged and dropped; DO reconciliation handles missed tail state where possible.
 
