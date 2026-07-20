@@ -57,13 +57,13 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
 
     // Install openvscode-server if not already present
     // TODO: make this one script/bash line
-    const checkResult = await sprite.execHttp(
+    const checkResult = await sprite.execWs(
       `test -f ${HOME_DIR}/.openvscode/bin/openvscode-server && echo 'installed' || echo 'missing'`,
       {},
     );
     if (checkResult.stdout.includes("missing")) {
       logger.info("Installing openvscode-server on sprite");
-      const installResult = await sprite.execHttp(
+      const installResult = await sprite.execWs(
         [
           `curl -fsSL https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.109.5/openvscode-server-v1.109.5-linux-x64.tar.gz -o /tmp/ovs.tar.gz`,
           `mkdir -p ${HOME_DIR}/.openvscode`,
@@ -87,14 +87,14 @@ export async function handleEditorOpen(context: EditorContext): Promise<EditorOp
     // Write the token to a file and start openvscode-server with --connection-token-file
     const tokenFile = `${HOME_DIR}/.openvscode/.connection-token`;
     // Kill any existing openvscode-server processes
-    await sprite.execHttp(
+    await sprite.execWs(
       `pkill -f openvscode-server 2>/dev/null || true; fuser -k 8080/tcp 2>/dev/null || true; sleep 1`,
       {},
     );
-    await sprite.execHttp(`echo -n '${token}' > ${tokenFile}`, {});
+    await sprite.execWs(`echo -n '${token}' > ${tokenFile}`, {});
 
     // Start as a background process via nohup so it persists
-    await sprite.execHttp(
+    await sprite.execWs(
       `nohup ${HOME_DIR}/.openvscode/bin/openvscode-server --host 0.0.0.0 --port 8080 --connection-token-file ${tokenFile} --default-folder ${WORKSPACE_DIR} > /tmp/openvscode.log 2>&1 &`,
       {},
     );
@@ -153,7 +153,7 @@ export async function handleEditorClose(context: EditorContext): Promise<EditorO
 
   try {
     // Kill openvscode-server
-    await sprite.execHttp(`fuser -k 8080/tcp 2>/dev/null || true`, {});
+    await sprite.execWs(`fuser -k 8080/tcp 2>/dev/null || true`, {});
 
     // Revoke public URL access
     await sprite.setUrlAuth("sprite");

@@ -17,7 +17,7 @@ export async function writeVmAgentScript(
 ): Promise<void> {
   const logger = createLogger("write-files.service.ts");
   try {
-    const result = await sprite.execHttp(
+    const result = await sprite.execWs(
       `sha256sum ${scriptPath} 2>/dev/null | cut -d' ' -f1`,
     );
     if (result.exitCode === 0 && result.stdout.trim() === expectedHash) {

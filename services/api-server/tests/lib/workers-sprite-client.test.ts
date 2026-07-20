@@ -8,136 +8,6 @@ describe("WorkersSpriteClient", () => {
     vi.unstubAllGlobals();
   });
 
-  it("parses an exit marker after trailing blank stdout lines", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(new Uint8Array([0x01]), encoder.encode("build complete\n\n")),
-      new Uint8Array([0x03, 0x00]),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("echo ok");
-
-    expect(result).toEqual({
-      stdout: "build complete",
-      stderr: "",
-      exitCode: 0,
-    });
-  });
-
-  it("preserves multiline stdout in a single HTTP exec frame", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(new Uint8Array([0x01]), encoder.encode("one\ntwo\nthree\n")),
-      new Uint8Array([0x03, 0x00]),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("printf lines");
-
-    expect(result).toEqual({
-      stdout: "one\ntwo\nthree",
-      stderr: "",
-      exitCode: 0,
-    });
-  });
-
-  it("parses an exit marker coalesced with stdout in one HTTP response chunk", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(
-        new Uint8Array([0x01]),
-        encoder.encode("build complete\n"),
-        new Uint8Array([0x03, 0x00]),
-      ),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("echo ok");
-
-    expect(result).toEqual({
-      stdout: "build complete",
-      stderr: "",
-      exitCode: 0,
-    });
-  });
-
-  it("parses an exit marker split across HTTP response chunks", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(new Uint8Array([0x01]), encoder.encode("ok"), new Uint8Array([0x03])),
-      new Uint8Array([0x2a]),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("exit 42");
-
-    expect(result).toEqual({
-      stdout: "ok",
-      stderr: "",
-      exitCode: 42,
-    });
-  });
-
-  it("does not treat trailing payload bytes as an exit marker", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(new Uint8Array([0x01]), encoder.encode("ok"), new Uint8Array([0x03, 0x2a])),
-      new Uint8Array([0x03, 0x00]),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("printf marker bytes");
-
-    expect(result).toEqual({
-      stdout: "ok\u0003*",
-      stderr: "",
-      exitCode: 0,
-    });
-  });
-
-  it("parses stdout and stderr from separate HTTP exec frames", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
-      concatBytes(new Uint8Array([0x01]), encoder.encode("out\n")),
-      concatBytes(new Uint8Array([0x02]), encoder.encode("err\n")),
-      new Uint8Array([0x03, 0x07]),
-    )) as unknown as typeof fetch);
-
-    const client = new WorkersSpriteClient(
-      "sprite-1",
-      "sprites-key",
-      "https://api.sprites.test",
-    );
-
-    const result = await client.execHttp("echo out; echo err >&2; exit 7");
-
-    expect(result).toEqual({
-      stdout: "out",
-      stderr: "err",
-      exitCode: 7,
-    });
-  });
-
   it("streams WebSocket exec chunks while returning accumulated output", async () => {
     const client = new WorkersSpriteClient(
       "sprite-1",
@@ -179,6 +49,7 @@ describe("WorkersSpriteClient", () => {
       cwd: "/workspace",
       idleTimeoutMs: 123,
       tty: false,
+      stdin: false,
     });
     expect(onStdout).toHaveBeenNthCalledWith(1, "hello ");
     expect(onStdout).toHaveBeenNthCalledWith(2, "world\n");
@@ -189,31 +60,98 @@ describe("WorkersSpriteClient", () => {
       exitCode: 0,
     });
   });
+
+  it("returns a nonzero WebSocket exit code with separate stdout and stderr", async () => {
+    const webSocket = new FakeWebSocket([
+      createFrame(1, "out\n"),
+      createFrame(2, "err\n"),
+      new Uint8Array([3, 7]),
+    ]);
+    vi.stubGlobal("WebSocket", { OPEN: FakeWebSocket.OPEN });
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      status: 101,
+      webSocket,
+    })) as unknown as typeof fetch);
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    await expect(client.execWs("exit 7")).resolves.toEqual({
+      stdout: "out",
+      stderr: "err",
+      exitCode: 7,
+    });
+  });
+
+  it("rejects when the WebSocket closes before an exit frame", async () => {
+    const webSocket = new FakeWebSocket([
+      createFrame(1, "incomplete\n"),
+    ], { closeBeforeExit: true });
+    vi.stubGlobal("WebSocket", { OPEN: FakeWebSocket.OPEN });
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      status: 101,
+      webSocket,
+    })) as unknown as typeof fetch);
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    await expect(client.execWs("echo incomplete")).rejects.toThrow(
+      "WebSocket closed before receiving process exit",
+    );
+  });
 });
 
-function concatBytes(...chunks: Uint8Array[]): Uint8Array {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return result;
+function createFrame(streamId: number, payload: string): Uint8Array {
+  const payloadBytes = encoder.encode(payload);
+  const frame = new Uint8Array(payloadBytes.length + 1);
+  frame[0] = streamId;
+  frame.set(payloadBytes, 1);
+  return frame;
 }
 
-function createExecResponse(...frames: Uint8Array[]): Response {
-  return new Response(new ReadableStream({
-    start(controller) {
-      for (const frame of frames) {
-        controller.enqueue(frame);
+class FakeWebSocket {
+  static readonly OPEN = 1;
+
+  readyState = FakeWebSocket.OPEN;
+  private readonly closeBeforeExit: boolean;
+  private readonly frames: Uint8Array[];
+  private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+
+  constructor(frames: Uint8Array[], options: { closeBeforeExit?: boolean } = {}) {
+    this.frames = frames;
+    this.closeBeforeExit = options.closeBeforeExit ?? false;
+  }
+
+  accept(): void {
+    queueMicrotask(() => {
+      for (const frame of this.frames) {
+        this.dispatch("message", { data: frame });
       }
-      controller.close();
-    },
-  }), {
-    headers: { "content-type": "application/octet-stream" },
-    status: 200,
-  });
+      if (this.closeBeforeExit) {
+        this.close(1006);
+      }
+    });
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  close(code = 1000): void {
+    this.readyState = 3;
+    this.dispatch("close", { code, reason: "" });
+  }
+
+  private dispatch(type: string, event: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
 }

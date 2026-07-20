@@ -3,9 +3,9 @@
 
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import type { Sprite} from "@fly/sprites";
+import type { Sprite } from "@fly/sprites";
 import { SpritesClient } from "@fly/sprites";
-import { SpritesCoordinator, WorkersSpriteClient } from "../src/lib/sprites";
+import { SpritesCoordinator } from "../src/shared/integrations/sprites";
 
 const SPRITES_API_KEY = process.env.SPRITES_API_KEY!;
 const SPRITES_API_URL = process.env.SPRITES_API_URL || "https://api.sprites.dev";
@@ -65,14 +65,17 @@ const connectClaude = async (nativeSprite: Sprite) => {
   return session;
 }
 
-const cloneRepo = async (workersSprite: WorkersSpriteClient) => {
+const cloneRepo = async (sprite: Sprite) => {
   console.log(`\n--- Cloning ${REPO_ID} ---`);
-  await workersSprite.execHttp("rm -rf ~/workspace && mkdir -p ~/workspace");
+  await sprite.execFile("sh", ["-c", "rm -rf ~/workspace && mkdir -p ~/workspace"]);
 
-  const clone = await workersSprite.execHttp(`git clone https://github.com/${REPO_ID}.git ~/workspace`);
+  const clone = await sprite.execFile("sh", [
+    "-c",
+    `git clone https://github.com/${REPO_ID}.git ~/workspace`,
+  ]);
   console.log(`Clone: stdout="${clone.stdout}" stderr="${clone.stderr}" exitCode=${clone.exitCode}`);
 
-  const verify = await workersSprite.execHttp("ls ~/workspace | head -10");
+  const verify = await sprite.execFile("sh", ["-c", "ls ~/workspace | head -10"]);
   console.log(`\nWorkspace after clone:\n${verify.stdout}`);
 }
 
@@ -82,16 +85,16 @@ async function main() {
   // Our coordinator for sprite lifecycle
   const coordinator = new SpritesCoordinator({ apiKey: SPRITES_API_KEY });
   // Native SDK for WebSocket (since Workers WebSocket doesn't work in Node.js)
-  const nativeClient = new SpritesClient(SPRITES_API_KEY);
+  const nativeClient = new SpritesClient(SPRITES_API_KEY, {
+    baseURL: SPRITES_API_URL,
+  });
 
-  let workersSprite: WorkersSpriteClient;
   let nativeSprite: Awaited<ReturnType<typeof nativeClient.getSprite>>;
   let createdSprite = false;
   let finalSpriteName: string;
 
   if (spriteName) {
     console.log(`Connecting to existing sprite: ${spriteName}`);
-    workersSprite = new WorkersSpriteClient(spriteName, SPRITES_API_KEY, SPRITES_API_URL);
     nativeSprite = await nativeClient.getSprite(spriteName);
     finalSpriteName = spriteName;
     console.log(`Connected to sprite: ${spriteName}`);
@@ -100,17 +103,19 @@ async function main() {
     console.log(`Creating new sprite: ${name}`);
     const spriteResponse = await coordinator.createSprite({ name });
     console.log(`Created sprite: ${spriteResponse.name} (status: ${spriteResponse.status})`);
-    workersSprite = new WorkersSpriteClient(spriteResponse.name, SPRITES_API_KEY, SPRITES_API_URL);
     nativeSprite = await nativeClient.getSprite(spriteResponse.name);
     finalSpriteName = spriteResponse.name;
     createdSprite = true;
   }
 
   // Clone repo if needed
-  const wsCheck = await workersSprite.execHttp("test -d ~/workspace/.git && echo 'exists' || echo 'empty'");
+  const wsCheck = await nativeSprite.execFile("sh", [
+    "-c",
+    "test -d ~/workspace/.git && echo 'exists' || echo 'empty'",
+  ]);
   console.log(`Workspace check: stdout="${wsCheck.stdout}" stderr="${wsCheck.stderr}" exitCode=${wsCheck.exitCode}`);
-  if (!wsCheck.stdout.includes("exists")) {
-    await cloneRepo(workersSprite);
+  if (!String(wsCheck.stdout).includes("exists")) {
+    await cloneRepo(nativeSprite);
   } else {
     console.log("Workspace already has repo");
   }
@@ -138,8 +143,8 @@ async function main() {
     claudeSession.kill();
 
     if (createdSprite) {
-      console.log(`Deleting sprite ${workersSprite.name}...`);
-      await coordinator.deleteSprite(workersSprite.name);
+      console.log(`Deleting sprite ${finalSpriteName}...`);
+      await coordinator.deleteSprite(finalSpriteName);
       console.log("Sprite deleted");
     }
 

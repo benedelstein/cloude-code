@@ -35,15 +35,12 @@ function createLogger(): Logger {
 
 function createSprite(results: Array<{ stdout: string; stderr?: string; exitCode: number }>) {
   return {
-    execHttp: vi.fn(async () => {
+    execWs: vi.fn(async () => {
       const result = results.shift();
       if (!result) {
-        throw new Error("Unexpected execHttp call");
+        throw new Error("Unexpected execWs call");
       }
       return { stderr: "", ...result };
-    }),
-    execWs: vi.fn(async () => {
-      throw new Error("Unexpected execWs call");
     }),
   } as unknown as WorkersSpriteClient;
 }
@@ -81,7 +78,7 @@ describe("startup toolchain dispatch", () => {
     });
 
     expect(secondResult.ok).toBe(true);
-    expect(secondSprite.execHttp).not.toHaveBeenCalled();
+    expect(secondSprite.execWs).not.toHaveBeenCalled();
   });
 
   it("reruns checks when the Codex minimum version override changes", async () => {
@@ -108,7 +105,7 @@ describe("startup toolchain dispatch", () => {
     });
 
     expect(secondResult.ok).toBe(true);
-    expect(secondSprite.execHttp).toHaveBeenCalledOnce();
+    expect(secondSprite.execWs).toHaveBeenCalledOnce();
   });
 
   it("keeps provisioning and spawn call sites provider-agnostic", () => {
@@ -148,11 +145,11 @@ describe("Claude Code startup check", () => {
       status: "ready",
       requiredVersion: MIN_CLAUDE_CODE_CLI_VERSION,
     });
-    expect(sprite.execHttp).toHaveBeenCalledOnce();
-    expect(sprite.execHttp).toHaveBeenCalledWith(
+    expect(sprite.execWs).toHaveBeenCalledOnce();
+    expect(sprite.execWs).toHaveBeenCalledWith(
       expect.stringContaining("bash -c"),
     );
-    expect(sprite.execHttp).toHaveBeenCalledWith(
+    expect(sprite.execWs).toHaveBeenCalledWith(
       expect.stringContaining(`min_version="${MIN_CLAUDE_CODE_CLI_VERSION}"`),
     );
   });
@@ -172,7 +169,7 @@ describe("Claude Code startup check", () => {
     if (!result.ok) {
       return;
     }
-    const command = vi.mocked(sprite.execHttp).mock.calls[0]?.[0] as string;
+    const command = vi.mocked(sprite.execWs).mock.calls[0]?.[0] as string;
     expect(command).toContain("read_claude_version()");
     expect(command).toContain("version_at_least()");
     expect(command).toContain("claude update");
@@ -226,11 +223,11 @@ describe("OpenAI Codex startup check", () => {
       status: "ready",
       requiredVersion: MIN_CODEX_CLI_VERSION,
     });
-    expect(sprite.execHttp).toHaveBeenCalledOnce();
-    expect(sprite.execHttp).toHaveBeenCalledWith(
+    expect(sprite.execWs).toHaveBeenCalledOnce();
+    expect(sprite.execWs).toHaveBeenCalledWith(
       expect.stringContaining("bash -c"),
     );
-    expect(sprite.execHttp).toHaveBeenCalledWith(
+    expect(sprite.execWs).toHaveBeenCalledWith(
       expect.stringContaining(`min_version="${MIN_CODEX_CLI_VERSION}"`),
     );
   });
@@ -250,8 +247,8 @@ describe("OpenAI Codex startup check", () => {
     if (!result.ok) {
       return;
     }
-    expect(sprite.execHttp).toHaveBeenCalledOnce();
-    const command = vi.mocked(sprite.execHttp).mock.calls[0]?.[0] as string;
+    expect(sprite.execWs).toHaveBeenCalledOnce();
+    const command = vi.mocked(sprite.execWs).mock.calls[0]?.[0] as string;
     expect(command).toContain("read_codex_version()");
     expect(command).toContain("version_at_least()");
     expect(command).toContain(`curl -fsSL "$install_url" | sh`);
@@ -276,7 +273,7 @@ describe("OpenAI Codex startup check", () => {
     }
     expect(result.value.requiredVersion).toBe("0.140.0");
     expect(check!.contract.minimumVersion).toBe("0.140.0");
-    expect(sprite.execHttp).toHaveBeenCalledWith(
+    expect(sprite.execWs).toHaveBeenCalledWith(
       expect.stringContaining('min_version="0.140.0"'),
     );
   });
