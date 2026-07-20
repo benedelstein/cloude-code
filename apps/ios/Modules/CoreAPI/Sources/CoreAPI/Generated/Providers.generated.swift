@@ -146,8 +146,6 @@ public enum ClaudeModel: RawRepresentable, Codable, Equatable, Sendable {
     case claudeOpus481m
     case claudeSonnet46
     case claudeHaiku45
-    case claudeOpus47
-    case claudeOpus471m
     /// A value this client version doesn't recognize yet.
     case unknown(String)
 
@@ -159,8 +157,6 @@ public enum ClaudeModel: RawRepresentable, Codable, Equatable, Sendable {
         case "claude-opus-4-8[1m]": self = .claudeOpus481m
         case "claude-sonnet-4-6": self = .claudeSonnet46
         case "claude-haiku-4-5": self = .claudeHaiku45
-        case "claude-opus-4-7": self = .claudeOpus47
-        case "claude-opus-4-7[1m]": self = .claudeOpus471m
         default: self = .unknown(rawValue)
         }
     }
@@ -173,8 +169,6 @@ public enum ClaudeModel: RawRepresentable, Codable, Equatable, Sendable {
         case .claudeOpus481m: "claude-opus-4-8[1m]"
         case .claudeSonnet46: "claude-sonnet-4-6"
         case .claudeHaiku45: "claude-haiku-4-5"
-        case .claudeOpus47: "claude-opus-4-7"
-        case .claudeOpus471m: "claude-opus-4-7[1m]"
         case .unknown(let value): value
         }
     }

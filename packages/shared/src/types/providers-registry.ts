@@ -53,8 +53,6 @@ export const CLAUDE_MODEL_DISPLAY_NAMES: Record<ClaudeModel, string> = {
   "claude-opus-4-8[1m]": "Claude Opus 4.8 (1M context)",
   "claude-sonnet-4-6": "Claude Sonnet 4.6",
   "claude-haiku-4-5": "Claude Haiku 4.5",
-  "claude-opus-4-7": "Claude Opus 4.7 [Legacy]",
-  "claude-opus-4-7[1m]": "Claude Opus 4.7 (1M context) [Legacy]",
 };
 
 export const CLAUDE_EFFORT_DISPLAY_NAMES: Record<ClaudeEffort, string> = {
