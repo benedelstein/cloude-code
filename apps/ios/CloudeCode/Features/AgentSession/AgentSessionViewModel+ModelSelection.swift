@@ -80,6 +80,20 @@ extension AgentSessionViewModel {
         persistDraftModelSelection(selection)
     }
 
+    /// Selects a newly connected provider's default model when it is available.
+    func selectDefaultModel(for providerId: ProviderId) {
+        guard let provider = modelCatalogStore.catalog?.providers.first(where: {
+            $0.providerId == providerId && $0.isSelectable
+        }),
+        let model = provider.models.first(where: {
+            $0.id == provider.defaultModel && $0.selectable
+        }) ?? provider.models.first(where: \.selectable) else {
+            return
+        }
+
+        selectModel(provider: provider, model: model)
+    }
+
     /// Selects an effort for the draft or stages it for the next existing-session message.
     func selectEffort(provider: ProviderCatalogEntry, effort: ProviderCatalogEffort) {
         guard isDraftMode || provider.providerId == modelProviderId else {

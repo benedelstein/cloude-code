@@ -50,6 +50,51 @@ describe("WorkersSpriteClient", () => {
     });
   });
 
+  it("parses an exit marker coalesced with stdout in one HTTP response chunk", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(
+        new Uint8Array([0x01]),
+        encoder.encode("build complete\n"),
+        new Uint8Array([0x03, 0x00]),
+      ),
+    )) as unknown as typeof fetch);
+
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    const result = await client.execHttp("echo ok");
+
+    expect(result).toEqual({
+      stdout: "build complete",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
+  it("parses an exit marker split across HTTP response chunks", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
+      concatBytes(new Uint8Array([0x01]), encoder.encode("ok"), new Uint8Array([0x03])),
+      new Uint8Array([0x2a]),
+    )) as unknown as typeof fetch);
+
+    const client = new WorkersSpriteClient(
+      "sprite-1",
+      "sprites-key",
+      "https://api.sprites.test",
+    );
+
+    const result = await client.execHttp("exit 42");
+
+    expect(result).toEqual({
+      stdout: "ok",
+      stderr: "",
+      exitCode: 42,
+    });
+  });
+
   it("does not treat trailing payload bytes as an exit marker", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => createExecResponse(
       concatBytes(new Uint8Array([0x01]), encoder.encode("ok"), new Uint8Array([0x03, 0x2a])),

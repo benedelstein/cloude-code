@@ -1,4 +1,5 @@
 import CoreAPI
+import Domain
 import SwiftUI
 
 struct ModelPickerButton: View {
@@ -18,34 +19,47 @@ struct ModelPickerButton: View {
     @State private var pendingConnectionProvider: ProviderCatalogEntry?
 
     var body: some View {
-        Menu {
-            Section("Model") {
-                Button {
-                    isSheetPresented = true
-                } label: {
-                    Text(displayedModel?.displayName ?? "Select a model")
-                }
+        pickerControl
+            .buttonStyle(.plain)
+            .disabled(isLoadingSelection)
+            .redacted(reason: isLoadingSelection ? .placeholder : [])
+            .sheet(isPresented: $isSheetPresented, onDismiss: presentPendingConnection) {
+                ModelPickerSheet(
+                    modelCatalog: modelCatalog,
+                    selectedModel: displayedModel,
+                    providerId: providerId,
+                    restrictsProvider: restrictsProvider,
+                    onSelectModel: onSelectModel,
+                    onConnectProvider: requestProviderConnection
+                )
             }
+    }
 
-            Section("Effort Level") {
-                effortMenu
+    @ViewBuilder
+    private var pickerControl: some View {
+        if let displayedModel {
+            Menu {
+                Section("Model") {
+                    Button {
+                        presentModelPicker()
+                    } label: {
+                        Text(displayedModel.displayName)
+                    }
+                }
+
+                Section("Effort Level") {
+                    effortMenu
+                }
+            } label: {
+                menuLabel
             }
-        } label: {
-            menuLabel
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .disabled(isLoadingSelection)
-        .redacted(reason: isLoadingSelection ? .placeholder : [])
-        .sheet(isPresented: $isSheetPresented, onDismiss: presentPendingConnection) {
-            ModelPickerSheet(
-                modelCatalog: modelCatalog,
-                selectedModel: displayedModel,
-                providerId: providerId,
-                restrictsProvider: restrictsProvider,
-                onSelectModel: onSelectModel,
-                onConnectProvider: requestProviderConnection
-            )
+            .menuIndicator(.hidden)
+        } else {
+            Button {
+                isSheetPresented = true
+            } label: {
+                menuLabel
+            }
         }
     }
 
@@ -110,13 +124,23 @@ struct ModelPickerButton: View {
         return selectedModel
     }
 
+    private func presentModelPicker() {
+        Task { @MainActor in
+            // Let the menu finish dismissing before asking SwiftUI to present a sheet.
+            try? await Task.sleep(for: .milliseconds(100))
+            isSheetPresented = true
+        }
+    }
+
     private func requestProviderConnection(_ provider: ProviderCatalogEntry) {
+        Logger.info("Provider connection requested from model picker: \(provider.providerId.rawValue)")
         pendingConnectionProvider = provider
         isSheetPresented = false
     }
 
     private func presentPendingConnection() {
         guard let provider = pendingConnectionProvider else { return }
+        Logger.info("Model picker dismissed; forwarding provider connection: \(provider.providerId.rawValue)")
         pendingConnectionProvider = nil
         onConnectProvider(provider)
     }

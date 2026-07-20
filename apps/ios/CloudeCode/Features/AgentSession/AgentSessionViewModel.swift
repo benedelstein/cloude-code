@@ -295,10 +295,10 @@ extension AgentSessionViewModel {
         for run: SessionClientState.SessionSetupRun
     ) -> Bool {
         switch run.status {
-        case .completed:
-            run.tasks.contains { $0.status == .failed }
-        case .running, .failed, .unknown:
+        case .running:
             true
+        case .completed, .failed, .unknown:
+            false
         }
     }
 

@@ -6,26 +6,24 @@ import Testing
 @testable import CloudeCode
 
 @MainActor
-struct ProviderConnectionViewModelTests {
-    @Test func claudeFlowOpensAuthorizationAndExchangesPastedCode() async throws {
+struct ClaudeProviderConnectionViewModelTests {
+    @Test func opensAuthorizationAndExchangesPastedCode() async throws {
         let authAPI = ProviderAuthAPISpy()
         let modelsAPI = ProviderConnectionModelsAPISpy()
-        let viewModel = makeViewModel(
-            providerId: .claudeCode,
-            sessionId: "session-1",
-            authAPI: authAPI,
-            modelsAPI: modelsAPI
+        let viewModel = ClaudeProviderConnectionViewModel(
+            context: providerContext(providerId: .claudeCode, sessionId: "session-1"),
+            api: authAPI,
+            modelCatalogStore: ModelCatalogStore(modelsAPI: modelsAPI)
         )
 
-        viewModel.connect()
-        try await waitUntil { viewModel.phase == .claudeCodeEntry }
+        viewModel.beginAuthorization()
+        try await waitUntil { viewModel.phase == .awaitingCode }
 
-        #expect(viewModel.externalAuthorization?.url.absoluteString == "https://claude.ai/oauth/authorize")
-        #expect(viewModel.externalAuthorization?.codeToCopy == nil)
+        #expect(viewModel.externalAuthorizationURL?.absoluteString == "https://claude.ai/oauth/authorize")
 
         viewModel.didOpenExternalAuthorization()
-        viewModel.claudeCode = "  claude-code  "
-        viewModel.submitClaudeCode()
+        viewModel.code = "  claude-code  "
+        viewModel.submitCode()
         try await waitUntil { viewModel.isConnected }
 
         #expect(authAPI.claudeExchange?.code == "claude-code")
@@ -33,24 +31,34 @@ struct ProviderConnectionViewModelTests {
         #expect(authAPI.claudeExchange?.sessionId == "session-1")
         #expect(modelsAPI.callCount == 1)
     }
+}
 
-    @Test func openAIFlowCopiesCodeAndPollsThroughCompletion() async throws {
+@MainActor
+struct OpenAIProviderConnectionViewModelTests {
+    @Test func preparesCodeBeforeOpeningOrPolling() async throws {
+        let authAPI = ProviderAuthAPISpy(openAIStatuses: [.completed])
+        let viewModel = makeViewModel(authAPI: authAPI)
+
+        viewModel.load()
+        try await waitUntil { viewModel.authorization != nil }
+
+        #expect(viewModel.phase == .codeReady(openAIAuthorization))
+        #expect(viewModel.authorization?.userCode == "ABCD-EFGH")
+        #expect(authAPI.openAIPollCount == 0)
+    }
+
+    @Test func startsPollingOnlyAfterAuthorizationPageOpens() async throws {
         let authAPI = ProviderAuthAPISpy(openAIStatuses: [.pending, .completed])
         let modelsAPI = ProviderConnectionModelsAPISpy()
         let viewModel = makeViewModel(
-            providerId: .openaiCodex,
             sessionId: "session-2",
             authAPI: authAPI,
             modelsAPI: modelsAPI
         )
 
-        viewModel.connect()
-        try await waitUntil { viewModel.externalAuthorization != nil }
-
-        #expect(viewModel.externalAuthorization?.url.absoluteString == "https://auth.openai.com/device")
-        #expect(viewModel.externalAuthorization?.codeToCopy == "ABCD-EFGH")
-
-        viewModel.didOpenExternalAuthorization()
+        viewModel.load()
+        try await waitUntil { viewModel.authorization != nil }
+        viewModel.didOpenAuthorization()
         try await waitUntil { viewModel.isConnected }
 
         #expect(authAPI.openAIPollCount == 2)
@@ -59,16 +67,13 @@ struct ProviderConnectionViewModelTests {
         #expect(modelsAPI.callCount == 1)
     }
 
-    @Test func expiredOpenAIAuthorizationReturnsToReadyWithError() async throws {
+    @Test func expiredAuthorizationReturnsToReadyWithError() async throws {
         let authAPI = ProviderAuthAPISpy(openAIStatuses: [.expired])
-        let viewModel = makeViewModel(
-            providerId: .openaiCodex,
-            sessionId: nil,
-            authAPI: authAPI,
-            modelsAPI: ProviderConnectionModelsAPISpy()
-        )
+        let viewModel = makeViewModel(authAPI: authAPI)
 
-        viewModel.connect()
+        viewModel.load()
+        try await waitUntil { viewModel.authorization != nil }
+        viewModel.didOpenAuthorization()
         try await waitUntil { viewModel.errorMessage != nil }
 
         #expect(viewModel.phase == .ready)
@@ -77,32 +82,45 @@ struct ProviderConnectionViewModelTests {
     }
 
     private func makeViewModel(
-        providerId: ProviderId,
-        sessionId: String?,
+        sessionId: String? = nil,
         authAPI: ProviderAuthAPISpy,
-        modelsAPI: ProviderConnectionModelsAPISpy
-    ) -> ProviderConnectionViewModel {
-        ProviderConnectionViewModel(
-            context: ProviderConnectionContext(
-                providerId: providerId,
-                providerName: providerId == .claudeCode ? "Claude" : "OpenAI Codex",
-                requiresReauth: false,
-                sessionId: sessionId
-            ),
+        modelsAPI: ProviderConnectionModelsAPISpy? = nil
+    ) -> OpenAIProviderConnectionViewModel {
+        let modelsAPI = modelsAPI ?? ProviderConnectionModelsAPISpy()
+        return OpenAIProviderConnectionViewModel(
+            context: providerContext(providerId: .openaiCodex, sessionId: sessionId),
             api: authAPI,
             modelCatalogStore: ModelCatalogStore(modelsAPI: modelsAPI),
             pollIntervalOverride: .milliseconds(1)
         )
     }
-
-    private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-        for _ in 0..<100 {
-            if condition() { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        throw ProviderConnectionTestError.timedOut
-    }
 }
+
+@MainActor
+private func providerContext(providerId: ProviderId, sessionId: String?) -> ProviderConnectionContext {
+    ProviderConnectionContext(
+        providerId: providerId,
+        providerName: providerId == .claudeCode ? "Claude" : "OpenAI Codex",
+        requiresReauth: false,
+        sessionId: sessionId
+    )
+}
+
+@MainActor
+private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
+    for _ in 0..<100 {
+        if condition() { return }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    throw ProviderConnectionTestError.timedOut
+}
+
+private let openAIAuthorization = OpenAIDeviceAuthorization(
+    attemptId: "attempt-1",
+    verificationURL: "https://auth.openai.com/device",
+    userCode: "ABCD-EFGH",
+    intervalSeconds: 5
+)
 
 @MainActor
 private final class ProviderAuthAPISpy: ProviderAuthAPIProviding {
@@ -134,12 +152,7 @@ private final class ProviderAuthAPISpy: ProviderAuthAPIProviding {
     }
 
     func startOpenAIDeviceAuthorization() async throws -> OpenAIDeviceAuthorization {
-        OpenAIDeviceAuthorization(
-            attemptId: "attempt-1",
-            verificationURL: "https://auth.openai.com/device",
-            userCode: "ABCD-EFGH",
-            intervalSeconds: 5
-        )
+        openAIAuthorization
     }
 
     func pollOpenAIDeviceAuthorization(
@@ -151,6 +164,10 @@ private final class ProviderAuthAPISpy: ProviderAuthAPIProviding {
         lastOpenAISessionId = sessionId
         return openAIStatuses.isEmpty ? .pending : openAIStatuses.removeFirst()
     }
+
+    func disconnectClaude() async throws {}
+
+    func disconnectOpenAI() async throws {}
 }
 
 @MainActor

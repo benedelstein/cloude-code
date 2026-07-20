@@ -320,13 +320,7 @@ async function readExecHttpResponse(
   response: Response,
   startedAtMs: number,
 ): Promise<ExecHttpResponseRead> {
-  const state: ExecHttpParseState = {
-    stdout: "",
-    stderr: "",
-    exitCode: -1,
-    stdoutDecoder: new TextDecoder(),
-    stderrDecoder: new TextDecoder(),
-  };
+  let state = createExecHttpParseState();
 
   if (!response.body) {
     return {
@@ -369,6 +363,27 @@ async function readExecHttpResponse(
     offset += chunk.byteLength;
   }
 
+  if (
+    state.exitCode === -1 &&
+    buffer.length >= 2 &&
+    buffer[buffer.length - 2] === 0x03
+  ) {
+    // HTTP transports can coalesce the final exit frame with the preceding
+    // stdout/stderr frame, or split its two bytes across response chunks.
+    // Replay the original chunk boundaries without the trailing exit frame.
+    state = createExecHttpParseState();
+    let remainingBytes = buffer.length - 2;
+    for (const chunk of buffers) {
+      if (remainingBytes === 0) {
+        break;
+      }
+      const chunkLength = Math.min(chunk.byteLength, remainingBytes);
+      parseExecHttpFrame(state, chunk.subarray(0, chunkLength));
+      remainingBytes -= chunkLength;
+    }
+    state.exitCode = buffer[buffer.length - 1] ?? 0;
+  }
+
   state.stdout += state.stdoutDecoder.decode();
   state.stderr += state.stderrDecoder.decode();
 
@@ -380,6 +395,16 @@ async function readExecHttpResponse(
     chunkCount,
     lastChunkAtMs,
     readError,
+  };
+}
+
+function createExecHttpParseState(): ExecHttpParseState {
+  return {
+    stdout: "",
+    stderr: "",
+    exitCode: -1,
+    stdoutDecoder: new TextDecoder(),
+    stderrDecoder: new TextDecoder(),
   };
 }
 

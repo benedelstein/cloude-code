@@ -73,6 +73,30 @@ struct ProviderAuthAPITests {
         #expect(status == .completed)
     }
 
+    @Test func claudeDisconnectUsesAuthenticatedPost() async throws {
+        let recorder = ProviderAuthRequestRecorder()
+        let api = makeAPI(recorder: recorder, responseJSON: #"{"ok":true}"#)
+
+        try await api.disconnectClaude()
+
+        let request = try #require(await recorder.request)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/auth/claude/disconnect")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
+    }
+
+    @Test func openAIDisconnectUsesAuthenticatedPost() async throws {
+        let recorder = ProviderAuthRequestRecorder()
+        let api = makeAPI(recorder: recorder, responseJSON: #"{"ok":true}"#)
+
+        try await api.disconnectOpenAI()
+
+        let request = try #require(await recorder.request)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/auth/openai/disconnect")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
+    }
+
     private func makeAPI(
         recorder: ProviderAuthRequestRecorder,
         responseJSON: String

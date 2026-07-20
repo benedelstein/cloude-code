@@ -65,7 +65,9 @@ struct AgentSessionView: View {
             }
         }
         .toolbarTitleDisplayMode(.inline)
-        .modifier(Destinations(destination: $destination))
+        .modifier(Destinations(destination: $destination) { context in
+            store.selectDefaultModel(for: context.providerId)
+        })
         .alert("Rename session", isPresented: $renamePromptPresented) {
             TextField("Session name", text: $proposedSessionTitle)
             Button("Cancel", role: .cancel) {}
@@ -112,6 +114,7 @@ struct AgentSessionView: View {
     }
 
     private func showProviderConnection(_ provider: ProviderCatalogEntry) {
+        Logger.info("Agent session presenting provider connection: \(provider.providerId.rawValue)")
         destination = .sheet(.providerConnection(ProviderConnectionContext(
             providerId: provider.providerId,
             providerName: provider.providerName,

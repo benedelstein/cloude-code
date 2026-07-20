@@ -45,6 +45,24 @@ private struct PollOpenAIDeviceAuthorization: APIRequest {
     }
 }
 
+private struct DisconnectClaude: APIRequest {
+    typealias Response = ClaudeDisconnectResponse
+
+    var headers: [String: String]
+
+    var path: String { "auth/claude/disconnect" }
+    var method: HTTPMethod { .post }
+}
+
+private struct DisconnectOpenAI: APIRequest {
+    typealias Response = OpenAIDisconnectResponse
+
+    var headers: [String: String]
+
+    var path: String { "auth/openai/disconnect" }
+    var method: HTTPMethod { .post }
+}
+
 /// Provider-account authorization API used by native connection flows.
 public protocol ProviderAuthAPIProviding: Sendable {
     /// Starts Claude authorization and returns the external URL and exchange state.
@@ -61,6 +79,12 @@ public protocol ProviderAuthAPIProviding: Sendable {
         attemptId: String,
         sessionId: String?
     ) async throws -> OpenAIDeviceAuthorizationStatus
+
+    /// Removes the saved Claude authorization for the current user.
+    func disconnectClaude() async throws
+
+    /// Removes the saved OpenAI authorization for the current user.
+    func disconnectOpenAI() async throws
 }
 
 /// Concrete provider-account authorization API backed by `APIClient`.
@@ -92,9 +116,13 @@ public struct ProviderAuthAPI: ProviderAuthAPIProviding {
 
     /// Starts OpenAI Codex device authorization.
     public func startOpenAIDeviceAuthorization() async throws -> OpenAIDeviceAuthorization {
+        Logger.info("OpenAI device authorization requesting bearer headers")
+        let headers = try await tokenProvider.bearerHeaders()
+        Logger.info("OpenAI device authorization starting API request")
         let response = try await client.fetch(StartOpenAIDeviceAuthorization(
-            headers: tokenProvider.bearerHeaders()
+            headers: headers
         ))
+        Logger.info("OpenAI device authorization API request completed")
         return OpenAIDeviceAuthorization(
             attemptId: response.attemptId,
             verificationURL: response.verificationUrl,
@@ -119,5 +147,17 @@ public struct ProviderAuthAPI: ProviderAuthAPIProviding {
         case .expired: .expired
         case .unknown(let value): .unknown(value)
         }
+    }
+
+    /// Removes the saved Claude authorization for the current user.
+    public func disconnectClaude() async throws {
+        let headers = try await tokenProvider.bearerHeaders()
+        _ = try await client.fetch(DisconnectClaude(headers: headers))
+    }
+
+    /// Removes the saved OpenAI authorization for the current user.
+    public func disconnectOpenAI() async throws {
+        let headers = try await tokenProvider.bearerHeaders()
+        _ = try await client.fetch(DisconnectOpenAI(headers: headers))
     }
 }

@@ -138,14 +138,9 @@ struct EnvironmentEditorView: View {
                 }
 
                 if viewModel.networkMode != .locked {
-                    Label(
-                        "Internet access poses security risks. Limit access to known safe domains when possible.",
-                        systemImage: "exclamationmark.triangle"
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .foregroundStyle(theme.accentOrange)
-                    .padding(8)
-                    .background(theme.accentOrange.opacity(0.1).cornerRadius(12))
+                    CalloutView(tint: theme.accentOrange, systemImage: "exclamationmark.triangle") {
+                        Text("Internet access poses security risks. Limit access to known safe domains when possible.")
+                    }
                 }
             }
         }

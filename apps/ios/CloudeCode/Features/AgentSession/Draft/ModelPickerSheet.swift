@@ -69,10 +69,54 @@ struct ModelPickerSheet: View {
 
         return Section {
             if isExpanded {
+                if !provider.isSelectable {
+                    providerConnectionRow(provider)
+                }
                 providerRows(provider, models: filteredModels(for: provider))
             }
         } header: {
             providerHeader(provider, isExpanded: isExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private func providerConnectionRow(_ provider: ProviderCatalogEntry) -> some View {
+        if provider.providerId.supportsNativeConnection {
+            Button {
+                onConnectProvider(provider)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                        .font(.body.weight(.semibold))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(provider.requiresReauth
+                             ? "Reconnect \(provider.providerName)"
+                             : "Connect \(provider.providerName)")
+                            .font(.body.weight(.semibold))
+
+                        Text(provider.requiresReauth
+                             ? "Sign in again to use these models."
+                             : "Connect to use these models.")
+                            .font(.caption)
+                            .foregroundStyle(theme.secondaryLabelColor)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(theme.accentBlue)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(theme.accentBlue.opacity(0.1))
+        } else {
+            Text("Not connected")
+                .foregroundStyle(theme.tertiaryLabelColor)
         }
     }
 
@@ -110,44 +154,28 @@ struct ModelPickerSheet: View {
     }
 
     private func providerHeader(_ provider: ProviderCatalogEntry, isExpanded: Bool) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                withAnimation {
-                    toggleProvider(provider)
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    // One constant image with a rotation and fixed width so
-                    // toggling expansion never shifts the header layout.
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 14)
-                    ProviderIconView(providerId: provider.providerId)
-                        .frame(width: 14, height: 14)
-                    Text(provider.providerName)
-                }
-                .contentShape(Rectangle())
+        Button {
+            withAnimation {
+                toggleProvider(provider)
             }
-            .buttonStyle(.plain)
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-
-            Spacer()
-
-            if !provider.isSelectable {
-                if provider.providerId.supportsNativeConnection {
-                    Button(provider.requiresReauth ? "Reconnect" : "Connect") {
-                        onConnectProvider(provider)
-                    }
+        } label: {
+            HStack(spacing: 8) {
+                // One constant image with a rotation and fixed width so
+                // toggling expansion never shifts the header layout.
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(theme.accentBlue)
-                    .buttonStyle(.plain)
-                } else {
-                    Text("Not connected")
-                        .foregroundStyle(theme.tertiaryLabelColor)
-                }
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 14)
+                ProviderIconView(providerId: provider.providerId)
+                    .frame(width: 14, height: 14)
+                Text(provider.providerName)
+
+                Spacer()
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
 
     private var trimmedQuery: String {

@@ -57,7 +57,7 @@ public final class EntityStore<M: EntityModel> {
         guard let cache else { return [] }
 
         let snapshots = try await cache.fetch(M.EntityType.self, ids: ids)
-        Logger.debug("got \(snapshots.count) of \(ids.count) from disk")
+        Logger.debug("got \(snapshots.count) of \(ids.count) \(M.self) from disk")
         return putMemory(snapshots)
     }
 
@@ -77,7 +77,9 @@ public final class EntityStore<M: EntityModel> {
             sortBy: sortBy,
             limit: limit
         )
-        Logger.debug("got \(snapshots.count) from disk by predicate in \(Date.now.timeIntervalSince(d0) * 1000)ms")
+        Logger.debug(
+            "got \(snapshots.count) \(M.self) from disk by predicate in \(Date.now.timeIntervalSince(d0) * 1000)ms"
+        )
         return putMemory(snapshots)
     }
 
@@ -133,7 +135,7 @@ public final class EntityStore<M: EntityModel> {
         }
 
         if !missingIds.isEmpty {
-            Logger.warning("missing \(missingIds.count) of \(ids.count) requested")
+            Logger.warning("missing \(missingIds.count) of \(ids.count) \(M.self) requested")
         }
 
         return results

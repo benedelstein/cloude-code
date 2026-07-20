@@ -21,7 +21,10 @@ extension AgentSessionView {
 
     struct Destinations: ViewModifier {
         @Environment(\.providerConnectionBuilder) private var providerConnectionBuilder
+        @Environment(\.showToast) private var showToast
+        @Environment(\.notificationFeedback) private var notificationFeedback
         @Binding var destination: Modal<Destination>?
+        let onProviderConnected: (ProviderConnectionContext) -> Void
 
         func body(content: Content) -> some View {
             content
@@ -36,7 +39,7 @@ extension AgentSessionView {
                     case .providerConnection(let context):
                         if let providerConnectionBuilder {
                             providerConnectionBuilder.build(context: context) {
-                                self.destination = nil
+                                providerDidConnect(context)
                             }
                         } else {
                             ContentUnavailableView(
@@ -46,6 +49,27 @@ extension AgentSessionView {
                         }
                     }
                 }
+        }
+
+        private func providerDidConnect(_ context: ProviderConnectionContext) {
+            onProviderConnected(context)
+            destination = nil
+            notificationFeedback.notificationOccurred(.success)
+            showToast?(
+                title: connectionSuccessTitle(for: context),
+                icon: Image(systemName: "checkmark.circle.fill")
+            )
+        }
+
+        private func connectionSuccessTitle(for context: ProviderConnectionContext) -> Text {
+            switch context.providerId {
+            case .claudeCode:
+                Text("Claude connected")
+            case .openaiCodex:
+                Text("Codex connected")
+            case .unknown:
+                Text(verbatim: "\(context.providerName) connected")
+            }
         }
     }
 }

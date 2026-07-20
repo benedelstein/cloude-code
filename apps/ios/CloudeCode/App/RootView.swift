@@ -36,7 +36,12 @@ struct RootView: View {
         })
         .environment(\.notificationRegistrationService, notificationRegistrationService)
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(logStore: logStore, sessionStore: sessionStore)
+            SettingsView(
+                logStore: logStore,
+                sessionStore: sessionStore,
+                providerAuthAPI: component.providerAuthAPI,
+                modelCatalogStore: component.homeComponent.modelCatalogStore
+            )
         }
         .themedRoot()
     }

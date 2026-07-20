@@ -19,6 +19,9 @@
     "Archive" : {
 
     },
+    "Authorization code" : {
+
+    },
     "Back" : {
 
     },
@@ -26,6 +29,12 @@
 
     },
     "Cancel" : {
+
+    },
+    "Checking…" : {
+
+    },
+    "Claude connected" : {
 
     },
     "Close" : {
@@ -37,6 +46,15 @@
     "Cloude Code" : {
 
     },
+    "CODE" : {
+
+    },
+    "Code copied" : {
+
+    },
+    "Codex connected" : {
+
+    },
     "Collapsed" : {
 
     },
@@ -44,6 +62,30 @@
 
     },
     "Complete" : {
+
+    },
+    "Connect" : {
+
+    },
+    "Connect %@" : {
+
+    },
+    "Connect Claude" : {
+
+    },
+    "Connect to use these models." : {
+
+    },
+    "Connect your Claude account to use Claude models in Cloude Code." : {
+
+    },
+    "Connect your OpenAI account to use Codex models in Cloude Code." : {
+
+    },
+    "Connected" : {
+
+    },
+    "Continue with Claude" : {
 
     },
     "Copied" : {
@@ -55,10 +97,22 @@
     "Copy" : {
 
     },
+    "Copy and continue to ChatGPT" : {
+
+    },
+    "Copy and open ChatGPT again" : {
+
+    },
     "Copy branch name" : {
 
     },
     "Copy response" : {
+
+    },
+    "Copy the authorization code Claude gives you." : {
+
+    },
+    "Copy this code, then continue to ChatGPT to authorize the connection." : {
 
     },
     "Couldn’t Load Allowlist" : {
@@ -97,13 +151,25 @@
     "Deleted file" : {
 
     },
+    "Device-code authentication must be enabled in ChatGPT Security settings." : {
+
+    },
     "Diagnostics" : {
 
     },
     "Diff available" : {
 
     },
-    "Disconnected" : {
+    "Disconnect" : {
+
+    },
+    "Disconnect %@?" : {
+
+    },
+    "Disconnect provider?" : {
+
+    },
+    "Disconnecting…" : {
 
     },
     "Done" : {
@@ -159,6 +225,9 @@
     "Expanded" : {
 
     },
+    "Failed to disconnect provider" : {
+
+    },
     "Fetch %@" : {
       "comment" : "Title for a web fetch tool action"
     },
@@ -169,6 +238,9 @@
 
     },
     "File preview available" : {
+
+    },
+    "Finish connecting Claude" : {
 
     },
     "Generic tool details" : {
@@ -267,6 +339,9 @@
         }
       }
     },
+    "Manage model-provider authorization." : {
+
+    },
     "Merged pull request" : {
 
     },
@@ -309,10 +384,28 @@
     "No sessions" : {
 
     },
+    "Not connected" : {
+
+    },
     "OK" : {
 
     },
+    "Open Claude again" : {
+
+    },
+    "Open Claude and approve access." : {
+
+    },
     "Open pull request" : {
+
+    },
+    "Opening ChatGPT…" : {
+
+    },
+    "Paste code" : {
+
+    },
+    "Paste the authorization code from Claude to finish connecting your account." : {
 
     },
     "Photos" : {
@@ -345,6 +438,15 @@
       }
     },
     "Plan details" : {
+
+    },
+    "Preparing code…" : {
+
+    },
+    "Provider connection unavailable" : {
+
+    },
+    "Provider Connections" : {
 
     },
     "Pushed branch" : {
@@ -425,6 +527,12 @@
     "Recent app logs are kept in memory for debugging." : {
 
     },
+    "Reconnect" : {
+
+    },
+    "Reconnect %@" : {
+
+    },
     "Reconnect required" : {
 
     },
@@ -447,6 +555,12 @@
 
     },
     "Responding" : {
+
+    },
+    "Retry" : {
+
+    },
+    "Return here and paste the code." : {
 
     },
     "Run %lld commands" : {
@@ -630,6 +744,15 @@
     "Sign in" : {
 
     },
+    "Sign in again to use these models." : {
+
+    },
+    "Sign in with ChatGPT" : {
+
+    },
+    "Sign in with Claude" : {
+
+    },
     "Sign out" : {
 
     },
@@ -684,10 +807,19 @@
     "Try a different search." : {
 
     },
+    "Try again" : {
+
+    },
     "Try Again" : {
 
     },
+    "Unavailable" : {
+
+    },
     "Unread message" : {
+
+    },
+    "Unsupported Provider" : {
 
     },
     "Update %lld todo lists" : {
@@ -715,6 +847,9 @@
     },
     "Update todos" : {
       "comment" : "Pending title for a todo update tool action"
+    },
+    "Update your app to connect %@" : {
+
     },
     "Updated todos" : {
       "comment" : "Complete title for a todo update tool action"
@@ -797,6 +932,9 @@
     "View on web" : {
 
     },
+    "Waiting for authorization…" : {
+
+    },
     "Worked" : {
 
     },
@@ -834,6 +972,15 @@
           }
         }
       }
+    },
+    "You won't be able to use %@ models until you reconnect." : {
+
+    },
+    "Your Claude session expired. Reconnect to continue using Claude models." : {
+
+    },
+    "Your OpenAI Codex session expired. Reconnect to continue using Codex models." : {
+
     }
   },
   "version" : "1.0"
