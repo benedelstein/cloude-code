@@ -6,6 +6,7 @@
 //
 
 import CoreAPI
+import Domain
 import Foundation
 import SwiftUI
 
@@ -40,6 +41,7 @@ extension AgentSessionView {
                         modelCatalog: vm.modelCatalogStore,
                         selectedModel: vm.modelSelection,
                         providerId: vm.modelProviderId,
+                        providerConnection: vm.clientState.providerConnection,
                         restrictsProvider: vm.isCreatingSession || !vm.isDraftMode,
                         isLoadingSelection: vm.isModelSelectionLoading,
                         onSelectModel: { provider, model in

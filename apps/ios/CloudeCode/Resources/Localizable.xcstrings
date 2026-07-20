@@ -73,9 +73,6 @@
     "Connect Claude" : {
 
     },
-    "Connect to use these models." : {
-
-    },
     "Connect your Claude account to use Claude models in Cloude Code." : {
 
     },
@@ -204,6 +201,9 @@
     "Effort Level" : {
 
     },
+    "Enter code" : {
+
+    },
     "Enter one hostname per line, such as api.example.com or *.example.com." : {
 
     },
@@ -241,6 +241,9 @@
 
     },
     "Finish connecting Claude" : {
+
+    },
+    "Finish reconnecting Claude" : {
 
     },
     "Generic tool details" : {
@@ -399,10 +402,13 @@
     "Opening ChatGPT…" : {
 
     },
-    "Paste code" : {
+    "Paste" : {
 
     },
     "Paste the authorization code from Claude to finish connecting your account." : {
+
+    },
+    "Paste the authorization code from Claude to finish reconnecting your account." : {
 
     },
     "Photos" : {
@@ -528,6 +534,9 @@
 
     },
     "Reconnect %@" : {
+
+    },
+    "Reconnect Claude" : {
 
     },
     "Reconnect required" : {
@@ -739,9 +748,6 @@
 
     },
     "Sign in" : {
-
-    },
-    "Sign in again to use these models." : {
 
     },
     "Sign in with ChatGPT" : {

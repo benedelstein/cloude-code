@@ -103,7 +103,7 @@ final class AgentSessionViewModel {
             || !attachmentStore.attachments.isEmpty
         let canSendInCurrentMode = isDraftMode
             ? draft?.selectedRepo != nil && isModelSelectionValid
-            : connectionState == .connected
+            : connectionState == .connected && clientState.providerConnection?.connected != false
         return hasContent
             && !attachmentStore.hasPendingOrFailedUploads
             && canSendInCurrentMode

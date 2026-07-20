@@ -92,6 +92,10 @@ struct AgentSessionView: View {
         .task {
             await store.bind()
         }
+        .onChange(of: requiredProviderConnection, initial: true) { _, requirement in
+            guard let requirement, destination == nil else { return }
+            showProviderConnection(requirement.providerId)
+        }
         .onChange(of: store.errorMessage) { _, errorMessage in
             guard let errorMessage else {
                 return
@@ -114,13 +118,53 @@ struct AgentSessionView: View {
     }
 
     private func showProviderConnection(_ provider: ProviderCatalogEntry) {
-        Logger.info("Agent session presenting provider connection: \(provider.providerId.rawValue)")
+        showProviderConnection(provider.providerId)
+    }
+
+    private func showProviderConnection(_ providerId: ProviderId) {
+        guard providerId == .claudeCode || providerId == .openaiCodex else { return }
+        let catalogProvider = store.modelCatalogStore.catalog?.providers.first {
+            $0.providerId == providerId
+        }
+        let liveConnection = store.clientState.providerConnection.flatMap { connection in
+            ProviderId(rawValue: connection.provider) == providerId ? connection : nil
+        }
+        let providerName = catalogProvider?.providerName ?? defaultProviderName(for: providerId)
+        Logger.info("Agent session presenting provider connection: \(providerId.rawValue)")
         destination = .sheet(.providerConnection(ProviderConnectionContext(
-            providerId: provider.providerId,
-            providerName: provider.providerName,
-            requiresReauth: provider.requiresReauth,
+            providerId: providerId,
+            providerName: providerName,
+            requiresReauth: liveConnection?.requiresReauth ?? catalogProvider?.requiresReauth ?? false,
             sessionId: store.session?.id
         )))
+    }
+
+    private var requiredProviderConnection: ProviderConnectionRequirement? {
+        guard !store.isDraftMode,
+              let connection = store.clientState.providerConnection,
+              !connection.connected else {
+            return nil
+        }
+        return ProviderConnectionRequirement(
+            providerId: ProviderId(rawValue: connection.provider),
+            requiresReauth: connection.requiresReauth
+        )
+    }
+
+    private func defaultProviderName(for providerId: ProviderId) -> String {
+        switch providerId {
+        case .claudeCode:
+            "Claude Code"
+        case .openaiCodex:
+            "OpenAI Codex"
+        case .unknown(let value):
+            value
+        }
+    }
+
+    private struct ProviderConnectionRequirement: Equatable {
+        let providerId: ProviderId
+        let requiresReauth: Bool
     }
 
     private var sessionHeader: some View {

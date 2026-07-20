@@ -10,6 +10,7 @@ struct ModelPickerButton: View {
     let modelCatalog: ModelCatalogStore
     let selectedModel: ModelSelection?
     let providerId: ProviderId?
+    let providerConnection: SessionClientState.ProviderConnection?
     let restrictsProvider: Bool
     let isLoadingSelection: Bool
     let onSelectModel: (ProviderCatalogEntry, ProviderCatalogModel) -> Void
@@ -38,22 +39,31 @@ struct ModelPickerButton: View {
     @ViewBuilder
     private var pickerControl: some View {
         if let displayedModel {
-            Menu {
-                Section("Model") {
-                    Button {
-                        presentModelPicker()
-                    } label: {
-                        Text(displayedModel.displayName)
+            if isProviderConnectionRequired {
+                Button {
+                    presentProviderConnection()
+                } label: {
+                    menuLabel
+                }
+                .accessibilityLabel(providerConnectionActionTitle)
+            } else {
+                Menu {
+                    Section("Model") {
+                        Button {
+                            presentModelPicker()
+                        } label: {
+                            Text(displayedModel.displayName)
+                        }
                     }
-                }
 
-                Section("Effort Level") {
-                    effortMenu
+                    Section("Effort Level") {
+                        effortMenu
+                    }
+                } label: {
+                    menuLabel
                 }
-            } label: {
-                menuLabel
+                .menuIndicator(.hidden)
             }
-            .menuIndicator(.hidden)
         } else {
             Button {
                 isSheetPresented = true
@@ -93,6 +103,11 @@ struct ModelPickerButton: View {
                     .frame(width: 16, height: 16)
                 Text(model.displayName)
                     .lineLimit(1)
+                if isProviderConnectionRequired {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(theme.accentOrange)
+                        .accessibilityHidden(true)
+                }
             } else {
                 Image(systemName: "cpu")
                 Text("Select model")
@@ -116,6 +131,22 @@ struct ModelPickerButton: View {
         }
     }
 
+    private var isProviderConnectionRequired: Bool {
+        guard let displayedModel,
+              let providerConnection,
+              ProviderId(rawValue: providerConnection.provider) == displayedModel.providerId else {
+            return false
+        }
+        return !providerConnection.connected
+    }
+
+    private var providerConnectionActionTitle: Text {
+        let providerName = selectedProvider?.providerName ?? "provider"
+        return providerConnection?.requiresReauth == true
+            ? Text("Reconnect \(providerName)")
+            : Text("Connect \(providerName)")
+    }
+
     private var displayedModel: ModelSelection? {
         guard let selectedModel,
               !restrictsProvider || selectedModel.providerId == providerId else {
@@ -130,6 +161,16 @@ struct ModelPickerButton: View {
             try? await Task.sleep(for: .milliseconds(100))
             isSheetPresented = true
         }
+    }
+
+    private func presentProviderConnection() {
+        guard var provider = selectedProvider else {
+            isSheetPresented = true
+            return
+        }
+        provider.connected = providerConnection?.connected ?? provider.connected
+        provider.requiresReauth = providerConnection?.requiresReauth ?? provider.requiresReauth
+        onConnectProvider(provider)
     }
 
     private func requestProviderConnection(_ provider: ProviderCatalogEntry) {

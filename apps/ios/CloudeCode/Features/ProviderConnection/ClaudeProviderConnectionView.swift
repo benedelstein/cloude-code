@@ -1,5 +1,6 @@
 import CoreAPI
 import SwiftUI
+import UIKit
 
 /// Native Claude account connection screen.
 struct ClaudeProviderConnectionView: View {
@@ -56,19 +57,26 @@ struct ClaudeProviderConnectionView: View {
     }
 
     private var heroTitle: LocalizedStringKey {
-        viewModel.phase == .awaitingCode || viewModel.phase == .submitting
-            ? "Finish connecting Claude"
-            : "Sign in with Claude"
+        if viewModel.phase == .awaitingCode || viewModel.phase == .submitting {
+            return isReconnect ? "Finish reconnecting Claude" : "Finish connecting Claude"
+        }
+        return isReconnect ? "Reconnect Claude" : "Sign in with Claude"
     }
 
     private var heroSubtitle: LocalizedStringKey {
         if viewModel.phase == .awaitingCode || viewModel.phase == .submitting {
-            return "Paste the authorization code from Claude to finish connecting your account."
+            return isReconnect
+                ? "Paste the authorization code from Claude to finish reconnecting your account."
+                : "Paste the authorization code from Claude to finish connecting your account."
         }
-        if viewModel.context.requiresReauth {
+        if isReconnect {
             return "Your Claude session expired. Reconnect to continue using Claude models."
         }
         return "Connect your Claude account to use Claude models in Cloude Code."
+    }
+
+    private var isReconnect: Bool {
+        viewModel.context.requiresReauth || viewModel.context.sessionId != nil
     }
 
     private var instructions: some View {
@@ -86,12 +94,29 @@ struct ClaudeProviderConnectionView: View {
                 .font(style.captionFont.weight(.semibold))
                 .foregroundStyle(theme.secondaryLabelColor)
 
-            TextField("Paste code", text: $viewModel.code, axis: .vertical)
+            TextField("Enter code", text: $viewModel.code, axis: .vertical)
                 .font(style.bodyFont)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .padding(14)
+                .frame(maxHeight: 200)
+                .padding(.vertical, 14)
+                .padding(.leading, 14)
+                .padding(.trailing, viewModel.code.isEmpty ? 78 : 14)
                 .background(theme.secondaryBackgroundColor, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(alignment: .trailing) {
+                    if viewModel.code.isEmpty {
+                        Button("Paste") {
+                            viewModel.code = UIPasteboard.general.string ?? ""
+                        }
+                        .font(style.subheadlineFont)
+                        .foregroundStyle(theme.accentBlue)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(theme.backgroundColor, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.trailing, 8)
+                        .buttonStyle(.plain)
+                    }
+                }
                 .disabled(viewModel.isWorking)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,7 +134,9 @@ struct ClaudeProviderConnectionView: View {
                     }
                 } label: {
                     buttonLabel(
-                        title: viewModel.canSubmitCode ? "Connect Claude" : "Open Claude again",
+                        title: viewModel.canSubmitCode
+                            ? (isReconnect ? "Reconnect Claude" : "Connect Claude")
+                            : "Open Claude again",
                         image: .providerAnthropic
                     )
                 }
@@ -120,7 +147,7 @@ struct ClaudeProviderConnectionView: View {
                     viewModel.beginAuthorization()
                 } label: {
                     buttonLabel(
-                        title: "Continue with Claude",
+                        title: isReconnect ? "Reconnect Claude" : "Continue with Claude",
                         image: .providerAnthropic
                     )
                 }
