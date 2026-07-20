@@ -14,8 +14,6 @@ export const ClaudeModel = z.enum([
   "claude-opus-4-8[1m]",
   "claude-sonnet-4-6",
   "claude-haiku-4-5",
-  "claude-opus-4-7",
-  "claude-opus-4-7[1m]",
 ]);
 export type ClaudeModel = z.infer<typeof ClaudeModel>;
 
