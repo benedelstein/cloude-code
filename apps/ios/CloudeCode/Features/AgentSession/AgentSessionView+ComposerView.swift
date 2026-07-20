@@ -17,6 +17,7 @@ extension AgentSessionView {
         @Bindable var vm: AgentSessionViewModel
         let showsRepoBranchPicker: Bool
         let onConnectProvider: (ProviderCatalogEntry) -> Void
+        let onComposerSizeChange: (CGSize) -> Void
         @State private var composerFocused = false
 
         var body: some View {
@@ -31,6 +32,20 @@ extension AgentSessionView {
                         .transition(.blurReplace)
                 }
 
+                measuredComposer
+            }
+            .animation(style.fadeAnimation, value: showsRepoBranchPicker)
+            .animation(style.fadeAnimation, value: vm.pushedBranchForDisplay)
+            .task {
+                if vm.isDraftMode {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    composerFocused = true
+                }
+            }
+        }
+
+        private var measuredComposer: some View {
+            VStack(alignment: .leading, spacing: style.gridSize) {
                 if vm.pushedBranchForDisplay != nil {
                     BranchBar(vm: vm)
                         .transition(.blurReplace)
@@ -55,14 +70,8 @@ extension AgentSessionView {
                     .disabled(vm.isCreatingSession)
                 }
             }
-            .animation(style.fadeAnimation, value: showsRepoBranchPicker)
-            .animation(style.fadeAnimation, value: vm.pushedBranchForDisplay)
-            .task {
-                if vm.isDraftMode {
-                    try? await Task.sleep(for: .milliseconds(100))
-                    composerFocused = true
-                }
-            }
+            .padding(.bottom, style.spacing)
+            .readSize(onComposerSizeChange)
         }
 
         private func promptComposer<TrailingAccessory: View>(

@@ -38,11 +38,10 @@ struct AgentSessionView: View {
                 ComposerView(
                     vm: store,
                     showsRepoBranchPicker: showsRepoBranchPicker,
-                    onConnectProvider: showProviderConnection
+                    onConnectProvider: showProviderConnection,
+                    onComposerSizeChange: updateComposerHeight
                 )
                     .padding(.horizontal, style.horizontalPadding)
-                    .padding(.bottom, style.spacing)
-                    .readSize(updateComposerHeight)
             }
         }
         .overlay {
