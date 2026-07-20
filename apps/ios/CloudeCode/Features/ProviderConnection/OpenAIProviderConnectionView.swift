@@ -55,19 +55,25 @@ struct OpenAIProviderConnectionView: View {
     private var hero: some View {
         ProviderConnectionHeroView(
             providerId: .openaiCodex,
-            title: "Sign in with ChatGPT",
+            title: isReconnect ? "Reconnect Codex" : "Sign in with ChatGPT",
             subtitle: heroSubtitle
         )
     }
 
     private var heroSubtitle: LocalizedStringKey {
         if viewModel.authorization != nil {
-            return "Copy this code, then continue to ChatGPT to authorize the connection."
+            return isReconnect
+                ? "Copy this code, then continue to ChatGPT to reconnect Codex."
+                : "Copy this code, then continue to ChatGPT to authorize the connection."
         }
-        if viewModel.context.requiresReauth {
+        if isReconnect {
             return "Your OpenAI Codex session expired. Reconnect to continue using Codex models."
         }
         return "Connect your OpenAI account to use Codex models in Cloude Code."
+    }
+
+    private var isReconnect: Bool {
+        viewModel.context.requiresReauth || viewModel.context.sessionId != nil
     }
 
     private var securityCallout: some View {
@@ -142,7 +148,9 @@ struct OpenAIProviderConnectionView: View {
                     buttonLabel(
                         title: viewModel.isWaiting
                             ? "Copy and open ChatGPT again"
-                            : "Copy and continue to ChatGPT"
+                            : isReconnect
+                                ? "Copy and reconnect in ChatGPT"
+                                : "Copy and continue to ChatGPT"
                     )
                 }
                 .buttonStyle(.main())

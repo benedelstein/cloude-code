@@ -100,6 +100,9 @@
     "Copy and open ChatGPT again" : {
 
     },
+    "Copy and reconnect in ChatGPT" : {
+
+    },
     "Copy branch name" : {
 
     },
@@ -110,6 +113,9 @@
 
     },
     "Copy this code, then continue to ChatGPT to authorize the connection." : {
+
+    },
+    "Copy this code, then continue to ChatGPT to reconnect Codex." : {
 
     },
     "Couldn’t Load Allowlist" : {
@@ -537,6 +543,9 @@
 
     },
     "Reconnect Claude" : {
+
+    },
+    "Reconnect Codex" : {
 
     },
     "Reconnect required" : {
