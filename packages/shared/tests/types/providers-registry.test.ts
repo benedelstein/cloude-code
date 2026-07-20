@@ -9,6 +9,14 @@ describe("provider registry", () => {
       { id: "gpt-5.6-terra", displayName: "5.6 Terra", isDefault: false },
       { id: "gpt-5.6-luna", displayName: "5.6 Luna", isDefault: false },
     ]);
+    expect(OPENAI_CODEX_PROVIDER.models.map((model) => model.id)).toEqual([
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+    ]);
     expect(OPENAI_CODEX_PROVIDER.models.filter((model) => model.isDefault)).toHaveLength(1);
   });
 });
