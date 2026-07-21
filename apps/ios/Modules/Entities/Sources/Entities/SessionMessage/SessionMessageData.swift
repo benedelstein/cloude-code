@@ -9,19 +9,19 @@ public struct SessionMessageData: Sendable, Codable, Identifiable {
     public let sessionId: String
     public let createdAt: Date
     public let message: Domain.SessionMessage
-    /// Durable user-message id whose assistant response is still streaming.
-    public let streamingTurnUserMessageId: String?
+    /// Whether this cached assistant message is still streaming.
+    public let isStreaming: Bool
 
     /// Creates a cache snapshot for a session message.
     public init(
         sessionId: String,
         createdAt: Date,
         message: Domain.SessionMessage,
-        streamingTurnUserMessageId: String? = nil
+        isStreaming: Bool = false
     ) {
         self.sessionId = sessionId
         self.createdAt = createdAt
         self.message = message
-        self.streamingTurnUserMessageId = streamingTurnUserMessageId
+        self.isStreaming = isStreaming
     }
 }

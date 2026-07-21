@@ -49,9 +49,8 @@ final class AgentSessionViewModel {
 
     let attachmentStore: ImageAttachmentStore
     var connectionState: WebSocketConnectionState = .disconnected
-    /// Ordered transcript rows. A row's `id` is stable for its lifetime; its
-    /// `messageID` is reassigned in place when a message gains its server id
-    /// (optimistic -> accepted, streaming -> final).
+    /// Ordered transcript rows. A row's `id` is stable for its lifetime; optimistic
+    /// messages can have their `messageID` reassigned when the server accepts them.
     var transcriptRows: [TranscriptRow] = []
     /// Message content keyed by message id. `transcriptRows` owns ordering;
     /// every row's `messageID` resolves here.
@@ -61,8 +60,6 @@ final class AgentSessionViewModel {
     // The active streaming row keeps this id from first chunk through final
     // message so collection view can update the existing cell in place.
     var streamingTranscriptRowID: String?
-    /// Durable user-message id that owns the active assistant transcript row.
-    var streamingTurnUserMessageID: String?
     @ObservationIgnored var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
     @ObservationIgnored let markdownRenderCache = MarkdownRenderCache()
     @ObservationIgnored var pullRequestPollingTask: Task<Void, Never>?
@@ -228,7 +225,6 @@ extension AgentSessionViewModel {
             restoreLastSubmittedAttachments()
             resetPendingResponse()
         case .chatAccepted(let clientMessageId, let messageId):
-            streamingTurnUserMessageID = messageId
             acceptOptimisticUserMessage(
                 clientMessageId: clientMessageId,
                 messageId: messageId
@@ -244,7 +240,7 @@ extension AgentSessionViewModel {
         case .agentChunks(let chunks, let messageMetadata):
             await applyAgentChunks(chunks, messageMetadata: messageMetadata)
         case .agentFinish(let message):
-            await applyAgentFinish(message)
+            applyAgentFinish(message)
         case .userMessage(let message):
             applyUserMessage(message)
         case .agentReady:
@@ -306,31 +302,34 @@ extension AgentSessionViewModel {
     }
 
     private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {
-        if !hasLoadedMessages {
-            hasLoadedMessages = true
-        }
-        let cacheMessages = messagesIncludingPendingUserMessage(in: snapshot.messages)
-        let transcriptMessages = messagesIncludingOptimisticUserMessages(
-            in: cacheMessages
+        hasLoadedMessages = true
+        var transcriptMessages = messagesIncludingOptimisticUserMessages(
+            in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
+        var streamingMessageIDs: Set<String> = []
+        if !snapshot.pendingChunks.isEmpty,
+           let streamingRow = transcriptRows.last(where: \.isStreaming),
+           let streamingMessage = messagesByID[streamingRow.messageID] {
+            if !transcriptMessages.contains(where: { $0.id == streamingMessage.id }) {
+                transcriptMessages.append(streamingMessage)
+            }
+            streamingMessageIDs.insert(streamingMessage.id)
+        }
         markdownRenderCache.reset()
         replaceStreamAccumulator()
         if let session {
             do {
-                // Keep the server-accepted pending user message, but clear the
-                // provisional assistant before replaying the server WAL.
                 try await sessionMessageStore.replace(
                     sessionId: session.id,
-                    with: cacheMessages
+                    with: snapshot.messages
                 )
             } catch {
                 Logger.warning("Failed to replace session message cache:", error)
             }
         }
-        rebuildTranscriptForSync(
+        rebuildTranscript(
             from: transcriptMessages,
-            activeTurnUserMessageID: snapshot.activeTurnUserMessageId,
-            hasPendingChunks: !snapshot.pendingChunks.isEmpty
+            streamingMessageIDs: streamingMessageIDs
         )
         applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         if snapshot.pendingChunks.isEmpty {
@@ -399,7 +398,6 @@ extension AgentSessionViewModel {
         messageThrottler = nil
         streamGeneration += 1
         clearStreamingState(removeActiveTranscript: true)
-        streamingTurnUserMessageID = nil
         clientState.activeTurnUserMessageId = nil
         isSending = false
         isCreatingSession = false
@@ -410,8 +408,7 @@ extension AgentSessionViewModel {
 
     private func applyActiveTurnUserMessageId(_ userMessageId: String?) {
         clientState.activeTurnUserMessageId = userMessageId
-        if let userMessageId {
-            streamingTurnUserMessageID = userMessageId
+        if userMessageId != nil {
             hasSeenServerActiveTurn = true
             return
         }

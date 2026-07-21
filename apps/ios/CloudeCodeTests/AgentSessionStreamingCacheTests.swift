@@ -15,7 +15,7 @@ extension AgentSessionTranscriptStateTests {
         messageStore.upsert(
             sessionId: "session-1",
             message: assistantMessage(id: "cached-partial", text: "Working"),
-            streamingTurnUserMessageId: "user-1"
+            isStreaming: true
         )
         let viewModel = makeViewModel(sessionMessageStore: messageStore)
 
@@ -23,12 +23,11 @@ extension AgentSessionTranscriptStateTests {
 
         let row = try #require(viewModel.transcriptRows.last)
         #expect(viewModel.transcriptRows.map(\.messageID) == ["user-1", "cached-partial"])
-        #expect(row.id == "streaming-turn:user-1")
+        #expect(row.id == "message:cached-partial")
         #expect(row.isStreaming)
-        #expect(viewModel.streamingTurnUserMessageID == "user-1")
     }
 
-    @Test func serverStreamingIDReplacesCachedIDWithoutReplacingRow() async throws {
+    @Test func liveStreamingUpdateUsesRestoredCanonicalRow() async throws {
         let messageStore = SessionMessageStore()
         try await messageStore.replace(
             sessionId: "session-1",
@@ -36,31 +35,22 @@ extension AgentSessionTranscriptStateTests {
         )
         messageStore.upsert(
             sessionId: "session-1",
-            message: assistantMessage(id: "cached-partial", text: "Working"),
-            streamingTurnUserMessageId: "user-1"
+            message: assistantMessage(id: "assistant-1", text: "Working"),
+            isStreaming: true
         )
         let viewModel = makeViewModel(sessionMessageStore: messageStore)
         await viewModel.loadCachedMessages()
         let restoredRowID = try #require(viewModel.transcriptRows.last).id
 
-        viewModel.rebuildTranscriptForSync(
-            from: [userMessage(id: "user-1")],
-            activeTurnUserMessageID: "user-1",
-            hasPendingChunks: true
-        )
-        viewModel.applyLiveState(liveState(
-            provider: .claudeCode,
-            activeTurnUserMessageID: "user-1"
-        ))
         viewModel.applyStreamingMessage(
-            assistantMessage(id: "server-partial", text: "Still working")
+            assistantMessage(id: "assistant-1", text: "Still working")
         )
 
         let row = try #require(viewModel.transcriptRows.last)
         #expect(row.id == restoredRowID)
-        #expect(row.messageID == "server-partial")
+        #expect(row.messageID == "assistant-1")
         #expect(row.isStreaming)
-        #expect(viewModel.messagesByID["cached-partial"] == nil)
+        #expect(viewModel.messagesByID["assistant-1"]?.text == "Still working")
     }
 
     @Test func completedServerMessageTakesRestoredStreamingRowID() async throws {
@@ -71,8 +61,8 @@ extension AgentSessionTranscriptStateTests {
         )
         messageStore.upsert(
             sessionId: "session-1",
-            message: assistantMessage(id: "cached-partial", text: "Working"),
-            streamingTurnUserMessageId: "user-1"
+            message: assistantMessage(id: "assistant-1", text: "Working"),
+            isStreaming: true
         )
         let viewModel = makeViewModel(sessionMessageStore: messageStore)
         await viewModel.loadCachedMessages()
@@ -81,7 +71,7 @@ extension AgentSessionTranscriptStateTests {
         await viewModel.handle(.syncResponse(SessionSyncSnapshot(
             messages: [
                 userMessage(id: "user-1"),
-                assistantMessage(id: "server-final", text: "Done")
+                assistantMessage(id: "assistant-1", text: "Done")
             ],
             pendingChunks: [],
             pendingMessageMetadata: nil,
@@ -91,11 +81,10 @@ extension AgentSessionTranscriptStateTests {
         let row = try #require(viewModel.transcriptRows.last)
         let cachedMessageIDs = try await messageStore.messages(sessionId: "session-1").map(\.id)
         #expect(row.id == restoredRowID)
-        #expect(row.messageID == "server-final")
+        #expect(row.messageID == "assistant-1")
         #expect(!row.isStreaming)
-        #expect(viewModel.messagesByID["cached-partial"] == nil)
         #expect(viewModel.streamingTranscriptRowID == nil)
-        #expect(cachedMessageIDs == ["user-1", "server-final"])
+        #expect(cachedMessageIDs == ["user-1", "assistant-1"])
     }
 
     @Test func serverSnapshotWithoutActiveTurnInvalidatesCachedStreamingRow() async throws {
@@ -107,7 +96,7 @@ extension AgentSessionTranscriptStateTests {
         messageStore.upsert(
             sessionId: "session-1",
             message: assistantMessage(id: "cached-partial", text: "Working"),
-            streamingTurnUserMessageId: "user-1"
+            isStreaming: true
         )
         let viewModel = makeViewModel(sessionMessageStore: messageStore)
         await viewModel.loadCachedMessages()

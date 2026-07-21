@@ -31,7 +31,7 @@ public final class SessionMessageStore {
         try await records(sessionId: sessionId).map(\.message)
     }
 
-    /// Returns cached message records, including in-progress turn identity.
+    /// Returns cached message records, including streaming state.
     public func records(sessionId: String) async throws -> [SessionMessageData] {
         await pendingWriteTask?.value
         if let models = modelsFromMemory(sessionId: sessionId) {
@@ -108,85 +108,21 @@ public final class SessionMessageStore {
         loadedSessionIDs.insert(sessionId)
     }
 
-    /// Replaces an in-progress assistant projection with its final message.
-    ///
-    /// - Parameters:
-    ///   - sessionId: Session whose cached transcript is being finalized.
-    ///   - streamingMessageID: Cached partial-message id to remove, when it differs from the final id.
-    ///   - finalMessage: Canonical assistant message emitted when the turn finishes.
-    ///   - createdAtFallback: Ordering timestamp used when the final message has no server timestamp.
-    public func finalizeStreamingMessage(
-        sessionId: String,
-        replacing streamingMessageID: String?,
-        with finalMessage: Domain.SessionMessage,
-        createdAtFallback: Date = Date()
-    ) async throws {
-        await pendingWriteTask?.value
-        let finalSnapshot = snapshot(
-            for: finalMessage,
-            sessionId: sessionId,
-            fallback: createdAtFallback
-        )
-        let staleIDs: Set<String> = if let streamingMessageID,
-                                       streamingMessageID != finalSnapshot.id {
-            [streamingMessageID]
-        } else {
-            []
-        }
-
-        if let cache {
-            let affectedIDs = staleIDs.union([finalSnapshot.id])
-            let descriptor = FetchDescriptor<SessionMessageEntity>(
-                predicate: SessionMessageEntity.multiItemPredicate(affectedIDs)
-            )
-            try await cache.runBackgroundTask { context in
-                let existingRows = try context.fetch(descriptor)
-                let finalRow = existingRows.first { $0.id == finalSnapshot.id }
-
-                for row in existingRows where staleIDs.contains(row.id) {
-                    context.delete(row)
-                }
-                if let finalRow {
-                    finalRow.update(finalSnapshot)
-                } else {
-                    context.insert(SessionMessageEntity(finalSnapshot))
-                }
-            }
-        }
-
-        entityStore.deleteMemory(staleIDs)
-        let finalModels = entityStore.putMemory([finalSnapshot])
-        if loadedSessionIDs.contains(sessionId) {
-            messageIDsBySessionID[sessionId]?.removeAll { staleIDs.contains($0) }
-            upsertIntoSessionIndex(finalModels, for: sessionId)
-        }
-    }
-
     /// Upserts one message into memory and schedules a disk write.
     public func upsert(
         sessionId: String,
         message: Domain.SessionMessage,
-        streamingTurnUserMessageId: String? = nil,
+        isStreaming: Bool = false,
         createdAtFallback: Date = Date()
     ) {
         let snapshot = snapshot(
             for: message,
             sessionId: sessionId,
-            streamingTurnUserMessageId: streamingTurnUserMessageId,
+            isStreaming: isStreaming,
             fallback: createdAtFallback
         )
         let newModels = entityStore.putMemory([snapshot])
-        if let cache {
-            let previousWriteTask = pendingWriteTask
-            pendingWriteTask = Task { @MainActor in
-                await previousWriteTask?.value
-                do {
-                    try await cache.put(SessionMessageEntity.self, snapshots: [snapshot])
-                } catch {
-                    Logger.error("disk write failed: \(error)")
-                }
-            }
-        }
+        persist(snapshot)
         if loadedSessionIDs.contains(sessionId) {
             upsertIntoSessionIndex(newModels, for: sessionId)
         }
@@ -264,15 +200,29 @@ public final class SessionMessageStore {
     private func snapshot(
         for message: Domain.SessionMessage,
         sessionId: String,
-        streamingTurnUserMessageId: String? = nil,
+        isStreaming: Bool = false,
         fallback: Date
     ) -> SessionMessageData {
         SessionMessageData(
             sessionId: sessionId,
             createdAt: message.createdAt ?? fallback,
             message: message,
-            streamingTurnUserMessageId: streamingTurnUserMessageId
+            isStreaming: isStreaming
         )
+    }
+
+    private func persist(_ snapshot: SessionMessageData) {
+        guard let cache else { return }
+
+        let previousWriteTask = pendingWriteTask
+        pendingWriteTask = Task { @MainActor in
+            await previousWriteTask?.value
+            do {
+                try await cache.put(SessionMessageEntity.self, snapshots: [snapshot])
+            } catch {
+                Logger.error("disk write failed: \(error)")
+            }
+        }
     }
 
     private func deleteUnreadableSessionCache(sessionId: String) async throws {

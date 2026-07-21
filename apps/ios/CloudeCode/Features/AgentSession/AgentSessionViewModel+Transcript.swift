@@ -13,33 +13,20 @@ extension AgentSessionViewModel {
         )
     }
 
-    func applyAgentFinish(_ message: SessionMessage) async {
+    func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
-        let streamingMessageID = streamingTranscriptRowID.flatMap { rowID in
-            transcriptRows.last { $0.id == rowID && $0.isStreaming }?.messageID
-        }
-        // Mutate the streaming transcript row into the final assistant row instead
-        // of inserting message:<server id>, which would replace the visible cell.
+        // Reuse the active row for compatibility with legacy streams that lacked an initial id.
         let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
         upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
+        if let session {
+            sessionMessageStore.upsert(sessionId: session.id, message: message)
+        }
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
         }
         clearOptimisticUserMessageTracking()
-        // Invalidate queued accumulator callbacks before the cache write yields.
         resetPendingResponse()
-        if let session {
-            do {
-                try await sessionMessageStore.finalizeStreamingMessage(
-                    sessionId: session.id,
-                    replacing: streamingMessageID,
-                    with: message
-                )
-            } catch {
-                Logger.warning("Failed to finalize session message cache:", error)
-            }
-        }
     }
 
     func applyUserMessage(_ message: SessionMessage) {
@@ -247,7 +234,10 @@ extension AgentSessionViewModel {
             }
 
             markdownRenderCache.reset()
-            rebuildTranscript(from: cachedRecords)
+            rebuildTranscript(
+                from: cachedRecords.map(\.message),
+                streamingMessageIDs: Set(cachedRecords.filter(\.isStreaming).map(\.id))
+            )
             hasLoadedMessages = true
         } catch {
             Logger.warning("Failed to load cached session messages:", error)
@@ -312,18 +302,21 @@ extension AgentSessionViewModel {
     }
 
     func applyStreamingMessage(_ message: SessionMessage) {
+        let rowID = streamingTranscriptRowID
+            ?? (message.id.isEmpty ? activeStreamingTranscriptRowID() : transcriptRowID(for: message))
+        streamingTranscriptRowID = rowID
         upsertTranscriptMessage(
-            rowID: activeStreamingTranscriptRowID(),
+            rowID: rowID,
             message: message,
             isStreaming: true
         )
-        guard let session, let streamingTurnUserMessageID else {
+        guard let session, !message.id.isEmpty else {
             return
         }
         sessionMessageStore.upsert(
             sessionId: session.id,
             message: message,
-            streamingTurnUserMessageId: streamingTurnUserMessageID
+            isStreaming: true
         )
     }
 
@@ -353,6 +346,34 @@ extension AgentSessionViewModel {
         }
     }
 
+    /// Rebuilds transcript rows from ordered messages and their streaming state.
+    func rebuildTranscript(
+        from messages: [SessionMessage],
+        streamingMessageIDs: Set<String> = []
+    ) {
+        transcriptRows = messages.map { message in
+            TranscriptRow(
+                id: transcriptRowID(for: message),
+                messageID: message.id,
+                isStreaming: streamingMessageIDs.contains(message.id)
+            )
+        }
+        messagesByID = Dictionary(messages.map { ($0.id, $0) }) { _, latest in latest }
+        streamingTranscriptRowID = transcriptRows.last(where: \.isStreaming)?.id
+        rebuildTranscriptDisplayData()
+        assertTranscriptStateConsistency()
+    }
+
+    func activeStreamingTranscriptRowID() -> String {
+        if let streamingTranscriptRowID {
+            return streamingTranscriptRowID
+        }
+
+        let rowID = "streaming-turn:\(streamGeneration)"
+        streamingTranscriptRowID = rowID
+        return rowID
+    }
+
     func transcriptRowID(for message: SessionMessage) -> String {
         if let existingRow = transcriptRows.last(where: { row in
             !row.isStreaming && row.messageID == message.id
@@ -363,10 +384,8 @@ extension AgentSessionViewModel {
         return SessionTranscriptItem.messageItemID(for: message.id)
     }
 
-    /// The single write path for transcript content, keyed by row id. A message
-    /// id change (optimistic -> accepted, streaming -> final server id) is an
-    /// in-place row update: the stale `messagesByID` entry is retired and the
-    /// row's `messageID` reassigned, never touching the row id.
+    /// The single write path for transcript content, keyed by row id. Optimistic
+    /// messages receive their server id in place without changing row identity.
     func upsertTranscriptMessage(rowID: String, message: SessionMessage, isStreaming: Bool) {
         if let index = transcriptRows.lastIndex(where: { $0.id == rowID }) {
             let previousMessageID = transcriptRows[index].messageID

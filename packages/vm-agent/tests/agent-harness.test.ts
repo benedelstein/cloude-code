@@ -71,7 +71,11 @@ describe("startAgentHarness", () => {
     });
 
     mockState.streamText.mockImplementation(({ messages }) => ({
-      toUIMessageStream: async function* () {
+      toUIMessageStream: async function* ({
+        generateMessageId,
+      }: {
+        generateMessageId: () => string;
+      }) {
         expect(messages).toEqual([
           {
             role: "user",
@@ -86,6 +90,7 @@ describe("startAgentHarness", () => {
           },
         ]);
 
+        yield { type: "start", messageId: generateMessageId() };
         yield { type: "text-delta", textDelta: "hi" };
         yield { type: "finish", finishReason: "stop" };
       },
@@ -120,6 +125,15 @@ describe("startAgentHarness", () => {
 
     expect(outputs).toContainEqual({ type: "ready" });
     expect(outputs).toContainEqual({ type: "debug", message: "Using model: gpt-5.3-codex, agentMode: edit" });
+    expect(outputs).toContainEqual({
+      type: "stream",
+      chunk: {
+        type: "start",
+        messageId: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        ),
+      },
+    });
     expect(outputs).toContainEqual({ type: "stream", chunk: { type: "text-delta", textDelta: "hi" } });
     expect(outputs).toContainEqual({ type: "stream", chunk: { type: "finish", finishReason: "stop" } });
 
