@@ -1,8 +1,10 @@
 import API
+import AuthenticationServices
 import CoreAPI
 import Domain
 import Entities
 import Foundation
+import SwiftUI
 
 @MainActor
 @Observable
@@ -26,6 +28,7 @@ final class NewSessionDraft {
     private let reposAPI: any ReposAPIProviding
     private let environmentsStore: RepoEnvironmentsStore
     private let preferences: NewSessionPreferences
+    private let githubInstallationStore: GitHubInstallationStore
     private var branchesByRepoID: [Int: [Branch]] = [:]
     /// Repos whose environment load failed with nothing cached; treated as
     /// empty so the picker doesn't stay in its loading state forever.
@@ -35,6 +38,17 @@ final class NewSessionDraft {
     private(set) var isLoading = false
     private(set) var isLoadingRepos = false
     private(set) var errorMessage: String?
+
+    var isConfiguringGitHub: Bool {
+        githubInstallationStore.state == .installing
+    }
+
+    var githubConfigurationError: String? {
+        guard case .failed(let message) = githubInstallationStore.state else {
+            return nil
+        }
+        return message
+    }
 
     var repoSelection: RepoSelection?
 
@@ -73,12 +87,14 @@ final class NewSessionDraft {
         sessionsAPI: any SessionsAPIProviding,
         reposAPI: any ReposAPIProviding,
         environmentsStore: RepoEnvironmentsStore,
-        preferences: NewSessionPreferences
+        preferences: NewSessionPreferences,
+        githubInstallationStore: GitHubInstallationStore
     ) {
         self.sessionsAPI = sessionsAPI
         self.reposAPI = reposAPI
         self.environmentsStore = environmentsStore
         self.preferences = preferences
+        self.githubInstallationStore = githubInstallationStore
         repoSelection = preferences.lastSelectedRepo.map {
             RepoSelection(
                 repo: SelectedRepo(
@@ -90,6 +106,12 @@ final class NewSessionDraft {
                 environmentId: preferences.lastEnvironmentId(repoId: $0.id)
             )
         }
+    }
+
+    /// Opens GitHub repository settings and refreshes the available repositories on return.
+    func configureGitHubAccess(using webSession: WebAuthenticationSession) async {
+        await githubInstallationStore.install(using: webSession)
+        await reloadRepos()
     }
 
     /// Loads repository defaults for the draft screen.
@@ -109,6 +131,19 @@ final class NewSessionDraft {
             let reposResponse = try await reposAPI.listRepos(limit: 50, cursor: nil)
             repos = reposResponse.repos
             resolveSelectedRepo(with: reposResponse.repos)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func reloadRepos() async {
+        isLoadingRepos = true
+        defer { isLoadingRepos = false }
+
+        do {
+            let response = try await reposAPI.listRepos(limit: 50, cursor: nil)
+            repos = response.repos
+            resolveSelectedRepo(with: response.repos)
         } catch {
             errorMessage = error.localizedDescription
         }

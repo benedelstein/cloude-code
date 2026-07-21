@@ -74,13 +74,16 @@ public struct ClaudeTokenResponse: Codable, Equatable, Sendable {
 public struct GitHubAuthUrlResponse: Codable, Equatable, Sendable {
     public var url: String
     public var state: String
+    public var continuationToken: String?
 
     public init(
         url: String,
-        state: String
+        state: String,
+        continuationToken: String? = nil
     ) {
         self.url = url
         self.state = state
+        self.continuationToken = continuationToken
     }
 }
 
@@ -107,6 +110,19 @@ public struct LogoutResponse: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case ok
+    }
+}
+
+public struct NativeLoginContinuationRequest: Codable, Equatable, Sendable {
+    public var state: String
+    public var token: String
+
+    public init(
+        state: String,
+        token: String
+    ) {
+        self.state = state
+        self.token = token
     }
 }
 

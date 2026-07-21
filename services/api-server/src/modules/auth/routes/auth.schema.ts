@@ -3,6 +3,7 @@ import {
   GitHubAuthUrlResponse,
   GitHubReauthTokenResponse,
   NativeLogoutRequest,
+  NativeLoginContinuationRequest,
   NativeTokenRequest,
   NativeTokenResponse,
   RefreshRequest,
@@ -30,6 +31,9 @@ export const getGithubRoute = createRoute({
       // against a hardcoded allowlist) that the OAuth callback 302s to.
       // Mutually exclusive with `origin`.
       redirectUri: z.string().optional(),
+      // Native clients can keep OAuth and GitHub App installation inside one
+      // browser session while retaining separate callback contracts.
+      continueToInstallation: z.coerce.boolean().optional(),
     }),
   },
   responses: {
@@ -60,6 +64,26 @@ export const postGithubReauthStartRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Origin is not allowed",
+    },
+  },
+});
+
+export const postGithubInstallStartRoute = createRoute({
+  method: "post",
+  path: "/github/install/start",
+  request: {
+    query: z.object({
+      redirectUri: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: GitHubAuthUrlResponse } },
+      description: "One-time GitHub App installation URL for a native client",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Native redirect URI is not allowed",
     },
   },
 });
@@ -140,6 +164,26 @@ export const postNativeTokenRoute = createRoute({
     500: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "Failed to create user",
+    },
+  },
+});
+
+export const postNativeLoginContinuationRoute = createRoute({
+  method: "post",
+  path: "/native/complete",
+  request: {
+    body: {
+      content: { "application/json": { schema: NativeLoginContinuationRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: NativeTokenResponse } },
+      description: "Native session completed after OAuth and optional GitHub App installation",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Continuation is not ready, invalid, or expired",
     },
   },
 });

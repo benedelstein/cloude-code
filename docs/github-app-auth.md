@@ -18,6 +18,35 @@ cloude-code uses a GitHub App for repository access. Each session gets a scoped,
 7. After a successful pushed branch and terminal agent turn, the Durable Object uses the same GitHub App service to create the pull request server-side
 ```
 
+### Native installation return
+
+Native first-time sign-in can chain OAuth and installation in one browser
+session without enabling GitHub's coupled OAuth-on-install setting. The OAuth
+callback exchanges and stores the user's GitHub credential, then creates a
+short-lived `github_native_login_continuation` state. When the user has no
+installation, the callback redirects that same browser session to GitHub's
+installation URL. The setup callback returns to the original OAuth custom
+scheme, and `POST /auth/native/complete` consumes the continuation and issues
+the native session. The client can also consume the continuation after the
+browser is dismissed, so pending or cancelled installation does not undo a
+completed login.
+
+The iOS client starts installation with the authenticated
+`POST /auth/github/install/start` route. The API creates a short-lived,
+single-use state row bound to an allowlisted native callback and appends the
+nonce to GitHub's installation URL. GitHub preserves this state when it sends
+the browser to the configured `/github/install/complete` setup page.
+
+The web setup page preserves its existing popup completion behavior when no
+state is present. For a native state, it forwards to the public
+`GET /auth/github/install/callback` route through the web API proxy. The API
+consumes and validates the state, then redirects to the iOS custom scheme.
+The client treats that redirect only as browser completion and refreshes actual
+access through the authenticated repository listing; it never trusts the
+`installation_id` supplied to the setup page. Zero repositories is a valid
+signed-in state, and repository configuration remains available from the
+native repository picker.
+
 ### User And Installation Authorization
 
 GitHub App user access tokens are intersection-scoped. They can access only the

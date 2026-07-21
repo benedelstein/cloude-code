@@ -7,10 +7,12 @@ import type { AuthContext } from "../types/auth.types";
 import { AuthService, type AuthGitHubClient } from "../services/auth.service";
 import {
   getGithubRoute,
+  postGithubInstallStartRoute,
   postGithubReauthStartRoute,
   postGithubReauthTokenRoute,
   postTokenRoute,
   postNativeTokenRoute,
+  postNativeLoginContinuationRoute,
   postNativeRefreshRoute,
   postNativeLogoutRoute,
   getMeRoute,
@@ -25,6 +27,7 @@ type AuthRouteEnv = {
 export interface AuthRouteDeps {
   authMiddleware: MiddlewareHandler<AuthRouteEnv>;
   createGitHubClient(env: Env, logger: Logger): AuthGitHubClient;
+  clearRepoListingSync(env: Env, userId: string): Promise<void>;
 }
 
 export function createAuthRoutes(
@@ -41,6 +44,7 @@ export function createAuthRoutes(
     return new AuthService({
       env,
       github: createAuthGitHubClient(env),
+      clearRepoListingSync: (userId) => deps.clearRepoListingSync(env, userId),
       logger,
     });
   }
@@ -57,11 +61,16 @@ export function createAuthRoutes(
    * @returns The install + authorize URL and the nonce token
    */
   authRoutes.openapi(getGithubRoute, async (c) => {
-    const { origin: requestedOrigin, redirectUri } = c.req.valid("query");
+    const {
+      origin: requestedOrigin,
+      redirectUri,
+      continueToInstallation,
+    } = c.req.valid("query");
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubAuthorizationUrl({
       requestedOrigin,
       nativeRedirectUri: redirectUri,
+      continueToInstallation,
       requestId: c.req.header("cf-ray") ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
@@ -83,6 +92,24 @@ export function createAuthRoutes(
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubCallbackRedirect({
       code: c.req.query("code"),
+      state: c.req.query("state"),
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    });
+    if (!result.ok) {
+      return c.text(result.error.message, result.error.status);
+    }
+
+    return c.redirect(result.value.redirectUrl, 302);
+  });
+
+  /**
+   * GET /auth/github/install/callback — consumes the state forwarded by the
+   * web setup page and returns to the native app's allowlisted custom scheme.
+   */
+  authRoutes.get("/github/install/callback", async (c) => {
+    const authService = createAuthService(c.env);
+    const result = await authService.createGitHubInstallationCallbackRedirect({
       state: c.req.query("state"),
     });
     if (!result.ok) {
@@ -141,6 +168,22 @@ export function createAuthRoutes(
     return c.json(result.value, 200);
   });
 
+  authRoutes.openapi(postNativeLoginContinuationRoute, async (c) => {
+    const { state, token } = c.req.valid("json");
+    const authService = createAuthService(c.env);
+    const result = await authService.completeNativeGitHubLogin({
+      state,
+      token,
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    });
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 400);
+    }
+
+    return c.json(result.value, 200);
+  });
+
   /**
    * POST /auth/native/refresh — rotate a native access/refresh token pair.
    * No auth middleware: the refresh token in the body is the credential.
@@ -167,6 +210,24 @@ export function createAuthRoutes(
   });
 
   authRoutes.use("/github/reauth/*", deps.authMiddleware);
+
+  authRoutes.use("/github/install/start", deps.authMiddleware);
+  authRoutes.openapi(postGithubInstallStartRoute, async (c) => {
+    const { redirectUri } = c.req.valid("query");
+    const auth = c.get("auth");
+    const authService = createAuthService(c.env);
+    const result = await authService.createGitHubInstallationUrl({
+      userId: auth.userId,
+      nativeRedirectUri: redirectUri,
+      requestId: c.req.header("cf-ray") ?? null,
+      userAgent: c.req.header("user-agent") ?? null,
+    });
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 400);
+    }
+
+    return c.json(result.value, 200);
+  });
 
   authRoutes.openapi(postGithubReauthStartRoute, async (c) => {
     const { origin: requestedOrigin } = c.req.valid("query");

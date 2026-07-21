@@ -1698,7 +1698,8 @@
   },
   "GitHubAuthUrlResponse.autoFull": {
     "url": "sample",
-    "state": "sample"
+    "state": "sample",
+    "continuationToken": "sample"
   },
   "GitHubAuthUrlResponse.autoMinimal": {
     "url": "sample",
@@ -1717,6 +1718,14 @@
   },
   "LogoutResponse.autoMinimal": {
     "ok": true
+  },
+  "NativeLoginContinuationRequest.autoFull": {
+    "state": "sample",
+    "token": "sample"
+  },
+  "NativeLoginContinuationRequest.autoMinimal": {
+    "state": "sample",
+    "token": "sample"
   },
   "NativeLogoutRequest.autoFull": {
     "refreshToken": "sample"

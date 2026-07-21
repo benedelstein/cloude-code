@@ -135,38 +135,64 @@ final class SessionStore {
     }
 
     /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,
-    /// run the session, verify the echoed state, exchange the code for a
-    /// native token pair, and adopt it (the events loop flips state).
+    /// run OAuth and optional repository setup in one browser session, then
+    /// complete and adopt the native token pair (the events loop flips state).
     func signIn(using webSession: WebAuthenticationSession) async {
         guard !isSigningIn else { return }
         isSigningIn = true
         signInError = nil
         defer { isSigningIn = false }
 
+        var page: AuthorizePage?
         do {
-            let page = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
+            let authorizePage = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
+            page = authorizePage
             guard let scheme = URL(string: oauthRedirectURI)?.scheme else {
                 preconditionFailure("invalid OAUTH_REDIRECT_URI: \(oauthRedirectURI)")
             }
             let callback = try await webSession.authenticate(
-                using: page.url,
+                using: authorizePage.url,
                 callbackURLScheme: scheme
             )
             let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
             guard
-                let code = query?.first(where: { $0.name == "code" })?.value,
                 let returnedState = query?.first(where: { $0.name == "state" })?.value,
-                returnedState == page.state
+                returnedState == authorizePage.state,
+                let continuationToken = authorizePage.continuationToken
             else {
                 signInError = "Sign-in failed. Please try again."
                 return
             }
-            let result = try await signInAPI.exchangeCode(code: code, state: returnedState)
+            let result = try await signInAPI.completeLogin(
+                state: returnedState,
+                token: continuationToken
+            )
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
-            // User dismissed the sheet — not an error.
+            // OAuth may already have completed before repository setup was
+            // dismissed or left awaiting approval. Recover that login without
+            // turning repository access into an authentication requirement.
+            guard let page, let continuationToken = page.continuationToken else { return }
+            if let result = await recoverCompletedLogin(
+                state: page.state,
+                token: continuationToken
+            ) {
+                await coordinator.adopt(result.session)
+            }
         } catch {
             signInError = "Sign-in failed. Please try again."
         }
+    }
+
+    private func recoverCompletedLogin(state: String, token: String) async -> SignInResult? {
+        for attempt in 0..<3 {
+            if attempt > 0 {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            if let result = try? await signInAPI.completeLogin(state: state, token: token) {
+                return result
+            }
+        }
+        return nil
     }
 }

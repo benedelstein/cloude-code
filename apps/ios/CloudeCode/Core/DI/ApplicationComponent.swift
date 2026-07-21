@@ -145,6 +145,15 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         }
     }
 
+    @MainActor var githubInstallationStore: GitHubInstallationStore {
+        shared {
+            GitHubInstallationStore(
+                authAPI: authAPI,
+                oauthRedirectURI: oauthRedirectURI
+            )
+        }
+    }
+
     @MainActor var cacheResetWorker: CacheResetWorker {
         shared {
             CacheResetWorker(

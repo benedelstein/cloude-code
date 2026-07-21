@@ -11,6 +11,7 @@ export type UserInfo = z.infer<typeof UserInfo>;
 export const GitHubAuthUrlResponse = z.object({
   url: z.string(),
   state: z.string(),
+  continuationToken: z.string().optional(),
 });
 export type GitHubAuthUrlResponse = z.infer<typeof GitHubAuthUrlResponse>;
 
@@ -33,6 +34,12 @@ export const NativeTokenRequest = z.object({
   state: z.string(),
 });
 export type NativeTokenRequest = z.infer<typeof NativeTokenRequest>;
+
+export const NativeLoginContinuationRequest = z.object({
+  state: z.string(),
+  token: z.string(),
+});
+export type NativeLoginContinuationRequest = z.infer<typeof NativeLoginContinuationRequest>;
 
 export const NativeTokenResponse = z.object({
   accessToken: z.string(),

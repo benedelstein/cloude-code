@@ -823,6 +823,14 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoMinimal")
     }
 
+    @Test func nativeLoginContinuationRequestAutoFull() throws {
+        try assertAutoRoundTrip(NativeLoginContinuationRequest.self, key: "NativeLoginContinuationRequest.autoFull")
+    }
+
+    @Test func nativeLoginContinuationRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeLoginContinuationRequest.self, key: "NativeLoginContinuationRequest.autoMinimal")
+    }
+
     @Test func nativeLogoutRequestAutoFull() throws {
         try assertAutoRoundTrip(NativeLogoutRequest.self, key: "NativeLogoutRequest.autoFull")
     }

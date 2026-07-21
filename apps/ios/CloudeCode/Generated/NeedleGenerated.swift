@@ -51,6 +51,11 @@ private final class HomeDependencyProvider: HomeDependency {
         applicationComponent.newSessionPreferences
     }
 
+    @MainActor
+    var githubInstallationStore: GitHubInstallationStore {
+        applicationComponent.githubInstallationStore
+    }
+
     var cache: Cache {
         applicationComponent.cache
     }
@@ -124,6 +129,11 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
     @MainActor
     var newSessionPreferences: NewSessionPreferences {
         applicationComponent.newSessionPreferences
+    }
+
+    @MainActor
+    var githubInstallationStore: GitHubInstallationStore {
+        homeComponent.githubInstallationStore
     }
 }
 

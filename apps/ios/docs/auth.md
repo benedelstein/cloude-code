@@ -33,7 +33,8 @@ group keychain, then removes the legacy value. Tokens must not be placed in
 
 | Type | Responsibility |
 | --- | --- |
-| `SessionStore` | Owns the main-actor UI state, starts local restoration, observes auth events, loads the cached/current user, and runs GitHub OAuth. |
+| `SessionStore` | Owns the main-actor UI state, starts local restoration, observes auth events, loads the cached/current user, and runs the chained GitHub OAuth flow. |
+| `GitHubInstallationStore` | Opens authenticated GitHub App repository settings from the repository picker and validates its native callback. |
 | `TokenCoordinator` | Actor that owns the in-memory session, keychain writes, refresh scheduling and retry, single-flight rotation, logout, and auth events. |
 | `KeychainSessionPersistence` | Loads, saves, migrates, and clears the complete session in Keychain. |
 | `UnauthenticatedAuthAPI` | Calls sign-in, refresh, and logout endpoints without a Bearer header. The refresh token in the request body is the credential. |
@@ -146,13 +147,50 @@ sheet:
 
 1. Request the GitHub authorization URL and state nonce.
 2. Open `ASWebAuthenticationSession` using the configured callback scheme.
-3. Validate that the callback state matches the original nonce.
-4. Exchange the authorization code for a native `Session`.
-5. Ask `TokenCoordinator` to adopt and persist it.
-6. Handle the emitted `.signedIn` event and load the current user.
+3. Let the API exchange the OAuth code and, when repository access is absent,
+   navigate the same browser session to GitHub App installation.
+4. Validate that the final callback state matches the original nonce.
+5. Complete the short-lived native login continuation for a native `Session`.
+6. Ask `TokenCoordinator` to adopt and persist it.
+7. Handle the emitted `.signedIn` event and load the current user.
+
+If the browser session is dismissed after OAuth completes, `SessionStore`
+attempts the same continuation exchange. This preserves the completed login
+when installation was cancelled or is awaiting organization approval. A
+dismissal before OAuth completes leaves the user signed out.
 
 The GitHub authorize-page request, OAuth code exchange, refresh, and logout
 endpoints bypass `AuthTokenProviding`.
+
+## GitHub App installation
+
+Authentication creates the Cloude Code account and stores the GitHub user
+credential. Repository-backed work separately requires a repository available
+through a GitHub App installation. Native sign-in requests a chained flow: the
+API exchanges OAuth at the web callback, stores a short-lived continuation,
+and either returns directly to iOS when an installation already exists or
+navigates the same browser session to GitHub's installation page.
+
+Repository access is not an authentication gate. A completed OAuth
+continuation always enters the normal signed-in UI, including when the user has
+zero repositories or an organization installation is pending approval. Session
+creation remains disabled until a repository is selected.
+
+The repository picker's **Configure access on GitHub** action starts an
+authenticated installation flow through
+`POST /auth/github/install/start`. The API returns a GitHub installation URL
+with a one-time state nonce whose stored redirect is paired with the app's
+allowlisted OAuth callback. GitHub forwards that state to the configured web
+setup page at `/github/install/complete`; the page sends native states through
+`/api/auth/github/install/callback`, and the API consumes the state before
+redirecting to `cloudecode://github/install/complete` (or the development
+scheme).
+
+The callback only closes `ASWebAuthenticationSession`. It is not proof of an
+installation: GitHub's setup query parameters are untrusted. The draft refreshes
+`/repos` after returning and renders whatever access is actually available.
+Cancelling, selecting no repositories, or awaiting approval leaves the user in
+the normal signed-in UI with the same configuration action available.
 
 ## Tests
 

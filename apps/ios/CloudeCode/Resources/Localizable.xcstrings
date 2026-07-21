@@ -64,6 +64,12 @@
     "Complete" : {
 
     },
+    "Configure access on GitHub" : {
+
+    },
+    "Configure which repositories Cloude Code can access on GitHub." : {
+
+    },
     "Connect" : {
 
     },
@@ -173,6 +179,9 @@
 
     },
     "Disconnecting…" : {
+
+    },
+    "Don't see your repository?" : {
 
     },
     "Done" : {

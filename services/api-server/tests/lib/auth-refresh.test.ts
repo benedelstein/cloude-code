@@ -209,7 +209,7 @@ class MockD1 {
   }
 }
 
-function createGitHubClient(): AuthGitHubClient {
+function createGitHubClient(hasInstallations = true): AuthGitHubClient {
   return {
     getAuthUrl: () => "https://github.test/authorize",
     getInstallUrl: () => "https://github.test/install",
@@ -220,11 +220,11 @@ function createGitHubClient(): AuthGitHubClient {
       expiresAt: "2099-01-01T00:00:00.000Z",
       user: { id: 123, login: "octocat", name: "Octo Cat", avatarUrl: "https://a" },
     }),
-    hasInstallations: async () => true,
+    hasInstallations: async () => hasInstallations,
   };
 }
 
-function createService(db: MockD1): AuthService {
+function createService(db: MockD1, hasInstallations = true): AuthService {
   return new AuthService({
     env: {
       DB: db.asD1(),
@@ -233,7 +233,8 @@ function createService(db: MockD1): AuthService {
       WORKER_URL: "https://api.test",
       WEB_ORIGIN: "https://web.test",
     } as Env,
-    github: createGitHubClient(),
+    github: createGitHubClient(hasInstallations),
+    clearRepoListingSync: async () => {},
   });
 }
 
@@ -267,6 +268,101 @@ async function exchangeNative(db: MockD1, service: AuthService) {
 }
 
 describe("AuthService native token refresh", () => {
+  it("chains missing installation access inside the native OAuth continuation", async () => {
+    const db = new MockD1();
+    const service = createService(db, false);
+    const started = await service.createGitHubAuthorizationUrl({
+      nativeRedirectUri: "cloudecode-dev://auth/callback",
+      continueToInstallation: true,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) { return; }
+    const continuationToken = started.value.continuationToken;
+    expect(continuationToken).toBeDefined();
+    if (!continuationToken) { return; }
+
+    const callback = await service.createGitHubCallbackRedirect({
+      code: "code-1",
+      state: started.value.state,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(callback).toEqual({
+      ok: true,
+      value: {
+        redirectUrl: `https://github.test/install?state=${started.value.state}`,
+      },
+    });
+    expect(db.oauthStates.get(started.value.state)).toMatchObject({
+      purpose: "github_native_login_continuation",
+      redirect_origin: "cloudecode-dev://auth/callback",
+    });
+
+    const installCallback = await service.createGitHubInstallationCallbackRedirect({
+      state: started.value.state,
+    });
+    expect(installCallback).toEqual({
+      ok: true,
+      value: {
+        redirectUrl: `cloudecode-dev://auth/callback?state=${started.value.state}`,
+      },
+    });
+
+    const rejected = await service.completeNativeGitHubLogin({
+      state: started.value.state,
+      token: "wrong-token",
+      requestId: null,
+      userAgent: null,
+    });
+    expect(rejected.ok).toBe(false);
+    expect(db.oauthStates.has(started.value.state)).toBe(true);
+
+    const completed = await service.completeNativeGitHubLogin({
+      state: started.value.state,
+      token: continuationToken,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(completed.ok).toBe(true);
+    expect(db.oauthStates.has(started.value.state)).toBe(false);
+    expect(db.refreshSessions.size).toBe(1);
+  });
+
+  it("completes login when repository installation is dismissed", async () => {
+    const db = new MockD1();
+    const service = createService(db, false);
+    const started = await service.createGitHubAuthorizationUrl({
+      nativeRedirectUri: "cloudecode-dev://auth/callback",
+      continueToInstallation: true,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) { return; }
+    const continuationToken = started.value.continuationToken;
+    expect(continuationToken).toBeDefined();
+    if (!continuationToken) { return; }
+
+    const callback = await service.createGitHubCallbackRedirect({
+      code: "code-1",
+      state: started.value.state,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(callback.ok).toBe(true);
+
+    const completed = await service.completeNativeGitHubLogin({
+      state: started.value.state,
+      token: continuationToken,
+      requestId: null,
+      userAgent: null,
+    });
+    expect(completed.ok).toBe(true);
+    expect(db.refreshSessions.size).toBe(1);
+  });
+
   it("issues the legacy response shape when client is absent", async () => {
     const db = new MockD1();
     const service = createService(db);

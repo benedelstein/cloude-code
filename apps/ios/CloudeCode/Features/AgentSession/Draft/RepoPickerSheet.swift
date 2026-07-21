@@ -1,3 +1,4 @@
+import AuthenticationServices
 import CoreAPI
 import SwiftUI
 
@@ -5,6 +6,7 @@ struct RepoPickerSheet: View {
     @Environment(\.style) var style: Style
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
     let draft: NewSessionDraft
     @State private var query = ""
@@ -28,6 +30,8 @@ struct RepoPickerSheet: View {
                             .transition(style.fadeTransition)
                     }
                 }
+
+                configureAccessRow
             }
             .animation(style.fadeAnimation, value: isSearching)
             .contentMargins(.top, 0, for: .scrollContent)
@@ -46,6 +50,12 @@ struct RepoPickerSheet: View {
             }
             .onChange(of: query) { _, newValue in
                 scheduleSearch(newValue)
+            }
+            .onChange(of: draft.repos) { _, repos in
+                guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return
+                }
+                visibleRepos = repos
             }
             .onDisappear {
                 searchTask?.cancel()
@@ -66,7 +76,9 @@ struct RepoPickerSheet: View {
         } else if visibleRepos.isEmpty {
             EmptyStateView(
                 title: "No repositories found",
-                subtitle: "Try a different search."
+                subtitle: query.isEmpty
+                    ? "Configure which repositories Cloude Code can access on GitHub."
+                    : "Try a different search."
             ) {
                 Image(systemName: "folder")
             }
@@ -83,6 +95,40 @@ struct RepoPickerSheet: View {
                 .transition(style.fadeTransition)
             }
         }
+    }
+
+    private var configureAccessRow: some View {
+        Button {
+            Task { await draft.configureGitHubAccess(using: webAuthenticationSession) }
+        } label: {
+            HStack(spacing: style.gridSize) {
+                VStack(alignment: .leading, spacing: style.gridSize / 2) {
+                    Text("Don't see your repository?")
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+
+                    Text("Configure access on GitHub")
+                        .styledFont(.subheadline)
+                        .foregroundStyle(theme.labelColor)
+
+                    if let error = draft.githubConfigurationError {
+                        Text(verbatim: error)
+                            .styledFont(.caption)
+                            .foregroundStyle(theme.errorRed)
+                    }
+                }
+
+                Spacer()
+
+                if draft.isConfiguringGitHub {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.up.right")
+                        .foregroundStyle(theme.secondaryLabelColor)
+                }
+            }
+        }
+        .disabled(draft.isConfiguringGitHub)
     }
 
     private func loadingRows(count: Int) -> some View {

@@ -33,6 +33,9 @@ protocol AgentSessionDependency: Dependency {
 
     @MainActor
     var newSessionPreferences: NewSessionPreferences { get }
+
+    @MainActor
+    var githubInstallationStore: GitHubInstallationStore { get }
 }
 
 /// Child of `HomeComponent`: agent sessions can only be opened from the
@@ -172,7 +175,8 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
                 environmentsStore: dependency.repoEnvironmentsStore,
-                preferences: dependency.newSessionPreferences
+                preferences: dependency.newSessionPreferences,
+                githubInstallationStore: dependency.githubInstallationStore
             )
         }
     }

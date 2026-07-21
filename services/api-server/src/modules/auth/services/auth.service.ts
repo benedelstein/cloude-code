@@ -13,7 +13,12 @@ import {
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import { encrypt, generateOpaqueToken, sha256 } from "@/shared/utils/crypto";
+import {
+  encrypt,
+  generateOpaqueToken,
+  sha256,
+  timingSafeCompare,
+} from "@/shared/utils/crypto";
 import {
   consumeValidOauthState,
   createOauthState,
@@ -26,11 +31,14 @@ import {
   looksLikeNativeRedirectUri,
   validateNativeRedirectUri,
 } from "../utils/native-redirect.util";
+import {
+  GITHUB_LOGIN_OAUTH_PURPOSE,
+  GITHUB_NATIVE_LOGIN_CONTINUATION_PURPOSE,
+  GITHUB_NATIVE_LOGIN_OAUTH_PURPOSE,
+  GITHUB_REAUTH_OAUTH_PURPOSE,
+} from "../utils/github-auth-purpose";
 import { NativeAccessTokenService } from "./native-access-token.service";
-
-const GITHUB_LOGIN_OAUTH_PURPOSE = "github_login";
-const GITHUB_REAUTH_OAUTH_PURPOSE = "github_reauth";
-
+import { NativeGitHubInstallationService } from "./native-github-installation.service";
 const WEB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 const ROTATION_GRACE_MS = 60_000;
@@ -43,6 +51,8 @@ export interface AuthServiceError {
   message: string;
   code:
     | "INVALID_ORIGIN"
+    | "MISSING_INSTALL_CALLBACK_PARAMS"
+    | "INVALID_INSTALL_STATE"
     | "MISSING_OAUTH_CALLBACK_PARAMS"
     | "INVALID_OAUTH_STATE"
     | "GITHUB_TOKEN_EXCHANGE_FAILED"
@@ -52,9 +62,9 @@ export interface AuthServiceError {
     | "INVALID_REFRESH_TOKEN";
 }
 
-type AuthServiceResult<T> = Result<T, AuthServiceError>;
+export type AuthServiceResult<T> = Result<T, AuthServiceError>;
 
-interface RequestLogFields {
+export interface RequestLogFields {
   requestId: string | null;
   userAgent: string | null;
 }
@@ -98,6 +108,7 @@ export interface AuthGitHubClient {
 export interface AuthServiceDeps {
   env: Env;
   github: AuthGitHubClient;
+  clearRepoListingSync(userId: string): Promise<void>;
   logger?: Logger;
 }
 
@@ -108,6 +119,7 @@ export class AuthService {
   private readonly userRepository: UserRepository;
   private readonly userSessionRepository: UserSessionRepository;
   private readonly nativeAccessTokenService: NativeAccessTokenService;
+  private readonly nativeGitHubInstallationService: NativeGitHubInstallationService;
 
   constructor(deps: AuthServiceDeps) {
     const logger = deps.logger ?? createLogger("auth.service.ts");
@@ -117,11 +129,18 @@ export class AuthService {
     this.userRepository = new UserRepository(deps.env.DB);
     this.userSessionRepository = new UserSessionRepository(deps.env.DB);
     this.nativeAccessTokenService = new NativeAccessTokenService(deps.env);
+    this.nativeGitHubInstallationService = new NativeGitHubInstallationService({
+      env: deps.env,
+      getInstallUrl: () => deps.github.getInstallUrl(),
+      clearRepoListingSync: deps.clearRepoListingSync,
+      logger: this.logger,
+    });
   }
 
   async createGitHubAuthorizationUrl(params: {
     requestedOrigin?: string;
     nativeRedirectUri?: string;
+    continueToInstallation?: boolean;
   } & RequestLogFields): Promise<AuthServiceResult<GitHubAuthUrlResponse>> {
     let redirectTarget: string;
     if (params.nativeRedirectUri !== undefined) {
@@ -171,23 +190,45 @@ export class AuthService {
       },
     });
 
+    const usesNativeContinuation = params.nativeRedirectUri !== undefined
+      && params.continueToInstallation;
+    const continuationToken = usesNativeContinuation
+      ? generateOpaqueToken()
+      : undefined;
     await createOauthState(this.env, {
       state,
       expiresAt,
       redirectOrigin: redirectTarget,
-      purpose: GITHUB_LOGIN_OAUTH_PURPOSE,
+      purpose: usesNativeContinuation
+        ? GITHUB_NATIVE_LOGIN_OAUTH_PURPOSE
+        : GITHUB_LOGIN_OAUTH_PURPOSE,
+      codeVerifier: continuationToken ? await sha256(continuationToken) : null,
     });
 
     return success({
       url: this.github.getAuthUrl(state),
       state,
+      continuationToken,
     });
+  }
+
+  async createGitHubInstallationUrl(params: {
+    userId: string;
+    nativeRedirectUri: string;
+  } & RequestLogFields): Promise<AuthServiceResult<GitHubAuthUrlResponse>> {
+    return this.nativeGitHubInstallationService.createUrl(params);
+  }
+
+  async createGitHubInstallationCallbackRedirect(params: {
+    state: string | undefined;
+  }): Promise<AuthServiceResult<{ redirectUrl: string }>> {
+    return this.nativeGitHubInstallationService.createCallbackRedirect(params);
   }
 
   async createGitHubCallbackRedirect(params: {
     code: string | undefined;
     state: string | undefined;
-  }): Promise<AuthServiceResult<{ redirectUrl: string }>> {
+  } & RequestLogFields): Promise<AuthServiceResult<{ redirectUrl: string }>> {
     if (!params.code || !params.state) {
       this.logger.warn("OAuth callback missing code or state");
       return failure({
@@ -229,6 +270,47 @@ export class AuthService {
           message: nativeResult.error.message,
         });
       }
+
+      if (stateRecord.purpose === GITHUB_NATIVE_LOGIN_OAUTH_PURPOSE) {
+        if (!stateRecord.codeVerifier) {
+          return failure({
+            domain: "auth",
+            status: 400,
+            code: "INVALID_OAUTH_STATE",
+            message: "Invalid or expired sign-in session. Try again.",
+          });
+        }
+        const exchanged = await this.exchangeNativeGitHubIdentity({
+          code: params.code,
+          state: params.state,
+          requestId: params.requestId,
+          userAgent: params.userAgent,
+        });
+        if (!exchanged.ok) {
+          return exchanged;
+        }
+
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        await createOauthState(this.env, {
+          state: params.state,
+          expiresAt,
+          redirectOrigin: nativeResult.value,
+          purpose: GITHUB_NATIVE_LOGIN_CONTINUATION_PURPOSE,
+          userId: exchanged.value.user.id,
+          codeVerifier: stateRecord.codeVerifier,
+        });
+
+        if (!exchanged.value.hasInstallations) {
+          const installUrl = new URL(this.github.getInstallUrl());
+          installUrl.searchParams.set("state", params.state);
+          return success({ redirectUrl: installUrl.toString() });
+        }
+
+        const target = new URL(nativeResult.value);
+        target.searchParams.set("state", params.state);
+        return success({ redirectUrl: target.toString() });
+      }
+
       const target = new URL(nativeResult.value);
       target.searchParams.set("code", params.code);
       target.searchParams.set("state", params.state);
@@ -319,6 +401,71 @@ export class AuthService {
     code: string;
     state: string;
   } & RequestLogFields): Promise<AuthServiceResult<NativeTokenResponse>> {
+    const exchanged = await this.exchangeNativeGitHubIdentity(params);
+    if (!exchanged.ok) {
+      return exchanged;
+    }
+
+    return this.issueNativeSession(
+      exchanged.value.user,
+      exchanged.value.hasInstallations,
+      params.requestId,
+    );
+  }
+
+  /** Completes a native login after OAuth and optional installation navigation. */
+  async completeNativeGitHubLogin(params: {
+    state: string;
+    token: string;
+  } & RequestLogFields): Promise<AuthServiceResult<NativeTokenResponse>> {
+    const pendingStateRecord = await peekOauthState(this.env, params.state);
+    const presentedTokenHash = await sha256(params.token);
+    if (
+      !pendingStateRecord?.userId
+      || pendingStateRecord.purpose !== GITHUB_NATIVE_LOGIN_CONTINUATION_PURPOSE
+      || !pendingStateRecord.redirectOrigin
+      || !pendingStateRecord.codeVerifier
+      || !timingSafeCompare(pendingStateRecord.codeVerifier, presentedTokenHash)
+      || !validateNativeRedirectUri(pendingStateRecord.redirectOrigin, this.env).ok
+    ) {
+      return failure({
+        domain: "auth",
+        status: 400,
+        code: "INVALID_OAUTH_STATE",
+        message: "Native sign-in is not ready or has expired.",
+      });
+    }
+
+    const stateRecord = await consumeValidOauthState(this.env, params.state);
+    if (!stateRecord?.userId) {
+      return failure({
+        domain: "auth",
+        status: 400,
+        code: "INVALID_OAUTH_STATE",
+        message: "Native sign-in is not ready or has expired.",
+      });
+    }
+
+    const user = await this.userRepository.getById(stateRecord.userId);
+    if (!user) {
+      return failure({
+        domain: "auth",
+        status: 500,
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    return this.issueNativeSession(user, undefined, params.requestId);
+  }
+
+  private async exchangeNativeGitHubIdentity(params: {
+    code: string;
+    state: string;
+  } & RequestLogFields): Promise<AuthServiceResult<{
+    user: GitHubLoginExchange["user"];
+    hasInstallations: boolean;
+  }>> {
     const exchanged = await this.exchangeGitHubLoginCode({
       ...params,
       client: "native",
@@ -341,6 +488,15 @@ export class AuthService {
       refreshTokenExpiresAt: oauth.refreshTokenExpiresAt ?? null,
     });
 
+    const hasInstallations = await this.checkHasInstallations(oauth.accessToken);
+    return success({ user, hasInstallations });
+  }
+
+  private async issueNativeSession(
+    user: GitHubLoginExchange["user"],
+    knownHasInstallations: boolean | undefined,
+    requestId: string | null,
+  ): Promise<AuthServiceResult<NativeTokenResponse>> {
     const refreshToken = generateOpaqueToken();
     const refreshTokenExpiresAt = new Date(
       Date.now() + REFRESH_TOKEN_TTL_MS,
@@ -358,14 +514,14 @@ export class AuthService {
       userId: user.id,
       refreshSessionId,
     });
-    const hasInstallations = await this.checkHasInstallations(oauth.accessToken);
+    const hasInstallations = knownHasInstallations ?? false;
 
     this.logger.info("GitHub OAuth login succeeded", {
       fields: {
         client: "native",
         githubLogin: user.githubLogin,
         hasInstallations,
-        requestId: params.requestId,
+        requestId,
       },
     });
 
@@ -420,6 +576,10 @@ export class AuthService {
       || (
         stateRecord.purpose !== null
         && stateRecord.purpose !== GITHUB_LOGIN_OAUTH_PURPOSE
+        && !(
+          params.client === "native"
+          && stateRecord.purpose === GITHUB_NATIVE_LOGIN_OAUTH_PURPOSE
+        )
       )
     ) {
       this.logger.error("GitHub OAuth callback rejected: invalid or expired state", {
