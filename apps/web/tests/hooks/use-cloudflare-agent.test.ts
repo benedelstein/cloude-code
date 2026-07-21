@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { UIMessage } from "ai";
 import type { ClientState } from "@repo/shared";
 import { aiChunksFromWire, useCloudflareAgent } from "@/hooks/use-cloudflare-agent";
 
@@ -35,7 +36,7 @@ function renderAgent({
   expiresAt?: string;
   refreshWebSocketToken?: () => void;
   onMarkRead?: (sessionId: string, messageId: string) => void;
-  initialPendingUserMessage?: import("ai").UIMessage | null;
+  initialPendingUserMessage?: UIMessage | null;
 } = {}) {
   return renderHook(() =>
     useCloudflareAgent({
