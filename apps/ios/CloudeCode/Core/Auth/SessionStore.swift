@@ -142,7 +142,6 @@ final class SessionStore {
         isSigningIn = true
         signInError = nil
         defer { isSigningIn = false }
-
         var page: AuthorizePage?
         do {
             let authorizePage = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
@@ -154,24 +153,21 @@ final class SessionStore {
                 using: authorizePage.url,
                 callbackURLScheme: scheme
             )
-            let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
-            guard
-                let returnedState = query?.first(where: { $0.name == "state" })?.value,
-                returnedState == authorizePage.state,
-                let continuationToken = authorizePage.continuationToken
-            else {
+            guard let callbackParameters = callbackParameters(from: callback, authorizePage: authorizePage) else {
+                Logger.error("no state in auth callback response")
                 signInError = "Sign-in failed. Please try again."
                 return
             }
             let result = try await signInAPI.completeLogin(
-                state: returnedState,
-                token: continuationToken
+                state: callbackParameters.state,
+                token: callbackParameters.token
             )
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             // OAuth may already have completed before repository setup was
             // dismissed or left awaiting approval. Recover that login without
             // turning repository access into an authentication requirement.
+            Logger.error("login canceled")
             guard let page, let continuationToken = page.continuationToken else { return }
             if let result = await recoverCompletedLogin(
                 state: page.state,
@@ -180,19 +176,34 @@ final class SessionStore {
                 await coordinator.adopt(result.session)
             }
         } catch {
+            Logger.error(error.localizedDescription)
             signInError = "Sign-in failed. Please try again."
         }
     }
 
-    private func recoverCompletedLogin(state: String, token: String) async -> SignInResult? {
-        for attempt in 0..<3 {
-            if attempt > 0 {
-                try? await Task.sleep(for: .milliseconds(200))
-            }
-            if let result = try? await signInAPI.completeLogin(state: state, token: token) {
-                return result
-            }
+    private func callbackParameters(
+        from callback: URL,
+        authorizePage: AuthorizePage
+    ) -> (state: String, token: String)? {
+        let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
+        guard let returnedState = query?.first(where: { $0.name == "state" })?.value,
+            returnedState == authorizePage.state,
+            let continuationToken = authorizePage.continuationToken
+        else {
+            return nil
         }
-        return nil
+        return (returnedState, continuationToken)
+    }
+
+    private func recoverCompletedLogin(state: String, token: String) async -> SignInResult? {
+        try? await Task.retrying(
+            maxAttempts: 3,
+            backoff: .constant(.milliseconds(200)),
+            priority: .userInitiated,
+            shouldRetry: { _ in true },
+            operation: { [signInAPI] in
+                try await signInAPI.completeLogin(state: state, token: token)
+            }
+        ).value
     }
 }

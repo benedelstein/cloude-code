@@ -267,7 +267,7 @@ We don't send app-level pings. Cloudflare answers protocol-level `ping` control 
 Even after you create a session on a repo you have access to, you may lose access to it if the installation is deleted, you lose access to the repo, or the repo is removed from the installation. We handle this like so:
 
 - Routes to create/get a session, mint a websocket token, connect a websocket, and send `chat.message` all check for access to the repo using `services/api-server/src/modules/sessions/services/session-repo-access.service.ts`.
-  a. If we don't know the repo's installation_id, we have to look it up using `github-app.service.ts#findInstallationForRepoId`. This first checks D1 `github_installation_repos`, then falls back to the GitHub API.
+  a. If we don't know the repo's installation_id, we look it up using `github-app.service.ts#findInstallationForRepoId`. This first prefers the authenticated user's unexpired `github_user_repo_access_cache` mapping, then checks D1 `github_installation_repos`, and finally falls back to the GitHub API. The user mapping prevents a missed delete webhook from binding a repo to a stale installation after the app is reinstalled.
   b. Check the `github_user_repo_access_cache` for this (user_id, repo_id, installation_id) (5 minute TTL)
   c. If no cache value exists, look up the repo using the GitHub API (the same route we use to fetch user-accessible repos). This path is slow, since we have to enumerate a user's repos, which is also why we cache it.
 

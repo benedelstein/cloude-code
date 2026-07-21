@@ -79,6 +79,7 @@ export interface SessionRepoAccessGitHubProvider {
     repoId: number,
   ): Promise<GitHubAppResult<GitHubRepositoryData>>;
   findInstallationForRepoId(
+    userId: string,
     repoId: number,
     accessToken: string,
   ): Promise<GitHubAppResult<{ id: number }>>;
@@ -197,6 +198,7 @@ async function resolveAccessibleRepoForRecovery(params: {
   githubAccessToken: string;
 }): Promise<UserRepoAccessResult> {
   const installationResult = await params.github.findInstallationForRepoId(
+    params.userId,
     params.repoId,
     params.githubAccessToken,
   );

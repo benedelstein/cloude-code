@@ -42,3 +42,4 @@ or important considerations.
     }
     ```
     This prevents long class names and keeps features encapsulated.
+- Before running strict SwiftLint validation, run `swiftlint lint --fix --no-cache` to autocorrect fixable violations.

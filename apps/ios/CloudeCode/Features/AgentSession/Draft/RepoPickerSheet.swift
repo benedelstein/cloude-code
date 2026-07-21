@@ -31,7 +31,13 @@ struct RepoPickerSheet: View {
                     }
                 }
 
-                configureAccessRow
+                if showsEmptyContent {
+                    Section {
+                        configureAccessRow
+                    }
+                } else {
+                    configureAccessRow
+                }
             }
             .animation(style.fadeAnimation, value: isSearching)
             .contentMargins(.top, 0, for: .scrollContent)
@@ -144,6 +150,10 @@ struct RepoPickerSheet: View {
 
     private var isInitialLoading: Bool {
         visibleRepos.isEmpty && (isSearching || draft.isLoadingRepos)
+    }
+
+    private var showsEmptyContent: Bool {
+        visibleRepos.isEmpty && !isInitialLoading
     }
 
     private func scheduleSearch(_ query: String) {

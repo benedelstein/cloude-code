@@ -65,6 +65,29 @@ export class GitHubUserRepoAccessCacheRepository {
     };
   }
 
+  /**
+   * Finds the current installation through which a user can access a repository.
+   * @param userId Authenticated user id.
+   * @param repoId Numeric GitHub repository id.
+   * @returns The installation id from the user's unexpired allowed listing, or null.
+   */
+  async findAllowedInstallationId(
+    userId: string,
+    repoId: number,
+  ): Promise<number | null> {
+    const row = await this.database.prepare(
+      `SELECT installation_id FROM github_user_repo_access_cache
+       WHERE user_id = ? AND repo_id = ? AND allowed = 1
+         AND datetime(expires_at) > datetime('now')
+       ORDER BY datetime(updated_at) DESC
+       LIMIT 1`,
+    )
+      .bind(userId, repoId)
+      .first<{ installation_id: number }>();
+
+    return row?.installation_id ?? null;
+  }
+
   async setAllowed(
     userId: string,
     installationId: number,
