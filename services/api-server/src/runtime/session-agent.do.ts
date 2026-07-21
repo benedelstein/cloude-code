@@ -414,7 +414,13 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
   // State helpers
 
   private updatePartialState(partial: Partial<ClientState>): void {
+    const previousStatus = this.state.status;
     this.setState({ ...this.state, ...partial });
+    // Mirror status transitions into the D1 session summary so session lists
+    // can show setup progress without querying each DO.
+    if (partial.status !== undefined && partial.status !== previousStatus) {
+      this.sessionSummaryService.persistStatus(partial.status);
+    }
   }
 
   private updateServerState(partial: Partial<ServerState>): void {

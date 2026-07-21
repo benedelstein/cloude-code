@@ -1,10 +1,15 @@
 import type {
   Logger,
   PullRequestState,
+  SessionStatus,
   SessionWorkingState,
 } from "@repo/shared";
 
 interface SessionSummaryRepository {
+  updateStatus(
+    sessionId: string,
+    status: SessionStatus,
+  ): Promise<void>;
   updateWorkingState(
     sessionId: string,
     workingState: SessionWorkingState,
@@ -41,6 +46,14 @@ export class SessionSummaryService {
       logger: Logger;
     },
   ) {}
+
+  persistStatus(status: SessionStatus): void {
+    void this.enqueueMutation(
+      "status",
+      (sessionId) => this.params.repository.updateStatus(sessionId, status),
+      { status },
+    );
+  }
 
   persistWorkingState(workingState: SessionWorkingState): void {
     void this.enqueueMutation(

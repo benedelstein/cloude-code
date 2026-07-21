@@ -1,4 +1,4 @@
-import type { PullRequestState, SessionWorkingState } from "@repo/shared";
+import type { PullRequestState, SessionStatus, SessionWorkingState } from "@repo/shared";
 import type { Env } from "@/shared/types";
 import {
   SessionsRepository,
@@ -10,6 +10,10 @@ export type { SessionAccessRow };
 export type { SessionPullRequestRow };
 
 export interface SessionSummaryWriter {
+  updateStatus(
+    sessionId: string,
+    status: SessionStatus,
+  ): Promise<void>;
   updateWorkingState(
     sessionId: string,
     workingState: SessionWorkingState,

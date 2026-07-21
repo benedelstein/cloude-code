@@ -213,6 +213,8 @@ export const SessionSummary = z.object({
   provider: ProviderId.optional(),
   title: z.string().nullable(),
   archived: z.boolean(),
+  status: SessionStatus.optional()
+    .describe("preparing: setup in progress or blocked; ready: accepting messages"),
   workingState: SessionWorkingState,
   pushedBranch: z.string().nullable(),
   pullRequest: z.object({

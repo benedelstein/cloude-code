@@ -23,6 +23,7 @@ extension CoreAPI.SessionSummary {
             provider: provider.map { AgentProviderID(rawValue: $0.rawValue) },
             title: title,
             archived: archived,
+            status: status?.rawValue,
             workingState: workingState.rawValue,
             pushedBranch: pushedBranch,
             pullRequest: pullRequest.map {

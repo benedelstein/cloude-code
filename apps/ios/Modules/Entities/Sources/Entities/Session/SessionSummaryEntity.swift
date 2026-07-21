@@ -10,6 +10,7 @@ public final class SessionSummaryEntity: Entity {
     var provider: String?
     var title: String?
     var archived: Bool
+    var status: String?
     var workingState: String
     var pushedBranch: String?
     var pullRequestUrl: String?
@@ -28,6 +29,7 @@ public final class SessionSummaryEntity: Entity {
         provider = snapshot.provider?.rawValue
         title = snapshot.title
         archived = snapshot.archived
+        status = snapshot.status
         workingState = snapshot.workingState
         pushedBranch = snapshot.pushedBranch
         pullRequestUrl = snapshot.pullRequest?.url
@@ -46,6 +48,7 @@ public final class SessionSummaryEntity: Entity {
         provider = snapshot.provider?.rawValue
         title = snapshot.title
         archived = snapshot.archived
+        status = snapshot.status
         workingState = snapshot.workingState
         pushedBranch = snapshot.pushedBranch
         pullRequestUrl = snapshot.pullRequest?.url
@@ -67,6 +70,7 @@ public final class SessionSummaryEntity: Entity {
             provider: provider.map(AgentProviderID.init(rawValue:)),
             title: title,
             archived: archived,
+            status: status,
             workingState: workingState,
             pushedBranch: pushedBranch,
             pullRequest: pullRequest,

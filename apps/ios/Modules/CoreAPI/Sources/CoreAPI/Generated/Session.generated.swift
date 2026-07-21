@@ -573,6 +573,8 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var provider: ProviderId?
     public var title: String?
     public var archived: Bool
+    /// preparing: setup in progress or blocked; ready: accepting messages
+    public var status: SessionStatus?
     public var workingState: SessionWorkingState
     public var pushedBranch: String?
     public var pullRequest: PullRequest?
@@ -589,6 +591,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         provider: ProviderId? = nil,
         title: String? = nil,
         archived: Bool,
+        status: SessionStatus? = nil,
         workingState: SessionWorkingState,
         pushedBranch: String? = nil,
         pullRequest: PullRequest? = nil,
@@ -604,6 +607,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         self.provider = provider
         self.title = title
         self.archived = archived
+        self.status = status
         self.workingState = workingState
         self.pushedBranch = pushedBranch
         self.pullRequest = pullRequest

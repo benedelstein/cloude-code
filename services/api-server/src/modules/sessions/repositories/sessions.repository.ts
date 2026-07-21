@@ -4,6 +4,7 @@ import type {
   PullRequestState,
   SessionAccessBlockReason,
   SessionRepoGroup,
+  SessionStatus,
   SessionSummary,
   SessionWorkingState,
 } from "@repo/shared";
@@ -42,6 +43,7 @@ interface SessionRow {
   archived: number;
   access_blocked_at: string | null;
   access_block_reason: SessionAccessBlockReason | null;
+  status: SessionStatus;
   working_state: SessionWorkingState;
   pushed_branch: string | null;
   pull_request_url: string | null;
@@ -91,6 +93,7 @@ function rowToSummary(row: SessionRow): SessionSummary {
     provider: row.provider_id ?? undefined,
     title: row.title,
     archived: row.archived === 1,
+    status: row.status,
     workingState: row.working_state,
     pushedBranch: row.pushed_branch,
     pullRequest,
@@ -122,9 +125,10 @@ export class SessionsRepository {
            repo_full_name,
            source,
            provider_id,
+           status,
            source_environment_id,
            source_environment_name
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?)`,
       )
       .bind(
         params.id,
@@ -191,6 +195,16 @@ export class SessionsRepository {
         `UPDATE sessions SET last_message_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
       )
       .bind(sessionId)
+      .run();
+  }
+
+  async updateStatus(
+    sessionId: string,
+    status: SessionStatus,
+  ): Promise<void> {
+    await this.database
+      .prepare(`UPDATE sessions SET status = ? WHERE id = ?`)
+      .bind(status, sessionId)
       .run();
   }
 

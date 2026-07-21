@@ -32,6 +32,7 @@ describe("SessionSummaryService", () => {
     const operations: string[] = [];
     const writeDeferred = Promise.withResolvers<void>();
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("write:start");
         await writeDeferred.promise;
@@ -73,6 +74,7 @@ describe("SessionSummaryService", () => {
   it("serializes summary mutations before publishing invalidations", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("working:write");
       }),
@@ -110,6 +112,7 @@ describe("SessionSummaryService", () => {
   it("persists pull request state before publishing summary invalidation", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
       markRead: vi.fn(),
@@ -146,6 +149,7 @@ describe("SessionSummaryService", () => {
   it("publishes one invalidation after assistant-finished summary persistence", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(async () => {
         operations.push("assistant-finished:write");
@@ -184,6 +188,7 @@ describe("SessionSummaryService", () => {
   it("clears working state without recording latest assistant message for aborted turns", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("working-state:write");
       }),
@@ -222,6 +227,7 @@ describe("SessionSummaryService", () => {
   it("marks read before publishing summary invalidation", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
       markRead: vi.fn(async () => {

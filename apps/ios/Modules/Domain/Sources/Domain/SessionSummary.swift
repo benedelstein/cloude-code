@@ -19,6 +19,9 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
     public let provider: AgentProviderID?
     public let title: String?
     public let archived: Bool
+    /// "preparing" while session setup is in progress or blocked; "ready" once
+    /// the session accepts messages. Nil for summaries cached before this field existed.
+    public let status: String?
     public let workingState: String
     public let pushedBranch: String?
     public let pullRequest: PullRequest?
@@ -35,6 +38,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         provider: AgentProviderID? = nil,
         title: String? = nil,
         archived: Bool,
+        status: String? = nil,
         workingState: String,
         pushedBranch: String? = nil,
         pullRequest: PullRequest? = nil,
@@ -50,6 +54,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         self.provider = provider
         self.title = title
         self.archived = archived
+        self.status = status
         self.workingState = workingState
         self.pushedBranch = pushedBranch
         self.pullRequest = pullRequest

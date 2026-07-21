@@ -25,6 +25,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     archived: 0,
     access_blocked_at: null,
     access_block_reason: null,
+    status: "ready",
     working_state: "idle",
     pushed_branch: null,
     pull_request_url: null,
