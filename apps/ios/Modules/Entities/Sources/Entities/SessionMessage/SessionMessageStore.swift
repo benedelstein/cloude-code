@@ -12,6 +12,7 @@ public final class SessionMessageStore {
     @ObservationIgnored private let cache: Cache?
     @ObservationIgnored private let entityStore: EntityStore<Model>
     @ObservationIgnored private var messageIDsBySessionID: [String: [String]] = [:]
+    @ObservationIgnored private var pendingWriteTask: Task<Void, Never>?
 
     public private(set) var loadedSessionIDs: Set<String> = []
 
@@ -27,9 +28,14 @@ public final class SessionMessageStore {
 
     /// Returns cached messages for a session, sorted by cached creation date.
     public func messages(sessionId: String) async throws -> [Domain.SessionMessage] {
+        try await records(sessionId: sessionId).map(\.message)
+    }
+
+    /// Returns cached message records, including in-progress turn identity.
+    public func records(sessionId: String) async throws -> [SessionMessageData] {
+        await pendingWriteTask?.value
         if let models = modelsFromMemory(sessionId: sessionId) {
-            let messages = models.map(\.message)
-            return messages
+            return models.map(\.snapshot)
         }
 
         do {
@@ -43,8 +49,7 @@ public final class SessionMessageStore {
             index(models, for: sessionId)
             loadedSessionIDs.insert(sessionId)
 
-            let messages = models.map(\.message)
-            return messages
+            return models.map(\.snapshot)
         } catch {
             try? await deleteUnreadableSessionCache(sessionId: sessionId)
             return []
@@ -56,6 +61,7 @@ public final class SessionMessageStore {
         sessionId: String,
         with messages: [Domain.SessionMessage]
     ) async throws {
+        await pendingWriteTask?.value
         guard let cache else {
             let models = entityStore.putMemory(snapshots(for: messages, sessionId: sessionId))
             index(models, for: sessionId)
@@ -106,14 +112,27 @@ public final class SessionMessageStore {
     public func upsert(
         sessionId: String,
         message: Domain.SessionMessage,
+        streamingTurnUserMessageId: String? = nil,
         createdAtFallback: Date = Date()
     ) {
         let snapshot = snapshot(
             for: message,
             sessionId: sessionId,
+            streamingTurnUserMessageId: streamingTurnUserMessageId,
             fallback: createdAtFallback
         )
-        let newModels = entityStore.putSnapshotsToDisk([snapshot])
+        let newModels = entityStore.putMemory([snapshot])
+        if let cache {
+            let previousWriteTask = pendingWriteTask
+            pendingWriteTask = Task { @MainActor in
+                await previousWriteTask?.value
+                do {
+                    try await cache.put(SessionMessageEntity.self, snapshots: [snapshot])
+                } catch {
+                    Logger.error("disk write failed: \(error)")
+                }
+            }
+        }
         if loadedSessionIDs.contains(sessionId) {
             upsertIntoSessionIndex(newModels, for: sessionId)
         }
@@ -121,6 +140,7 @@ public final class SessionMessageStore {
 
     /// Deletes all cached messages for a session.
     public func deleteSessionMessages(sessionId: String) async throws {
+        await pendingWriteTask?.value
         let models = try await entityStore.getFromDisk(
             predicate: #Predicate<SessionMessageEntity> {
                 $0.sessionId == sessionId
@@ -142,6 +162,7 @@ public final class SessionMessageStore {
 
     /// Clears every cached message and session index from memory and disk.
     public func deleteAll() async throws {
+        await pendingWriteTask?.value
         loadedSessionIDs.removeAll()
         messageIDsBySessionID.removeAll()
         try await entityStore.deleteAll()
@@ -189,12 +210,14 @@ public final class SessionMessageStore {
     private func snapshot(
         for message: Domain.SessionMessage,
         sessionId: String,
+        streamingTurnUserMessageId: String? = nil,
         fallback: Date
     ) -> SessionMessageData {
         SessionMessageData(
             sessionId: sessionId,
             createdAt: message.createdAt ?? fallback,
-            message: message
+            message: message,
+            streamingTurnUserMessageId: streamingTurnUserMessageId
         )
     }
 

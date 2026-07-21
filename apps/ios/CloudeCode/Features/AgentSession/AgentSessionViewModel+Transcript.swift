@@ -13,7 +13,7 @@ extension AgentSessionViewModel {
         )
     }
 
-    func applyAgentFinish(_ message: SessionMessage) {
+    func applyAgentFinish(_ message: SessionMessage) async {
         messageThrottler?.flush()
         // Mutate the streaming transcript row into the final assistant row instead
         // of inserting message:<server id>, which would replace the visible cell.
@@ -21,7 +21,14 @@ extension AgentSessionViewModel {
         upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
         if let session {
-            sessionMessageStore.upsert(sessionId: session.id, message: message)
+            do {
+                try await sessionMessageStore.replace(
+                    sessionId: session.id,
+                    with: orderedMessages
+                )
+            } catch {
+                Logger.warning("Failed to finalize session message cache:", error)
+            }
         }
         if message.role == .assistant {
             markReadIfNeeded(messageId: message.id)
@@ -229,13 +236,13 @@ extension AgentSessionViewModel {
             return
         }
         do {
-            let cachedMessages = try await sessionMessageStore.messages(sessionId: session.id)
-            guard !Task.isCancelled, !cachedMessages.isEmpty, messagesByID.isEmpty, !hasLoadedMessages else {
+            let cachedRecords = try await sessionMessageStore.records(sessionId: session.id)
+            guard !Task.isCancelled, !cachedRecords.isEmpty, messagesByID.isEmpty, !hasLoadedMessages else {
                 return
             }
 
             markdownRenderCache.reset()
-            rebuildTranscript(from: cachedMessages)
+            rebuildTranscript(from: cachedRecords)
             hasLoadedMessages = true
         } catch {
             Logger.warning("Failed to load cached session messages:", error)
@@ -305,6 +312,14 @@ extension AgentSessionViewModel {
             message: message,
             isStreaming: true
         )
+        guard let session, let streamingTurnUserMessageID else {
+            return
+        }
+        sessionMessageStore.upsert(
+            sessionId: session.id,
+            message: message,
+            streamingTurnUserMessageId: streamingTurnUserMessageID
+        )
     }
 
     func clearStreamingState(removeActiveTranscript: Bool) {
@@ -331,36 +346,6 @@ extension AgentSessionViewModel {
                 isStreaming: row.isStreaming
             )
         }
-    }
-
-    /// Rebuilds rows and content from an ordered canonical message list
-    /// (server snapshot or disk cache).
-    func rebuildTranscript(from messages: [SessionMessage]) {
-        // transcriptRowID(for:) consults the outgoing rows, so rows keep their
-        // ids across the rebuild.
-        transcriptRows = messages.map { message in
-            TranscriptRow(
-                id: transcriptRowID(for: message),
-                messageID: message.id,
-                isStreaming: false
-            )
-        }
-        messagesByID = Dictionary(messages.map { ($0.id, $0) }) { _, latest in latest }
-        // The rebuilt rows are all non-streaming, so a retained streaming row id
-        // would dangle and make the next applyAgentFinish append a duplicate row.
-        streamingTranscriptRowID = nil
-        rebuildTranscriptDisplayData()
-        assertTranscriptStateConsistency()
-    }
-
-    func activeStreamingTranscriptRowID() -> String {
-        if let streamingTranscriptRowID {
-            return streamingTranscriptRowID
-        }
-
-        let rowID = "streaming-turn:\(streamGeneration)"
-        streamingTranscriptRowID = rowID
-        return rowID
     }
 
     func transcriptRowID(for message: SessionMessage) -> String {
@@ -404,7 +389,7 @@ extension AgentSessionViewModel {
         assertTranscriptStateConsistency()
     }
 
-    private func assertTranscriptStateConsistency() {
+    func assertTranscriptStateConsistency() {
         #if DEBUG
         for row in transcriptRows {
             assert(

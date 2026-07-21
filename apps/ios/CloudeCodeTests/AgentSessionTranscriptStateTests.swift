@@ -12,12 +12,12 @@ import Testing
 /// row/`messagesByID` consistency invariants.
 @MainActor
 struct AgentSessionTranscriptStateTests {
-    @Test func streamingRowBecomesFinalRowInPlace() throws {
+    @Test func streamingRowBecomesFinalRowInPlace() async throws {
         let viewModel = makeViewModel()
         viewModel.applyStreamingMessage(assistantMessage(id: "partial-1", text: "he"))
 
         let rowID = try #require(viewModel.transcriptRows.last).id
-        viewModel.applyAgentFinish(assistantMessage(id: "server-1", text: "hello"))
+        await viewModel.applyAgentFinish(assistantMessage(id: "server-1", text: "hello"))
 
         let row = try #require(viewModel.transcriptRows.first)
         #expect(viewModel.transcriptRows.count == 1)
@@ -43,7 +43,7 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.messagesByID["server-9"]?.isOptimisticUserMessage == false)
     }
 
-    @Test func snapshotRebuildMidStreamDoesNotDuplicateFinishedMessage() {
+    @Test func snapshotRebuildMidStreamDoesNotDuplicateFinishedMessage() async {
         let viewModel = makeViewModel()
         viewModel.applyStreamingMessage(assistantMessage(id: "server-2", text: "partial"))
 
@@ -52,7 +52,7 @@ struct AgentSessionTranscriptStateTests {
             userMessage(id: "u1"),
             assistantMessage(id: "server-2", text: "partial")
         ])
-        viewModel.applyAgentFinish(assistantMessage(id: "server-2", text: "final"))
+        await viewModel.applyAgentFinish(assistantMessage(id: "server-2", text: "final"))
 
         #expect(viewModel.transcriptRows.count == 2)
         #expect(viewModel.transcriptRows.filter { $0.messageID == "server-2" }.count == 1)
@@ -414,6 +414,7 @@ extension AgentSessionTranscriptStateTests {
     func liveState(
         provider: AgentProviderID,
         pendingUserMessage: SessionMessage? = nil,
+        activeTurnUserMessageID: String? = nil,
         setupRun: SessionClientState.SessionSetupRun? = nil
     ) -> SessionClientState {
         var state = SessionClientState.empty
@@ -424,6 +425,7 @@ extension AgentSessionTranscriptStateTests {
             maxTokens: 8_192
         )
         state.pendingUserMessage = pendingUserMessage
+        state.activeTurnUserMessageId = activeTurnUserMessageID
         state.sessionSetupRun = setupRun
         return state
     }

@@ -61,6 +61,8 @@ final class AgentSessionViewModel {
     // The active streaming row keeps this id from first chunk through final
     // message so collection view can update the existing cell in place.
     var streamingTranscriptRowID: String?
+    /// Durable user-message id that owns the active assistant transcript row.
+    var streamingTurnUserMessageID: String?
     @ObservationIgnored var messageThrottler: SchedulerLatestValueThrottler<SessionMessage>?
     @ObservationIgnored let markdownRenderCache = MarkdownRenderCache()
     @ObservationIgnored var pullRequestPollingTask: Task<Void, Never>?
@@ -226,6 +228,7 @@ extension AgentSessionViewModel {
             restoreLastSubmittedAttachments()
             resetPendingResponse()
         case .chatAccepted(let clientMessageId, let messageId):
+            streamingTurnUserMessageID = messageId
             acceptOptimisticUserMessage(
                 clientMessageId: clientMessageId,
                 messageId: messageId
@@ -241,7 +244,7 @@ extension AgentSessionViewModel {
         case .agentChunks(let chunks, let messageMetadata):
             await applyAgentChunks(chunks, messageMetadata: messageMetadata)
         case .agentFinish(let message):
-            applyAgentFinish(message)
+            await applyAgentFinish(message)
         case .userMessage(let message):
             applyUserMessage(message)
         case .agentReady:
@@ -310,8 +313,25 @@ extension AgentSessionViewModel {
             in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
         markdownRenderCache.reset()
-        rebuildTranscript(from: snapshotMessages)
         replaceStreamAccumulator()
+        if let session {
+            do {
+                // Keep the server-accepted pending user message, but clear the
+                // provisional assistant before replaying the server WAL.
+                try await sessionMessageStore.replace(
+                    sessionId: session.id,
+                    with: snapshotMessages
+                )
+            } catch {
+                Logger.warning("Failed to replace session message cache:", error)
+            }
+        }
+        rebuildTranscriptForSync(
+            from: snapshotMessages,
+            activeTurnUserMessageID: snapshot.activeTurnUserMessageId,
+            hasPendingChunks: !snapshot.pendingChunks.isEmpty
+        )
+        applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         if snapshot.pendingChunks.isEmpty {
             clearStreamingState(removeActiveTranscript: true)
         } else {
@@ -320,18 +340,7 @@ extension AgentSessionViewModel {
                 messageMetadata: snapshot.pendingMessageMetadata
             )
         }
-        applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
         markLatestAssistantMessageRead(in: snapshotMessages)
-        if let session {
-            do {
-                try await sessionMessageStore.replace(
-                    sessionId: session.id,
-                    with: snapshot.messages
-                )
-            } catch {
-                Logger.warning("Failed to replace session message cache:", error)
-            }
-        }
     }
 
     private func applyAgentChunks(
@@ -389,6 +398,7 @@ extension AgentSessionViewModel {
         messageThrottler = nil
         streamGeneration += 1
         clearStreamingState(removeActiveTranscript: true)
+        streamingTurnUserMessageID = nil
         clientState.activeTurnUserMessageId = nil
         isSending = false
         isCreatingSession = false
@@ -399,7 +409,8 @@ extension AgentSessionViewModel {
 
     private func applyActiveTurnUserMessageId(_ userMessageId: String?) {
         clientState.activeTurnUserMessageId = userMessageId
-        if userMessageId != nil {
+        if let userMessageId {
+            streamingTurnUserMessageID = userMessageId
             hasSeenServerActiveTurn = true
             return
         }

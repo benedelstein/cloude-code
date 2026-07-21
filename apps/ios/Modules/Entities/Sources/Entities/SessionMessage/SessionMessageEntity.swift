@@ -13,6 +13,7 @@ public final class SessionMessageEntity: Entity {
     var sessionId: String
     var createdAt: Date
     var messageData: Data
+    var streamingTurnUserMessageId: String?
 
     /// Creates a persistence row from a session message snapshot.
     public init(_ snapshot: SessionMessageData) {
@@ -21,6 +22,7 @@ public final class SessionMessageEntity: Entity {
         sessionId = snapshot.sessionId
         createdAt = snapshot.createdAt
         messageData = Self.encode(snapshot.message)
+        streamingTurnUserMessageId = snapshot.streamingTurnUserMessageId
     }
 
     /// Updates this persistence row from a session message snapshot.
@@ -29,6 +31,7 @@ public final class SessionMessageEntity: Entity {
         sessionId = snapshot.sessionId
         createdAt = snapshot.createdAt
         messageData = Self.encode(snapshot.message)
+        streamingTurnUserMessageId = snapshot.streamingTurnUserMessageId
     }
 
     /// Decodes a persistence row into a cache snapshot.
@@ -36,7 +39,8 @@ public final class SessionMessageEntity: Entity {
         SessionMessageData(
             sessionId: sessionId,
             createdAt: createdAt,
-            message: try JSONDecoder().decode(Domain.SessionMessage.self, from: messageData)
+            message: try JSONDecoder().decode(Domain.SessionMessage.self, from: messageData),
+            streamingTurnUserMessageId: streamingTurnUserMessageId
         )
     }
 
