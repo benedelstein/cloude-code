@@ -12,7 +12,8 @@ public final class SessionMessageStore {
     @ObservationIgnored private let cache: Cache?
     @ObservationIgnored private let entityStore: EntityStore<Model>
     @ObservationIgnored private var messageIDsBySessionID: [String: [String]] = [:]
-    @ObservationIgnored private var pendingWriteTask: Task<Void, Never>?
+    // Prevent an older partial write from landing after the final same-id message.
+    @ObservationIgnored private var lastWriteTask: Task<Void, Never>?
 
     public private(set) var loadedSessionIDs: Set<String> = []
 
@@ -33,7 +34,7 @@ public final class SessionMessageStore {
 
     /// Returns cached message records, including streaming state.
     public func records(sessionId: String) async throws -> [SessionMessageData] {
-        await pendingWriteTask?.value
+        await lastWriteTask?.value
         if let models = modelsFromMemory(sessionId: sessionId) {
             return models.map(\.snapshot)
         }
@@ -61,7 +62,7 @@ public final class SessionMessageStore {
         sessionId: String,
         with messages: [Domain.SessionMessage]
     ) async throws {
-        await pendingWriteTask?.value
+        await lastWriteTask?.value
         guard let cache else {
             let models = entityStore.putMemory(snapshots(for: messages, sessionId: sessionId))
             index(models, for: sessionId)
@@ -130,7 +131,7 @@ public final class SessionMessageStore {
 
     /// Deletes all cached messages for a session.
     public func deleteSessionMessages(sessionId: String) async throws {
-        await pendingWriteTask?.value
+        await lastWriteTask?.value
         let models = try await entityStore.getFromDisk(
             predicate: #Predicate<SessionMessageEntity> {
                 $0.sessionId == sessionId
@@ -152,7 +153,7 @@ public final class SessionMessageStore {
 
     /// Clears every cached message and session index from memory and disk.
     public func deleteAll() async throws {
-        await pendingWriteTask?.value
+        await lastWriteTask?.value
         loadedSessionIDs.removeAll()
         messageIDsBySessionID.removeAll()
         try await entityStore.deleteAll()
@@ -214,8 +215,8 @@ public final class SessionMessageStore {
     private func persist(_ snapshot: SessionMessageData) {
         guard let cache else { return }
 
-        let previousWriteTask = pendingWriteTask
-        pendingWriteTask = Task { @MainActor in
+        let previousWriteTask = lastWriteTask
+        lastWriteTask = Task { @MainActor in
             await previousWriteTask?.value
             do {
                 try await cache.put(SessionMessageEntity.self, snapshots: [snapshot])
