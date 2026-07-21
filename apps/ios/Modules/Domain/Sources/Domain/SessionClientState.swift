@@ -76,6 +76,7 @@ public extension SessionClientState {
     /// The server-reported readiness of a session.
     enum Status: RawRepresentable, Codable, Equatable, Sendable {
         case preparing
+        case setupFailed
         case ready
         case unknown(String)
 
@@ -83,6 +84,7 @@ public extension SessionClientState {
         public init(rawValue: String) {
             switch rawValue {
             case "preparing": self = .preparing
+            case "setup_failed": self = .setupFailed
             case "ready": self = .ready
             default: self = .unknown(rawValue)
             }
@@ -92,6 +94,7 @@ public extension SessionClientState {
         public var rawValue: String {
             switch self {
             case .preparing: "preparing"
+            case .setupFailed: "setup_failed"
             case .ready: "ready"
             case .unknown(let value): value
             }

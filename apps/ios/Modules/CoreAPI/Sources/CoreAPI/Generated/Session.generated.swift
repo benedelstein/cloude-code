@@ -529,6 +529,7 @@ public enum SessionSetupTaskStatus: RawRepresentable, Codable, Equatable, Sendab
 
 public enum SessionStatus: RawRepresentable, Codable, Equatable, Sendable {
     case preparing
+    case setupFailed
     case ready
     /// A value this client version doesn't recognize yet.
     case unknown(String)
@@ -536,6 +537,7 @@ public enum SessionStatus: RawRepresentable, Codable, Equatable, Sendable {
     public init(rawValue: String) {
         switch rawValue {
         case "preparing": self = .preparing
+        case "setup_failed": self = .setupFailed
         case "ready": self = .ready
         default: self = .unknown(rawValue)
         }
@@ -544,6 +546,7 @@ public enum SessionStatus: RawRepresentable, Codable, Equatable, Sendable {
     public var rawValue: String {
         switch self {
         case .preparing: "preparing"
+        case .setupFailed: "setup_failed"
         case .ready: "ready"
         case .unknown(let value): value
         }
@@ -573,7 +576,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var provider: ProviderId?
     public var title: String?
     public var archived: Bool
-    /// preparing: setup in progress or blocked; ready: accepting messages
+    /// preparing: setup in progress; setup_failed: setup blocked by a failure; ready: accepting messages
     public var status: SessionStatus?
     public var workingState: SessionWorkingState
     public var pushedBranch: String?

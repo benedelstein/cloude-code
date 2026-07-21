@@ -193,15 +193,16 @@ final class CacheTests: XCTestCase {
         let cache = try makeCache()
 
         try await cache.put(SessionSummaryEntity.self, snapshots: [
-            testSessionSummary("s1", title: "Draft"),
+            testSessionSummary("s1", title: "Draft", status: "preparing")
         ])
         try await cache.put(SessionSummaryEntity.self, snapshots: [
-            testSessionSummary("s1", title: "Updated"),
+            testSessionSummary("s1", title: "Updated", status: "setup_failed")
         ])
 
         let fetched = try await cache.fetch(SessionSummaryEntity.self, ids: ["s1"])
         XCTAssertEqual(fetched.count, 1)
         XCTAssertEqual(fetched[0].title, "Updated")
+        XCTAssertEqual(fetched[0].status, "setup_failed")
         XCTAssertEqual(fetched[0].pullRequest?.number, 1)
 
         try await cache.delete(SessionSummaryEntity.self, ids: ["s1"])
@@ -214,7 +215,7 @@ final class CacheTests: XCTestCase {
         let summaries = [
             testSessionSummary("known", provider: .claudeCode),
             testSessionSummary("missing", provider: nil),
-            testSessionSummary("future", provider: .unknown("future-provider")),
+            testSessionSummary("future", provider: .unknown("future-provider"))
         ]
 
         try await cache.put(SessionSummaryEntity.self, snapshots: summaries)

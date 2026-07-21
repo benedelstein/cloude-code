@@ -340,6 +340,11 @@ struct SessionMessagesTests {
         #expect(summary.domainSummary.id == "session_custom_ID")
     }
 
+    @Test func sessionSetupFailedStatusMapsToDomain() {
+        #expect(SessionClientState.Status(rawValue: "setup_failed") == .setupFailed)
+        #expect(SessionClientState.Status.setupFailed.rawValue == "setup_failed")
+    }
+
     @Test func sessionSummaryMapsKnownAbsentAndUnknownProviders() {
         func summary(provider: CoreAPI.ProviderId?) -> CoreAPI.SessionSummary {
             CoreAPI.SessionSummary(

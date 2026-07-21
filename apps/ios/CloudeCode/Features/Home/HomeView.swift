@@ -325,6 +325,11 @@ private struct SessionRow: View {
                         .styledFont(.caption)
                         .foregroundStyle(theme.secondaryLabelColor)
                         .lineLimit(1)
+                } else if session.status == "setup_failed" {
+                    Text("Setup failed")
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.errorRed)
+                        .lineLimit(1)
                 } else if let pushedBranch = session.pushedBranch {
                     Text(pushedBranch)
                         .styledFont(.caption)
@@ -407,6 +412,10 @@ private struct SessionAttentionSlot: View {
                     .controlSize(.small)
                     .tint(theme.secondaryLabelColor)
                     .accessibilityLabel("Setting up")
+            } else if session.status == "setup_failed" {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(theme.errorRed)
+                    .accessibilityLabel("Setup failed")
             } else if session.workingState == "responding" {
                 ProgressView()
                     .controlSize(.small)

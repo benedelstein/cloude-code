@@ -70,6 +70,7 @@ describe("session api schemas", () => {
       provider: "openai-codex",
       title: "Fix sidebar",
       archived: false,
+      status: "setup_failed",
       workingState: "responding",
       pushedBranch: "cloude/fix-sidebar-abcd",
       pullRequest: {

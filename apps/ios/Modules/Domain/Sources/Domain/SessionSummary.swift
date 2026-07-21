@@ -19,8 +19,8 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
     public let provider: AgentProviderID?
     public let title: String?
     public let archived: Bool
-    /// "preparing" while session setup is in progress or blocked; "ready" once
-    /// the session accepts messages. Nil for summaries cached before this field existed.
+    /// "preparing" while setup runs, "setup_failed" after a blocking failure,
+    /// and "ready" once the session accepts messages. Nil for older cached summaries.
     public let status: String?
     public let workingState: String
     public let pushedBranch: String?

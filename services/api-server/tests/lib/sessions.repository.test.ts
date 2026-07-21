@@ -89,6 +89,7 @@ describe("SessionsRepository sidebar state", () => {
     });
 
     expect(calls[0]?.query).toContain("provider_id");
+    expect(calls[0]?.query).toContain("'preparing'");
     expect(calls[0]?.bindings).toEqual([
       "session-1",
       "user-1",
@@ -100,6 +101,16 @@ describe("SessionsRepository sidebar state", () => {
       null,
       null,
     ]);
+  });
+
+  it("writes setup failures to the session summary row", async () => {
+    const { database, calls } = createMockDatabase();
+    const repository = new SessionsRepository(database);
+
+    await repository.updateStatus("session-1", "setup_failed");
+
+    expect(calls[0]?.query).toContain("UPDATE sessions SET status = ?");
+    expect(calls[0]?.bindings).toEqual(["setup_failed", "session-1"]);
   });
 
   it("maps sidebar summary columns from D1 rows", async () => {
