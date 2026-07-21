@@ -105,7 +105,10 @@ struct RepoPickerSheet: View {
 
     private var configureAccessRow: some View {
         Button {
-            Task { await draft.configureGitHubAccess(using: webAuthenticationSession) }
+            Task {
+                await draft.configureGitHubAccess(using: webAuthenticationSession)
+                scheduleSearch(query)
+            }
         } label: {
             HStack(spacing: style.gridSize) {
                 VStack(alignment: .leading, spacing: style.gridSize / 2) {

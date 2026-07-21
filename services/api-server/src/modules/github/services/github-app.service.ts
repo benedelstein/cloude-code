@@ -818,25 +818,13 @@ export class GitHubAppService {
   }
 
   /**
-   * Find the GitHub App installation for a user's repo using its numeric GitHub ID.
-   * @param userId Authenticated user id.
-   * @param repoId Numeric GitHub repository id.
-   * @param userAccessToken Current GitHub user access token.
-   * @returns The current installation id for the repository.
+   * Find the GitHub App installation for a repo using its numeric GitHub ID.
    */
   async findInstallationForRepoId(
-    userId: string,
     repoId: number,
     userAccessToken: string,
-  ): Promise<GitHubAppResult<{ id: number }>> {
-    // The user listing is authoritative when an app was reinstalled but a
-    // delete webhook was missed and the global installation tables are stale.
-    const userInstallationId = await this.userRepoAccessCacheRepository
-      .findAllowedInstallationId(userId, repoId);
-    if (userInstallationId !== null) {
-      return success({ id: userInstallationId });
-    }
-
+  ): Promise<GitHubAppResult<GitHubInstallationWithRepo>> {
+    // first check d1
     const installation = await this.installationRepository.findByRepoId(repoId);
 
     if (installation) {
