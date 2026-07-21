@@ -15,26 +15,31 @@ extension AgentSessionViewModel {
 
     func applyAgentFinish(_ message: SessionMessage) async {
         messageThrottler?.flush()
+        let streamingMessageID = streamingTranscriptRowID.flatMap { rowID in
+            transcriptRows.last { $0.id == rowID && $0.isStreaming }?.messageID
+        }
         // Mutate the streaming transcript row into the final assistant row instead
         // of inserting message:<server id>, which would replace the visible cell.
         let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
         upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
+        if message.role == .assistant {
+            markReadIfNeeded(messageId: message.id)
+        }
+        clearOptimisticUserMessageTracking()
+        // Invalidate queued accumulator callbacks before the cache write yields.
+        resetPendingResponse()
         if let session {
             do {
-                try await sessionMessageStore.replace(
+                try await sessionMessageStore.finalizeStreamingMessage(
                     sessionId: session.id,
-                    with: orderedMessages
+                    replacing: streamingMessageID,
+                    with: message
                 )
             } catch {
                 Logger.warning("Failed to finalize session message cache:", error)
             }
         }
-        if message.role == .assistant {
-            markReadIfNeeded(messageId: message.id)
-        }
-        clearOptimisticUserMessageTracking()
-        resetPendingResponse()
     }
 
     func applyUserMessage(_ message: SessionMessage) {

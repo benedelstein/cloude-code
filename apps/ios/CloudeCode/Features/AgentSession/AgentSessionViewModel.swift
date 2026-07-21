@@ -309,8 +309,9 @@ extension AgentSessionViewModel {
         if !hasLoadedMessages {
             hasLoadedMessages = true
         }
-        let snapshotMessages = messagesIncludingOptimisticUserMessages(
-            in: messagesIncludingPendingUserMessage(in: snapshot.messages)
+        let cacheMessages = messagesIncludingPendingUserMessage(in: snapshot.messages)
+        let transcriptMessages = messagesIncludingOptimisticUserMessages(
+            in: cacheMessages
         )
         markdownRenderCache.reset()
         replaceStreamAccumulator()
@@ -320,14 +321,14 @@ extension AgentSessionViewModel {
                 // provisional assistant before replaying the server WAL.
                 try await sessionMessageStore.replace(
                     sessionId: session.id,
-                    with: snapshotMessages
+                    with: cacheMessages
                 )
             } catch {
                 Logger.warning("Failed to replace session message cache:", error)
             }
         }
         rebuildTranscriptForSync(
-            from: snapshotMessages,
+            from: transcriptMessages,
             activeTurnUserMessageID: snapshot.activeTurnUserMessageId,
             hasPendingChunks: !snapshot.pendingChunks.isEmpty
         )
@@ -340,7 +341,7 @@ extension AgentSessionViewModel {
                 messageMetadata: snapshot.pendingMessageMetadata
             )
         }
-        markLatestAssistantMessageRead(in: snapshotMessages)
+        markLatestAssistantMessageRead(in: transcriptMessages)
     }
 
     private func applyAgentChunks(

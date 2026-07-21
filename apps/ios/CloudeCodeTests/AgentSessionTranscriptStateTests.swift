@@ -28,6 +28,36 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.messagesByID["server-1"]?.text == "hello")
     }
 
+    @Test func agentFinishInvalidatesQueuedStreamCallbacksBeforeCacheWrite() async throws {
+        let cache = try Cache(container: ModelContainerFactory().make(inMemory: true))
+        let messageStore = SessionMessageStore(cache: cache)
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [userMessage(id: "user-1")]
+        )
+        let viewModel = makeViewModel(sessionMessageStore: messageStore)
+        await viewModel.loadCachedMessages()
+        viewModel.streamingTurnUserMessageID = "user-1"
+        viewModel.applyStreamingMessage(assistantMessage(id: "partial-1", text: "Working"))
+        let generation = viewModel.streamGeneration
+        let queuedCallback = Task { @MainActor in
+            await Task.yield()
+            guard viewModel.streamGeneration == generation else {
+                return
+            }
+            viewModel.applyStreamingMessage(
+                assistantMessage(id: "partial-1", text: "Stale callback")
+            )
+        }
+
+        await viewModel.applyAgentFinish(assistantMessage(id: "final-1", text: "Complete"))
+        await queuedCallback.value
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["user-1", "final-1"])
+        #expect(viewModel.messagesByID["final-1"]?.text == "Complete")
+        #expect(viewModel.messagesByID["partial-1"] == nil)
+    }
+
     @Test func acceptOptimisticUserMessageKeepsRowID() throws {
         let viewModel = makeViewModel()
         viewModel.upsert(optimisticUserMessage(id: "client-1"))
@@ -185,7 +215,8 @@ struct AgentSessionTranscriptStateTests {
     }
 
     @Test func livePendingUserMessageSurvivesEmptySyncAndDurableConfirmation() async {
-        let viewModel = makeViewModel()
+        let messageStore = SessionMessageStore()
+        let viewModel = makeViewModel(sessionMessageStore: messageStore)
         let pendingMessage = userMessage(id: "server-1")
         viewModel.applyLiveState(liveState(
             provider: .claudeCode,
@@ -198,11 +229,30 @@ struct AgentSessionTranscriptStateTests {
             pendingMessageMetadata: nil,
             activeTurnUserMessageId: nil
         )))
+        let cachedMessages = try? await messageStore.messages(sessionId: "session-1")
         viewModel.applyLiveState(liveState(provider: .claudeCode))
         viewModel.applyUserMessage(pendingMessage)
 
         #expect(viewModel.transcriptRows.map(\.messageID) == ["server-1"])
         #expect(viewModel.messagesByID["server-1"]?.text == "hello")
+        #expect(cachedMessages?.map(\.id) == ["server-1"])
+    }
+
+    @Test func syncKeepsClientOptimisticMessageOutOfPersistentCache() async throws {
+        let messageStore = SessionMessageStore()
+        let viewModel = makeViewModel(sessionMessageStore: messageStore)
+        viewModel.upsert(optimisticUserMessage(id: "client-1"))
+
+        await viewModel.handle(.syncResponse(SessionSyncSnapshot(
+            messages: [],
+            pendingChunks: [],
+            pendingMessageMetadata: nil,
+            activeTurnUserMessageId: nil
+        )))
+        let cachedMessages = try await messageStore.messages(sessionId: "session-1")
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["client-1"])
+        #expect(cachedMessages.isEmpty)
     }
 
     @Test func abortedMetadataMarksAssistantMessageInterrupted() {

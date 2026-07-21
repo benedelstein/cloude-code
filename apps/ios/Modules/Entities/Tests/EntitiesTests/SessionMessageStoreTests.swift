@@ -101,25 +101,59 @@ final class SessionMessageStoreTests: XCTestCase {
         XCTAssertEqual(records.first?.streamingTurnUserMessageId, "user-1")
     }
 
-    func testServerReplacePrunesCachedStreamingProjection() async throws {
+    func testFinalizeStreamingMessageTargetsProjectionAndPreservesOtherRows() async throws {
+        let cache = try makeCache()
+        let store = SessionMessageStore(cache: cache)
+        try await store.replace(
+            sessionId: "s1",
+            with: [testSessionMessage("user", createdAt: "2026-06-11T00:00:01.000Z")]
+        )
+        store.upsert(
+            sessionId: "s1",
+            message: testSessionMessage(
+                "partial",
+                text: "In progress",
+                createdAt: "2026-06-11T00:00:02.000Z"
+            ),
+            streamingTurnUserMessageId: "user-1"
+        )
+
+        try await store.finalizeStreamingMessage(
+            sessionId: "s1",
+            replacing: "partial",
+            with: testSessionMessage(
+                "final",
+                text: "Complete",
+                createdAt: "2026-06-11T00:00:03.000Z"
+            )
+        )
+        let records = try await store.records(sessionId: "s1")
+
+        XCTAssertEqual(records.map(\.message.id), ["user", "final"])
+        XCTAssertNil(records.last?.streamingTurnUserMessageId)
+        let partialRows = try await cache.fetch(SessionMessageEntity.self, ids: ["partial"])
+        XCTAssertTrue(partialRows.isEmpty)
+    }
+
+    func testFinalizeStreamingMessageClearsProjectionMetadataWhenIDIsUnchanged() async throws {
         let cache = try makeCache()
         let store = SessionMessageStore(cache: cache)
         store.upsert(
             sessionId: "s1",
-            message: testSessionMessage("partial", text: "In progress"),
+            message: testSessionMessage("message", text: "In progress"),
             streamingTurnUserMessageId: "user-1"
         )
 
-        try await store.replace(
+        try await store.finalizeStreamingMessage(
             sessionId: "s1",
-            with: [testSessionMessage("final", text: "Complete")]
+            replacing: "message",
+            with: testSessionMessage("message", text: "Complete")
         )
         let records = try await store.records(sessionId: "s1")
 
-        XCTAssertEqual(records.map(\.message.id), ["final"])
+        XCTAssertEqual(records.map(\.message.id), ["message"])
+        XCTAssertEqual(records.first?.message.text, "Complete")
         XCTAssertNil(records.first?.streamingTurnUserMessageId)
-        let partialRows = try await cache.fetch(SessionMessageEntity.self, ids: ["partial"])
-        XCTAssertTrue(partialRows.isEmpty)
     }
 
     func testMetadataAccessorsReadKnownTimestampFields() {
