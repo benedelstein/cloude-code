@@ -194,4 +194,49 @@ describe("AgentTurnCoordinator", () => {
     expect(serverState.agentProcessId).toBe(42);
     expect(serverState.agentProcessRunId).toBe("process-run-1");
   });
+
+  it("aborts an active turn with no agent process during reconcile", async () => {
+    const {
+      clientState,
+      coordinator,
+      serverState,
+      updateWorkingState,
+    } = createHarness();
+    serverState.agentProcessId = null;
+    serverState.agentProcessRunId = null;
+    serverState.spriteName = "sprite-1";
+
+    await coordinator.reconcileActiveTurnIfNeeded();
+
+    expect(serverState.activeUserMessageId).toBeNull();
+    expect(clientState.activeTurn).toBeNull();
+    expect(updateWorkingState).toHaveBeenCalledWith("idle");
+  });
+
+  it("aborts an active turn with no sprite name during reconcile", async () => {
+    const { clientState, coordinator, serverState } = createHarness();
+    serverState.spriteName = null;
+
+    await coordinator.reconcileActiveTurnIfNeeded();
+
+    expect(serverState.activeUserMessageId).toBeNull();
+    expect(clientState.activeTurn).toBeNull();
+  });
+
+  it("reconciles an orphaned active turn only once per instance", async () => {
+    const { coordinator, serverState, updateWorkingState } = createHarness();
+    serverState.agentProcessId = null;
+    serverState.spriteName = "sprite-1";
+
+    await coordinator.reconcileActiveTurnIfNeeded();
+    expect(serverState.activeUserMessageId).toBeNull();
+
+    updateWorkingState.mockClear();
+    serverState.activeUserMessageId = "user-message-2";
+
+    await coordinator.reconcileActiveTurnIfNeeded();
+
+    expect(serverState.activeUserMessageId).toBe("user-message-2");
+    expect(updateWorkingState).not.toHaveBeenCalled();
+  });
 });

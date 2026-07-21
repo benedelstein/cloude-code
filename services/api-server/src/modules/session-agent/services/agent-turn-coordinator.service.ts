@@ -88,6 +88,7 @@ export class AgentTurnCoordinator {
   private lastSeenChunkSequence: number | null = null;
 
   private hasEnsuredRehydratedState = false;
+  private hasReconciledActiveTurn = false;
   private messageAccumulator = new MessageAccumulator(createLogger("MessageAccumulator"));
   private pendingMessageStartedAt: number | null = null;
 
@@ -110,8 +111,8 @@ export class AgentTurnCoordinator {
 
   /**
    * Rehydrates the in-memory accumulator from the WAL at most once per DO
-   * instance. If an active turn is marked but the sprite process is gone,
-   * commits the partial as aborted in the background.
+   * instance. Callers that need orphaned-turn recovery should then await
+   * `reconcileActiveTurnIfNeeded()` under `keepAliveWhile`.
    */
   ensureRehydratedState(): void {
     if (this.hasEnsuredRehydratedState) { return; }
@@ -159,14 +160,23 @@ export class AgentTurnCoordinator {
     }
 
     this.hasEnsuredRehydratedState = true;
+  }
 
-    if (serverState.activeUserMessageId) {
-      // if active user message id, then ... ?
-      this.logger.info("Reconciling active turn on DO restart");
-      this.reconcileActiveTurn().catch((error: unknown) => {
-        this.logger.error("reconcileActiveTurn failed", { error });
-      });
-    }
+  /**
+   * Rehydrates WAL state, then recovers an orphaned active turn when the
+   * sprite process is missing or never attached. Runs at most once per DO
+   * instance. Callers must wrap this in `keepAliveWhile` so the DO cannot
+   * hibernate mid-reconcile.
+   */
+  async reconcileActiveTurnIfNeeded(): Promise<void> {
+    this.ensureRehydratedState();
+    if (!this.getServerState().sessionId) { return; }
+    if (this.hasReconciledActiveTurn) { return; }
+    this.hasReconciledActiveTurn = true;
+
+    if (!this.getServerState().activeUserMessageId) { return; }
+    this.logger.info("Reconciling active turn on DO restart");
+    await this.reconcileActiveTurn();
   }
 
   /** Returns any pending (uncommitted) chunks for client sync. */
@@ -382,11 +392,30 @@ export class AgentTurnCoordinator {
    * Best-effort: if the sprite process for the active turn no longer exists,
    * commit the partial message as aborted. Pre-existing webhooks will still
    * be accepted if the process is alive.
+   *
+   * An active turn with no process id means the DO died between `beginTurn`
+   * and `attachProcessId` — there is nothing to attach, so abort immediately.
    */
   private async reconcileActiveTurn(): Promise<void> {
     const serverState = this.getServerState();
-    const { agentProcessId, spriteName } = serverState;
-    if (!agentProcessId || !spriteName) { return; }
+    const { agentProcessId, spriteName, activeUserMessageId } = serverState;
+    if (!activeUserMessageId) { return; }
+
+    if (!agentProcessId || !spriteName) {
+      this.logger.warn(
+        "Reconcile: active turn has no agent process; committing as aborted",
+        {
+          fields: {
+            activeUserMessageId,
+            hasAgentProcessId: agentProcessId !== null,
+            hasSpriteName: Boolean(spriteName),
+          },
+        },
+      );
+      this.commitAbortedMessage();
+      this.updatePartialState({ status: this.synthesizeStatus() });
+      return;
+    }
 
     const sprite = new WorkersSpriteClient(
       spriteName,

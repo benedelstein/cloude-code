@@ -30,10 +30,12 @@ function renderAgent({
   expiresAt = new Date(Date.now() + 60_000).toISOString(),
   refreshWebSocketToken,
   onMarkRead,
+  initialPendingUserMessage = null,
 }: {
   expiresAt?: string;
   refreshWebSocketToken?: () => void;
   onMarkRead?: (sessionId: string, messageId: string) => void;
+  initialPendingUserMessage?: import("ai").UIMessage | null;
 } = {}) {
   return renderHook(() =>
     useCloudflareAgent({
@@ -43,6 +45,7 @@ function renderAgent({
         expiresAt,
       },
       refreshWebSocketToken,
+      initialPendingUserMessage,
       onMarkRead,
     }),
   );
@@ -105,6 +108,57 @@ describe("useCloudflareAgent", () => {
 
     expect(result.current.isResponding).toBe(true);
     expect(result.current.isStreaming).toBe(false);
+  });
+
+  it("clears waiting on sync when restore has no active turn", () => {
+    const { result } = renderAgent({
+      initialPendingUserMessage: {
+        id: "pending-user-1",
+        role: "user",
+        parts: [{ type: "text", text: "hello" }],
+      },
+    });
+
+    expect(result.current.isResponding).toBe(true);
+
+    act(() => {
+      mockAgentState.options?.onMessage({
+        data: JSON.stringify({
+          type: "sync.response",
+          messages: [
+            {
+              id: "pending-user-1",
+              role: "user",
+              parts: [{ type: "text", text: "hello" }],
+            },
+            {
+              id: "assistant-1",
+              role: "assistant",
+              parts: [{ type: "text", text: "done" }],
+            },
+          ],
+          activeTurn: null,
+        }),
+      });
+    });
+
+    expect(result.current.isResponding).toBe(false);
+  });
+
+  it("clears local waiting immediately when stop is pressed", () => {
+    const { result } = renderAgent();
+
+    act(() => {
+      result.current.sendMessage({ content: "hello" });
+    });
+    expect(result.current.isResponding).toBe(true);
+
+    act(() => {
+      result.current.stop();
+    });
+
+    expect(latestSentMessage()).toEqual({ type: "operation.cancel" });
+    expect(result.current.isResponding).toBe(false);
   });
 
   it("keeps local responding state across unrelated server state updates", () => {

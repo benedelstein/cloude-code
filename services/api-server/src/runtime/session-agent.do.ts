@@ -379,9 +379,16 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
 
   async onStart(): Promise<void> {
     // NOTE: doing this here brecause we cant access this.name in the constructor. cf bug
+    // Rehydrate + reconcile before publishing activeTurn so clients never see
+    // a turn that died between beginTurn and attachProcessId.
+    this.setupRunService.repairOnStart();
+    try {
+      await this.keepAliveWhile(() => this.turnCoordinator.reconcileActiveTurnIfNeeded());
+    } catch (error) {
+      this.logger.error("Active turn reconcile on start failed", { error });
+    }
     // Reset transient ClientState fields on every restart so they never get
     // stuck from a previous instance's in-progress operation.
-    this.setupRunService.repairOnStart();
     this.updatePartialState({
       status: this.synthesizeStatus(),
       lastError: null,
@@ -497,8 +504,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
         activeUserMessageId: this.serverState.activeUserMessageId,
       },
     });
-    this.turnCoordinator.ensureRehydratedState();
-    await this.turnCoordinator.handleChunks(userMessageId, chunks);
+    await this.keepAliveWhile(async () => {
+      await this.turnCoordinator.reconcileActiveTurnIfNeeded();
+      await this.turnCoordinator.handleChunks(userMessageId, chunks);
+    });
     return true;
   }
 
@@ -506,7 +515,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
    * Webhook entry point for non-stream agent events. Dispatches on the
    * AgentEvent discriminator.
    */
-  handleWebhookEvent(token: string, event: AgentEvent): boolean {
+  async handleWebhookEvent(token: string, event: AgentEvent): Promise<boolean> {
     if (!this.isWebhookTokenValid(token)) {
       return false;
     }
@@ -514,8 +523,10 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.logger.info("handleWebhookEvent", {
       fields: { eventType: event.type },
     });
-    this.turnCoordinator.ensureRehydratedState();
-    this.turnCoordinator.handleEvent(event);
+    await this.keepAliveWhile(async () => {
+      await this.turnCoordinator.reconcileActiveTurnIfNeeded();
+      this.turnCoordinator.handleEvent(event);
+    });
     return true;
   }
 
@@ -532,11 +543,17 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
 
   // WebSocket lifecycle (Agents SDK)
 
-  onConnect(connection: Connection): void {
+  async onConnect(connection: Connection): Promise<void> {
     this.logger.debug("Client connected", {
       fields: { connectionId: connection.id },
     });
-    this.turnCoordinator.ensureRehydratedState();
+
+    // Finish reconcile before sync so restore cannot report a dead activeTurn.
+    try {
+      await this.keepAliveWhile(() => this.turnCoordinator.reconcileActiveTurnIfNeeded());
+    } catch (error) {
+      this.logger.error("Active turn reconcile on connect failed", { error });
+    }
 
     // Send initial connection state
     this.sendMessage(this.syncService.buildConnectedMessage(), connection);
@@ -819,7 +836,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     connection: Connection,
     message: ClientMessage,
   ): Promise<void> {
-    this.turnCoordinator.ensureRehydratedState();
+    await this.keepAliveWhile(() => this.turnCoordinator.reconcileActiveTurnIfNeeded());
     switch (message.type) {
       case "chat.message":
         await this.handleUserChatMessage(connection, message);

@@ -285,6 +285,14 @@ export function useCloudflareAgent({
           ? aiChunksFromWire(msg.pendingChunks)
           : undefined;
         applyServerActiveTurn(msg.activeTurn);
+        // Sync is authoritative for whether a turn is in flight. Clear the
+        // optimistic waiting flag when the server reports no active turn,
+        // otherwise restore after session creation can stay "Responding"
+        // forever (initialPendingUserMessage sets waiting before any
+        // non-null activeTurn is observed).
+        if (!msg.activeTurn && !(pendingChunks && pendingChunks.length > 0)) {
+          setWaitingForResponse(false);
+        }
         const latestAssistantMessageId = getLatestAssistantMessageId(synced);
         latestAssistantMessageIdRef.current = latestAssistantMessageId;
         if (latestAssistantMessageId) {
@@ -555,6 +563,9 @@ export function useCloudflareAgent({
 
   const stop = useCallback(() => {
     sendToAgent({ type: "operation.cancel" });
+    // Cancel may clear the turn without broadcasting agent.finish (empty
+    // accumulator). Drop local waiting immediately; server state follows.
+    setWaitingForResponse(false);
   }, [sendToAgent]);
 
   const selectedProvider = agentSettings?.provider ?? null;

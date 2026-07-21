@@ -82,7 +82,7 @@ export interface SessionAgentRpc {
     userMessageId: string,
     chunks: Array<{ sequence: number; chunk: UIMessageChunk }>,
   ): Promise<boolean>;
-  handleWebhookEvent(token: string, event: AgentEvent): boolean;
+  handleWebhookEvent(token: string, event: AgentEvent): Promise<boolean>;
   handleInit(request: InitSessionAgentRequest): Promise<HandleInitResult>;
   handleGetSession(): HandleGetSessionResult;
   handleGetMessages(): HandleGetMessagesResult;

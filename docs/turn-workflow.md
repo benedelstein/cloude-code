@@ -119,8 +119,12 @@ The WAL invariant is: pending chunks imply an active or recently active turn. On
 1. Replays `pending_message_chunks` into `MessageAccumulator`.
 2. Re-applies derived todos/plan state.
 3. Restores `lastSeenChunkSequence`.
-4. If an active process id exists, attempts to attach to that Sprite process.
-5. If the process is gone, commits the partial assistant message as aborted and clears active turn state.
+
+`SessionAgentDO.onStart` / `onConnect` then await `reconcileActiveTurnIfNeeded()` under `keepAliveWhile` before publishing `activeTurn` or sending `sync.response`:
+
+4. If an active turn has no process id (crash between `beginTurn` and `attachProcessId`), abort the turn and clear state.
+5. If an active process id exists, attempt to attach to that Sprite process.
+6. If the process is gone (404), commit the partial assistant message as aborted and clear active turn state.
 
 Duplicate webhook batches are deduped by the WAL sequence constraint. Missing chunks abort the active turn, surface `CHAT_MESSAGE_FAILED`, and terminate the active process.
 
