@@ -12,7 +12,7 @@ public final class SessionSummaryModel: EntityModel {
     public var provider: AgentProviderID?
     public var title: String?
     public var archived: Bool
-    public var status: String?
+    public var status: SessionStatus?
     public var workingState: String
     public var pushedBranch: String?
     public var pullRequest: Domain.SessionSummary.PullRequest?

@@ -168,7 +168,7 @@ extension AgentSessionViewModel {
             repoFullName: selectedRepo.fullName,
             title: response.title,
             archived: false,
-            status: "preparing",
+            status: .preparing,
             workingState: "responding",
             createdAt: now,
             updatedAt: now,

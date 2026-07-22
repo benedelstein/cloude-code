@@ -19,9 +19,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
     public let provider: AgentProviderID?
     public let title: String?
     public let archived: Bool
-    /// "preparing" while setup runs, "setup_failed" after a blocking failure,
-    /// and "ready" once the session accepts messages. Nil for older cached summaries.
-    public let status: String?
+    public let status: SessionStatus?
     public let workingState: String
     public let pushedBranch: String?
     public let pullRequest: PullRequest?
@@ -38,7 +36,7 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         provider: AgentProviderID? = nil,
         title: String? = nil,
         archived: Bool,
-        status: String? = nil,
+        status: SessionStatus? = nil,
         workingState: String,
         pushedBranch: String? = nil,
         pullRequest: PullRequest? = nil,

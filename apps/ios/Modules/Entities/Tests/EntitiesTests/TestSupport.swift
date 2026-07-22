@@ -11,7 +11,7 @@ func testSessionSummary(
     repoId: Int = 1,
     title: String? = "Session",
     provider: AgentProviderID? = nil,
-    status: String? = nil
+    status: SessionStatus? = nil
 ) -> Domain.SessionSummary {
     Domain.SessionSummary(
         id: id,

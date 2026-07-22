@@ -300,7 +300,7 @@ private struct SessionRow: View {
     }
 
     private var isPreparing: Bool {
-        session.status == "preparing"
+        session.status == .preparing
     }
 
     var body: some View {
@@ -321,11 +321,11 @@ private struct SessionRow: View {
                     .lineLimit(1)
 
                 if isPreparing {
-                    Text("Setting up…")
+                    Text("Initializing session")
                         .styledFont(.caption)
                         .foregroundStyle(theme.secondaryLabelColor)
                         .lineLimit(1)
-                } else if session.status == "setup_failed" {
+                } else if session.status == .setupFailed {
                     Text("Setup failed")
                         .styledFont(.caption)
                         .foregroundStyle(theme.errorRed)
@@ -407,12 +407,12 @@ private struct SessionAttentionSlot: View {
 
     var body: some View {
         Group {
-            if session.status == "preparing" {
+            if session.status == .preparing {
                 ProgressView()
                     .controlSize(.small)
                     .tint(theme.secondaryLabelColor)
-                    .accessibilityLabel("Setting up")
-            } else if session.status == "setup_failed" {
+                    .accessibilityLabel("Initializing session")
+            } else if session.status == .setupFailed {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(theme.errorRed)
                     .accessibilityLabel("Setup failed")
