@@ -162,7 +162,7 @@ extension CoreAPI.WireUIMessageChunk {
             return .start(messageId: payload.messageId, messageMetadata: payload.messageMetadata?.aiSDKValue)
         case .finish(let payload):
             return .finish(
-                finishReason: payload.finishReason.flatMap { SwiftAISDK.FinishReason(rawValue: $0.rawValue) },
+                finishReason: payload.finishReason?.aiSDKFinishReason,
                 messageMetadata: payload.messageMetadata?.aiSDKValue
             )
         case .abort(let payload):
@@ -180,10 +180,44 @@ extension SessionMessage {
     init(aiSDKMessage message: SwiftAISDK.UIMessage) {
         self.init(
             id: message.id,
-            role: Role(rawValue: message.role.rawValue),
+            role: message.role.domainRole,
             parts: message.parts.map(SessionMessage.Part.init),
             metadata: message.metadata.map(Domain.JSONValue.init)
         )
+    }
+}
+
+private extension CoreAPI.WireUIMessageChunk.FinishUIMessageChunk.FinishReason {
+    var aiSDKFinishReason: SwiftAISDK.FinishReason? {
+        switch self {
+        case .length:
+            .length
+        case .error:
+            .error
+        case .stop:
+            .stop
+        case .contentFilter:
+            .contentFilter
+        case .toolCalls:
+            .toolCalls
+        case .other:
+            .other
+        case .unknown:
+            nil
+        }
+    }
+}
+
+private extension SwiftAISDK.UIMessageRole {
+    var domainRole: SessionMessage.Role {
+        switch self {
+        case .system:
+            .system
+        case .user:
+            .user
+        case .assistant:
+            .assistant
+        }
     }
 }
 

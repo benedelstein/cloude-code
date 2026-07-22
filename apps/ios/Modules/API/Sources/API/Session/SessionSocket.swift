@@ -150,7 +150,7 @@ public actor SessionSocket {
         case .setupOutputChunks, .unknown:
             return nil
         case .connected(let event):
-            return .connected(status: .init(rawValue: event.status.rawValue))
+            return .connected(status: event.status.clientStateStatus)
         case .operationError(let event):
             return .operationError(SessionSocketOperationError(
                 code: event.code.rawValue,
