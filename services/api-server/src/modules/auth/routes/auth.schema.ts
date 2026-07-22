@@ -2,48 +2,132 @@ import { createRoute, z } from "@hono/zod-openapi";
 import {
   GitHubAuthUrlResponse,
   GitHubReauthTokenResponse,
+  GitHubSignInCompleteRequest,
+  GitHubSignInStartResponse,
+  NativeGitHubSignInCompleteResponse,
+  NativeGitHubSignInStartRequest,
   NativeLogoutRequest,
-  NativeLoginContinuationRequest,
-  NativeTokenRequest,
-  NativeTokenResponse,
   RefreshRequest,
   RefreshResponse,
   TokenRequest,
-  TokenResponse,
   UserInfo,
   LogoutResponse,
+  WebGitHubSignInCompleteResponse,
+  WebGitHubSignInStartRequest,
 } from "@repo/shared";
 
 const ErrorResponse = z.object({
   error: z.string(),
 });
 
-export const getGithubRoute = createRoute({
-  method: "get",
-  path: "/github",
+/**
+ * Sign-in failures carry a stable code so clients can distinguish "the OAuth
+ * callback has not landed yet" from "this attempt can never be completed".
+ */
+const SignInErrorResponse = z.object({
+  error: z.string(),
+  code: z.enum(["INVALID_SIGN_IN_ATTEMPT", "INVALID_ORIGIN", "INVALID_RETURN_TO"]),
+});
+
+const SignInNotReadyResponse = z.object({
+  error: z.string(),
+  code: z.literal("SIGN_IN_NOT_READY"),
+});
+
+export const postWebGithubSignInStartRoute = createRoute({
+  method: "post",
+  path: "/github/web/start",
   request: {
-    query: z.object({
-      // Optional origin to bounce back to after GitHub redirects to prod.
-      // Must match the configured web origin, a dev loopback origin, or the
-      // preview allowlist regex.
-      origin: z.string().optional(),
-      // Native clients only: a custom-scheme redirect URI (exact-matched
-      // against a hardcoded allowlist) that the OAuth callback 302s to.
-      // Mutually exclusive with `origin`.
-      redirectUri: z.string().optional(),
-      // Native clients can keep OAuth and GitHub App installation inside one
-      // browser session while retaining separate callback contracts.
-      continueToInstallation: z.coerce.boolean().optional(),
-    }),
+    body: {
+      content: { "application/json": { schema: WebGitHubSignInStartRequest } },
+    },
   },
   responses: {
     200: {
-      content: { "application/json": { schema: GitHubAuthUrlResponse } },
-      description: "GitHub OAuth authorization URL",
+      content: { "application/json": { schema: GitHubSignInStartResponse } },
+      description: "Web-bound GitHub sign-in attempt",
     },
     400: {
+      content: { "application/json": { schema: SignInErrorResponse } },
+      description: "Origin or return path is not allowed",
+    },
+  },
+});
+
+export const postWebGithubSignInCompleteRoute = createRoute({
+  method: "post",
+  path: "/github/web/complete",
+  request: {
+    body: {
+      content: { "application/json": { schema: GitHubSignInCompleteRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: WebGitHubSignInCompleteResponse } },
+      description: "Opaque web session token, user, and next redirect",
+    },
+    400: {
+      content: { "application/json": { schema: SignInErrorResponse } },
+      description: "Attempt is invalid, expired, already claimed, or not web-bound",
+    },
+    409: {
+      content: { "application/json": { schema: SignInNotReadyResponse } },
+      description: "Attempt is still awaiting OAuth",
+    },
+    500: {
       content: { "application/json": { schema: ErrorResponse } },
-      description: "Origin is not allowed",
+      description: "Signed-in user could not be loaded",
+    },
+  },
+});
+
+export const postNativeGithubSignInStartRoute = createRoute({
+  method: "post",
+  path: "/github/native/start",
+  request: {
+    body: {
+      content: { "application/json": { schema: NativeGitHubSignInStartRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: GitHubSignInStartResponse } },
+      description: "Native-bound GitHub sign-in attempt",
+    },
+    400: {
+      content: { "application/json": { schema: SignInErrorResponse } },
+      description: "Native redirect URI is not allowed",
+    },
+  },
+});
+
+export const postNativeGithubSignInCompleteRoute = createRoute({
+  method: "post",
+  path: "/github/native/complete",
+  request: {
+    body: {
+      content: { "application/json": { schema: GitHubSignInCompleteRequest } },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: NativeGitHubSignInCompleteResponse },
+      },
+      description: "Native access/refresh token pair and user",
+    },
+    400: {
+      content: { "application/json": { schema: SignInErrorResponse } },
+      description: "Attempt is invalid, expired, already claimed, or not native-bound",
+    },
+    409: {
+      content: { "application/json": { schema: SignInNotReadyResponse } },
+      description: "Attempt is still awaiting OAuth",
+    },
+    500: {
+      content: { "application/json": { schema: ErrorResponse } },
+      description: "Signed-in user could not be loaded",
     },
   },
 });
@@ -108,82 +192,6 @@ export const postGithubReauthTokenRoute = createRoute({
     403: {
       content: { "application/json": { schema: ErrorResponse } },
       description: "GitHub account does not match the current app user",
-    },
-  },
-});
-
-export const postTokenRoute = createRoute({
-  method: "post",
-  path: "/token",
-  request: {
-    body: {
-      content: { "application/json": { schema: TokenRequest } },
-    },
-  },
-  responses: {
-    200: {
-      content: { "application/json": { schema: TokenResponse } },
-      description: "Session token and user info",
-    },
-    400: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "Bad request",
-    },
-    403: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "User not allowed",
-    },
-    500: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "Failed to create user",
-    },
-  },
-});
-
-export const postNativeTokenRoute = createRoute({
-  method: "post",
-  path: "/native/token",
-  request: {
-    body: {
-      content: { "application/json": { schema: NativeTokenRequest } },
-    },
-  },
-  responses: {
-    200: {
-      content: { "application/json": { schema: NativeTokenResponse } },
-      description: "Native JWT access token, refresh token, and user info",
-    },
-    400: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "Bad request",
-    },
-    403: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "User not allowed",
-    },
-    500: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "Failed to create user",
-    },
-  },
-});
-
-export const postNativeLoginContinuationRoute = createRoute({
-  method: "post",
-  path: "/native/complete",
-  request: {
-    body: {
-      content: { "application/json": { schema: NativeLoginContinuationRequest } },
-    },
-  },
-  responses: {
-    200: {
-      content: { "application/json": { schema: NativeTokenResponse } },
-      description: "Native session completed after OAuth and optional GitHub App installation",
-    },
-    400: {
-      content: { "application/json": { schema: ErrorResponse } },
-      description: "Continuation is not ready, invalid, or expired",
     },
   },
 });

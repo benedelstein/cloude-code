@@ -33,10 +33,10 @@ struct RepoPickerSheet: View {
 
                 if showsEmptyContent {
                     Section {
-                        configureAccessRow
+                        manageRepositoriesRow
                     }
                 } else {
-                    configureAccessRow
+                    manageRepositoriesRow
                 }
             }
             .animation(style.fadeAnimation, value: isSearching)
@@ -83,7 +83,7 @@ struct RepoPickerSheet: View {
             EmptyStateView(
                 title: "No repositories found",
                 subtitle: query.isEmpty
-                    ? "Configure which repositories Cloude Code can access on GitHub."
+                    ? "Manage which repositories Cloude Code can access on GitHub."
                     : "Try a different search."
             ) {
                 Image(systemName: "folder")
@@ -103,10 +103,10 @@ struct RepoPickerSheet: View {
         }
     }
 
-    private var configureAccessRow: some View {
+    private var manageRepositoriesRow: some View {
         Button {
             Task {
-                await draft.configureGitHubAccess(using: webAuthenticationSession)
+                await draft.manageGitHubRepositories(using: webAuthenticationSession)
                 scheduleSearch(query)
             }
         } label: {
@@ -116,11 +116,11 @@ struct RepoPickerSheet: View {
                         .styledFont(.caption)
                         .foregroundStyle(theme.secondaryLabelColor)
 
-                    Text("Configure access on GitHub")
+                    Text("Manage repositories on GitHub")
                         .styledFont(.subheadline)
                         .foregroundStyle(theme.labelColor)
 
-                    if let error = draft.githubConfigurationError {
+                    if let error = draft.githubRepositoryManagementError {
                         Text(verbatim: error)
                             .styledFont(.caption)
                             .foregroundStyle(theme.errorRed)
@@ -129,7 +129,7 @@ struct RepoPickerSheet: View {
 
                 Spacer()
 
-                if draft.isConfiguringGitHub {
+                if draft.isManagingGitHubRepositories {
                     ProgressView()
                 } else {
                     Image(systemName: "arrow.up.right")
@@ -137,7 +137,7 @@ struct RepoPickerSheet: View {
                 }
             }
         }
-        .disabled(draft.isConfiguringGitHub)
+        .disabled(draft.isManagingGitHubRepositories)
     }
 
     private func loadingRows(count: Int) -> some View {

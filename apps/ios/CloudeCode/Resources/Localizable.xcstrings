@@ -64,12 +64,6 @@
     "Complete" : {
 
     },
-    "Configure access on GitHub" : {
-
-    },
-    "Configure which repositories Cloude Code can access on GitHub." : {
-
-    },
     "Connect" : {
 
     },
@@ -356,6 +350,12 @@
           }
         }
       }
+    },
+    "Manage repositories on GitHub" : {
+
+    },
+    "Manage which repositories Cloude Code can access on GitHub." : {
+
     },
     "Merged pull request" : {
 

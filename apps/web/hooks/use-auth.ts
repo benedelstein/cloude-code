@@ -2,36 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  GitHubAuthPopupMessage,
-  githubAuthPopupMessageType,
-} from "@/types/auth";
+  SIGN_IN_ERROR_PARAM,
+  signInErrorMessage,
+  signInStartUrl,
+} from "@/lib/sign-in-navigation";
 import {
   ApiError,
   AUTH_UNAUTHORIZED_EVENT,
   getCurrentUser,
-  getGitHubAuthUrl,
   logoutUser,
   type UserInfo,
 } from "@/lib/client-api";
-
-const OAUTH_POPUP_NAME = "github-auth";
-const INSTALL_POPUP_NAME = "github-install";
-
-function openCenteredPopup(
-  url: string,
-  name: string,
-  width: number,
-  height: number,
-): Window | null {
-  const left = window.screenX + (window.outerWidth - width) / 2;
-  const top = window.screenY + (window.outerHeight - height) / 2;
-
-  return window.open(
-    url,
-    name,
-    `width=${width},height=${height},left=${left},top=${top}`,
-  );
-}
 
 export function useAuth() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -50,6 +31,21 @@ export function useAuth() {
         }
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Same-tab sign-in reports failures by returning to this origin with a
+  // stable error code. Surface it once, then strip it so a refresh or a later
+  // share of the URL doesn't replay the error.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const message = signInErrorMessage(url.searchParams.get(SIGN_IN_ERROR_PARAM));
+    if (!message) {
+      return;
+    }
+
+    setAuthError(message);
+    url.searchParams.delete(SIGN_IN_ERROR_PARAM);
+    window.history.replaceState(null, "", url.toString());
   }, []);
 
   // React to any /api/* call returning 401 (e.g. GitHub App revoked, session
@@ -72,144 +68,16 @@ export function useAuth() {
     };
   }, []);
 
-  const login = useCallback(async () => {
+  /**
+   * Navigates the current tab to the BFF start route. No popup, opener, or
+   * polling is involved, so popup blockers cannot break sign-in; the BFF
+   * restores this page's path once the flow settles.
+   */
+  const login = useCallback(() => {
     setAuthError(null);
     setLoading(true);
-
-    // Open popup synchronously with user gesture to avoid Safari popup blocker.
-    // Safari blocks window.open() calls that happen after an await.
-    const popup = openCenteredPopup("about:blank", OAUTH_POPUP_NAME, 500, 700);
-
-    if (!popup) {
-      setAuthError("GitHub sign-in popup was blocked.");
-      setLoading(false);
-      return;
-    }
-
-    let url: string;
-    try {
-      const response = await getGitHubAuthUrl();
-      url = response.url;
-    } catch (error) {
-      console.error("Failed to get auth URL", error);
-      popup.close();
-      setAuthError("Failed to start GitHub sign-in.");
-      setLoading(false);
-      return;
-    }
-
-    popup.location.href = url;
-
-    let installPopup: Window | null = null;
-    let authFinished = false;
-    let finalized = false;
-
-    const cleanup = () => {
-      window.removeEventListener("message", handleMessage);
-      clearInterval(interval);
-      clearInterval(installInterval);
-    };
-
-    const finalizeLogin = async () => {
-      if (finalized) {
-        return;
-      }
-
-      finalized = true;
-
-      try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-        setAuthError(null);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          setUser(null);
-        } else {
-          console.error("Failed to fetch user:", err);
-          setUser(null);
-        }
-      } finally {
-        setLoading(false);
-        cleanup();
-      }
-    };
-
-    // Listen for the popup to signal auth completion
-    const handleMessage = (event: MessageEvent<unknown>) => {
-      if (event.origin !== window.location.origin) { return; }
-
-      const parsedMessage = GitHubAuthPopupMessage.safeParse(event.data);
-      if (!parsedMessage.success) {
-        return;
-      }
-
-      const message = parsedMessage.data;
-
-      switch (message.type) {
-        case githubAuthPopupMessageType.authSuccess:
-          authFinished = true;
-          if (message.hasInstallations === false && message.installUrl) {
-            installPopup = openCenteredPopup(
-              message.installUrl,
-              INSTALL_POPUP_NAME,
-              920,
-              780,
-            );
-
-            if (!installPopup) {
-              setAuthError("GitHub installation popup was blocked.");
-              void finalizeLogin();
-            }
-
-            return;
-          }
-
-          void finalizeLogin();
-          return;
-
-        case githubAuthPopupMessageType.installComplete:
-          void finalizeLogin();
-          return;
-
-        case githubAuthPopupMessageType.authError:
-          setAuthError(
-            message.error.length > 0
-              ? message.error
-              : "GitHub sign-in failed.",
-          );
-          setLoading(false);
-          cleanup();
-          return;
-
-        case githubAuthPopupMessageType.githubReauthSuccess:
-        case githubAuthPopupMessageType.githubReauthError:
-          return;
-
-        default: {
-          const exhaustiveCheck: never = message;
-          return exhaustiveCheck;
-        }
-      }
-    };
-    window.addEventListener("message", handleMessage);
-
-    // Fallback: if popup is closed without completing, check auth status
-    const interval = setInterval(() => {
-      if (popup?.closed) {
-        if (authFinished) {
-          clearInterval(interval);
-          return;
-        }
-
-        void finalizeLogin();
-      }
-    }, 500);
-
-    const installInterval = setInterval(() => {
-      if (installPopup?.closed) {
-        void finalizeLogin();
-      }
-    }, 500);
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(signInStartUrl(returnTo));
   }, []);
 
   const logout = useCallback(async () => {

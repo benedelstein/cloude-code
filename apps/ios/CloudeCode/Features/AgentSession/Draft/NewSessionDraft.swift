@@ -39,11 +39,11 @@ final class NewSessionDraft {
     private(set) var isLoadingRepos = false
     private(set) var errorMessage: String?
 
-    var isConfiguringGitHub: Bool {
+    var isManagingGitHubRepositories: Bool {
         githubInstallationStore.state == .installing
     }
 
-    var githubConfigurationError: String? {
+    var githubRepositoryManagementError: String? {
         guard case .failed(let message) = githubInstallationStore.state else {
             return nil
         }
@@ -108,8 +108,8 @@ final class NewSessionDraft {
         }
     }
 
-    /// Opens GitHub repository settings and refreshes the available repositories on return.
-    func configureGitHubAccess(using webSession: WebAuthenticationSession) async {
+    /// Opens GitHub App repository management and refreshes the listing on return.
+    func manageGitHubRepositories(using webSession: WebAuthenticationSession) async {
         await githubInstallationStore.install(using: webSession)
         await reloadRepos()
     }

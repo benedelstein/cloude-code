@@ -1698,8 +1698,7 @@
   },
   "GitHubAuthUrlResponse.autoFull": {
     "url": "sample",
-    "state": "sample",
-    "continuationToken": "sample"
+    "state": "sample"
   },
   "GitHubAuthUrlResponse.autoMinimal": {
     "url": "sample",
@@ -1713,35 +1712,31 @@
     "ok": true,
     "installUrl": "sample"
   },
+  "GitHubSignInCompleteRequest.autoFull": {
+    "attemptId": "sample",
+    "claimToken": "sample"
+  },
+  "GitHubSignInCompleteRequest.autoMinimal": {
+    "attemptId": "sample",
+    "claimToken": "sample"
+  },
+  "GitHubSignInStartResponse.autoFull": {
+    "authorizeUrl": "sample",
+    "attemptId": "sample",
+    "claimToken": "sample"
+  },
+  "GitHubSignInStartResponse.autoMinimal": {
+    "authorizeUrl": "sample",
+    "attemptId": "sample",
+    "claimToken": "sample"
+  },
   "LogoutResponse.autoFull": {
     "ok": true
   },
   "LogoutResponse.autoMinimal": {
     "ok": true
   },
-  "NativeLoginContinuationRequest.autoFull": {
-    "state": "sample",
-    "token": "sample"
-  },
-  "NativeLoginContinuationRequest.autoMinimal": {
-    "state": "sample",
-    "token": "sample"
-  },
-  "NativeLogoutRequest.autoFull": {
-    "refreshToken": "sample"
-  },
-  "NativeLogoutRequest.autoMinimal": {
-    "refreshToken": "sample"
-  },
-  "NativeTokenRequest.autoFull": {
-    "code": "sample",
-    "state": "sample"
-  },
-  "NativeTokenRequest.autoMinimal": {
-    "code": "sample",
-    "state": "sample"
-  },
-  "NativeTokenResponse.autoFull": {
+  "NativeGitHubSignInCompleteResponse.autoFull": {
     "accessToken": "sample",
     "refreshToken": "sample",
     "refreshTokenExpiresAt": "2026-06-10T12:00:00Z",
@@ -1750,11 +1745,9 @@
       "login": "sample",
       "name": "sample",
       "avatarUrl": "sample"
-    },
-    "hasInstallations": true,
-    "installUrl": "sample"
+    }
   },
-  "NativeTokenResponse.autoMinimal": {
+  "NativeGitHubSignInCompleteResponse.autoMinimal": {
     "accessToken": "sample",
     "refreshToken": "sample",
     "refreshTokenExpiresAt": "2026-06-10T12:00:00Z",
@@ -1763,9 +1756,19 @@
       "login": "sample",
       "name": null,
       "avatarUrl": null
-    },
-    "hasInstallations": true,
-    "installUrl": "sample"
+    }
+  },
+  "NativeGitHubSignInStartRequest.autoFull": {
+    "redirectUri": "sample"
+  },
+  "NativeGitHubSignInStartRequest.autoMinimal": {
+    "redirectUri": "sample"
+  },
+  "NativeLogoutRequest.autoFull": {
+    "refreshToken": "sample"
+  },
+  "NativeLogoutRequest.autoMinimal": {
+    "refreshToken": "sample"
   },
   "OpenAIAuthUrlResponse.autoFull": {
     "url": "sample",
@@ -1847,28 +1850,6 @@
     "code": "sample",
     "state": "sample"
   },
-  "TokenResponse.autoFull": {
-    "token": "sample",
-    "user": {
-      "id": "sample",
-      "login": "sample",
-      "name": "sample",
-      "avatarUrl": "sample"
-    },
-    "hasInstallations": true,
-    "installUrl": "sample"
-  },
-  "TokenResponse.autoMinimal": {
-    "token": "sample",
-    "user": {
-      "id": "sample",
-      "login": "sample",
-      "name": null,
-      "avatarUrl": null
-    },
-    "hasInstallations": true,
-    "installUrl": "sample"
-  },
   "UserInfo.autoFull": {
     "id": "sample",
     "login": "sample",
@@ -1880,6 +1861,34 @@
     "login": "sample",
     "name": null,
     "avatarUrl": null
+  },
+  "WebGitHubSignInCompleteResponse.autoFull": {
+    "token": "sample",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": "sample",
+      "avatarUrl": "sample"
+    },
+    "redirectUrl": "sample"
+  },
+  "WebGitHubSignInCompleteResponse.autoMinimal": {
+    "token": "sample",
+    "user": {
+      "id": "sample",
+      "login": "sample",
+      "name": null,
+      "avatarUrl": null
+    },
+    "redirectUrl": "sample"
+  },
+  "WebGitHubSignInStartRequest.autoFull": {
+    "origin": "sample",
+    "returnTo": "sample"
+  },
+  "WebGitHubSignInStartRequest.autoMinimal": {
+    "origin": "sample",
+    "returnTo": "sample"
   },
   "Branch.autoFull": {
     "name": "sample",

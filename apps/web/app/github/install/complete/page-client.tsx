@@ -2,29 +2,19 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  type GitHubInstallCompleteMessage,
-  githubAuthPopupMessageType,
-} from "@/types/auth";
+import { DEFAULT_SIGNED_IN_PATH } from "@/lib/sign-in-navigation";
 
+/**
+ * Fallback for a GitHub App setup callback that arrives without installation
+ * state — for example when the user installed from the repository picker's
+ * external link. Repository availability is read from the repository API, so
+ * there is nothing to finish here beyond returning to the app.
+ */
 export function GithubInstallCompletePageClient() {
   const router = useRouter();
 
   useEffect(() => {
-    if (window.opener && !window.opener.closed) {
-      const message: GitHubInstallCompleteMessage = {
-        type: githubAuthPopupMessageType.installComplete,
-      };
-
-      window.opener.postMessage(
-        message,
-        window.location.origin,
-      );
-      window.close();
-      return;
-    }
-
-    router.replace("/dashboard");
+    router.replace(DEFAULT_SIGNED_IN_PATH);
   }, [router]);
 
   return (

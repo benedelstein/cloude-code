@@ -134,76 +134,82 @@ final class SessionStore {
         }
     }
 
-    /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,
-    /// run OAuth and optional repository setup in one browser session, then
-    /// complete and adopt the native token pair (the events loop flips state).
-    func signIn(using webSession: WebAuthenticationSession) async {
+    /// GitHub sign-in through the system web-auth sheet.
+    ///
+    /// The server owns the flow: one presentation covers OAuth and, when the
+    /// user has no GitHub App installation, repository setup. The app only
+    /// starts an attempt and claims the completed identity. Attempt
+    /// credentials stay in this function's memory; nothing is persisted, so a
+    /// process termination simply abandons the attempt.
+    func signIn(using webSession: some WebAuthenticating) async {
         guard !isSigningIn else { return }
         isSigningIn = true
         signInError = nil
         defer { isSigningIn = false }
-        var page: AuthorizePage?
+        var startedAttempt: GitHubSignInAttempt?
         do {
-            let authorizePage = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
-            page = authorizePage
+            let attempt = try await signInAPI.startSignIn(redirectUri: oauthRedirectURI)
+            startedAttempt = attempt
             guard let scheme = URL(string: oauthRedirectURI)?.scheme else {
                 preconditionFailure("invalid OAUTH_REDIRECT_URI: \(oauthRedirectURI)")
             }
             let callback = try await webSession.authenticate(
-                using: authorizePage.url,
+                using: attempt.authorizeURL,
                 callbackURLScheme: scheme
             )
-            guard let callbackParameters = callbackParameters(from: callback, authorizePage: authorizePage) else {
-                Logger.error("no state in auth callback response")
+            let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
+            guard query?.first(where: { $0.name == "attemptId" })?.value == attempt.attemptId else {
+                Logger.error("sign-in callback did not match the started attempt")
                 signInError = "Sign-in failed. Please try again."
                 return
             }
-            let result = try await signInAPI.completeLogin(
-                state: callbackParameters.state,
-                token: callbackParameters.token
+            if let callbackError = query?.first(where: { $0.name == "error" })?.value {
+                Logger.error("sign-in callback reported \(callbackError)")
+                signInError = "Sign-in failed. Please try again."
+                return
+            }
+            let result = try await signInAPI.completeSignIn(
+                attemptId: attempt.attemptId,
+                claimToken: attempt.claimToken
             )
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             // OAuth may already have completed before repository setup was
             // dismissed or left awaiting approval. Recover that login without
             // turning repository access into an authentication requirement.
-            Logger.error("login canceled")
-            guard let page, let continuationToken = page.continuationToken else { return }
-            if let result = await recoverCompletedLogin(
-                state: page.state,
-                token: continuationToken
-            ) {
-                await coordinator.adopt(result.session)
-            }
+            Logger.debug("web-auth session dismissed")
+            guard let startedAttempt else { return }
+            await recoverDismissedSignIn(startedAttempt)
         } catch {
             Logger.error(error.localizedDescription)
             signInError = "Sign-in failed. Please try again."
         }
     }
 
-    private func callbackParameters(
-        from callback: URL,
-        authorizePage: AuthorizePage
-    ) -> (state: String, token: String)? {
-        let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
-        guard let returnedState = query?.first(where: { $0.name == "state" })?.value,
-            returnedState == authorizePage.state,
-            let continuationToken = authorizePage.continuationToken
-        else {
-            return nil
+    /// Claims an attempt after the browser was dismissed.
+    ///
+    /// `SIGN_IN_NOT_READY` means the attempt is still awaiting OAuth. That is
+    /// normally an ordinary cancellation, so it stays silent — but the OAuth
+    /// callback can also still be in flight, hence the short bounded retry.
+    private func recoverDismissedSignIn(_ attempt: GitHubSignInAttempt) async {
+        for remainingAttempts in stride(from: Self.notReadyRetryCount, through: 0, by: -1) {
+            do {
+                let result = try await signInAPI.completeSignIn(
+                    attemptId: attempt.attemptId,
+                    claimToken: attempt.claimToken
+                )
+                await coordinator.adopt(result.session)
+                return
+            } catch let error as APIError where error.isSignInNotReady {
+                guard remainingAttempts > 0 else { return }
+                try? await Task.sleep(for: .milliseconds(200))
+            } catch {
+                Logger.error(error.localizedDescription)
+                signInError = "Sign-in failed. Please try again."
+                return
+            }
         }
-        return (returnedState, continuationToken)
     }
 
-    private func recoverCompletedLogin(state: String, token: String) async -> SignInResult? {
-        try? await Task.retrying(
-            maxAttempts: 3,
-            backoff: .constant(.milliseconds(200)),
-            priority: .userInitiated,
-            shouldRetry: { _ in true },
-            operation: { [signInAPI] in
-                try await signInAPI.completeLogin(state: state, token: token)
-            }
-        ).value
-    }
+    private static let notReadyRetryCount = 2
 }

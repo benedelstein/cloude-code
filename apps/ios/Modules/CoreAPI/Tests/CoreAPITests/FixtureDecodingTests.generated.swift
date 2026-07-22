@@ -815,6 +815,22 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(GitHubReauthTokenResponse.self, key: "GitHubReauthTokenResponse.autoMinimal")
     }
 
+    @Test func gitHubSignInCompleteRequestAutoFull() throws {
+        try assertAutoRoundTrip(GitHubSignInCompleteRequest.self, key: "GitHubSignInCompleteRequest.autoFull")
+    }
+
+    @Test func gitHubSignInCompleteRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(GitHubSignInCompleteRequest.self, key: "GitHubSignInCompleteRequest.autoMinimal")
+    }
+
+    @Test func gitHubSignInStartResponseAutoFull() throws {
+        try assertAutoRoundTrip(GitHubSignInStartResponse.self, key: "GitHubSignInStartResponse.autoFull")
+    }
+
+    @Test func gitHubSignInStartResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(GitHubSignInStartResponse.self, key: "GitHubSignInStartResponse.autoMinimal")
+    }
+
     @Test func logoutResponseAutoFull() throws {
         try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoFull")
     }
@@ -823,12 +839,20 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(LogoutResponse.self, key: "LogoutResponse.autoMinimal")
     }
 
-    @Test func nativeLoginContinuationRequestAutoFull() throws {
-        try assertAutoRoundTrip(NativeLoginContinuationRequest.self, key: "NativeLoginContinuationRequest.autoFull")
+    @Test func nativeGitHubSignInCompleteResponseAutoFull() throws {
+        try assertAutoRoundTrip(NativeGitHubSignInCompleteResponse.self, key: "NativeGitHubSignInCompleteResponse.autoFull")
     }
 
-    @Test func nativeLoginContinuationRequestAutoMinimal() throws {
-        try assertAutoRoundTrip(NativeLoginContinuationRequest.self, key: "NativeLoginContinuationRequest.autoMinimal")
+    @Test func nativeGitHubSignInCompleteResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeGitHubSignInCompleteResponse.self, key: "NativeGitHubSignInCompleteResponse.autoMinimal")
+    }
+
+    @Test func nativeGitHubSignInStartRequestAutoFull() throws {
+        try assertAutoRoundTrip(NativeGitHubSignInStartRequest.self, key: "NativeGitHubSignInStartRequest.autoFull")
+    }
+
+    @Test func nativeGitHubSignInStartRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(NativeGitHubSignInStartRequest.self, key: "NativeGitHubSignInStartRequest.autoMinimal")
     }
 
     @Test func nativeLogoutRequestAutoFull() throws {
@@ -837,22 +861,6 @@ struct FixtureDecodingTests {
 
     @Test func nativeLogoutRequestAutoMinimal() throws {
         try assertAutoRoundTrip(NativeLogoutRequest.self, key: "NativeLogoutRequest.autoMinimal")
-    }
-
-    @Test func nativeTokenRequestAutoFull() throws {
-        try assertAutoRoundTrip(NativeTokenRequest.self, key: "NativeTokenRequest.autoFull")
-    }
-
-    @Test func nativeTokenRequestAutoMinimal() throws {
-        try assertAutoRoundTrip(NativeTokenRequest.self, key: "NativeTokenRequest.autoMinimal")
-    }
-
-    @Test func nativeTokenResponseAutoFull() throws {
-        try assertAutoRoundTrip(NativeTokenResponse.self, key: "NativeTokenResponse.autoFull")
-    }
-
-    @Test func nativeTokenResponseAutoMinimal() throws {
-        try assertAutoRoundTrip(NativeTokenResponse.self, key: "NativeTokenResponse.autoMinimal")
     }
 
     @Test func openAIAuthUrlResponseAutoFull() throws {
@@ -935,20 +943,28 @@ struct FixtureDecodingTests {
         try assertAutoRoundTrip(TokenRequest.self, key: "TokenRequest.autoMinimal")
     }
 
-    @Test func tokenResponseAutoFull() throws {
-        try assertAutoRoundTrip(TokenResponse.self, key: "TokenResponse.autoFull")
-    }
-
-    @Test func tokenResponseAutoMinimal() throws {
-        try assertAutoRoundTrip(TokenResponse.self, key: "TokenResponse.autoMinimal")
-    }
-
     @Test func userInfoAutoFull() throws {
         try assertAutoRoundTrip(UserInfo.self, key: "UserInfo.autoFull")
     }
 
     @Test func userInfoAutoMinimal() throws {
         try assertAutoRoundTrip(UserInfo.self, key: "UserInfo.autoMinimal")
+    }
+
+    @Test func webGitHubSignInCompleteResponseAutoFull() throws {
+        try assertAutoRoundTrip(WebGitHubSignInCompleteResponse.self, key: "WebGitHubSignInCompleteResponse.autoFull")
+    }
+
+    @Test func webGitHubSignInCompleteResponseAutoMinimal() throws {
+        try assertAutoRoundTrip(WebGitHubSignInCompleteResponse.self, key: "WebGitHubSignInCompleteResponse.autoMinimal")
+    }
+
+    @Test func webGitHubSignInStartRequestAutoFull() throws {
+        try assertAutoRoundTrip(WebGitHubSignInStartRequest.self, key: "WebGitHubSignInStartRequest.autoFull")
+    }
+
+    @Test func webGitHubSignInStartRequestAutoMinimal() throws {
+        try assertAutoRoundTrip(WebGitHubSignInStartRequest.self, key: "WebGitHubSignInStartRequest.autoMinimal")
     }
 
     @Test func branchAutoFull() throws {

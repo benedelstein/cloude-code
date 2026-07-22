@@ -4,12 +4,12 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserInfo } from "@repo/shared";
-import { decryptSessionToken } from "@/lib/session";
+import { decryptCookieValue } from "@/lib/session";
 import { getAuthenticatedUser, ServerApiError } from "@/lib/server-api";
 
 export const getSessionToken = cache(async (): Promise<string | null> => {
   const encryptedToken = (await cookies()).get("session_token")?.value;
-  return decryptSessionToken(encryptedToken);
+  return decryptCookieValue(encryptedToken);
 });
 
 /**

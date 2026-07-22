@@ -1,12 +1,13 @@
 import "server-only";
 
 import type {
+  GitHubSignInStartResponse,
   LogoutResponse,
   SessionInfoResponse,
   GitHubReauthTokenResponse,
-  TokenResponse,
   UserInfo,
   UserRepoEnvironmentResponse,
+  WebGitHubSignInCompleteResponse,
 } from "@repo/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -83,14 +84,25 @@ export async function getSession(
   return serverApiFetch(`/sessions/${sessionId}`, { token });
 }
 
-export async function exchangeGitHubCode(
-  code: string,
-  state: string,
-): Promise<TokenResponse> {
-  return serverApiFetch("/auth/token", {
+export async function startWebGitHubSignIn(
+  origin: string,
+  returnTo: string,
+): Promise<GitHubSignInStartResponse> {
+  return serverApiFetch("/auth/github/web/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, state }),
+    body: JSON.stringify({ origin, returnTo }),
+  });
+}
+
+export async function completeWebGitHubSignIn(
+  attemptId: string,
+  claimToken: string,
+): Promise<WebGitHubSignInCompleteResponse> {
+  return serverApiFetch("/auth/github/web/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attemptId, claimToken }),
   });
 }
 

@@ -16,6 +16,7 @@ interface OauthStateRow {
   redirect_origin: string | null;
   purpose: string | null;
   user_id: string | null;
+  sign_in_attempt_id: string | null;
 }
 
 /** Minimal stateful D1 fake: only the oauth_states SQL these flows touch. */
@@ -32,14 +33,21 @@ class MockD1 {
           },
           first: async () => this.execute(sql, args),
         }),
+        run: async () => {
+          this.execute(sql, []);
+          return { success: true };
+        },
       }),
     } as unknown as D1Database;
   }
 
   private execute(sql: string, args: unknown[]): unknown {
     if (sql.includes("INSERT INTO oauth_states")) {
-      const [state, expiresAt, codeVerifier, redirectOrigin, purpose, userId] = args as [
-        string, string, string | null, string | null, string | null, string | null,
+      const [
+        state, expiresAt, codeVerifier, redirectOrigin, purpose, userId, signInAttemptId,
+      ] = args as [
+        string, string, string | null, string | null,
+        string | null, string | null, string | null,
       ];
       this.oauthStates.set(state, {
         state,
@@ -48,7 +56,16 @@ class MockD1 {
         redirect_origin: redirectOrigin,
         purpose,
         user_id: userId,
+        sign_in_attempt_id: signInAttemptId,
       });
+      return null;
+    }
+    if (sql.includes("DELETE FROM oauth_states WHERE datetime(expires_at)")) {
+      for (const [key, row] of this.oauthStates) {
+        if (new Date(row.expires_at).getTime() <= Date.now()) {
+          this.oauthStates.delete(key);
+        }
+      }
       return null;
     }
     if (sql.includes("FROM oauth_states")) {
@@ -192,93 +209,5 @@ describe("native GitHub installation redirect", () => {
     });
     expect(repeatedCallback.ok).toBe(false);
     expect(clearedUserIds).toEqual(["user-1"]);
-  });
-});
-
-describe("AuthService native OAuth redirect", () => {
-  it("stores the native redirect URI on the state row", async () => {
-    const db = new MockD1();
-    const service = createService(db);
-
-    const result = await service.createGitHubAuthorizationUrl({
-      nativeRedirectUri: "cloudecode-dev://auth/callback",
-      ...requestFields,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) { return; }
-    const row = db.oauthStates.get(result.value.state);
-    expect(row?.redirect_origin).toBe("cloudecode-dev://auth/callback");
-    expect(row?.purpose).toBe("github_login");
-  });
-
-  it("rejects a redirect URI that is not allowlisted", async () => {
-    const service = createService(new MockD1());
-
-    const result = await service.createGitHubAuthorizationUrl({
-      nativeRedirectUri: "evil://auth/callback",
-      ...requestFields,
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) { return; }
-    expect(result.error.status).toBe(400);
-  });
-
-  it("rejects the dev redirect URI in production", async () => {
-    const service = createService(new MockD1(), "production");
-
-    const result = await service.createGitHubAuthorizationUrl({
-      nativeRedirectUri: "cloudecode-dev://auth/callback",
-      ...requestFields,
-    });
-
-    expect(result.ok).toBe(false);
-  });
-
-  it("302s the callback to the custom scheme with code and state", async () => {
-    const db = new MockD1();
-    const service = createService(db);
-    const started = await service.createGitHubAuthorizationUrl({
-      nativeRedirectUri: "cloudecode-dev://auth/callback",
-      ...requestFields,
-    });
-    expect(started.ok).toBe(true);
-    if (!started.ok) { return; }
-
-    const result = await service.createGitHubCallbackRedirect({
-      code: "code-1",
-      state: started.value.state,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) { return; }
-    expect(result.value.redirectUrl).toBe(
-      `cloudecode-dev://auth/callback?code=code-1&state=${started.value.state}`,
-    );
-    // Callback peeks; the state must survive for /auth/token to consume.
-    expect(db.oauthStates.has(started.value.state)).toBe(true);
-  });
-
-  it("keeps the web callback redirect unchanged when no redirect URI is used", async () => {
-    const db = new MockD1();
-    const service = createService(db);
-    const started = await service.createGitHubAuthorizationUrl({
-      requestedOrigin: "https://web.test",
-      ...requestFields,
-    });
-    expect(started.ok).toBe(true);
-    if (!started.ok) { return; }
-
-    const result = await service.createGitHubCallbackRedirect({
-      code: "code-1",
-      state: started.value.state,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) { return; }
-    expect(result.value.redirectUrl).toBe(
-      `https://web.test/api/auth/finalize?code=code-1&state=${started.value.state}`,
-    );
   });
 });

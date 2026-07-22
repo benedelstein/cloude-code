@@ -32,10 +32,11 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(Buffer.from(value, "base64"));
 }
 
-export async function encryptSessionToken(sessionToken: string): Promise<string> {
+/** AES-GCM encryption for any HttpOnly cookie value this app owns. */
+export async function encryptCookieValue(value: string): Promise<string> {
   const key = await importKey();
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const plaintext = new TextEncoder().encode(sessionToken);
+  const plaintext = new TextEncoder().encode(value);
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt({ name: ALGORITHM, iv }, key, plaintext),
   );
@@ -47,16 +48,16 @@ export async function encryptSessionToken(sessionToken: string): Promise<string>
   return encodeBase64(combined);
 }
 
-export async function decryptSessionToken(
-  encryptedToken: string | undefined,
+export async function decryptCookieValue(
+  encryptedValue: string | undefined,
 ): Promise<string | null> {
-  if (!encryptedToken) {
+  if (!encryptedValue) {
     return null;
   }
 
   try {
     const key = await importKey();
-    const combined = decodeBase64(encryptedToken);
+    const combined = decodeBase64(encryptedValue);
 
     if (combined.length <= IV_BYTES) {
       return null;
@@ -79,14 +80,14 @@ export async function decryptSessionToken(
 export async function getSessionTokenFromRequest(
   request: NextRequest,
 ): Promise<string | null> {
-  return decryptSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+  return decryptCookieValue(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 }
 
 export async function setSessionCookie(
   response: NextResponse,
   sessionToken: string,
 ): Promise<void> {
-  const encryptedToken = await encryptSessionToken(sessionToken);
+  const encryptedToken = await encryptCookieValue(sessionToken);
 
   response.cookies.set(SESSION_COOKIE_NAME, encryptedToken, {
     httpOnly: true,
