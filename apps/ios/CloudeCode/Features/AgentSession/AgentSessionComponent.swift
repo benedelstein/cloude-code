@@ -7,6 +7,8 @@ import SwiftUI
 protocol AgentSessionDependency: Dependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket
 
+    var authAPI: any AuthAPIProviding { get }
+
     var sessionsAPI: any SessionsAPIProviding { get }
 
     var reposAPI: any ReposAPIProviding { get }
@@ -33,9 +35,6 @@ protocol AgentSessionDependency: Dependency {
 
     @MainActor
     var newSessionPreferences: NewSessionPreferences { get }
-
-    @MainActor
-    var githubInstallationStore: GitHubInstallationStore { get }
 }
 
 /// Child of `HomeComponent`: agent sessions can only be opened from the
@@ -176,7 +175,17 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 reposAPI: dependency.reposAPI,
                 environmentsStore: dependency.repoEnvironmentsStore,
                 preferences: dependency.newSessionPreferences,
-                githubInstallationStore: dependency.githubInstallationStore
+                githubInstallationStore: githubInstallationStore
+            )
+        }
+    }
+
+    @MainActor
+    private var githubInstallationStore: GitHubInstallationStore {
+        shared {
+            GitHubInstallationStore(
+                authAPI: dependency.authAPI,
+                oauthRedirectURI: Constants.oauthRedirectURI
             )
         }
     }

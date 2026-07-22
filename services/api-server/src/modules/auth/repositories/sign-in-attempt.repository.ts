@@ -104,38 +104,6 @@ export class SignInAttemptRepository {
     return row ? toRecord(row) : null;
   }
 
-  /**
-   * Reads an unexpired attempt only when the presented claim-token hash
-   * matches, so a caller without the token learns nothing about its status.
-   */
-  async getUnexpiredByClaimTokenHash(
-    id: string,
-    claimTokenHash: string,
-  ): Promise<SignInAttemptRecord | null> {
-    const row = await this.database.prepare(
-      `SELECT id,
-              client_type,
-              claim_token_hash,
-              completion_code_hash,
-              status,
-              user_id,
-              completion_target,
-              return_to,
-              install_url,
-              expires_at
-       FROM sign_in_attempts
-       WHERE id = ? AND datetime(expires_at) > datetime('now')`,
-    )
-      .bind(id)
-      .first<SignInAttemptRow>();
-
-    if (!row || !timingSafeCompare(row.claim_token_hash, claimTokenHash)) {
-      return null;
-    }
-
-    return toRecord(row);
-  }
-
   /** Attaches the authenticated user before the final browser handoff. */
   async markIdentityReady(input: {
     id: string;

@@ -167,6 +167,7 @@ final class SessionStore {
                 claimToken: attempt.claimToken,
                 completionCode: completionCode
             )
+            userStore.putSnapshotsToDisk([result.user]) // listener will set the user to state
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             Logger.debug("web-auth session dismissed")

@@ -14,8 +14,6 @@ protocol HomeDependency: Dependency {
     var sessionSummaryStore: SessionSummaryStore { get }
     @MainActor
     var newSessionPreferences: NewSessionPreferences { get }
-    @MainActor
-    var githubInstallationStore: GitHubInstallationStore { get }
     var cache: Cache { get }
     var userSessionsSocket: UserSessionsSocket { get }
 }
@@ -88,11 +86,6 @@ final class HomeComponent: Component<HomeDependency> {
         shared {
             ModelCatalogStore(modelsAPI: dependency.modelsAPI)
         }
-    }
-
-    @MainActor
-    var githubInstallationStore: GitHubInstallationStore {
-        dependency.githubInstallationStore
     }
 
     @MainActor

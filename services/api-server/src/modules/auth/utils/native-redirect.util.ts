@@ -43,14 +43,6 @@ export function validateNativeRedirectUri(
   });
 }
 
-/** Quick shape check so the callback knows which validator owns a stored value. */
-export function looksLikeNativeRedirectUri(value: string): boolean {
-  return (
-    PRODUCTION_NATIVE_REDIRECT_URIS.includes(value)
-    || DEVELOPMENT_NATIVE_REDIRECT_URIS.includes(value)
-  );
-}
-
 /** Resolve the installation callback paired with an allowlisted OAuth callback. */
 export function nativeInstallRedirectUri(
   oauthRedirectUri: string,

@@ -161,8 +161,9 @@ identity.
    attempt matches, the code is nonempty, and the callback carries no `error`.
 5. `POST /auth/github/native/complete { attemptId, claimToken,
    completionCode }` returns the access/refresh pair and user.
-6. Ask `TokenCoordinator` to adopt and persist the `Session`.
-7. Handle the emitted `.signedIn` event and load the current user.
+6. Seed `UserStore` with the returned user, then ask `TokenCoordinator` to
+   adopt and persist the `Session`.
+7. Handle the emitted `.signedIn` event using that canonical cached user.
 
 ### Attempt credentials
 

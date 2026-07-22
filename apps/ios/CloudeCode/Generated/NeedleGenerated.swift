@@ -51,11 +51,6 @@ private final class HomeDependencyProvider: HomeDependency {
         applicationComponent.newSessionPreferences
     }
 
-    @MainActor
-    var githubInstallationStore: GitHubInstallationStore {
-        applicationComponent.githubInstallationStore
-    }
-
     var cache: Cache {
         applicationComponent.cache
     }
@@ -80,6 +75,10 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
 
     func makeSessionSocket(sessionId: String) -> SessionSocket {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
+    }
+
+    var authAPI: any AuthAPIProviding {
+        applicationComponent.authAPI
     }
 
     var sessionsAPI: any SessionsAPIProviding {
@@ -131,10 +130,6 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.newSessionPreferences
     }
 
-    @MainActor
-    var githubInstallationStore: GitHubInstallationStore {
-        homeComponent.githubInstallationStore
-    }
 }
 
 private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {

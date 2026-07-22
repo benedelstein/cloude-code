@@ -29,6 +29,7 @@ struct SessionStoreSignInTests {
         ])
         #expect(store.signInError == nil)
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
+        #expect(store.user?.login == "octocat")
     }
 
     @Test func mismatchedCallbackAttemptIdIsRejectedWithoutClaiming() async throws {

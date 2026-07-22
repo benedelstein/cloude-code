@@ -35,8 +35,9 @@ control at different points:
   installation URL. Abandoning setup cannot undo the login.
 - **Native** has no control point between browser navigations. The setup
   callback returns to the app's OAuth custom scheme carrying `attemptId`, and
-  the app claims there — or, if the browser is dismissed first, by calling
-  `POST /auth/github/native/complete` with the attempt it started.
+  the app claims there with the callback's one-time completion code. If the
+  browser is dismissed first, iOS stays signed out and starts a fresh attempt
+  when the user retries; it never completes without the final callback.
 
 Authenticated repository management is separate: the iOS client starts it with
 `POST /auth/github/install/start`, which creates a one-time state row bound to
