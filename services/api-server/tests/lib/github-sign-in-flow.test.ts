@@ -743,6 +743,22 @@ describe("GitHub installation callback", () => {
     expect(harness.clearedUserIds).toHaveLength(1);
   });
 
+  it("keeps a chained web return valid after the sign-in attempt expires", async () => {
+    const harness = createHarness({ github: { hasInstallations: async () => false } });
+    const attempt = await startWeb(harness, "/dashboard");
+    await runOAuthCallback(harness, attempt.attemptId);
+    const state = installStateFor(harness, attempt.attemptId);
+    expireAttempt(harness, attempt.attemptId);
+
+    const result = await harness.auth.createGitHubInstallationCallbackRedirect({ state });
+
+    expect(result).toEqual({
+      ok: true,
+      value: { redirectUrl: "https://web.test/dashboard" },
+    });
+    expect(harness.clearedUserIds).toHaveLength(1);
+  });
+
   it("returns a chained native flow to its custom scheme with the attempt ID", async () => {
     const harness = createHarness({ github: { hasInstallations: async () => false } });
     const attempt = await startNative(harness);

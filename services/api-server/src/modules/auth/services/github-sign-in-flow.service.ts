@@ -223,7 +223,7 @@ export class GitHubSignInFlowService {
       : await this.installationService.createSignInInstallationUrl({
         userId: user.id,
         signInAttemptId: attempt.id,
-        completionTarget: attempt.completionTarget,
+        returnTarget: this.finalReturnUrl(attempt),
       });
 
     await this.attempts.markIdentityReady({
@@ -284,8 +284,7 @@ export class GitHubSignInFlowService {
     return success({
       token: sessionToken,
       user: toUserInfo(user),
-      redirectUrl: attempt.installUrl
-        ?? new URL(attempt.returnTo ?? "/", attempt.completionTarget).toString(),
+      redirectUrl: attempt.installUrl ?? this.finalReturnUrl(attempt),
     });
   }
 
@@ -504,6 +503,13 @@ export class GitHubSignInFlowService {
       target.searchParams.set("error", errorCode);
     }
     return target.toString();
+  }
+
+  /** Returns the final client target after optional GitHub App installation. */
+  private finalReturnUrl(attempt: SignInAttemptRecord): string {
+    return attempt.clientType === "web"
+      ? new URL(attempt.returnTo ?? "/", attempt.completionTarget).toString()
+      : this.clientCallbackUrl(attempt, null);
   }
 
   private invalidAttempt(): AuthServiceResult<never> {

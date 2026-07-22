@@ -6,14 +6,11 @@ import {
   createExternalAuthState,
 } from "@/shared/services/external-auth-state.service";
 import type { AuthServiceResult, RequestLogFields } from "../types/auth.types";
-import { SignInAttemptRepository } from "../repositories/sign-in-attempt.repository";
 import { GITHUB_INSTALL_PURPOSE } from "../utils/github-auth-purpose";
 import {
   nativeInstallRedirectUri,
   validateNativeInstallRedirectUri,
-  validateNativeRedirectUri,
 } from "../utils/native-redirect.util";
-import { validateRedirectOrigin } from "../utils/preview-origin.util";
 
 /**
  * Installation callback state covers the GitHub App repository-selection and
@@ -31,16 +28,12 @@ const INSTALL_STATE_TTL_MS = 30 * 60 * 1000;
  * authority for what the installation actually reaches.
  */
 export class GitHubInstallationService {
-  private readonly signInAttemptRepository: SignInAttemptRepository;
-
   constructor(private readonly deps: {
     env: Env;
     getInstallUrl(): string;
     clearRepoListingSync(userId: string): Promise<void>;
     logger: Logger;
-  }) {
-    this.signInAttemptRepository = new SignInAttemptRepository(deps.env.DB);
-  }
+  }) {}
 
   /**
    * Authenticated repository management: a one-time installation URL paired
@@ -95,14 +88,14 @@ export class GitHubInstallationService {
   async createSignInInstallationUrl(params: {
     userId: string;
     signInAttemptId: string;
-    /** The attempt's already-validated completion target. */
-    completionTarget: string;
+    /** The attempt's already-validated final return target. */
+    returnTarget: string;
   }): Promise<string> {
     const state = crypto.randomUUID();
     await createExternalAuthState(this.deps.env, {
       state,
       expiresAt: this.expiresAt(),
-      redirectOrigin: params.completionTarget,
+      redirectOrigin: params.returnTarget,
       purpose: GITHUB_INSTALL_PURPOSE,
       userId: params.userId,
       signInAttemptId: params.signInAttemptId,
@@ -147,7 +140,7 @@ export class GitHubInstallationService {
     }
 
     const redirectResult = await this.resolveReturnUrl({
-      redirectOrigin: stateRecord.redirectOrigin,
+      returnTarget: stateRecord.redirectOrigin,
       signInAttemptId: stateRecord.signInAttemptId,
       state: params.state,
     });
@@ -163,13 +156,13 @@ export class GitHubInstallationService {
   }
 
   private async resolveReturnUrl(params: {
-    redirectOrigin: string;
+    returnTarget: string;
     signInAttemptId: string | null;
     state: string;
   }): Promise<AuthServiceResult<string>> {
     if (!params.signInAttemptId) {
       const redirectResult = validateNativeInstallRedirectUri(
-        params.redirectOrigin,
+        params.returnTarget,
         this.deps.env,
       );
       if (!redirectResult.ok) {
@@ -185,46 +178,10 @@ export class GitHubInstallationService {
       return success(target.toString());
     }
 
-    const attempt = await this.signInAttemptRepository.getUnexpired(
-      params.signInAttemptId,
-    );
-    if (!attempt || attempt.completionTarget !== params.redirectOrigin) {
-      return this.invalidState();
-    }
-
-    if (attempt.clientType === "native") {
-      const redirectResult = validateNativeRedirectUri(
-        attempt.completionTarget,
-        this.deps.env,
-      );
-      if (!redirectResult.ok) {
-        return failure({
-          domain: "auth",
-          status: 400,
-          code: "INVALID_ORIGIN",
-          message: redirectResult.error.message,
-        });
-      }
-      const target = new URL(redirectResult.value);
-      target.searchParams.set("attemptId", attempt.id);
-      return success(target.toString());
-    }
-
-    const originResult = validateRedirectOrigin(
-      attempt.completionTarget,
-      this.deps.env,
-    );
-    if (!originResult.ok) {
-      return failure({
-        domain: "auth",
-        status: 400,
-        code: "INVALID_ORIGIN",
-        message: originResult.error.message,
-      });
-    }
-    // The web session cookie was already established before this navigation,
-    // so the browser returns straight to the requested application route.
-    return success(new URL(attempt.returnTo ?? "/", originResult.value).toString());
+    // Chained targets were constructed from the attempt's validated client
+    // targets before this state was stored. The installation state owns this
+    // redirect for its full lifetime; the shorter sign-in attempt does not.
+    return success(params.returnTarget);
   }
 
   private expiresAt(): string {
