@@ -23,7 +23,7 @@ extension CoreAPI.SessionSummary {
             provider: provider.map { AgentProviderID(rawValue: $0.rawValue) },
             title: title,
             archived: archived,
-            status: status.map { Domain.SessionStatus(rawValue: $0.rawValue) },
+            status: status?.domainStatus,
             workingState: workingState.rawValue,
             pushedBranch: pushedBranch,
             pullRequest: pullRequest.map {
@@ -39,6 +39,21 @@ extension CoreAPI.SessionSummary {
             lastAssistantMessageId: lastAssistantMessageId,
             hasUnread: hasUnread
         )
+    }
+}
+
+private extension CoreAPI.SessionStatus {
+    var domainStatus: Domain.SessionStatus {
+        switch self {
+        case .preparing:
+            .preparing
+        case .setupFailed:
+            .setupFailed
+        case .ready:
+            .ready
+        case .unknown(let value):
+            .unknown(value)
+        }
     }
 }
 

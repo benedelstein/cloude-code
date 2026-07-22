@@ -344,7 +344,7 @@ struct SessionMessagesTests {
         #expect(SessionClientState.Status(rawValue: "setup_failed") == .setupFailed)
         #expect(SessionClientState.Status.setupFailed.rawValue == "setup_failed")
 
-        let summary = CoreAPI.SessionSummary(
+        var summary = CoreAPI.SessionSummary(
             id: "session-id",
             repoId: 1,
             repoFullName: "ben/cloude-code",
@@ -357,6 +357,9 @@ struct SessionMessagesTests {
         )
 
         #expect(summary.domainSummary.status == .setupFailed)
+
+        summary.status = .unknown("future-status")
+        #expect(summary.domainSummary.status == .unknown("future-status"))
     }
 
     @Test func sessionSummaryMapsKnownAbsentAndUnknownProviders() {
