@@ -11,7 +11,7 @@ swiftlint lint --strict --no-cache
 xcodebuild -project CloudeCode.xcodeproj -scheme CloudeCode -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO build
 ```
 
-SwiftLint runs in the app target build phase for Debug builds.
+SwiftLint runs in the app target build phase for every build. A missing SwiftLint installation fails the build.
 
 ## Documentation
 
@@ -42,3 +42,4 @@ or important considerations.
     }
     ```
     This prevents long class names and keeps features encapsulated.
+- Before running strict SwiftLint validation, run `swiftlint lint --fix` to autocorrect fixable violations.

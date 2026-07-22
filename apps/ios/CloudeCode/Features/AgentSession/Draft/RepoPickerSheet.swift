@@ -1,3 +1,4 @@
+import AuthenticationServices
 import CoreAPI
 import SwiftUI
 
@@ -5,6 +6,7 @@ struct RepoPickerSheet: View {
     @Environment(\.style) var style: Style
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
     let draft: NewSessionDraft
     @State private var query = ""
@@ -28,6 +30,14 @@ struct RepoPickerSheet: View {
                             .transition(style.fadeTransition)
                     }
                 }
+
+                if showsEmptyContent {
+                    Section {
+                        manageRepositoriesRow
+                    }
+                } else {
+                    manageRepositoriesRow
+                }
             }
             .animation(style.fadeAnimation, value: isSearching)
             .contentMargins(.top, 0, for: .scrollContent)
@@ -46,6 +56,12 @@ struct RepoPickerSheet: View {
             }
             .onChange(of: query) { _, newValue in
                 scheduleSearch(newValue)
+            }
+            .onChange(of: draft.repos) { _, repos in
+                guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return
+                }
+                visibleRepos = repos
             }
             .onDisappear {
                 searchTask?.cancel()
@@ -66,7 +82,9 @@ struct RepoPickerSheet: View {
         } else if visibleRepos.isEmpty {
             EmptyStateView(
                 title: "No repositories found",
-                subtitle: "Try a different search."
+                subtitle: query.isEmpty
+                    ? "Manage which repositories Cloude Code can access on GitHub."
+                    : "Try a different search."
             ) {
                 Image(systemName: "folder")
             }
@@ -85,6 +103,43 @@ struct RepoPickerSheet: View {
         }
     }
 
+    private var manageRepositoriesRow: some View {
+        Button {
+            Task {
+                await draft.manageGitHubRepositories(using: webAuthenticationSession)
+                scheduleSearch(query)
+            }
+        } label: {
+            HStack(spacing: style.gridSize) {
+                VStack(alignment: .leading, spacing: style.gridSize / 2) {
+                    Text("Don't see your repository?")
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+
+                    Text("Manage repositories on GitHub")
+                        .styledFont(.subheadline)
+                        .foregroundStyle(theme.labelColor)
+
+                    if let error = draft.githubRepositoryManagementError {
+                        Text(verbatim: error)
+                            .styledFont(.caption)
+                            .foregroundStyle(theme.errorRed)
+                    }
+                }
+
+                Spacer()
+
+                if draft.isManagingGitHubRepositories {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.up.right")
+                        .foregroundStyle(theme.secondaryLabelColor)
+                }
+            }
+        }
+        .disabled(draft.isManagingGitHubRepositories)
+    }
+
     private func loadingRows(count: Int) -> some View {
         ForEach(0 ..< count, id: \.self) { _ in
             RepoRow(
@@ -98,6 +153,10 @@ struct RepoPickerSheet: View {
 
     private var isInitialLoading: Bool {
         visibleRepos.isEmpty && (isSearching || draft.isLoadingRepos)
+    }
+
+    private var showsEmptyContent: Bool {
+        visibleRepos.isEmpty && !isInitialLoading
     }
 
     private func scheduleSearch(_ query: String) {

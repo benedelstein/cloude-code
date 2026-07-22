@@ -2,27 +2,26 @@ import CoreAPI
 import Domain
 import Foundation
 
-private struct GetGitHubAuthURL: APIRequest {
-    typealias Response = CoreAPI.GitHubAuthUrlResponse
+private struct PostNativeSignInStart: APIRequest {
+    typealias Body = CoreAPI.NativeGitHubSignInStartRequest
+    typealias Response = CoreAPI.GitHubSignInStartResponse
 
-    var redirectUri: String
+    var body: CoreAPI.NativeGitHubSignInStartRequest?
 
-    var path: String { "auth/github" }
-    var method: HTTPMethod { .get }
-    var queryItems: [URLQueryItem] {
-        [URLQueryItem(name: "redirectUri", value: redirectUri)]
-    }
+    var path: String { "auth/github/native/start" }
+    var method: HTTPMethod { .post }
+    // No auth header: this begins the flow that first obtains a session.
 }
 
-private struct PostToken: APIRequest {
-    typealias Body = CoreAPI.NativeTokenRequest
-    typealias Response = CoreAPI.NativeTokenResponse
+private struct PostNativeSignInComplete: APIRequest {
+    typealias Body = CoreAPI.GitHubSignInCompleteRequest
+    typealias Response = CoreAPI.NativeGitHubSignInCompleteResponse
 
-    var body: CoreAPI.NativeTokenRequest?
+    var body: CoreAPI.GitHubSignInCompleteRequest?
 
-    var path: String { "auth/native/token" }
+    var path: String { "auth/github/native/complete" }
     var method: HTTPMethod { .post }
-    // No auth header: this is how a session is first obtained.
+    // No auth header: the attempt's claim token is the credential.
 }
 
 private struct PostRefresh: APIRequest {
@@ -47,23 +46,55 @@ private struct PostNativeLogout: APIRequest {
     // No auth header: the refresh token in the body is the credential.
 }
 
-/// The GitHub authorize page to open in a web-auth session, plus the state
-/// nonce the callback must echo back.
+/// A page to open in a web-auth session, plus the state nonce its callback
+/// must echo back. Used by GitHub App repository management.
 public struct AuthorizePage: Sendable, Equatable {
     public let url: URL
     public let state: String
+
+    public init(url: URL, state: String) {
+        self.url = url
+        self.state = state
+    }
+}
+
+/// A server-owned GitHub sign-in attempt.
+///
+/// `attemptId` is non-secret and travels on the custom-scheme callback.
+/// `claimToken` authorizes issuing this app's session and must stay in memory
+/// for the active sign-in operation only. Completion also requires the
+/// callback-delivered code; neither secret may reach persistence or logs.
+public struct GitHubSignInAttempt: Sendable, Equatable {
+    public let authorizeURL: URL
+    public let attemptId: String
+    public let claimToken: String
+
+    public init(authorizeURL: URL, attemptId: String, claimToken: String) {
+        self.authorizeURL = authorizeURL
+        self.attemptId = attemptId
+        self.claimToken = claimToken
+    }
 }
 
 public struct SignInResult: Sendable {
     public let session: Session
     public let user: Domain.User
+
+    public init(session: Session, user: Domain.User) {
+        self.session = session
+        self.user = user
+    }
 }
 
-/// Sign-in via GitHub OAuth: fetch the authorize URL, then exchange the
-/// callback's code for a native token pair.
+/// GitHub sign-in: start a server-owned attempt, then claim the completed
+/// identity. The app never sees or exchanges a GitHub authorization code.
 public protocol SignInProviding: Sendable {
-    func authorizePage(redirectUri: String) async throws -> AuthorizePage
-    func exchangeCode(code: String, state: String) async throws -> SignInResult
+    func startSignIn(redirectUri: String) async throws -> GitHubSignInAttempt
+    func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult
 }
 
 /// Rotates a session's token pair via `POST /auth/native/refresh`.
@@ -87,16 +118,32 @@ public struct UnauthenticatedAuthAPI: UnauthenticatedAuthAPIProviding {
         self.client = client
     }
 
-    public func authorizePage(redirectUri: String) async throws -> AuthorizePage {
-        let response = try await client.fetch(GetGitHubAuthURL(redirectUri: redirectUri))
-        guard let url = URL(string: response.url) else {
+    public func startSignIn(redirectUri: String) async throws -> GitHubSignInAttempt {
+        let response = try await client.fetch(PostNativeSignInStart(
+            body: .init(redirectUri: redirectUri)
+        ))
+        guard let url = URL(string: response.authorizeUrl) else {
             throw APIError.decodingFailed(SignInResponseError.invalidAuthorizeURL)
         }
-        return AuthorizePage(url: url, state: response.state)
+        return GitHubSignInAttempt(
+            authorizeURL: url,
+            attemptId: response.attemptId,
+            claimToken: response.claimToken
+        )
     }
 
-    public func exchangeCode(code: String, state: String) async throws -> SignInResult {
-        let response = try await client.fetch(PostToken(body: .init(code: code, state: state)))
+    public func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult {
+        let response = try await client.fetch(PostNativeSignInComplete(
+            body: .init(
+                attemptId: attemptId,
+                claimToken: claimToken,
+                completionCode: completionCode
+            )
+        ))
         let session = try Session(
             nativeAccessToken: response.accessToken,
             refreshToken: response.refreshToken,
@@ -125,7 +172,7 @@ private enum SignInResponseError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .invalidAuthorizeURL:
-            return "Unparseable authorize URL in /auth/github response"
+            return "Unparseable authorize URL in /auth/github/native/start response"
         }
     }
 }

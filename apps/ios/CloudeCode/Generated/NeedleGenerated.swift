@@ -77,6 +77,10 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
         applicationComponent.makeSessionSocket(sessionId: sessionId)
     }
 
+    var authAPI: any AuthAPIProviding {
+        applicationComponent.authAPI
+    }
+
     var sessionsAPI: any SessionsAPIProviding {
         applicationComponent.sessionsAPI
     }
@@ -125,6 +129,7 @@ private final class AgentSessionDependencyProvider: AgentSessionDependency {
     var newSessionPreferences: NewSessionPreferences {
         applicationComponent.newSessionPreferences
     }
+
 }
 
 private func agentSessionDependencyFactory(_ component: NeedleFoundation.Scope) -> AnyObject {

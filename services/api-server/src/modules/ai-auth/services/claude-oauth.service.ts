@@ -12,9 +12,9 @@ import {
   generateCodeVerifier,
 } from "@/shared/utils/pkce";
 import {
-  consumeValidOauthState,
-  createOauthState,
-} from "@/shared/services/oauth-state.service";
+  consumeValidExternalAuthState,
+  createExternalAuthState,
+} from "@/shared/services/external-auth-state.service";
 
 const CLAUDE_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const CLAUDE_PROVIDER_ID = "claude-code";
@@ -204,7 +204,7 @@ export class ClaudeOAuthService {
     const codeChallenge = await computeCodeChallenge(codeVerifier);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    await createOauthState(this.env, { state, expiresAt, codeVerifier });
+    await createExternalAuthState(this.env, { state, expiresAt, codeVerifier });
 
     const params = new URLSearchParams({
       code: "true",
@@ -250,7 +250,7 @@ export class ClaudeOAuthService {
       );
     }
 
-    const stateRow = await consumeValidOauthState(this.env, params.state);
+    const stateRow = await consumeValidExternalAuthState(this.env, params.state);
     if (!stateRow?.codeVerifier) {
       throw new ClaudeOAuthError(
         "CLAUDE_INVALID_STATE",

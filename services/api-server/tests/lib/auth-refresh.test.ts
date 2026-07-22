@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AuthService, type AuthGitHubClient } from "../../src/modules/auth/services/auth.service";
+import { AuthService } from "../../src/modules/auth/services/auth.service";
+import {
+  GitHubSignInFlowService,
+} from "../../src/modules/auth/services/github-sign-in-flow.service";
 import { looksLikeJwt } from "../../src/modules/auth/services/native-access-token.service";
+import type { AuthGitHubClient } from "../../src/modules/auth/types/auth.types";
 import { sha256 } from "../../src/shared/utils/crypto";
 import type { Env } from "../../src/shared/types";
 
@@ -14,6 +18,20 @@ interface OauthStateRow {
   redirect_origin: string | null;
   purpose: string | null;
   user_id: string | null;
+  sign_in_attempt_id: string | null;
+}
+
+interface SignInAttemptRow {
+  id: string;
+  client_type: string;
+  claim_token_hash: string;
+  completion_code_hash: string | null;
+  status: string;
+  user_id: string | null;
+  completion_target: string;
+  return_to: string | null;
+  install_url: string | null;
+  expires_at: string;
 }
 
 interface UserRow {
@@ -51,6 +69,7 @@ function sqliteDatetime(offsetMs = 0): string {
  */
 class MockD1 {
   oauthStates = new Map<string, OauthStateRow>();
+  signInAttempts = new Map<string, SignInAttemptRow>();
   users = new Map<number, UserRow>();
   authSessions = new Map<string, AuthSessionRow>();
   refreshSessions = new Map<string, RefreshSessionRow>();
@@ -79,13 +98,20 @@ class MockD1 {
         },
         first: async () => execute(args),
       }),
+      run: async () => {
+        execute([]);
+        return { success: true };
+      },
     };
   }
 
   private execute(sql: string, args: unknown[]): unknown {
     if (sql.includes("INSERT INTO oauth_states")) {
-      const [state, expiresAt, codeVerifier, redirectOrigin, purpose, userId] = args as [
-        string, string, string | null, string | null, string | null, string | null,
+      const [
+        state, expiresAt, codeVerifier, redirectOrigin, purpose, userId, signInAttemptId,
+      ] = args as [
+        string, string, string | null, string | null,
+        string | null, string | null, string | null,
       ];
       this.oauthStates.set(state, {
         state,
@@ -94,8 +120,79 @@ class MockD1 {
         redirect_origin: redirectOrigin,
         purpose,
         user_id: userId,
+        sign_in_attempt_id: signInAttemptId,
       });
       return null;
+    }
+    if (sql.includes("DELETE FROM oauth_states WHERE datetime(expires_at)")) {
+      return null;
+    }
+    if (sql.includes("INSERT INTO sign_in_attempts")) {
+      const [id, clientType, claimTokenHash, completionTarget, returnTo, expiresAt] = args as [
+        string, string, string, string, string | null, string,
+      ];
+      this.signInAttempts.set(id, {
+        id,
+        client_type: clientType,
+        claim_token_hash: claimTokenHash,
+        completion_code_hash: null,
+        status: "awaiting_oauth",
+        user_id: null,
+        completion_target: completionTarget,
+        return_to: returnTo,
+        install_url: null,
+        expires_at: expiresAt,
+      });
+      return null;
+    }
+    if (sql.includes("DELETE FROM sign_in_attempts")) {
+      return null;
+    }
+    if (sql.includes("SET status = 'identity_ready'")) {
+      const [userId, id] = args as [string, string];
+      const attempt = this.signInAttempts.get(id);
+      if (attempt) {
+        attempt.status = "identity_ready";
+        attempt.user_id = userId;
+      }
+      return null;
+    }
+    if (sql.includes("SET install_url = ?")) {
+      const [installUrl, id] = args as [string, string];
+      const attempt = this.signInAttempts.get(id);
+      if (attempt?.status === "identity_ready") {
+        attempt.install_url = installUrl;
+      }
+      return null;
+    }
+    if (sql.includes("SET status = 'completion_ready'")) {
+      const [completionCodeHash, id] = args as [string, string];
+      const attempt = this.signInAttempts.get(id);
+      if (!attempt || attempt.status !== "identity_ready") {
+        return null;
+      }
+      attempt.status = "completion_ready";
+      attempt.completion_code_hash = completionCodeHash;
+      return { id };
+    }
+    if (sql.includes("SET status = 'claimed'")) {
+      const [id, claimTokenHash, completionCodeHash, clientType] = args as string[];
+      const attempt = this.signInAttempts.get(id);
+      if (
+        !attempt
+        || attempt.claim_token_hash !== claimTokenHash
+        || attempt.completion_code_hash !== completionCodeHash
+        || attempt.client_type !== clientType
+        || attempt.status !== "completion_ready"
+      ) {
+        return null;
+      }
+      attempt.status = "claimed";
+      return { ...attempt };
+    }
+    if (sql.includes("FROM sign_in_attempts")) {
+      const [id] = args as [string];
+      return this.signInAttempts.get(id) ?? null;
     }
     if (sql.includes("DELETE FROM oauth_states")) {
       const [state] = args as [string];
@@ -209,7 +306,7 @@ class MockD1 {
   }
 }
 
-function createGitHubClient(): AuthGitHubClient {
+function createGitHubClient(hasInstallations = true): AuthGitHubClient {
   return {
     getAuthUrl: () => "https://github.test/authorize",
     getInstallUrl: () => "https://github.test/install",
@@ -220,91 +317,121 @@ function createGitHubClient(): AuthGitHubClient {
       expiresAt: "2099-01-01T00:00:00.000Z",
       user: { id: 123, login: "octocat", name: "Octo Cat", avatarUrl: "https://a" },
     }),
-    hasInstallations: async () => true,
+    hasInstallations: async () => hasInstallations,
   };
 }
 
-function createService(db: MockD1): AuthService {
-  return new AuthService({
+function createDeps(db: MockD1, hasInstallations = true) {
+  return {
     env: {
       DB: db.asD1(),
       TOKEN_ENCRYPTION_KEY,
       NATIVE_ACCESS_TOKEN_SIGNING_KEY,
       WORKER_URL: "https://api.test",
       WEB_ORIGIN: "https://web.test",
+      ENVIRONMENT: "development",
     } as Env,
-    github: createGitHubClient(),
-  });
+    github: createGitHubClient(hasInstallations),
+    clearRepoListingSync: async () => {},
+  };
 }
 
-function seedOauthState(
-  db: MockD1,
-  state: string,
-  redirectOrigin = "https://web.test",
-): void {
-  db.oauthStates.set(state, {
-    state,
-    expires_at: "2099-01-01T00:00:00.000Z",
-    code_verifier: null,
-    redirect_origin: redirectOrigin,
-    purpose: "github_login",
-    user_id: null,
-  });
+function createService(db: MockD1, hasInstallations = true): AuthService {
+  return new AuthService(createDeps(db, hasInstallations));
 }
 
-async function exchangeNative(db: MockD1, service: AuthService) {
-  seedOauthState(db, "state-native", "cloudecode-dev://auth/callback");
-  const result = await service.exchangeNativeGitHubAuthorizationCode({
-    code: "code-1",
-    state: "state-native",
-    requestId: null,
-    userAgent: null,
+const requestFields = { requestId: null, userAgent: null };
+
+/** Runs a full native sign-in so refresh/logout start from a real session. */
+async function signInNative(db: MockD1, hasInstallations = true) {
+  const flow = new GitHubSignInFlowService(createDeps(db, hasInstallations));
+  const started = await flow.startNative({
+    redirectUri: "cloudecode-dev://auth/callback",
+    ...requestFields,
   });
-  if (!result.ok) {
-    throw new Error("native exchange failed");
+  if (!started.ok) {
+    throw new Error("native sign-in start failed");
   }
-  return result.value;
+  const state = [...db.oauthStates.values()]
+    .find((row) => row.sign_in_attempt_id === started.value.attemptId)?.state;
+  if (!state) {
+    throw new Error("no OAuth state for the native attempt");
+  }
+  const callback = await flow.handleOAuthCallback({
+    code: "code-1",
+    oauthError: undefined,
+    state,
+    ...requestFields,
+  });
+  if (!callback.ok) {
+    throw new Error("native OAuth callback failed");
+  }
+  const completionCode = new URL(callback.value.redirectUrl)
+    .searchParams.get("completionCode");
+  if (!completionCode) {
+    throw new Error("native callback had no completion code");
+  }
+  const completed = await flow.completeNative({
+    attemptId: started.value.attemptId,
+    claimToken: started.value.claimToken,
+    completionCode,
+    ...requestFields,
+  });
+  if (!completed.ok) {
+    throw new Error("native sign-in completion failed");
+  }
+  return completed.value;
 }
 
-describe("AuthService native token refresh", () => {
-  it("issues the legacy response shape when client is absent", async () => {
-    const db = new MockD1();
-    const service = createService(db);
-    seedOauthState(db, "state-web");
-
-    const result = await service.exchangeGitHubAuthorizationCode({
-      code: "code-1",
-      state: "state-web",
-      requestId: null,
-      userAgent: null,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) { return; }
-    // Pin the legacy shape: no native keys may appear for web clients.
-    expect(Object.keys(result.value).sort()).toEqual([
-      "hasInstallations",
-      "installUrl",
-      "token",
-      "user",
-    ]);
-    const sessionTokenHash = await sha256(result.value.token);
-    const session = db.authSessions.get(sessionTokenHash);
-    expect(sessionTokenHash).not.toBe(result.value.token);
-    expect(db.refreshSessions.size).toBe(0);
-    // ~30-day expiry
-    const ttlMs = new Date(session!.expires_at).getTime() - Date.now();
-    expect(ttlMs).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
+/** Runs a full web sign-in so web-session behavior starts from a real session. */
+async function signInWeb(db: MockD1) {
+  const flow = new GitHubSignInFlowService(createDeps(db));
+  const started = await flow.startWeb({
+    origin: "https://web.test",
+    returnTo: "/dashboard",
+    ...requestFields,
   });
+  if (!started.ok) {
+    throw new Error("web sign-in start failed");
+  }
+  const state = [...db.oauthStates.values()]
+    .find((row) => row.sign_in_attempt_id === started.value.attemptId)?.state;
+  if (!state) {
+    throw new Error("no OAuth state for the web attempt");
+  }
+  const callback = await flow.handleOAuthCallback({
+    code: "code-1",
+    oauthError: undefined,
+    state,
+    ...requestFields,
+  });
+  if (!callback.ok) {
+    throw new Error("web OAuth callback failed");
+  }
+  const completionCode = new URL(callback.value.redirectUrl)
+    .searchParams.get("completionCode");
+  if (!completionCode) {
+    throw new Error("web callback had no completion code");
+  }
+  const completed = await flow.completeWeb({
+    attemptId: started.value.attemptId,
+    claimToken: started.value.claimToken,
+    completionCode,
+    ...requestFields,
+  });
+  if (!completed.ok) {
+    throw new Error("web sign-in completion failed");
+  }
+  return completed.value;
+}
 
-  it("issues a JWT access token and stores only the refresh hash for native clients", async () => {
+describe("AuthService native session lifecycle", () => {
+  it("issues a JWT access token and stores only the refresh hash", async () => {
     const db = new MockD1();
-    const service = createService(db);
 
-    const value = await exchangeNative(db, service);
+    const value = await signInNative(db);
 
     expect(looksLikeJwt(value.accessToken)).toBe(true);
-    expect(value.refreshToken).toBeDefined();
     expect(value.refreshTokenExpiresAt).toBeDefined();
     expect(db.authSessions.size).toBe(0);
 
@@ -314,48 +441,26 @@ describe("AuthService native token refresh", () => {
     expect(family!.refresh_token_hash).not.toBe(value.refreshToken);
   });
 
-  it("rejects native token exchange for a web-started state", async () => {
+  it("issues a hashed 30-day opaque web session with no native fields", async () => {
     const db = new MockD1();
-    const service = createService(db);
-    seedOauthState(db, "state-web");
 
-    const result = await service.exchangeNativeGitHubAuthorizationCode({
-      code: "code-1",
-      state: "state-web",
-      requestId: null,
-      userAgent: null,
-    });
+    const value = await signInWeb(db);
 
-    expect(result.ok).toBe(false);
-    expect(db.oauthStates.has("state-web")).toBe(true);
-    expect(db.authSessions.size).toBe(0);
+    expect(Object.keys(value).sort()).toEqual(["redirectUrl", "token", "user"]);
+    const sessionTokenHash = await sha256(value.token);
+    const session = db.authSessions.get(sessionTokenHash);
+    expect(sessionTokenHash).not.toBe(value.token);
     expect(db.refreshSessions.size).toBe(0);
-  });
-
-  it("rejects web token exchange for a native-started state", async () => {
-    const db = new MockD1();
-    const service = createService(db);
-    seedOauthState(db, "state-native", "cloudecode-dev://auth/callback");
-
-    const result = await service.exchangeGitHubAuthorizationCode({
-      code: "code-1",
-      state: "state-native",
-      requestId: null,
-      userAgent: null,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(db.oauthStates.has("state-native")).toBe(true);
-    expect(db.authSessions.size).toBe(0);
-    expect(db.refreshSessions.size).toBe(0);
+    const ttlMs = new Date(session!.expires_at).getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
   });
 
   it("rotates tokens on refresh without storing native access tokens", async () => {
     const db = new MockD1();
     const service = createService(db);
-    const issued = await exchangeNative(db, service);
+    const issued = await signInNative(db);
 
-    const result = await service.refreshSession(issued.refreshToken!);
+    const result = await service.refreshSession(issued.refreshToken);
 
     expect(result.ok).toBe(true);
     if (!result.ok) { return; }
@@ -368,22 +473,22 @@ describe("AuthService native token refresh", () => {
   it("accepts the previous refresh token within the grace window", async () => {
     const db = new MockD1();
     const service = createService(db);
-    const issued = await exchangeNative(db, service);
+    const issued = await signInNative(db);
 
-    const first = await service.refreshSession(issued.refreshToken!);
+    const first = await service.refreshSession(issued.refreshToken);
     expect(first.ok).toBe(true);
 
     // Immediate retry with the rotated-out token (network-retry case).
-    const retry = await service.refreshSession(issued.refreshToken!);
+    const retry = await service.refreshSession(issued.refreshToken);
     expect(retry.ok).toBe(true);
   });
 
   it("revokes the whole family on reuse outside the grace window", async () => {
     const db = new MockD1();
     const service = createService(db);
-    const issued = await exchangeNative(db, service);
+    const issued = await signInNative(db);
 
-    const first = await service.refreshSession(issued.refreshToken!);
+    const first = await service.refreshSession(issued.refreshToken);
     expect(first.ok).toBe(true);
     if (!first.ok) { return; }
 
@@ -391,7 +496,7 @@ describe("AuthService native token refresh", () => {
     const family = [...db.refreshSessions.values()][0]!;
     family.previous_rotated_at = sqliteDatetime(-2 * 60 * 1000);
 
-    const reuse = await service.refreshSession(issued.refreshToken!);
+    const reuse = await service.refreshSession(issued.refreshToken);
     expect(reuse.ok).toBe(false);
     if (reuse.ok) { return; }
     expect(reuse.error.status).toBe(401);
@@ -418,43 +523,35 @@ describe("AuthService native token refresh", () => {
   it("rejects expired refresh tokens", async () => {
     const db = new MockD1();
     const service = createService(db);
-    const issued = await exchangeNative(db, service);
+    const issued = await signInNative(db);
 
     const family = [...db.refreshSessions.values()][0]!;
     family.refresh_expires_at = "2000-01-01T00:00:00.000Z";
 
-    const result = await service.refreshSession(issued.refreshToken!);
+    const result = await service.refreshSession(issued.refreshToken);
     expect(result.ok).toBe(false);
   });
 
   it("revokes the whole family on native logout", async () => {
     const db = new MockD1();
     const service = createService(db);
-    const issued = await exchangeNative(db, service);
+    const issued = await signInNative(db);
 
     await service.logoutNative(issued.refreshToken);
 
     expect(db.authSessions.size).toBe(0);
     expect(db.refreshSessions.size).toBe(0);
-    const refresh = await service.refreshSession(issued.refreshToken!);
+    const refresh = await service.refreshSession(issued.refreshToken);
     expect(refresh.ok).toBe(false);
   });
 
-  it("keeps legacy logout behavior for web sessions", async () => {
+  it("keeps web logout scoped to the opaque web session row", async () => {
     const db = new MockD1();
     const service = createService(db);
-    seedOauthState(db, "state-web");
-    const result = await service.exchangeGitHubAuthorizationCode({
-      code: "code-1",
-      state: "state-web",
-      requestId: null,
-      userAgent: null,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) { return; }
+    const issued = await signInWeb(db);
 
-    const sessionTokenHash = await sha256(result.value.token);
-    await service.logout(result.value.token);
+    const sessionTokenHash = await sha256(issued.token);
+    await service.logout(issued.token);
     expect(db.authSessions.has(sessionTokenHash)).toBe(false);
   });
 });

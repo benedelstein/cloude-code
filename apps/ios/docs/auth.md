@@ -33,10 +33,11 @@ group keychain, then removes the legacy value. Tokens must not be placed in
 
 | Type | Responsibility |
 | --- | --- |
-| `SessionStore` | Owns the main-actor UI state, starts local restoration, observes auth events, loads the cached/current user, and runs GitHub OAuth. |
+| `SessionStore` | Owns the main-actor UI state, starts local restoration, observes auth events, loads the cached/current user, and runs the GitHub sign-in attempt. |
+| `GitHubInstallationStore` | Opens authenticated GitHub App repository management from the repository picker and validates its native callback. |
 | `TokenCoordinator` | Actor that owns the in-memory session, keychain writes, refresh scheduling and retry, single-flight rotation, logout, and auth events. |
 | `KeychainSessionPersistence` | Loads, saves, migrates, and clears the complete session in Keychain. |
-| `UnauthenticatedAuthAPI` | Calls sign-in, refresh, and logout endpoints without a Bearer header. The refresh token in the request body is the credential. |
+| `UnauthenticatedAuthAPI` | Calls sign-in start/complete, refresh, and logout endpoints without a Bearer header. The attempt claim token or refresh token in the request body is the credential. |
 | `AuthTokenProviding` | Boundary used by authenticated API types to obtain Bearer headers. `TokenCoordinator` implements it. |
 | `RootView` | Chooses the signed-out screen or Home from `SessionStore.State`. |
 | `HomeViewModel` | Loads cached Home data, then starts fetch/socket work whose API authorization awaits `TokenCoordinator` when refresh is required. |
@@ -141,18 +142,84 @@ lifecycle events, and errors.
 
 ## Sign-in flow
 
-`SessionStore.signIn(using:)` performs GitHub OAuth through the system web-auth
-sheet:
+Sign-in is a server-owned attempt. The app never sees or exchanges a GitHub
+authorization code; it starts an attempt and later claims the completed
+identity.
 
-1. Request the GitHub authorization URL and state nonce.
-2. Open `ASWebAuthenticationSession` using the configured callback scheme.
-3. Validate that the callback state matches the original nonce.
-4. Exchange the authorization code for a native `Session`.
-5. Ask `TokenCoordinator` to adopt and persist it.
-6. Handle the emitted `.signedIn` event and load the current user.
+`SessionStore.signIn(using:)`:
 
-The GitHub authorize-page request, OAuth code exchange, refresh, and logout
-endpoints bypass `AuthTokenProviding`.
+1. `POST /auth/github/native/start { redirectUri }` returns
+   `{ authorizeUrl, attemptId, claimToken }`.
+2. Open `authorizeUrl` in one `ASWebAuthenticationSession` using the configured
+   callback scheme.
+3. The API exchanges the OAuth code, persists the GitHub identity and
+   credentials, marks the attempt `identity_ready`, and — only when the GitHub
+   user has no App installation — navigates the same browser session to GitHub
+   App setup before returning to the custom scheme.
+4. At the actual final handoff, the API issues a one-time `completionCode` and
+   returns it with the `attemptId` on the custom-scheme callback. Verify the
+   attempt matches, the code is nonempty, and the callback carries no `error`.
+5. `POST /auth/github/native/complete { attemptId, claimToken,
+   completionCode }` returns the access/refresh pair and user.
+6. Seed `UserStore` with the returned user, then ask `TokenCoordinator` to
+   adopt and persist the `Session`.
+7. Handle the emitted `.signedIn` event using that canonical cached user.
+
+### Attempt credentials
+
+`attemptId` is non-secret and travels on the custom-scheme callback.
+`claimToken` is held by the initiating app call; `completionCode` is delivered
+only to the browser that reaches the final callback. The server requires both,
+so a transferred authorization URL cannot be claimed by either party alone.
+Both secrets stay in local function memory only — never Keychain,
+`UserDefaults`, other persistence, analytics, or logs. D1 stores only SHA-256
+hashes under the attempt's original fixed expiry. If the app is terminated
+mid-flow the attempt is abandoned and the next sign-in starts a new attempt.
+
+Completion is at-most-once on the server, so a lost completion response cannot
+be retried into a second session. That case surfaces as an ordinary sign-in
+failure and the (short) flow is restarted.
+
+### Cancellation
+
+One system presentation covers OAuth and repository setup, so a dismissal can
+happen on either side of OAuth. Any `.canceledLogin` is a silent signed-out
+outcome and makes no completion request. Even when OAuth already established
+the identity, no final callback means no `completionCode` and therefore no
+session. A retry starts a fresh attempt; GitHub will usually fast-path the
+authorization already granted. This tradeoff preserves callback binding rather
+than letting the initiator poll for another browser's identity.
+
+The sign-in start, sign-in completion, refresh, and logout endpoints bypass
+`AuthTokenProviding`.
+
+## GitHub App installation
+
+Authentication creates the Cloude Code account and stores the GitHub user
+credential. Repository-backed work separately requires a repository available
+through a GitHub App installation.
+
+Repository access is not an authentication gate. A claimed attempt always enters
+the normal signed-in UI, including when the user has zero repositories or an
+organization installation is pending approval. Session creation remains
+disabled until a repository is selected.
+
+The repository picker's **Manage repositories on GitHub** action starts a
+separate authenticated installation flow through
+`POST /auth/github/install/start`. The API returns a GitHub installation URL
+with a one-time state nonce whose stored redirect is paired with the app's
+allowlisted OAuth callback. GitHub forwards that state to the configured web
+setup page at `/github/install/complete`; the page sends states through
+`/api/auth/github/install/callback`, and the API consumes the state before
+redirecting to `cloudecode://github/install/complete` (or the development
+scheme).
+
+The callback only closes `ASWebAuthenticationSession`. It is not proof of an
+installation: GitHub's setup query parameters are untrusted. The draft refreshes
+`/repos` and its active search after returning and renders whatever access is
+actually available. Cancelling, selecting no repositories, or awaiting approval
+leaves the user in the normal signed-in UI with the same management action
+available.
 
 ## Tests
 
@@ -161,6 +228,10 @@ Auth lifecycle coverage lives in:
 - `CloudeCodeTests/SessionStoreTests.swift`: signed-out launch, explicit and
   terminal sign-out, stale-session startup, cached `refreshing` state, and
   transient startup retry.
+- `CloudeCodeTests/SessionStoreSignInTests.swift`: callback attempt/code
+  matching, missing or error callbacks, and silent dismissal before and after
+  OAuth with zero completion calls. It drives sign-in
+  through the `WebAuthenticating` seam instead of a real browser.
 - `CloudeCodeTests/TokenCoordinatorTests.swift`: concurrent refresh callers
   sharing one token rotation.
 

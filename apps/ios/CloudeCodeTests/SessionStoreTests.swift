@@ -238,11 +238,15 @@ private actor TestAuthAPI: SignInProviding, SessionRefreshing, SessionRevoking {
         self.transientFailuresRemaining = transientFailuresRemaining
     }
 
-    func authorizePage(redirectUri: String) async throws -> AuthorizePage {
+    func startSignIn(redirectUri: String) async throws -> GitHubSignInAttempt {
         throw SessionStoreTestError.unexpectedAPICall
     }
 
-    func exchangeCode(code: String, state: String) async throws -> SignInResult {
+    func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult {
         throw SessionStoreTestError.unexpectedAPICall
     }
 

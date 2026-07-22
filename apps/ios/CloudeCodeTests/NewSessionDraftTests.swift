@@ -48,7 +48,11 @@ struct NewSessionDraftTests {
             sessionsAPI: UnavailableSessionsAPI(),
             reposAPI: UnavailableReposAPI(),
             environmentsStore: RepoEnvironmentsStore { _ in [] },
-            preferences: preferences
+            preferences: preferences,
+            githubInstallationStore: GitHubInstallationStore(
+                authAPI: UnavailableAuthAPI(),
+                oauthRedirectURI: "cloudecode-dev://auth/callback"
+            )
         )
     }
 
@@ -56,6 +60,16 @@ struct NewSessionDraftTests {
         let suiteName = "NewSessionDraftTests.\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         return (NewSessionPreferences(userDefaults: userDefaults), suiteName)
+    }
+}
+
+private struct UnavailableAuthAPI: AuthAPIProviding {
+    func githubInstallationPage(redirectUri: String) async throws -> AuthorizePage {
+        throw TestError.unexpectedAPICall
+    }
+
+    func me() async throws -> User {
+        throw TestError.unexpectedAPICall
     }
 }
 

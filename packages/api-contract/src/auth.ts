@@ -20,29 +20,52 @@ export const TokenRequest = z.object({
 });
 export type TokenRequest = z.infer<typeof TokenRequest>;
 
-export const TokenResponse = z.object({
+/**
+ * GitHub sign-in attempts. The start route binds the attempt to a client type,
+ * so neither request carries a client-type or repository-setup selector, and
+ * each completion route returns one concrete credential shape.
+ */
+export const WebGitHubSignInStartRequest = z.object({
+  origin: z.string(),
+  returnTo: z.string(),
+});
+export type WebGitHubSignInStartRequest = z.infer<typeof WebGitHubSignInStartRequest>;
+
+export const NativeGitHubSignInStartRequest = z.object({
+  redirectUri: z.string(),
+});
+export type NativeGitHubSignInStartRequest = z.infer<typeof NativeGitHubSignInStartRequest>;
+
+export const GitHubSignInStartResponse = z.object({
+  authorizeUrl: z.string(),
+  attemptId: z.string(),
+  claimToken: z.string(),
+});
+export type GitHubSignInStartResponse = z.infer<typeof GitHubSignInStartResponse>;
+
+export const GitHubSignInCompleteRequest = z.object({
+  attemptId: z.string(),
+  claimToken: z.string(),
+  completionCode: z.string(),
+});
+export type GitHubSignInCompleteRequest = z.infer<typeof GitHubSignInCompleteRequest>;
+
+export const WebGitHubSignInCompleteResponse = z.object({
   token: z.string(),
   user: UserInfo,
-  hasInstallations: z.boolean(),
-  installUrl: z.string(),
+  redirectUrl: z.string(),
 });
-export type TokenResponse = z.infer<typeof TokenResponse>;
+export type WebGitHubSignInCompleteResponse = z.infer<typeof WebGitHubSignInCompleteResponse>;
 
-export const NativeTokenRequest = z.object({
-  code: z.string(),
-  state: z.string(),
-});
-export type NativeTokenRequest = z.infer<typeof NativeTokenRequest>;
-
-export const NativeTokenResponse = z.object({
+export const NativeGitHubSignInCompleteResponse = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
   refreshTokenExpiresAt: z.iso.datetime(),
   user: UserInfo,
-  hasInstallations: z.boolean(),
-  installUrl: z.string(),
 });
-export type NativeTokenResponse = z.infer<typeof NativeTokenResponse>;
+export type NativeGitHubSignInCompleteResponse = z.infer<
+  typeof NativeGitHubSignInCompleteResponse
+>;
 
 export const RefreshRequest = z.object({
   refreshToken: z.string(),

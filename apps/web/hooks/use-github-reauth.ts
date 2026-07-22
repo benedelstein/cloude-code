@@ -80,10 +80,10 @@ export function useGitHubReauth() {
           case githubAuthPopupMessageType.githubReauthError:
             finish(false, message.error || "GitHub reconnect failed.");
             return;
-          case githubAuthPopupMessageType.authSuccess:
-          case githubAuthPopupMessageType.authError:
-          case githubAuthPopupMessageType.installComplete:
-            return;
+          default: {
+            const exhaustiveCheck: never = message;
+            return exhaustiveCheck;
+          }
         }
       };
 

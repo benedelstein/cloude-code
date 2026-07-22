@@ -15,6 +15,9 @@ import {
   createAuthMiddleware,
 } from "@/modules/auth/middleware/auth.middleware";
 import { UserSessionService } from "@/modules/auth/services/user-session.service";
+import {
+  GitHubUserRepoListingSyncRepository,
+} from "@/modules/github/repositories/github-user-repo-listing-sync.repository";
 import { GitHubAppService } from "@/modules/github/services/github-app.service";
 import {
   createRepoScopedEnvironmentRoutes,
@@ -164,6 +167,9 @@ export function buildAuthRoutes() {
         exchangeOAuthCode: (code) => github.exchangeOAuthCode(code),
         hasInstallations: (accessToken) => github.hasInstallations(accessToken),
       };
+    },
+    clearRepoListingSync(env, userId) {
+      return new GitHubUserRepoListingSyncRepository(env.DB).clear(userId);
     },
   });
 

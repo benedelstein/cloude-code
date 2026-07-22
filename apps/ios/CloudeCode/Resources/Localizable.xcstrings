@@ -4,9 +4,6 @@
     "" : {
 
     },
-    "☁️" : {
-
-    },
     "Account" : {
 
     },
@@ -41,9 +38,6 @@
 
     },
     "Closed pull request" : {
-
-    },
-    "Cloude Code" : {
 
     },
     "CODE" : {
@@ -173,6 +167,9 @@
 
     },
     "Disconnecting…" : {
+
+    },
+    "Don't see your repository?" : {
 
     },
     "Done" : {
@@ -347,6 +344,12 @@
           }
         }
       }
+    },
+    "Manage repositories on GitHub" : {
+
+    },
+    "Manage which repositories Cloude Code can access on GitHub." : {
+
     },
     "Merged pull request" : {
 

@@ -134,39 +134,64 @@ final class SessionStore {
         }
     }
 
-    /// GitHub OAuth via the system web-auth sheet: fetch the authorize URL,
-    /// run the session, verify the echoed state, exchange the code for a
-    /// native token pair, and adopt it (the events loop flips state).
-    func signIn(using webSession: WebAuthenticationSession) async {
+    /// GitHub sign-in through the system web-auth sheet.
+    ///
+    /// The server owns the flow: one presentation covers OAuth and, when the
+    /// user has no GitHub App installation, repository setup. The app only
+    /// starts an attempt and claims the completed identity. Attempt
+    /// credentials stay in this function's memory; nothing is persisted, so a
+    /// process termination simply abandons the attempt.
+    func signIn(using webSession: some WebAuthenticating) async {
         guard !isSigningIn else { return }
         isSigningIn = true
         signInError = nil
         defer { isSigningIn = false }
-
         do {
-            let page = try await signInAPI.authorizePage(redirectUri: oauthRedirectURI)
+            let attempt = try await signInAPI.startSignIn(redirectUri: oauthRedirectURI)
             guard let scheme = URL(string: oauthRedirectURI)?.scheme else {
                 preconditionFailure("invalid OAUTH_REDIRECT_URI: \(oauthRedirectURI)")
             }
             let callback = try await webSession.authenticate(
-                using: page.url,
+                using: attempt.authorizeURL,
                 callbackURLScheme: scheme
             )
-            let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
-            guard
-                let code = query?.first(where: { $0.name == "code" })?.value,
-                let returnedState = query?.first(where: { $0.name == "state" })?.value,
-                returnedState == page.state
-            else {
+            guard let completionCode = completionCode(
+                from: callback,
+                matching: attempt.attemptId
+            ) else {
                 signInError = "Sign-in failed. Please try again."
                 return
             }
-            let result = try await signInAPI.exchangeCode(code: code, state: returnedState)
+            let result = try await signInAPI.completeSignIn(
+                attemptId: attempt.attemptId,
+                claimToken: attempt.claimToken,
+                completionCode: completionCode
+            )
+            userStore.putSnapshotsToDisk([result.user]) // listener will set the user to state
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
-            // User dismissed the sheet — not an error.
+            Logger.debug("web-auth session dismissed")
         } catch {
+            Logger.error(error.localizedDescription)
             signInError = "Sign-in failed. Please try again."
         }
+    }
+
+    private func completionCode(from callback: URL, matching attemptId: String) -> String? {
+        let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
+        guard query?.first(where: { $0.name == "attemptId" })?.value == attemptId else {
+            Logger.error("sign-in callback did not match the started attempt")
+            return nil
+        }
+        if let callbackError = query?.first(where: { $0.name == "error" })?.value {
+            Logger.error("sign-in callback reported \(callbackError)")
+            return nil
+        }
+        guard let code = query?.first(where: { $0.name == "completionCode" })?.value,
+              !code.isEmpty else {
+            Logger.error("sign-in callback did not include completion proof")
+            return nil
+        }
+        return code
     }
 }

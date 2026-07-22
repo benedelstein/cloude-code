@@ -395,14 +395,10 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
 }
 
 // GitHub OAuth
-export async function getGitHubAuthUrl(): Promise<GitHubAuthUrlResponse> {
-  // Pass the current window origin so the server can record it against the
-  // state nonce. After GitHub redirects to the prod bouncer, the bouncer 302s
-  // back to this origin's /api/auth/callback. Required for Vercel previews.
-  const origin = encodeURIComponent(window.location.origin);
-  return apiFetch(`/auth/github?origin=${origin}`);
-}
-
+//
+// Sign-in itself is a same-tab navigation through the BFF (`/api/auth/github/
+// start`), so there is no client-side authorize-URL call. Reauthorization
+// still runs in a popup for an already-authenticated user.
 export async function startGitHubReauth(): Promise<GitHubAuthUrlResponse> {
   const origin = encodeURIComponent(window.location.origin);
   return apiFetch(`/auth/github/reauth/start?origin=${origin}`, { method: "POST" });

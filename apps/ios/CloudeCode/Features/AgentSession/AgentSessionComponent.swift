@@ -7,6 +7,8 @@ import SwiftUI
 protocol AgentSessionDependency: Dependency {
     func makeSessionSocket(sessionId: String) -> SessionSocket
 
+    var authAPI: any AuthAPIProviding { get }
+
     var sessionsAPI: any SessionsAPIProviding { get }
 
     var reposAPI: any ReposAPIProviding { get }
@@ -172,7 +174,18 @@ final class AgentSessionComponent: Component<AgentSessionDependency> {
                 sessionsAPI: dependency.sessionsAPI,
                 reposAPI: dependency.reposAPI,
                 environmentsStore: dependency.repoEnvironmentsStore,
-                preferences: dependency.newSessionPreferences
+                preferences: dependency.newSessionPreferences,
+                githubInstallationStore: githubInstallationStore
+            )
+        }
+    }
+
+    @MainActor
+    private var githubInstallationStore: GitHubInstallationStore {
+        shared {
+            GitHubInstallationStore(
+                authAPI: dependency.authAPI,
+                oauthRedirectURI: Constants.oauthRedirectURI
             )
         }
     }

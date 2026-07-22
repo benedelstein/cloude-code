@@ -3,18 +3,25 @@ import type { MiddlewareHandler } from "hono";
 import type { Logger } from "@repo/shared";
 import { createLogger } from "@/shared/logging";
 import type { Env } from "@/shared/types";
-import type { AuthContext } from "../types/auth.types";
-import { AuthService, type AuthGitHubClient } from "../services/auth.service";
+import type {
+  AuthContext,
+  AuthGitHubClient,
+  AuthServiceError,
+} from "../types/auth.types";
+import { AuthService } from "../services/auth.service";
+import { GitHubSignInFlowService } from "../services/github-sign-in-flow.service";
 import {
-  getGithubRoute,
+  getMeRoute,
+  postGithubInstallStartRoute,
   postGithubReauthStartRoute,
   postGithubReauthTokenRoute,
-  postTokenRoute,
-  postNativeTokenRoute,
-  postNativeRefreshRoute,
-  postNativeLogoutRoute,
-  getMeRoute,
   postLogoutRoute,
+  postNativeGithubSignInCompleteRoute,
+  postNativeGithubSignInStartRoute,
+  postNativeLogoutRoute,
+  postNativeRefreshRoute,
+  postWebGithubSignInCompleteRoute,
+  postWebGithubSignInStartRoute,
 } from "./auth.schema";
 
 type AuthRouteEnv = {
@@ -25,6 +32,14 @@ type AuthRouteEnv = {
 export interface AuthRouteDeps {
   authMiddleware: MiddlewareHandler<AuthRouteEnv>;
   createGitHubClient(env: Env, logger: Logger): AuthGitHubClient;
+  clearRepoListingSync(env: Env, userId: string): Promise<void>;
+}
+
+/** Sign-in start failures are always client input problems. */
+type SignInStartErrorCode = "INVALID_SIGN_IN_ATTEMPT" | "INVALID_ORIGIN" | "INVALID_RETURN_TO";
+
+function startErrorCode(error: AuthServiceError): SignInStartErrorCode {
+  return error.code === "INVALID_RETURN_TO" ? "INVALID_RETURN_TO" : "INVALID_ORIGIN";
 }
 
 export function createAuthRoutes(
@@ -41,32 +56,112 @@ export function createAuthRoutes(
     return new AuthService({
       env,
       github: createAuthGitHubClient(env),
+      clearRepoListingSync: (userId) => deps.clearRepoListingSync(env, userId),
       logger,
     });
   }
 
+  function createSignInFlowService(env: Env): GitHubSignInFlowService {
+    return new GitHubSignInFlowService({
+      env,
+      github: createAuthGitHubClient(env),
+      clearRepoListingSync: (userId) => deps.clearRepoListingSync(env, userId),
+      logger,
+    });
+  }
+
+  function requestLogFields(header: (name: string) => string | undefined) {
+    return {
+      requestId: header("cf-ray") ?? null,
+      userAgent: header("user-agent") ?? null,
+    };
+  }
+
   /**
-   * GET auth/github — returns the install + authorize URL.
+   * POST /auth/github/web/start — begins a web-bound GitHub sign-in attempt.
    *
-   * Accepts an optional `origin` query param. The caller's window origin is
-   * recorded against the state nonce so the prod bouncer can 302 the OAuth code
-   * back to a Vercel preview branch after GitHub's callback. Origin is validated
-   * against the prod web origin or the preview allowlist regex before being
-   * stored.
-   *
-   * @returns The install + authorize URL and the nonce token
+   * The route, not a request field, binds the client type. The BFF keeps the
+   * returned claim token in an HttpOnly cookie; it is never in a redirect URL.
    */
-  authRoutes.openapi(getGithubRoute, async (c) => {
-    const { origin: requestedOrigin, redirectUri } = c.req.valid("query");
-    const authService = createAuthService(c.env);
-    const result = await authService.createGitHubAuthorizationUrl({
-      requestedOrigin,
-      nativeRedirectUri: redirectUri,
-      requestId: c.req.header("cf-ray") ?? null,
-      userAgent: c.req.header("user-agent") ?? null,
+  authRoutes.openapi(postWebGithubSignInStartRoute, async (c) => {
+    const { origin, returnTo } = c.req.valid("json");
+    const result = await createSignInFlowService(c.env).startWeb({
+      origin,
+      returnTo,
+      ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
-      return c.json({ error: result.error.message }, 400);
+      return c.json(
+        { error: result.error.message, code: startErrorCode(result.error) },
+        400,
+      );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/github/web/complete — claims an identity-ready web attempt and
+   * returns the opaque session token plus the server-selected next redirect.
+   */
+  authRoutes.openapi(postWebGithubSignInCompleteRoute, async (c) => {
+    const { attemptId, claimToken, completionCode } = c.req.valid("json");
+    const result = await createSignInFlowService(c.env).completeWeb({
+      attemptId,
+      claimToken,
+      completionCode,
+      ...requestLogFields((name) => c.req.header(name)),
+    });
+    if (!result.ok) {
+      if (result.error.status === 500) {
+        return c.json({ error: result.error.message }, 500);
+      }
+      return c.json(
+        { error: result.error.message, code: "INVALID_SIGN_IN_ATTEMPT" as const },
+        400,
+      );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /** POST /auth/github/native/start — begins a native-bound sign-in attempt. */
+  authRoutes.openapi(postNativeGithubSignInStartRoute, async (c) => {
+    const { redirectUri } = c.req.valid("json");
+    const result = await createSignInFlowService(c.env).startNative({
+      redirectUri,
+      ...requestLogFields((name) => c.req.header(name)),
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: result.error.message, code: startErrorCode(result.error) },
+        400,
+      );
+    }
+
+    return c.json(result.value, 200);
+  });
+
+  /**
+   * POST /auth/github/native/complete — claims a native attempt only after
+   * the final custom-scheme callback delivers its one-time completion code.
+   */
+  authRoutes.openapi(postNativeGithubSignInCompleteRoute, async (c) => {
+    const { attemptId, claimToken, completionCode } = c.req.valid("json");
+    const result = await createSignInFlowService(c.env).completeNative({
+      attemptId,
+      claimToken,
+      completionCode,
+      ...requestLogFields((name) => c.req.header(name)),
+    });
+    if (!result.ok) {
+      if (result.error.status === 500) {
+        return c.json({ error: result.error.message }, 500);
+      }
+      return c.json(
+        { error: result.error.message, code: "INVALID_SIGN_IN_ATTEMPT" as const },
+        400,
+      );
     }
 
     return c.json(result.value, 200);
@@ -75,15 +170,17 @@ export function createAuthRoutes(
   /**
    * GET /auth/callback — GitHub OAuth callback entry point.
    *
-   * GitHub redirects the popup here with `code` and `state`. The service peeks
-   * the state's recorded origin without consuming the row; single-use
-   * consumption still happens in /auth/token.
+   * Sign-in attempts are completed server-side here; the authorization code is
+   * never forwarded to a client. GitHub reauthorization still bounces its code
+   * back to the originating web origin.
    */
   authRoutes.get("/callback", async (c) => {
     const authService = createAuthService(c.env);
     const result = await authService.createGitHubCallbackRedirect({
       code: c.req.query("code"),
       state: c.req.query("state"),
+      oauthError: c.req.query("error"),
+      ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
       return c.text(result.error.message, result.error.status);
@@ -93,52 +190,19 @@ export function createAuthRoutes(
   });
 
   /**
-   * POST /auth/token — exchange code for session token
-   * the code is returned by github
-   * @param code - The OAuth code to exchange
-   * @param state - The state/nonce token to validate
-   * @returns The session token and user info
+   * GET /auth/github/install/callback — consumes the state forwarded by the
+   * web setup page and returns to the flow's stored redirect target.
    */
-  authRoutes.openapi(postTokenRoute, async (c) => {
-    const { code, state } = c.req.valid("json");
+  authRoutes.get("/github/install/callback", async (c) => {
     const authService = createAuthService(c.env);
-    const result = await authService.exchangeGitHubAuthorizationCode({
-      code,
-      state,
-      requestId: c.req.header("cf-ray") ?? null,
-      userAgent: c.req.header("user-agent") ?? null,
+    const result = await authService.createGitHubInstallationCallbackRedirect({
+      state: c.req.query("state"),
     });
     if (!result.ok) {
-      return c.json(
-        { error: result.error.message },
-        result.error.status === 500 ? 500 : 400,
-      );
+      return c.text(result.error.message, result.error.status);
     }
 
-    return c.json(result.value, 200);
-  });
-
-  /**
-   * POST /auth/native/token — exchange code for a native JWT access token and
-   * opaque rotating refresh token.
-   */
-  authRoutes.openapi(postNativeTokenRoute, async (c) => {
-    const { code, state } = c.req.valid("json");
-    const authService = createAuthService(c.env);
-    const result = await authService.exchangeNativeGitHubAuthorizationCode({
-      code,
-      state,
-      requestId: c.req.header("cf-ray") ?? null,
-      userAgent: c.req.header("user-agent") ?? null,
-    });
-    if (!result.ok) {
-      return c.json(
-        { error: result.error.message },
-        result.error.status === 500 ? 500 : 400,
-      );
-    }
-
-    return c.json(result.value, 200);
+    return c.redirect(result.value.redirectUrl, 302);
   });
 
   /**
@@ -168,6 +232,23 @@ export function createAuthRoutes(
 
   authRoutes.use("/github/reauth/*", deps.authMiddleware);
 
+  authRoutes.use("/github/install/start", deps.authMiddleware);
+  authRoutes.openapi(postGithubInstallStartRoute, async (c) => {
+    const { redirectUri } = c.req.valid("query");
+    const auth = c.get("auth");
+    const authService = createAuthService(c.env);
+    const result = await authService.createGitHubInstallationUrl({
+      userId: auth.userId,
+      nativeRedirectUri: redirectUri,
+      ...requestLogFields((name) => c.req.header(name)),
+    });
+    if (!result.ok) {
+      return c.json({ error: result.error.message }, 400);
+    }
+
+    return c.json(result.value, 200);
+  });
+
   authRoutes.openapi(postGithubReauthStartRoute, async (c) => {
     const { origin: requestedOrigin } = c.req.valid("query");
     const auth = c.get("auth");
@@ -175,8 +256,7 @@ export function createAuthRoutes(
     const result = await authService.createGitHubReauthAuthorizationUrl({
       userId: auth.userId,
       requestedOrigin,
-      requestId: c.req.header("cf-ray") ?? null,
-      userAgent: c.req.header("user-agent") ?? null,
+      ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
       return c.json({ error: result.error.message }, 400);
@@ -193,8 +273,7 @@ export function createAuthRoutes(
       userId: auth.userId,
       code,
       state,
-      requestId: c.req.header("cf-ray") ?? null,
-      userAgent: c.req.header("user-agent") ?? null,
+      ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
       return c.json(

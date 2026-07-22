@@ -62,9 +62,87 @@ A 401 from `/auth/refresh` (refresh token rejected) SHALL clear the keychain and
 - **THEN** the session is retained and a later refresh attempt may succeed
 
 ### Requirement: Auth-gated root view
-The root view SHALL switch on auth state: loading indicator while restoring, the Home experience when signed in, and a signed-out placeholder view otherwise. DEBUG builds SHALL provide a token-injection affordance in the signed-out view for testing (no production login UI in this change).
+The root view SHALL switch on auth state: loading indicator while restoring, the Home experience when refreshing or signed in, and a production GitHub sign-in view when signed out. A successful native sign-in attempt SHALL be adopted through `TokenCoordinator`; repository installation status SHALL NOT introduce another root authentication state.
 
 #### Scenario: State transitions drive the UI
-- **WHEN** the session store's state changes between loading, signedIn, and signedOut
-- **THEN** the root view renders the corresponding screen
+- **WHEN** the session store's state changes between loading, refreshing, signedIn, and signedOut
+- **THEN** the root view renders the corresponding loading, Home, or GitHub sign-in experience
 
+#### Scenario: Signed in without repository access
+- **WHEN** OAuth succeeds and the native session is adopted before installation approval or repository availability
+- **THEN** the root view renders Home rather than an installation-pending authentication screen
+
+### Requirement: iOS uses the explicit native GitHub sign-in contract
+The iOS unauthenticated auth API SHALL start GitHub sign-in through `/auth/github/native/start` and complete it through `/auth/github/native/complete`. Its app-facing start value SHALL contain only the authorization URL, attempt ID, and claim token; iOS SHALL NOT exchange the GitHub authorization code directly. `SessionStore` SHALL keep the attempt ID, raw claim token, and callback completion code only in memory for the active sign-in operation and SHALL NOT write them to Keychain, `UserDefaults`, other persistence, analytics, or logs.
+
+#### Scenario: Native sign-in starts
+- **WHEN** `SessionStore` requests a GitHub sign-in attempt
+- **THEN** `UnauthenticatedAuthAPI` returns a native attempt value with an authorization URL, attempt ID, and claim token
+
+#### Scenario: Native sign-in completes
+- **WHEN** `SessionStore` completes a callback-confirmed native attempt with both secrets
+- **THEN** `UnauthenticatedAuthAPI` maps the concrete native completion response to a `Session` and user
+
+#### Scenario: Legacy exchange API is absent
+- **WHEN** the iOS API module is compiled after the change
+- **THEN** `SignInProviding` has no direct OAuth-code exchange or continuation-token method
+
+#### Scenario: App terminates during sign-in
+- **WHEN** the app is terminated before the active native attempt is claimed
+- **THEN** the app persists no attempt credentials, abandons that attempt, and starts a new attempt on the next sign-in while the abandoned server row expires normally
+
+### Requirement: OAuth and installation share one system web-auth presentation
+`SessionStore` SHALL open the native attempt's authorization URL in one `ASWebAuthenticationSession`. The server MAY navigate that same presentation from OAuth to GitHub App installation before returning to the configured custom scheme, but the app SHALL NOT start a second web-auth session automatically.
+
+#### Scenario: Installation already exists
+- **WHEN** OAuth completes for a user with an existing installation
+- **THEN** the same web-auth session returns directly to the app callback
+
+#### Scenario: Installation is missing
+- **WHEN** OAuth completes for a user without an installation
+- **THEN** the same web-auth session navigates to GitHub App setup and then returns to the app callback
+
+### Requirement: Native callback matches the started attempt
+The custom-scheme callback SHALL include the non-secret attempt ID and one-time completion code. `SessionStore` SHALL verify that the ID equals the attempt it started and the code is nonempty before sending the attempt ID, in-memory claim token, and callback code to native completion. Neither secret SHALL be persisted or logged.
+
+#### Scenario: Matching callback
+- **WHEN** the custom-scheme callback carries the current attempt ID and completion code
+- **THEN** `SessionStore` sends both separated secrets and adopts the returned session through `TokenCoordinator`
+
+#### Scenario: Mismatched callback
+- **WHEN** the custom-scheme callback carries a different or missing attempt ID or completion code
+- **THEN** `SessionStore` rejects the callback, adopts no session, and presents a retryable sign-in error
+
+#### Scenario: OAuth denial callback
+- **WHEN** the custom-scheme callback carries the current attempt ID and `error=OAUTH_DENIED`
+- **THEN** `SessionStore` adopts no session and presents a retryable sign-in error
+
+### Requirement: Browser dismissal is silent and cannot issue a session
+When `ASWebAuthenticationSession` reports `.canceledLogin`, `SessionStore` SHALL remain signed out silently and SHALL NOT call native completion, whether dismissal happens before or after OAuth. A retry SHALL create a fresh attempt and one new web-auth presentation.
+
+#### Scenario: Installation is dismissed after OAuth
+- **WHEN** OAuth made the attempt identity-ready and the user dismisses GitHub App setup
+- **THEN** the app remains signed out without a completion request because no final callback delivered a completion code
+
+#### Scenario: Organization approval remains pending
+- **WHEN** OAuth made the attempt identity-ready but installation cannot finish without organization approval
+- **THEN** dismissal leaves the app silently signed out and retry starts a new attempt
+
+#### Scenario: User cancels before OAuth
+- **WHEN** the browser closes while the attempt is still awaiting OAuth
+- **THEN** the app remains signed out without showing a failure or calling completion
+
+#### Scenario: Retry after cancellation
+- **WHEN** the user retries after a dismissal
+- **THEN** `SessionStore` starts a new server attempt and opens exactly one new web-auth session
+
+### Requirement: Repository access does not gate native authentication
+After native completion, the iOS app SHALL enter its normal signed-in state even if the repository API returns no repositories. Repository management SHALL remain available through a separate authenticated action labeled **Manage repositories on GitHub**.
+
+#### Scenario: Signed in with no repositories
+- **WHEN** a native session is adopted and the refreshed repository list is empty
+- **THEN** the repository picker renders its normal empty state with the separate management action
+
+#### Scenario: Repository access changes later
+- **WHEN** the user returns from repository management or a webhook updates installation scope
+- **THEN** the active repository listing and search are refreshed without repeating sign-in

@@ -100,6 +100,38 @@ public struct GitHubReauthTokenResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct GitHubSignInCompleteRequest: Codable, Equatable, Sendable {
+    public var attemptId: String
+    public var claimToken: String
+    public var completionCode: String
+
+    public init(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) {
+        self.attemptId = attemptId
+        self.claimToken = claimToken
+        self.completionCode = completionCode
+    }
+}
+
+public struct GitHubSignInStartResponse: Codable, Equatable, Sendable {
+    public var authorizeUrl: String
+    public var attemptId: String
+    public var claimToken: String
+
+    public init(
+        authorizeUrl: String,
+        attemptId: String,
+        claimToken: String
+    ) {
+        self.authorizeUrl = authorizeUrl
+        self.attemptId = attemptId
+        self.claimToken = claimToken
+    }
+}
+
 public struct LogoutResponse: Codable, Equatable, Sendable {
     public let ok = true
 
@@ -110,6 +142,35 @@ public struct LogoutResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct NativeGitHubSignInCompleteResponse: Codable, Equatable, Sendable {
+    public var accessToken: String
+    public var refreshToken: String
+    public var refreshTokenExpiresAt: ISODateTimeString
+    public var user: UserInfo
+
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        refreshTokenExpiresAt: ISODateTimeString,
+        user: UserInfo
+    ) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.refreshTokenExpiresAt = refreshTokenExpiresAt
+        self.user = user
+    }
+}
+
+public struct NativeGitHubSignInStartRequest: Codable, Equatable, Sendable {
+    public var redirectUri: String
+
+    public init(
+        redirectUri: String
+    ) {
+        self.redirectUri = redirectUri
+    }
+}
+
 public struct NativeLogoutRequest: Codable, Equatable, Sendable {
     public var refreshToken: String
 
@@ -117,44 +178,6 @@ public struct NativeLogoutRequest: Codable, Equatable, Sendable {
         refreshToken: String
     ) {
         self.refreshToken = refreshToken
-    }
-}
-
-public struct NativeTokenRequest: Codable, Equatable, Sendable {
-    public var code: String
-    public var state: String
-
-    public init(
-        code: String,
-        state: String
-    ) {
-        self.code = code
-        self.state = state
-    }
-}
-
-public struct NativeTokenResponse: Codable, Equatable, Sendable {
-    public var accessToken: String
-    public var refreshToken: String
-    public var refreshTokenExpiresAt: ISODateTimeString
-    public var user: UserInfo
-    public var hasInstallations: Bool
-    public var installUrl: String
-
-    public init(
-        accessToken: String,
-        refreshToken: String,
-        refreshTokenExpiresAt: ISODateTimeString,
-        user: UserInfo,
-        hasInstallations: Bool,
-        installUrl: String
-    ) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-        self.refreshTokenExpiresAt = refreshTokenExpiresAt
-        self.user = user
-        self.hasInstallations = hasInstallations
-        self.installUrl = installUrl
     }
 }
 
@@ -314,25 +337,6 @@ public struct TokenRequest: Codable, Equatable, Sendable {
     }
 }
 
-public struct TokenResponse: Codable, Equatable, Sendable {
-    public var token: String
-    public var user: UserInfo
-    public var hasInstallations: Bool
-    public var installUrl: String
-
-    public init(
-        token: String,
-        user: UserInfo,
-        hasInstallations: Bool,
-        installUrl: String
-    ) {
-        self.token = token
-        self.user = user
-        self.hasInstallations = hasInstallations
-        self.installUrl = installUrl
-    }
-}
-
 public struct UserInfo: Codable, Equatable, Sendable {
     public var id: String
     public var login: String
@@ -349,5 +353,34 @@ public struct UserInfo: Codable, Equatable, Sendable {
         self.login = login
         self.name = name
         self.avatarUrl = avatarUrl
+    }
+}
+
+public struct WebGitHubSignInCompleteResponse: Codable, Equatable, Sendable {
+    public var token: String
+    public var user: UserInfo
+    public var redirectUrl: String
+
+    public init(
+        token: String,
+        user: UserInfo,
+        redirectUrl: String
+    ) {
+        self.token = token
+        self.user = user
+        self.redirectUrl = redirectUrl
+    }
+}
+
+public struct WebGitHubSignInStartRequest: Codable, Equatable, Sendable {
+    public var origin: String
+    public var returnTo: String
+
+    public init(
+        origin: String,
+        returnTo: String
+    ) {
+        self.origin = origin
+        self.returnTo = returnTo
     }
 }

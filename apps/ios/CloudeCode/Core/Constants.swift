@@ -19,6 +19,9 @@ enum Constants {
         return scheme
     }()
 
+    /// OAuth callback handled by the app's registered custom URL scheme.
+    static let oauthRedirectURI = "\(deepLinkScheme)://auth/callback"
+
     /// Web app origin injected by the active build scheme through Info.plist.
     static let webBaseURL: String = {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String,

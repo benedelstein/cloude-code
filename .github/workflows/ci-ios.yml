@@ -62,10 +62,6 @@ jobs:
       - name: Install SwiftLint
         run: brew install swiftlint
 
-      - name: SwiftLint
-        working-directory: apps/ios
-        run: swiftlint lint --strict --no-cache
-
       - name: Build app
         working-directory: apps/ios
         run: |

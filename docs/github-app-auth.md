@@ -18,6 +18,41 @@ cloude-code uses a GitHub App for repository access. Each session gets a scoped,
 7. After a successful pushed branch and terminal agent turn, the Durable Object uses the same GitHub App service to create the pull request server-side
 ```
 
+### Installation return
+
+First-time sign-in can chain OAuth and installation in one browser journey
+without enabling GitHub's coupled OAuth-on-install setting. `/auth/callback`
+exchanges and stores the user's GitHub credential and marks the sign-in attempt
+`identity_ready`. When the GitHub user has no installation, the API creates a
+one-time installation callback state bound to that attempt and sends the same
+browser to GitHub's installation URL.
+
+Where the attempt is claimed differs by client, because the clients regain
+control at different points:
+
+- **Web** claims first. The API returns the tab to the BFF completion route, the
+  BFF sets the session cookie, and only then does the browser continue to the
+  installation URL. Abandoning setup cannot undo the login.
+- **Native** has no control point between browser navigations. The setup
+  callback returns to the app's OAuth custom scheme carrying `attemptId`, and
+  the app claims there with the callback's one-time completion code. If the
+  browser is dismissed first, iOS stays signed out and starts a fresh attempt
+  when the user retries; it never completes without the final callback.
+
+Authenticated repository management is separate: the iOS client starts it with
+`POST /auth/github/install/start`, which creates a one-time state row bound to
+an allowlisted native callback and appends the nonce to GitHub's installation
+URL. GitHub preserves that state when it sends the browser to the configured
+`/github/install/complete` setup page, which forwards to the public
+`GET /auth/github/install/callback` route through the web API proxy.
+
+Consuming an installation state authorizes only the stored return redirect and a
+repository-listing refresh. Clients treat the redirect purely as browser
+completion and read actual access from the authenticated repository listing;
+the `installation_id` and `setup_action` supplied to the setup page are never
+trusted. Zero repositories is a valid signed-in state, and repository management
+remains available from the repository picker.
+
 ### User And Installation Authorization
 
 GitHub App user access tokens are intersection-scoped. They can access only the
