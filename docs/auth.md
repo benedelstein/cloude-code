@@ -29,7 +29,8 @@ GitHub" to "this client issued its session". It records:
 | `id` | Non-secret attempt id; travels on client callback URLs. |
 | `client_type` | `web` or `native`, set by the start route, never by a request field. |
 | `claim_token_hash` | SHA-256 of the raw claim token, which is returned exactly once to the initiating adapter. |
-| `status` | `awaiting_oauth` → `identity_ready` → `claimed`, or `failed`. |
+| `completion_code_hash` | SHA-256 of the raw one-time code issued only at the final browser handoff. |
+| `status` | `awaiting_oauth` → `identity_ready` → `completion_ready` → `claimed`, or `failed`. |
 | `user_id` | Populated after the OAuth exchange. |
 | `completion_target` | Web: the allowlisted origin. Native: the allowlisted custom-scheme URI. |
 | `return_to` | Web only: validated relative application path. |
@@ -48,26 +49,28 @@ grant, not an authentication step.
 
 ### Claim security
 
-The claim token is a bearer proof that authorizes the initiating adapter to
-issue *its* client-specific session. It is not proof of installation.
+Completion requires two independent bearer proofs: the initiating adapter's
+`claimToken` and the final callback's `completionCode`. Neither alone can issue
+a session, so transferring an authorization URL does not transfer the starter's
+ability to claim the callback receiver's identity.
 
-- Completion looks the attempt up by id and verifies the claim-token hash with a
-  constant-time comparison **before** disclosing status. A token mismatch always
-  returns `INVALID_SIGN_IN_ATTEMPT`, whatever the stored status.
-- Only an unexpired, correctly client-bound attempt with a valid claim token can
-  return `SIGN_IN_NOT_READY` (HTTP 409), which means "OAuth has not landed yet".
+- Completion verifies both stored hashes with constant-time comparisons before
+  disclosing status. Any mismatch, pending/failed state, expiry, wrong client,
+  or replay returns `INVALID_SIGN_IN_ATTEMPT`.
 - The claim is consumed by a conditional `UPDATE ... WHERE status =
-  'identity_ready' RETURNING`, so concurrent or repeated completions can issue
+  'completion_ready' RETURNING`, so concurrent or repeated completions can issue
   at most one session.
-- Claim tokens never appear in redirect URLs or logs.
+- Claim tokens never appear in redirect URLs or logs. Completion codes appear
+  only in the necessary final callback, are never persisted raw, and are
+  immediately removed from the browser URL by the BFF's next redirect.
 
 ## Routes
 
 ```text
 POST /auth/github/web/start        { origin, returnTo }  -> { authorizeUrl, attemptId, claimToken }
-POST /auth/github/web/complete     { attemptId, claimToken } -> { token, user, redirectUrl }
+POST /auth/github/web/complete     { attemptId, claimToken, completionCode } -> { token, user, redirectUrl }
 POST /auth/github/native/start     { redirectUri }       -> { authorizeUrl, attemptId, claimToken }
-POST /auth/github/native/complete  { attemptId, claimToken } -> { accessToken, refreshToken, refreshTokenExpiresAt, user }
+POST /auth/github/native/complete  { attemptId, claimToken, completionCode } -> { accessToken, refreshToken, refreshTokenExpiresAt, user }
 GET  /auth/callback                                       (GitHub OAuth callback)
 GET  /auth/github/install/callback                        (GitHub App setup callback)
 ```
@@ -98,10 +101,10 @@ Browser                    Next.js BFF                  API Server              
   |                                                         # upsert user + creds   |
   |                                                         # status=identity_ready |
   |                                                         # chain install if none |
-  |<-- 302 <origin>/api/auth/github/complete?attemptId=<id> -------------------------|
+  |<-- 302 <origin>/api/auth/github/complete?attemptId=<id>&completionCode=<code> ----|
   |-- GET /api/auth/github/complete ->|                     |                       |
   |                            |-- POST /auth/github/web/complete ----------------->|
-  |                            |   { attemptId, claimToken } # claim (at most once) |
+  |                            |   { attemptId, claimToken, completionCode }         |
   |                            |<-- { token, user, redirectUrl } -------------------|
   |<-- Set session_token cookie, clear attempt cookie, 302 redirectUrl -------------|
 ```
@@ -146,14 +149,15 @@ One `ASWebAuthenticationSession` covers OAuth and, when needed, installation:
 2. The app opens `authorizeUrl` with the custom callback scheme.
 3. `/auth/callback` exchanges the code server-side, then redirects either to
    GitHub App setup (whose callback returns to
-   `cloudecode://auth/callback?attemptId=<id>`) or straight to that URI.
-4. The app verifies the returned `attemptId`, then calls
+   `cloudecode://auth/callback?attemptId=<id>&completionCode=<code>`) or issues
+   the completion code and redirects straight to that URI.
+4. The app verifies the returned attempt ID and completion code, then calls
    `POST /auth/github/native/complete` and adopts the token pair.
 
-If the browser is dismissed, the app retries completion once more:
-`identity_ready` yields a session (installation was cancelled or is awaiting
-approval), while `awaiting_oauth` yields `SIGN_IN_NOT_READY` and the app stays
-signed out silently. See `apps/ios/docs/auth.md`.
+If the browser is dismissed before the final callback, the app stays signed out
+silently and makes no completion call. Retrying creates a new attempt; GitHub
+will usually fast-path an authorization already granted. No callback means no
+session. See `apps/ios/docs/auth.md`.
 
 ## OAuth denial and failure
 
@@ -171,10 +175,11 @@ No completion route can issue a session for a failed attempt.
 Installation is a repository-access grant with its own lifecycle, and it is
 never an authentication gate.
 
-- Installation navigation uses a dedicated one-time row in the temporary
-  external-auth state store, distinguished by `purpose = "github_install"`, with
-  its own user, validated redirect target, expiration, and optional sign-in
-  attempt reference.
+- Installation navigation uses distinct one-time purposes for post-claim web
+  sign-in, chained native sign-in finalization, and authenticated repository
+  management. Native sign-in state references the attempt but never contains
+  the raw completion code; web state owns its final application route and may
+  outlive the shorter claimed attempt.
 - Consuming it authorizes only the stored return redirect and a repository
   listing refresh.
 - `installation_id`, `setup_action`, and repository parameters on the callback

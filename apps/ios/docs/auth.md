@@ -156,41 +156,38 @@ identity.
    credentials, marks the attempt `identity_ready`, and — only when the GitHub
    user has no App installation — navigates the same browser session to GitHub
    App setup before returning to the custom scheme.
-4. Verify that the callback's `attemptId` equals the attempt that was started,
-   and that it carries no `error`.
-5. `POST /auth/github/native/complete { attemptId, claimToken }` returns the
-   access/refresh pair and user.
+4. At the actual final handoff, the API issues a one-time `completionCode` and
+   returns it with the `attemptId` on the custom-scheme callback. Verify the
+   attempt matches, the code is nonempty, and the callback carries no `error`.
+5. `POST /auth/github/native/complete { attemptId, claimToken,
+   completionCode }` returns the access/refresh pair and user.
 6. Ask `TokenCoordinator` to adopt and persist the `Session`.
 7. Handle the emitted `.signedIn` event and load the current user.
 
 ### Attempt credentials
 
 `attemptId` is non-secret and travels on the custom-scheme callback.
-`claimToken` authorizes issuing this app's session. It stays in memory for the
-duration of the active `signIn(using:)` call only — never Keychain,
-`UserDefaults`, other persistence, analytics, or logs. If the app is terminated
-mid-flow the attempt is simply abandoned; the server row expires on its own and
-the next sign-in starts a new attempt.
+`claimToken` is held by the initiating app call; `completionCode` is delivered
+only to the browser that reaches the final callback. The server requires both,
+so a transferred authorization URL cannot be claimed by either party alone.
+Both secrets stay in local function memory only — never Keychain,
+`UserDefaults`, other persistence, analytics, or logs. D1 stores only SHA-256
+hashes under the attempt's original fixed expiry. If the app is terminated
+mid-flow the attempt is abandoned and the next sign-in starts a new attempt.
 
 Completion is at-most-once on the server, so a lost completion response cannot
 be retried into a second session. That case surfaces as an ordinary sign-in
 failure and the (short) flow is restarted.
 
-### Cancellation recovery
+### Cancellation
 
 One system presentation covers OAuth and repository setup, so a dismissal can
-happen on either side of OAuth. On `.canceledLogin`, `SessionStore` calls
-native completion with the same attempt credentials:
-
-| Server attempt status | Response | App behavior |
-| --- | --- | --- |
-| `identity_ready` | token pair | Adopt the session and enter the normal signed-in UI. |
-| `awaiting_oauth` | `SIGN_IN_NOT_READY` | Stay signed out silently — an ordinary cancellation. |
-| invalid / expired / claimed | `INVALID_SIGN_IN_ATTEMPT` | Show a retryable sign-in error. |
-
-`SIGN_IN_NOT_READY` is retried a small bounded number of times, because a
-dismissal can race an OAuth callback that is still landing. No other error code
-is retried.
+happen on either side of OAuth. Any `.canceledLogin` is a silent signed-out
+outcome and makes no completion request. Even when OAuth already established
+the identity, no final callback means no `completionCode` and therefore no
+session. A retry starts a fresh attempt; GitHub will usually fast-path the
+authorization already granted. This tradeoff preserves callback binding rather
+than letting the initiator poll for another browser's identity.
 
 The sign-in start, sign-in completion, refresh, and logout endpoints bypass
 `AuthTokenProviding`.
@@ -230,9 +227,9 @@ Auth lifecycle coverage lives in:
 - `CloudeCodeTests/SessionStoreTests.swift`: signed-out launch, explicit and
   terminal sign-out, stale-session startup, cached `refreshing` state, and
   transient startup retry.
-- `CloudeCodeTests/SessionStoreSignInTests.swift`: callback attempt matching,
-  OAuth denial, dismissal before and after OAuth, the bounded
-  `SIGN_IN_NOT_READY` retry, and invalid-attempt recovery. It drives sign-in
+- `CloudeCodeTests/SessionStoreSignInTests.swift`: callback attempt/code
+  matching, missing or error callbacks, and silent dismissal before and after
+  OAuth with zero completion calls. It drives sign-in
   through the `WebAuthenticating` seam instead of a real browser.
 - `CloudeCodeTests/TokenCoordinatorTests.swift`: concurrent refresh callers
   sharing one token rotation.

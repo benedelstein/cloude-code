@@ -62,8 +62,8 @@ public struct AuthorizePage: Sendable, Equatable {
 ///
 /// `attemptId` is non-secret and travels on the custom-scheme callback.
 /// `claimToken` authorizes issuing this app's session and must stay in memory
-/// for the active sign-in operation only: never Keychain, `UserDefaults`,
-/// other persistence, analytics, or logs.
+/// for the active sign-in operation only. Completion also requires the
+/// callback-delivered code; neither secret may reach persistence or logs.
 public struct GitHubSignInAttempt: Sendable, Equatable {
     public let authorizeURL: URL
     public let attemptId: String
@@ -90,7 +90,11 @@ public struct SignInResult: Sendable {
 /// identity. The app never sees or exchanges a GitHub authorization code.
 public protocol SignInProviding: Sendable {
     func startSignIn(redirectUri: String) async throws -> GitHubSignInAttempt
-    func completeSignIn(attemptId: String, claimToken: String) async throws -> SignInResult
+    func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult
 }
 
 /// Rotates a session's token pair via `POST /auth/native/refresh`.
@@ -130,10 +134,15 @@ public struct UnauthenticatedAuthAPI: UnauthenticatedAuthAPIProviding {
 
     public func completeSignIn(
         attemptId: String,
-        claimToken: String
+        claimToken: String,
+        completionCode: String
     ) async throws -> SignInResult {
         let response = try await client.fetch(PostNativeSignInComplete(
-            body: .init(attemptId: attemptId, claimToken: claimToken)
+            body: .init(
+                attemptId: attemptId,
+                claimToken: claimToken,
+                completionCode: completionCode
+            )
         ))
         let session = try Session(
             nativeAccessToken: response.accessToken,
@@ -154,16 +163,6 @@ public struct UnauthenticatedAuthAPI: UnauthenticatedAuthAPIProviding {
 
     public func logout(refreshToken: String) async throws {
         _ = try await client.fetch(PostNativeLogout(body: .init(refreshToken: refreshToken)))
-    }
-}
-
-public extension APIError {
-    /// The sign-in attempt is valid but its OAuth callback has not landed yet.
-    var isSignInNotReady: Bool {
-        if case let .httpError(_, code, _) = self {
-            return code == "SIGN_IN_NOT_READY"
-        }
-        return false
     }
 }
 

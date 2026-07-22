@@ -32,15 +32,6 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         return identifier
     }
 
-    private var oauthRedirectURI: String {
-        // Injected per scheme via Config/*.xcconfig -> Info.plist.
-        guard let uri = Bundle.main.object(forInfoDictionaryKey: "OAUTH_REDIRECT_URI") as? String,
-              !uri.isEmpty else {
-            preconditionFailure("missing OAUTH_REDIRECT_URI in Info.plist")
-        }
-        return uri
-    }
-
     var apiClient: APIClient {
         shared {
             APIClient(baseURL: apiBaseURL) // pure transport
@@ -140,7 +131,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
                 coordinator: tokenCoordinator,
                 userStore: userStore,
                 signInAPI: unauthenticatedAuthAPI,
-                oauthRedirectURI: oauthRedirectURI
+                oauthRedirectURI: Constants.oauthRedirectURI
             )
         }
     }
@@ -149,7 +140,7 @@ final class ApplicationComponent: Component<ApplicationDependency> {
         shared {
             GitHubInstallationStore(
                 authAPI: authAPI,
-                oauthRedirectURI: oauthRedirectURI
+                oauthRedirectURI: Constants.oauthRedirectURI
             )
         }
     }

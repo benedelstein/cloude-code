@@ -20,18 +20,10 @@ const ErrorResponse = z.object({
   error: z.string(),
 });
 
-/**
- * Sign-in failures carry a stable code so clients can distinguish "the OAuth
- * callback has not landed yet" from "this attempt can never be completed".
- */
+/** Sign-in failures expose one stable invalid-attempt result. */
 const SignInErrorResponse = z.object({
   error: z.string(),
   code: z.enum(["INVALID_SIGN_IN_ATTEMPT", "INVALID_ORIGIN", "INVALID_RETURN_TO"]),
-});
-
-const SignInNotReadyResponse = z.object({
-  error: z.string(),
-  code: z.literal("SIGN_IN_NOT_READY"),
 });
 
 export const postWebGithubSignInStartRoute = createRoute({
@@ -70,10 +62,6 @@ export const postWebGithubSignInCompleteRoute = createRoute({
     400: {
       content: { "application/json": { schema: SignInErrorResponse } },
       description: "Attempt is invalid, expired, already claimed, or not web-bound",
-    },
-    409: {
-      content: { "application/json": { schema: SignInNotReadyResponse } },
-      description: "Attempt is still awaiting OAuth",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },
@@ -120,10 +108,6 @@ export const postNativeGithubSignInCompleteRoute = createRoute({
     400: {
       content: { "application/json": { schema: SignInErrorResponse } },
       description: "Attempt is invalid, expired, already claimed, or not native-bound",
-    },
-    409: {
-      content: { "application/json": { schema: SignInNotReadyResponse } },
-      description: "Attempt is still awaiting OAuth",
     },
     500: {
       content: { "application/json": { schema: ErrorResponse } },

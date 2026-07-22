@@ -21,7 +21,11 @@ struct SessionStoreSignInTests {
         ))
 
         #expect(await api.completions == [
-            Completion(attemptId: Self.attemptId, claimToken: Self.claimToken)
+            Completion(
+                attemptId: Self.attemptId,
+                claimToken: Self.claimToken,
+                completionCode: Self.completionCode
+            )
         ])
         #expect(store.signInError == nil)
         try await waitUntil { store.state == .signedIn(userId: "user-1") }
@@ -53,7 +57,8 @@ struct SessionStoreSignInTests {
         await store.signIn(using: TestWebAuthenticationSession(
             outcome: .callback(try testURL(Self.callbackURLString(
                 attemptId: Self.attemptId,
-                error: "OAUTH_DENIED"
+                error: "OAUTH_DENIED",
+                completionCode: nil
             )))
         ))
 
@@ -62,7 +67,26 @@ struct SessionStoreSignInTests {
         #expect(store.state == .signedOut)
     }
 
-    @Test func dismissalAfterOAuthStillAdoptsTheIdentityReadySession() async throws {
+    @Test func callbackWithoutCompletionCodeIsRejectedWithoutClaiming() async throws {
+        let api = TestSignInAPI(result: Self.signInResult)
+        let store = makeStore(api: api)
+        let startTask = Task { await store.start() }
+        defer { startTask.cancel() }
+        try await waitUntil { store.state == .signedOut }
+
+        await store.signIn(using: TestWebAuthenticationSession(
+            outcome: .callback(try testURL(Self.callbackURLString(
+                attemptId: Self.attemptId,
+                completionCode: nil
+            )))
+        ))
+
+        #expect(await api.completions.isEmpty)
+        #expect(store.signInError != nil)
+        #expect(store.state == .signedOut)
+    }
+
+    @Test func dismissalBeforeOAuthStaysSignedOutWithoutCompleting() async throws {
         let api = TestSignInAPI(result: Self.signInResult)
         let store = makeStore(api: api)
         let startTask = Task { await store.start() }
@@ -71,13 +95,13 @@ struct SessionStoreSignInTests {
 
         await store.signIn(using: TestWebAuthenticationSession(outcome: .canceled))
 
-        #expect(await api.completions.count == 1)
         #expect(store.signInError == nil)
-        try await waitUntil { store.state == .signedIn(userId: "user-1") }
+        #expect(store.state == .signedOut)
+        #expect(await api.completions.isEmpty)
     }
 
-    @Test func dismissalBeforeOAuthStaysSignedOutWithoutAnError() async throws {
-        let api = TestSignInAPI(result: Self.signInResult, notReadyResponses: .max)
+    @Test func dismissalAfterOAuthStaysSignedOutWithoutCompleting() async throws {
+        let api = TestSignInAPI(result: Self.signInResult)
         let store = makeStore(api: api)
         let startTask = Task { await store.start() }
         defer { startTask.cancel() }
@@ -87,42 +111,7 @@ struct SessionStoreSignInTests {
 
         #expect(store.signInError == nil)
         #expect(store.state == .signedOut)
-        // Bounded: the not-ready path must not retry indefinitely.
-        #expect(await api.completions.count == 3)
-    }
-
-    @Test func notReadyRetriesBrieflyWhileTheOAuthCallbackLands() async throws {
-        let api = TestSignInAPI(result: Self.signInResult, notReadyResponses: 1)
-        let store = makeStore(api: api)
-        let startTask = Task { await store.start() }
-        defer { startTask.cancel() }
-        try await waitUntil { store.state == .signedOut }
-
-        await store.signIn(using: TestWebAuthenticationSession(outcome: .canceled))
-
-        #expect(await api.completions.count == 2)
-        #expect(store.signInError == nil)
-        try await waitUntil { store.state == .signedIn(userId: "user-1") }
-    }
-
-    @Test func invalidAttemptOnDismissalSurfacesARetryableError() async throws {
-        let api = TestSignInAPI(
-            result: Self.signInResult,
-            completionError: APIError.httpError(
-                statusCode: 400,
-                code: "INVALID_SIGN_IN_ATTEMPT",
-                message: "Invalid or expired sign-in attempt. Try again."
-            )
-        )
-        let store = makeStore(api: api)
-        let startTask = Task { await store.start() }
-        defer { startTask.cancel() }
-        try await waitUntil { store.state == .signedOut }
-
-        await store.signIn(using: TestWebAuthenticationSession(outcome: .canceled))
-
-        #expect(store.signInError != nil)
-        #expect(store.state == .signedOut)
+        #expect(await api.completions.isEmpty)
     }
 
     private func makeStore(api: TestSignInAPI) -> SessionStore {
@@ -138,12 +127,18 @@ struct SessionStoreSignInTests {
         )
     }
 
-    fileprivate static let attemptId = "attempt-1"
-    fileprivate static let claimToken = "claim-token"
+    nonisolated fileprivate static let attemptId = "attempt-1"
+    nonisolated fileprivate static let claimToken = "claim-token"
+    nonisolated fileprivate static let completionCode = "completion-code"
 
-    fileprivate static func callbackURLString(attemptId: String, error: String? = nil) -> String {
+    fileprivate static func callbackURLString(
+        attemptId: String,
+        error: String? = nil,
+        completionCode: String? = SessionStoreSignInTests.completionCode
+    ) -> String {
         let errorQuery = error.map { "&error=\($0)" } ?? ""
-        return "cloudecode://auth/callback?attemptId=\(attemptId)\(errorQuery)"
+        let codeQuery = completionCode.map { "&completionCode=\($0)" } ?? ""
+        return "cloudecode://auth/callback?attemptId=\(attemptId)\(errorQuery)\(codeQuery)"
     }
 
     private static let signInResult = SignInResult(
@@ -171,6 +166,7 @@ struct SessionStoreSignInTests {
 private struct Completion: Equatable, Sendable {
     let attemptId: String
     let claimToken: String
+    let completionCode: String
 }
 
 private struct TestWebAuthenticationSession: WebAuthenticating {
@@ -193,18 +189,10 @@ private struct TestWebAuthenticationSession: WebAuthenticating {
 
 private actor TestSignInAPI: SignInProviding, SessionRefreshing, SessionRevoking {
     private let result: SignInResult
-    private let completionError: (any Error)?
-    private var notReadyResponses: Int
     private(set) var completions: [Completion] = []
 
-    init(
-        result: SignInResult,
-        notReadyResponses: Int = 0,
-        completionError: (any Error)? = nil
-    ) {
+    init(result: SignInResult) {
         self.result = result
-        self.notReadyResponses = notReadyResponses
-        self.completionError = completionError
     }
 
     func startSignIn(redirectUri: String) async throws -> GitHubSignInAttempt {
@@ -215,19 +203,16 @@ private actor TestSignInAPI: SignInProviding, SessionRefreshing, SessionRevoking
         )
     }
 
-    func completeSignIn(attemptId: String, claimToken: String) async throws -> SignInResult {
-        completions.append(Completion(attemptId: attemptId, claimToken: claimToken))
-        if let completionError {
-            throw completionError
-        }
-        if notReadyResponses > 0 {
-            notReadyResponses -= 1
-            throw APIError.httpError(
-                statusCode: 409,
-                code: "SIGN_IN_NOT_READY",
-                message: "Sign-in is not ready yet."
-            )
-        }
+    func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult {
+        completions.append(Completion(
+            attemptId: attemptId,
+            claimToken: claimToken,
+            completionCode: completionCode
+        ))
         return result
     }
 

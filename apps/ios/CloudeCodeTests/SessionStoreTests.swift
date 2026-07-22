@@ -242,7 +242,11 @@ private actor TestAuthAPI: SignInProviding, SessionRefreshing, SessionRevoking {
         throw SessionStoreTestError.unexpectedAPICall
     }
 
-    func completeSignIn(attemptId: String, claimToken: String) async throws -> SignInResult {
+    func completeSignIn(
+        attemptId: String,
+        claimToken: String,
+        completionCode: String
+    ) async throws -> SignInResult {
         throw SessionStoreTestError.unexpectedAPICall
     }
 

@@ -31,7 +31,7 @@ The BFF start route SHALL validate a relative same-origin `returnTo`, call the A
 - **THEN** the cookie is HttpOnly, Secure outside local development, SameSite=Lax, narrowly scoped, and has `Max-Age=600` seconds
 
 ### Requirement: OAuth returns through web completion
-After the API completes OAuth for a web attempt, it SHALL redirect to the attempt's allowlisted origin at the BFF completion route with only the non-secret attempt ID. The raw claim token SHALL remain only in the BFF cookie. An OAuth denial SHALL use the same route with the attempt ID and `error=OAUTH_DENIED`.
+After OAuth and optional installation URL preparation, the API SHALL issue a one-time completion code and redirect to the attempt's allowlisted BFF completion route with the non-secret attempt ID and completion code. The raw claim token SHALL remain only in the encrypted HttpOnly cookie. OAuth denial SHALL return the attempt ID and error without a completion code.
 
 #### Scenario: OAuth callback reaches the originating preview
 - **WHEN** a web attempt was started from an allowlisted preview origin
@@ -41,12 +41,20 @@ After the API completes OAuth for a web attempt, it SHALL redirect to the attemp
 - **WHEN** the completion query attempt ID does not match the BFF attempt cookie
 - **THEN** the BFF refuses completion, sets no web session cookie, preserves the different active attempt cookie, and returns that tab to the retry surface
 
+#### Scenario: Matching callback and cookie
+- **WHEN** the BFF receives a completion code and attempt ID matching its claim cookie
+- **THEN** it combines the callback code with the cookie claim to request API completion
+
+#### Scenario: Callback lacks completion code
+- **WHEN** the BFF receives a non-error callback without a completion code
+- **THEN** it does not call completion or clear a newer attempt cookie
+
 #### Scenario: OAuth denial reaches the BFF
 - **WHEN** GitHub denies OAuth for a web attempt
 - **THEN** the API redirects to `<bound-origin>/api/auth/github/complete?attemptId=<id>&error=OAUTH_DENIED`, and the BFF clears the matching attempt cookie and returns to the signed-out retry surface
 
 ### Requirement: Web session is established before installation navigation
-The BFF completion route SHALL first process a claim cookie whose attempt ID matches the query, even when a valid normal web session already exists; successful completion replaces that session cookie. If no matching claim cookie exists, the route SHALL redirect a request with a valid normal web session to the default signed-in app route. If neither condition holds, it SHALL render the retryable signed-out error surface. After a successful claim, it SHALL clear the temporary attempt cookie before redirecting to the API-selected next URL.
+The BFF completion route SHALL require the matching encrypted claim cookie and callback completion code before API completion, even when a valid web session already exists. Successful completion SHALL replace the session cookie, clear the attempt cookie, and immediately redirect to a clean final or installation URL containing no completion code. Without the exact callback-and-cookie pair, it SHALL preserve existing-session back-button and concurrent-tab behavior.
 
 #### Scenario: Consumed completion URL is revisited
 - **WHEN** the browser revisits a completion URL after successful sign-in and presents a valid normal web session cookie but no claim cookie
@@ -59,6 +67,14 @@ The BFF completion route SHALL first process a claim cookie whose attempt ID mat
 #### Scenario: Installation is missing
 - **WHEN** web completion returns a GitHub App installation URL
 - **THEN** the BFF sets the session cookie before redirecting the same tab to GitHub installation
+
+#### Scenario: Callback receiver lacks starter cookie
+- **WHEN** a browser receives the completion callback without the matching claim cookie
+- **THEN** it cannot claim, does not call API completion, and preserves any newer claim cookie
+
+#### Scenario: Starter lacks callback code
+- **WHEN** the initiating browser has the claim cookie but no completion code
+- **THEN** it cannot claim and does not call API completion
 
 #### Scenario: Installation is abandoned
 - **WHEN** the user leaves or cancels GitHub App installation after web completion

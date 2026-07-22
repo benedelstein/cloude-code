@@ -25,6 +25,7 @@ interface SignInAttemptRow {
   id: string;
   client_type: string;
   claim_token_hash: string;
+  completion_code_hash: string | null;
   status: string;
   user_id: string | null;
   completion_target: string;
@@ -134,6 +135,7 @@ class MockD1 {
         id,
         client_type: clientType,
         claim_token_hash: claimTokenHash,
+        completion_code_hash: null,
         status: "awaiting_oauth",
         user_id: null,
         completion_target: completionTarget,
@@ -147,19 +149,42 @@ class MockD1 {
       return null;
     }
     if (sql.includes("SET status = 'identity_ready'")) {
-      const [userId, installUrl, id] = args as [string, string | null, string];
+      const [userId, id] = args as [string, string];
       const attempt = this.signInAttempts.get(id);
       if (attempt) {
         attempt.status = "identity_ready";
         attempt.user_id = userId;
+      }
+      return null;
+    }
+    if (sql.includes("SET install_url = ?")) {
+      const [installUrl, id] = args as [string, string];
+      const attempt = this.signInAttempts.get(id);
+      if (attempt?.status === "identity_ready") {
         attempt.install_url = installUrl;
       }
       return null;
     }
-    if (sql.includes("SET status = 'claimed'")) {
-      const [id] = args as [string];
+    if (sql.includes("SET status = 'completion_ready'")) {
+      const [completionCodeHash, id] = args as [string, string];
       const attempt = this.signInAttempts.get(id);
       if (!attempt || attempt.status !== "identity_ready") {
+        return null;
+      }
+      attempt.status = "completion_ready";
+      attempt.completion_code_hash = completionCodeHash;
+      return { id };
+    }
+    if (sql.includes("SET status = 'claimed'")) {
+      const [id, claimTokenHash, completionCodeHash, clientType] = args as string[];
+      const attempt = this.signInAttempts.get(id);
+      if (
+        !attempt
+        || attempt.claim_token_hash !== claimTokenHash
+        || attempt.completion_code_hash !== completionCodeHash
+        || attempt.client_type !== clientType
+        || attempt.status !== "completion_ready"
+      ) {
         return null;
       }
       attempt.status = "claimed";
@@ -341,9 +366,15 @@ async function signInNative(db: MockD1, hasInstallations = true) {
   if (!callback.ok) {
     throw new Error("native OAuth callback failed");
   }
+  const completionCode = new URL(callback.value.redirectUrl)
+    .searchParams.get("completionCode");
+  if (!completionCode) {
+    throw new Error("native callback had no completion code");
+  }
   const completed = await flow.completeNative({
     attemptId: started.value.attemptId,
     claimToken: started.value.claimToken,
+    completionCode,
     ...requestFields,
   });
   if (!completed.ok) {
@@ -368,15 +399,24 @@ async function signInWeb(db: MockD1) {
   if (!state) {
     throw new Error("no OAuth state for the web attempt");
   }
-  await flow.handleOAuthCallback({
+  const callback = await flow.handleOAuthCallback({
     code: "code-1",
     oauthError: undefined,
     state,
     ...requestFields,
   });
+  if (!callback.ok) {
+    throw new Error("web OAuth callback failed");
+  }
+  const completionCode = new URL(callback.value.redirectUrl)
+    .searchParams.get("completionCode");
+  if (!completionCode) {
+    throw new Error("web callback had no completion code");
+  }
   const completed = await flow.completeWeb({
     attemptId: started.value.attemptId,
     claimToken: started.value.claimToken,
+    completionCode,
     ...requestFields,
   });
   if (!completed.ok) {

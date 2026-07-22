@@ -103,13 +103,16 @@ public struct GitHubReauthTokenResponse: Codable, Equatable, Sendable {
 public struct GitHubSignInCompleteRequest: Codable, Equatable, Sendable {
     public var attemptId: String
     public var claimToken: String
+    public var completionCode: String
 
     public init(
         attemptId: String,
-        claimToken: String
+        claimToken: String,
+        completionCode: String
     ) {
         self.attemptId = attemptId
         self.claimToken = claimToken
+        self.completionCode = completionCode
     }
 }
 

@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthService } from "../../src/modules/auth/services/auth.service";
 import { GitHubSignInFlowService } from "../../src/modules/auth/services/github-sign-in-flow.service";
 import type { AuthGitHubClient } from "../../src/modules/auth/types/auth.types";
+import {
+  GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE,
+  GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE,
+} from "../../src/modules/auth/utils/github-auth-purpose";
 import { validateReturnToPath } from "../../src/modules/auth/utils/return-to.util";
 import type { Env } from "../../src/shared/types";
 
@@ -22,6 +26,7 @@ interface SignInAttemptRow {
   id: string;
   client_type: string;
   claim_token_hash: string;
+  completion_code_hash: string | null;
   status: string;
   user_id: string | null;
   completion_target: string;
@@ -49,6 +54,8 @@ class MockD1 {
   authSessions: { tokenHash: string; userId: string }[] = [];
   refreshSessions: { id: string; userId: string }[] = [];
   githubCredentials: { userId: string }[] = [];
+  failInstallationStateCreation = false;
+  completionCodes = new Map<string, string>();
 
   asD1(): D1Database {
     return {
@@ -72,6 +79,13 @@ class MockD1 {
     if (sql.includes("INSERT INTO oauth_states")) {
       const [state, expiresAt, codeVerifier, redirectOrigin, purpose, userId, attemptId] =
         args as (string | null)[];
+      if (
+        this.failInstallationStateCreation
+        && (purpose === GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE
+          || purpose === GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE)
+      ) {
+        throw new Error("installation state write failed");
+      }
       this.oauthStates.set(state as string, {
         state: state as string,
         expires_at: expiresAt as string,
@@ -105,6 +119,7 @@ class MockD1 {
         id: id as string,
         client_type: clientType as string,
         claim_token_hash: claimTokenHash as string,
+        completion_code_hash: null,
         status: "awaiting_oauth",
         user_id: null,
         completion_target: completionTarget as string,
@@ -118,12 +133,19 @@ class MockD1 {
       return this.pruneExpired(this.signInAttempts);
     }
     if (sql.includes("SET status = 'identity_ready'")) {
-      const [userId, installUrl, id] = args as (string | null)[];
+      const [userId, id] = args as (string | null)[];
       const row = this.signInAttempts.get(id as string);
       if (row?.status === "awaiting_oauth") {
         row.status = "identity_ready";
         row.user_id = userId ?? null;
-        row.install_url = installUrl ?? null;
+      }
+      return null;
+    }
+    if (sql.includes("SET install_url = ?")) {
+      const [installUrl, id] = args as string[];
+      const row = this.signInAttempts.get(id);
+      if (row?.status === "identity_ready") {
+        row.install_url = installUrl;
       }
       return null;
     }
@@ -135,14 +157,25 @@ class MockD1 {
       }
       return null;
     }
+    if (sql.includes("SET status = 'completion_ready'")) {
+      const [completionCodeHash, id] = args as [string, string];
+      const row = this.signInAttempts.get(id);
+      if (!row || row.status !== "identity_ready" || isExpired(row.expires_at)) {
+        return null;
+      }
+      row.status = "completion_ready";
+      row.completion_code_hash = completionCodeHash;
+      return { id };
+    }
     if (sql.includes("SET status = 'claimed'")) {
-      const [id, claimTokenHash, clientType] = args as [string, string, string];
+      const [id, claimTokenHash, completionCodeHash, clientType] = args as string[];
       const row = this.signInAttempts.get(id);
       if (
         !row
         || row.claim_token_hash !== claimTokenHash
+        || row.completion_code_hash !== completionCodeHash
         || row.client_type !== clientType
-        || row.status !== "identity_ready"
+        || row.status !== "completion_ready"
         || isExpired(row.expires_at)
       ) {
         return null;
@@ -315,12 +348,20 @@ async function runOAuthCallback(
   attemptId: string,
   overrides: { code?: string; oauthError?: string } = {},
 ) {
-  return harness.flow.handleOAuthCallback({
+  const result = await harness.flow.handleOAuthCallback({
     code: overrides.code ?? "code-1",
     oauthError: overrides.oauthError,
     state: oauthStateFor(harness, attemptId),
     ...requestFields,
   });
+  if (result.ok) {
+    const callback = new URL(result.value.redirectUrl);
+    const completionCode = callback.searchParams.get("completionCode");
+    if (completionCode) {
+      harness.db.completionCodes.set(attemptId, completionCode);
+    }
+  }
+  return result;
 }
 
 beforeEach(() => {
@@ -450,7 +491,7 @@ describe("GitHub sign-in OAuth callback", () => {
     expect(harness.db.authSessions).toHaveLength(0);
     expect(harness.db.refreshSessions).toHaveLength(0);
     expect(harness.db.signInAttempts.get(attempt.attemptId)?.status)
-      .toBe("identity_ready");
+      .toBe("completion_ready");
   });
 
   it("returns a web attempt to its BFF completion route regardless of installation", async () => {
@@ -465,13 +506,15 @@ describe("GitHub sign-in OAuth callback", () => {
     expect(first).toEqual({
       ok: true,
       value: {
-        redirectUrl: `https://web.test/api/auth/github/complete?attemptId=${a.attemptId}`,
+        redirectUrl: `https://web.test/api/auth/github/complete?attemptId=${a.attemptId}`
+          + `&completionCode=${completionCodeFor(withInstall, a.attemptId)}`,
       },
     });
     expect(second).toEqual({
       ok: true,
       value: {
-        redirectUrl: `https://web.test/api/auth/github/complete?attemptId=${b.attemptId}`,
+        redirectUrl: `https://web.test/api/auth/github/complete?attemptId=${b.attemptId}`
+          + `&completionCode=${completionCodeFor(withoutInstall, b.attemptId)}`,
       },
     });
   });
@@ -487,11 +530,64 @@ describe("GitHub sign-in OAuth callback", () => {
 
     expect(direct).toEqual({
       ok: true,
-      value: { redirectUrl: `cloudecode-dev://auth/callback?attemptId=${a.attemptId}` },
+      value: {
+        redirectUrl: `cloudecode-dev://auth/callback?attemptId=${a.attemptId}`
+          + `&completionCode=${completionCodeFor(withInstall, a.attemptId)}`,
+      },
     });
     expect(chained.ok).toBe(true);
     if (!chained.ok) { return; }
     expect(chained.value.redirectUrl).toContain("https://github.test/install?state=");
+  });
+
+  it("keeps web sign-in claimable when optional installation setup fails", async () => {
+    const harness = createHarness({ github: { hasInstallations: async () => false } });
+    const attempt = await startWeb(harness);
+    harness.db.failInstallationStateCreation = true;
+
+    const callback = await runOAuthCallback(harness, attempt.attemptId);
+    const completed = await harness.flow.completeWeb({
+      attemptId: attempt.attemptId,
+      claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
+      ...requestFields,
+    });
+
+    expect(callback).toEqual({
+      ok: true,
+      value: {
+        redirectUrl: `https://web.test/api/auth/github/complete?attemptId=${attempt.attemptId}`
+          + `&completionCode=${completionCodeFor(harness, attempt.attemptId)}`,
+      },
+    });
+    expect(completed.ok).toBe(true);
+    if (!completed.ok) { return; }
+    expect(completed.value.redirectUrl).toBe("https://web.test/dashboard");
+    expect(harness.db.authSessions).toHaveLength(1);
+  });
+
+  it("keeps native sign-in claimable when optional installation setup fails", async () => {
+    const harness = createHarness({ github: { hasInstallations: async () => false } });
+    const attempt = await startNative(harness);
+    harness.db.failInstallationStateCreation = true;
+
+    const callback = await runOAuthCallback(harness, attempt.attemptId);
+    const completed = await harness.flow.completeNative({
+      attemptId: attempt.attemptId,
+      claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
+      ...requestFields,
+    });
+
+    expect(callback).toEqual({
+      ok: true,
+      value: {
+        redirectUrl: `cloudecode-dev://auth/callback?attemptId=${attempt.attemptId}`
+          + `&completionCode=${completionCodeFor(harness, attempt.attemptId)}`,
+      },
+    });
+    expect(completed.ok).toBe(true);
+    expect(harness.db.refreshSessions).toHaveLength(1);
   });
 
   it("marks the attempt failed and returns the bound client on OAuth denial", async () => {
@@ -544,6 +640,7 @@ describe("GitHub sign-in OAuth callback", () => {
     const completed = await harness.flow.completeWeb({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: "unissued-code",
       ...requestFields,
     });
     expect(completed.ok).toBe(false);
@@ -563,6 +660,47 @@ describe("GitHub sign-in OAuth callback", () => {
 });
 
 describe("GitHub sign-in completion", () => {
+  it("binds a transferred authorization link to both separated secrets", async () => {
+    const harness = createHarness();
+    const first = await startNative(harness);
+    const second = await startNative(harness);
+    await runOAuthCallback(harness, first.attemptId);
+    await runOAuthCallback(harness, second.attemptId);
+    const firstCode = completionCodeFor(harness, first.attemptId);
+    const secondCode = completionCodeFor(harness, second.attemptId);
+
+    const starterOnly = await harness.flow.completeNative({
+      attemptId: first.attemptId,
+      claimToken: first.claimToken,
+      completionCode: "code-not-seen-by-starter",
+      ...requestFields,
+    });
+    const callbackReceiverOnly = await harness.flow.completeNative({
+      attemptId: first.attemptId,
+      claimToken: "claim-not-held-by-callback-receiver",
+      completionCode: firstCode,
+      ...requestFields,
+    });
+    const mixedAttempts = await harness.flow.completeNative({
+      attemptId: first.attemptId,
+      claimToken: first.claimToken,
+      completionCode: secondCode,
+      ...requestFields,
+    });
+    const exactPair = await harness.flow.completeNative({
+      attemptId: first.attemptId,
+      claimToken: first.claimToken,
+      completionCode: firstCode,
+      ...requestFields,
+    });
+
+    expect(starterOnly.ok).toBe(false);
+    expect(callbackReceiverOnly.ok).toBe(false);
+    expect(mixedAttempts.ok).toBe(false);
+    expect(exactPair.ok).toBe(true);
+    expect(harness.db.refreshSessions).toHaveLength(1);
+  });
+
   it("returns only web session data and the server-selected redirect", async () => {
     const harness = createHarness();
     const attempt = await startWeb(harness, "/discord/link?token=abc");
@@ -571,6 +709,7 @@ describe("GitHub sign-in completion", () => {
     const result = await harness.flow.completeWeb({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
       ...requestFields,
     });
 
@@ -592,6 +731,7 @@ describe("GitHub sign-in completion", () => {
     const result = await harness.flow.completeWeb({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
       ...requestFields,
     });
 
@@ -610,6 +750,7 @@ describe("GitHub sign-in completion", () => {
     const result = await harness.flow.completeNative({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
       ...requestFields,
     });
 
@@ -622,7 +763,7 @@ describe("GitHub sign-in completion", () => {
     expect(harness.db.refreshSessions).toHaveLength(1);
   });
 
-  it("stays claimable while installation is still pending", async () => {
+  it("issues no completion code while native installation is pending", async () => {
     const harness = createHarness({ github: { hasInstallations: async () => false } });
     const attempt = await startNative(harness);
     await runOAuthCallback(harness, attempt.attemptId);
@@ -630,31 +771,36 @@ describe("GitHub sign-in completion", () => {
     const result = await harness.flow.completeNative({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: "not-issued",
       ...requestFields,
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(harness.db.completionCodes.has(attempt.attemptId)).toBe(false);
+    expect(harness.db.signInAttempts.get(attempt.attemptId)?.status).toBe("identity_ready");
   });
 
-  it("reports SIGN_IN_NOT_READY only for a valid attempt awaiting OAuth", async () => {
+  it("returns the same invalid error before OAuth and for wrong secrets", async () => {
     const harness = createHarness();
     const attempt = await startNative(harness);
 
     const notReady = await harness.flow.completeNative({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: "not-issued",
       ...requestFields,
     });
     const wrongToken = await harness.flow.completeNative({
       attemptId: attempt.attemptId,
       claimToken: "not-the-claim-token",
+      completionCode: "not-issued",
       ...requestFields,
     });
 
     expect(notReady.ok).toBe(false);
     if (notReady.ok) { return; }
-    expect(notReady.error.code).toBe("SIGN_IN_NOT_READY");
-    expect(notReady.error.status).toBe(409);
+    expect(notReady.error.code).toBe("INVALID_SIGN_IN_ATTEMPT");
+    expect(notReady.error.status).toBe(400);
 
     // A token mismatch must not disclose that the attempt is merely pending.
     expect(wrongToken.ok).toBe(false);
@@ -672,11 +818,13 @@ describe("GitHub sign-in completion", () => {
     const webOnNative = await harness.flow.completeNative({
       attemptId: web.attemptId,
       claimToken: web.claimToken,
+      completionCode: completionCodeFor(harness, web.attemptId),
       ...requestFields,
     });
     const nativeOnWeb = await harness.flow.completeWeb({
       attemptId: native.attemptId,
       claimToken: native.claimToken,
+      completionCode: completionCodeFor(harness, native.attemptId),
       ...requestFields,
     });
 
@@ -695,6 +843,7 @@ describe("GitHub sign-in completion", () => {
     const credentials = {
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
       ...requestFields,
     };
 
@@ -718,6 +867,7 @@ describe("GitHub sign-in completion", () => {
     const result = await harness.flow.completeWeb({
       attemptId: attempt.attemptId,
       claimToken: attempt.claimToken,
+      completionCode: completionCodeFor(harness, attempt.attemptId),
       ...requestFields,
     });
 
@@ -759,7 +909,7 @@ describe("GitHub installation callback", () => {
     expect(harness.clearedUserIds).toHaveLength(1);
   });
 
-  it("returns a chained native flow to its custom scheme with the attempt ID", async () => {
+  it("returns a chained native flow with one completion code", async () => {
     const harness = createHarness({ github: { hasInstallations: async () => false } });
     const attempt = await startNative(harness);
     await runOAuthCallback(harness, attempt.attemptId);
@@ -767,12 +917,15 @@ describe("GitHub installation callback", () => {
 
     const result = await harness.auth.createGitHubInstallationCallbackRedirect({ state });
 
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        redirectUrl: `cloudecode-dev://auth/callback?attemptId=${attempt.attemptId}`,
-      },
-    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) { return; }
+    const callback = new URL(result.value.redirectUrl);
+    expect(callback.origin).toBe("null");
+    expect(callback.protocol).toBe("cloudecode-dev:");
+    expect(callback.searchParams.get("attemptId")).toBe(attempt.attemptId);
+    expect(callback.searchParams.get("completionCode")).toBeTruthy();
+    expect(harness.db.signInAttempts.get(attempt.attemptId)?.status)
+      .toBe("completion_ready");
   });
 
   it("rejects a replayed installation state without redirecting again", async () => {
@@ -821,12 +974,24 @@ function expireAttempt(harness: Harness, attemptId: string): void {
 }
 
 function installStateFor(harness: Harness, attemptId: string): string {
+  const clientType = harness.db.signInAttempts.get(attemptId)?.client_type;
+  const purpose = clientType === "native"
+    ? GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE
+    : GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE;
   const row = [...harness.db.oauthStates.values()].find(
-    (candidate) => candidate.purpose === "github_install"
-      && candidate.sign_in_attempt_id === attemptId,
+    (candidate) => candidate.purpose === purpose
+      && (clientType !== "native" || candidate.sign_in_attempt_id === attemptId),
   );
   if (!row) {
     throw new Error(`no installation state for attempt ${attemptId}`);
   }
   return row.state;
+}
+
+function completionCodeFor(harness: Harness, attemptId: string): string {
+  const completionCode = harness.db.completionCodes.get(attemptId);
+  if (!completionCode) {
+    throw new Error(`no completion code for attempt ${attemptId}`);
+  }
+  return completionCode;
 }

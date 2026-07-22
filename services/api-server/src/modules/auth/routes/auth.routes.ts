@@ -105,19 +105,14 @@ export function createAuthRoutes(
    * returns the opaque session token plus the server-selected next redirect.
    */
   authRoutes.openapi(postWebGithubSignInCompleteRoute, async (c) => {
-    const { attemptId, claimToken } = c.req.valid("json");
+    const { attemptId, claimToken, completionCode } = c.req.valid("json");
     const result = await createSignInFlowService(c.env).completeWeb({
       attemptId,
       claimToken,
+      completionCode,
       ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
-      if (result.error.code === "SIGN_IN_NOT_READY") {
-        return c.json(
-          { error: result.error.message, code: "SIGN_IN_NOT_READY" as const },
-          409,
-        );
-      }
       if (result.error.status === 500) {
         return c.json({ error: result.error.message }, 500);
       }
@@ -148,24 +143,18 @@ export function createAuthRoutes(
   });
 
   /**
-   * POST /auth/github/native/complete — claims an identity-ready native
-   * attempt. Returns `SIGN_IN_NOT_READY` while OAuth is still pending so a
-   * browser dismissal before OAuth is not reported as a sign-in failure.
+   * POST /auth/github/native/complete — claims a native attempt only after
+   * the final custom-scheme callback delivers its one-time completion code.
    */
   authRoutes.openapi(postNativeGithubSignInCompleteRoute, async (c) => {
-    const { attemptId, claimToken } = c.req.valid("json");
+    const { attemptId, claimToken, completionCode } = c.req.valid("json");
     const result = await createSignInFlowService(c.env).completeNative({
       attemptId,
       claimToken,
+      completionCode,
       ...requestLogFields((name) => c.req.header(name)),
     });
     if (!result.ok) {
-      if (result.error.code === "SIGN_IN_NOT_READY") {
-        return c.json(
-          { error: result.error.message, code: "SIGN_IN_NOT_READY" as const },
-          409,
-        );
-      }
       if (result.error.status === 500) {
         return c.json({ error: result.error.message }, 500);
       }

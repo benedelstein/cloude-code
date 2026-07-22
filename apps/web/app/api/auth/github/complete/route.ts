@@ -19,8 +19,8 @@ import {
 /**
  * Claims a completed GitHub sign-in attempt and establishes the web session.
  *
- * The API redirects here with only the non-secret attempt ID; the raw claim
- * token never leaves the HttpOnly cookie this origin set when sign-in started.
+ * The API redirects here with the attempt ID and one-time completion code;
+ * the independent raw claim token stays in this origin's HttpOnly cookie.
  * The session cookie is set *before* any GitHub App installation navigation,
  * so abandoning repository setup cannot discard the completed login.
  *
@@ -36,6 +36,7 @@ import {
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const attemptId = request.nextUrl.searchParams.get("attemptId");
+  const completionCode = request.nextUrl.searchParams.get("completionCode");
   const oauthError = request.nextUrl.searchParams.get("error");
   const claim = await readSignInAttemptCookie(request);
 
@@ -55,9 +56,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (!completionCode) {
+    return signedOutRedirect(origin, "failed", { clearAttempt: true });
+  }
+
   let completion;
   try {
-    completion = await completeWebGitHubSignIn(claim.attemptId, claim.claimToken);
+    completion = await completeWebGitHubSignIn(
+      claim.attemptId,
+      claim.claimToken,
+      completionCode,
+    );
   } catch (error) {
     console.error("Failed to complete GitHub sign-in", error);
     const expired = error instanceof ServerApiError && error.status === 400;

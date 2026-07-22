@@ -1,10 +1,11 @@
-import { timingSafeCompare } from "@/shared/utils/crypto";
+import { generateOpaqueToken, sha256, timingSafeCompare } from "@/shared/utils/crypto";
 
 export type SignInClientType = "web" | "native";
 
 export type SignInAttemptStatus =
   | "awaiting_oauth"
   | "identity_ready"
+  | "completion_ready"
   | "claimed"
   | "failed";
 
@@ -26,6 +27,7 @@ interface SignInAttemptRow {
   id: string;
   client_type: SignInClientType;
   claim_token_hash: string;
+  completion_code_hash: string | null;
   status: SignInAttemptStatus;
   user_id: string | null;
   completion_target: string;
@@ -86,6 +88,7 @@ export class SignInAttemptRepository {
       `SELECT id,
               client_type,
               claim_token_hash,
+              completion_code_hash,
               status,
               user_id,
               completion_target,
@@ -113,6 +116,7 @@ export class SignInAttemptRepository {
       `SELECT id,
               client_type,
               claim_token_hash,
+              completion_code_hash,
               status,
               user_id,
               completion_target,
@@ -132,21 +136,30 @@ export class SignInAttemptRepository {
     return toRecord(row);
   }
 
-  /** Attaches the authenticated user and makes the attempt claimable. */
+  /** Attaches the authenticated user before the final browser handoff. */
   async markIdentityReady(input: {
     id: string;
     userId: string;
-    installUrl: string | null;
   }): Promise<void> {
     await this.database.prepare(
       `UPDATE sign_in_attempts
        SET status = 'identity_ready',
            user_id = ?,
-           install_url = ?,
            updated_at = datetime('now')
        WHERE id = ? AND status = 'awaiting_oauth'`,
     )
-      .bind(input.userId, input.installUrl, input.id)
+      .bind(input.userId, input.id)
+      .run();
+  }
+
+  /** Attaches optional installation navigation without changing auth state. */
+  async setInstallUrl(input: { id: string; installUrl: string }): Promise<void> {
+    await this.database.prepare(
+      `UPDATE sign_in_attempts
+       SET install_url = ?, updated_at = datetime('now')
+       WHERE id = ? AND status = 'identity_ready'`,
+    )
+      .bind(input.installUrl, input.id)
       .run();
   }
 
@@ -161,6 +174,29 @@ export class SignInAttemptRepository {
   }
 
   /**
+   * Mints the one-time final-callback secret for an identity-ready attempt.
+   * Only its hash is stored; a racing or replayed issuance returns no code.
+   */
+  async issueCompletionCode(id: string): Promise<string | null> {
+    const completionCode = generateOpaqueToken();
+    const completionCodeHash = await sha256(completionCode);
+    const row = await this.database.prepare(
+      `UPDATE sign_in_attempts
+       SET status = 'completion_ready',
+           completion_code_hash = ?,
+           updated_at = datetime('now')
+       WHERE id = ?
+         AND status = 'identity_ready'
+         AND datetime(expires_at) > datetime('now')
+       RETURNING id`,
+    )
+      .bind(completionCodeHash, id)
+      .first<{ id: string }>();
+
+    return row ? completionCode : null;
+  }
+
+  /**
    * Claims an identity-ready attempt exactly once. The conditional update is
    * the concurrency guard: two racing completions both read `identity_ready`,
    * but only the first `UPDATE ... WHERE status = 'identity_ready'` returns a
@@ -169,19 +205,47 @@ export class SignInAttemptRepository {
   async claim(input: {
     id: string;
     claimTokenHash: string;
+    completionCodeHash: string;
     clientType: SignInClientType;
   }): Promise<SignInAttemptRecord | null> {
+    const candidate = await this.database.prepare(
+      `SELECT id,
+              client_type,
+              claim_token_hash,
+              completion_code_hash,
+              status,
+              user_id,
+              completion_target,
+              return_to,
+              install_url,
+              expires_at
+       FROM sign_in_attempts
+       WHERE id = ?`,
+    )
+      .bind(input.id)
+      .first<SignInAttemptRow>();
+
+    if (
+      !candidate?.completion_code_hash
+      || !timingSafeCompare(candidate.claim_token_hash, input.claimTokenHash)
+      || !timingSafeCompare(candidate.completion_code_hash, input.completionCodeHash)
+    ) {
+      return null;
+    }
+
     const row = await this.database.prepare(
       `UPDATE sign_in_attempts
        SET status = 'claimed', updated_at = datetime('now')
        WHERE id = ?
          AND claim_token_hash = ?
+         AND completion_code_hash = ?
          AND client_type = ?
-         AND status = 'identity_ready'
+         AND status = 'completion_ready'
          AND datetime(expires_at) > datetime('now')
        RETURNING id,
                  client_type,
                  claim_token_hash,
+                 completion_code_hash,
                  status,
                  user_id,
                  completion_target,
@@ -189,7 +253,12 @@ export class SignInAttemptRepository {
                  install_url,
                  expires_at`,
     )
-      .bind(input.id, input.claimTokenHash, input.clientType)
+      .bind(
+        input.id,
+        input.claimTokenHash,
+        input.completionCodeHash,
+        input.clientType,
+      )
       .first<SignInAttemptRow>();
 
     return row ? toRecord(row) : null;

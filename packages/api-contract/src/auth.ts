@@ -46,6 +46,7 @@ export type GitHubSignInStartResponse = z.infer<typeof GitHubSignInStartResponse
 export const GitHubSignInCompleteRequest = z.object({
   attemptId: z.string(),
   claimToken: z.string(),
+  completionCode: z.string(),
 });
 export type GitHubSignInCompleteRequest = z.infer<typeof GitHubSignInCompleteRequest>;
 

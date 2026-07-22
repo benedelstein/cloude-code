@@ -6,9 +6,15 @@ import {
   createExternalAuthState,
 } from "@/shared/services/external-auth-state.service";
 import type { AuthServiceResult, RequestLogFields } from "../types/auth.types";
-import { GITHUB_INSTALL_PURPOSE } from "../utils/github-auth-purpose";
+import { SignInAttemptRepository, type SignInClientType } from "../repositories/sign-in-attempt.repository";
+import {
+  GITHUB_INSTALL_PURPOSE,
+  GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE,
+  GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE,
+} from "../utils/github-auth-purpose";
 import {
   nativeInstallRedirectUri,
+  validateNativeRedirectUri,
   validateNativeInstallRedirectUri,
 } from "../utils/native-redirect.util";
 
@@ -86,19 +92,22 @@ export class GitHubInstallationService {
    * GitHub App setup and returns to the sign-in attempt's bound client.
    */
   async createSignInInstallationUrl(params: {
+    clientType: SignInClientType;
     userId: string;
     signInAttemptId: string;
-    /** The attempt's already-validated final return target. */
-    returnTarget: string;
+    /** Web's validated app return. Native finalization reads its attempt. */
+    returnTarget: string | null;
   }): Promise<string> {
     const state = crypto.randomUUID();
     await createExternalAuthState(this.deps.env, {
       state,
       expiresAt: this.expiresAt(),
       redirectOrigin: params.returnTarget,
-      purpose: GITHUB_INSTALL_PURPOSE,
+      purpose: params.clientType === "web"
+        ? GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE
+        : GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE,
       userId: params.userId,
-      signInAttemptId: params.signInAttemptId,
+      signInAttemptId: params.clientType === "native" ? params.signInAttemptId : null,
     });
 
     const installUrl = new URL(this.deps.getInstallUrl());
@@ -128,11 +137,7 @@ export class GitHubInstallationService {
       this.deps.env,
       params.state,
     );
-    if (
-      !stateRecord?.redirectOrigin
-      || !stateRecord.userId
-      || stateRecord.purpose !== GITHUB_INSTALL_PURPOSE
-    ) {
+    if (!stateRecord?.userId) {
       this.deps.logger.warn("GitHub installation callback rejected", {
         fields: { statePrefix: params.state.slice(0, 8) },
       });
@@ -142,6 +147,7 @@ export class GitHubInstallationService {
     const redirectResult = await this.resolveReturnUrl({
       returnTarget: stateRecord.redirectOrigin,
       signInAttemptId: stateRecord.signInAttemptId,
+      purpose: stateRecord.purpose,
       state: params.state,
     });
     if (!redirectResult.ok) {
@@ -156,11 +162,12 @@ export class GitHubInstallationService {
   }
 
   private async resolveReturnUrl(params: {
-    returnTarget: string;
+    returnTarget: string | null;
     signInAttemptId: string | null;
+    purpose: string | null;
     state: string;
   }): Promise<AuthServiceResult<string>> {
-    if (!params.signInAttemptId) {
+    if (params.purpose === GITHUB_INSTALL_PURPOSE && params.returnTarget) {
       const redirectResult = validateNativeInstallRedirectUri(
         params.returnTarget,
         this.deps.env,
@@ -178,10 +185,40 @@ export class GitHubInstallationService {
       return success(target.toString());
     }
 
-    // Chained targets were constructed from the attempt's validated client
-    // targets before this state was stored. The installation state owns this
-    // redirect for its full lifetime; the shorter sign-in attempt does not.
-    return success(params.returnTarget);
+    if (params.purpose === GITHUB_WEB_SIGN_IN_INSTALL_PURPOSE && params.returnTarget) {
+      // The web state owns this route for its full lifetime; it intentionally
+      // does not depend on the shorter attempt after the BFF claimed it.
+      return success(params.returnTarget);
+    }
+
+    if (params.purpose === GITHUB_NATIVE_SIGN_IN_INSTALL_PURPOSE && params.signInAttemptId) {
+      const attempts = new SignInAttemptRepository(this.deps.env.DB);
+      const attempt = await attempts.getUnexpired(params.signInAttemptId);
+      if (
+        !attempt
+        || attempt.clientType !== "native"
+        || attempt.status !== "identity_ready"
+      ) {
+        return this.invalidState();
+      }
+      const redirectResult = validateNativeRedirectUri(
+        attempt.completionTarget,
+        this.deps.env,
+      );
+      if (!redirectResult.ok) {
+        return this.invalidState();
+      }
+      const completionCode = await attempts.issueCompletionCode(attempt.id);
+      if (!completionCode) {
+        return this.invalidState();
+      }
+      const target = new URL(redirectResult.value);
+      target.searchParams.set("attemptId", attempt.id);
+      target.searchParams.set("completionCode", completionCode);
+      return success(target.toString());
+    }
+
+    return this.invalidState();
   }
 
   private expiresAt(): string {

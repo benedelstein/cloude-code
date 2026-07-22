@@ -98,11 +98,12 @@ export async function startWebGitHubSignIn(
 export async function completeWebGitHubSignIn(
   attemptId: string,
   claimToken: string,
+  completionCode: string,
 ): Promise<WebGitHubSignInCompleteResponse> {
   return serverApiFetch("/auth/github/web/complete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ attemptId, claimToken }),
+    body: JSON.stringify({ attemptId, claimToken, completionCode }),
   });
 }
 

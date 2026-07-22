@@ -217,47 +217,61 @@ export class GitHubSignInFlowService {
     }
 
     const { user, githubAccessToken } = exchanged;
-    const hasInstallations = await this.checkHasInstallations(githubAccessToken);
-    const installUrl = hasInstallations
-      ? null
-      : await this.installationService.createSignInInstallationUrl({
-        userId: user.id,
-        signInAttemptId: attempt.id,
-        returnTarget: this.finalReturnUrl(attempt),
-      });
-
     await this.attempts.markIdentityReady({
       id: attempt.id,
       userId: user.id,
-      installUrl,
     });
+
+    const hasInstallations = await this.checkHasInstallations(githubAccessToken);
+    let installUrl: string | null = null;
+    if (!hasInstallations) {
+      try {
+        const candidate = await this.installationService.createSignInInstallationUrl({
+          clientType: attempt.clientType,
+          userId: user.id,
+          signInAttemptId: attempt.id,
+          returnTarget: attempt.clientType === "web" ? this.finalReturnUrl(attempt) : null,
+        });
+        await this.attempts.setInstallUrl({ id: attempt.id, installUrl: candidate });
+        installUrl = candidate;
+      } catch (error) {
+        this.logger.error("Failed to prepare optional GitHub installation", {
+          error,
+          fields: {
+            attemptIdPrefix: attempt.id.slice(0, 8),
+            clientType: attempt.clientType,
+            requestId: params.requestId,
+          },
+        });
+      }
+    }
 
     this.logger.info("GitHub sign-in identity ready", {
       fields: {
         attemptIdPrefix: attempt.id.slice(0, 8),
         clientType: attempt.clientType,
         hasInstallations,
+        installationPrepared: installUrl !== null,
         requestId: params.requestId,
       },
     });
 
-    // Web claims its session at the BFF completion route before any
-    // installation navigation, so abandoning setup cannot lose the login.
-    // Native has no control point between browser navigations, so the server
-    // chains installation first and iOS claims at the final callback.
+    // Web reaches its final auth handoff before optional installation. Native
+    // without an installation reaches its final handoff from the setup callback.
     if (attempt.clientType === "web") {
-      return success({ redirectUrl: this.clientCallbackUrl(attempt, null) });
+      return this.issueCompletionCallback(attempt);
     }
 
-    return success({
-      redirectUrl: installUrl ?? this.clientCallbackUrl(attempt, null),
-    });
+    return installUrl
+      ? success({ redirectUrl: installUrl })
+      : this.issueCompletionCallback(attempt);
   }
 
   /** Issues the opaque web session for an identity-ready web attempt. */
   async completeWeb(params: {
     attemptId: string;
     claimToken: string;
+    completionCode: string;
   } & RequestLogFields): Promise<AuthServiceResult<WebGitHubSignInCompleteResponse>> {
     const claimed = await this.claim(params, "web");
     if (!claimed.ok) {
@@ -292,6 +306,7 @@ export class GitHubSignInFlowService {
   async completeNative(params: {
     attemptId: string;
     claimToken: string;
+    completionCode: string;
   } & RequestLogFields): Promise<AuthServiceResult<NativeGitHubSignInCompleteResponse>> {
     const claimed = await this.claim(params, "native");
     if (!claimed.ok) {
@@ -378,37 +393,22 @@ export class GitHubSignInFlowService {
   }
 
   /**
-   * Verifies the claim token before disclosing anything about the attempt,
-   * then consumes it so concurrent or repeated claims cannot issue a second
-   * session.
+   * Verifies both browser-separated secrets and atomically consumes the exact
+   * pair so concurrent or repeated claims cannot issue a second session.
    */
   private async claim(
-    params: { attemptId: string; claimToken: string },
+    params: { attemptId: string; claimToken: string; completionCode: string },
     clientType: SignInClientType,
   ): Promise<AuthServiceResult<{
     attempt: SignInAttemptRecord;
     user: SignedInUser;
   }>> {
     const claimTokenHash = await sha256(params.claimToken);
-    const attempt = await this.attempts.getUnexpiredByClaimTokenHash(
-      params.attemptId,
-      claimTokenHash,
-    );
-    if (!attempt || attempt.clientType !== clientType) {
-      return this.invalidAttempt();
-    }
-    if (attempt.status === "awaiting_oauth") {
-      return failure({
-        domain: "auth",
-        status: 409,
-        code: "SIGN_IN_NOT_READY",
-        message: "Sign-in is not ready yet.",
-      });
-    }
-
+    const completionCodeHash = await sha256(params.completionCode);
     const consumed = await this.attempts.claim({
-      id: attempt.id,
+      id: params.attemptId,
       claimTokenHash,
+      completionCodeHash,
       clientType,
     });
     if (!consumed?.userId) {
@@ -490,10 +490,11 @@ export class GitHubSignInFlowService {
     }
   }
 
-  /** The bound client's callback, carrying only the non-secret attempt ID. */
+  /** The bound client's final callback. */
   private clientCallbackUrl(
     attempt: SignInAttemptRecord,
     errorCode: string | null,
+    completionCode: string | null = null,
   ): string {
     const target = attempt.clientType === "web"
       ? new URL(WEB_SIGN_IN_COMPLETE_PATH, attempt.completionTarget)
@@ -502,14 +503,29 @@ export class GitHubSignInFlowService {
     if (errorCode) {
       target.searchParams.set("error", errorCode);
     }
+    if (completionCode) {
+      target.searchParams.set("completionCode", completionCode);
+    }
     return target.toString();
+  }
+
+  private async issueCompletionCallback(
+    attempt: SignInAttemptRecord,
+  ): Promise<AuthServiceResult<{ redirectUrl: string }>> {
+    const completionCode = await this.attempts.issueCompletionCode(attempt.id);
+    if (!completionCode) {
+      return this.invalidAttempt();
+    }
+    return success({
+      redirectUrl: this.clientCallbackUrl(attempt, null, completionCode),
+    });
   }
 
   /** Returns the final client target after optional GitHub App installation. */
   private finalReturnUrl(attempt: SignInAttemptRecord): string {
     return attempt.clientType === "web"
       ? new URL(attempt.returnTo ?? "/", attempt.completionTarget).toString()
-      : this.clientCallbackUrl(attempt, null);
+      : attempt.completionTarget;
   }
 
   private invalidAttempt(): AuthServiceResult<never> {

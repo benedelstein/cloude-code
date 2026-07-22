@@ -49,7 +49,7 @@ function startRequest(returnTo?: string): NextRequest {
 }
 
 function completeRequest(
-  query: { attemptId?: string; error?: string },
+  query: { attemptId?: string; completionCode?: string; error?: string },
   cookies: { attempt?: string; session?: string } = {},
 ): NextRequest {
   const url = new URL("/api/auth/github/complete", ORIGIN);
@@ -58,6 +58,9 @@ function completeRequest(
   }
   if (query.error) {
     url.searchParams.set("error", query.error);
+  }
+  if (query.completionCode) {
+    url.searchParams.set("completionCode", query.completionCode);
   }
   const request = new NextRequest(url);
   if (cookies.attempt) {
@@ -125,11 +128,15 @@ describe("GET /api/auth/github/complete", () => {
     });
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       { attempt: await attemptCookieValue("attempt-1", "claim-1") },
     ));
 
-    expect(completeWebGitHubSignIn).toHaveBeenCalledWith("attempt-1", "claim-1");
+    expect(completeWebGitHubSignIn).toHaveBeenCalledWith(
+      "attempt-1",
+      "claim-1",
+      "completion-1",
+    );
     expect(response.headers.get("location")).toBe(`${ORIGIN}/discord/link?token=abc`);
     expect(response.cookies.get(SESSION_COOKIE)?.value).toBeTruthy();
     expect(response.cookies.get(ATTEMPT_COOKIE)?.maxAge).toBe(0);
@@ -143,7 +150,7 @@ describe("GET /api/auth/github/complete", () => {
     });
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       { attempt: await attemptCookieValue("attempt-1", "claim-1") },
     ));
 
@@ -163,7 +170,7 @@ describe("GET /api/auth/github/complete", () => {
     getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       {
         attempt: await attemptCookieValue("attempt-1", "claim-1"),
         session: await sessionCookieValue("old-session-token"),
@@ -187,7 +194,7 @@ describe("GET /api/auth/github/complete", () => {
 
   it("preserves a newer tab's attempt cookie when an older callback arrives", async () => {
     const response = await completeRoute(completeRequest(
-      { attemptId: "older-attempt" },
+      { attemptId: "older-attempt", completionCode: "older-completion" },
       { attempt: await attemptCookieValue("newer-attempt", "claim-2") },
     ));
 
@@ -196,11 +203,33 @@ describe("GET /api/auth/github/complete", () => {
     expect(response.cookies.get(ATTEMPT_COOKIE)).toBeUndefined();
   });
 
+  it("does not claim a matching cookie without a callback completion code", async () => {
+    const response = await completeRoute(completeRequest(
+      { attemptId: "attempt-1" },
+      { attempt: await attemptCookieValue("attempt-1", "claim-1") },
+    ));
+
+    expect(completeWebGitHubSignIn).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/?signInError=failed`);
+    expect(response.cookies.get(ATTEMPT_COOKIE)?.maxAge).toBe(0);
+  });
+
+  it("does not claim a callback code without its matching cookie", async () => {
+    const newerCookie = await attemptCookieValue("newer-attempt", "claim-2");
+    const response = await completeRoute(completeRequest(
+      { attemptId: "attempt-1", completionCode: "completion-1" },
+      { attempt: newerCookie },
+    ));
+
+    expect(completeWebGitHubSignIn).not.toHaveBeenCalled();
+    expect(response.cookies.get(ATTEMPT_COOKIE)).toBeUndefined();
+  });
+
   it("sends a revisited completion URL with a valid session to the app", async () => {
     getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       { session: await sessionCookieValue("session-token") },
     ));
 
@@ -212,7 +241,7 @@ describe("GET /api/auth/github/complete", () => {
     getAuthenticatedUser.mockRejectedValue(new ServerApiError("nope", 401));
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       { session: await sessionCookieValue("stale-session-token") },
     ));
 
@@ -223,7 +252,7 @@ describe("GET /api/auth/github/complete", () => {
     completeWebGitHubSignIn.mockRejectedValue(new ServerApiError("expired", 400));
 
     const response = await completeRoute(completeRequest(
-      { attemptId: "attempt-1" },
+      { attemptId: "attempt-1", completionCode: "completion-1" },
       { attempt: await attemptCookieValue("attempt-1", "claim-1") },
     ));
 

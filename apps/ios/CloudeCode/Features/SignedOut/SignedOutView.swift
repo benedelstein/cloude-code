@@ -15,11 +15,6 @@ struct SignedOutView: View {
             Spacer()
 
             VStack(spacing: style.spacing) {
-                Text("☁️")
-                    .font(.system(size: 72))
-                Text("Cloude Code")
-                    .font(style.largeTitleFont.weight(.semibold))
-                    .foregroundStyle(theme.labelColor)
             }
 
             Spacer()

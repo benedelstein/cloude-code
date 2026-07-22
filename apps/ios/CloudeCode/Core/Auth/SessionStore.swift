@@ -146,10 +146,8 @@ final class SessionStore {
         isSigningIn = true
         signInError = nil
         defer { isSigningIn = false }
-        var startedAttempt: GitHubSignInAttempt?
         do {
             let attempt = try await signInAPI.startSignIn(redirectUri: oauthRedirectURI)
-            startedAttempt = attempt
             guard let scheme = URL(string: oauthRedirectURI)?.scheme else {
                 preconditionFailure("invalid OAUTH_REDIRECT_URI: \(oauthRedirectURI)")
             }
@@ -157,59 +155,42 @@ final class SessionStore {
                 using: attempt.authorizeURL,
                 callbackURLScheme: scheme
             )
-            let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
-            guard query?.first(where: { $0.name == "attemptId" })?.value == attempt.attemptId else {
-                Logger.error("sign-in callback did not match the started attempt")
-                signInError = "Sign-in failed. Please try again."
-                return
-            }
-            if let callbackError = query?.first(where: { $0.name == "error" })?.value {
-                Logger.error("sign-in callback reported \(callbackError)")
+            guard let completionCode = completionCode(
+                from: callback,
+                matching: attempt.attemptId
+            ) else {
                 signInError = "Sign-in failed. Please try again."
                 return
             }
             let result = try await signInAPI.completeSignIn(
                 attemptId: attempt.attemptId,
-                claimToken: attempt.claimToken
+                claimToken: attempt.claimToken,
+                completionCode: completionCode
             )
             await coordinator.adopt(result.session)
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
-            // OAuth may already have completed before repository setup was
-            // dismissed or left awaiting approval. Recover that login without
-            // turning repository access into an authentication requirement.
             Logger.debug("web-auth session dismissed")
-            guard let startedAttempt else { return }
-            await recoverDismissedSignIn(startedAttempt)
         } catch {
             Logger.error(error.localizedDescription)
             signInError = "Sign-in failed. Please try again."
         }
     }
 
-    /// Claims an attempt after the browser was dismissed.
-    ///
-    /// `SIGN_IN_NOT_READY` means the attempt is still awaiting OAuth. That is
-    /// normally an ordinary cancellation, so it stays silent — but the OAuth
-    /// callback can also still be in flight, hence the short bounded retry.
-    private func recoverDismissedSignIn(_ attempt: GitHubSignInAttempt) async {
-        for remainingAttempts in stride(from: Self.notReadyRetryCount, through: 0, by: -1) {
-            do {
-                let result = try await signInAPI.completeSignIn(
-                    attemptId: attempt.attemptId,
-                    claimToken: attempt.claimToken
-                )
-                await coordinator.adopt(result.session)
-                return
-            } catch let error as APIError where error.isSignInNotReady {
-                guard remainingAttempts > 0 else { return }
-                try? await Task.sleep(for: .milliseconds(200))
-            } catch {
-                Logger.error(error.localizedDescription)
-                signInError = "Sign-in failed. Please try again."
-                return
-            }
+    private func completionCode(from callback: URL, matching attemptId: String) -> String? {
+        let query = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems
+        guard query?.first(where: { $0.name == "attemptId" })?.value == attemptId else {
+            Logger.error("sign-in callback did not match the started attempt")
+            return nil
         }
+        if let callbackError = query?.first(where: { $0.name == "error" })?.value {
+            Logger.error("sign-in callback reported \(callbackError)")
+            return nil
+        }
+        guard let code = query?.first(where: { $0.name == "completionCode" })?.value,
+              !code.isEmpty else {
+            Logger.error("sign-in callback did not include completion proof")
+            return nil
+        }
+        return code
     }
-
-    private static let notReadyRetryCount = 2
 }

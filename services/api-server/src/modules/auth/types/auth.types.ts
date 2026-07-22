@@ -16,9 +16,7 @@ export type AuthServiceErrorCode =
   | "USER_CREATE_FAILED"
   | "USER_NOT_FOUND"
   | "INVALID_REFRESH_TOKEN"
-  /** The attempt is valid and claimable, but OAuth has not completed yet. */
-  | "SIGN_IN_NOT_READY"
-  /** Unknown, expired, already-claimed, failed, wrong-client, or token-mismatched. */
+  /** Unknown, expired, unready, claimed, failed, wrong-client, or secret-mismatched. */
   | "INVALID_SIGN_IN_ATTEMPT";
 
 export interface AuthServiceError {
