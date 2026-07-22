@@ -18,6 +18,13 @@ describe("websocket api schemas", () => {
       status: "ready",
     });
     expect(server.type).toBe("connected");
+
+    const setupFailedServer = ServerMessage.parse({
+      type: "connected",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
+      status: "setup_failed",
+    });
+    expect(setupFailedServer.type).toBe("connected");
   });
 
   it("does not include a client-supplied durable message id on chat.message", () => {

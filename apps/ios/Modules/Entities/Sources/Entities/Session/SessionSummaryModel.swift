@@ -12,6 +12,7 @@ public final class SessionSummaryModel: EntityModel {
     public var provider: AgentProviderID?
     public var title: String?
     public var archived: Bool
+    public var status: SessionStatus?
     public var workingState: String
     public var pushedBranch: String?
     public var pullRequest: Domain.SessionSummary.PullRequest?
@@ -28,6 +29,7 @@ public final class SessionSummaryModel: EntityModel {
         provider = snapshot.provider
         title = snapshot.title
         archived = snapshot.archived
+        status = snapshot.status
         workingState = snapshot.workingState
         pushedBranch = snapshot.pushedBranch
         pullRequest = snapshot.pullRequest
@@ -44,6 +46,7 @@ public final class SessionSummaryModel: EntityModel {
         updateIfChanged(\.provider, to: snapshot.provider)
         updateIfChanged(\.title, to: snapshot.title)
         updateIfChanged(\.archived, to: snapshot.archived)
+        updateIfChanged(\.status, to: snapshot.status)
         updateIfChanged(\.workingState, to: snapshot.workingState)
         updateIfChanged(\.pushedBranch, to: snapshot.pushedBranch)
         updateIfChanged(\.pullRequest, to: snapshot.pullRequest)
@@ -62,6 +65,7 @@ public final class SessionSummaryModel: EntityModel {
             provider: provider,
             title: title,
             archived: archived,
+            status: status,
             workingState: workingState,
             pushedBranch: pushedBranch,
             pullRequest: pullRequest,

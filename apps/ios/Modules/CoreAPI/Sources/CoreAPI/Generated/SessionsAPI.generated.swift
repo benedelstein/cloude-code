@@ -141,7 +141,7 @@ public struct PullRequestStatusResponse: Codable, Equatable, Sendable {
 public struct SessionInfoResponse: Codable, Equatable, Sendable {
     public var sessionId: String
     public var title: String?
-    /// preparing: setup in progress or blocked; ready: accepting messages
+    /// preparing: setup in progress; setup_failed: setup blocked by a failure; ready: accepting messages
     public var status: SessionStatus
     /// GitHub repo in owner/name form
     public var repoFullName: String

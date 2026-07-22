@@ -299,6 +299,10 @@ private struct SessionRow: View {
         session.title ?? "Untitled session"
     }
 
+    private var isPreparing: Bool {
+        session.status == .preparing
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: style.gridSize * 1.5) {
             SessionArtifactIcon(session: session, width: style.gridSize * 2)
@@ -316,7 +320,17 @@ private struct SessionRow: View {
                     .transition(.blurReplace.animation(.easeIn))
                     .lineLimit(1)
 
-                if let pushedBranch = session.pushedBranch {
+                if isPreparing {
+                    Text("Initializing session")
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.secondaryLabelColor)
+                        .lineLimit(1)
+                } else if session.status == .setupFailed {
+                    Text("Setup failed")
+                        .styledFont(.caption)
+                        .foregroundStyle(theme.errorRed)
+                        .lineLimit(1)
+                } else if let pushedBranch = session.pushedBranch {
                     Text(pushedBranch)
                         .styledFont(.caption)
                         .foregroundStyle(theme.secondaryLabelColor)
@@ -393,7 +407,16 @@ private struct SessionAttentionSlot: View {
 
     var body: some View {
         Group {
-            if session.workingState == "responding" {
+            if session.status == .preparing {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(theme.secondaryLabelColor)
+                    .accessibilityLabel("Initializing session")
+            } else if session.status == .setupFailed {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(theme.errorRed)
+                    .accessibilityLabel("Setup failed")
+            } else if session.workingState == "responding" {
                 ProgressView()
                     .controlSize(.small)
                     .tint(theme.secondaryLabelColor)

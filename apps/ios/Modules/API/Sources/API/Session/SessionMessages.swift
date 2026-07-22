@@ -5,7 +5,7 @@ extension SessionMessage {
     init(_ message: CoreAPI.WireUIMessage) {
         self.init(
             id: message.id,
-            role: Role(rawValue: message.role.rawValue),
+            role: message.role.domainRole,
             parts: message.parts.map(SessionMessage.Part.init),
             metadata: message.metadata.map(Domain.JSONValue.init)
         )
@@ -53,7 +53,7 @@ extension SessionClientState {
     init(_ state: ClientState) {
         self.init(
             repoFullName: state.repoFullName,
-            status: .init(rawValue: state.status.rawValue),
+            status: state.status.clientStateStatus,
             sessionSetupRun: state.sessionSetupRun.map(SessionClientState.SessionSetupRun.init),
             agentSettings: SessionClientState.AgentSettings(state.agentSettings),
             pullRequest: state.pullRequest.map(SessionClientState.PullRequest.init),
@@ -141,7 +141,7 @@ private extension SessionClientState.SessionSetupRun {
     init(_ run: CoreAPI.SessionSetupRun) {
         self.init(
             id: run.id,
-            status: .init(rawValue: run.status.rawValue),
+            status: run.status.clientStateStatus,
             startedAt: run.startedAt,
             completedAt: run.completedAt,
             tasks: run.tasks.map(SessionClientState.SessionSetupTask.init)
@@ -177,7 +177,7 @@ private extension SessionClientState.SessionSetupTask {
     init(_ task: CoreAPI.CloudContainerSetupTask) {
         self.init(
             id: .init(rawValue: task.id),
-            status: .init(rawValue: task.status.rawValue),
+            status: task.status.clientStateStatus,
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -190,7 +190,7 @@ private extension SessionClientState.SessionSetupTask {
     init(_ task: CoreAPI.RepositorySetupTask) {
         self.init(
             id: .init(rawValue: task.id),
-            status: .init(rawValue: task.status.rawValue),
+            status: task.status.clientStateStatus,
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -203,7 +203,7 @@ private extension SessionClientState.SessionSetupTask {
     init(_ task: CoreAPI.StartupScriptSetupTask) {
         self.init(
             id: .init(rawValue: task.id),
-            status: .init(rawValue: task.status.rawValue),
+            status: task.status.clientStateStatus,
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -217,7 +217,7 @@ private extension SessionClientState.SessionSetupTask {
     init(_ task: CoreAPI.NetworkPolicySetupTask) {
         self.init(
             id: .init(rawValue: task.id),
-            status: .init(rawValue: task.status.rawValue),
+            status: task.status.clientStateStatus,
             startedAt: task.startedAt,
             completedAt: task.completedAt,
             error: task.error,
@@ -252,6 +252,70 @@ private extension SessionClientState.SessionSetupTaskOutput {
             stdoutLength: output.stdoutLength,
             stderrLength: output.stderrLength
         )
+    }
+}
+
+private extension CoreAPI.WireUIMessage.Role {
+    var domainRole: SessionMessage.Role {
+        switch self {
+        case .user:
+            .user
+        case .assistant:
+            .assistant
+        case .system:
+            .system
+        case .unknown(let value):
+            .unknown(value)
+        }
+    }
+}
+
+extension CoreAPI.SessionStatus {
+    var clientStateStatus: SessionClientState.Status {
+        switch self {
+        case .preparing:
+            .preparing
+        case .setupFailed:
+            .setupFailed
+        case .ready:
+            .ready
+        case .unknown(let value):
+            .unknown(value)
+        }
+    }
+}
+
+private extension CoreAPI.SessionSetupRunStatus {
+    var clientStateStatus: SessionClientState.SessionSetupRun.Status {
+        switch self {
+        case .running:
+            .running
+        case .completed:
+            .completed
+        case .failed:
+            .failed
+        case .unknown(let value):
+            .unknown(value)
+        }
+    }
+}
+
+private extension CoreAPI.SessionSetupTaskStatus {
+    var clientStateStatus: SessionClientState.SessionSetupTask.Status {
+        switch self {
+        case .pending:
+            .pending
+        case .running:
+            .running
+        case .completed:
+            .completed
+        case .failed:
+            .failed
+        case .skipped:
+            .skipped
+        case .unknown(let value):
+            .unknown(value)
+        }
     }
 }
 

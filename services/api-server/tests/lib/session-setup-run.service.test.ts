@@ -43,7 +43,17 @@ function createHarness(args: {
     getClientState: () => clientState,
     updateRunState: (setupRun) => {
       clientState.sessionSetupRun = setupRun;
-      clientState.status = setupRun.status === "completed" ? "ready" : "preparing";
+      switch (setupRun.status) {
+        case "running":
+          clientState.status = "preparing";
+          break;
+        case "failed":
+          clientState.status = "setup_failed";
+          break;
+        case "completed":
+          clientState.status = "ready";
+          break;
+      }
     },
   });
 
@@ -165,6 +175,7 @@ describe("SessionSetupRunService", () => {
 
     const setupRun = requireSetupRun(clientState);
     expect(setupRun.status).toBe("failed");
+    expect(clientState.status).toBe("setup_failed");
     expect(setupRun.completedAt).not.toBeNull();
     expect(setupRun.tasks.find((task) => task.id === taskId)?.status)
       .toBe("failed");
@@ -186,6 +197,7 @@ describe("SessionSetupRunService", () => {
     const setupRun = requireSetupRun(clientState);
     const cloudContainerTask = setupRun.tasks.find((task) => task.id === "cloud_container");
     expect(setupRun.status).toBe("running");
+    expect(clientState.status).toBe("preparing");
     expect(setupRun.completedAt).toBeNull();
     expect(cloudContainerTask?.status).toBe("running");
     expect(cloudContainerTask?.completedAt).toBeNull();

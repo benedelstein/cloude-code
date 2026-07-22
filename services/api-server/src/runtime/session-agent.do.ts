@@ -235,11 +235,7 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.setupRunService = new SessionSetupRunService({
       getServerState: () => this.serverState,
       getClientState: () => this.state,
-      updateRunState: (setupRun) =>
-        this.updatePartialState({
-          sessionSetupRun: setupRun,
-          status: this.synthesizeStatus(setupRun),
-        }),
+      updateRunState: (setupRun) => this.updateSetupRun(setupRun),
     });
     this.turnCoordinator = new AgentTurnCoordinator({
       logger: this.logger,
@@ -417,6 +413,15 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.setState({ ...this.state, ...partial });
   }
 
+  private updateSetupRun(setupRun: SessionSetupRun): void {
+    const previousStatus = this.state.status;
+    const status = this.synthesizeStatus(setupRun);
+    this.updatePartialState({ sessionSetupRun: setupRun, status });
+    if (status !== previousStatus) {
+      this.sessionSummaryService.persistStatus(status);
+    }
+  }
+
   private updateServerState(partial: Partial<ServerState>): void {
     this.serverState = { ...this.serverState, ...partial };
     this.serverStateRepository.update(partial);
@@ -426,8 +431,21 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     const effectiveSetupRun = setupRun === undefined
       ? this.state.sessionSetupRun
       : setupRun;
-    if (!this.serverState.initialized) { return "preparing"; }
-    return effectiveSetupRun?.status === "completed" ? "ready" : "preparing";
+    if (!this.serverState.initialized || !effectiveSetupRun) {
+      return "preparing";
+    }
+    switch (effectiveSetupRun.status) {
+      case "running":
+        return "preparing";
+      case "failed":
+        return "setup_failed";
+      case "completed":
+        return "ready";
+      default: {
+        const exhaustiveCheck: never = effectiveSetupRun.status;
+        throw new Error(`Unhandled setup run status: ${exhaustiveCheck}`);
+      }
+    }
   }
 
   private async publishTurnFinishedNotification(message: UIMessage): Promise<void> {

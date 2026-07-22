@@ -28,10 +28,45 @@ async function waitFor(
 }
 
 describe("SessionSummaryService", () => {
+  it("persists setup status before publishing the summary invalidation", async () => {
+    const operations: string[] = [];
+    const repository = {
+      updateStatus: vi.fn(async () => {
+        operations.push("status:write");
+      }),
+      updateWorkingState: vi.fn(),
+      recordAssistantTurnFinished: vi.fn(),
+      markRead: vi.fn(),
+      updatePushedBranch: vi.fn(),
+      setPullRequest: vi.fn(),
+      updatePullRequestState: vi.fn(),
+    };
+    const publishSessionSummaryInvalidated = vi.fn(async () => {
+      operations.push("publish");
+    });
+    const service = new SessionSummaryService({
+      repository,
+      getSessionId: () => SESSION_ID,
+      getUserId: () => USER_ID,
+      publishSessionSummaryInvalidated,
+      logger: noopLogger,
+    });
+
+    service.persistStatus("setup_failed");
+    await waitFor(() => operations.length === 2);
+
+    expect(repository.updateStatus).toHaveBeenCalledWith(
+      SESSION_ID,
+      "setup_failed",
+    );
+    expect(operations).toEqual(["status:write", "publish"]);
+  });
+
   it("publishes invalidation only after the D1 write resolves", async () => {
     const operations: string[] = [];
     const writeDeferred = Promise.withResolvers<void>();
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("write:start");
         await writeDeferred.promise;
@@ -73,6 +108,7 @@ describe("SessionSummaryService", () => {
   it("serializes summary mutations before publishing invalidations", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("working:write");
       }),
@@ -110,6 +146,7 @@ describe("SessionSummaryService", () => {
   it("persists pull request state before publishing summary invalidation", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
       markRead: vi.fn(),
@@ -146,6 +183,7 @@ describe("SessionSummaryService", () => {
   it("publishes one invalidation after assistant-finished summary persistence", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(async () => {
         operations.push("assistant-finished:write");
@@ -184,6 +222,7 @@ describe("SessionSummaryService", () => {
   it("clears working state without recording latest assistant message for aborted turns", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(async () => {
         operations.push("working-state:write");
       }),
@@ -222,6 +261,7 @@ describe("SessionSummaryService", () => {
   it("marks read before publishing summary invalidation", async () => {
     const operations: string[] = [];
     const repository = {
+      updateStatus: vi.fn(),
       updateWorkingState: vi.fn(),
       recordAssistantTurnFinished: vi.fn(),
       markRead: vi.fn(async () => {

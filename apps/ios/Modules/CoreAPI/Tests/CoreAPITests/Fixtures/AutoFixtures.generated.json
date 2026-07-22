@@ -253,6 +253,7 @@
     "provider": "claude-code",
     "title": "sample",
     "archived": true,
+    "status": "preparing",
     "workingState": "idle",
     "pushedBranch": "sample",
     "pullRequest": {
@@ -393,6 +394,7 @@
             "provider": "claude-code",
             "title": "sample",
             "archived": true,
+            "status": "preparing",
             "workingState": "idle",
             "pushedBranch": "sample",
             "pullRequest": {
@@ -500,6 +502,7 @@
         "provider": "claude-code",
         "title": "sample",
         "archived": true,
+        "status": "preparing",
         "workingState": "idle",
         "pushedBranch": "sample",
         "pullRequest": {
@@ -1512,6 +1515,7 @@
       "provider": "claude-code",
       "title": "sample",
       "archived": true,
+      "status": "preparing",
       "workingState": "idle",
       "pushedBranch": "sample",
       "pullRequest": {
@@ -1561,6 +1565,7 @@
       "provider": "claude-code",
       "title": "sample",
       "archived": true,
+      "status": "preparing",
       "workingState": "idle",
       "pushedBranch": "sample",
       "pullRequest": {
@@ -1611,6 +1616,7 @@
       "provider": "claude-code",
       "title": "sample",
       "archived": true,
+      "status": "preparing",
       "workingState": "idle",
       "pushedBranch": "sample",
       "pullRequest": {
@@ -1634,6 +1640,7 @@
       "provider": "claude-code",
       "title": "sample",
       "archived": true,
+      "status": "preparing",
       "workingState": "idle",
       "pushedBranch": "sample",
       "pullRequest": {

@@ -2,8 +2,10 @@ import { z } from "zod";
 import { ProviderId } from "./providers";
 
 export const SessionStatus = z.enum([
-  /** Session setup is still in progress or blocked. */
+  /** Session setup is still in progress. */
   "preparing",
+  /** Session setup stopped after a blocking task failed. */
+  "setup_failed",
   /** Ready to send and receive messages */
   "ready",
 ]);
@@ -213,6 +215,8 @@ export const SessionSummary = z.object({
   provider: ProviderId.optional(),
   title: z.string().nullable(),
   archived: z.boolean(),
+  status: SessionStatus.optional()
+    .describe("preparing: setup in progress; setup_failed: setup blocked by a failure; ready: accepting messages"),
   workingState: SessionWorkingState,
   pushedBranch: z.string().nullable(),
   pullRequest: z.object({

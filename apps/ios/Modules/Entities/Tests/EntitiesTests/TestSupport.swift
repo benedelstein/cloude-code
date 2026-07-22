@@ -10,7 +10,8 @@ func testSessionSummary(
     _ id: String,
     repoId: Int = 1,
     title: String? = "Session",
-    provider: AgentProviderID? = nil
+    provider: AgentProviderID? = nil,
+    status: SessionStatus? = nil
 ) -> Domain.SessionSummary {
     Domain.SessionSummary(
         id: id,
@@ -19,6 +20,7 @@ func testSessionSummary(
         provider: provider,
         title: title,
         archived: false,
+        status: status,
         workingState: "idle",
         pushedBranch: "cloude/test",
         pullRequest: .init(url: "https://github.com/owner/repo/pull/1", number: 1, state: "open"),

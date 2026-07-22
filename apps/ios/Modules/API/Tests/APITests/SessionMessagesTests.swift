@@ -340,6 +340,28 @@ struct SessionMessagesTests {
         #expect(summary.domainSummary.id == "session_custom_ID")
     }
 
+    @Test func sessionSetupFailedStatusMapsToDomain() {
+        #expect(SessionClientState.Status(rawValue: "setup_failed") == .setupFailed)
+        #expect(SessionClientState.Status.setupFailed.rawValue == "setup_failed")
+
+        var summary = CoreAPI.SessionSummary(
+            id: "session-id",
+            repoId: 1,
+            repoFullName: "ben/cloude-code",
+            archived: false,
+            status: .setupFailed,
+            workingState: .idle,
+            createdAt: "2026-06-13T00:00:00.000Z",
+            updatedAt: "2026-06-13T00:00:00.000Z",
+            hasUnread: false
+        )
+
+        #expect(summary.domainSummary.status == .setupFailed)
+
+        summary.status = .unknown("future-status")
+        #expect(summary.domainSummary.status == .unknown("future-status"))
+    }
+
     @Test func sessionSummaryMapsKnownAbsentAndUnknownProviders() {
         func summary(provider: CoreAPI.ProviderId?) -> CoreAPI.SessionSummary {
             CoreAPI.SessionSummary(

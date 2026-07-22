@@ -20,9 +20,10 @@ extension CoreAPI.SessionSummary {
             id: id,
             repoId: repoId,
             repoFullName: repoFullName,
-            provider: provider.map { AgentProviderID(rawValue: $0.rawValue) },
+            provider: provider?.domainProviderID,
             title: title,
             archived: archived,
+            status: status?.domainSummaryStatus,
             workingState: workingState.rawValue,
             pushedBranch: pushedBranch,
             pullRequest: pullRequest.map {
@@ -38,6 +39,34 @@ extension CoreAPI.SessionSummary {
             lastAssistantMessageId: lastAssistantMessageId,
             hasUnread: hasUnread
         )
+    }
+}
+
+private extension CoreAPI.ProviderId {
+    var domainProviderID: AgentProviderID {
+        switch self {
+        case .claudeCode:
+            .claudeCode
+        case .openaiCodex:
+            .openaiCodex
+        case .unknown(let value):
+            .unknown(value)
+        }
+    }
+}
+
+private extension CoreAPI.SessionStatus {
+    var domainSummaryStatus: Domain.SessionStatus {
+        switch self {
+        case .preparing:
+            .preparing
+        case .setupFailed:
+            .setupFailed
+        case .ready:
+            .ready
+        case .unknown(let value):
+            .unknown(value)
+        }
     }
 }
 

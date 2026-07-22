@@ -12,7 +12,9 @@ import {
 export const SessionInfoResponse = z.object({
   sessionId: z.uuid(),
   title: z.string().nullable(),
-  status: SessionStatus.describe("preparing: setup in progress or blocked; ready: accepting messages"),
+  status: SessionStatus.describe(
+    "preparing: setup in progress; setup_failed: setup blocked by a failure; ready: accepting messages",
+  ),
   repoFullName: z.string().describe("GitHub repo in owner/name form"),
   baseBranch: z.string().optional().describe("Branch the session was started from"),
   pushedBranch: z.string().optional().describe("Branch the agent pushed its work to, if any"),
