@@ -1,6 +1,6 @@
 ## Context
 
-GitHub authentication and GitHub App installation are separate grants with separate lifecycles. A Cloude Code account and GitHub user credential are established by OAuth; repository-backed sessions additionally require repositories visible through a GitHub App installation. Repository access is therefore not an authentication gate.
+GitHub authentication and GitHub App installation are separate grants with separate lifecycles. A My Machines account and GitHub user credential are established by OAuth; repository-backed sessions additionally require repositories visible through a GitHub App installation. Repository access is therefore not an authentication gate.
 
 The current implementation expresses that product flow differently per client:
 

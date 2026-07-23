@@ -27,5 +27,10 @@
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>DMSerifDisplay-Regular.ttf</string>
+		<string>SchoolYard-Regular.otf</string>
+	</array>
 </dict>
 </plist>

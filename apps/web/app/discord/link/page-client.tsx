@@ -135,16 +135,16 @@ function getDescription(params: {
     const discordName = params.claimState.externalUsername
       ? ` Discord user ${params.claimState.externalUsername}`
       : " Your external account";
-    return `${discordName} can create Cloude sessions until ${expires}.`;
+    return `${discordName} can create My Machines sessions until ${expires}.`;
   }
   if (params.claimState.type === "error") {
     return params.claimState.message;
   }
   if (params.loading) {
-    return "One moment while we check whether you are signed in to Cloude.";
+    return "One moment while we check whether you are signed in to My Machines.";
   }
   if (!params.user) {
-    return "Sign in with GitHub, then this page will connect your external account to Cloude.";
+    return "Sign in with GitHub, then this page will connect your external account to My Machines.";
   }
   return "One moment while we connect your Discord account.";
 }

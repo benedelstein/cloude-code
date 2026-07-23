@@ -5,6 +5,6 @@ APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)
 BUILD_ENVIRONMENT = PRODUCTION
 // escaping workaround: xcconfig treats // as a comment
 SLASH = /
-API_BASE_URL = https:$(SLASH)/api.cloudecode.dev
-WEB_BASE_URL = https:$(SLASH)/cloudecode.dev
+API_BASE_URL = https:$(SLASH)/api.mymachines.dev
+WEB_BASE_URL = https:$(SLASH)/www.mymachines.dev
 DEEP_LINK_SCHEME = cloudecode

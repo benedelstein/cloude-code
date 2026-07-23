@@ -72,7 +72,7 @@ struct ClaudeProviderConnectionView: View {
         if isReconnect {
             return "Your Claude session expired. Reconnect to continue using Claude models."
         }
-        return "Connect your Claude account to use Claude models in Cloude Code."
+        return "Connect your Claude account to use Claude models in My Machines."
     }
 
     private var isReconnect: Bool {

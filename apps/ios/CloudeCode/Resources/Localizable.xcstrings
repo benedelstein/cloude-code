@@ -70,10 +70,10 @@
     "Connect Claude" : {
 
     },
-    "Connect your Claude account to use Claude models in Cloude Code." : {
+    "Connect your Claude account to use Claude models in My Machines." : {
 
     },
-    "Connect your OpenAI account to use Codex models in Cloude Code." : {
+    "Connect your OpenAI account to use Codex models in My Machines." : {
 
     },
     "Connected" : {
@@ -357,7 +357,7 @@
     "Manage repositories on GitHub" : {
 
     },
-    "Manage which repositories Cloude Code can access on GitHub." : {
+    "Manage which repositories the app can access on GitHub." : {
 
     },
     "Merged pull request" : {

@@ -33,14 +33,14 @@ export async function generateMetadata({
 
   const sessionToken = await getSessionToken();
   if (!sessionToken) {
-    return { title: "Cloude Code" };
+    return { title: "My Machines" };
   }
 
   const session = await getSessionForRoute(sessionId, sessionToken);
   const sessionTitle = session?.title ?? null;
 
   return {
-    title: sessionTitle ? `${sessionTitle} | Cloude Code` : "Cloude Code",
+    title: sessionTitle ? `${sessionTitle} | My Machines` : "My Machines",
   };
 }
 

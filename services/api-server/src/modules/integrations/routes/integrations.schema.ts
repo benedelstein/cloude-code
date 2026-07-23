@@ -42,7 +42,7 @@ export const claimIntegrationLinkRoute = createRoute({
   responses: {
     200: {
       content: { "application/json": { schema: IntegrationLinkClaimResponse } },
-      description: "External integration account linked to the current Cloude user",
+      description: "External integration account linked to the current My Machines user",
     },
     400: {
       content: { "application/json": { schema: ErrorResponse } },

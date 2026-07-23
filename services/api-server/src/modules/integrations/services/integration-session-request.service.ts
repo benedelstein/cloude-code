@@ -72,7 +72,7 @@ export class IntegrationSessionRequestService {
 
   /**
    * Resolves the external integration user, routes the prompt to a repository,
-   * and creates a Cloude session with the prompt as the initial user message.
+   * and creates a My Machines session with the prompt as the initial user message.
    */
   async createSessionFromIntegration(params: {
     request: IntegrationSessionRequest;
@@ -99,7 +99,7 @@ export class IntegrationSessionRequestService {
       return {
         ok: false,
         code: "GITHUB_AUTH_REQUIRED",
-        message: "The linked Cloude account needs to sign in with GitHub again.",
+        message: "The linked My Machines account needs to sign in with GitHub again.",
       };
     }
 
@@ -282,7 +282,7 @@ export class IntegrationSessionRequestService {
     return {
       ok: false,
       code: "EXTERNAL_USER_NOT_LINKED",
-      message: "Link or reconnect your Cloude account to use Cloude from this integration.",
+      message: "Link or reconnect your My Machines account to use My Machines from this integration.",
       linkUrl: this.buildIntegrationLinkUrl(token, request.externalUser.provider),
       linkExpiresAt: expiresAt,
     };

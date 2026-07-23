@@ -1,6 +1,6 @@
 # CloudeCode (iOS app)
 
-SwiftUI iOS client for Cloude Code, using Needle for DI and local Swift packages for compile-time isolation. Bundle ID: `llc.bze.CloudeCode`.
+SwiftUI iOS client for My Machines, using Needle for DI and local Swift packages for compile-time isolation. Bundle ID: `llc.bze.CloudeCode`.
 
 Before module, layering, package-boundary, DI, or persistence changes, you must read `ARCHITECTURE.md` (in this directory) — it covers package organization, the dependency graph, and layering invariants.
 

@@ -17,7 +17,6 @@ final class CloudeCodeUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Cloude Code"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 5))
     }
 

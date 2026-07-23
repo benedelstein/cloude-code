@@ -45,7 +45,7 @@ export function StickyHeader({ children }: { children: ReactNode }) {
           }`}
           style={WORDMARK_STROKE}
         >
-          Cloude Code
+          My Machines
         </button>
         <div>{children}</div>
       </div>

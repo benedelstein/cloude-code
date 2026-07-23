@@ -122,7 +122,7 @@ function appendSessionLinkToPullRequestBody(body: string, sessionUrl?: string): 
     return body;
   }
 
-  const footer = `Cloud Code session: ${sessionUrl}`;
+  const footer = `My Machines session: ${sessionUrl}`;
   const trimmedBody = body.trimEnd();
   return trimmedBody ? `${trimmedBody}\n\n${footer}` : footer;
 }

@@ -44,7 +44,7 @@ function createEnv(database: D1Database): Env {
     GITHUB_WEBHOOK_SECRET: "webhook-secret",
     GITHUB_APP_CLIENT_ID: "client-id",
     GITHUB_APP_CLIENT_SECRET: "client-secret",
-    GITHUB_APP_SLUG: "cloude-code",
+    GITHUB_APP_SLUG: "my-machines-integration",
     TOKEN_ENCRYPTION_KEY: btoa("12345678901234567890123456789012"),
   } as Env;
 }

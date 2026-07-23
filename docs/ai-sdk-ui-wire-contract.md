@@ -91,7 +91,7 @@ Do not use the wire schemas to:
 - Replace the server `MessageAccumulator` state machine.
 - Define model-call inputs. Use AI SDK `ModelMessage` concepts only for model
   calls, not UI transcript state.
-- Invent a Cloude-specific transcript protocol.
+- Invent a My Machines-specific transcript protocol.
 
 ## Data flow
 

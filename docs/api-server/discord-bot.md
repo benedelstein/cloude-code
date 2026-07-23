@@ -39,7 +39,7 @@ Content-Type: application/json
 
 ## Account linking
 
-External users are linked to Cloude users with short-lived, single-use link attempts:
+External users are linked to My Machines users with short-lived, single-use link attempts:
 
 1. An external user sends a session request through an integration client.
 2. The client calls `POST /integrations/session-requests` with the external user and prompt.
@@ -48,7 +48,7 @@ External users are linked to Cloude users with short-lived, single-use link atte
 5. The user opens the link in the web app.
 6. If needed, the user signs in through the existing GitHub OAuth flow.
 7. The web app calls `POST /integrations/link/claim` with the token.
-8. The API consumes the link attempt and stores an integration account link for the signed-in Cloude user.
+8. The API consumes the link attempt and stores an integration account link for the signed-in My Machines user.
 
 Account links expire after 90 days. Use does not extend the expiry: `last_used_at` is tracked, but `expires_at` stays fixed from the claim, so even active users must relink every 90 days. Once expired, the next integration request creates a fresh link URL and asks the user to reconnect. Link attempts store only a SHA-256 token hash, and each new link request replaces the user's previous outstanding attempt.
 
@@ -56,8 +56,8 @@ Account links expire after 90 days. Use does not extend the expiry: `last_used_a
 
 Routing is API-side in `IntegrationSessionRequestService`:
 
-1. Resolve `{ provider, externalUser.id }` to an active, unexpired Cloude account link.
-2. Load the linked user's valid GitHub token from stored Cloude credentials.
+1. Resolve `{ provider, externalUser.id }` to an active, unexpired My Machines account link.
+2. Load the linked user's valid GitHub token from stored My Machines credentials.
 3. Enumerate the user's accessible repos from the existing repo listing/cache path.
 4. Heuristically rank repos by exact owner/name, repo name, token matches, and description.
 5. Fetch README excerpts for top candidates as lightweight RAG context.

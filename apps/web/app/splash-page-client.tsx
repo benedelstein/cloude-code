@@ -113,7 +113,7 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
             className="font-display text-5xl font-normal text-white leading-[0.96] tracking-normal md:text-7xl lg:text-8xl"
             style={TITLE_STROKE}
           >
-            Cloude Code
+            My Machines
           </h1>
           <p
             className="mt-4 max-w-xl text-pretty text-base text-secondary-foreground md:text-lg"
@@ -125,7 +125,7 @@ export function SplashPageClient({ hasSessionCookie }: SplashPageClientProps) {
             className="mt-2 max-w-xl text-pretty text-sm text-muted-foreground"
             style={{ textShadow: "0 0 10px rgba(255,255,255,0.85)" }}
           >
-            Cloude Code gives agents their own full environment to work on, so you can
+            My Machines gives agents their own full environment to work on, so you can
             scale up output without being limited by your own hardware.
           </p> */}
 
@@ -150,13 +150,13 @@ const FEATURES: Feature[] = [
   {
     title: "Environments for real work",
     body:
-      "Laptops were made for humans to work during their workdays, not for agents to crank out code around the clock. Cloude Code gives each agent its own persistent computer to build, run, and test in — not just an ephemeral sandbox to edit files.",
+      "Laptops were made for humans to work during their workdays, not for agents to crank out code around the clock. My Machines gives each agent its own persistent computer to build, run, and test in — not just an ephemeral sandbox to edit files.",
     illustration: <ComputerCluster />,
   },
   {
     title: "Your favorite harness",
     body:
-      "Cloude Code runs your preferred provider's own agent harness directly on its dev computer. Connect your Claude or OpenAI login — no API keys needed. More providers to come.",
+      "My Machines runs your preferred provider's own agent harness directly on its dev computer. Connect your Claude or OpenAI login — no API keys needed. More providers to come.",
     illustration: <HarnessIllustration />,
   },
   {

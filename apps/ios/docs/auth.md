@@ -195,7 +195,7 @@ The sign-in start, sign-in completion, refresh, and logout endpoints bypass
 
 ## GitHub App installation
 
-Authentication creates the Cloude Code account and stores the GitHub user
+Authentication creates the My Machines account and stores the GitHub user
 credential. Repository-backed work separately requires a repository available
 through a GitHub App installation.
 
