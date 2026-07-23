@@ -77,7 +77,7 @@ struct Wordmark: View {
     }
 
     private var eyeInsertionAnimation: Animation {
-        .spring(duration: 0.52, bounce: 0.38)
+        .spring(duration: 0.42, bounce: 0.5)
     }
 
     private var eyeRemovalAnimation: Animation {
