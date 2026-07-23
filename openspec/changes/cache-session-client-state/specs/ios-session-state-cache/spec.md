@@ -2,23 +2,31 @@
 
 ### Requirement: iOS persists a curated session-state snapshot
 
-The iOS app SHALL persist a per-session presentation snapshot containing agent settings, setup-run state, a derived responding flag, and pull request states not represented by the session summary. It MUST NOT persist raw `SessionClientState`, pending messages, active-turn identifiers, editor URLs, provider connection state, todos, plans, or errors.
+The iOS app SHALL persist a per-session presentation snapshot containing repository full name, session status, agent settings, agent mode, setup-run state, pull request state, pushed and base branches, and a derived responding flag. It MUST NOT persist raw `SessionClientState`, pending messages, active-turn identifiers, editor URLs, provider connection state, todos, plans, or errors.
 
 #### Scenario: Curated state is saved
-- **WHEN** an existing session receives model settings, setup progress, responding state, or a transitional pull request state
+- **WHEN** an existing session receives repository, status, model settings, agent mode, setup, branch, responding, or pull request state
 - **THEN** iOS stores those values in the snapshot identified by the session ID
 
 #### Scenario: Transient live state is excluded
 - **WHEN** live client state contains a pending message, active-turn ID, editor URL, provider connection state, todos, plans, or an error
 - **THEN** those values are not written to the session-state snapshot
 
-### Requirement: Existing session summaries remain the cache for summary fields
+### Requirement: Cached client state is canonical over the session summary
 
-iOS SHALL continue to restore the session title, repository, status, working state, pushed branch, provider fallback, and created pull request from `SessionSummaryStore`. The new session-state snapshot MUST NOT duplicate those summary-owned fields.
+iOS SHALL use restored client-state values instead of overlapping values from `SessionSummaryStore`. It SHALL continue to read the session title from the summary and SHALL use available summary values only when no client-state snapshot exists.
 
-#### Scenario: Summary restores durable presentation
-- **WHEN** a cached session summary contains a title, responding working state, pushed branch, provider, or created pull request
-- **THEN** the session screen presents that value without waiting for the session socket
+#### Scenario: Client state and summary disagree
+- **WHEN** a cached client-state snapshot differs from the cached summary for status, provider, responding, branch, or pull request
+- **THEN** the session screen presents the client-state snapshot value
+
+#### Scenario: No client-state snapshot exists
+- **WHEN** a session has a cached summary but no cached client-state snapshot
+- **THEN** the session screen uses the available summary values until live client state arrives
+
+#### Scenario: Session title is restored
+- **WHEN** a cached session summary contains a title
+- **THEN** the session screen presents that title because title is not part of client state
 
 ### Requirement: Cached state loads before cached messages
 
@@ -37,7 +45,7 @@ For an existing session, iOS SHALL load its cached session-state snapshot before
 After socket connection, iOS SHALL replace cached curated values with the corresponding values from complete live client state. A sync response SHALL replace the cached responding flag using the server-reported active-turn state, including clearing stale cached state.
 
 #### Scenario: Live state replaces cached values
-- **WHEN** cached setup, model, or transitional pull request state differs from a received live client-state frame
+- **WHEN** any cached curated field differs from a received live client-state frame
 - **THEN** the session screen and persisted snapshot use the live values
 
 #### Scenario: Server reports no active turn

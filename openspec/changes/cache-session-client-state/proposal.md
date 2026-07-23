@@ -6,8 +6,9 @@ Opening an iOS agent session restores cached transcript messages immediately, bu
 
 - Add a per-session SwiftData cache for curated client-state fields needed by the iOS session screen.
 - Restore cached state before cached messages, then replace it when live session state arrives.
-- Reuse the existing cached session summary for title, working state, pushed branch, provider fallback, and created pull request information instead of duplicating those fields.
-- Cache only setup-run state, agent model settings, a derived responding flag, and pull request states not represented by the summary.
+- Treat the cached client-state snapshot as canonical over overlapping session summary fields.
+- Cache repository, status, setup-run state, agent settings, agent mode, pull request, pushed and base branches, and a derived responding flag.
+- Continue using the session summary for title and as a fallback when no client-state snapshot exists.
 - Write only when the curated snapshot changes and save the latest snapshot when the session view disappears.
 - Clear the new cache on sign-out and when its session is deleted.
 

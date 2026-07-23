@@ -1,6 +1,6 @@
 ## 1. Cached state model
 
-- [ ] 1.1 Add the curated per-session Domain snapshot with agent settings, setup run, responding flag, and transitional pull request state.
+- [ ] 1.1 Add the curated per-session Domain snapshot with repository, status, agent settings, agent mode, setup run, pull request, pushed and base branches, and responding flag.
 - [ ] 1.2 Add its SwiftData entity and observable entity model, register the additive model in the current schema, and implement per-session load, save, delete, and delete-all store operations.
 - [ ] 1.3 Add Entities tests for snapshot round trips, replacement including cleared optionals, unreadable-row cleanup, deletion, and reopening an existing on-disk cache with the new model.
 
@@ -12,11 +12,11 @@
 ## 3. Agent session restoration
 
 - [ ] 3.1 Load cached session state before cached messages and socket connection for existing sessions, while skipping the cache for drafts.
-- [ ] 3.2 Restore curated client presentation fields while continuing to read title, repository, status, working state, branch, provider fallback, and created pull request from the existing session summary.
+- [ ] 3.2 Restore cached client-state fields as canonical, while continuing to read title and missing-snapshot fallback values from the existing session summary.
 - [ ] 3.3 Replace restored values from live state and sync responses, and persist only changed curated snapshots.
 - [ ] 3.4 Save the latest snapshot before `unbind()` resets local responding and socket state.
 
 ## 4. Regression coverage and verification
 
-- [ ] 4.1 Add AgentSession tests for cache-first provider/setup/responding restoration, summary-owned field restoration, live replacement, inactive sync clearing, draft exclusion, and disappear-time saving.
+- [ ] 4.1 Add AgentSession tests for cache-first field restoration, precedence over overlapping summary values, title and missing-cache summary fallback, live replacement, inactive sync clearing, draft exclusion, and disappear-time saving.
 - [ ] 4.2 Run Entities tests, SwiftLint fix and strict checks, the generic iOS simulator build, and the repository build, lint, typecheck, and test commands.
