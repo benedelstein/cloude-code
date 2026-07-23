@@ -72,7 +72,7 @@ struct Wordmark: View {
             insertion: .scale(scale: 0.2, anchor: .bottom)
                 .combined(with: .opacity),
             removal: .opacity
-                .animation(.easeOut(duration: 0.2))
+                .animation(.easeOut(duration: 0.15))
         )
     }
 
@@ -81,7 +81,7 @@ struct Wordmark: View {
     }
 
     private var eyeRemovalAnimation: Animation {
-        .spring(duration: 0.3, bounce: 0.3)
+        .spring(duration: 0.24, bounce: 0.45)
     }
 
     @MainActor
