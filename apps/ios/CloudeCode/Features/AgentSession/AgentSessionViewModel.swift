@@ -32,6 +32,7 @@ final class AgentSessionViewModel {
     let renameSessionAction: RenameSessionAction
     let archiveSessionAction: ArchiveSessionAction
     let deleteSessionAction: DeleteSessionAction
+    let performCompletionHaptic: () -> Void
     var subscriptionTask: Task<Void, Never>?
     /// Whether the view is currently on screen (between `bind` and `unbind`).
     /// Session creation is allowed to finish after the view goes away, but we
@@ -141,6 +142,9 @@ final class AgentSessionViewModel {
         archiveSessionAction: ArchiveSessionAction,
         deleteSessionAction: DeleteSessionAction,
         sessionCreatedSubject: PassthroughSubject<String, Never>,
+        completionHaptic: @escaping () -> Void = {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        },
         pullRequestPollInterval: Duration = .seconds(30)
     ) {
         self.context = context
@@ -160,6 +164,7 @@ final class AgentSessionViewModel {
         self.renameSessionAction = renameSessionAction
         self.archiveSessionAction = archiveSessionAction
         self.deleteSessionAction = deleteSessionAction
+        performCompletionHaptic = completionHaptic
         attachmentStore = ImageAttachmentStore(
             sessionId: context.session?.id,
             attachmentsAPI: attachmentsAPI

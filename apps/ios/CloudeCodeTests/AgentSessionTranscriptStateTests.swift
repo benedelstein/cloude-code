@@ -54,6 +54,29 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.messagesByID["assistant-1"]?.text == "Complete")
     }
 
+    @Test func agentFinishTriggersCompletionHapticWhileViewModelIsBound() {
+        var completionHapticCount = 0
+        let viewModel = makeViewModel {
+            completionHapticCount += 1
+        }
+        viewModel.isBound = true
+
+        viewModel.applyAgentFinish(assistantMessage(id: "assistant-1", text: "Complete"))
+
+        #expect(completionHapticCount == 1)
+    }
+
+    @Test func agentFinishDoesNotTriggerCompletionHapticWhileViewModelIsUnbound() {
+        var completionHapticCount = 0
+        let viewModel = makeViewModel {
+            completionHapticCount += 1
+        }
+
+        viewModel.applyAgentFinish(assistantMessage(id: "assistant-1", text: "Complete"))
+
+        #expect(completionHapticCount == 0)
+    }
+
     @Test func acceptOptimisticUserMessageKeepsRowID() throws {
         let viewModel = makeViewModel()
         viewModel.upsert(optimisticUserMessage(id: "client-1"))
@@ -399,7 +422,8 @@ extension AgentSessionTranscriptStateTests {
         provider: AgentProviderID? = nil,
         modelsAPI: any ModelsAPIProviding = StubModelsAPI(),
         sessionMessageStore: SessionMessageStore? = nil,
-        transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder()
+        transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder(),
+        completionHaptic: @escaping () -> Void = {}
     ) -> AgentSessionViewModel {
         let sessionMessageStore = sessionMessageStore ?? SessionMessageStore()
         let sessionSummaryStore = SessionSummaryStore()
@@ -436,7 +460,8 @@ extension AgentSessionTranscriptStateTests {
                 sessionsAPI: sessionsAPI,
                 sessionSummaryStore: sessionSummaryStore
             ),
-            sessionCreatedSubject: PassthroughSubject<String, Never>()
+            sessionCreatedSubject: PassthroughSubject<String, Never>(),
+            completionHaptic: completionHaptic
         )
     }
 

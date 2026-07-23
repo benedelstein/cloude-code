@@ -26,6 +26,9 @@ extension AgentSessionViewModel {
         }
         clearOptimisticUserMessageTracking()
         resetPendingResponse()
+        if isBound {
+            performCompletionHaptic()
+        }
     }
 
     func applyUserMessage(_ message: SessionMessage) {
