@@ -3,14 +3,23 @@ import SwiftUI
 struct HighlightButtonStyle: ButtonStyle {
     @Environment(\.theme) private var theme
 
-    private let highlightShape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+    var cornerRadius: CGFloat = 6
+    var highlightColor: Color?
+
+    private var highlightShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
+    private var color: Color {
+        highlightColor ?? theme.tertiaryBackgroundColor
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .brightness(configuration.isPressed ? 0.1 : 0)
             .background {
                 highlightShape
-                    .fill(configuration.isPressed ? theme.tertiaryBackgroundColor : .clear)
+                    .fill(configuration.isPressed ? color : .clear)
             }
             .contentShape(highlightShape)
             .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
@@ -86,6 +95,10 @@ struct BounceButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == HighlightButtonStyle {
     static var highlight: Self {
         HighlightButtonStyle()
+    }
+
+    static func highlight(cornerRadius: CGFloat, highlightColor: Color? = nil) -> Self {
+        HighlightButtonStyle(cornerRadius: cornerRadius, highlightColor: highlightColor)
     }
 }
 

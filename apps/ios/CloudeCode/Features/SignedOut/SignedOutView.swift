@@ -1,6 +1,5 @@
 import AuthenticationServices
 import SwiftUI
-import UIKit
 
 /// Login screen: app identity centered, GitHub sign-in pinned to the bottom.
 struct SignedOutView: View {
@@ -37,7 +36,7 @@ struct SignedOutView: View {
                     .frame(height: SignedOutStyle.signInButtonHeight)
                     .contentShape(Capsule())
                 }
-                .buttonStyle(SignedOutClearGlassButtonStyle())
+                .glassButtonStyle(.glass, tint: SignedOutStyle.signInButtonTint)
                 .disabled(sessionStore.isSigningIn)
                 .padding(.horizontal, SignedOutStyle.horizontalPadding)
                 .padding(.bottom, SignedOutStyle.bottomPadding)
@@ -57,43 +56,208 @@ struct SignedOutView: View {
 }
 
 private struct Wordmark: View {
-    private let machinesFont = UIFont(
-        name: SignedOutStyle.machinesFontName,
-        size: SignedOutStyle.wordmarkFontSize
-    ) ?? .systemFont(ofSize: SignedOutStyle.wordmarkFontSize)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.softFeedback) private var softFeedback
+    @State private var isVisible = false
+    @State private var extraEyeCount = 0
+    @State private var eyeSequenceID = 0
+    @State private var toggleTargetEyeCount: Int?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: SignedOutStyle.wordmarkSpacing) {
-            Text("My")
-                .font(.custom(SignedOutStyle.schoolYardFontName, size: SignedOutStyle.wordmarkFontSize))
+        Button {
+            toggleEyes()
+        } label: {
+            ZStack {
+                if isVisible {
+                    HStack(alignment: .firstTextBaseline, spacing: SignedOutStyle.wordmarkSpacing) {
+                        Text("My")
+                            .font(.custom(SignedOutStyle.schoolbellFontName, size: SignedOutStyle.myFontSize))
 
-            // Use a dotless i so the lavender brand dot is the only dot rendered.
-            Text("Mach\u{0131}nes")
-                .font(.custom(SignedOutStyle.machinesFontName, size: SignedOutStyle.wordmarkFontSize))
-                .overlay(alignment: .topLeading) {
-                    Circle()
-                        .fill(SignedOutStyle.dotColor)
-                        .frame(width: SignedOutStyle.dotSize, height: SignedOutStyle.dotSize)
-                        .offset(x: dotHorizontalOffset, y: SignedOutStyle.dotVerticalOffset)
+                        HStack(alignment: .firstTextBaseline, spacing: 0) {
+                            Text("Mach")
+
+                            WordmarkI()
+
+                            if extraEyeCount >= 1 {
+                                WordmarkI()
+                                    .transition(extraEyeTransition)
+                            }
+
+                            if extraEyeCount >= 2 {
+                                WordmarkI()
+                                    .transition(extraEyeTransition)
+                            }
+
+                            if extraEyeCount >= 3 {
+                                WordmarkI()
+                                    .transition(extraEyeTransition)
+                            }
+
+                            if extraEyeCount >= 4 {
+                                WordmarkI()
+                                    .transition(extraEyeTransition)
+                            }
+
+                            Text("nes")
+                        }
+                        .font(.custom(SignedOutStyle.machinesFontName, size: SignedOutStyle.machinesFontSize))
+                    }
+                    .transition(.blurReplace)
                 }
+            }
+            .foregroundStyle(.white)
+            .fixedSize()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .foregroundStyle(.white)
-        .fixedSize()
-        .accessibilityElement(children: .ignore)
+        .buttonStyle(.highlight(cornerRadius: 14, highlightColor: .white.opacity(0.08)))
         .accessibilityLabel("My Machines")
+        .accessibilityHint("Toggles the animated eyes")
+        .task(id: eyeSequenceID) {
+            if let toggleTargetEyeCount {
+                await animateEyes(to: toggleTargetEyeCount)
+            } else {
+                await animateIntro()
+            }
+        }
     }
 
-    private var dotHorizontalOffset: CGFloat {
-        let prefixWidth = ("Mach" as NSString).size(withAttributes: [.font: machinesFont]).width
-        let letterWidth = ("\u{0131}" as NSString).size(withAttributes: [.font: machinesFont]).width
-        return prefixWidth + (letterWidth - SignedOutStyle.dotSize) / 2
+    private var extraEyeTransition: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.2, anchor: .bottom)
+                .combined(with: .opacity),
+            removal: .opacity
+                .animation(.easeOut(duration: 0.2))
+        )
+    }
+
+    private var eyeInsertionAnimation: Animation {
+        .spring(duration: 0.52, bounce: 0.38)
+    }
+
+    private var eyeRemovalAnimation: Animation {
+        .spring(duration: 0.3, bounce: 0.15)
+    }
+
+    @MainActor
+    private func animateIntro() async {
+        guard !isVisible else {
+            return
+        }
+
+        if reduceMotion {
+            isVisible = true
+            return
+        }
+
+        guard await wait(milliseconds: 300) else {
+            return
+        }
+
+        withAnimation(.easeOut(duration: 0.42)) {
+            isVisible = true
+        }
+
+        guard await wait(milliseconds: 850) else {
+            return
+        }
+
+        await animateEyes(to: SignedOutStyle.maximumExtraEyeCount)
+
+        guard await wait(milliseconds: 750) else {
+            return
+        }
+
+        await animateEyes(to: 0)
+    }
+
+    @MainActor
+    private func animateEyes(to targetCount: Int) async {
+        if reduceMotion {
+            extraEyeCount = targetCount
+            return
+        }
+
+        while extraEyeCount != targetCount {
+            guard !Task.isCancelled else {
+                return
+            }
+
+            let isExpanding = extraEyeCount < targetCount
+            let nextCount = extraEyeCount + (isExpanding ? 1 : -1)
+            transitionEyes(
+                to: nextCount,
+                animation: isExpanding ? eyeInsertionAnimation : eyeRemovalAnimation
+            )
+
+            guard nextCount != targetCount else {
+                return
+            }
+
+            let staggerMilliseconds = isExpanding ? 70 : 65
+            guard await wait(milliseconds: staggerMilliseconds) else {
+                return
+            }
+        }
+    }
+
+    @MainActor
+    private func toggleEyes() {
+        guard isVisible else {
+            return
+        }
+
+        let nextTarget: Int
+        if let toggleTargetEyeCount {
+            nextTarget = toggleTargetEyeCount == SignedOutStyle.maximumExtraEyeCount
+                ? 0
+                : SignedOutStyle.maximumExtraEyeCount
+        } else {
+            nextTarget = extraEyeCount == 0 ? SignedOutStyle.maximumExtraEyeCount : 0
+        }
+
+        toggleTargetEyeCount = nextTarget
+        eyeSequenceID += 1
+    }
+
+    @MainActor
+    private func wait(milliseconds: Int) async -> Bool {
+        do {
+            try await Task.sleep(for: .milliseconds(milliseconds))
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
+    }
+
+    @MainActor
+    private func transitionEyes(to count: Int, animation: Animation) {
+        softFeedback.impactOccurred(intensity: 0.6)
+        withAnimation(animation) {
+            extraEyeCount = count
+        }
+    }
+}
+
+private struct WordmarkI: View {
+    var body: some View {
+        // The dotless glyph lets the lavender brand dot animate independently.
+        Text("\u{0131}")
+            .overlay(alignment: .top) {
+                Circle()
+                    .fill(SignedOutStyle.dotColor)
+                    .frame(width: SignedOutStyle.dotSize, height: SignedOutStyle.dotSize)
+                    .offset(y: SignedOutStyle.dotVerticalOffset)
+            }
     }
 }
 
 private enum SignedOutStyle {
-    static let schoolYardFontName = "SchoolYardRegular"
+    static let schoolbellFontName = "Schoolbell-Regular"
     static let machinesFontName = "DMSerifDisplay-Regular"
-    static let wordmarkFontSize: CGFloat = 58.5
+    static let myFontSize: CGFloat = 50
+    static let machinesFontSize: CGFloat = 55
+    static let maximumExtraEyeCount = 4
     static let wordmarkSpacing: CGFloat = 4
     static let wordmarkVerticalOffset: CGFloat = -25
     static let dotSize: CGFloat = 10
@@ -102,27 +266,11 @@ private enum SignedOutStyle {
     static let signInButtonHeight: CGFloat = 60
     static let bottomPadding: CGFloat = 4
     static let dotColor = Color(hex: 0xD4A8FF)
-    static let buttonBorderColor = Color(hex: 0x6D768F)
+    static let signInButtonTint = Color(hex: 0x102A5A)
     static let signInFont = Font.semibold(20)
     static let backgroundGradient = LinearGradient(
-        colors: [Color(hex: 0x0A1534), Color(hex: 0x060F2A)],
+        colors: [Color(hex: 0x08122F), Color(hex: 0x040B22)],
         startPoint: .top,
         endPoint: .bottom
     )
-}
-
-private struct SignedOutClearGlassButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background {
-                Capsule()
-                    .fill(.clear)
-                    .stroke(SignedOutStyle.buttonBorderColor, lineWidth: 0.5)
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-            }
-            .opacity(isEnabled ? 1 : 0.5)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-    }
 }
