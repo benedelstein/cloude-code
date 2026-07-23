@@ -6,12 +6,12 @@ import Foundation
 
 extension AgentSessionViewModel {
     var pushedBranchForDisplay: String? {
-        clientState.pushedBranch ?? session?.pushedBranch
+        hasHydratedClientState ? clientState.pushedBranch : session?.pushedBranch
     }
 
     var pullRequestForDisplay: SessionClientState.PullRequest? {
-        if let pullRequest = clientState.pullRequest {
-            return pullRequest
+        if hasHydratedClientState {
+            return clientState.pullRequest
         }
         guard let pullRequest = session?.pullRequest else {
             return nil
@@ -164,5 +164,6 @@ extension AgentSessionViewModel {
 
         pullRequestOperationErrorMessage = nil
         updatePullRequestPolling()
+        persistClientStateIfNeeded()
     }
 }

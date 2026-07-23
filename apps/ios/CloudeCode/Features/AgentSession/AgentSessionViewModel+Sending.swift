@@ -63,6 +63,7 @@ extension AgentSessionViewModel {
         isSending = true
         isWaitingForResponse = true
         errorMessage = nil
+        persistClientStateIfNeeded()
 
         if isDraftMode {
             isCreatingSession = true
@@ -207,5 +208,6 @@ extension AgentSessionViewModel {
         )
         attachmentStore.restore(submittedAttachments)
         resetPendingResponse()
+        persistClientStateIfNeeded()
     }
 }

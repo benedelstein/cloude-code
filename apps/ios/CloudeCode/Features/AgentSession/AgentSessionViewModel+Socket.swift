@@ -29,8 +29,7 @@ extension AgentSessionViewModel {
 
     func startSocketPipeline(socket: SessionSocket) -> Task<Void, Never> {
         let task = Task { [weak self, socket] in
-            // No-op for a freshly created session: the optimistic message is
-            // already in the transcript and hasLoadedMessages is set.
+            await self?.loadCachedClientState()
             await self?.loadCachedMessages()
             guard !Task.isCancelled else {
                 return
@@ -50,6 +49,7 @@ extension AgentSessionViewModel {
     func unbind() {
         isBound = false
         stopPullRequestPolling()
+        persistClientStateIfNeeded(force: true)
         subscriptionTask?.cancel()
         subscriptionTask = nil
         connectionState = .disconnected
