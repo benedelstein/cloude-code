@@ -83,7 +83,7 @@ struct RepoPickerSheet: View {
             EmptyStateView(
                 title: "No repositories found",
                 subtitle: query.isEmpty
-                    ? "Manage which repositories Cloude Code can access on GitHub."
+                    ? "Manage which repositories the app can access on GitHub."
                     : "Try a different search."
             ) {
                 Image(systemName: "folder")

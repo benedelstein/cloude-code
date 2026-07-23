@@ -9,7 +9,7 @@ token that the Next.js BFF stores in an HTTP-only cookie, so the token never
 touches client-side JavaScript. iOS receives an access/refresh pair.
 
 The production GitHub App's "User authorization callback URL" is
-`https://api.cloudecode.dev/auth/callback` — pinned to the api-server, not the
+`https://api.mymachines.dev/auth/callback` — pinned to the api-server, not the
 web app. The api-server owns OAuth state, exchanges the authorization code
 itself, and decides where the browser goes next. This is how sign-in works on
 Vercel preview branches as well as prod.
@@ -95,7 +95,7 @@ Browser                    Next.js BFF                  API Server              
   |<-- 302 authorizeUrl + Set-Cookie github_sign_in_attempt (HttpOnly, 600s) -------|
   |                                                                                 |
   |                  (user authorizes on GitHub)                                    |
-  |<-- redirect to api.cloudecode.dev/auth/callback?code=X&state=Y ------------------|
+  |<-- redirect to api.mymachines.dev/auth/callback?code=X&state=Y ------------------|
   |                                                         # consume state         |
   |                                                         # exchange code         |
   |                                                         # upsert user + creds   |
@@ -342,9 +342,9 @@ After credentials are missing or revoked, identity-only routes still work: `/aut
 
 ## Preview Branches
 
-Vercel preview branches share one GitHub App with prod, which means one callback URL. The callback lives on the api-server (`api.cloudecode.dev/auth/callback`); GitHub redirects every sign-in there regardless of which web origin started it. The api-server reads the attempt's bound origin — recorded and re-validated server-side — and 302s the tab back to that origin's `/api/auth/github/complete?attemptId=<id>`.
+Vercel preview branches share one GitHub App with prod, which means one callback URL. The callback lives on the api-server (`api.mymachines.dev/auth/callback`); GitHub redirects every sign-in there regardless of which web origin started it. The api-server reads the attempt's bound origin — recorded and re-validated server-side — and 302s the tab back to that origin's `/api/auth/github/complete?attemptId=<id>`.
 
-One browser rule forces this hop: cookies are origin-scoped, so the api-server on `api.cloudecode.dev` cannot Set-Cookie for `<preview>.vercel.app` (different registrable domain). Both the temporary claim cookie and the session cookie must be written by the origin that started sign-in, which is why the BFF completion route exists.
+One browser rule forces this hop: cookies are origin-scoped, so the api-server on `api.mymachines.dev` cannot Set-Cookie for `<preview>.vercel.app` (different registrable domain). Both the temporary claim cookie and the session cookie must be written by the origin that started sign-in, which is why the BFF completion route exists.
 
 The claim cookie is also what binds a callback to the tab that started it: only the originating origin holds it, and only a matching attempt id can spend it.
 

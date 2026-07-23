@@ -1,6 +1,6 @@
 ## Context
 
-A sign-in attempt currently has one secret, `claimToken`, retained by its initiator. OAuth marks the attempt identity-ready, while the final browser callback contains only a public attempt ID. If the authorization URL is transferred, the starter can poll completion after another browser authorizes and receive that browser user's Cloude session. Native cancellation recovery makes the missing callback especially explicit, but web is vulnerable to the same cross-browser split.
+A sign-in attempt currently has one secret, `claimToken`, retained by its initiator. OAuth marks the attempt identity-ready, while the final browser callback contains only a public attempt ID. If the authorization URL is transferred, the starter can poll completion after another browser authorizes and receive that browser user's My Machines session. Native cancellation recovery makes the missing callback especially explicit, but web is vulnerable to the same cross-browser split.
 
 The flow must retain the existing fixed 10-minute web and 30-minute native attempt deadlines, one native `ASWebAuthenticationSession`, optional GitHub App setup, web cookie-before-install behavior, and repository access as separate from authentication.
 

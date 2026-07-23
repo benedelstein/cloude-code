@@ -26,13 +26,13 @@ if (!applicationId || !botToken) {
 
 const command: DiscordCommandBody = {
   name: "cloude",
-  description: "Create a Cloude session from a natural-language prompt.",
+  description: "Create a My Machines session from a natural-language prompt.",
   type: APPLICATION_COMMAND_TYPE_CHAT_INPUT,
   options: [
     {
       type: OPTION_TYPE_STRING,
       name: "prompt",
-      description: "What should Cloude change, including the repo hint.",
+      description: "What should My Machines change, including the repo hint.",
       required: true,
       max_length: 4000,
     },

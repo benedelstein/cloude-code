@@ -15,7 +15,7 @@ export function SiteFooter() {
             className="font-display text-3xl font-normal text-white leading-none"
             style={WORDMARK_STROKE}
           >
-            Cloude Code
+            My Machines
           </span>
           <p className="mt-4 text-sm text-muted-foreground">
             "Works on my machines"

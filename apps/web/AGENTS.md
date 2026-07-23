@@ -1,4 +1,4 @@
-# Cloude Code Web Client
+# My Machines Web Client
 
 This is a Next.js web client. It uses:
 - Next.js app router

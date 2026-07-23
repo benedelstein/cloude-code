@@ -81,7 +81,7 @@ describe("createPullRequestForSessionContext", () => {
     });
   });
 
-  it("appends the Cloud Code session link to the pull request body", async () => {
+  it("appends the My Machines session link to the pull request body", async () => {
     const github: SessionPullRequestGitHubProvider = {
       compareBranches: vi.fn<SessionPullRequestGitHubProvider["compareBranches"]>()
         .mockResolvedValue(failure({
@@ -105,12 +105,12 @@ describe("createPullRequestForSessionContext", () => {
       baseBranch: "main",
       headBranch: "cloude/mobile-scroll-fix-bafd",
       sessionMessages: [],
-      sessionUrl: "https://cloudecode.dev/session/session-1",
+      sessionUrl: "https://www.mymachines.dev/session/session-1",
     });
 
     expect(github.createPullRequest).toHaveBeenCalledWith("benedelstein/cloude-code", {
       title: "Mobile scroll fix",
-      body: "Cloud Code session: https://cloudecode.dev/session/session-1",
+      body: "My Machines session: https://www.mymachines.dev/session/session-1",
       head: "cloude/mobile-scroll-fix-bafd",
       base: "main",
     });

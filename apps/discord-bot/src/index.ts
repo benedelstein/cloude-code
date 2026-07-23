@@ -90,7 +90,7 @@ async function createSessionAndEditResponse(params: {
   applicationId: string;
   interactionToken: string;
 }): Promise<void> {
-  let message = "I could not create a Cloude session. Something went wrong, please try again.";
+  let message = "I could not create a My Machines session. Something went wrong, please try again.";
   try {
     const response = await fetch(`${params.env.API_BASE_URL.replace(/\/$/, "")}/integrations/session-requests`, {
       method: "POST",
@@ -122,12 +122,12 @@ async function createSessionAndEditResponse(params: {
 
 async function buildDiscordMessage(response: Response): Promise<string> {
   if (!response.ok) {
-    return "I could not create a Cloude session. The API rejected the request.";
+    return "I could not create a My Machines session. The API rejected the request.";
   }
 
   const parsed = IntegrationSessionResponse.safeParse(await response.json());
   if (!parsed.success) {
-    return "I could not create a Cloude session. The API returned an unexpected response.";
+    return "I could not create a My Machines session. The API returned an unexpected response.";
   }
 
   if (!parsed.data.ok) {
@@ -151,7 +151,7 @@ async function buildDiscordMessage(response: Response): Promise<string> {
   const link = parsed.data.sessionUrl ? `\n${parsed.data.sessionUrl}` : "";
   const reason = parsed.data.routingReason ? `\nRouting: ${parsed.data.routingReason}` : "";
   return truncateDiscordMessage(
-    `Started a Cloude session in ${parsed.data.repoFullName}${title}.${link}${reason}`,
+    `Started a My Machines session in ${parsed.data.repoFullName}${title}.${link}${reason}`,
   );
 }
 

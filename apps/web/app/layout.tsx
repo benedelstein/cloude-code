@@ -12,17 +12,17 @@ const caprasimo = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "Cloude Code",
-    template: "%s | Cloude Code",
+    default: "My Machines",
+    template: "%s | My Machines",
   },
   description: "Develop in the cloud.",
   openGraph: {
     title: {
-      default: "Cloude Code",
-      template: "%s | Cloude Code",
+      default: "My Machines",
+      template: "%s | My Machines",
     },
     description: "Develop in the cloud.",
-    siteName: "Cloude Code",
+    siteName: "My Machines",
   },
 };
 

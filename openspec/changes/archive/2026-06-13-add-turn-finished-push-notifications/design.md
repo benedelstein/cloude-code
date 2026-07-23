@@ -1,6 +1,6 @@
 ## Context
 
-Cloude Code already has separate ownership boundaries for session execution and user-level fanout. `SessionAgentDO` owns turn lifecycle and persists session summary state to D1 through `SessionSummaryService`; user-facing live updates are handled through a separate user-scoped stream. Push notifications should follow the same separation: session code emits a semantic notification event, while a notifications module owns token storage, queue consumption, and Firebase Cloud Messaging delivery.
+My Machines already has separate ownership boundaries for session execution and user-level fanout. `SessionAgentDO` owns turn lifecycle and persists session summary state to D1 through `SessionSummaryService`; user-facing live updates are handled through a separate user-scoped stream. Push notifications should follow the same separation: session code emits a semantic notification event, while a notifications module owns token storage, queue consumption, and Firebase Cloud Messaging delivery.
 
 The iOS app uses generated API types from `packages/api-contract`. Notification payloads will eventually be consumed by iOS tap handling, so the payload contract should live in the API contract even though the app does not implement deep-link routing in this change. The generated Swift code is decode-tolerant for enums and discriminated unions by default, so future notification variants can decode as unknown instead of breaking older clients.
 

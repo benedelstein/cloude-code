@@ -15,13 +15,13 @@
   "vars": {
     "ENVIRONMENT": "production",
     "SPRITES_API_URL": "https://api.sprites.dev",
-    "WORKER_URL": "https://api.cloudecode.dev",
-    "GITHUB_APP_SLUG": "cloude-code",
+    "WORKER_URL": "https://api.mymachines.dev",
+    "GITHUB_APP_SLUG": "my-machines-integration",
     "GITHUB_APP_ID": "2799576",
     "GITHUB_APP_CLIENT_ID": "Iv23lirr1sj5RthzlsAs",
     "LOG_LEVEL": "info",
-    "WEB_ORIGIN": "https://cloudecode.dev",
-    "PREVIEW_ORIGIN_ALLOWLIST_REGEX": "^https://cloude-code-[a-z0-9][a-z0-9-]*-benedelsteins-projects\\.vercel\\.app$",
+    "WEB_ORIGIN": "https://www.mymachines.dev",
+    "PREVIEW_ORIGIN_ALLOWLIST_REGEX": "^https://my-machines-[a-z0-9][a-z0-9-]*-benedelsteins-projects\\.vercel\\.app$",
   },
   "dev": {
     "port": 8787
@@ -82,6 +82,11 @@
     ]
   },
   "routes": [
+    {
+      "pattern": "api.mymachines.dev",
+      "custom_domain": true
+    },
+    // Existing iOS releases still use this hostname.
     {
       "pattern": "api.cloudecode.dev",
       "custom_domain": true

@@ -1,6 +1,6 @@
-# Cloude Code
+# My Machines
 
-Cloude Code is a background agent service to manage agent-driven software development teams.  It was inspired by [Ramp's background-agent](https://builders.ramp.com/post/why-we-built-our-background-agent).
+My Machines is a background agent service to manage agent-driven software development teams.  It was inspired by [Ramp's background-agent](https://builders.ramp.com/post/why-we-built-our-background-agent).
 
 It was designed with these ideas in mind:
 
@@ -10,7 +10,7 @@ It was designed with these ideas in mind:
 
 ## How to Use It
 
-Visit [https://cloudecode.dev](https://cloudecode.dev) to get started. Authenticate with your Github account and install the Github app to connect your repositories, connect your Claude Code or Codex subscription, and start creating tasks.
+Visit [https://www.mymachines.dev](https://www.mymachines.dev) to get started. Authenticate with your Github account and install the Github app to connect your repositories, connect your Claude Code or Codex subscription, and start creating tasks.
 
 ## Architecture
 
@@ -61,7 +61,7 @@ This is a typescript monorepo using pnpm and Turbo. The code is organized like s
 
 ### Authentication and Authorization
 
-Users authenticate with their Github account, and then install the Github app to authorize Cloude Code to access their repositories.
+Users authenticate with their Github account, and then install the Github app to authorize My Machines to access their repositories.
 Users authorize the Github app to access their personal organization, or an organization that they own.
 
 If you are a member of an organization and your admin has granted access, you will be able to create sessions on all repositories for which:
@@ -271,7 +271,7 @@ If you'd like to contribute to this repo, see [contributing](#contributing).
 
 ## License
 
-Cloude Code is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
+My Machines is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
 
 ## Contributing
 

@@ -5,9 +5,9 @@ import type { Env } from "../../src/shared/types";
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "production",
-    WEB_ORIGIN: "https://cloudecode.dev",
+    WEB_ORIGIN: "https://www.mymachines.dev",
     PREVIEW_ORIGIN_ALLOWLIST_REGEX:
-      "^https://cloude-code-[a-z0-9][a-z0-9-]*-benedelsteins-projects\\.vercel\\.app$",
+      "^https://my-machines-[a-z0-9][a-z0-9-]*-benedelsteins-projects\\.vercel\\.app$",
     ...overrides,
   } as Env;
 }
@@ -27,13 +27,13 @@ describe("validateRedirectOrigin", () => {
 
   it("allows matching https preview origins", () => {
     const result = validateRedirectOrigin(
-      "https://cloude-code-abc-benedelsteins-projects.vercel.app",
+      "https://my-machines-abc-benedelsteins-projects.vercel.app",
       createEnv(),
     );
 
     expect(result).toEqual({
       ok: true,
-      value: "https://cloude-code-abc-benedelsteins-projects.vercel.app",
+      value: "https://my-machines-abc-benedelsteins-projects.vercel.app",
     });
   });
 

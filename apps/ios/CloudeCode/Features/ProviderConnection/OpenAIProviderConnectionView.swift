@@ -69,7 +69,7 @@ struct OpenAIProviderConnectionView: View {
         if isReconnect {
             return "Your OpenAI Codex session expired. Reconnect to continue using Codex models."
         }
-        return "Connect your OpenAI account to use Codex models in Cloude Code."
+        return "Connect your OpenAI account to use Codex models in My Machines."
     }
 
     private var isReconnect: Bool {

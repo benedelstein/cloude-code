@@ -504,8 +504,8 @@ export class SessionProvisionService {
       cd ${WORKSPACE_DIR}
       git remote set-url origin ${fetchUrl}
       git remote set-url --push origin ${cloneUrl}
-      git config user.email "agent@cloudecode.dev"
-      git config user.name "Cloude Code"
+      git config user.email "agent@mymachines.dev"
+      git config user.name "My Machines"
       git config --unset-all http.extraHeader || true
       git config --unset-all "http.${proxyBaseUrl}/.extraHeader" || true
       git config --add "http.${proxyBaseUrl}/.extraHeader" "Authorization: Bearer ${gitProxySecret}"
