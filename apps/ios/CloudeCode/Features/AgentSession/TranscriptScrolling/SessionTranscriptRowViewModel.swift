@@ -2,6 +2,7 @@ import Observation
 
 @Observable final class SessionTranscriptRowViewModel {
     var workExpanded = false
+    var userMessageExpanded = false
 }
 
 final class SessionTranscriptRowViewModelCache {

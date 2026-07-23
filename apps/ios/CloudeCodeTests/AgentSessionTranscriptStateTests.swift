@@ -7,14 +7,13 @@ import Foundation
 import Testing
 @testable import CloudeCode
 
-/// Covers the transcript row/content state machine: stable row identity across
-/// message id changes (streaming -> final, optimistic -> accepted) and the
-/// row/`messagesByID` consistency invariants.
+/// Covers stable transcript identity across streaming updates and optimistic
+/// message acceptance, plus row/`messagesByID` consistency invariants.
 @MainActor
 struct AgentSessionTranscriptStateTests {
-    @Test func streamingRowBecomesFinalRowInPlace() throws {
+    @Test func streamingRowBecomesFinalRowInPlace() async throws {
         let viewModel = makeViewModel()
-        viewModel.applyStreamingMessage(assistantMessage(id: "partial-1", text: "he"))
+        viewModel.applyStreamingMessage(assistantMessage(id: "server-1", text: "he"))
 
         let rowID = try #require(viewModel.transcriptRows.last).id
         viewModel.applyAgentFinish(assistantMessage(id: "server-1", text: "hello"))
@@ -24,8 +23,35 @@ struct AgentSessionTranscriptStateTests {
         #expect(row.id == rowID)
         #expect(row.messageID == "server-1")
         #expect(!row.isStreaming)
-        #expect(viewModel.messagesByID["partial-1"] == nil)
         #expect(viewModel.messagesByID["server-1"]?.text == "hello")
+    }
+
+    @Test func agentFinishInvalidatesQueuedStreamCallbacks() async throws {
+        let cache = try Cache(container: ModelContainerFactory().make(inMemory: true))
+        let messageStore = SessionMessageStore(cache: cache)
+        try await messageStore.replace(
+            sessionId: "session-1",
+            with: [userMessage(id: "user-1")]
+        )
+        let viewModel = makeViewModel(sessionMessageStore: messageStore)
+        await viewModel.loadCachedMessages()
+        viewModel.applyStreamingMessage(assistantMessage(id: "assistant-1", text: "Working"))
+        let generation = viewModel.streamGeneration
+        let queuedCallback = Task { @MainActor in
+            await Task.yield()
+            guard viewModel.streamGeneration == generation else {
+                return
+            }
+            viewModel.applyStreamingMessage(
+                assistantMessage(id: "assistant-1", text: "Stale callback")
+            )
+        }
+
+        viewModel.applyAgentFinish(assistantMessage(id: "assistant-1", text: "Complete"))
+        await queuedCallback.value
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["user-1", "assistant-1"])
+        #expect(viewModel.messagesByID["assistant-1"]?.text == "Complete")
     }
 
     @Test func acceptOptimisticUserMessageKeepsRowID() throws {
@@ -43,7 +69,7 @@ struct AgentSessionTranscriptStateTests {
         #expect(viewModel.messagesByID["server-9"]?.isOptimisticUserMessage == false)
     }
 
-    @Test func snapshotRebuildMidStreamDoesNotDuplicateFinishedMessage() {
+    @Test func snapshotRebuildMidStreamDoesNotDuplicateFinishedMessage() async {
         let viewModel = makeViewModel()
         viewModel.applyStreamingMessage(assistantMessage(id: "server-2", text: "partial"))
 
@@ -203,6 +229,23 @@ struct AgentSessionTranscriptStateTests {
 
         #expect(viewModel.transcriptRows.map(\.messageID) == ["server-1"])
         #expect(viewModel.messagesByID["server-1"]?.text == "hello")
+    }
+
+    @Test func syncKeepsClientOptimisticMessageOutOfPersistentCache() async throws {
+        let messageStore = SessionMessageStore()
+        let viewModel = makeViewModel(sessionMessageStore: messageStore)
+        viewModel.upsert(optimisticUserMessage(id: "client-1"))
+
+        await viewModel.handle(.syncResponse(SessionSyncSnapshot(
+            messages: [],
+            pendingChunks: [],
+            pendingMessageMetadata: nil,
+            activeTurnUserMessageId: nil
+        )))
+        let cachedMessages = try await messageStore.messages(sessionId: "session-1")
+
+        #expect(viewModel.transcriptRows.map(\.messageID) == ["client-1"])
+        #expect(cachedMessages.isEmpty)
     }
 
     @Test func abortedMetadataMarksAssistantMessageInterrupted() {
@@ -414,6 +457,7 @@ extension AgentSessionTranscriptStateTests {
     func liveState(
         provider: AgentProviderID,
         pendingUserMessage: SessionMessage? = nil,
+        activeTurnUserMessageID: String? = nil,
         setupRun: SessionClientState.SessionSetupRun? = nil
     ) -> SessionClientState {
         var state = SessionClientState.empty
@@ -424,6 +468,7 @@ extension AgentSessionTranscriptStateTests {
             maxTokens: 8_192
         )
         state.pendingUserMessage = pendingUserMessage
+        state.activeTurnUserMessageId = activeTurnUserMessageID
         state.sessionSetupRun = setupRun
         return state
     }

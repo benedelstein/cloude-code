@@ -38,11 +38,10 @@ struct AgentSessionView: View {
                 ComposerView(
                     vm: store,
                     showsRepoBranchPicker: showsRepoBranchPicker,
-                    onConnectProvider: showProviderConnection
+                    onConnectProvider: showProviderConnection,
+                    onComposerSizeChange: updateComposerHeight
                 )
                     .padding(.horizontal, style.horizontalPadding)
-                    .padding(.bottom, style.spacing)
-                    .readSize(updateComposerHeight)
             }
         }
         .overlay {
@@ -266,9 +265,8 @@ extension AgentSessionView {
         let finalResponseStartIndex: Int?
     }
 
-    // Keep collection row identity separate from SessionMessage.id. A streaming
-    // assistant row starts before the server id exists, then receives the final
-    // message id; preserving this row id avoids delete/insert churn and cell jumps.
+    // Keep collection row identity separate from SessionMessage.id so optimistic
+    // user messages can receive their server id without replacing the visible row.
     // The message content lives in the view model's `messagesByID`.
     struct TranscriptRow: Identifiable, Equatable {
         let id: String
@@ -313,8 +311,7 @@ private extension AgentSessionView {
 
         private var transcriptItems: [SessionTranscriptItem] {
             // TranscriptRow.id is the stable row id assigned when the row is
-            // created (streaming assistant rows and optimistic user rows keep it
-            // when the server id arrives), so rows never churn identity.
+            // created, so optimistic user rows never churn when their server id arrives.
             let messageItems = rows.compactMap { row -> SessionTranscriptItem? in
                 guard let message = store.messagesByID[row.messageID] else {
                     assertionFailure("Transcript row \(row.id) has no message \(row.messageID)")

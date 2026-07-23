@@ -37,7 +37,7 @@ function createHarness(params: {
   } as ClientState;
   const pendingChunkRepository = {
     getAll: vi.fn(() => []),
-    appendIfNew: vi.fn(() => true),
+    appendIfNew: vi.fn((_chunk: UIMessageChunk, _sequence: number, _receivedAt: number) => true),
     clear: vi.fn(),
   };
   const broadcastMessage = vi.fn();
@@ -77,12 +77,43 @@ function createHarness(params: {
     clientState,
     coordinator,
     messageRepository,
+    pendingChunkRepository,
     serverState,
     updateWorkingState,
   };
 }
 
 describe("AgentTurnCoordinator", () => {
+  it("assigns one message id before persisting, broadcasting, and finalizing a legacy stream", async () => {
+    const {
+      broadcastMessage,
+      coordinator,
+      pendingChunkRepository,
+    } = createHarness();
+
+    await coordinator.handleChunks("user-message-1", [
+      { sequence: 0, chunk: { type: "start" } as UIMessageChunk },
+      { sequence: 1, chunk: { type: "finish", finishReason: "stop" } as UIMessageChunk },
+    ]);
+
+    const persistedStart = pendingChunkRepository.appendIfNew.mock.calls[0]?.[0] as UIMessageChunk;
+    expect(persistedStart.type).toBe("start");
+    if (persistedStart.type !== "start") {
+      throw new Error("Expected the persisted chunk to be a start chunk");
+    }
+    expect(persistedStart.messageId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(broadcastMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      type: "agent.chunks",
+      chunks: [persistedStart, expect.objectContaining({ type: "finish" })],
+    }));
+    expect(broadcastMessage).toHaveBeenLastCalledWith({
+      type: "agent.finish",
+      message: expect.objectContaining({ id: persistedStart.messageId }),
+    });
+  });
+
   it("runs the turn-finished hook after broadcasting a terminal assistant message", async () => {
     const onTurnFinished = vi.fn();
     const {

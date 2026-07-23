@@ -13,6 +13,7 @@ public final class SessionMessageWrapper: EntityModel {
     public private(set) var sessionId: String
     public private(set) var createdAt: Date
     public private(set) var message: Domain.SessionMessage
+    public private(set) var isStreaming: Bool
 
     public var role: Domain.SessionMessage.Role {
         message.role
@@ -24,6 +25,7 @@ public final class SessionMessageWrapper: EntityModel {
         sessionId = snapshot.sessionId
         createdAt = snapshot.createdAt
         message = snapshot.message
+        isStreaming = snapshot.isStreaming
     }
 
     /// Merges a cache snapshot into this wrapper while preserving identity.
@@ -31,13 +33,15 @@ public final class SessionMessageWrapper: EntityModel {
         updateIfChanged(\.sessionId, to: snapshot.sessionId)
         updateIfChanged(\.createdAt, to: snapshot.createdAt)
         updateIfChanged(\.message, to: snapshot.message)
+        updateIfChanged(\.isStreaming, to: snapshot.isStreaming)
     }
 
     public var snapshot: SessionMessageData {
         SessionMessageData(
             sessionId: sessionId,
             createdAt: createdAt,
-            message: message
+            message: message,
+            isStreaming: isStreaming
         )
     }
 }

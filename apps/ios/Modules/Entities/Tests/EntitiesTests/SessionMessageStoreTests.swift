@@ -80,6 +80,62 @@ final class SessionMessageStoreTests: XCTestCase {
         XCTAssertEqual(messages.map(\.id), ["m1", "m2"])
     }
 
+    func testStreamingStatePersistsWithMessage() async throws {
+        let cache = try makeCache()
+        let store = SessionMessageStore(cache: cache)
+
+        store.upsert(
+            sessionId: "s1",
+            message: testSessionMessage("partial", text: "In progress"),
+            isStreaming: true
+        )
+
+        _ = try await pollUntil {
+            let rows = try await cache.fetch(SessionMessageEntity.self, ids: ["partial"])
+            return rows.first
+        }
+        let restoredStore = SessionMessageStore(cache: cache)
+        let records = try await restoredStore.records(sessionId: "s1")
+
+        XCTAssertEqual(records.map(\.message.id), ["partial"])
+        XCTAssertEqual(records.first?.isStreaming, true)
+    }
+
+    func testFinalUpsertReplacesStreamingMessageWithSameID() async throws {
+        let cache = try makeCache()
+        let store = SessionMessageStore(cache: cache)
+        store.upsert(
+            sessionId: "s1",
+            message: testSessionMessage(
+                "assistant",
+                text: "In progress",
+                createdAt: "2026-06-11T00:00:02.000Z"
+            ),
+            isStreaming: true
+        )
+        store.upsert(
+            sessionId: "s1",
+            message: testSessionMessage(
+                "assistant",
+                text: "Complete",
+                createdAt: "2026-06-11T00:00:03.000Z"
+            )
+        )
+        _ = try await pollUntil {
+            let rows = try await cache.fetch(SessionMessageEntity.self, ids: ["assistant"])
+            guard let row = rows.first, row.message.text == "Complete", !row.isStreaming else {
+                return nil as SessionMessageData?
+            }
+            return row
+        }
+        let restoredStore = SessionMessageStore(cache: cache)
+        let records = try await restoredStore.records(sessionId: "s1")
+
+        XCTAssertEqual(records.map(\.message.id), ["assistant"])
+        XCTAssertEqual(records.first?.message.text, "Complete")
+        XCTAssertEqual(records.first?.isStreaming, false)
+    }
+
     func testMetadataAccessorsReadKnownTimestampFields() {
         let message = Domain.SessionMessage(
             id: "m1",

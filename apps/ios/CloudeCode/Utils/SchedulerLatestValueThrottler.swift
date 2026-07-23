@@ -35,11 +35,13 @@ final class SchedulerLatestValueThrottler<Value>: LatestValueThrottling {
         latestValue = value
 
         let now = scheduler.now
+        // for the first submitted value, emit immediately (leading-edge)
         guard let lastEmitTime else {
             emit(now: now)
             return
         }
 
+        // for subsequent values, emit the throttled trailing-edge
         let nextAllowedTime = lastEmitTime.advanced(by: interval)
         if now >= nextAllowedTime {
             emit(now: now)

@@ -123,6 +123,104 @@ struct SessionMessagesTests {
     }
 
     @Test
+    func streamReaderCountsReducerEmissionsRatherThanChunks() async throws {
+        let chunks = [
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.startStep(.init())),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello"))),
+            SessionStreamChunk(.finishStep(.init())),
+            SessionStreamChunk(.finish(.init(finishReason: .stop)))
+        ]
+
+        let emissionCount = try await SessionMessageStreamReader.emissionCount(from: chunks)
+
+        #expect(emissionCount == 3)
+    }
+
+    @Test
+    func streamAccumulatorEmitsOnlyFinalBackfillMessageThenContinuesLive() async throws {
+        let initialChunks = [
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hel")))
+        ]
+        let emissionCount = try await SessionMessageStreamReader.emissionCount(from: initialChunks)
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator(
+            initialChunks: initialChunks,
+            messageMetadata: SessionStreamMessageMetadata(startedAt: "2026-06-24T00:00:00.000Z")
+        )
+
+        #expect(emissionCount == 3)
+        let backfilledMessage = try await recorder.waitForMessage { $0.text == "Hel" }
+        #expect(backfilledMessage.id == "message-1")
+        #expect(backfilledMessage.metadata == .object([
+            "startedAt": .string("2026-06-24T00:00:00.000Z")
+        ]))
+        #expect(await recorder.messageCount == 1)
+
+        await accumulator.append([
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "lo")))
+        ])
+
+        let liveMessage = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(liveMessage.id == "message-1")
+        #expect(await recorder.messageCount == 2)
+        #expect(await accumulator.errorDescription == nil)
+        await accumulator.finish()
+    }
+
+    @Test
+    func streamAccumulatorQueuesLiveChunksWhilePreparingBackfill() async throws {
+        let initialText = String(repeating: "a", count: 500)
+        let initialChunks = [
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1")))
+        ] + initialText.map { character in
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: String(character))))
+        }
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator(initialChunks: initialChunks)
+
+        await accumulator.append([
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "b")))
+        ])
+
+        let messages = try await recorder.waitForMessageCount(2)
+        #expect(messages.map(\.text).contains(initialText))
+        #expect(messages.map(\.text).contains(initialText + "b"))
+        #expect(messages.allSatisfy { !$0.text.isEmpty })
+        #expect(await accumulator.errorDescription == nil)
+        await accumulator.finish()
+    }
+
+    @Test
+    func streamAccumulatorHandlesBackfillWithoutMessageEmissions() async throws {
+        let initialChunks = [
+            SessionStreamChunk(.finish(.init(finishReason: .stop))),
+            SessionStreamChunk(.unknown(type: "future-chunk", rawValue: .object([
+                "type": .string("future-chunk")
+            ])))
+        ]
+        let emissionCount = try await SessionMessageStreamReader.emissionCount(from: initialChunks)
+        let recorder = StreamEmissionRecorder()
+        let accumulator = recorder.makeAccumulator(initialChunks: initialChunks)
+
+        #expect(emissionCount == 0)
+        await accumulator.append([
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            SessionStreamChunk(.textDelta(.init(id: "text-1", delta: "Hello")))
+        ])
+
+        let liveMessage = try await recorder.waitForMessage { $0.text == "Hello" }
+        #expect(liveMessage.id == "message-1")
+        #expect(await accumulator.errorDescription == nil)
+        await accumulator.finish()
+    }
+
+    @Test
     func streamAccumulatorAppliesMetadata() async throws {
         let recorder = StreamEmissionRecorder()
         let accumulator = recorder.makeAccumulator()
@@ -395,8 +493,13 @@ private actor StreamEmissionRecorder {
     private(set) var messages: [SessionMessage] = []
     private(set) var errors: [String] = []
 
-    nonisolated func makeAccumulator() -> SessionMessageStreamAccumulator {
+    nonisolated func makeAccumulator(
+        initialChunks: [SessionStreamChunk] = [],
+        messageMetadata: SessionStreamMessageMetadata? = nil
+    ) -> SessionMessageStreamAccumulator {
         SessionMessageStreamAccumulator(
+            initialChunks: initialChunks,
+            messageMetadata: messageMetadata,
             onStatus: { [weak self] status in
                 Task {
                     await self?.record(status)
@@ -440,6 +543,18 @@ private actor StreamEmissionRecorder {
         }
 
         Issue.record("Timed out waiting for streamed message")
+        throw StreamEmissionTimeout()
+    }
+
+    func waitForMessageCount(_ count: Int) async throws -> [SessionMessage] {
+        for _ in 0..<100 {
+            if messages.count >= count {
+                return messages
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        Issue.record("Timed out waiting for streamed message count")
         throw StreamEmissionTimeout()
     }
 }

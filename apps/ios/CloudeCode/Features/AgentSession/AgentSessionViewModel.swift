@@ -49,9 +49,8 @@ final class AgentSessionViewModel {
 
     let attachmentStore: ImageAttachmentStore
     var connectionState: WebSocketConnectionState = .disconnected
-    /// Ordered transcript rows. A row's `id` is stable for its lifetime; its
-    /// `messageID` is reassigned in place when a message gains its server id
-    /// (optimistic -> accepted, streaming -> final).
+    /// Ordered transcript rows. A row's `id` is stable for its lifetime; optimistic
+    /// messages can have their `messageID` reassigned when the server accepts them.
     var transcriptRows: [TranscriptRow] = []
     /// Message content keyed by message id. `transcriptRows` owns ordering;
     /// every row's `messageID` resolves here.
@@ -78,9 +77,11 @@ final class AgentSessionViewModel {
         let clientProvider = clientState.agentSettings.provider
         // The summary only seeds cached transcript rendering; hydrated client
         // state is canonical for the active session.
-        return clientProvider == .unknown("")
-            ? session?.provider ?? clientProvider
-            : clientProvider
+        if case .unknown = clientProvider {
+            return session?.provider ?? clientProvider
+        } else {
+            return clientProvider
+        }
     }
     /// Message send is in progress
     var isSending = false
@@ -306,22 +307,20 @@ extension AgentSessionViewModel {
         if !hasLoadedMessages {
             hasLoadedMessages = true
         }
-        let snapshotMessages = messagesIncludingOptimisticUserMessages(
+        var transcriptMessages = messagesIncludingOptimisticUserMessages(
             in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
-        markdownRenderCache.reset()
-        rebuildTranscript(from: snapshotMessages)
-        replaceStreamAccumulator()
-        if snapshot.pendingChunks.isEmpty {
-            clearStreamingState(removeActiveTranscript: true)
-        } else {
-            await streamAccumulator?.append(
-                snapshot.pendingChunks,
-                messageMetadata: snapshot.pendingMessageMetadata
-            )
+        var streamingMessageIDs: Set<String> = []
+        if !snapshot.pendingChunks.isEmpty,
+           let streamingRow = transcriptRows.last(where: \.isStreaming),
+           let streamingMessage = messagesByID[streamingRow.messageID] {
+            if !transcriptMessages.contains(where: { $0.id == streamingMessage.id }) {
+                transcriptMessages.append(streamingMessage)
+            }
+            streamingMessageIDs.insert(streamingMessage.id)
         }
-        applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
-        markLatestAssistantMessageRead(in: snapshotMessages)
+        markdownRenderCache.reset()
+        invalidateStreamAccumulator()
         if let session {
             do {
                 try await sessionMessageStore.replace(
@@ -332,6 +331,20 @@ extension AgentSessionViewModel {
                 Logger.warning("Failed to replace session message cache:", error)
             }
         }
+        rebuildTranscript(
+            from: transcriptMessages,
+            streamingMessageIDs: streamingMessageIDs
+        )
+        applyActiveTurnUserMessageId(snapshot.activeTurnUserMessageId)
+        if snapshot.pendingChunks.isEmpty {
+            clearStreamingState(removeActiveTranscript: true)
+        } else {
+            installStreamAccumulator(
+                initialChunks: snapshot.pendingChunks,
+                messageMetadata: snapshot.pendingMessageMetadata
+            )
+        }
+        markLatestAssistantMessageRead(in: transcriptMessages)
     }
 
     private func applyAgentChunks(

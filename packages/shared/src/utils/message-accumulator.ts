@@ -116,6 +116,10 @@ export class MessageAccumulator {
             fields: { chunkMessageId: chunk.messageId ?? "undefined", currentMessageId: this.messageId },
           });
         }
+        if (!chunk.messageId) {
+          // invariant: the harnesses should always generate a messageId
+          this.logger.error("received start chunk with no messageId!");
+        }
         this.messageId = chunk.messageId ?? this.messageId;
         break;
 

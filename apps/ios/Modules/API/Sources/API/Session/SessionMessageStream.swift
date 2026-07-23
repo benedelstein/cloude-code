@@ -10,6 +10,16 @@ public enum SessionMessageStreamReader {
     /// - Parameter chunks: Full chunk history to reduce.
     /// - Returns: The latest message emitted by the SDK reducer, or `nil` when no message is emitted.
     public static func message(from chunks: [SessionStreamChunk]) async throws -> Domain.SessionMessage? {
+        try await reduction(from: chunks).message
+    }
+
+    static func emissionCount(from chunks: [SessionStreamChunk]) async throws -> Int {
+        try await reduction(from: chunks).emissionCount
+    }
+
+    private static func reduction(
+        from chunks: [SessionStreamChunk]
+    ) async throws -> (message: Domain.SessionMessage?, emissionCount: Int) {
         let stream = AsyncThrowingStream<SwiftAISDK.AnyUIMessageChunk, Error> { continuation in
             for chunk in chunks {
                 guard let sdkChunk = chunk.value.sdkChunk() else {
@@ -22,10 +32,12 @@ public enum SessionMessageStreamReader {
 
         let sequence: SwiftAISDK.AsyncIterableStream<SwiftAISDK.UIMessage> = readUIMessageStream(stream: stream)
         var latestMessage: SessionMessage?
+        var emissionCount = 0
         for try await sdkMessage in sequence {
             latestMessage = SessionMessage(aiSDKMessage: sdkMessage)
+            emissionCount += 1
         }
-        return latestMessage
+        return (latestMessage, emissionCount)
     }
 }
 
