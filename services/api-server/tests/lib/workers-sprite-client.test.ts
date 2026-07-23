@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkersSpriteClient } from "../../src/shared/integrations/sprites/WorkersSpriteClient";
+import { SpritesError } from "../../src/shared/integrations/sprites/types";
 
 const encoder = new TextEncoder();
 
@@ -105,6 +106,177 @@ describe("WorkersSpriteClient", () => {
     );
   });
 });
+
+describe("WorkersSpriteClient HTTP endpoints", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const newClient = () =>
+    new WorkersSpriteClient("sprite-1", "sprites-key", "https://api.sprites.test");
+
+  it("posts network policy rules", async () => {
+    const fetchMock = stubFetch();
+    const rules = [{ domain: "example.com", action: "allow" as const }];
+
+    await newClient().setNetworkPolicy(rules);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.sprites.test/v1/sprites/sprite-1/policy/network",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer sprites-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rules }),
+      },
+    );
+  });
+
+  it("wraps a failed network policy update in SpritesError", async () => {
+    stubFetch({ ok: false, status: 403, text: async () => "denied" });
+
+    const error = await newClient()
+      .setNetworkPolicy([])
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(SpritesError);
+    expect((error as SpritesError).statusCode).toBe(403);
+    expect((error as SpritesError).responseBody).toBe("denied");
+  });
+
+  it("kills a session with the default SIGTERM signal", async () => {
+    const fetchMock = stubFetch();
+
+    await newClient().killSession(42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.sprites.test/v1/sprites/sprite-1/exec/42/kill?signal=SIGTERM",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer sprites-key" },
+      },
+    );
+  });
+
+  it("kills a session with an explicit signal and surfaces failures", async () => {
+    const fetchMock = stubFetch({ ok: false, status: 404, text: async () => "gone" });
+
+    const error = await newClient()
+      .killSession(42, "SIGINT")
+      .catch((caught: unknown) => caught);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://api.sprites.test/v1/sprites/sprite-1/exec/42/kill?signal=SIGINT",
+    );
+    expect(error).toBeInstanceOf(SpritesError);
+    expect((error as SpritesError).statusCode).toBe(404);
+  });
+
+  it("writes a file with mkdir enabled by default", async () => {
+    const fetchMock = stubFetch();
+
+    await newClient().writeFile("/workspace/a.txt", "content", { mode: "0644" });
+
+    const [urlString, init] = fetchMock.mock.calls[0]!;
+    const url = new URL(urlString as string);
+    expect(url.pathname).toBe("/v1/sprites/sprite-1/fs/write");
+    expect(url.searchParams.get("path")).toBe("/workspace/a.txt");
+    expect(url.searchParams.get("mkdir")).toBe("true");
+    expect(url.searchParams.get("mode")).toBe("0644");
+    expect(init).toEqual({
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer sprites-key",
+        "Content-Type": "application/octet-stream",
+      },
+      body: "content",
+    });
+  });
+
+  it("omits the mkdir param when mkdir is disabled", async () => {
+    const fetchMock = stubFetch();
+
+    await newClient().writeFile("/workspace/a.txt", "content", { mkdir: false });
+
+    const url = new URL(fetchMock.mock.calls[0]![0] as string);
+    expect(url.searchParams.get("mkdir")).toBeNull();
+    expect(url.searchParams.get("mode")).toBeNull();
+  });
+
+  it("returns sprite info from the REST API", async () => {
+    const info = {
+      name: "sprite-1",
+      url: "https://sprite-1.sprites.app",
+      url_settings: { auth: "sprite" },
+      status: "running",
+    };
+    const fetchMock = stubFetch({ json: async () => info });
+
+    await expect(newClient().getSpriteInfo()).resolves.toEqual(info);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.sprites.test/v1/sprites/sprite-1",
+      {
+        method: "GET",
+        headers: { Authorization: "Bearer sprites-key" },
+      },
+    );
+  });
+
+  it("wraps a failed sprite info request in SpritesError", async () => {
+    stubFetch({ ok: false, status: 500, text: async () => "oops" });
+
+    await expect(newClient().getSpriteInfo()).rejects.toThrow(
+      "Failed to get sprite info: 500",
+    );
+  });
+
+  it("updates URL auth settings", async () => {
+    const fetchMock = stubFetch();
+
+    await newClient().setUrlAuth("public");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.sprites.test/v1/sprites/sprite-1",
+      {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer sprites-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url_settings: { auth: "public" } }),
+      },
+    );
+  });
+
+  it("wraps a failed URL auth update in SpritesError", async () => {
+    stubFetch({ ok: false, status: 400, text: async () => "bad request" });
+
+    await expect(newClient().setUrlAuth("sprite")).rejects.toThrow(
+      "Failed to update URL settings: 400",
+    );
+  });
+});
+
+function stubFetch(
+  overrides: Partial<{
+    ok: boolean;
+    status: number;
+    text: () => Promise<string>;
+    json: () => Promise<unknown>;
+  }> = {},
+) {
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    text: async () => "",
+    json: async () => ({}),
+    ...overrides,
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
 function createFrame(streamId: number, payload: string): Uint8Array {
   const payloadBytes = encoder.encode(payload);
