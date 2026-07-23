@@ -49,6 +49,7 @@ extension AgentSessionViewModel {
 
     func unbind() {
         isBound = false
+        hapticFeedback.cancelPendingFeedback()
         stopPullRequestPolling()
         subscriptionTask?.cancel()
         subscriptionTask = nil

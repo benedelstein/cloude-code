@@ -27,7 +27,7 @@ extension AgentSessionViewModel {
         clearOptimisticUserMessageTracking()
         resetPendingResponse()
         if isBound {
-            performCompletionHaptic()
+            hapticFeedback.turnCompleted()
         }
     }
 
