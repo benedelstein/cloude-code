@@ -32,7 +32,7 @@ export function SiteFooter() {
           <FooterColumn
             heading="Legal"
             links={[
-              { label: "Privacy", href: "#" },
+              { label: "Privacy", href: "/privacy" },
               { label: "Terms", href: "#" },
             ]}
           />

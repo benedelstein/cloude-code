@@ -6,6 +6,7 @@ import { getSessionTokenFromRequest } from "@/lib/session";
 const publicExactRoutes = [
   "/",
   "/auth/callback",
+  "/privacy",
 ];
 
 // Integration link pages render their own sign-in button.
