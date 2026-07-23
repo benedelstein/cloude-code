@@ -313,7 +313,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\n\nif ! command -v swiftlint > /dev/null 2>&1\nthen\n    echo 'error: SwiftLint is required. Install it with `brew install swiftlint`.'\n    exit 1\nfi\n\nswiftlint lint --strict --no-cache\n";
+			shellScript = "export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\n\nif ! command -v swiftlint > /dev/null 2>&1\nthen\n    echo 'error: SwiftLint is required. Install it with `brew install swiftlint`.'\n    exit 1\nfi\n\nif [ -n \"${CI_XCODE_CLOUD:-}\" ]\nthen\n    echo 'Xcode Cloud detected; disabling SourceKit-dependent SwiftLint rules.'\n    swiftlint lint --strict --no-cache --disable-sourcekit\nelse\n    swiftlint lint --strict --no-cache\nfi\n";
 		};
 		B6A000000000000000000016 /* Copy Google Plist */ = {
 			isa = PBXShellScriptBuildPhase;
