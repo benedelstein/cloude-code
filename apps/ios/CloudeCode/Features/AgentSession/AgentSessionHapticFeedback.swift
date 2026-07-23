@@ -18,10 +18,11 @@ final class AgentSessionHapticFeedback: AgentSessionHapticFeedbackProviding {
     private let hapticEngine: CHHapticEngine?
 
     init(
-        turnStartGenerator: UIImpactFeedbackGenerator = .init(style: .light),
+        turnStartGenerator: UIImpactFeedbackGenerator? = nil,
         bundle: Bundle = .main
     ) {
         self.turnStartGenerator = turnStartGenerator
+            ?? UIImpactFeedbackGenerator(style: .light)
         completionPatternURL = bundle.url(
             forResource: "TurnCompletion",
             withExtension: "ahap"

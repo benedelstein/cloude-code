@@ -142,7 +142,7 @@ final class AgentSessionViewModel {
         archiveSessionAction: ArchiveSessionAction,
         deleteSessionAction: DeleteSessionAction,
         sessionCreatedSubject: PassthroughSubject<String, Never>,
-        hapticFeedback: any AgentSessionHapticFeedbackProviding = AgentSessionHapticFeedback(),
+        hapticFeedback: (any AgentSessionHapticFeedbackProviding)? = nil,
         pullRequestPollInterval: Duration = .seconds(30)
     ) {
         self.context = context
@@ -162,7 +162,7 @@ final class AgentSessionViewModel {
         self.renameSessionAction = renameSessionAction
         self.archiveSessionAction = archiveSessionAction
         self.deleteSessionAction = deleteSessionAction
-        self.hapticFeedback = hapticFeedback
+        self.hapticFeedback = hapticFeedback ?? AgentSessionHapticFeedback()
         attachmentStore = ImageAttachmentStore(
             sessionId: context.session?.id,
             attachmentsAPI: attachmentsAPI
