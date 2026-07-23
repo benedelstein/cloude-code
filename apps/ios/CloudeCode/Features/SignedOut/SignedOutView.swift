@@ -35,8 +35,8 @@ struct SignedOutView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: SignedOutStyle.signInButtonHeight)
                     .contentShape(Capsule())
+                    .glassBackground(in: .capsule, glass: .clear)
                 }
-                .glassButtonStyle(.glass, tint: SignedOutStyle.signInButtonTint)
                 .disabled(sessionStore.isSigningIn)
                 .padding(.horizontal, SignedOutStyle.horizontalPadding)
                 .padding(.bottom, SignedOutStyle.bottomPadding)
@@ -58,7 +58,7 @@ struct SignedOutView: View {
 private enum SignedOutStyle {
     static let wordmarkVerticalOffset: CGFloat = -25
     static let horizontalPadding: CGFloat = 16
-    static let signInButtonHeight: CGFloat = 60
+    static let signInButtonHeight: CGFloat = 56
     static let bottomPadding: CGFloat = 4
     static let signInButtonTint = Color(hex: 0x102A5A)
     static let signInFont = Font.semibold(20)

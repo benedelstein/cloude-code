@@ -276,6 +276,9 @@
     "Interrupted" : {
 
     },
+    "ı" : {
+
+    },
     "Light" : {
 
     },
@@ -285,7 +288,7 @@
     "Logs" : {
 
     },
-    "Machınes" : {
+    "Mach" : {
 
     },
     "Made %lld web requests" : {
@@ -376,6 +379,9 @@
 
     },
     "My Machines" : {
+
+    },
+    "nes" : {
 
     },
     "Network" : {
@@ -835,6 +841,9 @@
 
     },
     "Toggles repository sessions" : {
+
+    },
+    "Toggles the animated eyes" : {
 
     },
     "Tool not found" : {

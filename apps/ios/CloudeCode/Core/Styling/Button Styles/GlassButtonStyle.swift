@@ -1,17 +1,28 @@
 import SwiftUI
 
+enum AppGlassStyle {
+    case regular, clear, identity
+}
+
 extension View {
     /// Liquid Glass background on iOS 26+, falling back to material or a solid
     /// tint with a soft shadow on older systems.
     @ViewBuilder
     func glassBackground<S: Shape>(
         in shape: S,
+        glass appGlass: AppGlassStyle = .regular,
         tint: Color? = nil,
         interactive: Bool = true
     ) -> some View {
         if #available(iOS 26.0, *) {
             let effect: Glass = {
-                var glass: Glass = .regular
+                var glass: Glass = {
+                    switch appGlass {
+                    case .regular: .regular
+                    case .clear: .clear
+                    case .identity: .identity
+                    }
+                }()
                 if let tint {
                     glass = glass.tint(tint)
                 }
