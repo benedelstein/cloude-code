@@ -15,8 +15,7 @@ extension AgentSessionViewModel {
 
     func applyAgentFinish(_ message: SessionMessage) {
         messageThrottler?.flush()
-        // Reuse the active row for compatibility with legacy streams that lacked an initial id.
-        let rowID = streamingTranscriptRowID ?? transcriptRowID(for: message)
+        let rowID = transcriptRowID(for: message)
         upsertTranscriptMessage(rowID: rowID, message: message, isStreaming: false)
         streamingTranscriptRowID = nil
         if let session {
@@ -244,13 +243,32 @@ extension AgentSessionViewModel {
         }
     }
 
-    func replaceStreamAccumulator() {
+    func invalidateStreamAccumulator() {
         let previousAccumulator = streamAccumulator
+        streamAccumulator = nil
         Task {
             await previousAccumulator?.finish()
         }
         messageThrottler?.cancel()
+        messageThrottler = nil
         streamGeneration += 1
+    }
+
+    func replaceStreamAccumulator(
+        initialChunks: [SessionStreamChunk] = [],
+        messageMetadata: SessionStreamMessageMetadata? = nil
+    ) {
+        invalidateStreamAccumulator()
+        installStreamAccumulator(
+            initialChunks: initialChunks,
+            messageMetadata: messageMetadata
+        )
+    }
+
+    func installStreamAccumulator(
+        initialChunks: [SessionStreamChunk] = [],
+        messageMetadata: SessionStreamMessageMetadata? = nil
+    ) {
         let generation = streamGeneration
 
         messageThrottler = SchedulerLatestValueThrottler(
@@ -264,6 +282,8 @@ extension AgentSessionViewModel {
         }
 
         streamAccumulator = SessionMessageStreamAccumulator(
+            initialChunks: initialChunks,
+            messageMetadata: messageMetadata,
             onStatus: { [weak self] status in
                 Task { @MainActor [weak self] in
                     guard let self, streamGeneration == generation else {
@@ -302,15 +322,14 @@ extension AgentSessionViewModel {
     }
 
     func applyStreamingMessage(_ message: SessionMessage) {
-        let rowID = streamingTranscriptRowID
-            ?? (message.id.isEmpty ? activeStreamingTranscriptRowID() : transcriptRowID(for: message))
+        let rowID = transcriptRowID(for: message)
         streamingTranscriptRowID = rowID
         upsertTranscriptMessage(
             rowID: rowID,
             message: message,
             isStreaming: true
         )
-        guard let session, !message.id.isEmpty else {
+        guard let session else {
             return
         }
         sessionMessageStore.upsert(
@@ -364,20 +383,8 @@ extension AgentSessionViewModel {
         assertTranscriptStateConsistency()
     }
 
-    func activeStreamingTranscriptRowID() -> String {
-        if let streamingTranscriptRowID {
-            return streamingTranscriptRowID
-        }
-
-        let rowID = "streaming-turn:\(streamGeneration)"
-        streamingTranscriptRowID = rowID
-        return rowID
-    }
-
     func transcriptRowID(for message: SessionMessage) -> String {
-        if let existingRow = transcriptRows.last(where: { row in
-            !row.isStreaming && row.messageID == message.id
-        }) {
+        if let existingRow = transcriptRows.last(where: { $0.messageID == message.id }) {
             return existingRow.id
         }
 

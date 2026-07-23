@@ -247,7 +247,11 @@ export function startAgentHarness<S extends AgentSettings>(
       });
 
       for await (const chunk of result.toUIMessageStream({
-        generateMessageId: () => crypto.randomUUID(),
+        generateMessageId: () => {
+          const id = crypto.randomUUID();
+          emit({ type: "debug", message: `Generated message ID: ${id}` });
+          return id;
+        },
       })) {
         if (chunk.type === "finish") {
           finishReason = chunk.finishReason;

@@ -267,6 +267,9 @@
     "Include default allowlist" : {
 
     },
+    "Initializing session" : {
+
+    },
     "Internet access poses security risks. Limit access to known safe domains when possible." : {
 
     },
@@ -757,6 +760,9 @@
 
     },
     "Settings" : {
+
+    },
+    "Setup failed" : {
 
     },
     "Share image" : {

@@ -73,8 +73,6 @@ pnpm build         # tsc --noEmit
 
 ### Output
 - No preamble. No "Great question!", "Sure!", etc
-- No hollow closings. No "I hope this helps!", etc.
-- No restating the prompt. If the task is clear, execute immediately.
 
 ### Token Efficiency
 - Compress responses. Every sentence must earn its place.

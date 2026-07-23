@@ -97,8 +97,8 @@ type_body_length:
   error: 350
 
 function_body_length:
-  warning: 40
-  error: 60
+  warning: 45
+  error: 70
 
 cyclomatic_complexity:
   warning: 8

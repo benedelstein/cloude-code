@@ -532,7 +532,6 @@ export class SessionAgentDO extends Agent<Env, ClientState> implements SessionAg
     this.logger.info("handleWebhookEvent", {
       fields: { eventType: event.type },
     });
-    this.turnCoordinator.ensureRehydratedState();
     this.turnCoordinator.handleEvent(event);
     return true;
   }

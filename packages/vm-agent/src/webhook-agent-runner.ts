@@ -220,6 +220,7 @@ export class WebhookAgentRunner<S extends AgentSettings = AgentSettings> {
         this.log("debug", "emit heartbeat -> stdout");
         return;
       case "debug":
+        // dont forward these to webhook, just log locally.
         this.log("debug", output.message);
         return;
       default: {

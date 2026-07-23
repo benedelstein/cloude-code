@@ -77,9 +77,11 @@ final class AgentSessionViewModel {
         let clientProvider = clientState.agentSettings.provider
         // The summary only seeds cached transcript rendering; hydrated client
         // state is canonical for the active session.
-        return clientProvider == .unknown("")
-            ? session?.provider ?? clientProvider
-            : clientProvider
+        if case .unknown = clientProvider {
+            return session?.provider ?? clientProvider
+        } else {
+            return clientProvider
+        }
     }
     /// Message send is in progress
     var isSending = false
@@ -302,7 +304,9 @@ extension AgentSessionViewModel {
     }
 
     private func applySyncResponse(_ snapshot: SessionSyncSnapshot) async {
-        hasLoadedMessages = true
+        if !hasLoadedMessages {
+            hasLoadedMessages = true
+        }
         var transcriptMessages = messagesIncludingOptimisticUserMessages(
             in: messagesIncludingPendingUserMessage(in: snapshot.messages)
         )
@@ -316,9 +320,10 @@ extension AgentSessionViewModel {
             streamingMessageIDs.insert(streamingMessage.id)
         }
         markdownRenderCache.reset()
-        replaceStreamAccumulator()
+        invalidateStreamAccumulator()
         if let session {
             do {
+                // TODo should we put the streaming message to disk here too?
                 try await sessionMessageStore.replace(
                     sessionId: session.id,
                     with: snapshot.messages
@@ -335,8 +340,8 @@ extension AgentSessionViewModel {
         if snapshot.pendingChunks.isEmpty {
             clearStreamingState(removeActiveTranscript: true)
         } else {
-            await streamAccumulator?.append(
-                snapshot.pendingChunks,
+            installStreamAccumulator(
+                initialChunks: snapshot.pendingChunks,
                 messageMetadata: snapshot.pendingMessageMetadata
             )
         }

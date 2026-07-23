@@ -236,6 +236,9 @@ export class AgentTurnCoordinator {
     // so collapsing N → 1 is meaningfully cheaper.
     const buffered: UIMessageChunk[] = [];
     for (const { sequence, chunk } of chunks) {
+      const normalizedChunk: UIMessageChunk = chunk.type === "start" && !chunk.messageId
+        ? { ...chunk, messageId: crypto.randomUUID() }
+        : chunk;
       // Gap check skipped for the very first chunk (lastSeen is null) — the
       // vm-agent's ChunkBatcher always starts a turn at 0
       if (this.lastSeenChunkSequence !== null) {
@@ -261,11 +264,11 @@ export class AgentTurnCoordinator {
           });
         }
       }
-      validateWireCompatibleChunk(chunk);
+      validateWireCompatibleChunk(normalizedChunk);
       const receivedAt = Date.now();
       // WAL is the source of truth for dedup: a UNIQUE conflict on `sequence`
       // means this chunk was already applied by a prior batch (retry).
-      const inserted = this.pendingChunkRepository.appendIfNew(chunk, sequence, receivedAt);
+      const inserted = this.pendingChunkRepository.appendIfNew(normalizedChunk, sequence, receivedAt);
       if (!inserted) {
         this.logger.warn("Dropping duplicate chunk from WAL conflict", {
           fields: { sequence },
@@ -273,9 +276,9 @@ export class AgentTurnCoordinator {
         continue;
       }
       this.pendingMessageStartedAt = this.pendingMessageStartedAt ?? receivedAt;
-      buffered.push(chunk);
+      buffered.push(normalizedChunk);
       const messageMetadata = this.getPendingMessageMetadata();
-      const result = this.handleStreamChunk(chunk, receivedAt);
+      const result = this.handleStreamChunk(normalizedChunk, receivedAt);
       if (result.ended) {
         // Flush the batched chunks (including this terminal one) before the
         // agent.finish so the wire order stays chunks → finish.

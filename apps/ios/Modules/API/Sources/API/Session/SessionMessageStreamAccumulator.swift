@@ -31,6 +31,12 @@ public struct SessionMessageStreamStatus: Sendable, Equatable {
 
 /// Accumulates streamed assistant-message chunks through the Swift AI SDK reducer.
 public actor SessionMessageStreamAccumulator {
+    private enum EmissionPhase {
+        case preparingBackfill
+        case backfilling(remainingEmissions: Int)
+        case live
+    }
+
     public private(set) var chunks: [SessionStreamChunk] = []
     public private(set) var messageMetadata: SessionStreamMessageMetadata?
     public private(set) var message: SessionMessage?
@@ -41,6 +47,8 @@ public actor SessionMessageStreamAccumulator {
     private let onMessage: @Sendable (SessionMessage) -> Void
     private var readTask: Task<Void, Never>?
     private var isFinished = false
+    private var emissionPhase: EmissionPhase
+    private var chunksQueuedDuringPreparation: [SessionStreamChunk] = []
 
     /// Current status value of the accumulator.
     public var status: SessionMessageStreamStatus {
@@ -60,9 +68,13 @@ public actor SessionMessageStreamAccumulator {
     /// Creates an accumulator that emits immediate status and SDK-reduced messages separately.
     ///
     /// - Parameters:
+    ///   - initialChunks: Finite chunk history to reduce into one initial message before live emission.
+    ///   - messageMetadata: Metadata associated with the active streamed message.
     ///   - onStatus: Called whenever active stream status changes.
     ///   - onMessage: Called whenever the SDK reducer emits the latest message.
     public init(
+        initialChunks: [SessionStreamChunk] = [],
+        messageMetadata: SessionStreamMessageMetadata? = nil,
         onStatus: @escaping @Sendable (SessionMessageStreamStatus) -> Void,
         onMessage: @escaping @Sendable (SessionMessage) -> Void
     ) {
@@ -70,14 +82,25 @@ public actor SessionMessageStreamAccumulator {
             of: SwiftAISDK.AnyUIMessageChunk.self
         )
 
+        chunks = initialChunks
+        self.messageMetadata = messageMetadata
         continuation = streamPair.continuation
         self.onStatus = onStatus
         self.onMessage = onMessage
         readTask = nil
+        emissionPhase = initialChunks.isEmpty ? .live : .preparingBackfill
 
         let stream = streamPair.stream
         Task { [weak self] in
             await self?.startReadTask(stream: stream)
+            await self?.prepareBackfill(initialChunks)
+        }
+        if !initialChunks.isEmpty {
+            onStatus(SessionMessageStreamStatus(
+                isActive: true,
+                chunkCount: initialChunks.count,
+                messageMetadata: messageMetadata
+            ))
         }
     }
 
@@ -105,14 +128,18 @@ public actor SessionMessageStreamAccumulator {
         onStatus(status)
 
         if shouldReapplyMetadata, let message {
-            publish(message)
+            if case .live = emissionPhase {
+                publish(message)
+            } else {
+                store(message)
+            }
         }
 
-        for chunk in newChunks {
-            guard let sdkChunk = chunk.value.sdkChunk() else {
-                continue
-            }
-            continuation.yield(sdkChunk)
+        if case .preparingBackfill = emissionPhase {
+            Logger.debug("still preparing, queueing chunks...")
+            chunksQueuedDuringPreparation.append(contentsOf: newChunks)
+        } else {
+            yield(newChunks)
         }
     }
 
@@ -158,12 +185,60 @@ public actor SessionMessageStreamAccumulator {
         }
     }
 
+    private func prepareBackfill(_ initialChunks: [SessionStreamChunk]) async {
+        guard !initialChunks.isEmpty else {
+            return
+        }
+
+        let emissionCount: Int
+        do {
+            emissionCount = try await SessionMessageStreamReader.emissionCount(from: initialChunks)
+        } catch {
+            recordError(error)
+            emissionCount = 0
+        }
+
+        guard !isFinished else {
+            return
+        }
+        emissionPhase = emissionCount == 0
+            ? .live
+            : .backfilling(remainingEmissions: emissionCount)
+        yield(initialChunks)
+        yield(chunksQueuedDuringPreparation)
+        chunksQueuedDuringPreparation.removeAll()
+    }
+
+    private func yield(_ chunks: [SessionStreamChunk]) {
+        for chunk in chunks {
+            guard let sdkChunk = chunk.value.sdkChunk() else {
+                continue
+            }
+            continuation.yield(sdkChunk)
+        }
+    }
+
     private func record(_ sdkMessage: SwiftAISDK.UIMessage) {
         guard !isFinished else {
             return
         }
 
-        publish(SessionMessage(aiSDKMessage: sdkMessage))
+        assert(!sdkMessage.id.isEmpty, "streaming message id is empty??")
+
+        let newMessage = SessionMessage(aiSDKMessage: sdkMessage)
+        switch emissionPhase {
+        case .preparingBackfill:
+            assertionFailure("Reducer emitted before backfill preparation completed")
+            store(newMessage)
+        case .backfilling(let remainingEmissions) where remainingEmissions > 1:
+            emissionPhase = .backfilling(remainingEmissions: remainingEmissions - 1)
+            store(newMessage)
+        case .backfilling:
+            emissionPhase = .live
+            publish(newMessage)
+        case .live:
+            publish(newMessage)
+        }
     }
 
     private func publish(_ newMessage: SessionMessage) {
@@ -171,11 +246,17 @@ public actor SessionMessageStreamAccumulator {
             return
         }
 
+        let messageWithMetadata = store(newMessage)
+        onStatus(status)
+        onMessage(messageWithMetadata)
+    }
+
+    @discardableResult
+    private func store(_ newMessage: SessionMessage) -> SessionMessage {
         let messageWithMetadata = newMessage.adding(messageMetadata: messageMetadata)
         message = messageWithMetadata
         errorDescription = nil
-        onStatus(status)
-        onMessage(messageWithMetadata)
+        return messageWithMetadata
     }
 
     private func recordError(_ error: any Error) {

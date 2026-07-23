@@ -5,7 +5,6 @@
     "rootDir": "./src",
     "types": ["@cloudflare/workers-types"],
     "lib": ["ES2022"],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
