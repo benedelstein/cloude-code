@@ -322,13 +322,6 @@ extension AgentSessionTranscriptStateTests {
         }
     }
 
-    final class NoopHapticFeedback: AgentSessionHapticFeedbackProviding {
-        func prepare() {}
-        func turnStarted() {}
-        func turnCompleted() {}
-        func stop() {}
-    }
-
     struct StubAttachmentsAPI: AttachmentsAPIProviding {
         func uploadImages(
             _ files: [AttachmentUploadFile],

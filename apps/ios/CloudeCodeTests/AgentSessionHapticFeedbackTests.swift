@@ -95,6 +95,13 @@ extension AgentSessionTranscriptStateTests {
         }
     }
 
+    final class NoopHapticFeedback: AgentSessionHapticFeedbackProviding {
+        func prepare() {}
+        func turnStarted() {}
+        func turnCompleted() {}
+        func stop() {}
+    }
+
     private func initialMessageChunks() -> [SessionStreamChunk] {
         [
             SessionStreamChunk(.start(.init(messageId: "message-1"))),
