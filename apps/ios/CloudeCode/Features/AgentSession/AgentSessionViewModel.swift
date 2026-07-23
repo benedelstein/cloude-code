@@ -323,7 +323,6 @@ extension AgentSessionViewModel {
         invalidateStreamAccumulator()
         if let session {
             do {
-                // TODo should we put the streaming message to disk here too?
                 try await sessionMessageStore.replace(
                     sessionId: session.id,
                     with: snapshot.messages
