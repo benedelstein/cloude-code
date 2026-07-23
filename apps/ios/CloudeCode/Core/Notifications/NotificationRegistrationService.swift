@@ -42,6 +42,7 @@ final class NotificationRegistrationService: NSObject {
 
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+        UIApplication.shared.registerForRemoteNotifications()
 
         authUserPublisher
             .combineLatest($fcmToken)
@@ -84,8 +85,6 @@ final class NotificationRegistrationService: NSObject {
         } catch {
             Logger.warning("Notification authorization request failed", error)
         }
-
-        UIApplication.shared.registerForRemoteNotifications()
     }
 
     private func uploadToken(_ token: String) async {

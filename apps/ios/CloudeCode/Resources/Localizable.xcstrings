@@ -285,6 +285,9 @@
     "Logs" : {
 
     },
+    "Machınes" : {
+
+    },
     "Made %lld web requests" : {
       "comment" : "Grouped tool title. %lld is the number of completed web requests.",
       "localizations" : {
@@ -367,6 +370,12 @@
 
     },
     "Model catalog is unavailable." : {
+
+    },
+    "My" : {
+
+    },
+    "My Machines" : {
 
     },
     "Network" : {
