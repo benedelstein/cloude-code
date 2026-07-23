@@ -1,27 +1,43 @@
+import CoreHaptics
+import Domain
 import Foundation
 import UIKit
 
 @MainActor
 protocol AgentSessionHapticFeedbackProviding: AnyObject {
+    func prepare()
     func turnStarted()
     func turnCompleted()
-    func cancelPendingFeedback()
+    func stop()
 }
 
 @MainActor
 final class AgentSessionHapticFeedback: AgentSessionHapticFeedbackProviding {
-    private static let completionPulseDelay = Duration.milliseconds(140)
-
     private let turnStartGenerator: UIImpactFeedbackGenerator
-    private let turnCompletionGenerator: UIImpactFeedbackGenerator
-    private var completionTask: Task<Void, Never>?
+    private let completionPatternURL: URL?
+    private let hapticEngine: CHHapticEngine?
 
     init(
         turnStartGenerator: UIImpactFeedbackGenerator = .init(style: .light),
-        turnCompletionGenerator: UIImpactFeedbackGenerator = .init(style: .medium)
+        bundle: Bundle = .main
     ) {
         self.turnStartGenerator = turnStartGenerator
-        self.turnCompletionGenerator = turnCompletionGenerator
+        completionPatternURL = bundle.url(
+            forResource: "TurnCompletion",
+            withExtension: "ahap"
+        )
+        hapticEngine = Self.makeHapticEngine()
+    }
+
+    func prepare() {
+        guard let hapticEngine else {
+            return
+        }
+        do {
+            try hapticEngine.start()
+        } catch {
+            Logger.warning("Failed to prepare agent session haptic engine:", error)
+        }
     }
 
     func turnStarted() {
@@ -29,27 +45,30 @@ final class AgentSessionHapticFeedback: AgentSessionHapticFeedbackProviding {
     }
 
     func turnCompleted() {
-        completionTask?.cancel()
-        turnCompletionGenerator.prepare()
-        turnCompletionGenerator.impactOccurred(intensity: 0.75)
-        turnCompletionGenerator.prepare()
-
-        completionTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: Self.completionPulseDelay)
-            } catch {
-                return
-            }
-            guard let self else {
-                return
-            }
-            turnCompletionGenerator.impactOccurred()
-            completionTask = nil
+        guard let hapticEngine, let completionPatternURL else {
+            return
+        }
+        do {
+            try hapticEngine.start()
+            try hapticEngine.playPattern(from: completionPatternURL)
+        } catch {
+            Logger.warning("Failed to play agent turn completion haptic:", error)
         }
     }
 
-    func cancelPendingFeedback() {
-        completionTask?.cancel()
-        completionTask = nil
+    func stop() {
+        hapticEngine?.stop(completionHandler: nil)
+    }
+
+    private static func makeHapticEngine() -> CHHapticEngine? {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+            return nil
+        }
+        do {
+            return try CHHapticEngine()
+        } catch {
+            Logger.warning("Failed to create agent session haptic engine:", error)
+            return nil
+        }
     }
 }

@@ -1,3 +1,5 @@
+@testable import API
+import CoreAPI
 import Testing
 @testable import CloudeCode
 
@@ -21,45 +23,64 @@ extension AgentSessionTranscriptStateTests {
         #expect(hapticFeedback.events.isEmpty)
     }
 
-    @Test func submittingMessageTriggersTurnStartHapticWhileViewModelIsBound() {
+    @Test func firstLiveChunkTriggersTurnStartHapticWhileViewModelIsBound() async {
         let hapticFeedback = RecordingHapticFeedback()
         let viewModel = makeViewModel(hapticFeedback: hapticFeedback)
         viewModel.isBound = true
-        viewModel.draftText = "Start a turn"
 
-        viewModel.submitUserMessage()
+        await viewModel.handle(.agentChunks(chunks: [], messageMetadata: nil))
+        await viewModel.handle(.agentChunks(
+            chunks: initialMessageChunks(),
+            messageMetadata: nil
+        ))
+        await viewModel.handle(.agentChunks(
+            chunks: [messageDeltaChunk(delta: "Second")],
+            messageMetadata: nil
+        ))
 
         #expect(hapticFeedback.events == [.turnStarted])
     }
 
-    @Test func submittingMessageDoesNotTriggerTurnStartHapticWhileViewModelIsUnbound() {
+    @Test func firstLiveChunkDoesNotTriggerTurnStartHapticWhileViewModelIsUnbound() async {
         let hapticFeedback = RecordingHapticFeedback()
         let viewModel = makeViewModel(hapticFeedback: hapticFeedback)
-        viewModel.draftText = "Start a turn"
 
-        viewModel.submitUserMessage()
+        await viewModel.handle(.agentChunks(
+            chunks: initialMessageChunks(),
+            messageMetadata: nil
+        ))
 
         #expect(hapticFeedback.events.isEmpty)
     }
 
-    @Test func unbindingCancelsPendingHapticFeedback() {
+    @Test func bindingPreparesAndUnbindingStopsHapticFeedback() async {
         let hapticFeedback = RecordingHapticFeedback()
         let viewModel = makeViewModel(hapticFeedback: hapticFeedback)
-        viewModel.isBound = true
 
+        let bindTask = Task {
+            await viewModel.bind()
+        }
+        await Task.yield()
         viewModel.unbind()
+        await bindTask.value
 
-        #expect(hapticFeedback.events == [.pendingFeedbackCancelled])
+        #expect(hapticFeedback.events.first == .prepared)
+        #expect(hapticFeedback.events.last == .stopped)
     }
 
     final class RecordingHapticFeedback: AgentSessionHapticFeedbackProviding {
         enum Event: Equatable {
+            case prepared
             case turnStarted
             case turnCompleted
-            case pendingFeedbackCancelled
+            case stopped
         }
 
         private(set) var events: [Event] = []
+
+        func prepare() {
+            events.append(.prepared)
+        }
 
         func turnStarted() {
             events.append(.turnStarted)
@@ -69,8 +90,20 @@ extension AgentSessionTranscriptStateTests {
             events.append(.turnCompleted)
         }
 
-        func cancelPendingFeedback() {
-            events.append(.pendingFeedbackCancelled)
+        func stop() {
+            events.append(.stopped)
         }
+    }
+
+    private func initialMessageChunks() -> [SessionStreamChunk] {
+        [
+            SessionStreamChunk(.start(.init(messageId: "message-1"))),
+            SessionStreamChunk(.textStart(.init(id: "text-1"))),
+            messageDeltaChunk(delta: "First")
+        ]
+    }
+
+    private func messageDeltaChunk(delta: String) -> SessionStreamChunk {
+        SessionStreamChunk(.textDelta(.init(id: "text-1", delta: delta)))
     }
 }

@@ -63,9 +63,6 @@ extension AgentSessionViewModel {
         isSending = true
         isWaitingForResponse = true
         errorMessage = nil
-        if isBound {
-            hapticFeedback.turnStarted()
-        }
 
         if isDraftMode {
             isCreatingSession = true

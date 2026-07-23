@@ -354,8 +354,15 @@ extension AgentSessionViewModel {
         _ chunks: [SessionStreamChunk],
         messageMetadata: SessionStreamMessageMetadata?
     ) async {
+        guard !chunks.isEmpty else {
+            return
+        }
+        let isFirstLiveChunk = streamAccumulator == nil
         if streamAccumulator == nil {
             replaceStreamAccumulator()
+        }
+        if isFirstLiveChunk && isBound {
+            hapticFeedback.turnStarted()
         }
 
         await streamAccumulator?.append(chunks, messageMetadata: messageMetadata)
