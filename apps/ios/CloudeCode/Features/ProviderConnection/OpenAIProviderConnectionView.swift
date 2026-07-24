@@ -6,6 +6,7 @@ import UIKit
 /// Native OpenAI Codex device-code connection screen.
 struct OpenAIProviderConnectionView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.showToast) private var showToast
     @Environment(\.style) private var style
     @Environment(\.theme) private var theme
@@ -45,6 +46,10 @@ struct OpenAIProviderConnectionView: View {
         .onChange(of: viewModel.isConnected) { _, isConnected in
             guard isConnected else { return }
             onConnected()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            viewModel.sceneDidBecomeActive()
         }
         .onDisappear {
             openTask?.cancel()
