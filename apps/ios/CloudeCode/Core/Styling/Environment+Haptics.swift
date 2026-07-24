@@ -8,5 +8,5 @@ import SwiftUI
 
 extension EnvironmentValues {
     @Entry
-    var hapticFeedbackPlayer: any HapticFeedbackPlaying = SystemHapticFeedbackPlayer()
+    var hapticFeedbackPlayer: any HapticFeedbackPlaying = NoopHapticFeedbackPlayer()
 }

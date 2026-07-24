@@ -12,6 +12,10 @@ protocol HapticFeedbackPlaying {
     func play(_ feedback: HapticFeedback)
 }
 
+struct NoopHapticFeedbackPlayer: HapticFeedbackPlaying {
+    func play(_: HapticFeedback) {}
+}
+
 @MainActor
 final class SystemHapticFeedbackPlayer: HapticFeedbackPlaying {
     private let lightFeedback = UIImpactFeedbackGenerator(style: .light)
