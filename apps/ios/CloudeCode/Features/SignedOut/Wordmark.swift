@@ -99,7 +99,7 @@ struct Wordmark: View {
             return
         }
 
-        withAnimation(.easeOut(duration: 0.42)) {
+        withAnimation(.easeOut(duration: 0.25)) {
             isVisible = true
         }
 
