@@ -84,8 +84,8 @@ extension PromptComposerView {
 
         var body: some View {
             Button {
+                lightFeedback.impactOccurred()
                 if showsStop {
-                    lightFeedback.impactOccurred()
                     onStop()
                 } else {
                     onSubmit()
