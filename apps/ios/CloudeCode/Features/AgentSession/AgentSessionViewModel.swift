@@ -26,6 +26,7 @@ final class AgentSessionViewModel {
     /// `HomeRouter` listens to the derived publisher to adopt the draft route.
     let sessionCreatedSubject: PassthroughSubject<String, Never>
     let sessionMessageStore: SessionMessageStore
+    let sessionClientStateStore: SessionClientStateStore
     let sessionSummaryStore: SessionSummaryStore
     let transcriptBuilder: any AgentSessionTranscriptBuilding
     let sessionsAPI: any SessionsAPIProviding
@@ -68,16 +69,15 @@ final class AgentSessionViewModel {
     /// Guard so that we do not accumulate to a stream that is no longer active
     var streamGeneration = 0
     var streamStatus = SessionMessageStreamStatus()
-    // Future optimization: cache the last known setup run and other curated,
-    // durable client state. Do not persist raw SessionClientState; active turns,
-    // pending work, editor readiness, and transient errors are live state.
     var clientState = SessionClientState.empty
+    var clientStateIsResponding = false
+    var hasHydratedClientState = false
+    var hasDeletedSession = false
+    @ObservationIgnored var lastCachedClientStateSnapshot: SessionClientStateSnapshot?
     private(set) var isSetupRunExpanded = false
     var transcriptProvider: AgentProviderID {
         let clientProvider = clientState.agentSettings.provider
-        // The summary only seeds cached transcript rendering; hydrated client
-        // state is canonical for the active session.
-        if case .unknown = clientProvider {
+        if !hasHydratedClientState, case .unknown = clientProvider {
             return session?.provider ?? clientProvider
         } else {
             return clientProvider
@@ -116,14 +116,14 @@ final class AgentSessionViewModel {
     var isResponding: Bool {
         isWaitingForResponse
             || streamStatus.isActive
-            || clientState.activeTurnUserMessageId != nil
+            || clientStateIsResponding
     }
 
     var canInterruptResponse: Bool {
         isResponding
             && !isCreatingSession
             && connectionState == .connected
-            && clientState.status == .ready
+            && sessionStatusForDisplay == .ready
             && clientState.sessionSetupRun?.status != .running
     }
 
@@ -133,6 +133,7 @@ final class AgentSessionViewModel {
         preferences: NewSessionPreferences,
         makeSocket: @escaping (String) -> SessionSocket,
         sessionMessageStore: SessionMessageStore,
+        sessionClientStateStore: SessionClientStateStore,
         sessionSummaryStore: SessionSummaryStore,
         transcriptBuilder: any AgentSessionTranscriptBuilding,
         sessionsAPI: any SessionsAPIProviding,
@@ -153,6 +154,7 @@ final class AgentSessionViewModel {
         self.socket = context.session.map { makeSocket($0.id) }
         self.makeSocket = makeSocket
         self.sessionMessageStore = sessionMessageStore
+        self.sessionClientStateStore = sessionClientStateStore
         self.sessionSummaryStore = sessionSummaryStore
         self.transcriptBuilder = transcriptBuilder
         self.sessionsAPI = sessionsAPI
@@ -164,6 +166,7 @@ final class AgentSessionViewModel {
             sessionId: context.session?.id,
             attachmentsAPI: attachmentsAPI
         )
+        clientStateIsResponding = context.session?.workingState == "responding"
     }
 }
 
@@ -190,9 +193,13 @@ extension AgentSessionViewModel {
         guard let session, !isPerformingSessionAction else {
             return false
         }
-        return await performSessionAction {
+        let didDelete = await performSessionAction {
             try await deleteSessionAction(session)
         }
+        if didDelete {
+            hasDeletedSession = true
+        }
+        return didDelete
     }
 
     private func performSessionAction(_ action: () async throws -> Void) async -> Bool {
@@ -226,6 +233,7 @@ extension AgentSessionViewModel {
             removePendingOptimisticUserMessage(restoreDraft: draftText.isEmpty)
             restoreLastSubmittedAttachments()
             resetPendingResponse()
+            persistClientStateIfNeeded()
         case .chatAccepted(let clientMessageId, let messageId):
             acceptOptimisticUserMessage(
                 clientMessageId: clientMessageId,
@@ -233,6 +241,7 @@ extension AgentSessionViewModel {
             )
         case .connected(let status):
             clientState.status = status
+            persistClientStateIfNeeded()
         case .editorReady(let url):
             clientState.editorURL = url
         case .liveState(let state):
@@ -254,6 +263,8 @@ extension AgentSessionViewModel {
         let previousProvider = transcriptProvider
         updateSetupRunDisclosure(from: clientState.sessionSetupRun, to: state.sessionSetupRun)
         clientState = state
+        clientStateIsResponding = state.activeTurnUserMessageId != nil
+        hasHydratedClientState = true
         // A newly created session keeps its initial message in live state until
         // provisioning dispatches it into durable message history.
         if let pendingUserMessage = state.pendingUserMessage {
@@ -269,6 +280,7 @@ extension AgentSessionViewModel {
             rebuildTranscriptDisplayData()
         }
         reconcilePullRequestState()
+        persistClientStateIfNeeded()
     }
 
     func toggleSetupRunExpansion() {
@@ -278,7 +290,7 @@ extension AgentSessionViewModel {
         isSetupRunExpanded.toggle()
     }
 
-    private func updateSetupRunDisclosure(
+    func updateSetupRunDisclosure(
         from previousRun: SessionClientState.SessionSetupRun?,
         to nextRun: SessionClientState.SessionSetupRun?
     ) {
@@ -345,6 +357,7 @@ extension AgentSessionViewModel {
             )
         }
         markLatestAssistantMessageRead(in: transcriptMessages)
+        persistClientStateIfNeeded()
     }
 
     private func applyAgentChunks(
@@ -403,6 +416,7 @@ extension AgentSessionViewModel {
         streamGeneration += 1
         clearStreamingState(removeActiveTranscript: true)
         clientState.activeTurnUserMessageId = nil
+        clientStateIsResponding = false
         isSending = false
         isCreatingSession = false
         isWaitingForResponse = false
@@ -412,6 +426,7 @@ extension AgentSessionViewModel {
 
     private func applyActiveTurnUserMessageId(_ userMessageId: String?) {
         clientState.activeTurnUserMessageId = userMessageId
+        clientStateIsResponding = userMessageId != nil
         if userMessageId != nil {
             hasSeenServerActiveTurn = true
             return

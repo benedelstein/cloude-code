@@ -142,6 +142,7 @@ struct AgentSessionPullRequestTests {
         pollInterval: Duration = .seconds(30)
     ) -> AgentSessionViewModel {
         let sessionSummaryStore = SessionSummaryStore()
+        let sessionClientStateStore = SessionClientStateStore()
         let session = makeSession(pushedBranch: pushedBranch, pullRequest: pullRequest)
         return AgentSessionViewModel(
             context: .session(session),
@@ -151,6 +152,7 @@ struct AgentSessionPullRequestTests {
             ) ?? .standard),
             makeSocket: makeSocket,
             sessionMessageStore: SessionMessageStore(),
+            sessionClientStateStore: sessionClientStateStore,
             sessionSummaryStore: sessionSummaryStore,
             transcriptBuilder: StubTranscriptBuilder(),
             sessionsAPI: api,
@@ -165,7 +167,8 @@ struct AgentSessionPullRequestTests {
             ),
             deleteSessionAction: DeleteSessionAction(
                 sessionsAPI: api,
-                sessionSummaryStore: sessionSummaryStore
+                sessionSummaryStore: sessionSummaryStore,
+                sessionClientStateStore: sessionClientStateStore
             ),
             sessionCreatedSubject: PassthroughSubject<String, Never>(),
             pullRequestPollInterval: pollInterval
