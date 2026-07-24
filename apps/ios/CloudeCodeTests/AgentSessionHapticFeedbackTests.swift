@@ -4,6 +4,29 @@ import Testing
 @testable import CloudeCode
 
 extension AgentSessionTranscriptStateTests {
+    @Test func agentSessionHapticsComposeGenericAndPatternPlayers() {
+        let feedbackPlayer = RecordingFeedbackPlayer()
+        let patternPlayer = RecordingPatternPlayer()
+        let completionPatternURL = URL(fileURLWithPath: "/TurnCompletion.ahap")
+        let haptics = AgentSessionHapticFeedback(
+            feedbackPlayer: feedbackPlayer,
+            patternPlayer: patternPlayer,
+            completionPatternURL: completionPatternURL
+        )
+
+        haptics.prepare()
+        haptics.turnStarted()
+        haptics.turnCompleted()
+        haptics.stop()
+
+        #expect(feedbackPlayer.feedback == [.light])
+        #expect(patternPlayer.events == [
+            .prepared,
+            .played(completionPatternURL),
+            .stopped
+        ])
+    }
+
     @Test func agentFinishTriggersCompletionHapticWhileViewModelIsBound() {
         let hapticFeedback = RecordingHapticFeedback()
         let viewModel = makeViewModel(hapticFeedback: hapticFeedback)
@@ -100,6 +123,36 @@ extension AgentSessionTranscriptStateTests {
         func turnStarted() {}
         func turnCompleted() {}
         func stop() {}
+    }
+
+    final class RecordingFeedbackPlayer: HapticFeedbackPlaying {
+        private(set) var feedback: [HapticFeedback] = []
+
+        func play(_ feedback: HapticFeedback) {
+            self.feedback.append(feedback)
+        }
+    }
+
+    final class RecordingPatternPlayer: AHAPPatternPlaying {
+        enum Event: Equatable {
+            case prepared
+            case played(URL)
+            case stopped
+        }
+
+        private(set) var events: [Event] = []
+
+        func prepare() {
+            events.append(.prepared)
+        }
+
+        func play(_ patternURL: URL) {
+            events.append(.played(patternURL))
+        }
+
+        func stop() {
+            events.append(.stopped)
+        }
     }
 
     private func initialMessageChunks() -> [SessionStreamChunk] {
