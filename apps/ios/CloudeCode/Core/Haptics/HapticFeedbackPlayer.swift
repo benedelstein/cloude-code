@@ -7,12 +7,13 @@ enum HapticFeedback: Equatable {
     case error
 }
 
-@MainActor
 protocol HapticFeedbackPlaying {
+    @MainActor
     func play(_ feedback: HapticFeedback)
 }
 
 struct NoopHapticFeedbackPlayer: HapticFeedbackPlaying {
+    @MainActor
     func play(_: HapticFeedback) {}
 }
 
