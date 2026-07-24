@@ -72,6 +72,7 @@ final class AgentSessionViewModel {
     var clientState = SessionClientState.empty
     var clientStateIsResponding = false
     var hasHydratedClientState = false
+    var hasDeletedSession = false
     @ObservationIgnored var lastCachedClientStateSnapshot: SessionClientStateSnapshot?
     private(set) var isSetupRunExpanded = false
     var transcriptProvider: AgentProviderID {
@@ -192,9 +193,13 @@ extension AgentSessionViewModel {
         guard let session, !isPerformingSessionAction else {
             return false
         }
-        return await performSessionAction {
+        let didDelete = await performSessionAction {
             try await deleteSessionAction(session)
         }
+        if didDelete {
+            hasDeletedSession = true
+        }
+        return didDelete
     }
 
     private func performSessionAction(_ action: () async throws -> Void) async -> Bool {

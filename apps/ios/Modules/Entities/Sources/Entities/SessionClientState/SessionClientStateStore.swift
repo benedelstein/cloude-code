@@ -10,6 +10,7 @@ public final class SessionClientStateStore {
     @ObservationIgnored private let cache: Cache?
     @ObservationIgnored private let entityStore: EntityStore<Model>
     @ObservationIgnored private var lastWriteTask: Task<Void, Never>?
+    @ObservationIgnored private var mutationVersions: [String: Int] = [:]
 
     /// Creates a session client-state store.
     public init(cache: Cache? = nil) {
@@ -26,18 +27,49 @@ public final class SessionClientStateStore {
         if let snapshot = self[sessionId] {
             return snapshot
         }
-        await lastWriteTask?.value
+        let mutationVersion = mutationVersions[sessionId, default: 0]
+        let pendingWrite = lastWriteTask
+        await pendingWrite?.value
+        // Do not install a disk result if this session was saved or deleted
+        // while the fetch path was suspended.
+        guard !Task.isCancelled else {
+            return nil
+        }
+        guard mutationVersion == mutationVersions[sessionId, default: 0] else {
+            return self[sessionId]
+        }
+        if let snapshot = self[sessionId] {
+            return snapshot
+        }
+        guard let cache else {
+            return nil
+        }
+
         do {
-            return try await entityStore.get([sessionId], scopes: [.memory, .disk]).first?.snapshot
+            let snapshots = try await cache.fetch(
+                SessionClientStateEntity.self,
+                ids: [sessionId]
+            )
+            guard !Task.isCancelled else {
+                return nil
+            }
+            guard mutationVersion == mutationVersions[sessionId, default: 0] else {
+                return self[sessionId]
+            }
+            return entityStore.putMemory(snapshots).first?.snapshot
         } catch {
+            guard mutationVersion == mutationVersions[sessionId, default: 0] else {
+                return self[sessionId]
+            }
             Logger.warning("Failed to load cached session client state: \(error)")
-            entityStore.delete([sessionId])
+            delete(sessionId: sessionId)
             return nil
         }
     }
 
     /// Saves a curated session snapshot to memory and disk.
     public func save(_ snapshot: Domain.SessionClientStateSnapshot) {
+        mutationVersions[snapshot.id, default: 0] += 1
         entityStore.putMemory([snapshot])
         guard let cache else {
             return
@@ -50,6 +82,7 @@ public final class SessionClientStateStore {
 
     /// Deletes one session's cached client state.
     public func delete(sessionId: String) {
+        mutationVersions[sessionId, default: 0] += 1
         entityStore.deleteMemory([sessionId])
         guard let cache else {
             return

@@ -13,8 +13,11 @@ extension AgentSessionViewModel {
     }
 
     func loadCachedClientState() async {
-        guard let session,
-              let snapshot = await sessionClientStateStore.snapshot(sessionId: session.id) else {
+        guard let session else {
+            return
+        }
+        let snapshot = await sessionClientStateStore.snapshot(sessionId: session.id)
+        guard !Task.isCancelled, let snapshot else {
             return
         }
 
@@ -42,7 +45,7 @@ extension AgentSessionViewModel {
     }
 
     func persistClientStateIfNeeded(force: Bool = false) {
-        guard let session, hasHydratedClientState else {
+        guard let session, hasHydratedClientState, !hasDeletedSession else {
             return
         }
 

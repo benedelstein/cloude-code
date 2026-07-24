@@ -85,6 +85,24 @@ final class SessionClientStateStoreTests: XCTestCase {
         }
     }
 
+    func testCancelledSnapshotDoesNotHydrateMemory() async throws {
+        let cache = try makeCache()
+        let snapshot = testSessionClientStateSnapshot("s1")
+        try await cache.put(SessionClientStateEntity.self, snapshots: [snapshot])
+        let store = SessionClientStateStore(cache: cache)
+        let hydrationTask = Task {
+            await store.snapshot(sessionId: "s1")
+        }
+
+        hydrationTask.cancel()
+        let cancelledSnapshot = await hydrationTask.value
+
+        XCTAssertNil(cancelledSnapshot)
+        XCTAssertNil(store["s1"])
+        let restoredSnapshot = await store.snapshot(sessionId: "s1")
+        XCTAssertEqual(restoredSnapshot, snapshot)
+    }
+
     func testDeleteAndDeleteAllClearSnapshots() async throws {
         let cache = try makeCache()
         let store = SessionClientStateStore(cache: cache)

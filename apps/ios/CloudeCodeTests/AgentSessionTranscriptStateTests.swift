@@ -407,13 +407,13 @@ extension AgentSessionTranscriptStateTests {
         provider: AgentProviderID? = nil,
         context: AgentSessionViewModel.Context? = nil,
         modelsAPI: any ModelsAPIProviding = StubModelsAPI(),
+        sessionsAPI: any SessionsAPIProviding = StubSessionsAPI(),
         sessionMessageStore: SessionMessageStore? = nil,
         sessionClientStateStore: SessionClientStateStore = SessionClientStateStore(),
         transcriptBuilder: any AgentSessionTranscriptBuilding = StubTranscriptBuilder()
     ) -> AgentSessionViewModel {
         let sessionMessageStore = sessionMessageStore ?? SessionMessageStore()
         let sessionSummaryStore = SessionSummaryStore()
-        let sessionsAPI = StubSessionsAPI()
         return AgentSessionViewModel(
             context: context ?? .session(makeSession(provider: provider)),
             modelCatalogStore: ModelCatalogStore(modelsAPI: modelsAPI),

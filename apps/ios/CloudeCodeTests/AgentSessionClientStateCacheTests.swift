@@ -193,6 +193,37 @@ extension AgentSessionTranscriptStateTests {
         #expect(!viewModel.isResponding)
     }
 
+    @Test func unbindDoesNotRecreateSuccessfullyDeletedClientState() async {
+        let stateStore = SessionClientStateStore()
+        let viewModel = makeViewModel(
+            sessionsAPI: StubSessionsAPI(deleteSucceeds: true),
+            sessionClientStateStore: stateStore
+        )
+        viewModel.applyLiveState(liveState(provider: .claudeCode))
+
+        let didDelete = await viewModel.deleteSession()
+        viewModel.unbind()
+
+        #expect(didDelete)
+        #expect(stateStore["session-1"] == nil)
+    }
+
+    @Test func cancelledHydrationDoesNotApplyCachedClientState() async {
+        let stateStore = SessionClientStateStore()
+        stateStore.save(cachedState(provider: .openaiCodex, isResponding: true))
+        let viewModel = makeViewModel(sessionClientStateStore: stateStore)
+        let hydrationTask = Task {
+            await viewModel.loadCachedClientState()
+        }
+
+        hydrationTask.cancel()
+        await hydrationTask.value
+
+        #expect(!viewModel.hasHydratedClientState)
+        #expect(viewModel.clientState == .empty)
+        #expect(!viewModel.isResponding)
+    }
+
     @Test func successfulDeletionClearsCachedClientState() async throws {
         let stateStore = SessionClientStateStore()
         stateStore.save(cachedState(provider: .claudeCode, isResponding: false))
