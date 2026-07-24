@@ -71,7 +71,7 @@ struct OpenAIProviderConnectionViewModelTests {
         let authAPI = ProviderAuthAPISpy(openAIPollResults: [
             .failure(URLError(.networkConnectionLost)),
             .failure(URLError(.cancelled)),
-            .success(.completed),
+            .success(.completed)
         ])
         let viewModel = makeViewModel(authAPI: authAPI)
 
@@ -103,7 +103,7 @@ struct OpenAIProviderConnectionViewModelTests {
 
     @Test func surfacesNonTransientPollErrors() async throws {
         let authAPI = ProviderAuthAPISpy(openAIPollResults: [
-            .failure(URLError(.badServerResponse)),
+            .failure(URLError(.badServerResponse))
         ])
         let viewModel = makeViewModel(authAPI: authAPI)
 
