@@ -10,6 +10,8 @@ export const CLAUDE_PROVIDER_ID = "claude-code" as const;
 export const ClaudeModel = z.enum([
   "claude-fable-5",
   "claude-fable-5[1m]",
+  "claude-opus-5",
+  "claude-opus-5[1m]",
   "claude-opus-4-8",
   "claude-opus-4-8[1m]",
   "claude-sonnet-4-6",
